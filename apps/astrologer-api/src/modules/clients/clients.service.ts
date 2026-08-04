@@ -17,10 +17,13 @@ import {
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
   clientBirthDataUpsertRequestSchema,
+  clientBirthPlaceReferenceParamsSchema,
+  clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
   type AstrologerClientListResponse,
   type AstrologerClientResponse,
+  type ClientBirthPlaceReferenceResponse,
   type ClientBirthPlaceSearchResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
@@ -79,10 +82,28 @@ export class ClientsService {
     request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
   ): Promise<ClientBirthPlaceSearchResponse> {
     const parsedQuery = parseContract(clientBirthPlaceSearchQuerySchema, query);
-    requireAstrologerUserId(request);
-    const result = await this.birthPlaceSearchProvider.search(parsedQuery);
+    const ownerUserId = requireAstrologerUserId(request);
+    const result = await this.birthPlaceSearchProvider.search({
+      ownerUserId,
+      ...parsedQuery
+    });
 
     return clientBirthPlaceSearchResponseSchema.parse(result);
+  }
+
+  async resolveBirthPlaceReference(
+    providerPlaceId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<ClientBirthPlaceReferenceResponse> {
+    const params = parseBirthPlaceReferenceParams(providerPlaceId);
+    const ownerUserId = requireAstrologerUserId(request);
+    const result = await this.birthPlaceSearchProvider.resolveReference({
+      ownerUserId,
+      provider: "geoapify",
+      providerPlaceId: params.providerPlaceId
+    });
+
+    return clientBirthPlaceReferenceResponseSchema.parse(result);
   }
 
   async updateBirthData(
@@ -117,6 +138,18 @@ export class ClientsService {
       }
     });
   }
+}
+
+function parseBirthPlaceReferenceParams(providerPlaceId: string) {
+  const result = clientBirthPlaceReferenceParamsSchema.safeParse({ providerPlaceId });
+  if (!result.success) {
+    throw new BadRequestException({
+      code: "BIRTH_PLACE_REFERENCE_INVALID",
+      message: "Birth place reference is invalid"
+    });
+  }
+
+  return result.data;
 }
 
 function requireAstrologerUserId(

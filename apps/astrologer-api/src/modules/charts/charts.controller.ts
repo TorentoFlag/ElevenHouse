@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { chartAiDraftCommandScope } from "@elevenhouse/domain";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { ChartsService } from "./charts.service";
 
 @Controller("charts")
@@ -82,11 +83,13 @@ export class ChartsController {
 
   @Post("calculations/:calculationId/ai-draft")
   @RequireCsrf()
+  @RequireIdempotency({ scope: chartAiDraftCommandScope })
   createAiDraft(
     @Param("calculationId") calculationId: string,
     @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
+    @Req() request: AstrologerSessionRequest,
+    @Headers("idempotency-key") idempotencyKey: string
   ) {
-    return this.service.createAiDraft(calculationId, body, request);
+    return this.service.createAiDraft(calculationId, body, request, idempotencyKey);
   }
 }

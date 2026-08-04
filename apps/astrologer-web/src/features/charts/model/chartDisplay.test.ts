@@ -4,9 +4,11 @@ import {
   formatAspectTypeDisplay,
   formatChartPointPosition,
   formatHouseSignDisplay,
+  getAspectDisplaySymbol,
   getChartPointDisplayLabel,
   getChartPointSymbol,
-  getPrimaryChartRenderResult
+  getPrimaryChartRenderResult,
+  getZodiacDisplaySymbol
 } from "./chartDisplay";
 
 describe("chartDisplay", () => {
@@ -23,9 +25,9 @@ describe("chartDisplay", () => {
     expect(formatChartPointPosition({ sign: "cancer", signDegree: 22.6, retrograde: false })).toBe(
       "Рак 22°36'"
     );
-    expect(formatChartPointPosition({ sign: "capricorn", signDegree: 21.98, retrograde: true })).toBe(
-      "Козерог 21°59' R"
-    );
+    expect(
+      formatChartPointPosition({ sign: "capricorn", signDegree: 21.98, retrograde: true })
+    ).toBe("Козерог 21°59' R");
     expect(formatHouseSignDisplay("virgo")).toBe("Дева");
     expect(formatAspectTypeDisplay("square")).toBe("Квадрат");
     expect(formatAspectTypeDisplay("semi-sextile")).toBe("Полусекстиль");
@@ -39,6 +41,12 @@ describe("chartDisplay", () => {
       "Водолей 0°00'"
     );
     expect(formatChartPointPosition({ sign: "pisces", signDegree: 29.999 })).toBe("Овен 0°00'");
+  });
+
+  it("preserves unknown provider aspect and sign labels instead of inventing semantics", () => {
+    expect(getAspectDisplaySymbol("biquintile", "en")).toBe("biquintile");
+    expect(getZodiacDisplaySymbol("ophiuchus")).toBe("ophiuchus");
+    expect(getZodiacDisplaySymbol("aries")).toBe("♈︎");
   });
 
   it("rejects astrocartography payloads in wheel-only helpers", () => {

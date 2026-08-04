@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type {
+  ChartResult,
   ChartSettings,
   ChartHoraryQuestionSnapshot,
   StoredChartCalculationPayload,
@@ -13,6 +14,7 @@ import type {
 import {
   getChartBirthDataReadiness,
   isChartResultStale,
+  toChartHoraryQuestionSnapshot,
   toVisibleChartJobState,
   type BackendChartJobStatus
 } from "./chartEngineState";
@@ -73,6 +75,19 @@ describe("chartEngineState", () => {
     expect(isChartResultStale(chartResult(), readyBirthData(), chartSettings())).toBe(false);
   });
 
+  it("evaluates a reproducible v2 result against the current CRM birth snapshot", () => {
+    expect(isChartResultStale(reproducibleChartResult(), readyBirthData(), chartSettings())).toBe(
+      false
+    );
+    expect(
+      isChartResultStale(
+        reproducibleChartResult(),
+        { ...readyBirthData(), birthTimeDstOccurrence: "second" },
+        chartSettings()
+      )
+    ).toBe(true);
+  });
+
   it("marks a restored calculation stale when current birth data no longer matches the snapshot", () => {
     expect(
       isChartResultStale(
@@ -107,6 +122,25 @@ describe("chartEngineState", () => {
       isChartResultStale(transitResult(), readyBirthData(), chartSettings(), "transit", {
         date: "2026-07-23",
         time: "14:30"
+      })
+    ).toBe(true);
+  });
+
+  it("compares the selected repeated-hour occurrence for restored transit results", () => {
+    expect(
+      isChartResultStale(transitResult(), readyBirthData(), chartSettings(), "transit", {
+        date: "2026-10-25",
+        time: "02:30",
+        timezone: "Europe/Rome",
+        dstOccurrence: "second"
+      })
+    ).toBe(false);
+    expect(
+      isChartResultStale(transitResult(), readyBirthData(), chartSettings(), "transit", {
+        date: "2026-10-25",
+        time: "02:30",
+        timezone: "Europe/Rome",
+        dstOccurrence: "first"
       })
     ).toBe(true);
   });
@@ -206,6 +240,25 @@ describe("chartEngineState", () => {
       )
     ).toBe(true);
   });
+
+  it("persists and compares the selected repeated-hour occurrence for horary results", () => {
+    expect(
+      toChartHoraryQuestionSnapshot({ ...horaryQuestion(), dstOccurrence: "second" })
+    ).toMatchObject({ dstOccurrence: "second" });
+    expect(
+      isChartResultStale(
+        horaryResult(),
+        null,
+        chartSettings(),
+        "horary",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { ...horaryQuestion(), dstOccurrence: "second" }
+      )
+    ).toBe(true);
+  });
 });
 
 function chartSettings(): ChartSettings {
@@ -261,6 +314,26 @@ function chartResult(
   };
 }
 
+function reproducibleChartResult(): Extract<
+  ChartResult,
+  { readonly schemaVersion: "chart-result.v2"; readonly method: "natal" }
+> {
+  return {
+    ...chartResult(),
+    schemaVersion: "chart-result.v2",
+    methodVersion: "chart.natal.kerykeion-5.12.v2",
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      ephemeris: "swiss-ephemeris",
+      pyswissephVersion: "2.10.3.2",
+      ephemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"],
+      ephemerisDataRevision: `sha256:${"1".repeat(64)}`
+    },
+    reproducibilityFingerprint: `sha256:${"2".repeat(64)}`
+  };
+}
+
 function transitResult(): StoredChartCalculationPayload {
   const natal = chartResult().result;
 
@@ -271,11 +344,12 @@ function transitResult(): StoredChartCalculationPayload {
     settings: chartSettings(),
     inputSnapshot: chartResult().inputSnapshot,
     transitSnapshot: {
-      date: "2026-07-22",
-      time: "14:30",
+      date: "2026-10-25",
+      time: "02:30",
       timezone: "Europe/Rome",
       latitude: 41.9028,
-      longitude: 12.4964
+      longitude: 12.4964,
+      dstOccurrence: "second"
     },
     result: {
       natal,
@@ -399,6 +473,7 @@ function horaryQuestion(): ChartHoraryQuestionSnapshot {
     time: "14:30",
     timezone: "Europe/Moscow",
     latitude: 55.7558,
-    longitude: 37.6173
+    longitude: 37.6173,
+    dstOccurrence: "first"
   };
 }

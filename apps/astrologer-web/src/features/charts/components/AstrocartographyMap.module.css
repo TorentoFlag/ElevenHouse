@@ -1,0 +1,109 @@
+.astroMapStage {
+  box-sizing: border-box;
+  display: grid;
+  width: min(860px, calc(100% - 40px));
+  min-height: min(560px, calc(100dvh - var(--astrologer-app-header-height, 68px) - 128px));
+  flex: 0 0 auto;
+  align-content: center;
+  gap: 14px;
+  margin: 0 auto;
+  padding: 28px 0 10px;
+}
+.astroMapSvg {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgb(180 168 220 / 0.16);
+  border-radius: 18px;
+  background: #0b0a20;
+  box-shadow: inset 0 0 70px rgb(98 167 255 / 0.08);
+}
+.astroMapOcean {
+  fill: rgb(13 12 32 / 0.92);
+}
+.astroMapGrid {
+  stroke: rgb(216 212 236 / 0.11);
+  stroke-dasharray: 3 7;
+  stroke-width: 0.8;
+}
+.astroMapLand {
+  fill: rgb(99 185 154 / 0.12);
+  stroke: rgb(143 224 192 / 0.2);
+  stroke-width: 0.9;
+}
+.astroMapLine {
+  fill: none;
+  opacity: 0.78;
+  stroke: rgb(246 210 102 / 0.68);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+}
+.astroMapLine[data-angle="ic"] {
+  stroke: rgb(182 154 255 / 0.62);
+}
+.astroMapLine[data-angle="asc"] {
+  stroke: rgb(98 167 255 / 0.64);
+  stroke-dasharray: 6 4;
+}
+.astroMapLine[data-angle="dsc"] {
+  stroke: rgb(255 119 119 / 0.58);
+  stroke-dasharray: 7 5;
+}
+.astroMapLegend,
+.astroLineStack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.astroMapLegend {
+  justify-content: center;
+}
+.astroMapLegend span,
+.astroLinePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  border: 1px solid rgb(216 212 236 / 0.1);
+  border-radius: 999px;
+  background: rgb(30 27 62 / 0.58);
+  color: rgb(229 225 244 / 0.76);
+  font-size: 11.5px;
+  font-weight: 720;
+}
+.astroMapLegend span {
+  padding: 0 10px;
+}
+.astroMapLegend b {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--chart-gold);
+}
+.astroMapLegend span[data-angle="ic"] b {
+  background: var(--chart-violet);
+}
+.astroMapLegend span[data-angle="asc"] b {
+  background: var(--chart-blue);
+}
+.astroMapLegend span[data-angle="dsc"] b {
+  background: #ff7777;
+}
+.astroLineStack {
+  justify-content: center;
+}
+.astroLinePill {
+  padding: 0 11px 0 9px;
+}
+.astroLinePill span {
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+}
+.astroLinePill strong {
+  color: rgb(229 225 244 / 0.9);
+}
+.astroLinePill small {
+  color: var(--chart-gold);
+  font-size: 11px;
+  font-weight: 840;
+}

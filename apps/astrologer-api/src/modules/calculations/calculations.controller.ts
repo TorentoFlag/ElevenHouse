@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { CalculationsService } from "./calculations.service";
 
 @Controller("calculations")
@@ -44,12 +44,19 @@ export class CalculationsController {
 
   @Post(":calculationId/interpretations")
   @RequireCsrf()
+  @RequireIdempotency({ scope: "calculations.interpretations.manual.save.v1" })
   saveManualInterpretation(
     @Param("calculationId") calculationId: string,
     @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
+    @Req() request: AstrologerSessionRequest,
+    @Headers("idempotency-key") idempotencyKey: string
   ) {
-    return this.calculationsService.saveManualInterpretation(calculationId, body, request);
+    return this.calculationsService.saveManualInterpretation(
+      calculationId,
+      body,
+      request,
+      idempotencyKey
+    );
   }
 
   @Post(":calculationId/interpretations/:interpretationId/approve")

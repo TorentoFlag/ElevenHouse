@@ -1,5 +1,6 @@
 import type { ChartAspect, ChartHouse, ChartPoint } from "@elevenhouse/contracts";
 import type { ChartPdfDocument, ChartPdfInterpretation } from "./calculation-pdf.documents";
+import { formatDegreeMinutes, formatZodiacPosition } from "./chart-pdf.position";
 import {
   createPdfLayout,
   type PdfGraphicContext,
@@ -343,20 +344,24 @@ function drawChartWheel(
 }
 
 function pointRow(point: ChartPoint, labels: Labels): readonly string[] {
+  const position = formatZodiacPosition(point.sign, point.signDegree);
+
   return [
     labels.pointsById[point.id] ?? point.label,
-    labels.signs[point.sign] ?? point.sign,
-    degree(point.signDegree),
+    labels.signs[position.sign] ?? position.sign,
+    position.degree,
     point.house ? labels.houseValue(point.house) : labels.noHouse,
     point.retrograde ? labels.retrograde : labels.direct
   ];
 }
 
 function houseRow(house: ChartHouse, labels: Labels): readonly string[] {
+  const position = formatZodiacPosition(house.sign, house.signDegree);
+
   return [
     labels.houseValue(house.number),
-    labels.signs[house.sign] ?? house.sign,
-    degree(house.signDegree)
+    labels.signs[position.sign] ?? position.sign,
+    position.degree
   ];
 }
 
@@ -365,7 +370,7 @@ function aspectRow(aspect: ChartAspect, labels: Labels): readonly string[] {
     labels.pointsById[aspect.pointA] ?? aspect.pointA,
     labels.aspectTypes[aspect.type] ?? aspect.type,
     labels.pointsById[aspect.pointB] ?? aspect.pointB,
-    degree(aspect.orb),
+    formatDegreeMinutes(aspect.orb),
     aspect.strength == null ? labels.notAvailable : `${Math.round(aspect.strength * 100)}%`
   ];
 }
@@ -399,12 +404,6 @@ function buildInterpretationRows(
       labels.missingInterpretationText(interpretation.code),
     interpretation.entry ? `${labels.dictionary} · ${interpretation.entry.source}` : labels.noEntry
   ]);
-}
-
-function degree(value: number): string {
-  const degrees = Math.trunc(value);
-  const minutes = Math.round((value - degrees) * 60);
-  return `${degrees}°${String(minutes).padStart(2, "0")}'`;
 }
 
 function polar(

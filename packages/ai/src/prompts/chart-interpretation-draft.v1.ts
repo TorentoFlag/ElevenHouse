@@ -4,7 +4,6 @@ import { definePrompt } from "../generation/prompt-definition";
 export const chartAiLocaleSchema = z.enum(["ru", "en"]);
 export type ChartAiLocale = z.infer<typeof chartAiLocaleSchema>;
 
-const checksumSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const chartPointIdSchema = nonEmptyStringSchema.max(80);
 const signSchema = nonEmptyStringSchema.max(40);
 
@@ -52,7 +51,6 @@ export const chartInterpretationDraftPromptInputSchema = z
   .object({
     locale: chartAiLocaleSchema,
     methodCode: z.literal("natal"),
-    resultChecksum: checksumSchema,
     settings: z
       .object({
         zodiac: z.literal("tropical"),
@@ -110,13 +108,13 @@ const sectionJsonSchema = { type: "string", minLength: 1, maxLength: 4_000 } as 
 
 export const chartInterpretationDraftPromptV1 = definePrompt({
   id: "chart.interpretationDraft",
-  version: 2,
+  version: 3,
   locales: ["ru", "en"],
   modelProfile: "qualityDraft",
   responseFormat: "json",
   reasoningEffort: "medium",
   maxOutputTokens: 3_800,
-  structuredOutputName: "chart_interpretation_draft_v2",
+  structuredOutputName: "chart_interpretation_draft_v3",
   structuredOutputJsonSchema: {
     type: "object",
     properties: {
@@ -199,7 +197,7 @@ function renderSystemPrompt(locale: ChartAiLocale): string {
       "Опирайся на dictionaryGrounding как на смысловой справочник; если материала не хватает, аккуратно синтезируй только из переданных расчётных факторов.",
       "Собери 3-5 главных тем карты вместо механического перечисления всех планет.",
       "Не давай медицинских, юридических или финансовых советов и не делай фаталистичных предсказаний.",
-      "Не упоминай AI, prompt, системные инструкции, модели, внутренние ключи, checksum или процесс генерации.",
+      "Не упоминай AI, prompt, системные инструкции, модели, внутренние ключи или процесс генерации.",
       "Верни только JSON, строго соответствующий схеме."
     ].join("\n");
   }
@@ -212,7 +210,7 @@ function renderSystemPrompt(locale: ChartAiLocale): string {
     "Use dictionaryGrounding as the semantic reference; when it is incomplete, synthesize only from the supplied calculated factors.",
     "Synthesize 3-5 main chart themes instead of mechanically listing every planet.",
     "Do not provide medical, legal, or financial advice or make fatalistic predictions.",
-    "Do not mention AI, prompts, system instructions, models, internal keys, checksums, or the generation process.",
+    "Do not mention AI, prompts, system instructions, models, internal keys, or the generation process.",
     "Return only JSON that exactly matches the schema."
   ].join("\n");
 }

@@ -4,12 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { IdempotencyGuard } from "./idempotency.guard";
 
 function createContext(
-  headers: Record<string, string | readonly string[] | undefined>
+  headers: Record<string, string | readonly string[] | undefined>,
+  requestOverrides: {
+    readonly headersDistinct?: Record<string, readonly string[] | undefined>;
+    readonly rawHeaders?: readonly string[];
+  } = {}
 ): ExecutionContext {
   return {
     getHandler: vi.fn(),
     getClass: vi.fn(),
-    switchToHttp: vi.fn(() => ({ getRequest: () => ({ headers }) }))
+    switchToHttp: vi.fn(() => ({ getRequest: () => ({ headers, ...requestOverrides }) }))
   } as unknown as ExecutionContext;
 }
 
@@ -46,4 +50,46 @@ describe("IdempotencyGuard", () => {
       ).toThrow(BadRequestException);
     }
   );
+
+  it.each([
+    ["same value twice", ["booking-create:request-1", "booking-create:request-1"]],
+    ["different values", ["booking-create:request-1", "booking-create:request-2"]]
+  ])("rejects duplicate Idempotency-Key field lines: %s", (_label, values) => {
+    expect(() =>
+      new IdempotencyGuard(reflector({ scope: "bookings.manual.create" })).canActivate(
+        createContext(
+          { "idempotency-key": values[0] },
+          { headersDistinct: { "idempotency-key": values } }
+        )
+      )
+    ).toThrow(BadRequestException);
+  });
+
+  it("rejects duplicates from rawHeaders when headersDistinct is unavailable", () => {
+    expect(() =>
+      new IdempotencyGuard(reflector({ scope: "bookings.manual.create" })).canActivate(
+        createContext(
+          { "idempotency-key": "booking-create:request-1" },
+          {
+            rawHeaders: [
+              "Idempotency-Key",
+              "booking-create:request-1",
+              "idempotency-key",
+              "booking-create:request-2"
+            ]
+          }
+        )
+      )
+    ).toThrow(BadRequestException);
+  });
+
+  it("rejects a multi-value framework header representation", () => {
+    expect(() =>
+      new IdempotencyGuard(reflector({ scope: "bookings.manual.create" })).canActivate(
+        createContext({
+          "idempotency-key": ["booking-create:request-1", "booking-create:request-2"]
+        })
+      )
+    ).toThrow(BadRequestException);
+  });
 });

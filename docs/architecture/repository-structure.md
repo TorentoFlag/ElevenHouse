@@ -21,6 +21,7 @@ ElevenHouse/
   packages/
     ai/
     auth/
+    birth-place-search/
     chart-engine-client/
     config/
     contracts/
@@ -68,6 +69,9 @@ workflows добавляются только здесь, а не в `public-api
 
 - `ai`: provider-neutral AI generation ports, prompt definitions and prompt registry.
 - `auth`: roles, permissions, session helpers and auth crypto helpers.
+- `birth-place-search`: provider-neutral birth-place search ports plus the
+  Geoapify and Redis cache/single-flight/rate-limit infrastructure reused by
+  authenticated API composition roots.
 - `chart-engine-client`: typed client for the private chart-engine runtime.
 - `config`: typed environment configuration helpers.
 - `contracts`: API DTOs, event schemas, generated clients или shared contracts.

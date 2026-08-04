@@ -1,10 +1,6 @@
-import type { ClientBirthPlaceSearchResponse } from "@elevenhouse/contracts";
-
-export type BirthPlaceSearchInput = {
-  readonly query: string;
-  readonly limit: number;
-};
-
-export type ClientBirthPlaceSearchProvider = {
-  search(input: BirthPlaceSearchInput): Promise<ClientBirthPlaceSearchResponse>;
-};
+export type {
+  BirthPlaceProvider as ClientBirthPlaceSearchProvider,
+  BirthPlaceReferenceInput,
+  BirthPlaceSearchInput,
+  BirthPlaceUpstreamProvider as ClientBirthPlaceUpstreamProvider
+} from "@elevenhouse/birth-place-search";

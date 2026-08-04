@@ -208,10 +208,12 @@ describe("chartInterpretations", () => {
       "astrocartography.sun.mc",
       "astrocartography.moon.asc"
     ]);
-    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual([
-      "astrocartography.sun.mc:planet_aspects:Астрокартография · линия планеты",
-      "astrocartography.moon.asc:planet_aspects:Астрокартография · линия планеты"
-    ]);
+    expect(anchors.map((anchor) => `${anchor.code}:${anchor.categoryCode}:${anchor.meta}`)).toEqual(
+      [
+        "astrocartography.sun.mc:planet_aspects:Астрокартография · линия планеты",
+        "astrocartography.moon.asc:planet_aspects:Астрокартография · линия планеты"
+      ]
+    );
     expect(anchors.map((anchor) => `${anchor.group}:${anchor.label}`)).toEqual([
       "aspects:Солнце MC",
       "aspects:Луна Asc"

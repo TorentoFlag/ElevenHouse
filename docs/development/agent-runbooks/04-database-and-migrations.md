@@ -30,6 +30,13 @@ transactional DDL/data migration, advisory lock и записью нового b
 ledger только после успешного перехода. Неизвестное состояние должно завершать
 deploy ошибкой.
 
+Единственное текущее исключение — принятый ADR
+`0012-prelaunch-production-baseline-reset.md`: initial Finance rollout может
+один раз пересоздать объявленную disposable ElevenHouse production DB после
+fresh-database rehearsal и точной проверки host/database/container. Это не
+разрешение использовать `db:reset` с локальными defaults против production;
+rollout обязан иметь отдельную fail-before-delete проверку target identity.
+
 ## Пошаговая процедура
 
 1. Confirm domain ownership in `docs/architecture/backend-modules.md`.
@@ -62,10 +69,17 @@ deploy ошибкой.
 
     Do not run this against non-local or production DBs.
 
-11. Если предыдущий baseline уже развёрнут в production, добавь или обнови
+11. Если предыдущий baseline уже развёрнут в production и ADR 0012 не применим,
+    добавь или обнови
     production reconciliation и его integration fixture. Проверь как минимум:
     approved legacy transition, сохранение данных, повторный no-op запуск и
     отказ на неизвестной migration history.
+
+12. Для одноразового ADR 0012 rollout вместо legacy-data reconciliation докажи
+    полный baseline на новой пустой БД, exact production target preflight,
+    reset/restore rehearsal на disposable clone, reviewed seeds и post-reset
+    deploy/E2E. До прохождения этих gates destructive production command не
+    запускается.
 
 ## Schema Test Expectations
 

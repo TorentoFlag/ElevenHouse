@@ -163,7 +163,7 @@ describe("ClientsService", () => {
     ).resolves.toEqual({
       candidates: [
         {
-          id: "nominatim:41485",
+          id: "geoapify:41485",
           label: "Rome, Lazio, Italy",
           placeName: "Rome, Italy",
           countryCode: "IT",
@@ -172,16 +172,50 @@ describe("ClientsService", () => {
           timezone: "Europe/Rome",
           latitude: 41.8933,
           longitude: 12.4829,
-          provider: "nominatim",
+          provider: "geoapify",
           providerPlaceId: "41485"
         }
       ]
     });
 
-    expect(provider.search).toHaveBeenCalledWith({ query: "Rome Italy", limit: 3 });
+    expect(provider.search).toHaveBeenCalledWith({
+      ownerUserId: astrologerUserId,
+      query: "Rome Italy",
+      limit: 3
+    });
     await expect(service.searchBirthPlaces({ query: "Rome" }, {})).rejects.toThrow(
       UnauthorizedException
     );
+  });
+
+  it("resolves an opaque Geoapify place reference only for an authenticated astrologer", async () => {
+    const provider = createBirthPlaceSearchProvider();
+    const service = createService(createStore(), provider);
+
+    await expect(
+      service.resolveBirthPlaceReference("41485", createAuthenticatedRequest())
+    ).resolves.toMatchObject({
+      provider: "geoapify",
+      providerPlaceId: "41485",
+      timezone: "Europe/Rome",
+      latitude: 41.8933,
+      longitude: 12.4829
+    });
+
+    expect(provider.resolveReference).toHaveBeenCalledWith({
+      ownerUserId: astrologerUserId,
+      provider: "geoapify",
+      providerPlaceId: "41485"
+    });
+    await expect(service.resolveBirthPlaceReference("41485", {})).rejects.toThrow(
+      UnauthorizedException
+    );
+    await expect(
+      service.resolveBirthPlaceReference(
+        "https://provider.invalid/place?id=41485",
+        createAuthenticatedRequest()
+      )
+    ).rejects.toThrow(BadRequestException);
   });
 });
 
@@ -198,7 +232,7 @@ function createBirthPlaceSearchProvider(): ClientBirthPlaceSearchProvider {
       async (): Promise<ClientBirthPlaceSearchResponse> => ({
         candidates: [
           {
-            id: "nominatim:41485",
+            id: "geoapify:41485",
             label: "Rome, Lazio, Italy",
             placeName: "Rome, Italy",
             countryCode: "IT",
@@ -207,12 +241,25 @@ function createBirthPlaceSearchProvider(): ClientBirthPlaceSearchProvider {
             timezone: "Europe/Rome",
             latitude: 41.8933,
             longitude: 12.4829,
-            provider: "nominatim" as const,
+            provider: "geoapify" as const,
             providerPlaceId: "41485"
           }
         ]
       })
-    )
+    ),
+    resolveReference: vi.fn(async () => ({
+      id: "geoapify:41485",
+      label: "Rome, Lazio, Italy",
+      placeName: "Rome, Italy",
+      countryCode: "IT",
+      city: "Rome",
+      region: "Lazio",
+      timezone: "Europe/Rome",
+      latitude: 41.8933,
+      longitude: 12.4829,
+      provider: "geoapify" as const,
+      providerPlaceId: "41485"
+    }))
   };
 }
 

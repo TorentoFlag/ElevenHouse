@@ -14,7 +14,19 @@ export type ClaimedOutboxEvent = {
   readonly aggregateId: string;
   readonly payload: OutboxEventPayload;
   readonly attempts: number;
+  readonly claimFence: bigint;
 };
+
+export type OutboxRelayDispositionOperation = "mark_published" | "mark_publish_failed";
+
+export class OutboxRelayStaleClaimError extends Error {
+  readonly code = "OUTBOX_RELAY_STALE_CLAIM" as const;
+
+  constructor(readonly operation: OutboxRelayDispositionOperation) {
+    super("Outbox relay claim is stale");
+    this.name = "OutboxRelayStaleClaimError";
+  }
+}
 
 export type OutboxRelayStore = {
   readonly claimPending: (input: {
@@ -25,10 +37,12 @@ export type OutboxRelayStore = {
   }) => Promise<readonly ClaimedOutboxEvent[]>;
   readonly markPublished: (input: {
     readonly eventId: string;
+    readonly claimFence: bigint;
     readonly publishedAt: Date;
   }) => Promise<void>;
   readonly markPublishFailed: (input: {
     readonly eventId: string;
+    readonly claimFence: bigint;
     readonly failedAt: Date;
     readonly nextAvailableAt: Date;
     readonly errorMessage: string;
@@ -65,6 +79,7 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
           update ${outboxEvents}
           set
             status = 'publishing',
+            claim_fence = ${outboxEvents.claimFence} + 1,
             locked_at = ${input.now},
             updated_at = ${input.now}
           from claimed
@@ -74,7 +89,8 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
             ${outboxEvents.eventType} as "eventType",
             ${outboxEvents.aggregateId} as "aggregateId",
             ${outboxEvents.payload} as "payload",
-            ${outboxEvents.attempts} as "attempts"
+            ${outboxEvents.attempts} as "attempts",
+            ${outboxEvents.claimFence} as "claimFence"
         `);
 
         return result.rows as unknown as ClaimedOutboxEvent[];
@@ -83,7 +99,7 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
       return rows.map(toClaimedOutboxEvent);
     },
     markPublished: async (input) => {
-      await database
+      const rows = await database
         .update(outboxEvents)
         .set({
           status: "published",
@@ -91,10 +107,12 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
           publishedAt: input.publishedAt,
           updatedAt: input.publishedAt
         })
-        .where(and(eq(outboxEvents.id, input.eventId), eq(outboxEvents.status, "publishing")));
+        .where(claimDispositionFence(input))
+        .returning({ id: outboxEvents.id });
+      assertClaimDispositionApplied(rows, "mark_published");
     },
     markPublishFailed: async (input) => {
-      await database
+      const rows = await database
         .update(outboxEvents)
         .set({
           status: "pending",
@@ -104,9 +122,26 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
           lastError: input.errorMessage,
           updatedAt: input.failedAt
         })
-        .where(and(eq(outboxEvents.id, input.eventId), eq(outboxEvents.status, "publishing")));
+        .where(claimDispositionFence(input))
+        .returning({ id: outboxEvents.id });
+      assertClaimDispositionApplied(rows, "mark_publish_failed");
     }
   };
+}
+
+function claimDispositionFence(input: { readonly eventId: string; readonly claimFence: bigint }) {
+  return and(
+    eq(outboxEvents.id, input.eventId),
+    eq(outboxEvents.status, "publishing"),
+    eq(outboxEvents.claimFence, input.claimFence)
+  );
+}
+
+function assertClaimDispositionApplied(
+  rows: readonly { readonly id: string }[],
+  operation: OutboxRelayDispositionOperation
+): void {
+  if (rows.length !== 1) throw new OutboxRelayStaleClaimError(operation);
 }
 
 function toClaimedOutboxEvent(row: ClaimedOutboxEvent): ClaimedOutboxEvent {
@@ -115,6 +150,7 @@ function toClaimedOutboxEvent(row: ClaimedOutboxEvent): ClaimedOutboxEvent {
     eventType: row.eventType,
     aggregateId: row.aggregateId,
     payload: row.payload,
-    attempts: row.attempts
+    attempts: row.attempts,
+    claimFence: BigInt(row.claimFence)
   };
 }

@@ -254,7 +254,6 @@ def _fingerprint_input(value: Mapping[str, Any], method: str) -> Any:
         return {
             "inputSnapshot": value["inputSnapshot"],
             "partnerInputSnapshot": value["partnerInputSnapshot"],
-            "relationshipSnapshot": value["relationshipSnapshot"],
         }
     if method == "solar_return":
         return {

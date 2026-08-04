@@ -45,6 +45,7 @@ function savedCalculation(): CalculationRecordResponse {
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     module: "human_design",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "human_design_classic",
     title: "Марина Краснова — Дизайн человека",
     status: "linked",

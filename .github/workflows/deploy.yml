@@ -142,7 +142,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     needs:
@@ -164,6 +164,22 @@ jobs:
           printf '%s\n' "${PRODUCTION_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 0600 ~/.ssh/known_hosts
 
+      - name: Preflight production providers
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'bash -s' < deployment/server/preflight-production-providers.sh
+
+      - name: Preflight licensed chart ephemeris
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'bash -s' < deployment/server/preflight-chart-ephemeris.sh
+
       - name: Upload deployment files
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -171,11 +187,12 @@ jobs:
         run: |
           SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
           ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'install -d -m 0755 /opt/elevenhouse/compose /opt/elevenhouse/caddy && install -d -m 0700 /opt/elevenhouse/env /opt/elevenhouse/backups/postgres'
-          scp "${SSH_OPTS[@]}" deployment/compose/compose.production.yml "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/compose/compose.production.yml"
+          scp "${SSH_OPTS[@]}" deployment/compose/compose.production.yml "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/compose/compose.production.yml.next"
           scp "${SSH_OPTS[@]}" deployment/caddy/Caddyfile "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/caddy/Caddyfile"
           scp "${SSH_OPTS[@]}" deployment/server/backup-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/backup-postgres.sh"
           scp "${SSH_OPTS[@]}" deployment/server/restore-postgres.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/restore-postgres.sh"
           scp "${SSH_OPTS[@]}" deployment/server/cleanup-docker-retention.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/cleanup-docker-retention.sh"
+          scp "${SSH_OPTS[@]}" deployment/server/materialize-chart-service-envs.sh "${PRODUCTION_USER}@${PRODUCTION_HOST}:/opt/elevenhouse/materialize-chart-service-envs.sh"
 
       - name: Deploy over SSH
         env:
@@ -193,40 +210,70 @@ jobs:
             'bash -s' <<'REMOTE'
           set -euo pipefail
           cd /opt/elevenhouse
-          chmod +x backup-postgres.sh restore-postgres.sh cleanup-docker-retention.sh
+          chmod +x backup-postgres.sh restore-postgres.sh cleanup-docker-retention.sh materialize-chart-service-envs.sh
           test -f env/.env.production
           test "$(stat -c '%a' env/.env.production)" = "600"
           install -d -m 0700 env backups/postgres
-          ./cleanup-docker-retention.sh capture-rollback-set
+          ./materialize-chart-service-envs.sh
+          test "$(stat -c '%a' env/.env.chart-engine.production)" = "600"
+          test "$(stat -c '%a' env/.env.chart-worker.production)" = "600"
           umask 077
-          cat > env/.env.deploy <<EOF
+          cat > env/.env.deploy.next <<EOF
           IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
           IMAGE_TAG=${IMAGE_TAG}
           COMPOSE_PROJECT_NAME=elevenhouse
           EOF
-          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml pull
-          if docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps --services --status running | grep -qx postgres; then
-            ./backup-postgres.sh
+          compose_version="$(docker compose version --short)"
+          compose_version="${compose_version#v}"
+          if [[ ! "${compose_version}" =~ ^([0-9]+)\.([0-9]+)(\.|$) ]]; then
+            printf '%s\n' 'COMPOSE_VERSION_UNSUPPORTED' >&2
+            exit 1
           fi
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d postgres redis minio
+          compose_major="${BASH_REMATCH[1]}"
+          compose_minor="${BASH_REMATCH[2]}"
+          if (( compose_major < 2 || (compose_major == 2 && compose_minor < 30) )); then
+            printf '%s\n' 'COMPOSE_VERSION_UNSUPPORTED' >&2
+            exit 1
+          fi
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next config --quiet
+          ./cleanup-docker-retention.sh bootstrap-successful-release
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
+            node apps/chart-worker/dist/validate-startup-config.js </dev/null
+          mv -- compose/compose.production.yml.next compose/compose.production.yml
+          mv -- env/.env.deploy.next env/.env.deploy
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --no-recreate --wait --wait-timeout 120 postgres
+          ./backup-postgres.sh
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 120 postgres redis minio
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up --force-recreate --exit-code-from minio-init minio-init
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-reconciler </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-migrator </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml exec -T \
+            -e CHART_SMOKE_ALLOW_PRODUCTION=true \
+            -e CHART_SMOKE_EXPECTED_DATABASE_HOST=postgres \
+            -e CHART_SMOKE_EXPECTED_DATABASE_NAME=elevenhouse \
+            -e CHART_SMOKE_API_BASE_URL=http://127.0.0.1:3002 \
+            -e CHART_WORKER_BASE_URL=http://chart-worker:3012 \
+            -e CHART_ENGINE_BASE_URL=http://chart-engine:8012 \
+            -e CHART_SMOKE_ORIGIN=https://astrologer.elevenhouse.ai \
+            -e CHART_SMOKE_POLL_TIMEOUT_MS=150000 \
+            -e CHART_SMOKE_CLEANUP_SETTLE_TIMEOUT_MS=150000 \
+            astrologer-api node apps/astrologer-api/scripts/chart-engine-smoke.mjs
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
           REMOTE
 
       - name: Smoke check
         run: |
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://app.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://app.elevenhouse.ai/api/health
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://astrologer.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://astrologer.elevenhouse.ai/api/health
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --connect-timeout 10 -fsS https://admin.elevenhouse.ai/api/health
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai/api/health
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://astrologer.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://astrologer.elevenhouse.ai/api/health
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai/api/health
 
       - name: Cleanup production Docker artifacts
         if: success()
@@ -235,4 +282,11 @@ jobs:
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
           SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
-          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'cd /opt/elevenhouse && ./cleanup-docker-retention.sh cleanup-after-success'
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+            RELEASE_ID="${IMAGE_TAG}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/elevenhouse
+          ./cleanup-docker-retention.sh record-successful-release "${RELEASE_ID}"
+          ./cleanup-docker-retention.sh cleanup-after-success
+          REMOTE

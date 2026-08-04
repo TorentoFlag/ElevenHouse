@@ -1,6 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import { Test } from "@nestjs/testing";
 import { describe, expect, it, vi } from "vitest";
+import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { REDIS_CLIENT } from "../redis/redis.tokens";
 import { AiGenerationService } from "./ai-generation.service";
@@ -16,6 +17,8 @@ describe("AiModule", () => {
       .useValue({ eval: vi.fn(), quit: vi.fn() })
       .overrideProvider(REDIS_CLIENT)
       .useValue({ eval: vi.fn() })
+      .overrideProvider(PostgresRuntimeService)
+      .useValue({ database: {} })
       .overrideProvider(ConfigService)
       .useValue(
         new ConfigService({

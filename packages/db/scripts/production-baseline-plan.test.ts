@@ -5,9 +5,21 @@ import {
   approvedLegacyMigrations,
   classifyBaselineHistory,
   currentBaseline,
+  flowCapabilityManifestSafetyBaselineDdl,
   flowDefinitionControlBaselineDdl,
+  flowExecutionAtomicAdvanceBaselineDdl,
+  flowExecutionRetrySafetyBaselineDdl,
+  flowExecutionRuntimeBaselineDdl,
+  flowExecutionSafetyBaselineDdl,
+  flowOutboxSafetyBaselineDdl,
+  flowRunCancellationBaselineDdl,
+  flowRuntimeFoundationBaselineDdl,
+  previousAtomicAdvanceBaseline,
+  previousFlowSafetyBaseline,
   previousBaseline,
+  previousCancellationKernelBaseline,
   previousFlowDefinitionControlBaseline,
+  previousRuntimeKernelBaseline,
   schedulingBaselineDdl
 } from "./production-baseline-plan";
 
@@ -34,14 +46,36 @@ describe("production baseline transition plan", () => {
 
   it("accepts only explicit fresh, previous and calculation-legacy histories", () => {
     expect(classifyBaselineHistory([row(currentBaseline)])).toBe("current");
+    expect(classifyBaselineHistory([row(previousAtomicAdvanceBaseline)])).toBe(
+      "previous_atomic_advance"
+    );
+    expect(
+      classifyBaselineHistory([row(previousAtomicAdvanceBaseline), row(currentBaseline)])
+    ).toBe("current");
+    expect(classifyBaselineHistory([row(previousFlowSafetyBaseline)])).toBe("previous_flow_safety");
+    expect(
+      classifyBaselineHistory([row(previousFlowSafetyBaseline), row(previousAtomicAdvanceBaseline)])
+    ).toBe("previous_atomic_advance");
+    expect(classifyBaselineHistory([row(previousFlowSafetyBaseline), row(currentBaseline)])).toBe(
+      "current"
+    );
+    expect(classifyBaselineHistory([row(previousCancellationKernelBaseline)])).toBe(
+      "previous_cancellation_kernel"
+    );
+    expect(
+      classifyBaselineHistory([row(previousCancellationKernelBaseline), row(currentBaseline)])
+    ).toBe("current");
+    expect(classifyBaselineHistory([row(previousRuntimeKernelBaseline)])).toBe(
+      "previous_runtime_kernel"
+    );
+    expect(
+      classifyBaselineHistory([row(previousRuntimeKernelBaseline), row(currentBaseline)])
+    ).toBe("current");
     expect(classifyBaselineHistory([row(previousFlowDefinitionControlBaseline)])).toBe(
       "previous_flow_definition_control"
     );
     expect(
-      classifyBaselineHistory([
-        row(previousFlowDefinitionControlBaseline),
-        row(currentBaseline)
-      ])
+      classifyBaselineHistory([row(previousFlowDefinitionControlBaseline), row(currentBaseline)])
     ).toBe("current");
     expect(classifyBaselineHistory([row(previousBaseline), row(currentBaseline)])).toBe("current");
     expect(
@@ -114,7 +148,178 @@ describe("production baseline transition plan", () => {
     expect(flowDefinitionControlBaselineDdl).toContain(
       'CREATE TRIGGER "flow_definition_migrations_immutable"'
     );
+    expect(flowDefinitionControlBaselineDdl).toContain("flow-capability-manifest.v1");
+    expect(flowDefinitionControlBaselineDdl).toContain("flow-capability-manifest.v2");
+    expect(flowDefinitionControlBaselineDdl).toContain("executionSemanticsVersion");
+    expect(flowDefinitionControlBaselineDdl).toContain("triggerMatcher");
+    expect(flowDefinitionControlBaselineDdl).toContain("eventSchemaVersion");
+    expect(flowDefinitionControlBaselineDdl).toContain("capability_manifest ?& ARRAY[");
+    expect(flowDefinitionControlBaselineDdl).toContain("capability_manifest - ARRAY[");
     expect(flowDefinitionControlBaselineDdl).not.toContain("expires_at timestamptz");
+  });
+
+  it("contains the additive fail-closed capability-manifest transition", () => {
+    expect(flowCapabilityManifestSafetyBaselineDdl).toContain(
+      "ADD CONSTRAINT flow_versions_capability_manifest_schema_check"
+    );
+    expect(flowCapabilityManifestSafetyBaselineDdl).toContain("eventSchemaVersion");
+    expect(flowCapabilityManifestSafetyBaselineDdl).toContain("NOT VALID");
+    expect(flowCapabilityManifestSafetyBaselineDdl).toContain(
+      "VALIDATE CONSTRAINT flow_versions_capability_manifest_schema_check"
+    );
+    expect(flowCapabilityManifestSafetyBaselineDdl).not.toMatch(
+      /\b(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+flow_versions/
+    );
+  });
+
+  it("contains the lossless terminal-token runtime transition without fabricating executions", () => {
+    expect(flowExecutionRuntimeBaselineDdl).toContain(
+      "ADD COLUMN trace_sequence bigint DEFAULT 0 NOT NULL"
+    );
+    expect(flowExecutionRuntimeBaselineDdl).toContain("CREATE TABLE flow_execution_tokens");
+    expect(flowExecutionRuntimeBaselineDdl).toContain("CREATE TABLE flow_execution_attempts");
+    expect(flowExecutionRuntimeBaselineDdl).toContain("CREATE TABLE flow_run_events");
+    expect(flowExecutionRuntimeBaselineDdl).toContain(
+      "CREATE UNIQUE INDEX flow_execution_attempts_token_attempt_unique"
+    );
+    expect(flowExecutionRuntimeBaselineDdl).toContain(
+      'CREATE TRIGGER "flow_execution_attempts_immutable"'
+    );
+    expect(flowExecutionRuntimeBaselineDdl).toContain(
+      'CREATE TRIGGER "flow_execution_attempts_truncate_guard"'
+    );
+    expect(flowExecutionRuntimeBaselineDdl).toContain('CREATE TRIGGER "flow_run_events_immutable"');
+    expect(flowExecutionRuntimeBaselineDdl).toContain(
+      'CREATE TRIGGER "flow_run_events_truncate_guard"'
+    );
+    expect(flowExecutionRuntimeBaselineDdl).toContain("result_code text NOT NULL");
+    expect(flowExecutionRuntimeBaselineDdl).not.toContain("INSERT INTO flow_execution_tokens");
+    expect(flowExecutionRuntimeBaselineDdl).not.toContain("UPDATE flow_runs SET status");
+  });
+
+  it("contains the durable cancellation transition without fabricating commands or history", () => {
+    expect(flowRunCancellationBaselineDdl).toContain("CREATE TABLE flow_runtime_commands");
+    expect(flowRunCancellationBaselineDdl).toContain("CREATE TABLE flow_runtime_command_outcomes");
+    expect(flowRunCancellationBaselineDdl).toContain(
+      "ALTER TABLE flow_run_events ADD COLUMN command_id uuid"
+    );
+    expect(flowRunCancellationBaselineDdl).toContain("flow_run_events_command_run_owner_fk");
+    expect(flowRunCancellationBaselineDdl).toContain("FLOW_RUN_CANCELED_BY_OWNER");
+    expect(flowRunCancellationBaselineDdl).toContain(
+      'CREATE TRIGGER "flow_runtime_commands_immutable_identity"'
+    );
+    expect(flowRunCancellationBaselineDdl).toContain(
+      'CREATE CONSTRAINT TRIGGER "flow_runtime_command_outcome_consistency"'
+    );
+    expect(flowRunCancellationBaselineDdl).not.toContain("INSERT INTO flow_runtime_commands");
+    expect(flowRunCancellationBaselineDdl).not.toContain("INSERT INTO flow_run_events");
+  });
+
+  it("contains the lossless fenced outbox quarantine transition", () => {
+    expect(flowOutboxSafetyBaselineDdl).toContain(
+      "ADD COLUMN claim_fence bigint DEFAULT 0 NOT NULL"
+    );
+    expect(flowOutboxSafetyBaselineDdl).toContain("ADD COLUMN quarantine_reason_code text");
+    expect(flowOutboxSafetyBaselineDdl).toContain("outbox_events_state_check");
+    expect(flowOutboxSafetyBaselineDdl).toContain("outbox_events_claim_fence_check");
+    expect(flowOutboxSafetyBaselineDdl).toContain("outbox_events_quarantined_index");
+    expect(flowOutboxSafetyBaselineDdl).toContain("VALIDATE CONSTRAINT outbox_events_state_check");
+    expect(flowOutboxSafetyBaselineDdl).not.toContain("UPDATE outbox_events");
+    expect(flowOutboxSafetyBaselineDdl).not.toContain("INSERT INTO outbox_events");
+    expect(flowOutboxSafetyBaselineDdl).not.toContain("DELETE FROM outbox_events");
+  });
+
+  it("contains the lossless pinned retry and poison-token transition", () => {
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "ADD COLUMN retry_policy_key text DEFAULT 'flow-execution-retry.v1' NOT NULL"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "flow_execution_tokens_failure_state_check"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("max_attempts = 3");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("retry_base_delay_ms = 1000");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("retry_max_delay_ms = 60000");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "attempt_counter BETWEEN 0 AND max_attempts"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("fencing_token >= attempt_counter");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("attempt_counter < max_attempts");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("claimed_at <= lease_expires_at");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("claimed_at <= updated_at");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("failure_disposition IS NOT NULL");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("failure_reason_code IS NOT NULL");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "VALIDATE CONSTRAINT flow_execution_tokens_lease_state_check"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("attempt_number BETWEEN 1 AND 3");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("fencing_token >= attempt_number");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "VALIDATE CONSTRAINT flow_execution_attempts_number_check"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("FLOW_EXECUTION_RETRY_SCHEDULED");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain("FLOW_EXECUTION_RETRY_EXHAUSTED");
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "VALIDATE CONSTRAINT flow_execution_attempts_trace_summary_schema_check"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).toContain(
+      "CREATE INDEX flow_execution_tokens_quarantined_idx"
+    );
+    expect(flowExecutionRetrySafetyBaselineDdl).not.toMatch(
+      /\b(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+flow_(?:execution|run)/
+    );
+  });
+
+  it("contains the lossless one-token atomic-advance transition", () => {
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "ADD COLUMN node_activation_sequence bigint DEFAULT 1 NOT NULL"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "ALTER COLUMN node_activation_sequence DROP DEFAULT"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "flow_execution_attempts_token_activation_attempt_unique"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "flow_execution_tokens_completed_node_check"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "DROP CONSTRAINT flow_execution_tokens_node_kind_check"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "VALIDATE CONSTRAINT flow_execution_tokens_node_kind_check"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).not.toContain("'booking_confirmed'");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).not.toContain("'manual_client'");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain("flow_run_events_attempt_unique");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain("event_type = 'token_advanced'");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain("outcome = 'advanced'");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain("FLOW_TOKEN_ADVANCED");
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "jsonb_typeof(trace_summary->'sourceHandle') = 'string'"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "jsonb_typeof(summary->'selectedEdgeId') = 'string'"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).toContain(
+      "outcome = 'completed'\n          AND trace_summary->>'nodeKind' = 'completed'"
+    );
+    expect(flowExecutionAtomicAdvanceBaselineDdl).not.toMatch(
+      /\b(?:UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+flow_(?:execution|run)/
+    );
+    expect(flowExecutionSafetyBaselineDdl).toBe(
+      `${flowExecutionRetrySafetyBaselineDdl}\n${flowExecutionAtomicAdvanceBaselineDdl}`
+    );
+  });
+
+  it("contains the canonical runtime foundation transition without fabricating activity", () => {
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_runtime_events");
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_runs");
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_step_runs");
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_approvals");
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_delivery_attempts");
+    expect(flowRuntimeFoundationBaselineDdl).toContain("CREATE TABLE flow_suppressions");
+    expect(flowRuntimeFoundationBaselineDdl).not.toContain("INSERT INTO flow_runtime_events");
+    expect(flowRuntimeFoundationBaselineDdl).not.toContain("INSERT INTO flow_runs");
   });
 });
 

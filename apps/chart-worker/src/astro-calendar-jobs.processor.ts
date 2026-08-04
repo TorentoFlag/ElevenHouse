@@ -39,12 +39,21 @@ export async function processAstroCalendarGenerationJob(input: {
   readonly store: AstroCalendarGenerationStore;
   readonly engine: AstroCalendarEngineClient;
   readonly now: Date;
+  readonly storageOperationTimeoutMs: number;
 }): Promise<void> {
-  const current = await input.store.findById({ generationId: input.generationId });
-  if (!current) throw new UnrecoverableError("Astro calendar generation was not found");
+  let current: Awaited<ReturnType<AstroCalendarGenerationStore["findById"]>>;
+  try {
+    current = await runAstroCalendarStorageOperation(
+      () => input.store.findById({ generationId: input.generationId }),
+      input.storageOperationTimeoutMs
+    );
+  } catch {
+    throw new Error("ASTRO_CALENDAR_STORAGE_FAILURE");
+  }
+  if (!current) throw new UnrecoverableError("ASTRO_CALENDAR_GENERATION_NOT_FOUND");
   if (current.generation.status === "ready") return;
   if (current.generation.status !== "calculating") {
-    throw new UnrecoverableError("Astro calendar generation is not calculating");
+    throw new UnrecoverableError("ASTRO_CALENDAR_GENERATION_NOT_CALCULATING");
   }
 
   try {
@@ -57,51 +66,86 @@ export async function processAstroCalendarGenerationJob(input: {
       response.generation.provider === null ||
       response.generation.generatedAt === null
     ) {
-      throw new ChartEnginePermanentError("Chart engine did not return a ready astro calendar");
+      throw new ChartEnginePermanentError("CHART_ENGINE_RESPONSE_INVALID_SCHEMA");
     }
-    const completed = await input.store.markReady({
-      ownerUserId: current.generation.ownerUserId,
-      generationId: current.generation.id,
-      provider: response.generation.provider,
-      readinessSummary: current.generation.readinessSummary,
-      summary: response.summary,
-      warnings: [...current.generation.warnings, ...response.warnings],
-      events: response.events.map((event) => ({
-        eventId: event.id,
-        source: event.source,
-        type: event.type,
-        startsAt: event.startsAt,
-        endsAt: event.endsAt,
-        payload: event,
-        dictionaryCodes: event.dictionaryCodes
-      })),
-      generatedAt: response.generation.generatedAt,
-      now: input.now.toISOString()
-    });
-    if (!completed) throw new Error("Astro calendar generation completion could not be persisted");
-  } catch (error) {
-    if (error instanceof ChartEnginePermanentError || error instanceof UnrecoverableError) {
-      if (error instanceof ChartEnginePermanentError) {
-        await input.store.markFailed({
+    const provider = response.generation.provider;
+    const generatedAt = response.generation.generatedAt;
+    const completed = await runAstroCalendarStorageOperation(
+      () =>
+        input.store.markReady({
           ownerUserId: current.generation.ownerUserId,
           generationId: current.generation.id,
-          errorCode: "provider_invalid_result",
-          errorMessage: normalizeErrorMessage(error),
+          provider,
+          readinessSummary: current.generation.readinessSummary,
+          summary: response.summary,
+          warnings: [...current.generation.warnings, ...response.warnings],
+          events: response.events.map((event) => ({
+            eventId: event.id,
+            source: event.source,
+            type: event.type,
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            payload: event,
+            dictionaryCodes: event.dictionaryCodes
+          })),
+          generatedAt,
           now: input.now.toISOString()
-        });
+        }),
+      input.storageOperationTimeoutMs
+    );
+    if (!completed) throw new Error("ASTRO_CALENDAR_COMPLETION_REJECTED");
+  } catch (error) {
+    if (
+      error instanceof ChartEnginePermanentError ||
+      error instanceof z.ZodError ||
+      error instanceof UnrecoverableError
+    ) {
+      if (error instanceof UnrecoverableError) throw error;
+      try {
+        await runAstroCalendarStorageOperation(
+          () =>
+            input.store.markFailed({
+              ownerUserId: current.generation.ownerUserId,
+              generationId: current.generation.id,
+              errorCode:
+                error instanceof ChartEnginePermanentError
+                  ? "provider_invalid_result"
+                  : "job_input_invalid",
+              errorMessage:
+                error instanceof ChartEnginePermanentError
+                  ? "Chart engine returned an invalid AstroCalendar result"
+                  : "AstroCalendar job input is invalid",
+              now: input.now.toISOString()
+            }),
+          input.storageOperationTimeoutMs
+        );
+      } catch {
+        throw new Error("ASTRO_CALENDAR_STORAGE_FAILURE");
       }
-      throw createUnrecoverableError(error);
+      throw createUnrecoverableError(
+        error instanceof ChartEnginePermanentError
+          ? "ASTRO_CALENDAR_PROVIDER_INVALID_RESULT"
+          : "ASTRO_CALENDAR_JOB_INPUT_INVALID"
+      );
     }
     if (input.finalAttempt) {
-      await input.store.markFailed({
-        ownerUserId: current.generation.ownerUserId,
-        generationId: current.generation.id,
-        errorCode: "retry_exhausted",
-        errorMessage: normalizeErrorMessage(error),
-        now: input.now.toISOString()
-      });
+      try {
+        await runAstroCalendarStorageOperation(
+          () =>
+            input.store.markFailed({
+              ownerUserId: current.generation.ownerUserId,
+              generationId: current.generation.id,
+              errorCode: "retry_exhausted",
+              errorMessage: "AstroCalendar generation failed after configured retries",
+              now: input.now.toISOString()
+            }),
+          input.storageOperationTimeoutMs
+        );
+      } catch {
+        throw new Error("ASTRO_CALENDAR_STORAGE_FAILURE");
+      }
     }
-    throw error;
+    throw createAstroCalendarTransientError();
   }
 }
 
@@ -121,14 +165,31 @@ function toChartEngineRequest(
   };
 }
 
-function createUnrecoverableError(error: Error): UnrecoverableError {
-  if (error instanceof UnrecoverableError) return error;
-  const unrecoverableError = new UnrecoverableError(error.message);
-  unrecoverableError.cause = error;
-  return unrecoverableError;
+function createUnrecoverableError(code: string): UnrecoverableError {
+  return new UnrecoverableError(code);
 }
 
-function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message.trim().slice(0, 500);
-  return "Astro calendar generation failed";
+function createAstroCalendarTransientError(): Error {
+  return new Error("ASTRO_CALENDAR_TRANSIENT_FAILURE");
+}
+
+async function runAstroCalendarStorageOperation<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("ASTRO_CALENDAR_STORAGE_DEADLINE_EXCEEDED")),
+          timeoutMs
+        );
+        timer.unref();
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

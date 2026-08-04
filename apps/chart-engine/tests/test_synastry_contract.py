@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from chart_engine.main import app
+from chart_engine.schemas import StoredChartSynastryCalculationPayload
 from test_request_validation import execution_profile
 
 
@@ -34,10 +36,6 @@ def _synastry_payload():
             "longitude": 37.6173,
             "birthTimePrecision": "approximate",
         },
-        "relationshipSnapshot": {
-            "primaryClientId": "00000000-0000-4000-8000-000000000001",
-            "partnerClientId": "00000000-0000-4000-8000-000000000002",
-        },
     }
 
 
@@ -55,14 +53,19 @@ def test_synastry_returns_canonical_dual_wheel_shape():
     assert data["settings"] == payload["settings"]
     assert data["inputSnapshot"] == payload["inputSnapshot"]
     assert data["partnerInputSnapshot"] == payload["partnerInputSnapshot"]
-    assert data["relationshipSnapshot"] == payload["relationshipSnapshot"]
-    assert (
-        data["relationshipSnapshot"]["primaryClientId"],
-        data["relationshipSnapshot"]["partnerClientId"],
-    ) == (
-        "00000000-0000-4000-8000-000000000001",
-        "00000000-0000-4000-8000-000000000002",
-    )
+    assert "relationshipSnapshot" not in data
+    assert "ClientId" not in response.text
+    assert "00000000-0000-4000-8000-000000000001" not in response.text
+    with pytest.raises(ValidationError):
+        StoredChartSynastryCalculationPayload.model_validate(
+            {
+                **data,
+                "relationshipSnapshot": {
+                    "primaryClientId": "00000000-0000-4000-8000-000000000001",
+                    "partnerClientId": "00000000-0000-4000-8000-000000000002",
+                },
+            }
+        )
     primary_point_ids = {point["id"] for point in data["result"]["primary"]["points"]}
     partner_point_ids = {point["id"] for point in data["result"]["partner"]["points"]}
     assert {"sun", "moon", "ascendant", "midheaven", "north_node", "south_node"}.issubset(

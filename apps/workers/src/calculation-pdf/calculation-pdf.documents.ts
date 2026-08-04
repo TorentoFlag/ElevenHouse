@@ -3,8 +3,10 @@ import type {
   DictionaryEntrySource,
   HumanDesignResult,
   NumerologyResult,
-  StoredChartNatalCalculationPayload
+  ReproducibleChartResult
 } from "@elevenhouse/contracts";
+
+export type ChartNatalPdfResult = Extract<ReproducibleChartResult, { readonly method: "natal" }>;
 
 export type MatrixPdfDocument = {
   readonly kind: "matrix";
@@ -27,7 +29,7 @@ export type ChartPdfDocument = {
   readonly locale: "ru" | "en";
   readonly createdAt: string;
   readonly calculationTitle: string;
-  readonly result: StoredChartNatalCalculationPayload;
+  readonly result: ChartNatalPdfResult;
   readonly approvedInterpretation: string | null;
   readonly interpretations: readonly ChartPdfInterpretation[];
 };

@@ -10,6 +10,7 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayIntervalMs: 1000,
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
+      flowRuntimeOutboxMaxAttempts: 5,
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
       calculationPdfJitter: 0.5,
@@ -29,6 +30,7 @@ describe("createWorkersRuntimeConfig", () => {
     expect(
       createWorkersRuntimeConfig({
         REDIS_URL: "rediss://worker:secret@redis.internal:6380/2",
+        WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "7",
         WORKERS_CALCULATION_PDF_ATTEMPTS: "7",
         WORKERS_CALCULATION_PDF_JITTER: "0.25",
         WORKERS_CALCULATION_PDF_CONCURRENCY: "4",
@@ -38,6 +40,7 @@ describe("createWorkersRuntimeConfig", () => {
       })
     ).toMatchObject({
       redisUrl: "rediss://worker:secret@redis.internal:6380/2",
+      flowRuntimeOutboxMaxAttempts: 7,
       calculationPdfAttempts: 7,
       calculationPdfJitter: 0.25,
       calculationPdfConcurrency: 4,
@@ -54,6 +57,9 @@ describe("createWorkersRuntimeConfig", () => {
       createWorkersRuntimeConfig({ WORKERS_CALCULATION_PDF_CONCURRENCY: "50" })
     ).toThrow();
     expect(() => createWorkersRuntimeConfig({ WORKERS_CALCULATION_PDF_JITTER: "1.5" })).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "21" })
+    ).toThrow();
   });
 
   it("requires every external dependency and PDF tuning value explicitly in production", () => {
@@ -64,6 +70,12 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_CALCULATION_PDF_BACKOFF_MS: undefined
       })
     ).toThrow("WORKERS_CALCULATION_PDF_BACKOFF_MS");
+    expect(() =>
+      createWorkersRuntimeConfig({
+        ...productionConfig(),
+        WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: undefined
+      })
+    ).toThrow("WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS");
   });
 
   it("rejects local object-storage defaults and insecure endpoints in production", () => {
@@ -99,6 +111,7 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayIntervalMs: 1000,
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
+      flowRuntimeOutboxMaxAttempts: 5,
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
       calculationPdfJitter: 0.5,
@@ -121,6 +134,7 @@ function productionConfig(): Record<string, string | undefined> {
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS: "1000",
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE: "25",
     WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: "60000",
+    WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "5",
     WORKERS_CALCULATION_PDF_ATTEMPTS: "5",
     WORKERS_CALCULATION_PDF_BACKOFF_MS: "1000",
     WORKERS_CALCULATION_PDF_JITTER: "0.5",

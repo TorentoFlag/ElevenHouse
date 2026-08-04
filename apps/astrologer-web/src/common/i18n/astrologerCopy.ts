@@ -1,6 +1,10 @@
 import type { OtpAuthFormCopy } from "@elevenhouse/design-system/components/OtpAuthForm";
 import type { OtpCodeFormCopy } from "@elevenhouse/design-system/components/OtpCodeForm";
 import type { SupportedLocale } from "@elevenhouse/i18n";
+import {
+  chartEngineCopyByLocale,
+  type ChartEngineCopy
+} from "../../features/charts/model/chartEngineCopy";
 
 export type AuthCopy = {
   documentTitle: string;
@@ -206,6 +210,7 @@ export type AstrologerCopy = {
       retryLabel: string;
     };
   };
+  chartEngine: ChartEngineCopy;
   numerology: {
     interpretation: NumerologyInterpretationCopy;
   };
@@ -705,6 +710,7 @@ export const astrologerCopyByLocale = {
         retryLabel: "Повторить"
       }
     },
+    chartEngine: chartEngineCopyByLocale.ru,
     numerology: {
       interpretation: {
         sectionLabel: "AI-разбор портрета",
@@ -1145,6 +1151,7 @@ export const astrologerCopyByLocale = {
         retryLabel: "Retry"
       }
     },
+    chartEngine: chartEngineCopyByLocale.en,
     numerology: {
       interpretation: {
         sectionLabel: "AI portrait interpretation",

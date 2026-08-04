@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  CalculationRecordResponse,
-  ChartHoraryQuestionSnapshot,
-  ChartSettings,
-  ChartTransitMoment,
-  StoredChartCalculationPayload
-} from "@elevenhouse/contracts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { ChartSettings, type ClientBirthPlaceCandidate } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
   getAstrologerClient,
+  resolveClientBirthPlaceReference,
   searchClientBirthPlaces,
   updateClientBirthData
 } from "../../features/clients/api/clientsApi";
@@ -20,26 +15,58 @@ import {
   toClientSelectOptions
 } from "../../features/clients/model/clientSelectorModel";
 import {
-  createAstrocartographyChartJob,
-  createHoraryChartJob,
-  createCompositeChartJob,
-  createNatalChartJob,
-  createProgressionChartJob,
-  createSolarReturnChartJob,
-  createSynastryChartJob,
-  createTransitChartJob,
   downloadChartPdf,
   enqueueChartPdf,
   getChartCalculation,
   getChartJob,
-  getLatestChartPdf,
-  recalculateChart
+  getLatestChartPdf
 } from "../../features/charts/api/chartsApi";
+import { resolveChartCalculationIdentity } from "../../features/charts/model/chartCalculationIdentity";
 import {
-  getChartBirthDataReadiness,
-  isChartResultStale,
-  toChartHoraryQuestionSnapshot
-} from "../../features/charts/model/chartEngineState";
+  createChartBirthDataDraft,
+  toBirthDataUpsertRequest,
+  updateChartBirthDataDraft
+} from "../../features/charts/model/chartBirthDataDraft";
+import { chartEngineCopyByLocale } from "../../features/charts/model/chartEngineCopy";
+import {
+  createInitialChartEngineControllerState,
+  defaultChartEngineSettings,
+  deriveChartEngineJobState,
+  errorMessageFrom,
+  getChartIdentityErrorMessage,
+  getDefaultHoraryQuestion,
+  getDefaultProgressionTargetDate,
+  getDefaultTransitMoment,
+  getHoraryPlaceReferenceErrorMessage,
+  restoreChartEngineViewState,
+  resolveChartEngineCalculationState,
+  resolveChartEngineSubmissionAuthority,
+  shouldCommitTerminalJobRecovery
+} from "../../features/charts/model/chartEngineControllerState";
+import type {
+  ChartHoraryQuestionInput,
+  ChartTransitMomentInput
+} from "../../features/charts/model/chartEngineInput";
+import type { ChartEngineMode } from "../../features/charts/model/chartEngineMode";
+import {
+  buildSubmissionUrlState,
+  getChartJobRecalculationTarget,
+  getExactChartCalculationRefreshKeys,
+  resolveChartRecalculationTarget,
+  type ChartRecalculationTarget
+} from "../../features/charts/model/chartEngineRecovery";
+import { submitChartEngineMode } from "../../features/charts/model/chartEngineSubmission";
+import {
+  attachChartEngineSubmissionTarget,
+  prepareChartEngineSubmission
+} from "../../features/charts/model/chartEngineSubmissionRequest";
+import {
+  buildChartEngineSearch as buildSafeChartEngineSearch,
+  transitionChartEngineUrlState,
+  type ChartEngineUrlState as SafeChartEngineUrlState
+} from "../../features/charts/model/chartEngineUrlState";
+import { isChartResultStale } from "../../features/charts/model/chartEngineState";
+import { updateChartCivilMoment } from "../../features/charts/model/chartCivilTimeOccurrence";
 import {
   buildChartPdfAction,
   closeReservedChartPdfWindow,
@@ -52,438 +79,203 @@ import {
   linkCalculationClient
 } from "../../features/calculations/api/calculationsApi";
 import { isCalculationLinked } from "../../features/calculations/model/calculationStatus";
-import type {
-  ChartEngineMode,
-  ChartEnginePageJobState,
-  ChartHoraryQuestionInput,
-  ChartTransitMomentInput
-} from "../../features/charts/components/ChartEnginePage";
-import { getChartResultMethodForMode } from "../../features/charts/components/ChartEnginePage";
+import { getChartResultMethodForMode } from "../../features/charts/model/chartEngineMode";
 
-const defaultSettings: ChartSettings = {
-  zodiac: "tropical",
-  houseSystem: "placidus",
-  nodeType: "true",
-  aspectPreset: "major",
-  orbMultiplier: 1
-};
+export {
+  createInitialChartEngineControllerState,
+  deriveChartEngineJobState,
+  getBrowserTimezone,
+  getChartLinkableClientId,
+  getDefaultProgressionTargetDate,
+  restoreChartEngineViewState,
+  resolveChartEngineCalculationState,
+  resolveChartEngineSubmissionAuthority,
+  shouldCommitTerminalJobRecovery
+} from "../../features/charts/model/chartEngineControllerState";
+export {
+  submitAstrocartographyCalculation,
+  submitChartCalculation,
+  submitChartEngineMode,
+  submitCompositeCalculation,
+  submitHoraryCalculation,
+  submitProgressionCalculation,
+  submitSolarReturnCalculation,
+  submitSynastryCalculation,
+  submitTargetedOrNewChart,
+  submitTransitCalculation
+} from "../../features/charts/model/chartEngineSubmission";
+export type { ChartEngineSubmission } from "../../features/charts/model/chartEngineSubmission";
+
+async function refreshExactChartCalculation(queryClient: QueryClient, calculationId: string) {
+  await Promise.all(
+    getExactChartCalculationRefreshKeys(calculationId).map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "active" })
+    )
+  );
+}
 
 export function useChartEngineController() {
-  useDocumentTitle("ElevenHouse | Движок карт");
   const { locale } = useI18n();
+  const chartCopy = chartEngineCopyByLocale[locale];
+  const controllerCopy = chartCopy.controller;
+  useDocumentTitle(chartCopy.documentTitle);
   const pdfLocale = locale === "en" ? "en" : "ru";
   const queryClient = useQueryClient();
-  const initialUrlState = useMemo(() => readChartEngineUrlState(), []);
+  const initialControllerState = useMemo(
+    () => createInitialChartEngineControllerState(getCurrentChartEngineSearch()),
+    []
+  );
+  const initialUrlState = initialControllerState.urlState;
+  const [urlState, setUrlState] = useState(initialUrlState);
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
   const [selectedPartnerClient, setSelectedPartnerClient] = useState<ClientSelectOption | null>(
     null
   );
+  const [restoredClientId, setRestoredClientId] = useState<string | null>(initialUrlState.clientId);
   const [restoredPartnerClientId, setRestoredPartnerClientId] = useState<string | null>(
-    initialUrlState.partnerClientId ?? null
+    initialUrlState.partnerClientId
   );
-  const [settings, setSettings] = useState<ChartSettings>(defaultSettings);
-  const [mode, setMode] = useState<ChartEngineMode>(initialUrlState.mode ?? "natal");
-  const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(() =>
-    getDefaultTransitMoment()
+  const [settings, setSettings] = useState<ChartSettings>(defaultChartEngineSettings);
+  const [mode, setMode] = useState<ChartEngineMode>(initialControllerState.mode);
+  const [transitMoment, setTransitMoment] = useState<ChartTransitMomentInput>(
+    initialControllerState.transitMoment
   );
-  const [solarReturnYear, setSolarReturnYear] = useState(() => new Date().getFullYear());
-  const [progressionTargetDate, setProgressionTargetDate] = useState(() =>
-    getDefaultProgressionTargetDate()
+  const [solarReturnYear, setSolarReturnYear] = useState(initialControllerState.solarReturnYear);
+  const [progressionTargetDate, setProgressionTargetDate] = useState(
+    initialControllerState.progressionTargetDate
   );
-  const [horaryQuestion, setHoraryQuestion] = useState<ChartHoraryQuestionInput>(() =>
-    getDefaultHoraryQuestion()
+  const [horaryQuestion, setHoraryQuestion] = useState<ChartHoraryQuestionInput>(
+    initialControllerState.horaryQuestion
   );
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [calculationId, setCalculationId] = useState<string | null>(initialUrlState.calculationId);
-  const [immediateResult, setImmediateResult] = useState<StoredChartCalculationPayload | null>(
-    null
+  const [horaryPlaceText, setHoraryPlaceText] = useState("");
+  const [jobId, setJobId] = useState<string | null>(initialControllerState.jobId);
+  const [calculationId, setCalculationId] = useState<string | null>(
+    initialControllerState.calculationId
   );
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [calculationErrorMessage, setCalculationErrorMessage] = useState<string | null>(null);
+  const [pdfActionErrorMessage, setPdfActionErrorMessage] = useState<string | null>(null);
   const [hasResultStaleIntent, setHasResultStaleIntent] = useState(false);
+  const [pendingRecalculationTarget, setPendingRecalculationTarget] =
+    useState<ChartRecalculationTarget | null>(null);
+  const submissionEpochRef = useRef(0);
+  const terminalRecoveryRef = useRef<string | null>(null);
+
+  const invalidateActiveSubmission = () => {
+    submissionEpochRef.current += 1;
+  };
+
+  const commitUrlState = (next: SafeChartEngineUrlState) => {
+    setUrlState(next);
+    writeChartEngineUrlState(next);
+  };
 
   const restoredClientQuery = useQuery({
-    queryKey: ["clients", "detail", initialUrlState.clientId],
-    queryFn: () => getAstrologerClient(initialUrlState.clientId ?? ""),
-    enabled: Boolean(initialUrlState.clientId && !selectedClient)
+    queryKey: ["clients", "detail", restoredClientId],
+    queryFn: () => getAstrologerClient(restoredClientId ?? ""),
+    enabled: Boolean(restoredClientId && !selectedClient),
+    retry: false
   });
   const partnerClientIdToRestore = restoredPartnerClientId;
   const restoredPartnerClientQuery = useQuery({
     queryKey: ["clients", "detail", partnerClientIdToRestore],
     queryFn: () => getAstrologerClient(partnerClientIdToRestore ?? ""),
-    enabled: Boolean(partnerClientIdToRestore && !selectedPartnerClient)
+    enabled: Boolean(partnerClientIdToRestore && !selectedPartnerClient),
+    retry: false
+  });
+  const horaryPlaceReferenceQuery = useQuery({
+    queryKey: [
+      "clients",
+      "birth-place-reference",
+      urlState.horaryPlaceProvider,
+      urlState.horaryPlaceId
+    ],
+    queryFn: () => resolveClientBirthPlaceReference(urlState.horaryPlaceId ?? ""),
+    enabled: Boolean(
+      mode === "horary" && urlState.horaryPlaceProvider === "geoapify" && urlState.horaryPlaceId
+    ),
+    retry: false
   });
 
+  useEffect(() => {
+    const candidate = horaryPlaceReferenceQuery.data;
+    if (!candidate || mode !== "horary") return;
+    setHoraryPlaceText(candidate.placeName);
+    setHoraryQuestion((current) => ({
+      ...updateChartCivilMoment(current, { timezone: candidate.timezone }),
+      latitude: candidate.latitude,
+      longitude: candidate.longitude
+    }));
+  }, [horaryPlaceReferenceQuery.data, mode]);
+
   const calculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      isResultStale,
-      settings
-    }: {
-      readonly clientId: string;
-      readonly isResultStale: boolean;
-      readonly settings: ChartSettings;
-    }) =>
-      submitChartCalculation({
-        clientId,
-        calculationId,
-        isResultStale,
-        settings,
-        create: createNatalChartJob,
-        recalculate: recalculateChart
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
+    mutationFn: submitChartEngineMode,
+    onMutate: () => {
+      submissionEpochRef.current += 1;
+      return { epoch: submissionEpochRef.current };
+    },
+    onSuccess: async (response, variables, submissionContext) => {
+      if (submissionContext?.epoch !== submissionEpochRef.current) return;
+      setCalculationErrorMessage(null);
       if (response.status === "succeeded") {
+        if (
+          variables.calculationId !== null &&
+          variables.calculationId === response.calculationId
+        ) {
+          await refreshExactChartCalculation(queryClient, response.calculationId);
+          if (submissionContext?.epoch !== submissionEpochRef.current) return;
+        }
         setJobId(null);
         setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: mode === "child_chart" ? "child_chart" : "natal",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
+        setPendingRecalculationTarget(null);
+        setHasResultStaleIntent(false);
+      } else {
+        setCalculationId(null);
+        setJobId(response.jobId);
+        setPendingRecalculationTarget(
+          variables.calculationId && variables.expectedResultChecksum
+            ? {
+                calculationId: variables.calculationId,
+                expectedResultChecksum: variables.expectedResultChecksum
+              }
+            : null
+        );
+        setHasResultStaleIntent(false);
       }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: mode === "child_chart" ? "child_chart" : "natal",
-        clientId: variables.clientId,
-        calculationId: null
-      });
+      commitUrlState(
+        buildSubmissionUrlState({ current: urlState, submission: variables, response })
+      );
     },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить расчёт карты");
-    }
-  });
-  const transitCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      settings,
-      transit
-    }: {
-      readonly clientId: string;
-      readonly settings: ChartSettings;
-      readonly transit: ChartTransitMoment;
-    }) =>
-      submitTransitCalculation({
-        clientId,
-        settings,
-        transit,
-        create: createTransitChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "transit",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "transit",
-        clientId: variables.clientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить транзиты");
-    }
-  });
-  const synastryCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      partnerClientId,
-      settings
-    }: {
-      readonly clientId: string;
-      readonly partnerClientId: string;
-      readonly settings: ChartSettings;
-    }) =>
-      submitSynastryCalculation({
-        clientId,
-        partnerClientId,
-        settings,
-        create: createSynastryChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "synastry",
-          clientId: variables.clientId,
-          partnerClientId: variables.partnerClientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "synastry",
-        clientId: variables.clientId,
-        partnerClientId: variables.partnerClientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить синстрию");
-    }
-  });
-  const compositeCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      partnerClientId,
-      settings
-    }: {
-      readonly clientId: string;
-      readonly partnerClientId: string;
-      readonly settings: ChartSettings;
-    }) =>
-      submitCompositeCalculation({
-        clientId,
-        partnerClientId,
-        settings,
-        create: createCompositeChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "composite",
-          clientId: variables.clientId,
-          partnerClientId: variables.partnerClientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "composite",
-        clientId: variables.clientId,
-        partnerClientId: variables.partnerClientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить композит");
-    }
-  });
-  const solarReturnCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      settings,
-      year
-    }: {
-      readonly clientId: string;
-      readonly settings: ChartSettings;
-      readonly year: number;
-    }) =>
-      submitSolarReturnCalculation({
-        clientId,
-        settings,
-        year,
-        create: createSolarReturnChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "solar_return",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "solar_return",
-        clientId: variables.clientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить соляр");
-    }
-  });
-  const progressionCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      settings,
-      targetDate
-    }: {
-      readonly clientId: string;
-      readonly settings: ChartSettings;
-      readonly targetDate: string;
-    }) =>
-      submitProgressionCalculation({
-        clientId,
-        settings,
-        targetDate,
-        create: createProgressionChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "progression",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "progression",
-        clientId: variables.clientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить прогрессии");
-    }
-  });
-  const horaryCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      question,
-      settings
-    }: {
-      readonly clientId: string;
-      readonly question: ChartHoraryQuestionSnapshot;
-      readonly settings: ChartSettings;
-    }) =>
-      submitHoraryCalculation({
-        clientId,
-        settings,
-        question,
-        create: createHoraryChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "horary",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "horary",
-        clientId: variables.clientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить хорар");
-    }
-  });
-  const astrocartographyCalculationMutation = useMutation({
-    mutationFn: ({
-      clientId,
-      settings
-    }: {
-      readonly clientId: string;
-      readonly settings: ChartSettings;
-    }) =>
-      submitAstrocartographyCalculation({
-        clientId,
-        settings,
-        create: createAstrocartographyChartJob
-      }),
-    onSuccess: (response, variables) => {
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      if (response.status === "succeeded") {
-        setJobId(null);
-        setCalculationId(response.calculationId);
-        setImmediateResult(response.result as StoredChartCalculationPayload);
-        writeChartEngineUrlState({
-          mode: "astrocartography",
-          clientId: variables.clientId,
-          calculationId: response.calculationId
-        });
-        return;
-      }
-      setImmediateResult(null);
-      setCalculationId(null);
-      setJobId(response.jobId);
-      writeChartEngineUrlState({
-        mode: "astrocartography",
-        clientId: variables.clientId,
-        calculationId: null
-      });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось запустить астрокарту");
+    onError: (error, _variables, submissionContext) => {
+      if (submissionContext?.epoch !== submissionEpochRef.current) return;
+      setCalculationErrorMessage(
+        error instanceof Error ? error.message : controllerCopy.startFailed
+      );
     }
   });
 
   const birthDataMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof updateClientBirthData>[1]) => {
-      if (!selectedClient) {
-        throw new Error("Выберите клиента из CRM");
-      }
-
-      return updateClientBirthData(selectedClient.value, data);
+    mutationFn: async (input: {
+      readonly clientId: string;
+      readonly data: Parameters<typeof updateClientBirthData>[1];
+      readonly sourceBirthData: ClientSelectOption["birthData"];
+    }) => {
+      const draft = updateChartBirthDataDraft(
+        createChartBirthDataDraft(input.clientId, input.sourceBirthData),
+        input.data
+      );
+      return updateClientBirthData(input.clientId, toBirthDataUpsertRequest(draft, input.clientId));
     },
     onSuccess: async (response) => {
       const [updatedClient] = toClientSelectOptions([response.client]);
       if (updatedClient) {
-        setSelectedClient(updatedClient);
+        setSelectedClient((current) =>
+          current?.value === updatedClient.value ? updatedClient : current
+        );
       }
-      setErrorMessage(null);
       if (result) {
         setHasResultStaleIntent(true);
       }
       await queryClient.invalidateQueries({ queryKey: astrologerClientsQueryKeys.all() });
-    },
-    onError: (error) => {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Не удалось сохранить данные рождения"
-      );
     }
   });
   const birthPlaceSearchMutation = useMutation({
@@ -498,57 +290,124 @@ export function useChartEngineController() {
     queryKey: ["charts", "jobs", jobId],
     queryFn: () => getChartJob(jobId ?? ""),
     enabled: Boolean(jobId),
-    refetchInterval: (query: { state: { data?: { status: string } } }) =>
-      query.state.data?.status === "calculating" || !query.state.data ? 1800 : false
+    retry: false,
+    refetchInterval: (query) => {
+      if (query.state.error) return false;
+      return query.state.data?.status === "calculating" || !query.state.data ? 1800 : false;
+    }
   });
+  const ownerScopedJobTarget = useMemo(
+    () => getChartJobRecalculationTarget(jobQuery.data, jobId),
+    [jobId, jobQuery.data]
+  );
+  const recalculationTargetState = useMemo(
+    () =>
+      resolveChartRecalculationTarget(
+        pendingRecalculationTarget,
+        ownerScopedJobTarget,
+        controllerCopy
+      ),
+    [controllerCopy, ownerScopedJobTarget, pendingRecalculationTarget]
+  );
+  const effectiveCalculationId =
+    calculationId ?? recalculationTargetState.target?.calculationId ?? null;
 
   useEffect(() => {
     const job = jobQuery.data;
-    if (!job) return;
-    if (job.status === "succeeded" && job.calculationId) {
-      setCalculationId(job.calculationId);
-      setJobId(null);
-      setErrorMessage(null);
-      setHasResultStaleIntent(false);
-      writeChartEngineUrlState({
-        mode,
-        clientId: selectedClient?.value ?? initialUrlState.clientId,
-        partnerClientId: selectedPartnerClient?.value ?? initialUrlState.partnerClientId,
-        calculationId: job.calculationId
-      });
+    if (!job || !jobId || job.id !== jobId) return;
+    const authoritativeJobMode =
+      job.interpretationMode === "child"
+        ? "child_chart"
+        : job.interpretationMode === "adult_natal"
+          ? "natal"
+          : null;
+    if (
+      authoritativeJobMode &&
+      (mode !== authoritativeJobMode || urlState.mode !== authoritativeJobMode)
+    ) {
+      setMode(authoritativeJobMode);
+      commitUrlState({ ...urlState, mode: authoritativeJobMode });
     }
-    if (job.status === "failed") {
-      setJobId(null);
-      setErrorMessage(job.failureMessage ?? "Не удалось рассчитать карту");
+    if (job.status === "succeeded") {
+      if (
+        !shouldCommitTerminalJobRecovery({
+          localJobId: jobId,
+          localCalculationId: calculationId,
+          urlJobId: urlState.jobId,
+          urlCalculationId: urlState.calculationId,
+          terminalCalculationId: job.calculationId
+        })
+      ) {
+        return;
+      }
+      const recoveryKey = `${job.id}:${job.calculationId}`;
+      if (terminalRecoveryRef.current === recoveryKey) return;
+      terminalRecoveryRef.current = recoveryKey;
+      const recoveryEpoch = submissionEpochRef.current;
+      void (async () => {
+        if (job.targetCalculationId === job.calculationId) {
+          await refreshExactChartCalculation(queryClient, job.calculationId);
+        }
+        if (
+          recoveryEpoch !== submissionEpochRef.current ||
+          terminalRecoveryRef.current !== recoveryKey
+        ) {
+          return;
+        }
+        setCalculationId(job.calculationId);
+        setJobId(null);
+        setPendingRecalculationTarget(null);
+        setCalculationErrorMessage(null);
+        setHasResultStaleIntent(false);
+        commitUrlState({
+          ...urlState,
+          ...(authoritativeJobMode ? { mode: authoritativeJobMode } : {}),
+          jobId: null,
+          calculationId: job.calculationId
+        });
+        terminalRecoveryRef.current = null;
+      })();
     }
-  }, [
-    initialUrlState.clientId,
-    initialUrlState.partnerClientId,
-    jobQuery.data,
-    mode,
-    selectedClient?.value,
-    selectedPartnerClient?.value
-  ]);
+  }, [calculationId, jobId, jobQuery.data, mode, queryClient, urlState]);
 
   const calculationQuery = useQuery({
-    queryKey: ["charts", "calculations", calculationId],
-    queryFn: () => getChartCalculation(calculationId ?? ""),
-    enabled: Boolean(calculationId && !immediateResult)
+    queryKey: ["charts", "calculations", effectiveCalculationId],
+    queryFn: () => getChartCalculation(effectiveCalculationId ?? ""),
+    enabled: Boolean(effectiveCalculationId),
+    retry: false
   });
   const savedCalculationQuery = useQuery({
-    queryKey: ["calculations", calculationId],
-    queryFn: () => getSavedCalculation(calculationId ?? ""),
-    enabled: Boolean(calculationId)
+    queryKey: ["calculations", effectiveCalculationId],
+    queryFn: () => getSavedCalculation(effectiveCalculationId ?? ""),
+    enabled: Boolean(effectiveCalculationId),
+    retry: false
   });
+  const calculationState = useMemo(
+    () =>
+      resolveChartEngineCalculationState({
+        mode,
+        selectedClientId: selectedClient?.value ?? urlState.clientId,
+        selectedPartnerClientId: selectedPartnerClient?.value ?? urlState.partnerClientId,
+        chartCalculation: effectiveCalculationId ? calculationQuery.data : undefined,
+        savedCalculation: effectiveCalculationId ? savedCalculationQuery.data : undefined
+      }),
+    [
+      effectiveCalculationId,
+      calculationQuery.data,
+      mode,
+      savedCalculationQuery.data,
+      selectedClient?.value,
+      selectedPartnerClient?.value,
+      urlState.clientId,
+      urlState.partnerClientId
+    ]
+  );
+  const authoritativeMode = calculationState.mode ?? mode;
   const linkCalculationMutation = useMutation({
     mutationFn: linkCalculationClient,
     onSuccess: async (calculation) => {
-      setErrorMessage(null);
       queryClient.setQueryData(["calculations", calculation.id], calculation);
       await queryClient.invalidateQueries({ queryKey: ["calculations"] });
-    },
-    onError: (error) => {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось привязать расчёт");
     }
   });
 
@@ -571,10 +430,44 @@ export function useChartEngineController() {
   }, [restoredPartnerClientQuery.data, selectedPartnerClient]);
 
   useEffect(() => {
-    if (!calculationQuery.data) return;
-    const restoredState = restoreChartEngineViewState(calculationQuery.data, { mode });
+    if (calculationState.identity.kind !== "ready") return;
+    const { subjectClientId, partnerClientId } = calculationState.identity;
+    if (!selectedClient && !restoredClientId) {
+      setRestoredClientId(subjectClientId);
+    }
+    if (partnerClientId && !selectedPartnerClient && !restoredPartnerClientId) {
+      setRestoredPartnerClientId(partnerClientId);
+    }
+    if (urlState.clientId === null || urlState.partnerClientId !== partnerClientId) {
+      commitUrlState({
+        ...urlState,
+        clientId: subjectClientId,
+        partnerClientId
+      });
+    }
+  }, [
+    calculationState.identity,
+    restoredClientId,
+    restoredPartnerClientId,
+    selectedClient,
+    selectedPartnerClient,
+    urlState
+  ]);
+
+  useEffect(() => {
+    if (!calculationState.result || !calculationState.interpretationMode) return;
+    const restoredState = restoreChartEngineViewState(calculationState.result, {
+      interpretationMode: calculationState.interpretationMode,
+      partnerClientId:
+        calculationState.identity.kind === "ready"
+          ? calculationState.identity.partnerClientId
+          : null
+    });
     setSettings(restoredState.settings);
     setMode(restoredState.mode);
+    if (urlState.mode !== restoredState.mode) {
+      commitUrlState({ ...urlState, mode: restoredState.mode });
+    }
     if (restoredState.transitMoment) {
       setTransitMoment(restoredState.transitMoment);
     }
@@ -591,20 +484,65 @@ export function useChartEngineController() {
       setHoraryQuestion(restoredState.horaryQuestion);
     }
     setHasResultStaleIntent(false);
-  }, [calculationQuery.data, mode]);
+  }, [
+    calculationState.identity,
+    calculationState.interpretationMode,
+    calculationState.result,
+    urlState
+  ]);
 
-  const result = immediateResult ?? calculationQuery.data ?? null;
+  const result = calculationState.result;
   const savedCalculation = savedCalculationQuery.data ?? null;
-  const isCurrentCalculationLinked = isCalculationLinked(savedCalculation);
-  const linkableClientId = getChartLinkableClientId(savedCalculation, selectedClient?.value ?? null);
+  const authoritativeCalculationIdentity = savedCalculation
+    ? resolveChartCalculationIdentity({
+        calculation: savedCalculation,
+        mode: authoritativeMode,
+        selectedClientId: null,
+        selectedPartnerClientId: null
+      })
+    : ({ kind: "pending" } as const);
+  const canRecoverCalculationIdentity = Boolean(
+    (calculationState.identity.kind === "client_mismatch" ||
+      calculationState.identity.kind === "partner_mismatch") &&
+    authoritativeCalculationIdentity.kind === "ready"
+  );
+  const recoveredTargetChecksumMismatch = Boolean(
+    recalculationTargetState.target &&
+    savedCalculation &&
+    savedCalculation.resultChecksum !== recalculationTargetState.target.expectedResultChecksum
+  );
+  const submissionAuthority = resolveChartEngineSubmissionAuthority({
+    calculationId: effectiveCalculationId,
+    expectedResultChecksum: recalculationTargetState.target
+      ? recoveredTargetChecksumMismatch
+        ? null
+        : recalculationTargetState.target.expectedResultChecksum
+      : (savedCalculation?.resultChecksum ?? null),
+    canRecalculate:
+      calculationState.capabilities.canRecalculate &&
+      recalculationTargetState.errorMessage === null &&
+      !recoveredTargetChecksumMismatch,
+    locale
+  });
+  const getSubmissionTarget = () => {
+    if (submissionAuthority.kind === "blocked") {
+      setCalculationErrorMessage(submissionAuthority.message);
+      return null;
+    }
+    return submissionAuthority;
+  };
+  const isCurrentCalculationLinked =
+    calculationState.identity.kind === "ready" && isCalculationLinked(savedCalculation);
+  const linkableClientId = calculationState.linkableClientId;
   const isResultStale = Boolean(
     result &&
-    (hasResultStaleIntent ||
+    (result.schemaVersion === "chart-result.v1" ||
+      hasResultStaleIntent ||
       isChartResultStale(
         result,
         selectedClient?.birthData,
         settings,
-        getChartResultMethodForMode(mode),
+        getChartResultMethodForMode(authoritativeMode),
         transitMoment,
         selectedPartnerClient?.birthData,
         solarReturnYear,
@@ -616,8 +554,9 @@ export function useChartEngineController() {
     queryKey: ["charts", "pdf", calculationId, pdfLocale],
     queryFn: () => getLatestChartPdf({ calculationId: calculationId ?? "", locale: pdfLocale }),
     enabled: Boolean(
-      calculationId && mode === "natal" && result?.method === "natal" && !isResultStale
+      calculationId && calculationState.capabilities.canRequestPdf && !isResultStale
     ),
+    retry: false,
     refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
       const status = query.state.data?.job?.status;
       return status === "queued" || status === "processing" ? 1500 : false;
@@ -632,67 +571,115 @@ export function useChartEngineController() {
     }
   });
   const downloadPdfMutation = useMutation({ mutationFn: downloadChartPdf });
-  const jobState: ChartEnginePageJobState = useMemo(() => {
-    if (
-      calculationMutation.isPending ||
-      transitCalculationMutation.isPending ||
-      synastryCalculationMutation.isPending ||
-      compositeCalculationMutation.isPending ||
-      solarReturnCalculationMutation.isPending ||
-      progressionCalculationMutation.isPending ||
-      horaryCalculationMutation.isPending ||
-      astrocartographyCalculationMutation.isPending ||
-      jobId ||
-      jobQuery.data?.status === "calculating"
-    ) {
-      return "calculating";
-    }
-    if (errorMessage || jobQuery.data?.status === "failed") {
-      return "failed";
-    }
-    if (result) {
-      return "succeeded";
-    }
-
-    return "idle";
-  }, [
-    calculationMutation.isPending,
-    errorMessage,
+  const restoredClientError = restoredClientQuery.error ?? restoredPartnerClientQuery.error;
+  const recalculationRecoveryErrorMessage = recoveredTargetChecksumMismatch
+    ? controllerCopy.recalculationChanged
+    : recalculationTargetState.errorMessage;
+  const pollErrorMessage = errorMessageFrom(jobQuery.error) ?? recalculationRecoveryErrorMessage;
+  const resultErrorMessage = errorMessageFrom(calculationQuery.error);
+  const savedCalculationErrorMessage = errorMessageFrom(savedCalculationQuery.error);
+  const clientErrorMessage = errorMessageFrom(restoredClientError);
+  const identityErrorMessage = getChartIdentityErrorMessage(
+    calculationState.identity,
+    controllerCopy
+  );
+  const linkErrorMessage = errorMessageFrom(linkCalculationMutation.error);
+  const horaryPlaceErrorMessage = getHoraryPlaceReferenceErrorMessage(
+    horaryPlaceReferenceQuery.error,
+    chartCopy
+  );
+  const jobState = deriveChartEngineJobState({
+    isSubmitting: calculationMutation.isPending,
     jobId,
-    jobQuery.data?.status,
-    result,
-    transitCalculationMutation.isPending,
-    synastryCalculationMutation.isPending,
-    compositeCalculationMutation.isPending,
-    solarReturnCalculationMutation.isPending,
-    progressionCalculationMutation.isPending,
-    horaryCalculationMutation.isPending,
-    astrocartographyCalculationMutation.isPending
-  ]);
+    jobStatus: jobQuery.data?.status,
+    pollError: jobQuery.error ?? recalculationRecoveryErrorMessage,
+    calculationId: effectiveCalculationId,
+    isResultLoading: calculationQuery.isLoading,
+    resultError: calculationQuery.error,
+    isSavedCalculationLoading: savedCalculationQuery.isLoading,
+    savedCalculationError: savedCalculationQuery.error ?? restoredClientError,
+    identityKind: calculationState.identity.kind,
+    result
+  });
   const isBusy =
     calculationMutation.isPending ||
-    transitCalculationMutation.isPending ||
-    synastryCalculationMutation.isPending ||
-    compositeCalculationMutation.isPending ||
-    solarReturnCalculationMutation.isPending ||
-    progressionCalculationMutation.isPending ||
-    horaryCalculationMutation.isPending ||
-    astrocartographyCalculationMutation.isPending ||
     birthDataMutation.isPending ||
     linkCalculationMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
-    Boolean(jobId) ||
+    jobState === "calculating" ||
     jobQuery.isFetching ||
-    calculationQuery.isFetching;
+    calculationQuery.isFetching ||
+    savedCalculationQuery.isFetching;
   const pdfAction = buildChartPdfAction({
-    calculationId,
+    calculationId: calculationState.capabilities.canRequestPdf ? calculationId : null,
     currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
     job: pdfQuery.data?.job ?? null,
     isBusy,
-    isResultStale:
-      isResultStale || mode !== "natal" || (result != null && result.method !== "natal")
+    isResultStale: isResultStale || !calculationState.capabilities.canRequestPdf,
+    locale: pdfLocale
   });
+  const pdfErrorMessage =
+    pdfActionErrorMessage ?? errorMessageFrom(pdfQuery.error) ?? pdfAction.errorMessage;
+  const jobFailureMessage =
+    jobQuery.data?.status === "failed"
+      ? (jobQuery.data.failureMessage ?? controllerCopy.calculationFailed)
+      : null;
+  const handlePdfAction = async () => {
+    if (pdfQuery.error) {
+      setPdfActionErrorMessage(null);
+      await pdfQuery.refetch();
+      return;
+    }
+    const downloadWindow = reserveChartPdfDownloadWindow({
+      kind: pdfAction.kind,
+      openWindow: (url, target) => window.open(url, target)
+    });
+    try {
+      setPdfActionErrorMessage(null);
+      await executeChartPdfAction({
+        calculationId: calculationState.capabilities.canRequestPdf ? calculationId : null,
+        locale: pdfLocale,
+        currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+        kind: pdfAction.kind,
+        job: pdfQuery.data?.job ?? null,
+        enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
+        download: (input) => downloadPdfMutation.mutateAsync(input),
+        openUrl: (url) =>
+          openChartPdfDownloadUrl({
+            url,
+            downloadWindow,
+            navigateCurrentWindow: (nextUrl) => window.location.assign(nextUrl)
+          })
+      });
+    } catch (error) {
+      closeReservedChartPdfWindow({ downloadWindow });
+      setPdfActionErrorMessage(error instanceof Error ? error.message : controllerCopy.pdfFailed);
+    }
+  };
+  const submitPreparedCalculation = async (requestedMode: ChartEngineMode) => {
+    const preparation = prepareChartEngineSubmission({
+      mode: requestedMode,
+      selectedClient,
+      selectedPartnerClient,
+      settings,
+      transitMoment,
+      solarReturnYear,
+      progressionTargetDate,
+      horaryQuestion,
+      locale,
+      copy: controllerCopy
+    });
+    if (preparation.kind === "blocked") {
+      setCalculationErrorMessage(preparation.message);
+      return;
+    }
+    const target = getSubmissionTarget();
+    if (!target) return;
+    await calculationMutation.mutateAsync(
+      attachChartEngineSubmissionTarget(preparation.draft, target)
+    );
+  };
 
   return {
     selectedClient,
@@ -700,71 +687,205 @@ export function useChartEngineController() {
     jobState,
     calculationId,
     result,
+    capabilities: calculationState.capabilities,
+    canRequestAi: calculationState.capabilities.canRequestAi,
+    calculationIdentity: calculationState.identity,
+    canRecoverCalculationIdentity,
     isResultStale,
     isCalculationLinked: isCurrentCalculationLinked,
     linkDisabled:
       isBusy ||
       !calculationId ||
       !result ||
+      !calculationState.capabilities.canLink ||
       isResultStale ||
       isCurrentCalculationLinked ||
       !linkableClientId,
     errorMessage:
-      errorMessage ??
-      (calculationQuery.error instanceof Error ? calculationQuery.error.message : null) ??
-      (jobQuery.error instanceof Error ? jobQuery.error.message : null),
+      calculationErrorMessage ??
+      jobFailureMessage ??
+      pollErrorMessage ??
+      resultErrorMessage ??
+      savedCalculationErrorMessage ??
+      clientErrorMessage ??
+      identityErrorMessage ??
+      recalculationRecoveryErrorMessage ??
+      horaryPlaceErrorMessage,
+    calculationErrorMessage,
+    pollErrorMessage,
+    resultErrorMessage,
+    savedCalculationErrorMessage: savedCalculationErrorMessage ?? clientErrorMessage,
+    clientErrorMessage,
+    identityErrorMessage,
+    linkErrorMessage,
+    horaryPlaceErrorMessage,
     isBusy,
     pdfLabel: pdfAction.label,
     pdfDisabled: pdfAction.disabled,
     pdfTitle: pdfAction.title,
-    pdfErrorMessage: pdfAction.errorMessage,
+    pdfErrorMessage,
+    onRetryPoll: async () => {
+      if (!jobId) return;
+      await jobQuery.refetch();
+    },
+    onRetryResult: async () => {
+      if (!effectiveCalculationId) return;
+      await calculationQuery.refetch();
+    },
+    onRetrySavedCalculation: async () => {
+      const retries: Array<Promise<unknown>> = [];
+      if (effectiveCalculationId) retries.push(savedCalculationQuery.refetch());
+      if (restoredClientId && !selectedClient) retries.push(restoredClientQuery.refetch());
+      if (restoredPartnerClientId && !selectedPartnerClient) {
+        retries.push(restoredPartnerClientQuery.refetch());
+      }
+      await Promise.all(retries);
+    },
+    onRecoverCalculationIdentity: () => {
+      if (!canRecoverCalculationIdentity || authoritativeCalculationIdentity.kind !== "ready") {
+        return;
+      }
+      invalidateActiveSubmission();
+      setSelectedClient(null);
+      setSelectedPartnerClient(null);
+      setRestoredClientId(authoritativeCalculationIdentity.subjectClientId);
+      setRestoredPartnerClientId(authoritativeCalculationIdentity.partnerClientId);
+      setCalculationErrorMessage(null);
+      commitUrlState({
+        ...urlState,
+        clientId: authoritativeCalculationIdentity.subjectClientId,
+        partnerClientId: authoritativeCalculationIdentity.partnerClientId
+      });
+    },
     settings,
-    mode,
+    mode: authoritativeMode,
+    interpretationMode: calculationState.interpretationMode,
     transitMoment,
     solarReturnYear,
     progressionTargetDate,
     horaryQuestion,
+    horaryPlaceText,
     onModeChange: (nextMode: ChartEngineMode) => {
+      invalidateActiveSubmission();
+      const nextUrlState = transitionChartEngineUrlState(urlState, { mode: nextMode });
       setMode(nextMode);
+      setSelectedPartnerClient(null);
+      setRestoredPartnerClientId(null);
       setJobId(null);
       setCalculationId(null);
-      setImmediateResult(null);
-      setErrorMessage(null);
+      setPendingRecalculationTarget(null);
+      setCalculationErrorMessage(null);
+      setTransitMoment(getDefaultTransitMoment());
+      setSolarReturnYear(new Date().getFullYear());
+      setProgressionTargetDate(getDefaultProgressionTargetDate());
+      setHoraryQuestion(getDefaultHoraryQuestion());
+      setHoraryPlaceText("");
       setHasResultStaleIntent(false);
-      writeChartEngineUrlState(
-        buildChartEngineModeChangeUrlState({
-          nextMode,
-          clientId: selectedClient?.value ?? initialUrlState.clientId,
-          partnerClientId: selectedPartnerClient?.value ?? initialUrlState.partnerClientId,
-          calculationId
-        })
-      );
+      commitUrlState(nextUrlState);
     },
     onTransitMomentChange: (nextMoment: ChartTransitMomentInput) => {
-      setTransitMoment(nextMoment);
-      if (result?.method === "transit") {
-        setHasResultStaleIntent(true);
-      }
+      invalidateActiveSubmission();
+      const normalizedMoment = updateChartCivilMoment(transitMoment, nextMoment);
+      setTransitMoment(normalizedMoment);
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setHasResultStaleIntent(false);
+      commitUrlState({
+        ...urlState,
+        jobId: null,
+        calculationId: null,
+        transitDate: normalizedMoment.date,
+        transitTime: normalizedMoment.time
+      });
     },
     onSolarReturnYearChange: (year: number) => {
+      invalidateActiveSubmission();
       setSolarReturnYear(year);
-      if (result?.method === "solar_return") {
-        setHasResultStaleIntent(true);
-      }
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setHasResultStaleIntent(false);
+      commitUrlState({
+        ...urlState,
+        jobId: null,
+        calculationId: null,
+        solarReturnYear: year
+      });
     },
     onProgressionTargetDateChange: (targetDate: string) => {
+      invalidateActiveSubmission();
       setProgressionTargetDate(targetDate);
-      if (result?.method === "progression") {
-        setHasResultStaleIntent(true);
-      }
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setHasResultStaleIntent(false);
+      commitUrlState({
+        ...urlState,
+        jobId: null,
+        calculationId: null,
+        progressionTargetDate: targetDate
+      });
     },
     onHoraryQuestionChange: (nextQuestion: ChartHoraryQuestionInput) => {
-      setHoraryQuestion(nextQuestion);
-      if (result?.method === "horary") {
-        setHasResultStaleIntent(true);
-      }
+      invalidateActiveSubmission();
+      setHoraryQuestion(updateChartCivilMoment(horaryQuestion, nextQuestion));
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setHasResultStaleIntent(false);
+      const changedResolvedPlace =
+        nextQuestion.timezone !== horaryQuestion.timezone ||
+        nextQuestion.latitude !== horaryQuestion.latitude ||
+        nextQuestion.longitude !== horaryQuestion.longitude;
+      if (changedResolvedPlace) setHoraryPlaceText("");
+      commitUrlState({
+        ...urlState,
+        jobId: null,
+        calculationId: null,
+        ...(changedResolvedPlace ? { horaryPlaceProvider: null, horaryPlaceId: null } : {})
+      });
+    },
+    onSelectHoraryPlace: (candidate: ClientBirthPlaceCandidate) => {
+      invalidateActiveSubmission();
+      setHoraryPlaceText(candidate.placeName);
+      setHoraryQuestion((current) => ({
+        ...updateChartCivilMoment(current, { timezone: candidate.timezone }),
+        latitude: candidate.latitude,
+        longitude: candidate.longitude
+      }));
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setHasResultStaleIntent(false);
+      commitUrlState({
+        ...urlState,
+        mode: "horary",
+        jobId: null,
+        calculationId: null,
+        horaryPlaceProvider: candidate.provider,
+        horaryPlaceId: candidate.providerPlaceId
+      });
+    },
+    onClearHoraryPlace: () => {
+      invalidateActiveSubmission();
+      setHoraryPlaceText("");
+      setHoraryQuestion((current) => ({
+        ...current,
+        timezone: "",
+        latitude: "",
+        longitude: ""
+      }));
+      commitUrlState({
+        ...urlState,
+        jobId: null,
+        calculationId: null,
+        horaryPlaceProvider: null,
+        horaryPlaceId: null
+      });
     },
     onSettingsChange: (nextSettings: ChartSettings) => {
+      invalidateActiveSubmission();
       setSettings(nextSettings);
       if (result) {
         setHasResultStaleIntent(true);
@@ -775,7 +896,14 @@ export function useChartEngineController() {
       birthDataMutation.error instanceof Error ? birthDataMutation.error.message : null,
     onSearchBirthPlaces: async (query: string) => birthPlaceSearchMutation.mutateAsync(query),
     onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
-      await birthDataMutation.mutateAsync(data);
+      if (!selectedClient) {
+        throw new Error(controllerCopy.chooseClient);
+      }
+      await birthDataMutation.mutateAsync({
+        clientId: selectedClient.value,
+        data,
+        sourceBirthData: selectedClient.birthData
+      });
     },
     onLink: async () => {
       if (!calculationId || !linkableClientId || isCurrentCalculationLinked) return;
@@ -785,569 +913,72 @@ export function useChartEngineController() {
           body: { clientId: linkableClientId }
         });
       } catch {
-        // The mutation onError handler owns the visible error message.
+        // The link mutation owns its local retry/error state.
+      }
+    },
+    onRetryLink: async () => {
+      if (!calculationId || !linkableClientId || isCurrentCalculationLinked) return;
+      try {
+        await linkCalculationMutation.mutateAsync({
+          calculationId,
+          body: { clientId: linkableClientId }
+        });
+      } catch {
+        // The link mutation owns its local retry/error state.
       }
     },
     onSelectClient: (client: ClientSelectOption) => {
+      invalidateActiveSubmission();
+      const nextUrlState = transitionChartEngineUrlState(urlState, { clientId: client.value });
       setSelectedClient(client);
+      setRestoredClientId(client.value);
+      setSelectedPartnerClient(null);
+      setRestoredPartnerClientId(null);
       setJobId(null);
       setCalculationId(null);
-      setImmediateResult(null);
-      setErrorMessage(null);
+      setPendingRecalculationTarget(null);
+      setCalculationErrorMessage(null);
       setHasResultStaleIntent(false);
-      writeChartEngineUrlState({
-        mode,
-        clientId: client.value,
-        partnerClientId: selectedPartnerClient?.value ?? null,
-        calculationId: null
-      });
+      commitUrlState(nextUrlState);
     },
     onSelectPartnerClient: (client: ClientSelectOption) => {
+      invalidateActiveSubmission();
+      const relationshipMode = mode === "composite" ? "composite" : "synastry";
+      const modeUrlState = transitionChartEngineUrlState(urlState, { mode: relationshipMode });
+      const nextUrlState = transitionChartEngineUrlState(modeUrlState, {
+        partnerClientId: client.value
+      });
+      setMode(relationshipMode);
       setSelectedPartnerClient(client);
       setRestoredPartnerClientId(client.value);
       setJobId(null);
       setCalculationId(null);
-      setImmediateResult(null);
-      setErrorMessage(null);
+      setPendingRecalculationTarget(null);
+      setCalculationErrorMessage(null);
       setHasResultStaleIntent(false);
-      writeChartEngineUrlState({
-        mode: mode === "composite" ? "composite" : "synastry",
-        clientId: selectedClient?.value ?? null,
-        partnerClientId: client.value,
-        calculationId: null
-      });
+      commitUrlState(nextUrlState);
     },
-    onCreateNatalJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      await calculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        isResultStale,
-        settings
-      });
-    },
-    onCreateTransitJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      if (!transitMoment.date || !transitMoment.time) {
-        setErrorMessage("Укажите дату и время транзита");
-        return;
-      }
-      await transitCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        settings,
-        transit: transitMoment
-      });
-    },
-    onCreateSynastryJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      if (!selectedPartnerClient) {
-        setErrorMessage("Выберите партнёра из CRM");
-        return;
-      }
-      if (selectedClient.value === selectedPartnerClient.value) {
-        setErrorMessage("Для синстрии выберите другого клиента");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient.birthData);
-      if (!partnerReadiness.ready) {
-        setErrorMessage(
-          `Не хватает данных рождения партнёра: ${partnerReadiness.missing.join(", ")}`
-        );
-        return;
-      }
-      await synastryCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        partnerClientId: selectedPartnerClient.value,
-        settings
-      });
-    },
-    onCreateCompositeJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      if (!selectedPartnerClient) {
-        setErrorMessage("Выберите партнёра из CRM");
-        return;
-      }
-      if (selectedClient.value === selectedPartnerClient.value) {
-        setErrorMessage("Для композита выберите другого клиента");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient.birthData);
-      if (!partnerReadiness.ready) {
-        setErrorMessage(
-          `Не хватает данных рождения партнёра: ${partnerReadiness.missing.join(", ")}`
-        );
-        return;
-      }
-      await compositeCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        partnerClientId: selectedPartnerClient.value,
-        settings
-      });
-    },
-    onCreateSolarReturnJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      await solarReturnCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        settings,
-        year: solarReturnYear
-      });
-    },
-    onCreateProgressionJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      if (!progressionTargetDate) {
-        setErrorMessage("Укажите дату прогрессии");
-        return;
-      }
-      await progressionCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        settings,
-        targetDate: progressionTargetDate
-      });
-    },
-    onCreateHoraryJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      let questionSnapshot: ChartHoraryQuestionSnapshot;
-      try {
-        questionSnapshot = toChartHoraryQuestionSnapshot(horaryQuestion);
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "Заполните хорар");
-        return;
-      }
-      await horaryCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        settings,
-        question: questionSnapshot
-      });
-    },
-    onCreateAstrocartographyJob: async () => {
-      if (!selectedClient) {
-        setErrorMessage("Выберите клиента из CRM");
-        return;
-      }
-      const readiness = getChartBirthDataReadiness(selectedClient.birthData);
-      if (!readiness.ready) {
-        setErrorMessage(`Не хватает данных рождения: ${readiness.missing.join(", ")}`);
-        return;
-      }
-      await astrocartographyCalculationMutation.mutateAsync({
-        clientId: selectedClient.value,
-        settings
-      });
-    },
-    onPdf: async () => {
-      const downloadWindow = reserveChartPdfDownloadWindow({
-        kind: pdfAction.kind,
-        openWindow: (url, target) => window.open(url, target)
-      });
-      try {
-        setErrorMessage(null);
-        await executeChartPdfAction({
-          calculationId,
-          locale: pdfLocale,
-          currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
-          kind: pdfAction.kind,
-          job: pdfQuery.data?.job ?? null,
-          enqueue: (input) => enqueuePdfMutation.mutateAsync(input),
-          download: (input) => downloadPdfMutation.mutateAsync(input),
-          openUrl: (url) =>
-            openChartPdfDownloadUrl({
-              url,
-              downloadWindow,
-              navigateCurrentWindow: (nextUrl) => window.location.assign(nextUrl)
-            })
-        });
-      } catch (error) {
-        closeReservedChartPdfWindow({ downloadWindow });
-        setErrorMessage(
-          error instanceof Error ? error.message : "Не удалось выполнить PDF-действие"
-        );
-      }
-    }
+    onCreateNatalJob: async () =>
+      submitPreparedCalculation(authoritativeMode === "child_chart" ? "child_chart" : "natal"),
+    onCreateTransitJob: async () => submitPreparedCalculation("transit"),
+    onCreateSynastryJob: async () => submitPreparedCalculation("synastry"),
+    onCreateCompositeJob: async () => submitPreparedCalculation("composite"),
+    onCreateSolarReturnJob: async () => submitPreparedCalculation("solar_return"),
+    onCreateProgressionJob: async () => submitPreparedCalculation("progression"),
+    onCreateHoraryJob: async () => submitPreparedCalculation("horary"),
+    onCreateAstrocartographyJob: async () => submitPreparedCalculation("astrocartography"),
+    onPdf: handlePdfAction,
+    onRetryPdf: handlePdfAction
   };
 }
 
-export function getChartLinkableClientId(
-  calculation: Pick<CalculationRecordResponse, "participants"> | null,
-  selectedClientId: string | null
-) {
-  return (
-    calculation?.participants.find(
-      (participant) => participant.source === "crm_client" && participant.clientId
-    )?.clientId ?? selectedClientId
-  );
-}
-
-export async function submitChartCalculation({
-  clientId,
-  calculationId,
-  create,
-  isResultStale,
-  recalculate,
-  settings
-}: {
-  readonly clientId: string;
-  readonly calculationId: string | null;
-  readonly isResultStale: boolean;
-  readonly settings: ChartSettings;
-  readonly create: typeof createNatalChartJob;
-  readonly recalculate: typeof recalculateChart;
-}) {
-  if (calculationId && isResultStale) {
-    return recalculate({ calculationId, clientId, settings });
-  }
-
-  return create({ clientId, settings });
-}
-
-export async function submitTransitCalculation({
-  clientId,
-  create,
-  settings,
-  transit
-}: {
-  readonly clientId: string;
-  readonly settings: ChartSettings;
-  readonly transit: ChartTransitMoment;
-  readonly create: typeof createTransitChartJob;
-}) {
-  return create({ clientId, settings, transit });
-}
-
-export async function submitSynastryCalculation({
-  clientId,
-  create,
-  partnerClientId,
-  settings
-}: {
-  readonly clientId: string;
-  readonly partnerClientId: string;
-  readonly settings: ChartSettings;
-  readonly create: typeof createSynastryChartJob;
-}) {
-  return create({ clientId, partnerClientId, settings });
-}
-
-export async function submitCompositeCalculation({
-  clientId,
-  create,
-  partnerClientId,
-  settings
-}: {
-  readonly clientId: string;
-  readonly partnerClientId: string;
-  readonly settings: ChartSettings;
-  readonly create: typeof createCompositeChartJob;
-}) {
-  return create({ clientId, partnerClientId, settings });
-}
-
-export async function submitSolarReturnCalculation({
-  clientId,
-  create,
-  settings,
-  year
-}: {
-  readonly clientId: string;
-  readonly settings: ChartSettings;
-  readonly year: number;
-  readonly create: typeof createSolarReturnChartJob;
-}) {
-  return create({ clientId, settings, year });
-}
-
-export async function submitProgressionCalculation({
-  clientId,
-  create,
-  settings,
-  targetDate
-}: {
-  readonly clientId: string;
-  readonly settings: ChartSettings;
-  readonly targetDate: string;
-  readonly create: typeof createProgressionChartJob;
-}) {
-  return create({ clientId, settings, targetDate });
-}
-
-export async function submitHoraryCalculation({
-  clientId,
-  create,
-  question,
-  settings
-}: {
-  readonly clientId: string;
-  readonly question: ChartHoraryQuestionSnapshot;
-  readonly settings: ChartSettings;
-  readonly create: typeof createHoraryChartJob;
-}) {
-  return create({ clientId, settings, question });
-}
-
-export async function submitAstrocartographyCalculation({
-  clientId,
-  create,
-  settings
-}: {
-  readonly clientId: string;
-  readonly settings: ChartSettings;
-  readonly create: typeof createAstrocartographyChartJob;
-}) {
-  return create({ clientId, settings });
-}
-
-export function restoreChartEngineViewState(
-  result: StoredChartCalculationPayload,
-  options: { readonly mode?: ChartEngineMode } = {}
-): {
-  readonly mode: ChartEngineMode;
-  readonly settings: ChartSettings;
-  readonly transitMoment?: ChartTransitMomentInput;
-  readonly partnerClientId?: string;
-  readonly solarReturnYear?: number;
-  readonly progressionTargetDate?: string;
-  readonly horaryQuestion?: ChartHoraryQuestionInput;
-} {
-  if (result.method === "horary") {
-    return {
-      mode: "horary",
-      settings: result.settings,
-      horaryQuestion: result.questionSnapshot
-    };
-  }
-
-  if (result.method === "astrocartography") {
-    return {
-      mode: "astrocartography",
-      settings: result.settings
-    };
-  }
-
-  if (result.method === "synastry") {
-    return {
-      mode: "synastry",
-      settings: result.settings,
-      partnerClientId: result.relationshipSnapshot.partnerClientId
-    };
-  }
-
-  if (result.method === "composite") {
-    return {
-      mode: "composite",
-      settings: result.settings,
-      partnerClientId: result.relationshipSnapshot.partnerClientId
-    };
-  }
-
-  if (result.method !== "transit") {
-    if (result.method === "solar_return") {
-      return {
-        mode: "solar_return",
-        settings: result.settings,
-        solarReturnYear: result.solarReturnSnapshot.year
-      };
-    }
-    if (result.method === "progression") {
-      return {
-        mode: "progression",
-        settings: result.settings,
-        progressionTargetDate: result.progressionSnapshot.targetDate
-      };
-    }
-    return {
-      mode: options.mode === "child_chart" ? "child_chart" : "natal",
-      settings: result.settings
-    };
-  }
-
-  return {
-    mode: "transit",
-    settings: result.settings,
-    transitMoment: {
-      date: result.transitSnapshot.date,
-      time: result.transitSnapshot.time
-    }
-  };
-}
-
-export type ChartEngineUrlState = {
-  readonly mode?: ChartEngineMode;
-  readonly clientId: string | null;
-  readonly partnerClientId?: string | null;
-  readonly calculationId: string | null;
-};
-
-export function buildChartEngineModeChangeUrlState({
-  clientId,
-  nextMode,
-  partnerClientId
-}: {
-  readonly nextMode: ChartEngineMode;
-  readonly clientId: string | null;
-  readonly partnerClientId?: string | null;
-  readonly calculationId: string | null;
-}): ChartEngineUrlState {
-  return {
-    mode: nextMode,
-    clientId,
-    partnerClientId,
-    calculationId: null
-  };
-}
-
-export function readChartEngineUrlState(
-  search = getCurrentChartEngineSearch()
-): ChartEngineUrlState {
-  const params = new URLSearchParams(search);
-
-  return {
-    mode: readChartEngineMode(params.get("mode")),
-    clientId: normalizeUrlParam(params.get("clientId")),
-    partnerClientId: normalizeUrlParam(params.get("partnerClientId")),
-    calculationId: normalizeUrlParam(params.get("calculationId"))
-  };
-}
-
-export function buildChartEngineSearch(search: string, state: ChartEngineUrlState): string {
-  const params = new URLSearchParams(search);
-  const shouldKeepPartnerClientId =
-    Boolean(state.partnerClientId) &&
-    (state.mode == null || state.mode === "synastry" || state.mode === "composite");
-
-  if (state.clientId) {
-    params.set("clientId", state.clientId);
-  } else {
-    params.delete("clientId");
-  }
-  if (shouldKeepPartnerClientId && state.partnerClientId) {
-    params.set("partnerClientId", state.partnerClientId);
-  } else {
-    params.delete("partnerClientId");
-  }
-  if (state.calculationId) {
-    params.set("calculationId", state.calculationId);
-  } else {
-    params.delete("calculationId");
-  }
-  if (
-    state.mode === "child_chart" ||
-    state.mode === "horary" ||
-    state.mode === "astrocartography"
-  ) {
-    params.set("mode", state.mode);
-  } else {
-    params.delete("mode");
-  }
-
-  const next = params.toString();
-  return next ? `?${next}` : "";
-}
-
-function writeChartEngineUrlState(state: ChartEngineUrlState) {
+function writeChartEngineUrlState(state: SafeChartEngineUrlState) {
   if (typeof window === "undefined") return;
-  const search = buildChartEngineSearch(window.location.search, state);
+  const search = buildSafeChartEngineSearch(window.location.search, state);
   const nextUrl = `${window.location.pathname}${search}${window.location.hash}`;
   window.history.replaceState(window.history.state, "", nextUrl);
 }
 
 function getCurrentChartEngineSearch() {
   return typeof window === "undefined" ? "" : window.location.search;
-}
-
-function normalizeUrlParam(value: string | null): string | null {
-  const normalized = value?.trim() ?? "";
-  return normalized ? normalized : null;
-}
-
-function readChartEngineMode(value: string | null): ChartEngineMode | undefined {
-  return value === "child_chart" || value === "horary" || value === "astrocartography"
-    ? value
-    : undefined;
-}
-
-function getDefaultTransitMoment(): ChartTransitMomentInput {
-  const now = new Date();
-  const date = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0")
-  ].join("-");
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
-  return { date, time };
-}
-
-function getDefaultProgressionTargetDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getDefaultHoraryQuestion(): ChartHoraryQuestionInput {
-  const moment = getDefaultTransitMoment();
-
-  return {
-    question: "",
-    category: "other",
-    date: moment.date,
-    time: moment.time,
-    timezone: getBrowserTimezone(),
-    latitude: "",
-    longitude: ""
-  };
-}
-
-function getBrowserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
 }

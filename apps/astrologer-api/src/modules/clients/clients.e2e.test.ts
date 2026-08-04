@@ -5,6 +5,7 @@ import { hashSessionToken } from "@elevenhouse/auth";
 import {
   astrologerClientListResponseSchema,
   astrologerClientResponseSchema,
+  clientBirthPlaceReferenceResponseSchema,
   clientBirthDataUpsertRequestSchema
 } from "@elevenhouse/contracts";
 import type {
@@ -38,7 +39,7 @@ import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordle
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { ClientsModule } from "./clients.module";
-import { CLIENT_STORE } from "./clients.tokens";
+import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
 
 const now = new Date("2026-07-06T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_astrologer_session";
@@ -113,6 +114,23 @@ describe("clients HTTP routes", () => {
       })
       .overrideProvider(CLIENT_STORE)
       .useValue(createClientStore())
+      .overrideProvider(BIRTH_PLACE_SEARCH_PROVIDER)
+      .useValue({
+        search: vi.fn(async () => ({ candidates: [] })),
+        resolveReference: vi.fn(async () => ({
+          id: "geoapify:51485",
+          label: "Rome, Lazio, Italy",
+          placeName: "Rome, Italy",
+          countryCode: "IT",
+          city: "Rome",
+          region: "Lazio",
+          timezone: "Europe/Rome",
+          latitude: 41.8933,
+          longitude: 12.4829,
+          provider: "geoapify",
+          providerPlaceId: "51485"
+        }))
+      })
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -170,6 +188,27 @@ describe("clients HTTP routes", () => {
       }
     });
     expect(unrelatedResponse.status).toBe(404);
+  });
+
+  it("authenticates and strictly resolves one Geoapify place reference", async () => {
+    const unauthenticatedResponse = await fetch(`${baseUrl}/clients/birth-places/geoapify/51485`);
+    const authenticatedResponse = await getJson("/clients/birth-places/geoapify/51485");
+    const invalidResponse = await getJson(
+      `/clients/birth-places/geoapify/${encodeURIComponent("https://provider.invalid/place?id=51485")}`
+    );
+
+    expect(unauthenticatedResponse.status).toBe(401);
+    expect(authenticatedResponse.status).toBe(200);
+    clientBirthPlaceReferenceResponseSchema.parse(authenticatedResponse.body);
+    expect(authenticatedResponse.body).toMatchObject({
+      provider: "geoapify",
+      providerPlaceId: "51485",
+      timezone: "Europe/Rome"
+    });
+    expect(invalidResponse.status).toBe(400);
+    expect(invalidResponse.body).toMatchObject({
+      code: "BIRTH_PLACE_REFERENCE_INVALID"
+    });
   });
 
   it("requires CSRF for birth data updates", async () => {

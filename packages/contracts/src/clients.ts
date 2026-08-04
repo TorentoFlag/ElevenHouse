@@ -202,7 +202,7 @@ export const clientBirthPlaceSearchQuerySchema = z
     query: z
       .string()
       .trim()
-      .min(2)
+      .min(3)
       .max(120)
       .transform((value) => value.replace(/\s+/g, " ")),
     limit: z.coerce.number().int().min(1).max(10).optional().default(5)
@@ -210,9 +210,16 @@ export const clientBirthPlaceSearchQuerySchema = z
   .strict();
 export type ClientBirthPlaceSearchQuery = z.infer<typeof clientBirthPlaceSearchQuerySchema>;
 
+export const clientBirthPlaceProviderPlaceIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9._~-]+$/);
+
 export const clientBirthPlaceCandidateSchema = z
   .object({
-    id: z.string().trim().min(1).max(200),
+    id: z.string().trim().min(1).max(256),
     label: z.string().trim().min(1).max(500),
     placeName: z.string().trim().min(1).max(500),
     countryCode: z
@@ -226,11 +233,32 @@ export const clientBirthPlaceCandidateSchema = z
     timezone: ianaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
-    provider: z.enum(["nominatim"]),
-    providerPlaceId: z.string().trim().min(1).max(200)
+    provider: z.enum(["geoapify"]),
+    providerPlaceId: clientBirthPlaceProviderPlaceIdSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.id !== `${value.provider}:${value.providerPlaceId}`) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["id"],
+        message: "Birth place candidate id must match its provider reference"
+      });
+    }
+  });
+export type ClientBirthPlaceCandidate = z.infer<typeof clientBirthPlaceCandidateSchema>;
+
+export const clientBirthPlaceReferenceParamsSchema = z
+  .object({
+    providerPlaceId: clientBirthPlaceProviderPlaceIdSchema
   })
   .strict();
-export type ClientBirthPlaceCandidate = z.infer<typeof clientBirthPlaceCandidateSchema>;
+export type ClientBirthPlaceReferenceParams = z.infer<typeof clientBirthPlaceReferenceParamsSchema>;
+
+export const clientBirthPlaceReferenceResponseSchema = clientBirthPlaceCandidateSchema;
+export type ClientBirthPlaceReferenceResponse = z.infer<
+  typeof clientBirthPlaceReferenceResponseSchema
+>;
 
 export const clientBirthPlaceSearchResponseSchema = z
   .object({

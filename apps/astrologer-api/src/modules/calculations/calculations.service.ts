@@ -9,8 +9,12 @@ import {
 import {
   approveCalculationInterpretation,
   archiveCalculation,
+  assertStoredChartCalculationIntegrity,
+  CalculationInterpretationIdempotencyConflictError,
+  CalculationInterpretationModeUnavailableError,
   CalculationNotFoundError,
   CalculationResultChangedError,
+  ChartStoredResultIntegrityError,
   CalculationValidationError,
   getCalculation,
   linkCalculationToClient,
@@ -34,16 +38,17 @@ import {
   type ListCalculationsResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
-import { randomUUID } from "node:crypto";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { ChartExecutionProfileProvider } from "../charts/chart-execution-profile.provider";
 import { CALCULATION_STORE } from "./calculations.tokens";
 
 @Injectable()
 export class CalculationsService {
   constructor(
     @Inject(CALCULATION_STORE) private readonly store: CalculationStore,
-    private readonly clock: SystemClock
+    private readonly clock: SystemClock,
+    private readonly chartExecutionProfile: ChartExecutionProfileProvider
   ) {}
 
   async listCalculations(
@@ -52,18 +57,22 @@ export class CalculationsService {
   ): Promise<ListCalculationsResponse> {
     const parsedQuery = parseContract(listCalculationsQuerySchema, query);
     const ownerUserId = requireOwnerUserId(request);
-    const result = await listCalculations({
-      store: this.store,
-      ownerUserId,
-      module: parsedQuery.module,
-      status: parsedQuery.status,
-      limit: parsedQuery.limit,
-      offset: parsedQuery.offset
-    });
+    return mapCalculationErrors(async () => {
+      const result = await listCalculations({
+        store: this.store,
+        ownerUserId,
+        module: parsedQuery.module,
+        status: parsedQuery.status,
+        limit: parsedQuery.limit,
+        offset: parsedQuery.offset
+      });
 
-    return listCalculationsResponseSchema.parse({
-      calculations: result.calculations.map(toCalculationResponse),
-      total: result.total
+      return listCalculationsResponseSchema.parse({
+        calculations: result.calculations.map((record) =>
+          toReadableCalculationResponse(record, this.chartExecutionProfile.getProfile())
+        ),
+        total: result.total
+      });
     });
   }
 
@@ -75,12 +84,13 @@ export class CalculationsService {
     const ownerUserId = requireOwnerUserId(request);
 
     return mapCalculationErrors(async () =>
-      toCalculationResponse(
+      toReadableCalculationResponse(
         await getCalculation({
           store: this.store,
           ownerUserId,
           calculationId: params.calculationId
-        })
+        }),
+        this.chartExecutionProfile.getProfile()
       )
     );
   }
@@ -101,6 +111,7 @@ export class CalculationsService {
           ownerUserId,
           calculationId: params.calculationId,
           clientId: parsedBody.clientId,
+          expectedChartExecutionProfile: this.chartExecutionProfile.getProfile(),
           now: this.clock.now()
         })
       )
@@ -124,6 +135,7 @@ export class CalculationsService {
           calculationId: params.calculationId,
           clientId: parsedBody.clientId,
           expectedResultChecksum: parsedBody.expectedResultChecksum,
+          expectedChartExecutionProfile: this.chartExecutionProfile.getProfile(),
           now: this.clock.now()
         })
       )
@@ -133,9 +145,13 @@ export class CalculationsService {
   async saveManualInterpretation(
     calculationId: string,
     body: unknown,
-    request: AstrologerSessionRequest
+    request: AstrologerSessionRequest,
+    idempotencyKey: unknown
   ): Promise<CalculationRecordResponse> {
-    const params = parseContract(calculationIdParamSchema, { calculationId });
+    const params = parseContract(calculationInterpretationIdParamSchema, {
+      calculationId,
+      interpretationId: idempotencyKey
+    });
     const parsedBody = parseContract(saveCalculationInterpretationRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
 
@@ -150,7 +166,7 @@ export class CalculationsService {
           text: parsedBody.text,
           modelId: null,
           promptVersion: null,
-          interpretationIdGenerator: randomUUID,
+          interpretationIdGenerator: () => params.interpretationId,
           now: this.clock.now()
         })
       )
@@ -210,6 +226,19 @@ export function toCalculationResponse(record: CalculationRecord): CalculationRec
   });
 }
 
+function toReadableCalculationResponse(
+  record: CalculationRecord,
+  expectedChartExecutionProfile: ReturnType<ChartExecutionProfileProvider["getProfile"]>
+): CalculationRecordResponse {
+  if (record.module === "chart") {
+    assertStoredChartCalculationIntegrity({
+      calculation: record,
+      expectedExecutionProfile: expectedChartExecutionProfile
+    });
+  }
+  return toCalculationResponse(record);
+}
+
 export function requireOwnerUserId(request: AstrologerSessionRequest): string {
   const ownerUserId = request.currentAstrologerAccount?.account.id;
   if (!ownerUserId) {
@@ -238,8 +267,27 @@ export async function mapCalculationErrors<T>(operation: () => Promise<T>): Prom
     if (error instanceof CalculationResultChangedError) {
       throw new ConflictException(error.message);
     }
+    if (error instanceof CalculationInterpretationIdempotencyConflictError) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: error.code,
+        code: error.code,
+        message: error.message
+      });
+    }
+    if (error instanceof CalculationInterpretationModeUnavailableError) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: error.code,
+        code: error.code,
+        message: error.message
+      });
+    }
     if (error instanceof CalculationValidationError) {
       throw new BadRequestException(error.message);
+    }
+    if (error instanceof ChartStoredResultIntegrityError) {
+      throw new ConflictException(error.message);
     }
 
     throw error;

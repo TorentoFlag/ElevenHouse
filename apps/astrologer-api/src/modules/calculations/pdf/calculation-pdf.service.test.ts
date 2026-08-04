@@ -261,6 +261,7 @@ function calculation(): CalculationRecord {
     ownerUserId,
     module: "numerology",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: "Голубев Антон",
     status: "linked",
@@ -300,7 +301,10 @@ function pdfJob(): CalculationPdfJob {
   };
 }
 
-function fingerprint(sourceLocator: CalculationPdfSourceLocator, renderContract: string): `sha256:${string}` {
+function fingerprint(
+  sourceLocator: CalculationPdfSourceLocator,
+  renderContract: string
+): `sha256:${string}` {
   return calculationPdfDocumentFingerprint({
     resultChecksum: checksum,
     locale: "ru",

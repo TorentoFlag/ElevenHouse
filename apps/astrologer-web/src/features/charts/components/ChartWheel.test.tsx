@@ -2,7 +2,11 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChartHouse, ChartPoint, StoredChartCalculationPayload } from "@elevenhouse/contracts";
+import type {
+  ChartHouse,
+  ChartPoint,
+  StoredChartNatalCalculationPayload
+} from "@elevenhouse/contracts";
 import { ChartWheel } from "./ChartWheel";
 import styles from "./ChartEnginePage.module.css";
 
@@ -33,9 +37,34 @@ describe("ChartWheel", () => {
     }
     expect(screen.getByTestId("chart-point-sun")).toHaveClass(pointMarkerClass);
   });
+
+  it("reports a malformed house set instead of rotating the chart to a fabricated Aries zero", () => {
+    const result = wheelResult();
+    const malformedResult = {
+      ...result,
+      result: {
+        ...result.result,
+        houses: result.result.houses.filter((house) => house.number !== 1)
+      }
+    } satisfies StoredChartNatalCalculationPayload;
+
+    render(
+      <ChartWheel
+        hoveredPointId={null}
+        locale="en"
+        onHoverPoint={vi.fn()}
+        result={malformedResult}
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The chart result is invalid: the first house is missing"
+    );
+    expect(screen.queryByRole("img", { name: "Chart wheel" })).not.toBeInTheDocument();
+  });
 });
 
-function wheelResult(): StoredChartCalculationPayload {
+function wheelResult(): StoredChartNatalCalculationPayload {
   return {
     schemaVersion: "chart-result.v1",
     method: "natal",

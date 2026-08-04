@@ -1,6 +1,10 @@
+import { chartResultSchema, type ChartExecutionProfile } from "@elevenhouse/contracts";
+import { assertStoredChartCalculationIntegrity } from "../charts/chart-stored-result-integrity";
 import { normalizeRequiredString } from "../shared";
 import {
   CalculationAlreadyExistsError,
+  CalculationInterpretationIdempotencyConflictError,
+  CalculationInterpretationModeUnavailableError,
   CalculationNotFoundError,
   CalculationParticipantMismatchError,
   CalculationResultChangedError,
@@ -49,12 +53,14 @@ export async function createCalculation(
   input: Omit<CalculationStoreCreateInput, "now"> & {
     readonly store: CalculationStore;
     readonly now: Date;
+    readonly expectedChartExecutionProfile?: ChartExecutionProfile;
   }
 ): Promise<CalculationRecord> {
   const normalized: CalculationStoreCreateInput = {
     ownerUserId: required(input.ownerUserId, "Calculation owner user id is required"),
     module: input.module,
     mode: input.mode,
+    interpretationMode: input.interpretationMode ?? null,
     methodCode: required(input.methodCode, "Calculation method code is required"),
     title: required(input.title, "Calculation title is required"),
     participants: normalizeCalculationParticipants(input.participants),
@@ -78,8 +84,14 @@ export async function createCalculation(
   };
   assertLinkClientsAreParticipants(normalized.participants, normalized.linkClientIds);
   const existing = await input.store.findExact(normalized);
-  if (!existing) return input.store.create(normalized);
+  if (!existing) {
+    if (normalized.linkClientIds.length > 0) {
+      assertClientExposureAllowed(normalized, input.expectedChartExecutionProfile);
+    }
+    return input.store.create(normalized);
+  }
   if (normalized.linkClientIds.length === 0) return existing;
+  assertClientExposureAllowed(existing, input.expectedChartExecutionProfile);
   return (
     (await input.store.ensureClientLinks({
       ownerUserId: existing.ownerUserId,
@@ -129,10 +141,12 @@ export async function linkCalculationToClient(input: {
   readonly ownerUserId: string;
   readonly calculationId: string;
   readonly clientId: string;
+  readonly expectedChartExecutionProfile?: ChartExecutionProfile;
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
+  assertClientExposureAllowed(record, input.expectedChartExecutionProfile);
   const clientId = required(input.clientId, "Calculation client id is required");
 
   if (
@@ -160,10 +174,13 @@ export async function publishCalculationToClient(input: {
   readonly calculationId: string;
   readonly clientId: string;
   readonly expectedResultChecksum: string;
+  readonly expectedChartExecutionProfile?: ChartExecutionProfile;
   readonly now: Date;
 }): Promise<CalculationRecord> {
   const record = await requireOwnedCalculation(input.store, input.ownerUserId, input.calculationId);
   assertCalculationCanBeChanged(record);
+  assertClientPublicationInterpretationMode(record);
+  assertClientExposureAllowed(record, input.expectedChartExecutionProfile);
   const clientId = required(input.clientId, "Calculation client id is required");
   const expectedResultChecksum = digest(
     input.expectedResultChecksum,
@@ -213,9 +230,6 @@ export async function saveCalculationInterpretation(input: {
     input.expectedResultChecksum,
     "Expected calculation result checksum is required"
   );
-  if (record.resultChecksum !== expectedResultChecksum) {
-    throw new CalculationResultChangedError();
-  }
   const saved = await input.store.saveInterpretation({
     ownerUserId: record.ownerUserId,
     calculationId: record.id,
@@ -228,6 +242,9 @@ export async function saveCalculationInterpretation(input: {
     now: input.now.toISOString()
   });
   if (!saved) throw new CalculationResultChangedError();
+  if ("kind" in saved) {
+    throw new CalculationInterpretationIdempotencyConflictError();
+  }
   return saved;
 }
 
@@ -244,9 +261,13 @@ export async function approveCalculationInterpretation(input: {
     input.interpretationId,
     "Calculation interpretation id is required"
   );
-  if (!record.interpretations.some((interpretation) => interpretation.id === interpretationId)) {
+  const interpretation = record.interpretations.find(
+    (candidate) => candidate.id === interpretationId
+  );
+  if (!interpretation) {
     throw new CalculationValidationError("Calculation interpretation was not found");
   }
+  if (interpretation.status === "approved") return record;
 
   const approved = await input.store.approveInterpretation({
     ownerUserId: record.ownerUserId,
@@ -291,6 +312,54 @@ async function requireOwnedCalculation(
 function assertCalculationCanBeChanged(record: CalculationRecord): void {
   if (record.status === "archived") {
     throw new CalculationValidationError("Archived calculation cannot be changed");
+  }
+}
+
+function assertClientPublicationInterpretationMode(
+  calculation: Pick<CalculationRecord, "module" | "methodCode" | "interpretationMode">
+): void {
+  if (
+    calculation.module === "chart" &&
+    calculation.methodCode === "natal" &&
+    calculation.interpretationMode !== "adult_natal"
+  ) {
+    throw new CalculationInterpretationModeUnavailableError();
+  }
+}
+
+function assertClientExposureAllowed(
+  calculation: Pick<
+    CalculationRecord,
+    "module" | "methodCode" | "inputData" | "resultData" | "resultChecksum"
+  >,
+  expectedExecutionProfile: ChartExecutionProfile | undefined
+): void {
+  if (calculation.module !== "chart") return;
+  const parsed = chartResultSchema.safeParse(calculation.resultData);
+  if (!parsed.success || parsed.data.method !== calculation.methodCode) {
+    throw new CalculationValidationError(
+      "Chart calculation result is not eligible for client exposure"
+    );
+  }
+  if (parsed.data.schemaVersion === "chart-result.v1") {
+    throw new CalculationValidationError(
+      "Legacy chart calculation must be recalculated before client exposure"
+    );
+  }
+  if (!expectedExecutionProfile) {
+    throw new CalculationValidationError(
+      "Chart calculation result is not eligible for client exposure"
+    );
+  }
+  try {
+    assertStoredChartCalculationIntegrity({
+      calculation,
+      expectedExecutionProfile
+    });
+  } catch {
+    throw new CalculationValidationError(
+      "Chart calculation result is not eligible for client exposure"
+    );
   }
 }
 

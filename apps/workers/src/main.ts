@@ -1,5 +1,9 @@
 import { createLogger } from "@elevenhouse/observability";
-import { createDrizzleFlowRuntimeStore, createDrizzleFlowStore } from "@elevenhouse/db";
+import {
+  createDrizzleFlowRuntimeDispatchOutboxStore,
+  createDrizzleFlowRuntimeStore,
+  createDrizzleFlowStore
+} from "@elevenhouse/db";
 import {
   createDrizzleCalculationPdfCleanupStore,
   createDrizzleCalculationPdfJobStore,
@@ -10,7 +14,7 @@ import { createDrizzleMediaAssetStore } from "@elevenhouse/db/media";
 import { createDrizzleMatrixReportStore } from "@elevenhouse/db/matrix";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
-import { dispatchFlowRuntimeEvent } from "@elevenhouse/domain";
+import { dispatchFlowRuntimeEvent, resolveChartExecutionProfile } from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
 import { processCalculationPdfCleanup } from "./calculation-pdf/calculation-pdf.cleanup";
 import {
@@ -47,6 +51,9 @@ const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
 const flowStore = createDrizzleFlowStore(postgres.database);
 const flowRuntimeStore = createDrizzleFlowRuntimeStore(postgres.database);
+const flowRuntimeDispatchOutboxStore = createDrizzleFlowRuntimeDispatchOutboxStore(
+  postgres.database
+);
 const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
 const pdfJobStore = createDrizzleCalculationPdfJobStore(postgres.database);
 const pdfCleanupStore = createDrizzleCalculationPdfCleanupStore(postgres.database);
@@ -56,7 +63,11 @@ const matrixSource = createMatrixPdfSource(calculationStore, matrixReportStore);
 const matrixRenderer = createMatrixPdfRenderer();
 const numerologySource = createNumerologyPdfSource(calculationStore);
 const numerologyRenderer = createNumerologyPdfRenderer();
-const chartSource = createChartPdfSource(calculationStore, dictionaryStore);
+const chartSource = createChartPdfSource(
+  calculationStore,
+  dictionaryStore,
+  resolveChartExecutionProfile(process.env)
+);
 const chartRenderer = createChartPdfRenderer();
 const humanDesignSource = createHumanDesignPdfSource(calculationStore);
 const humanDesignRenderer = createHumanDesignPdfRenderer();
@@ -148,7 +159,7 @@ const relay = createCalculationPdfOutboxRelay({
       logger
     });
     await relayPendingFlowRuntimeDispatchEvents({
-      store: outboxStore,
+      store: flowRuntimeDispatchOutboxStore,
       dispatch: (event) =>
         dispatchFlowRuntimeEvent({
           flowStore,
@@ -158,6 +169,7 @@ const relay = createCalculationPdfOutboxRelay({
       now,
       batchSize: config.outboxRelayBatchSize,
       publishingLockTimeoutMs: config.outboxLockTimeoutMs,
+      maxAttempts: config.flowRuntimeOutboxMaxAttempts,
       logger
     });
   },

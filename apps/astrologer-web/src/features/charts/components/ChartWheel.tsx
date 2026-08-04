@@ -2,14 +2,16 @@ import type {
   ChartAspect,
   ChartPoint,
   ChartProgressionAspect,
+  ChartResult,
   ChartSolarReturnAspect,
   ChartSynastryAspect,
   ChartTransitAspect,
-  StoredChartCalculationPayload
+  DictionaryLocale
 } from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
   formatHouseSignDisplay,
+  getAspectDisplaySymbol,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
   getProgressionChartRenderResult,
@@ -24,6 +26,7 @@ import {
   getRoundedChartPointPosition,
   romanHouses
 } from "../model/chartDisplay";
+import { chartEngineCopyByLocale } from "../model/chartEngineCopy";
 import styles from "./ChartEnginePage.module.css";
 
 const zodiacSymbols = ["♈︎", "♉︎", "♊︎", "♋︎", "♌︎", "♍︎", "♎︎", "♏︎", "♐︎", "♑︎", "♒︎", "♓︎"];
@@ -44,12 +47,19 @@ const zodiacElementClasses = [
 const axisPointIds = new Set(["ascendant", "midheaven"]);
 
 export type ChartWheelProps = {
-  readonly result: StoredChartCalculationPayload | null;
+  readonly result: ChartResult | null;
   readonly hoveredPointId: string | null;
+  readonly locale?: DictionaryLocale;
   readonly onHoverPoint: (pointId: string | null) => void;
 };
 
-export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelProps) {
+export function ChartWheel({
+  hoveredPointId,
+  locale = "ru",
+  onHoverPoint,
+  result
+}: ChartWheelProps) {
+  const copy = chartEngineCopyByLocale[locale].wheel;
   const renderResult = result ? getPrimaryChartRenderResult(result) : null;
   const transitResult = result ? getTransitChartResult(result) : null;
   const solarReturnResult = result ? getSolarReturnChartResult(result) : null;
@@ -65,7 +75,15 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
   const solarReturnPoints = solarReturnRenderResult?.points ?? [];
   const progressionPoints = progressionRenderResult?.points ?? [];
   const partnerPoints = partnerRenderResult?.points ?? [];
-  const ascLongitude = houses.find((house) => house.number === 1)?.longitude ?? 0;
+  const ascendantHouse = houses.find((house) => house.number === 1);
+  if (renderResult && !ascendantHouse) {
+    return (
+      <div className={`${styles.wheelStage} ${styles.panelEmpty}`} role="alert">
+        {copy.invalidResult}
+      </div>
+    );
+  }
+  const ascLongitude = ascendantHouse ? ascendantHouse.longitude : 0;
   const markerLongitudes = spreadPointLongitudes(
     points.filter((point) => !axisPointIds.has(point.id))
   );
@@ -95,8 +113,13 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
   });
 
   return (
-    <div className={styles.wheelStage} aria-label="Натальная карта">
-      <svg className={styles.wheelSvg} viewBox="0 0 520 520" role="img" aria-label="Круг карты">
+    <div className={styles.wheelStage} aria-label={copy.stageLabel}>
+      <svg
+        className={styles.wheelSvg}
+        viewBox="0 0 520 520"
+        role="img"
+        aria-label={copy.wheelLabel}
+      >
         <circle className={styles.wheelOuter} cx="260" cy="260" r="220" />
         <circle className={styles.wheelMiddle} cx="260" cy="260" r="166" />
         <circle className={styles.aspectHub} cx="260" cy="260" r="132" />
@@ -273,7 +296,7 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
           const solarReturnHoverId = getSolarReturnHoverPointId(solarReturnPoint.id);
           const involved = Boolean(
             hoveredPointId &&
-              (hoveredPointId === solarReturnHoverId || hoveredPointId === aspect.natalPoint)
+            (hoveredPointId === solarReturnHoverId || hoveredPointId === aspect.natalPoint)
           );
           const dimmed = Boolean(hoveredPointId && !involved);
 
@@ -315,7 +338,7 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
           const progressionHoverId = getProgressionHoverPointId(progressedPoint.id);
           const involved = Boolean(
             hoveredPointId &&
-              (hoveredPointId === progressionHoverId || hoveredPointId === aspect.natalPoint)
+            (hoveredPointId === progressionHoverId || hoveredPointId === aspect.natalPoint)
           );
           const dimmed = Boolean(hoveredPointId && !involved);
 
@@ -389,7 +412,9 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
 
           return (
             <g
-              aria-label={`${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              aria-label={copy.pointOnChart(
+                getChartPointDisplayLabel(point.id, point.label, locale)
+              )}
               className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-point-${point.id}`}
@@ -442,7 +467,9 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
 
           return (
             <g
-              aria-label={`Транзитный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              aria-label={copy.transitPointOnChart(
+                getChartPointDisplayLabel(point.id, point.label, locale)
+              )}
               className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-transit-point-${point.id}`}
@@ -495,7 +522,9 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
 
           return (
             <g
-              aria-label={`Солярный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              aria-label={copy.solarPointOnChart(
+                getChartPointDisplayLabel(point.id, point.label, locale)
+              )}
               className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-solar-return-point-${point.id}`}
@@ -548,7 +577,9 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
 
           return (
             <g
-              aria-label={`Прогрессивный ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              aria-label={copy.progressedPointOnChart(
+                getChartPointDisplayLabel(point.id, point.label, locale)
+              )}
               className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-progression-point-${point.id}`}
@@ -601,7 +632,9 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
 
           return (
             <g
-              aria-label={`Партнёрский ${getChartPointDisplayLabel(point.id, point.label)} на карте`}
+              aria-label={copy.partnerPointOnChart(
+                getChartPointDisplayLabel(point.id, point.label, locale)
+              )}
               className={styles.pointMarker}
               data-hovered={hovered ? "true" : "false"}
               data-testid={`chart-partner-point-${point.id}`}
@@ -643,22 +676,26 @@ export function ChartWheel({ hoveredPointId, onHoverPoint, result }: ChartWheelP
         })}
       </svg>
       <div className={styles.hoverDetailSlot} data-testid="chart-hover-detail-slot">
-        <HoverPointDetail point={hoveredPoint} result={result} />
+        <HoverPointDetail locale={locale} point={hoveredPoint} result={result} />
       </div>
     </div>
   );
 }
 
 function HoverPointDetail({
+  locale,
   point,
   result
 }: {
+  readonly locale: DictionaryLocale;
   readonly point: ChartPoint | null;
-  readonly result: StoredChartCalculationPayload | null;
+  readonly result: ChartResult | null;
 }) {
   if (!point || !result) {
-    return <p className={styles.wheelHint}>Наведите на планету — детали, дом и аспекты</p>;
+    return <p className={styles.wheelHint}>{chartEngineCopyByLocale[locale].wheel.hint}</p>;
   }
+
+  const copy = chartEngineCopyByLocale[locale];
 
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
@@ -702,35 +739,35 @@ function HoverPointDetail({
               angle: aspect.angle,
               orb: aspect.orb,
               applying: aspect.applying,
-            strength: aspect.strength
-          }))
-      : isProgressionPoint && progressionResult
-        ? progressionResult.result.aspectsToNatal
-            .filter((aspect) => aspect.progressedPoint === pointId)
-            .map((aspect) => ({
-              pointA: aspect.progressedPoint,
-              pointB: aspect.natalPoint,
-              type: aspect.type,
-              angle: aspect.angle,
-              orb: aspect.orb,
-              applying: aspect.applying,
               strength: aspect.strength
             }))
-      : isPartnerPoint && synastryResult
-        ? synastryResult.result.aspectsBetween
-            .filter((aspect) => aspect.partnerPoint === pointId)
-            .map((aspect) => ({
-              pointA: aspect.primaryPoint,
-              pointB: aspect.partnerPoint,
-              type: aspect.type,
-              angle: aspect.angle,
-              orb: aspect.orb,
-              applying: aspect.applying,
-              strength: aspect.strength
-            }))
-        : renderResult.aspects
-            .filter((aspect) => aspect.pointA === point.id || aspect.pointB === point.id)
-            .slice(0, 6);
+        : isProgressionPoint && progressionResult
+          ? progressionResult.result.aspectsToNatal
+              .filter((aspect) => aspect.progressedPoint === pointId)
+              .map((aspect) => ({
+                pointA: aspect.progressedPoint,
+                pointB: aspect.natalPoint,
+                type: aspect.type,
+                angle: aspect.angle,
+                orb: aspect.orb,
+                applying: aspect.applying,
+                strength: aspect.strength
+              }))
+          : isPartnerPoint && synastryResult
+            ? synastryResult.result.aspectsBetween
+                .filter((aspect) => aspect.partnerPoint === pointId)
+                .map((aspect) => ({
+                  pointA: aspect.primaryPoint,
+                  pointB: aspect.partnerPoint,
+                  type: aspect.type,
+                  angle: aspect.angle,
+                  orb: aspect.orb,
+                  applying: aspect.applying,
+                  strength: aspect.strength
+                }))
+            : renderResult.aspects
+                .filter((aspect) => aspect.pointA === point.id || aspect.pointB === point.id)
+                .slice(0, 6);
 
   return (
     <div className={styles.hoverDetailCard}>
@@ -739,30 +776,30 @@ function HoverPointDetail({
       </span>
       <div className={styles.hoverDetailText}>
         <strong>
-          {isTransitPoint ? "Транзитный " : ""}
-          {isSolarReturnPoint ? "Солярный " : ""}
-          {isProgressionPoint ? "Прогрессивный " : ""}
-          {isPartnerPoint ? "Партнёрский " : ""}
-          {getChartPointDisplayLabel(pointId, point.label)}
-          {point.retrograde ? <b> R ретроград</b> : null}
+          {isTransitPoint ? copy.wheel.transitPrefix : ""}
+          {isSolarReturnPoint ? copy.wheel.solarPrefix : ""}
+          {isProgressionPoint ? copy.wheel.progressedPrefix : ""}
+          {isPartnerPoint ? copy.wheel.partnerPrefix : ""}
+          {getChartPointDisplayLabel(pointId, point.label, locale)}
+          {point.retrograde ? <b>{copy.wheel.retrograde}</b> : null}
         </strong>
         <span>
-          {position.degree} {formatHouseSignDisplay(position.sign)}
-          {point.house ? ` · ${romanHouses[point.house]} дом` : ""}
+          {position.degree} {formatHouseSignDisplay(position.sign, locale)}
+          {point.house ? ` · ${copy.tables.house(romanHouses[point.house] ?? "")}` : ""}
         </span>
       </div>
-      <div className={styles.hoverDetailAspects} aria-label="Аспекты выбранной планеты">
+      <div className={styles.hoverDetailAspects} aria-label={copy.wheel.selectedAspects}>
         {aspects.length ? (
           aspects.map((aspect, index) => (
             <span
               key={`${aspect.pointA}-${aspect.pointB}-${aspect.type}-${index}`}
-              title={formatAspectTypeDisplay(aspect.type)}
+              title={formatAspectTypeDisplay(aspect.type, locale)}
             >
-              {getAspectSymbol(aspect.type)}
+              {getAspectDisplaySymbol(aspect.type, locale)}
             </span>
           ))
         ) : (
-          <small>нет аспектов</small>
+          <small>{copy.wheel.noAspects}</small>
         )}
       </div>
     </div>
@@ -920,19 +957,3 @@ const aspectToneClasses = {
   neutral: styles.aspectLineNeutral,
   soft: styles.aspectLineSoft
 } as const;
-
-const aspectSymbols: Record<string, string> = {
-  conjunction: "☌",
-  sextile: "✶",
-  square: "□",
-  trine: "△",
-  opposition: "☍",
-  "semi-sextile": "⚺",
-  "semi-square": "∠",
-  quincunx: "⚻",
-  quintile: "Q"
-};
-
-function getAspectSymbol(type: string): string {
-  return aspectSymbols[type] ?? "•";
-}

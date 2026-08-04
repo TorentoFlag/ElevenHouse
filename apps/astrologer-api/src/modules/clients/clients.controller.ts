@@ -19,6 +19,14 @@ export class ClientsController {
     return this.clientsService.searchBirthPlaces(query, request);
   }
 
+  @Get("birth-places/geoapify/:providerPlaceId")
+  resolveBirthPlaceReference(
+    @Param("providerPlaceId") providerPlaceId: string,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.clientsService.resolveBirthPlaceReference(providerPlaceId, request);
+  }
+
   @Get(":clientUserId")
   getClient(@Param("clientUserId") clientUserId: string, @Req() request: AstrologerSessionRequest) {
     return this.clientsService.getClient(clientUserId, request);

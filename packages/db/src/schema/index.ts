@@ -15,3 +15,4 @@ export * from "./scheduling";
 export * from "./messaging";
 export * from "./finance";
 export * from "./audit-log";
+export * from "./ai";

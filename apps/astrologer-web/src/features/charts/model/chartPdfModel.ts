@@ -4,6 +4,7 @@ import type {
   CalculationPdfLocale
 } from "@elevenhouse/contracts";
 import { HttpError } from "../../../common/http/HttpError";
+import { chartEngineCopyByLocale } from "./chartEngineCopy";
 
 export type ChartPdfAction = {
   readonly kind: "disabled" | "request" | "pending" | "download" | "retry";
@@ -26,15 +27,17 @@ export function buildChartPdfAction(input: {
   readonly job: CalculationPdfJob | null;
   readonly isBusy: boolean;
   readonly isResultStale: boolean;
+  readonly locale?: CalculationPdfLocale;
 }): ChartPdfAction {
+  const copy = chartEngineCopyByLocale[input.locale ?? "ru"].pdf;
   if (!input.calculationId) {
-    return action("disabled", "PDF", true, "Сначала рассчитайте карту");
+    return action("disabled", "PDF", true, copy.calculateFirst);
   }
   if (input.isResultStale) {
-    return action("disabled", "PDF", true, "Сначала пересчитайте карту");
+    return action("disabled", "PDF", true, copy.recalculateFirst);
   }
   if (!input.currentResultChecksum) {
-    return action("disabled", "PDF", true, "Загружаем состояние PDF");
+    return action("disabled", "PDF", true, copy.loading);
   }
 
   const job =
@@ -45,26 +48,24 @@ export function buildChartPdfAction(input: {
       : null;
 
   if (job?.status === "queued" || job?.status === "processing") {
-    return action("pending", "PDF готовится…", true, "PDF формируется");
+    return action("pending", copy.preparing, true, copy.forming);
   }
 
   if (job?.status === "ready") {
-    return action("download", "Скачать PDF", input.isBusy, "Скачать готовый PDF");
+    return action("download", copy.download, input.isBusy, copy.downloadTitle);
   }
 
   if (job?.status === "failed") {
     return action(
       "retry",
-      "Повторить",
+      copy.retry,
       input.isBusy,
-      "Повторить формирование PDF",
-      job.failureReason
-        ? `Не удалось сформировать PDF: ${job.failureReason}`
-        : "Не удалось сформировать PDF. Повторите попытку."
+      copy.retryTitle,
+      job.failureReason ? copy.failed(job.failureReason) : copy.failedDefault
     );
   }
 
-  return action("request", "PDF", input.isBusy, "Сформировать PDF");
+  return action("request", "PDF", input.isBusy, copy.form);
 }
 
 export async function executeChartPdfAction(input: {
@@ -109,7 +110,7 @@ export async function executeChartPdfAction(input: {
       return "enqueued";
     }
   } catch (error) {
-    throw new Error(getChartPdfActionErrorMessage(error), { cause: error });
+    throw new Error(getChartPdfActionErrorMessage(error, input.locale), { cause: error });
   }
 
   return "skipped";
@@ -157,15 +158,16 @@ function action(
   return { kind, label, disabled, title, errorMessage };
 }
 
-function getChartPdfActionErrorMessage(error: unknown): string {
+function getChartPdfActionErrorMessage(error: unknown, locale: CalculationPdfLocale): string {
+  const copy = chartEngineCopyByLocale[locale].pdf;
   if (error instanceof HttpError) {
     if (error.status === 409) {
-      return "Карта изменилась. Пересчитайте её и сформируйте PDF заново";
+      return copy.changed;
     }
     if (error.status === 404) {
-      return "PDF-экспорт карты временно недоступен. Повторите позже";
+      return copy.unavailable;
     }
   }
 
-  return "Не удалось выполнить действие с PDF. Повторите позже";
+  return copy.genericError;
 }

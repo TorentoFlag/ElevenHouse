@@ -3,6 +3,7 @@ import {
   calculationIdParamSchema,
   calculationPdfJobIdParamSchema,
   calculationPdfLatestQuerySchema,
+  chartResultSchema,
   requestCalculationPdfSchema,
   type CalculationPdfDownloadResponse,
   type CalculationPdfJobResponse,
@@ -10,6 +11,9 @@ import {
   type RequestCalculationPdf
 } from "@elevenhouse/contracts";
 import {
+  assertStoredChartCalculationIntegrity,
+  CalculationInterpretationModeUnavailableError,
+  resolveChartInterpretationMode,
   selectCurrentApprovedCalculationInterpretation,
   type CalculationPdfSourceLocator,
   type CalculationRecord,
@@ -25,12 +29,14 @@ import {
 import { CalculationPdfService } from "../calculations/pdf/calculation-pdf.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { chartHttpError } from "./chart-http-errors";
+import { ChartExecutionProfileProvider } from "./chart-execution-profile.provider";
 
 @Injectable()
 export class ChartsPdfService {
   constructor(
     @Inject(CALCULATION_STORE) private readonly calculationStore: CalculationStore,
-    private readonly calculationPdf: CalculationPdfService
+    private readonly calculationPdf: CalculationPdfService,
+    private readonly executionProfile: ChartExecutionProfileProvider
   ) {}
 
   async latest(
@@ -48,7 +54,7 @@ export class ChartsPdfService {
         calculationId: params.calculationId,
         locale: parsedQuery.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v1"
+        renderContract: "chart-natal-v2"
       });
     });
   }
@@ -69,7 +75,7 @@ export class ChartsPdfService {
         expectedResultChecksum: parsedBody.expectedResultChecksum,
         locale: parsedBody.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v1",
+        renderContract: "chart-natal-v2",
         originalFileName: parsedBody.locale === "ru" ? "Натальная карта.pdf" : "Natal chart.pdf"
       });
     });
@@ -106,15 +112,49 @@ export class ChartsPdfService {
     if (!calculation) {
       throw chartHttpError(404, "CHART_CALCULATION_NOT_FOUND", "Chart calculation was not found");
     }
-    if (
-      calculation.status === "archived" ||
-      calculation.module !== "chart" ||
-      calculation.methodCode !== "natal"
-    ) {
+    if (calculation.status === "archived") {
+      throw chartHttpError(409, "CHART_CALCULATION_ARCHIVED", "Chart calculation is archived");
+    }
+    if (calculation.module !== "chart" || calculation.methodCode !== "natal") {
       throw chartHttpError(
         409,
         "CHART_CALCULATION_MISMATCH",
         "Calculation is not a supported natal chart record"
+      );
+    }
+    if (resolveChartInterpretationMode(calculation, "natal") !== "adult_natal") {
+      throw new CalculationInterpretationModeUnavailableError(
+        "Chart PDF is unavailable for this interpretation mode"
+      );
+    }
+    const readable = chartResultSchema.safeParse(calculation.resultData);
+    if (readable.success && readable.data.schemaVersion === "chart-result.v1") {
+      throw chartHttpError(
+        409,
+        "CHART_RECALCULATION_REQUIRED",
+        "Legacy chart calculation must be recalculated before PDF rendering"
+      );
+    }
+    if (!readable.success || readable.data.method !== "natal") {
+      throw chartHttpError(
+        409,
+        "CHART_CALCULATION_MISMATCH",
+        "Stored chart calculation result is invalid"
+      );
+    }
+    try {
+      const result = assertStoredChartCalculationIntegrity({
+        calculation,
+        expectedExecutionProfile: this.executionProfile.getProfile()
+      });
+      if (result.schemaVersion !== "chart-result.v2" || result.method !== "natal") {
+        throw new Error("CHART_PDF_V2_NATAL_REQUIRED");
+      }
+    } catch {
+      throw chartHttpError(
+        409,
+        "CHART_STORED_RESULT_INTEGRITY_INVALID",
+        "Stored chart result failed integrity validation"
       );
     }
     return calculation;
@@ -122,7 +162,9 @@ export class ChartsPdfService {
 }
 
 function chartPdfSourceLocator(calculation: CalculationRecord): CalculationPdfSourceLocator {
-  const interpretation = selectCurrentApprovedCalculationInterpretation(calculation.interpretations);
+  const interpretation = selectCurrentApprovedCalculationInterpretation(
+    calculation.interpretations
+  );
   return {
     kind: "approved_interpretation",
     interpretationId: interpretation?.id ?? null
@@ -157,6 +199,9 @@ async function mapChartPdfErrors<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
+    if (error instanceof CalculationInterpretationModeUnavailableError) {
+      throw chartHttpError(409, error.code, error.message);
+    }
     if (error instanceof CalculationPdfResultChangedError) {
       throw chartHttpError(409, "CHART_RESULT_CHANGED", error.message);
     }

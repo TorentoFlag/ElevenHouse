@@ -3,12 +3,15 @@ import {
   astrologerClientListResponseSchema,
   astrologerClientResponseSchema,
   astrologerClientParamsSchema,
+  clientBirthPlaceReferenceParamsSchema,
+  clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
   type AstrologerClientListQuery,
   type AstrologerClientListResponse,
   type AstrologerClientResponse,
+  type ClientBirthPlaceReferenceResponse,
   type ClientBirthPlaceSearchQuery,
   type ClientBirthPlaceSearchResponse,
   type ClientBirthDataUpsertRequest
@@ -49,6 +52,18 @@ export async function searchClientBirthPlaces(
 
   return clientBirthPlaceSearchResponseSchema.parse(
     await application.http.get(`/clients/birth-places?${searchParams.toString()}`)
+  );
+}
+
+export async function resolveClientBirthPlaceReference(
+  providerPlaceId: string
+): Promise<ClientBirthPlaceReferenceResponse> {
+  const params = clientBirthPlaceReferenceParamsSchema.parse({ providerPlaceId });
+
+  return clientBirthPlaceReferenceResponseSchema.parse(
+    await application.http.get(
+      `/clients/birth-places/geoapify/${encodeURIComponent(params.providerPlaceId)}`
+    )
   );
 }
 

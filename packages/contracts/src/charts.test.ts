@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import readinessFixture from "../test-fixtures/chart-engine-readiness.v2.json";
 import {
   chartAstrocartographyJobCreateRequestSchema,
+  chartAstrocartographyJobInputSnapshotSchema,
+  chartCalculationResponseSchema,
+  chartRecalculateRequestSchema,
+  chartCompositeCalculationRequestSchema,
   chartCompositeJobCreateRequestSchema,
+  chartCompositeResultV2Schema,
   createChartAiDraftRequestSchema,
+  chartHoraryCalculationRequestSchema,
   chartHoraryJobCreateRequestSchema,
+  chartHoraryJobInputSnapshotSchema,
   chartAstrocartographyCalculationRequestSchema,
   chartPlanetaryPositionsRequestSchema,
   chartPlanetaryPositionsResponseSchema,
@@ -14,10 +21,18 @@ import {
   chartSolarReturnCalculationRequestSchema,
   chartProgressionCalculationBasisSchema,
   chartProgressionResultV2Schema,
+  chartProgressionJobInputSnapshotSchema,
   chartProgressionJobCreateRequestSchema,
   chartSolarReturnJobCreateRequestSchema,
+  chartSolarReturnJobInputSnapshotSchema,
+  chartSolarReturnRequestSnapshotSchema,
+  chartSynastryCalculationRequestSchema,
   chartSynastryJobCreateRequestSchema,
+  chartSynastryResultV2Schema,
+  chartRelationshipJobInputSnapshotSchema,
   chartTransitJobCreateRequestSchema,
+  chartTransitCalculationRequestSchema,
+  chartTransitJobInputSnapshotSchema,
   chartResultSchema,
   chartMethodVersions,
   chartEngineReadinessResponseSchema,
@@ -118,6 +133,60 @@ describe("chart contracts", () => {
     expect(storedChartCalculationPayloadSchema.parse(payload)).toEqual(payload);
   });
 
+  it.each(["synastry", "composite"] as const)(
+    "keeps %s provider-facing v2 requests and results free of client identity",
+    (method) => {
+      const relationshipSnapshot = {
+        primaryClientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: "00000000-0000-4000-8000-000000000002"
+      };
+      const request = {
+        schemaVersion: "chart-request.v2" as const,
+        method,
+        methodVersion: chartMethodVersions[method],
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        inputSnapshot: completeInputSnapshot(),
+        partnerInputSnapshot: {
+          ...completeInputSnapshot(),
+          birthDate: "1992-08-11"
+        }
+      };
+      const requestSchema =
+        method === "synastry"
+          ? chartSynastryCalculationRequestSchema
+          : chartCompositeCalculationRequestSchema;
+      const resultSchema =
+        method === "synastry" ? chartSynastryResultV2Schema : chartCompositeResultV2Schema;
+      const result = {
+        schemaVersion: "chart-result.v2" as const,
+        method,
+        methodVersion: chartMethodVersions[method],
+        provider: completeV2NatalPayload().provider,
+        reproducibilityFingerprint: `sha256:${"c".repeat(64)}`,
+        settings: request.settings,
+        inputSnapshot: request.inputSnapshot,
+        partnerInputSnapshot: request.partnerInputSnapshot,
+        result: method === "synastry" ? completeV1SynastryPayload().result : completeRenderResult()
+      };
+
+      expect(requestSchema.parse(request)).not.toHaveProperty("relationshipSnapshot");
+      expect(() => requestSchema.parse({ ...request, relationshipSnapshot })).toThrow();
+      expect(resultSchema.parse(result)).not.toHaveProperty("relationshipSnapshot");
+      expect(() => resultSchema.parse({ ...result, relationshipSnapshot })).toThrow();
+    }
+  );
+
+  it("reads historical v1 relationship identity without upgrading or stripping it", () => {
+    const historical = completeV1SynastryPayload();
+
+    const parsed = chartResultSchema.parse(historical);
+
+    expect(parsed).toEqual(historical);
+    expect(parsed).toHaveProperty("relationshipSnapshot", historical.relationshipSnapshot);
+    expect(parsed).not.toHaveProperty("methodVersion");
+  });
+
   it("keeps historical v1 civil and render payloads frozen while v2 remains strict", () => {
     const historical = {
       schemaVersion: "chart-result.v1" as const,
@@ -147,6 +216,25 @@ describe("chart contracts", () => {
       chartResultSchema.parse({ ...completeV2NatalPayload(), result: historical.result })
     ).toThrow();
   });
+
+  it.each(["1799-12-31", "2400-01-01"])(
+    "rejects v2 chart dates outside the packaged Swiss Ephemeris range: %s",
+    (birthDate) => {
+      expect(() =>
+        chartNatalCalculationRequestSchema.parse({
+          ...completeV2NatalRequest(),
+          inputSnapshot: { ...completeInputSnapshot(), birthDate }
+        })
+      ).toThrow("CHART_EPHEMERIS_DATE_UNSUPPORTED");
+      expect(() =>
+        chartProgressionJobCreateRequestSchema.parse({
+          clientId: "00000000-0000-4000-8000-000000000001",
+          targetDate: birthDate,
+          settings: completeSettings()
+        })
+      ).toThrow("CHART_EPHEMERIS_DATE_UNSUPPORTED");
+    }
+  );
 
   it("rejects Placidus v2 calculation requests outside the Kerykeion latitude range", () => {
     expect(
@@ -414,24 +502,68 @@ describe("chart contracts", () => {
       })
     ).toThrow();
   });
-  it("accepts natal job request by client id and settings only", () => {
-    expect(
+  it.each(["adult_natal", "child"] as const)(
+    "requires the explicit server-persisted %s interpretation mode for a natal job",
+    (interpretationMode) => {
+      expect(
+        chartNatalJobCreateRequestSchema.parse({
+          clientId: "00000000-0000-4000-8000-000000000001",
+          interpretationMode,
+          settings: {
+            houseSystem: "placidus",
+            nodeType: "true",
+            aspectPreset: "major",
+            orbMultiplier: 1
+          }
+        })
+      ).toMatchObject({ interpretationMode, settings: { houseSystem: "placidus" } });
+    }
+  );
+
+  it("rejects missing, legacy and foreign natal interpretation modes", () => {
+    const request = {
+      clientId: "00000000-0000-4000-8000-000000000001",
+      settings: completeSettings()
+    };
+
+    for (const interpretationMode of [undefined, "legacy_unclassified", "adult"] as const) {
+      expect(() =>
+        chartNatalJobCreateRequestSchema.parse({ ...request, interpretationMode })
+      ).toThrow();
+    }
+  });
+
+  it("rejects non-canonical UUID casing on new jobs without rewriting historical v1 ids", () => {
+    const uppercaseClientId = "00000000-0000-4000-8000-00000000000A";
+    const settings = completeSettings();
+
+    expect(() =>
       chartNatalJobCreateRequestSchema.parse({
-        clientId: "00000000-0000-4000-8000-000000000001",
-        settings: {
-          houseSystem: "placidus",
-          nodeType: "true",
-          aspectPreset: "major",
-          orbMultiplier: 1
-        }
+        clientId: uppercaseClientId,
+        interpretationMode: "adult_natal",
+        settings
       })
-    ).toMatchObject({ settings: { houseSystem: "placidus" } });
+    ).toThrow();
+    expect(() =>
+      chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partnerClientId: uppercaseClientId,
+        settings
+      })
+    ).toThrow();
+
+    const historical = completeV1SynastryPayload();
+    historical.relationshipSnapshot.partnerClientId = uppercaseClientId;
+    const parsedHistorical = storedChartCalculationPayloadSchema.parse(historical);
+    if (parsedHistorical.method !== "synastry") throw new Error("Expected v1 synastry payload");
+    expect(parsedHistorical.relationshipSnapshot.partnerClientId).toBe(uppercaseClientId);
   });
 
   it("rejects browser-supplied birth data in create request", () => {
     expect(() =>
       chartNatalJobCreateRequestSchema.parse({
         clientId: "00000000-0000-4000-8000-000000000001",
+        interpretationMode: "adult_natal",
         birthDate: "1990-07-15",
         settings: {
           houseSystem: "placidus",
@@ -458,6 +590,113 @@ describe("chart contracts", () => {
     ).toThrow();
   });
 
+  it("accepts only checksum and optional settings for targeted recalculation", () => {
+    const expectedResultChecksum = `sha256:${"d".repeat(64)}`;
+
+    expect(chartRecalculateRequestSchema.parse({ expectedResultChecksum })).toEqual({
+      expectedResultChecksum
+    });
+    expect(
+      chartRecalculateRequestSchema.parse({
+        expectedResultChecksum,
+        settings: completeSettings()
+      })
+    ).toEqual({ expectedResultChecksum, settings: completeSettings() });
+
+    for (const invalid of [
+      {},
+      { expectedResultChecksum: "not-a-digest" },
+      {
+        expectedResultChecksum,
+        clientId: "00000000-0000-4000-8000-000000000001"
+      },
+      { expectedResultChecksum, birthDate: "1991-07-10" }
+    ]) {
+      expect(() => chartRecalculateRequestSchema.parse(invalid)).toThrow();
+    }
+  });
+
+  it("shares strict identity-free durable job input snapshots", () => {
+    const inputSnapshot = completeInputSnapshot();
+    const transitSnapshot = {
+      date: "2026-08-03",
+      time: "12:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    };
+    const relationship = {
+      inputSnapshot,
+      partnerInputSnapshot: { ...inputSnapshot, birthDate: "1992-08-11" }
+    };
+    const solarReturnSnapshot = {
+      year: 2026,
+      returnType: "solar" as const,
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      }
+    };
+
+    expect(chartTransitJobInputSnapshotSchema.parse({ inputSnapshot, transitSnapshot })).toEqual({
+      inputSnapshot,
+      transitSnapshot
+    });
+    expect(chartRelationshipJobInputSnapshotSchema.parse(relationship)).toEqual(relationship);
+    expect(chartSolarReturnRequestSnapshotSchema.parse(solarReturnSnapshot)).toEqual(
+      solarReturnSnapshot
+    );
+    expect(
+      chartSolarReturnJobInputSnapshotSchema.parse({ inputSnapshot, solarReturnSnapshot })
+    ).toEqual({ inputSnapshot, solarReturnSnapshot });
+    expect(
+      chartProgressionJobInputSnapshotSchema.parse({
+        inputSnapshot,
+        progressionSnapshot: { targetDate: "2026-08-03", progressionType: "secondary" }
+      })
+    ).toBeTruthy();
+    expect(
+      chartHoraryJobInputSnapshotSchema.parse({
+        questionSnapshot: {
+          question: "Should I accept the offer?",
+          category: "career",
+          date: "2026-08-03",
+          time: "12:30",
+          timezone: "Europe/Moscow",
+          latitude: 55.7558,
+          longitude: 37.6173
+        }
+      })
+    ).toBeTruthy();
+    expect(chartAstrocartographyJobInputSnapshotSchema.parse({ inputSnapshot })).toEqual({
+      inputSnapshot
+    });
+
+    expect(() =>
+      chartRelationshipJobInputSnapshotSchema.parse({
+        ...relationship,
+        relationshipSnapshot: {
+          primaryClientId: "00000000-0000-4000-8000-000000000001",
+          partnerClientId: "00000000-0000-4000-8000-000000000002"
+        }
+      })
+    ).toThrow();
+    expect(() =>
+      chartTransitJobInputSnapshotSchema.parse({
+        inputSnapshot,
+        transitSnapshot,
+        clientId: "00000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow();
+    expect(() =>
+      chartSolarReturnRequestSnapshotSchema.parse({
+        ...solarReturnSnapshot,
+        resolvedAt: "2026-08-03T12:30:00.000Z"
+      })
+    ).toThrow();
+  });
+
   it("accepts a transit job request by client id, settings and transit moment", () => {
     expect(
       chartTransitJobCreateRequestSchema.parse({
@@ -477,6 +716,111 @@ describe("chart contracts", () => {
       clientId: "00000000-0000-4000-8000-000000000001",
       transit: { date: "2026-07-22", time: "14:30" }
     });
+  });
+
+  it("round-trips repeated-hour occurrence through transit and horary boundaries", () => {
+    const clientId = "00000000-0000-4000-8000-000000000001";
+    const transitSnapshot = {
+      date: "2024-10-27",
+      time: "02:30",
+      timezone: "Europe/Berlin",
+      latitude: 52.52,
+      longitude: 13.405,
+      dstOccurrence: "second" as const
+    };
+    const questionSnapshot = {
+      question: "Should I accept the offer?",
+      category: "career" as const,
+      ...transitSnapshot
+    };
+
+    expect(
+      chartTransitJobCreateRequestSchema.parse({
+        clientId,
+        settings: completeSettings(),
+        transit: transitSnapshot
+      }).transit
+    ).toEqual(transitSnapshot);
+    expect(
+      chartHoraryJobCreateRequestSchema.parse({
+        clientId,
+        settings: completeSettings(),
+        question: questionSnapshot
+      }).question
+    ).toEqual(questionSnapshot);
+
+    const durableTransit = chartTransitJobInputSnapshotSchema.parse({
+      inputSnapshot: completeInputSnapshot(),
+      transitSnapshot
+    });
+    const durableHorary = chartHoraryJobInputSnapshotSchema.parse({ questionSnapshot });
+    expect(durableTransit.transitSnapshot.dstOccurrence).toBe("second");
+    expect(durableHorary.questionSnapshot.dstOccurrence).toBe("second");
+
+    expect(
+      chartTransitCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "transit",
+        methodVersion: chartMethodVersions.transit,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        ...durableTransit
+      }).transitSnapshot.dstOccurrence
+    ).toBe("second");
+    expect(
+      chartHoraryCalculationRequestSchema.parse({
+        schemaVersion: "chart-request.v2",
+        method: "horary",
+        methodVersion: chartMethodVersions.horary,
+        executionProfile: localExecutionProfile(),
+        settings: completeSettings(),
+        ...durableHorary
+      }).questionSnapshot.dstOccurrence
+    ).toBe("second");
+
+    const storedTransit = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "transit",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: completeSettings(),
+      inputSnapshot: completeInputSnapshot(),
+      transitSnapshot,
+      result: {
+        natal: completeRenderResult(),
+        transit: completeRenderResult(),
+        aspectsToNatal: [],
+        warnings: []
+      }
+    });
+    const storedHorary = storedChartCalculationPayloadSchema.parse({
+      schemaVersion: "chart-result.v1",
+      method: "horary",
+      provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+      settings: completeSettings(),
+      questionSnapshot,
+      result: completeRenderResult()
+    });
+    if (storedTransit.method !== "transit" || storedHorary.method !== "horary") {
+      throw new Error("Expected transit and horary payloads");
+    }
+    expect(storedTransit.transitSnapshot.dstOccurrence).toBe("second");
+    expect(storedHorary.questionSnapshot.dstOccurrence).toBe("second");
+  });
+
+  it("rejects non-canonical repeated-hour occurrence values", () => {
+    const transit = {
+      date: "2024-10-27",
+      time: "02:30",
+      dstOccurrence: "latest"
+    };
+
+    expect(() =>
+      chartTransitJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        settings: completeSettings(),
+        transit
+      })
+    ).toThrow();
   });
 
   it("rejects browser-supplied birth data in transit job requests", () => {
@@ -721,9 +1065,99 @@ describe("chart contracts", () => {
     expect(
       chartJobResponseSchema.parse({
         id: "00000000-0000-4000-8000-000000000002",
+        interpretationMode: "child",
+        status: "calculating"
+      })
+    ).toMatchObject({ status: "calculating", interpretationMode: "child" });
+    expect(
+      chartJobResponseSchema.parse({
+        id: "00000000-0000-4000-8000-000000000002",
+        interpretationMode: "legacy_unclassified",
         status: "calculating"
       }).status
     ).toBe("calculating");
+  });
+
+  it("requires complete status-specific terminal chart job payloads", () => {
+    const id = "00000000-0000-4000-8000-000000000002";
+
+    for (const malformed of [
+      { id, status: "succeeded" },
+      { id, status: "succeeded", calculationId: null },
+      {
+        id,
+        status: "succeeded",
+        calculationId: "00000000-0000-4000-8000-000000000003",
+        failureCode: "unexpected",
+        failureMessage: "must not survive success"
+      },
+      { id, status: "failed" },
+      { id, status: "failed", failureCode: "retry_exhausted" },
+      { id, status: "failed", failureMessage: "provider unavailable" },
+      {
+        id,
+        status: "failed",
+        calculationId: "00000000-0000-4000-8000-000000000003",
+        failureCode: "retry_exhausted",
+        failureMessage: "provider unavailable"
+      }
+    ]) {
+      expect(() => chartJobResponseSchema.parse(malformed)).toThrow();
+    }
+  });
+
+  it("preserves exact recalculation authority as one atomic job response pair", () => {
+    const targetCalculationId = "00000000-0000-4000-8000-000000000003";
+    const expectedSourceChecksum = `sha256:${"d".repeat(64)}`;
+
+    expect(
+      chartJobResponseSchema.parse({
+        id: "00000000-0000-4000-8000-000000000002",
+        interpretationMode: "adult_natal",
+        status: "calculating",
+        targetCalculationId,
+        expectedSourceChecksum
+      })
+    ).toMatchObject({ targetCalculationId, expectedSourceChecksum });
+
+    for (const malformed of [
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        status: "calculating",
+        targetCalculationId
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        status: "failed",
+        failureCode: "retry_exhausted",
+        failureMessage: "provider unavailable",
+        expectedSourceChecksum
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        status: "succeeded",
+        calculationId: "00000000-0000-4000-8000-000000000004",
+        targetCalculationId,
+        expectedSourceChecksum
+      }
+    ]) {
+      expect(() => chartJobResponseSchema.parse(malformed)).toThrow();
+    }
+  });
+
+  it("returns an explicit strict capability set with saved chart reads", () => {
+    const response = {
+      calculationId: "00000000-0000-4000-8000-000000000002",
+      interpretationMode: "legacy_unclassified",
+      result: { schemaVersion: "chart-result.v1", method: "natal" },
+      capabilities: ["view_legacy", "recalculate"]
+    };
+
+    expect(chartCalculationResponseSchema.parse(response)).toEqual(response);
+    expect(() =>
+      chartCalculationResponseSchema.parse({ ...response, capabilities: ["future_action"] })
+    ).toThrow();
+    expect(() => chartCalculationResponseSchema.parse({ ...response, archived: true })).toThrow();
   });
 
   it("separates private input snapshot from render result", () => {

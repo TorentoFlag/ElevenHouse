@@ -1,15 +1,40 @@
-import type { CalculationPdfJob, CalculationRecord } from "@elevenhouse/domain";
+import {
+  buildChartResultReproducibilityFingerprint,
+  sha256CanonicalJson,
+  type CalculationPdfJob,
+  type CalculationRecord,
+  type CanonicalJson
+} from "@elevenhouse/domain";
+import {
+  chartMethodVersions,
+  type ChartExecutionProfile,
+  type ReproducibleChartResult
+} from "@elevenhouse/contracts";
 import type { DictionaryStore } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import { CalculationPdfPermanentError } from "./calculation-pdf.registry";
 import { createChartPdfSource } from "./chart-pdf.source";
 
+const executionProfile: ChartExecutionProfile = {
+  provider: "kerykeion",
+  kerykeionVersion: "5.12.9",
+  pyswissephVersion: "2.10.3.2",
+  expectedEphemeris: "moshier",
+  expectedEphemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+  expectedEphemerisDataRevision: null
+};
+type NatalChartResultV2 = Extract<ReproducibleChartResult, { readonly method: "natal" }>;
+
 describe("Chart PDF source", () => {
   it("loads the current deterministic natal calculation result with approved AI interpretation", async () => {
     const current = calculation();
-    const source = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => current)
-    } as never, dictionaryStore());
+    const source = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => current)
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
 
     await expect(source.load(pdfJob())).resolves.toMatchObject({
       kind: "chart",
@@ -18,7 +43,7 @@ describe("Chart PDF source", () => {
       calculationTitle: "Natal chart",
       approvedInterpretation: "Approved chart interpretation",
       result: {
-        schemaVersion: "chart-result.v1",
+        schemaVersion: "chart-result.v2",
         method: "natal",
         provider: { name: "kerykeion" }
       }
@@ -27,9 +52,13 @@ describe("Chart PDF source", () => {
 
   it("allows deterministic natal PDF without an approved AI interpretation", async () => {
     const current = calculation({ interpretations: [] });
-    const source = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => current)
-    } as never, dictionaryStore());
+    const source = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => current)
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
 
     await expect(
       source.load(
@@ -67,7 +96,8 @@ describe("Chart PDF source", () => {
       {
         findByOwnerAndId: vi.fn(async () => calculation())
       } as never,
-      dictionaryStore
+      dictionaryStore,
+      executionProfile
     );
 
     const document = await source.load(pdfJob());
@@ -108,9 +138,13 @@ describe("Chart PDF source", () => {
     { methodCode: "transits" },
     { resultChecksum: `sha256:${"e".repeat(64)}` }
   ])("rejects stale job identity %#", async (override) => {
-    const source = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => calculation())
-    } as never, dictionaryStore());
+    const source = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => calculation())
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
 
     await expect(source.load(pdfJob(override as never))).rejects.toBeInstanceOf(
       CalculationPdfPermanentError
@@ -118,20 +152,91 @@ describe("Chart PDF source", () => {
   });
 
   it("rejects archived, missing or invalid chart records", async () => {
-    const archived = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => calculation({ status: "archived" }))
-    } as never, dictionaryStore());
+    const archived = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => calculation({ status: "archived" }))
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
     await expect(archived.load(pdfJob())).rejects.toMatchObject({ code: "stale_source" });
 
-    const missing = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => null)
-    } as never, dictionaryStore());
+    const missing = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => null)
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
     await expect(missing.load(pdfJob())).rejects.toMatchObject({ code: "stale_source" });
 
-    const invalid = createChartPdfSource({
-      findByOwnerAndId: vi.fn(async () => calculation({ resultData: { method: "natal" } }))
-    } as never, dictionaryStore());
+    const invalid = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () =>
+          calculation({
+            resultData: { method: "natal" },
+            resultChecksum: pdfJob().resultChecksum
+          })
+        )
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
     await expect(invalid.load(pdfJob())).rejects.toMatchObject({ code: "invalid_source" });
+  });
+
+  it("rejects legacy, checksum-mutated and non-current-profile sources before Dictionary", async () => {
+    const original = chartResult();
+    const mutated = {
+      ...original,
+      result: {
+        ...original.result,
+        points: [
+          { ...original.result.points[0]!, longitude: 42 },
+          ...original.result.points.slice(1)
+        ]
+      }
+    };
+    const cases: readonly {
+      readonly record: CalculationRecord;
+      readonly profile: ChartExecutionProfile;
+    }[] = [
+      {
+        record: calculation({
+          resultData: legacyChartResult(),
+          resultChecksum: pdfJob().resultChecksum
+        }),
+        profile: executionProfile
+      },
+      {
+        record: calculation({
+          resultData: mutated,
+          resultChecksum: pdfJob().resultChecksum
+        }),
+        profile: executionProfile
+      },
+      {
+        record: calculation(),
+        profile: {
+          ...executionProfile,
+          expectedEphemeris: "swiss-ephemeris" as const,
+          expectedEphemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"] as ("FLG_SWIEPH" | "FLG_SPEED")[],
+          expectedEphemerisDataRevision: `sha256:${"f".repeat(64)}` as const
+        }
+      }
+    ];
+
+    for (const candidate of cases) {
+      const dictionary = dictionaryStore();
+      const source = createChartPdfSource(
+        { findByOwnerAndId: vi.fn(async () => candidate.record) } as never,
+        dictionary,
+        candidate.profile
+      );
+
+      await expect(source.load(pdfJob())).rejects.toMatchObject({ code: "invalid_source" });
+      expect(dictionary.listEntriesByCodes).not.toHaveBeenCalled();
+    }
   });
 });
 
@@ -142,7 +247,7 @@ function pdfJob(overrides: Partial<CalculationPdfJob> = {}): CalculationPdfJob {
     ownerUserId: "00000000-0000-4000-8000-000000000003",
     module: "chart",
     methodCode: "natal",
-    resultChecksum: `sha256:${"a".repeat(64)}`,
+    resultChecksum: chartResultChecksum(),
     locale: "ru",
     sourceLocator: {
       kind: "approved_interpretation",
@@ -188,6 +293,14 @@ function emptyDictionaryEntries() {
 }
 
 function calculation(overrides: Partial<CalculationRecord> = {}): CalculationRecord {
+  const defaultResult = chartResult();
+  const resultData = overrides.resultData ?? defaultResult;
+  const inputData = overrides.inputData ?? {
+    inputSnapshot: defaultResult.inputSnapshot,
+    settings: defaultResult.settings
+  };
+  const resultChecksum =
+    overrides.resultChecksum ?? sha256CanonicalJson(resultData as unknown as CanonicalJson);
   return {
     id: pdfJob().calculationId,
     ownerUserId: pdfJob().ownerUserId,
@@ -198,10 +311,10 @@ function calculation(overrides: Partial<CalculationRecord> = {}): CalculationRec
     status: "linked",
     participants: [],
     requestFingerprint: `sha256:${"c".repeat(64)}`,
-    inputData: {},
-    resultData: chartResult(),
+    inputData,
+    resultData,
     resultSummary: {},
-    resultChecksum: pdfJob().resultChecksum,
+    resultChecksum,
     links: [],
     interpretations: [interpretation()],
     artifacts: [],
@@ -227,11 +340,20 @@ function interpretation(
   };
 }
 
-export function chartResult() {
-  return {
-    schemaVersion: "chart-result.v1",
+export function chartResult(): NatalChartResultV2 {
+  const candidate = {
+    schemaVersion: "chart-result.v2",
     method: "natal",
-    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    methodVersion: chartMethodVersions.natal,
+    provider: {
+      name: "kerykeion",
+      version: executionProfile.kerykeionVersion,
+      pyswissephVersion: executionProfile.pyswissephVersion,
+      ephemeris: executionProfile.expectedEphemeris,
+      ephemerisFlags: executionProfile.expectedEphemerisFlags,
+      ephemerisDataRevision: executionProfile.expectedEphemerisDataRevision
+    },
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
     settings: {
       zodiac: "tropical",
       houseSystem: "placidus",
@@ -296,5 +418,25 @@ export function chartResult() {
       },
       warnings: []
     }
+  } as NatalChartResultV2;
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function chartResultChecksum() {
+  return sha256CanonicalJson(chartResult() as unknown as CanonicalJson);
+}
+
+function legacyChartResult() {
+  const current = chartResult();
+  return {
+    schemaVersion: "chart-result.v1",
+    method: "natal",
+    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    settings: current.settings,
+    inputSnapshot: current.inputSnapshot,
+    result: current.result
   };
 }

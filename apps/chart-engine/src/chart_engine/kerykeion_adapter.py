@@ -539,7 +539,7 @@ def calculate_transit(
         longitude=request.transitSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
-        dst_occurrence=None,
+        dst_occurrence=request.transitSnapshot.dstOccurrence,
     )
     allowed_aspects = (
         MAJOR_ASPECTS
@@ -643,7 +643,6 @@ def calculate_synastry(
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         partnerInputSnapshot=request.partnerInputSnapshot,
-        relationshipSnapshot=request.relationshipSnapshot,
         result=ChartSynastryRenderResult(
             primary=_map_render_result(
                 primary_subject,
@@ -716,7 +715,6 @@ def calculate_composite(
         settings=request.settings,
         inputSnapshot=request.inputSnapshot,
         partnerInputSnapshot=request.partnerInputSnapshot,
-        relationshipSnapshot=request.relationshipSnapshot,
         result=_map_render_result(
             composite_subject,
             request.settings.nodeType,
@@ -947,7 +945,7 @@ def calculate_horary(
         longitude=request.questionSnapshot.longitude,
         house_system=request.settings.houseSystem,
         active_points=active_points,
-        dst_occurrence=None,
+        dst_occurrence=request.questionSnapshot.dstOccurrence,
     )
 
     return _validated_payload(StoredChartHoraryCalculationPayload(

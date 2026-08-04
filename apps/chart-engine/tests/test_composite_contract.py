@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from chart_engine.main import app
+from chart_engine.schemas import StoredChartCompositeCalculationPayload
 from test_request_validation import execution_profile
 
 
@@ -34,10 +36,6 @@ def _composite_payload():
             "longitude": 37.6173,
             "birthTimePrecision": "approximate",
         },
-        "relationshipSnapshot": {
-            "primaryClientId": "00000000-0000-4000-8000-000000000001",
-            "partnerClientId": "00000000-0000-4000-8000-000000000002",
-        },
     }
 
 
@@ -55,7 +53,19 @@ def test_composite_returns_canonical_single_wheel_relationship_shape():
     assert data["settings"] == payload["settings"]
     assert data["inputSnapshot"] == payload["inputSnapshot"]
     assert data["partnerInputSnapshot"] == payload["partnerInputSnapshot"]
-    assert data["relationshipSnapshot"] == payload["relationshipSnapshot"]
+    assert "relationshipSnapshot" not in data
+    assert "ClientId" not in response.text
+    assert "00000000-0000-4000-8000-000000000001" not in response.text
+    with pytest.raises(ValidationError):
+        StoredChartCompositeCalculationPayload.model_validate(
+            {
+                **data,
+                "relationshipSnapshot": {
+                    "primaryClientId": "00000000-0000-4000-8000-000000000001",
+                    "partnerClientId": "00000000-0000-4000-8000-000000000002",
+                },
+            }
+        )
     assert "primary" not in data["result"]
     assert "partner" not in data["result"]
     point_ids = {point["id"] for point in data["result"]["points"]}

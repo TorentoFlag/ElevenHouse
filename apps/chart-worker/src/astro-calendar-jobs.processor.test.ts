@@ -32,7 +32,8 @@ describe("processAstroCalendarGenerationJob", () => {
       finalAttempt: false,
       store,
       engine,
-      now
+      now,
+      storageOperationTimeoutMs: 1_000
     });
 
     expect(engine.calculateAstroCalendarRange).toHaveBeenCalledWith({
@@ -81,7 +82,7 @@ describe("processAstroCalendarGenerationJob", () => {
     const store = createStore();
     const engine = createEngine({
       calculateAstroCalendarRange: vi.fn(async () => {
-        throw new ChartEnginePermanentError("invalid astro calendar response");
+        throw new ChartEnginePermanentError("CHART_ENGINE_RESPONSE_INVALID_SCHEMA");
       })
     });
 
@@ -91,7 +92,8 @@ describe("processAstroCalendarGenerationJob", () => {
         finalAttempt: false,
         store,
         engine,
-        now
+        now,
+        storageOperationTimeoutMs: 1_000
       })
     ).rejects.toBeInstanceOf(UnrecoverableError);
 
@@ -99,7 +101,7 @@ describe("processAstroCalendarGenerationJob", () => {
       expect.objectContaining({
         generationId,
         errorCode: "provider_invalid_result",
-        errorMessage: "invalid astro calendar response"
+        errorMessage: "Chart engine returned an invalid AstroCalendar result"
       })
     );
   });
@@ -112,23 +114,64 @@ describe("processAstroCalendarGenerationJob", () => {
       })
     });
 
-    await expect(
-      processAstroCalendarGenerationJob({
-        generationId,
-        finalAttempt: true,
-        store,
-        engine,
-        now
-      })
-    ).rejects.toThrow("chart-engine unavailable");
+    const error = await processAstroCalendarGenerationJob({
+      generationId,
+      finalAttempt: true,
+      store,
+      engine,
+      now,
+      storageOperationTimeoutMs: 1_000
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "ASTRO_CALENDAR_TRANSIENT_FAILURE" });
 
     expect(store.markFailed).toHaveBeenCalledWith(
       expect.objectContaining({
         generationId,
         errorCode: "retry_exhausted",
-        errorMessage: "chart-engine unavailable"
+        errorMessage: "AstroCalendar generation failed after configured retries"
       })
     );
+  });
+
+  it("never exposes sensitive provider or Drizzle details in durable or Bull errors", async () => {
+    const sensitive = "DrizzleQueryError SQL params clients birthSnapshot resultData";
+    const store = createStore();
+    const engine = createEngine({
+      calculateAstroCalendarRange: vi.fn().mockRejectedValue(new Error(sensitive))
+    });
+
+    const error = await processAstroCalendarGenerationJob({
+      generationId,
+      finalAttempt: true,
+      store,
+      engine,
+      now,
+      storageOperationTimeoutMs: 1_000
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "ASTRO_CALENDAR_TRANSIENT_FAILURE" });
+    expect(JSON.stringify(error)).not.toContain(sensitive);
+    expect(JSON.stringify(vi.mocked(store.markFailed).mock.calls)).not.toContain(sensitive);
+  });
+
+  it("sanitizes a pre-read storage failure before it reaches Bull", async () => {
+    const sensitive = "select request_snapshot settings_snapshot params owner";
+    const store = createStore({
+      findById: vi.fn().mockRejectedValue(new Error(sensitive))
+    });
+
+    const error = await processAstroCalendarGenerationJob({
+      generationId,
+      finalAttempt: false,
+      store,
+      engine: createEngine(),
+      now,
+      storageOperationTimeoutMs: 1_000
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "ASTRO_CALENDAR_STORAGE_FAILURE" });
+    expect(JSON.stringify(error)).not.toContain(sensitive);
   });
 });
 

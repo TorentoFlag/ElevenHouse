@@ -5,7 +5,7 @@ describe("birthPlaceModel", () => {
   it("maps a provider candidate to the persisted birth-data fields", () => {
     expect(
       toBirthPlaceDraftPatch({
-        id: "nominatim:41485",
+        id: "geoapify:41485",
         label: "Rome, Lazio, Italy",
         placeName: "Rome, Italy",
         countryCode: "IT",
@@ -14,7 +14,7 @@ describe("birthPlaceModel", () => {
         timezone: "Europe/Rome",
         latitude: 41.8933,
         longitude: 12.4829,
-        provider: "nominatim",
+        provider: "geoapify",
         providerPlaceId: "41485"
       })
     ).toEqual({

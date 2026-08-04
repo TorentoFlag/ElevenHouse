@@ -34,11 +34,15 @@ POST /identity/logout
 POST /client-join-intents
 GET  /me/astrologers
 GET  /me/overview
+GET  /me/birth-places
 GET  /me/birth-data
 PUT  /me/birth-data
 GET  /me/birth-profiles
 POST /me/birth-profiles
 PUT  /me/birth-profiles/:birthDataId
+GET  /me/consents?locale=ru|en
+PUT  /me/consents/:astrologerUserId/chart-ai
+DELETE /me/consents/:consentId
 GET  /a/:handle
 POST /booking/intent
 POST /booking/:intentId/select-slot
@@ -75,6 +79,15 @@ client-astrologer relationships, saved birth profiles and current cabinet
 summary counters. The `directLinkOnly: true` summary flag is an invariant, not a
 feature toggle; this API must not search, recommend or enumerate astrologers.
 
+`GET /me/birth-places` is client-role and owner scoped. It accepts the strict
+shared birth-place query contract and returns only canonical Geoapify candidates
+with coordinates and an IANA timezone. The server keeps the quota-bearing
+provider key private and applies shared Redis cache, single-flight and
+per-owner/global sliding-window limits. Provider, credential, contract or Redis
+failures are explicit `4xx`/`5xx` responses; this route has no browser-side or
+alternate-provider fallback. Selecting a candidate and persisting a birth
+profile remain separate operations.
+
 `GET/PUT /me/birth-data` is client-role and owner scoped. It is the
 primary-profile compatibility route: reads and updates the client's current
 primary reusable birth-data record.
@@ -85,6 +98,16 @@ They support multiple saved birth profiles with at most one primary profile per
 client. Birth-profile mutations require CSRF. Sharing any saved birth profile
 with an astrologer/order is a separate consent-bound workflow and is not implied
 by profile storage.
+
+`GET /me/consents` is client-role and owner scoped. It returns the canonical,
+locale-bound external chart-AI notice and consent evidence only for explicit
+client-astrologer relationships. Inactive relationships remain visible when
+needed to revoke existing evidence, but cannot receive a new grant. Grant and
+revoke mutations require CSRF and strict shared contracts. The server owns the
+purpose, processor and relationship identity, persists the exact policy version,
+notice locale/hash and timestamps, permits only the first revocation, and blocks
+new external chart-AI processing immediately after revocation or stale policy
+evidence. Profile storage and an active relationship never imply consent.
 
 ## Astrologer API
 
@@ -98,9 +121,10 @@ calculations with private notes and a versioned interpretation catalog, Human
 Design individual/compatibility/transit/AI/PDF contours, provider-neutral
 Messaging commands/webhook/SSE freshness and provider-neutral AI generation
 through OpenAI, and the Flows templates/draft CRUD/immutable publish,
-owner-scoped definition validation and definition-only runtime read surface.
-Flows execution is currently fail-closed until the durable `flow-graph.v2`
-interpreter is implemented.
+owner-scoped definition validation, definition-only runtime read surface and
+durable cancellation of existing v2 terminal-token runs. New Flows execution
+and enrollment remain fail-closed until the complete durable `flow-graph.v2`
+interpreter and rollout authority are implemented.
 Messaging architecture is recorded in
 `docs/decisions/0010-messaging-channel-architecture.md`.
 
@@ -115,7 +139,8 @@ Messaging architecture is recorded in
 - Sessions и materials.
 - Wallet/finance views.
 - Flows templates, draft CRUD, owner-scoped read-only definition validation,
-  immutable publish and definition-only runtime history/availability projection.
+  immutable publish, definition-only runtime history/availability projection
+  and durable owner-scoped cancellation of eligible existing v2 runs.
 - Analytics.
 - Verification submission and current verification status for the signed-in
   astrologer.
@@ -188,6 +213,7 @@ GET  /matrix/calculations/:calculationId/report/pdf/:jobId/download
 GET  /charts/calculations/:calculationId/report/pdf?locale=ru|en
 POST /charts/calculations/:calculationId/report/pdf
 GET  /charts/calculations/:calculationId/report/pdf/:jobId/download
+POST /charts/calculations/:calculationId/ai-draft
 POST /human-design/preview
 POST /human-design/calculations
 POST /human-design/calculations/:calculationId/recalculate
@@ -250,12 +276,41 @@ separately. A valid graph remains `activatable=false` with
 `FLOW_RUNTIME_EXECUTION_UNAVAILABLE` until the versioned runtime readiness
 authority exists. Validation does not mutate the flow, runtime or outbox.
 
+Validation V2 and publication V3 are vendor-media responses gated by both an
+explicit `Accept` value and
+`ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE=manifest_v2`. The default
+`legacy_v1` phase always returns legacy wire envelopes and persists a V1
+capability manifest, even to a new frontend. In `manifest_v2`, every fresh
+publication persists V2 while clients without vendor `Accept` continue to
+receive the legacy publication envelope. Idempotency replay returns the exact
+stored response across phase changes; `Vary` appends `Accept` without removing
+existing cache dimensions such as `Origin`.
+
 Create/edit/publish, read-only history and pausing an already active legacy flow
-remain available. Activation, simulation, manual run creation, run cancellation
-and approval decision fail before runtime-store mutation; authenticated HTTP
-commands return typed
-`409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Internal event dispatch never enrolls
-a legacy active flow: it returns the terminal disposition
+remain available. Activation, simulation, manual run creation and approval
+decision fail before runtime-store mutation; authenticated HTTP commands return
+typed `409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE`.
+
+`POST /flow-runs/:runId/cancel` is an independent operational control for
+existing durable v2 terminal-token runs; it does not enable activation,
+enrollment, traversal or scheduling. The command requires authenticated owner
+scope, CSRF and exactly one syntactically valid `Idempotency-Key` field line.
+The v1 request is bodyless: no body or `{}` is accepted and any field returns
+`400 FLOW_INVALID_REQUEST` before persistence. PostgreSQL atomically persists
+the canonical request hash, exact status/body replay for 24 hours, terminal
+fencing and command-linked trace. Reusing a key with different canonical valid
+content conflicts. Missing and foreign-owned run ids produce the same durable
+`404`; already-terminal runs produce a durable `409`. Legacy or internally
+inconsistent runs and `waiting_external` runs fail closed with a durable `409`
+rather than claiming that in-flight provider work was stopped. Cancellation is
+accepted only for runnable or claimed terminal-token work; a claimed
+cancellation records the locked attempt identity, while a runnable cancellation
+does not fabricate an attempt. Bounded PostgreSQL lock/statement timeouts roll
+back before authority is acquired and return `503 FLOW_RUNTIME_COMMAND_BUSY`;
+the same idempotency key remains retryable.
+
+Internal event dispatch never enrolls a legacy active flow: it returns the
+terminal disposition
 `execution_unavailable` with a matched-flow count, creates no run/effect and
 lets the outbox relay consume the event with a sanitized ignored-event log.
 This prevents an unbounded payload backlog and prevents stale events from being
@@ -330,6 +385,29 @@ only `id`, `status` and `text`. Internal source, provider model and prompt
 metadata are not exposed to frontend consumers. Approval remains a separate
 explicit mutation against a saved interpretation id.
 
+New natal creation requires an explicit persisted `interpretationMode` of
+`adult_natal` or `child`. It is product intent, not an age inference: neither
+date of birth nor a `mode=child_chart` URL can classify or reclassify a saved
+calculation. Chart job/result reads return the server-owned mode. Existing natal
+rows without the field are exposed as `legacy_unclassified` and are not
+backfilled by guessing; recalculation preserves the stored classification.
+Non-natal chart methods use `legacy_unclassified` because this field only
+classifies natal interpretation policy.
+
+Result schema version and interpretation classification are separate persisted
+facts. A classified `chart-result.v1` natal row keeps its stored adult/child
+mode, but remains limited to legacy viewing plus exact-id recalculation; that
+recalculation upgrades the result without reclassifying the product intent.
+
+The capability boundary is fail closed. Adult natal supports private linking,
+publication/client delivery, chart AI and PDF. Child natal may be viewed,
+recalculated and privately linked to its CRM client, but cannot be published,
+delivered to the client, exported to PDF or sent to chart AI. Legacy natal may
+only be viewed and recalculated until an explicit future classification
+workflow exists. These guards run from persisted authority before downstream
+provider, PDF-queue or publication work; frontend URL/query state cannot
+override them.
+
 Numerology PDF routes are owner-scoped to a current, non-archived
 `module = numerology`, `method_code = pythagorean` saved calculation. Latest
 state is read per `locale`; enqueue requires CSRF and the strict body
@@ -389,6 +467,21 @@ downloaded, and object deletion is performed asynchronously by `workers`. API
 responses expose public job state and the presigned URL only: storage keys,
 buckets, source locators, document fingerprints, provider/model and prompt
 metadata are never frontend contracts.
+
+`POST /charts/calculations/:calculationId/ai-draft` requires CSRF and exactly
+one valid `Idempotency-Key`. The durable command binds the authenticated actor,
+calculation id and normalized checksum body and is committed before provider
+work. A live duplicate returns `409 CHART_AI_DRAFT_IN_PROGRESS`; reuse for a
+different request returns `409 CHART_AI_DRAFT_IDEMPOTENCY_KEY_REUSED`.
+Successful replay returns the same deterministic interpretation without new
+provider usage. Terminal replay is resolved after authentication, ownership and
+request-identity fencing but before mutable consent/configuration/dictionary
+preflight, so a previously committed outcome remains stable. Known terminal
+failures are replayed, while ambiguous provider or post-provider persistence
+outcomes are persisted as `CHART_AI_DRAFT_OUTCOME_UNKNOWN` and require
+reconciliation instead of silently repeating billable processing. Command keys
+expire after 24 hours; safe expiry cleanup allows one new acquisition while
+preserving the unique concurrent-acquisition fence.
 
 `POST /human-design/preview` is authenticated and read-only, so it does not
 require CSRF and must not create calculation, participant-link, interpretation,

@@ -1,7 +1,8 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { CalculationRecord, CalculationStore } from "@elevenhouse/domain";
 import type { SystemClock } from "../clock/system-clock.service";
+import type { ChartExecutionProfileProvider } from "../charts/chart-execution-profile.provider";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { CalculationsService } from "./calculations.service";
 
@@ -35,6 +36,25 @@ describe("CalculationsService", () => {
     );
   });
 
+  it("maps child chart publication policy to a typed conflict before persistence", async () => {
+    const record = {
+      ...publishableCalculation(),
+      module: "chart" as const,
+      methodCode: "natal",
+      interpretationMode: "child" as const
+    };
+    const store = createStore(record);
+    const service = createService(store);
+
+    await expect(
+      service.publish(calculationId, { clientId, expectedResultChecksum: checksum }, request())
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
+    });
+    expect(store.publishClientLink).not.toHaveBeenCalled();
+  });
+
   it("saves an interpretation against the expected current result without a version id", async () => {
     const record = manualCalculation();
     const store = createStore(record);
@@ -44,7 +64,8 @@ describe("CalculationsService", () => {
     await service.saveManualInterpretation(
       calculationId,
       { text: "Проверено", expectedResultChecksum: checksum },
-      request()
+      request(),
+      "66666666-6666-4666-8666-666666666666"
     );
 
     expect(store.saveInterpretation).toHaveBeenCalledWith(
@@ -54,10 +75,39 @@ describe("CalculationsService", () => {
       expect.not.objectContaining({ versionId: expect.anything() })
     );
   });
+
+  it("fails closed when the generic read surface reaches a corrupt stored chart result", async () => {
+    const store = createStore(
+      baseCalculation({
+        module: "chart",
+        methodCode: "natal",
+        inputData: {},
+        resultData: {}
+      })
+    );
+    const service = createService(store);
+
+    await expect(service.getCalculation(calculationId, request())).rejects.toBeInstanceOf(
+      ConflictException
+    );
+  });
 });
 
 function createService(store: CalculationStore): CalculationsService {
-  return new CalculationsService(store, { now: () => now } as SystemClock);
+  return new CalculationsService(
+    store,
+    { now: () => now } as SystemClock,
+    {
+      getProfile: () => ({
+        provider: "kerykeion",
+        kerykeionVersion: "5.12.9",
+        pyswissephVersion: "2.10.3.2",
+        expectedEphemeris: "moshier",
+        expectedEphemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+        expectedEphemerisDataRevision: null
+      })
+    } as ChartExecutionProfileProvider
+  );
 }
 
 function createStore(record: CalculationRecord): CalculationStore {
@@ -131,6 +181,7 @@ function baseCalculation(overrides: Partial<CalculationRecord> = {}): Calculatio
     ownerUserId,
     module: "numerology",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: "Manual calculation",
     status: "calculated",

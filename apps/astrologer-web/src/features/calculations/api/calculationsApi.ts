@@ -57,16 +57,30 @@ export async function linkCalculationClient(input: {
 
 export async function saveCalculationInterpretation(input: {
   readonly calculationId: string;
+  readonly idempotencyKey: string;
   readonly body: SaveCalculationInterpretationRequest;
 }): Promise<CalculationRecordResponse> {
-  const params = calculationIdParamSchema.parse({ calculationId: input.calculationId });
+  const params = calculationInterpretationIdParamSchema.parse({
+    calculationId: input.calculationId,
+    interpretationId: input.idempotencyKey
+  });
   const body = saveCalculationInterpretationRequestSchema.parse(input.body);
 
   return calculationRecordResponseSchema.parse(
     await application.http.post(`/calculations/${params.calculationId}/interpretations`, body, {
-      csrf: true
+      csrf: true,
+      headers: { "idempotency-key": params.interpretationId }
     })
   );
+}
+
+export function createCalculationInterpretationIdempotencyKey(
+  createRequestId: () => string = () => crypto.randomUUID()
+): string {
+  return calculationInterpretationIdParamSchema.parse({
+    calculationId: "00000000-0000-4000-8000-000000000000",
+    interpretationId: createRequestId()
+  }).interpretationId;
 }
 
 export async function approveCalculationInterpretation(input: {

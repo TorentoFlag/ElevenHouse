@@ -9,6 +9,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./finance-core": {
+      "types": "./dist/finance-core/index.d.ts",
+      "import": "./dist/finance-core/index.js",
+      "require": "./dist/finance-core/index.js"
+    },
+    "./finance-core/reconciliation": {
+      "types": "./dist/finance-core/reconciliation.d.ts",
+      "import": "./dist/finance-core/reconciliation.js",
+      "require": "./dist/finance-core/reconciliation.js"
     }
   },
   "scripts": {

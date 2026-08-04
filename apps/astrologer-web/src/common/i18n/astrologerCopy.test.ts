@@ -31,6 +31,35 @@ const assertRequiredProductActionCopy = (
 ): AstrologerCopy["products"]["actions"] => copy;
 
 describe("astrologerCopy", () => {
+  it("contains complete typed Chart Engine copy in both locales", () => {
+    expect(astrologerCopyByLocale.ru.chartEngine).toMatchObject({
+      documentTitle: "ElevenHouse | Движок карт",
+      title: "Движок карт",
+      modeMenu: {
+        openLabel: "Открыть остальные типы карт",
+        menuLabel: "Другие типы карт"
+      },
+      emptyClient: {
+        title: "Выберите клиента"
+      }
+    });
+    expect(astrologerCopyByLocale.en.chartEngine).toMatchObject({
+      documentTitle: "ElevenHouse | Chart Engine",
+      title: "Chart Engine",
+      modeMenu: {
+        openLabel: "Open other chart types",
+        menuLabel: "Other chart types"
+      },
+      emptyClient: {
+        title: "Choose a client"
+      }
+    });
+
+    expect(collectCopyStrings(astrologerCopyByLocale.en.chartEngine).join(" ")).not.toMatch(
+      /[А-Яа-яЁё]/
+    );
+  });
+
   it("contains complete Numerology interpretation editor copy in both locales", () => {
     expect(astrologerCopyByLocale.ru.numerology.interpretation).toEqual({
       sectionLabel: "AI-разбор портрета",
@@ -192,3 +221,12 @@ describe("astrologerCopy", () => {
     });
   });
 });
+
+function collectCopyStrings(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(collectCopyStrings);
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectCopyStrings);
+  }
+  return [];
+}

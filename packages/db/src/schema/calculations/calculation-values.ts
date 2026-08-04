@@ -2,6 +2,12 @@ export const calculationModuleValues = ["numerology", "chart", "matrix", "human_
 
 export const calculationModeValues = ["individual", "compatibility"] as const;
 
+export const chartInterpretationModeValues = [
+  "adult_natal",
+  "child",
+  "legacy_unclassified"
+] as const;
+
 export const calculationStatusValues = ["calculated", "linked", "published", "archived"] as const;
 
 export const calculationParticipantRoleValues = ["subject", "partner"] as const;
@@ -45,7 +51,10 @@ export const chartCalculationJobStatusValues = [
 
 export const chartCalculationJobProviderValues = ["kerykeion"] as const;
 
-export const chartCalculationJobSchemaVersionValues = ["chart-result.v1"] as const;
+export const chartCalculationJobSchemaVersionValues = [
+  "chart-result.v1",
+  "chart-result.v2"
+] as const;
 
 export function formatCalculationSqlValues(values: readonly string[]): string {
   return `(${values.map((value) => `'${value}'`).join(", ")})`;

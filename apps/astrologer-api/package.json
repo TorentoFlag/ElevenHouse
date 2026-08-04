@@ -13,6 +13,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1079.0",
     "@elevenhouse/ai": "workspace:*",
     "@elevenhouse/auth": "workspace:*",
+    "@elevenhouse/birth-place-search": "workspace:*",
     "@elevenhouse/chart-engine-client": "workspace:*",
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
@@ -28,13 +29,11 @@
     "redis": "6.0.0",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
-    "teleproto": "^1.228.4",
-    "tz-lookup": "^6.1.25"
+    "teleproto": "^1.228.4"
   },
   "devDependencies": {
     "@nestjs/testing": "11.1.26",
     "@types/node": "25.9.2",
-    "@types/tz-lookup": "^6.1.2",
     "tsx": "4.21.0",
     "typescript": "6.0.3"
   }

@@ -4,6 +4,15 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig({
   resolve: {
     alias: {
+      "@elevenhouse/chart-engine-client": fileURLToPath(
+        new URL("./packages/chart-engine-client/src/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/db/charts": fileURLToPath(
+        new URL("./packages/db/src/adapters/charts/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/db/connection": fileURLToPath(
+        new URL("./packages/db/src/connection/index.ts", import.meta.url)
+      ),
       "@elevenhouse/auth/roles": fileURLToPath(
         new URL("./packages/auth/src/roles.ts", import.meta.url)
       ),
@@ -27,6 +36,12 @@ export default defineConfig({
       ),
       "@elevenhouse/db/runtime": fileURLToPath(
         new URL("./packages/db/src/runtime/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/domain/finance-core/reconciliation": fileURLToPath(
+        new URL("./packages/domain/src/finance-core/reconciliation.ts", import.meta.url)
+      ),
+      "@elevenhouse/domain/finance-core": fileURLToPath(
+        new URL("./packages/domain/src/finance-core/index.ts", import.meta.url)
       ),
       "@elevenhouse/domain": fileURLToPath(
         new URL("./packages/domain/src/index.ts", import.meta.url)

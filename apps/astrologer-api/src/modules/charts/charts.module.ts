@@ -1,9 +1,12 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import {
+  createDrizzleChartAiDraftCommandStore,
   createDrizzleChartCalculationCommandStore,
   createDrizzleChartCalculationJobStore
 } from "@elevenhouse/db/charts";
+import { createDrizzleClientConsentStore } from "@elevenhouse/db/clients";
+import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { AiModule } from "../ai/ai.module";
 import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profile.module";
@@ -17,8 +20,15 @@ import { SecurityModule } from "../security/security.module";
 import { ChartsController } from "./charts.controller";
 import { ChartsPdfController } from "./charts-pdf.controller";
 import { ChartsPdfService } from "./charts-pdf.service";
+import { ChartAiDraftCommandReconciliationService } from "./chart-ai-draft-command-reconciliation.service";
 import { ChartsService } from "./charts.service";
-import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
+import {
+  CHART_AI_CONFIG,
+  CHART_AI_DRAFT_COMMAND_STORE,
+  CHART_CLIENT_CONSENT_STORE,
+  CHART_COMMAND_STORE,
+  CHART_JOB_STORE
+} from "./charts.tokens";
 
 @Module({
   imports: [
@@ -37,6 +47,7 @@ import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
   providers: [
     ChartsService,
     ChartsPdfService,
+    ChartAiDraftCommandReconciliationService,
     {
       provide: CHART_COMMAND_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -48,6 +59,24 @@ import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleChartCalculationJobStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
+    },
+    {
+      provide: CHART_CLIENT_CONSENT_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleClientConsentStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: CHART_AI_DRAFT_COMMAND_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleChartAiDraftCommandStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: CHART_AI_CONFIG,
+      useFactory: (configService: ConfigService) =>
+        configService.getOrThrow<AstrologerApiRuntimeConfig["chartAi"]>("astrologerApi.chartAi"),
+      inject: [ConfigService]
     }
   ]
 })

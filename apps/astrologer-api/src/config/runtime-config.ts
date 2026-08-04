@@ -1,5 +1,20 @@
 import { parseBase64Aes256GcmKey } from "@elevenhouse/auth";
+import { chartAiConsentPolicyVersion, chartAiConsentProcessorCode } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
+import { flowPublicationRolloutPhaseValues } from "../modules/flows/flow-publication-rollout";
+
+const officialOpenAiApiBaseUrl = "https://api.openai.com/v1";
+const officialGeoapifyBaseUrl = "https://api.geoapify.com";
+const productionChartEngineBaseUrl = "http://chart-engine:8012";
+const chartAiProcessingAuthorityRegistry = Object.freeze({
+  "verified-test-authority.v1": Object.freeze({
+    environments: Object.freeze(["development", "test"] as const),
+    provider: "openai" as const,
+    processorCode: chartAiConsentProcessorCode,
+    consentPolicyVersion: chartAiConsentPolicyVersion,
+    providerBaseUrl: officialOpenAiApiBaseUrl
+  })
+});
 
 const localAstrologerSessionCookieName = "elevenhouse_astrologer_session";
 const secureAstrologerSessionCookieName = "__Host-elevenhouse_astrologer_session";
@@ -28,6 +43,9 @@ const optionalTelegramBotUsernameSchema = z.preprocess(
 const astrologerApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   ASTROLOGER_API_PORT: z.coerce.number().int().positive().default(3002),
+  ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: z
+    .enum(flowPublicationRolloutPhaseValues)
+    .default("legacy_v1"),
   ASTROLOGER_API_TRUST_PROXY: z
     .enum(["true", "false"])
     .default("false")
@@ -101,22 +119,50 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((value) => value === "true"),
-  ASTROLOGER_API_NOMINATIM_BASE_URL: z
-    .string()
-    .trim()
-    .url()
-    .default("https://nominatim.openstreetmap.org"),
-  ASTROLOGER_API_NOMINATIM_USER_AGENT: z
-    .string()
-    .trim()
-    .min(12)
-    .default("ElevenHouse/1.0 (support@elevenhouse.ai)"),
+  ASTROLOGER_API_GEOAPIFY_BASE_URL: z.string().trim().url().default(officialGeoapifyBaseUrl),
+  ASTROLOGER_API_GEOAPIFY_API_KEY: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: z.coerce
     .number()
     .int()
     .positive()
     .max(15000)
     .default(5000),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2592000),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(1800),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(20000)
+    .default(6000),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse:astrologer-api:birth-place-search"),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(20),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(120),
+  ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(2500),
   NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: optionalTrimmedNonEmptyStringSchema,
   NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_API_ALLOWED_ORIGINS: z.string().trim().optional(),
@@ -204,7 +250,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .transform((value) => value === "true"),
   ASTROLOGER_AI_PROVIDER: z.literal("openai").default("openai"),
   ASTROLOGER_OPENAI_API_KEY: optionalTrimmedNonEmptyStringSchema,
-  ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
+  ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default(officialOpenAiApiBaseUrl),
   ASTROLOGER_AI_FAST_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.4-mini"),
   ASTROLOGER_AI_QUALITY_DRAFT_MODEL: z.enum(["gpt-5.4-mini", "gpt-5.5"]).default("gpt-5.5"),
   ASTROLOGER_AI_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
@@ -216,13 +262,24 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("elevenhouse:astrologer-api:ai")
+    .default("elevenhouse:astrologer-api:ai"),
+  ASTROLOGER_CHART_AI_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: optionalTrimmedNonEmptyStringSchema.refine(
+    (value) => value === undefined || value.length <= 160,
+    "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION must be at most 160 characters"
+  )
 });
 
 export type AstrologerApiRuntimeConfig = {
   readonly port: number;
   readonly trustProxy: boolean;
   readonly redisUrl: string;
+  readonly flows: {
+    readonly publicationRolloutPhase: (typeof flowPublicationRolloutPhaseValues)[number];
+  };
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
@@ -259,10 +316,28 @@ export type AstrologerApiRuntimeConfig = {
   } | null;
   readonly birthPlaceSearch: {
     readonly enabled: boolean;
-    readonly provider: "nominatim";
+    readonly provider: "geoapify";
     readonly baseUrl: string;
-    readonly userAgent: string;
+    readonly apiKey?: string;
     readonly timeoutMs: number;
+    readonly cacheSuccessTtlSeconds: number;
+    readonly cacheEmptyTtlSeconds: number;
+    readonly lockTtlMs: number;
+    readonly rateLimitRedisKeyPrefix: string;
+    readonly rateLimits: {
+      readonly userPerMinute: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+      readonly globalPerMinute: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+      readonly globalPerDay: {
+        readonly limit: number;
+        readonly windowSeconds: number;
+      };
+    };
   };
   readonly allowedOrigins: readonly string[];
   readonly chartEngineBaseUrl: string;
@@ -334,6 +409,10 @@ export type AstrologerApiRuntimeConfig = {
         readonly windowSeconds: number;
       };
     };
+  };
+  readonly chartAi: {
+    readonly enabled: boolean;
+    readonly processingAuthorityVersion: string | null;
   };
 };
 
@@ -420,13 +499,32 @@ export function createAstrologerApiRuntimeConfig(
 
   if (
     config.NODE_ENV === "production" &&
-    ["localhost", "127.0.0.1", "::1"].includes(new URL(config.CHART_ENGINE_BASE_URL).hostname)
+    ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+      new URL(config.CHART_ENGINE_BASE_URL).hostname
+    )
   ) {
     throw new Error("CHART_ENGINE_BASE_URL must not use a loopback host in production");
   }
 
+  if (
+    config.NODE_ENV === "production" &&
+    !isExactRootOrigin(config.CHART_ENGINE_BASE_URL, productionChartEngineBaseUrl)
+  ) {
+    throw new Error(
+      `CHART_ENGINE_BASE_URL must equal ${productionChartEngineBaseUrl} in production`
+    );
+  }
+
   if (config.ASTROLOGER_AI_ENABLED && !config.ASTROLOGER_OPENAI_API_KEY) {
     throw new Error("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+  }
+
+  if (config.ASTROLOGER_CHART_AI_ENABLED && !config.ASTROLOGER_AI_ENABLED) {
+    throw new Error("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
+  }
+
+  if (config.ASTROLOGER_CHART_AI_ENABLED) {
+    assertChartAiProcessingAuthority(config);
   }
 
   if (
@@ -439,10 +537,48 @@ export function createAstrologerApiRuntimeConfig(
     );
   }
 
+  if (config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED && !config.ASTROLOGER_API_GEOAPIFY_API_KEY) {
+    throw new Error(
+      "ASTROLOGER_API_GEOAPIFY_API_KEY is required when ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED=true"
+    );
+  }
+
+  if (
+    config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED &&
+    config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS <=
+      config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS
+  ) {
+    throw new Error(
+      "ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS must exceed ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS"
+    );
+  }
+
+  if (
+    config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED &&
+    new URL(config.ASTROLOGER_API_GEOAPIFY_BASE_URL).protocol !== "https:"
+  ) {
+    throw new Error(
+      "ASTROLOGER_API_GEOAPIFY_BASE_URL must use HTTPS when ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED=true"
+    );
+  }
+
+  if (
+    config.NODE_ENV === "production" &&
+    config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED &&
+    !isExactRootOrigin(config.ASTROLOGER_API_GEOAPIFY_BASE_URL, officialGeoapifyBaseUrl)
+  ) {
+    throw new Error(
+      `ASTROLOGER_API_GEOAPIFY_BASE_URL must equal ${officialGeoapifyBaseUrl} in production when birth-place search is enabled`
+    );
+  }
+
   return {
     port: config.ASTROLOGER_API_PORT,
     trustProxy: config.ASTROLOGER_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
+    flows: {
+      publicationRolloutPhase: config.ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE
+    },
     sessionTtlSeconds: config.ASTROLOGER_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.ASTROLOGER_API_SESSION_COOKIE_SECURE,
     sessionCookieName,
@@ -464,10 +600,28 @@ export function createAstrologerApiRuntimeConfig(
     instagramGraph,
     birthPlaceSearch: {
       enabled: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED,
-      provider: "nominatim",
-      baseUrl: stripTrailingSlashes(config.ASTROLOGER_API_NOMINATIM_BASE_URL),
-      userAgent: config.ASTROLOGER_API_NOMINATIM_USER_AGENT,
-      timeoutMs: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS
+      provider: "geoapify",
+      baseUrl: stripTrailingSlashes(config.ASTROLOGER_API_GEOAPIFY_BASE_URL),
+      apiKey: config.ASTROLOGER_API_GEOAPIFY_API_KEY,
+      timeoutMs: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS,
+      cacheSuccessTtlSeconds: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS,
+      cacheEmptyTtlSeconds: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS,
+      lockTtlMs: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS,
+      rateLimitRedisKeyPrefix: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX,
+      rateLimits: {
+        userPerMinute: {
+          limit: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE,
+          windowSeconds: 60
+        },
+        globalPerMinute: {
+          limit: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE,
+          windowSeconds: 60
+        },
+        globalPerDay: {
+          limit: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY,
+          windowSeconds: 86400
+        }
+      }
     },
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5174"],
     chartEngineBaseUrl: stripTrailingSlashes(config.CHART_ENGINE_BASE_URL),
@@ -544,6 +698,10 @@ export function createAstrologerApiRuntimeConfig(
           windowSeconds: 86400
         }
       }
+    },
+    chartAi: {
+      enabled: config.ASTROLOGER_CHART_AI_ENABLED,
+      processingAuthorityVersion: config.ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION ?? null
     }
   };
 }
@@ -555,8 +713,54 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
     .filter(Boolean);
 }
 
+function assertChartAiProcessingAuthority(
+  config: typeof astrologerApiRuntimeConfigSchema._output
+): void {
+  const authorityVersion = config.ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION;
+  if (!authorityVersion) {
+    const environmentQualifier = config.NODE_ENV === "production" ? " in production" : "";
+    throw new Error(
+      `ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required${environmentQualifier} when ASTROLOGER_CHART_AI_ENABLED=true`
+    );
+  }
+
+  const authority =
+    chartAiProcessingAuthorityRegistry[
+      authorityVersion as keyof typeof chartAiProcessingAuthorityRegistry
+    ];
+  if (!authority || !authority.environments.includes(config.NODE_ENV as "development" | "test")) {
+    throw new Error(
+      `ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION=${authorityVersion} is not registered for ${config.NODE_ENV} chart AI`
+    );
+  }
+  if (
+    authority.provider !== config.ASTROLOGER_AI_PROVIDER ||
+    authority.processorCode !== chartAiConsentProcessorCode ||
+    authority.consentPolicyVersion !== chartAiConsentPolicyVersion
+  ) {
+    throw new Error("Chart AI processing authority does not match the active consent policy");
+  }
+  if (stripTrailingSlashes(config.ASTROLOGER_OPENAI_BASE_URL) !== authority.providerBaseUrl) {
+    throw new Error(
+      "ASTROLOGER_OPENAI_BASE_URL must match the processor endpoint registered for chart AI authority"
+    );
+  }
+}
+
 function stripTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function isExactRootOrigin(value: string, expectedOrigin: string): boolean {
+  const url = new URL(value);
+  return (
+    url.origin === expectedOrigin &&
+    url.pathname === "/" &&
+    url.search === "" &&
+    url.hash === "" &&
+    url.username === "" &&
+    url.password === ""
+  );
 }
 
 function toTelegramMtprotoConfig(input: {

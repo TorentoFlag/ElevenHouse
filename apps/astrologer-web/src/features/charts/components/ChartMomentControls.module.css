@@ -1,0 +1,144 @@
+.transitMomentFields {
+  display: inline-grid;
+  flex: 0 0 auto;
+  grid-template-columns: 118px 92px 142px;
+  align-items: center;
+  gap: 8px;
+}
+.solarReturnYearField {
+  grid-template-columns: 106px;
+}
+.transitMomentFields label,
+.horaryQuestionFields label {
+  display: grid;
+  gap: 3px;
+}
+.transitMomentFields span,
+.horaryQuestionFields span {
+  overflow: hidden;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 9px;
+  font-weight: 780;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.transitMomentFields input,
+.transitMomentFields select,
+.horaryQuestionFields input,
+.horaryQuestionFields select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(13 12 32 / 0.78);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 12px;
+}
+.transitMomentFields input:disabled,
+.transitMomentFields select:disabled,
+.horaryQuestionFields input:disabled,
+.horaryQuestionFields select:disabled {
+  opacity: 0.52;
+}
+.horaryQuestionFields {
+  display: inline-grid;
+  flex: 1 1 560px;
+  min-width: min(100%, 360px);
+  grid-template-columns: minmax(180px, 1.6fr) 108px 116px 88px 130px 142px 90px 90px;
+  align-items: center;
+  gap: 8px;
+}
+.horaryQuestionText {
+  min-width: 0;
+}
+.horaryPlaceField {
+  position: relative;
+  display: grid;
+  min-width: 150px;
+  gap: 3px;
+}
+.horaryPlaceField > small {
+  color: rgb(186 178 218 / 0.72);
+  font-size: 9px;
+  line-height: 1.2;
+}
+.horaryPlaceCandidates {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  display: grid;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 220px;
+  gap: 4px;
+  padding: 6px;
+  overflow-y: auto;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 12px;
+  background: rgb(20 17 48 / 0.99);
+  box-shadow: 0 18px 36px rgb(0 0 0 / 0.38);
+}
+.horaryPlaceCandidates button {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.horaryPlaceCandidates button:hover,
+.horaryPlaceCandidates button:focus-visible {
+  background: rgb(111 96 172 / 0.22);
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 1px;
+}
+.horaryPlaceError {
+  color: #ffb5b5 !important;
+}
+.civilTimeOccurrenceField small {
+  color: rgb(186 178 218 / 0.62);
+  font-size: 9px;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+@container chart-engine-page (max-width: 760px) {
+  .transitMomentFields,
+  .horaryQuestionFields {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .transitMomentFields input,
+  .transitMomentFields select,
+  .horaryQuestionFields input,
+  .horaryQuestionFields select {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 760px) {
+  .transitMomentFields,
+  .horaryQuestionFields {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .transitMomentFields input,
+  .transitMomentFields select,
+  .horaryQuestionFields input,
+  .horaryQuestionFields select {
+    min-height: 44px;
+  }
+}

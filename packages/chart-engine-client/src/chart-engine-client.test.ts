@@ -79,6 +79,15 @@ describe("ChartEngineHttpClient", () => {
     }));
     expect(requests).toHaveLength(expectedRequests.length);
     for (const expected of expectedRequests) expect(requests).toContainEqual(expected);
+    for (const request of requests.filter(({ path }) =>
+      ["/v1/synastry", "/v1/composite"].includes(path)
+    )) {
+      const serialized = JSON.stringify(request.body);
+      expect(request.body).not.toHaveProperty("relationshipSnapshot");
+      expect(serialized).not.toContain("ClientId");
+      expect(serialized).not.toContain("00000000-0000-4000-8000-000000000001");
+      expect(serialized).not.toContain("00000000-0000-4000-8000-000000000002");
+    }
   });
 
   it.each([
@@ -311,9 +320,21 @@ describe("ChartEngineHttpClient", () => {
     );
   });
 
-  it("classifies readiness HTTP, JSON, schema, profile and capability failures as configuration", async () => {
+  it("classifies a temporarily unavailable readiness endpoint as transient", async () => {
+    const client = new ChartEngineHttpClient({
+      baseUrl: await listen((_request, response) => respondText(response, 503, "not ready"))
+    });
+
+    expectSafeError(
+      await capture(client.checkReady()),
+      ChartEngineTransientError,
+      "CHART_ENGINE_READY_HTTP_503",
+      503
+    );
+  });
+
+  it("classifies readiness JSON, schema, profile and capability failures as configuration", async () => {
     const responses: Array<readonly [(response: ServerResponse) => void, string, number?]> = [
-      [(response) => respondText(response, 503, "not ready"), "CHART_ENGINE_READY_HTTP_503", 503],
       [(response) => respondText(response, 200, "not-json"), "CHART_ENGINE_READY_INVALID_JSON"],
       [
         (response) => respondJson(response, { service: "chart-engine", status: "ready" }),
@@ -611,11 +632,6 @@ const partnerInputSnapshot = {
   longitude: 37.6173
 };
 
-const relationshipSnapshot = {
-  primaryClientId: "00000000-0000-4000-8000-000000000001",
-  partnerClientId: "00000000-0000-4000-8000-000000000002"
-};
-
 const calculationRequests = {
   natal: {
     schemaVersion: "chart-request.v2" as const,
@@ -655,8 +671,7 @@ const calculationRequests = {
     executionProfile,
     settings,
     inputSnapshot,
-    partnerInputSnapshot,
-    relationshipSnapshot
+    partnerInputSnapshot
   },
   composite: {
     schemaVersion: "chart-request.v2" as const,
@@ -665,8 +680,7 @@ const calculationRequests = {
     executionProfile,
     settings,
     inputSnapshot,
-    partnerInputSnapshot,
-    relationshipSnapshot
+    partnerInputSnapshot
   },
   solar_return: {
     schemaVersion: "chart-request.v2" as const,
@@ -791,7 +805,6 @@ const calculationResults = {
     methodVersion: "chart.synastry.kerykeion-5.12.v2" as const,
     inputSnapshot,
     partnerInputSnapshot,
-    relationshipSnapshot,
     result: {
       primary: renderResult,
       partner: renderResult,
@@ -806,7 +819,6 @@ const calculationResults = {
     methodVersion: "chart.composite.kerykeion-5.12.v2" as const,
     inputSnapshot,
     partnerInputSnapshot,
-    relationshipSnapshot,
     result: renderResult
   },
   solar_return: {

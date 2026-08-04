@@ -16,6 +16,7 @@ const eventId = "00000000-0000-4000-8000-000000000001";
 const jobId = "00000000-0000-4000-8000-000000000002";
 const mediaAssetId = "00000000-0000-4000-8000-000000000003";
 const now = new Date("2026-07-15T12:00:00.000Z");
+const claimFence = 17n;
 
 describe("relayPendingCalculationPdfEvents", () => {
   it.each([
@@ -35,7 +36,8 @@ describe("relayPendingCalculationPdfEvents", () => {
         eventType,
         aggregateId,
         payload,
-        attempts: 0
+        attempts: 0,
+        claimFence
       });
       const calls: string[] = [];
       const queue = {
@@ -61,6 +63,7 @@ describe("relayPendingCalculationPdfEvents", () => {
         expect.objectContaining({ jobId: `calculation-pdf-${operation}-${aggregateId}` })
       );
       expect(calls).toEqual(["queue", "published"]);
+      expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence, publishedAt: now });
     }
   );
 
@@ -70,7 +73,8 @@ describe("relayPendingCalculationPdfEvents", () => {
       eventType: CALCULATION_PDF_REQUESTED_EVENT,
       aggregateId: jobId,
       payload: { jobId: "not-a-uuid", secret: "do-not-log" } as never,
-      attempts: 2
+      attempts: 2,
+      claimFence
     });
     const queue = { add: vi.fn() } as unknown as CalculationPdfQueue;
 
@@ -81,12 +85,35 @@ describe("relayPendingCalculationPdfEvents", () => {
     expect(store.markPublishFailed).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId,
+        claimFence,
         nextAvailableAt: new Date("2026-07-15T12:00:04.000Z")
       })
     );
-    expect(JSON.stringify(vi.mocked(store.markPublishFailed).mock.calls)).not.toContain(
+    expect(vi.mocked(store.markPublishFailed).mock.calls.flat(Infinity).join(" ")).not.toContain(
       "do-not-log"
     );
+  });
+
+  it("propagates a stale publish claim without trying to requeue it", async () => {
+    const store = createStore({
+      id: eventId,
+      eventType: CALCULATION_PDF_REQUESTED_EVENT,
+      aggregateId: jobId,
+      payload: { jobId },
+      attempts: 0,
+      claimFence
+    });
+    const staleClaimError = Object.assign(new Error("Outbox relay claim is stale"), {
+      name: "OutboxRelayStaleClaimError",
+      code: "OUTBOX_RELAY_STALE_CLAIM" as const
+    });
+    vi.mocked(store.markPublished).mockRejectedValueOnce(staleClaimError);
+    const queue = { add: vi.fn(async () => undefined) } as unknown as CalculationPdfQueue;
+
+    await expect(relayPendingCalculationPdfEvents(relayInput(store, queue))).rejects.toBe(
+      staleClaimError
+    );
+    expect(store.markPublishFailed).not.toHaveBeenCalled();
   });
 
   it("stops intake and waits for the in-flight relay before shutdown", async () => {

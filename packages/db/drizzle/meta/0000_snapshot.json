@@ -1,5 +1,5 @@
 {
-  "id": "4daa9e61-dece-4c8a-ba29-58aebd0e0ec1",
+  "id": "240b6d19-2c60-4c00-a388-c7ff0029a3be",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1340,6 +1340,13 @@
           "notNull": true,
           "default": 0
         },
+        "claim_fence": {
+          "name": "claim_fence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
         "available_at": {
           "name": "available_at",
           "type": "timestamp with time zone",
@@ -1356,6 +1363,18 @@
         "published_at": {
           "name": "published_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quarantined_at": {
+          "name": "quarantined_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quarantine_reason_code": {
+          "name": "quarantine_reason_code",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1443,6 +1462,34 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "outbox_events_quarantined_index": {
+          "name": "outbox_events_quarantined_index",
+          "columns": [
+            {
+              "expression": "event_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "quarantined_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox_events\".\"status\" = 'quarantined'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -1452,23 +1499,23 @@
       "checkConstraints": {
         "outbox_events_status_check": {
           "name": "outbox_events_status_check",
-          "value": "\"outbox_events\".\"status\" in ('pending', 'publishing', 'published')"
+          "value": "\"outbox_events\".\"status\" in ('pending', 'publishing', 'published', 'quarantined')"
         },
         "outbox_events_attempts_check": {
           "name": "outbox_events_attempts_check",
           "value": "\"outbox_events\".\"attempts\" >= 0"
         },
-        "outbox_events_pending_not_published_check": {
-          "name": "outbox_events_pending_not_published_check",
-          "value": "\"outbox_events\".\"status\" <> 'pending' or \"outbox_events\".\"published_at\" is null"
+        "outbox_events_claim_fence_check": {
+          "name": "outbox_events_claim_fence_check",
+          "value": "\"outbox_events\".\"claim_fence\" >= 0"
         },
-        "outbox_events_publishing_locked_check": {
-          "name": "outbox_events_publishing_locked_check",
-          "value": "\"outbox_events\".\"status\" <> 'publishing' or \"outbox_events\".\"locked_at\" is not null"
+        "outbox_events_quarantine_reason_code_check": {
+          "name": "outbox_events_quarantine_reason_code_check",
+          "value": "\"outbox_events\".\"quarantine_reason_code\" is null or (\n        length(\"outbox_events\".\"quarantine_reason_code\") between 3 and 120\n        and \"outbox_events\".\"quarantine_reason_code\" ~ '^[A-Z][A-Z0-9_]+$'\n      )"
         },
-        "outbox_events_published_at_check": {
-          "name": "outbox_events_published_at_check",
-          "value": "\"outbox_events\".\"status\" <> 'published' or \"outbox_events\".\"published_at\" is not null"
+        "outbox_events_state_check": {
+          "name": "outbox_events_state_check",
+          "value": "(\n        \"outbox_events\".\"status\" = 'pending'\n        and \"outbox_events\".\"locked_at\" is null\n        and \"outbox_events\".\"published_at\" is null\n        and \"outbox_events\".\"quarantined_at\" is null\n        and \"outbox_events\".\"quarantine_reason_code\" is null\n      ) or (\n        \"outbox_events\".\"status\" = 'publishing'\n        and \"outbox_events\".\"locked_at\" is not null\n        and \"outbox_events\".\"published_at\" is null\n        and \"outbox_events\".\"quarantined_at\" is null\n        and \"outbox_events\".\"quarantine_reason_code\" is null\n      ) or (\n        \"outbox_events\".\"status\" = 'published'\n        and \"outbox_events\".\"locked_at\" is null\n        and \"outbox_events\".\"published_at\" is not null\n        and \"outbox_events\".\"quarantined_at\" is null\n        and \"outbox_events\".\"quarantine_reason_code\" is null\n      ) or (\n        \"outbox_events\".\"status\" = 'quarantined'\n        and \"outbox_events\".\"locked_at\" is null\n        and \"outbox_events\".\"published_at\" is null\n        and \"outbox_events\".\"quarantined_at\" is not null\n        and \"outbox_events\".\"quarantine_reason_code\" is not null\n      )"
         }
       },
       "isRLSEnabled": false
@@ -4754,6 +4801,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "interpretation_mode": {
+          "name": "interpretation_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "method_code": {
           "name": "method_code",
           "type": "text",
@@ -4854,6 +4907,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"calculation_records\".\"status\" <> 'archived'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5027,6 +5081,10 @@
           "name": "calculation_records_mode_check",
           "value": "\"calculation_records\".\"mode\" in ('individual', 'compatibility')"
         },
+        "calculation_records_interpretation_mode_check": {
+          "name": "calculation_records_interpretation_mode_check",
+          "value": "\"calculation_records\".\"interpretation_mode\" is null or (\n        \"calculation_records\".\"module\" = 'chart'\n        and \"calculation_records\".\"method_code\" = 'natal'\n        and \"calculation_records\".\"interpretation_mode\" in ('adult_natal', 'child', 'legacy_unclassified')\n      )"
+        },
         "calculation_records_status_check": {
           "name": "calculation_records_status_check",
           "value": "\"calculation_records\".\"status\" in ('calculated', 'linked', 'published', 'archived')"
@@ -5116,50 +5174,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "calculation_participants_record_role_idx": {
-          "name": "calculation_participants_record_role_idx",
-          "columns": [
-            {
-              "expression": "calculation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "role",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "calculation_participants_record_order_idx": {
-          "name": "calculation_participants_record_order_idx",
-          "columns": [
-            {
-              "expression": "calculation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "order",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "calculation_participants_calculation_id_calculation_records_id_fk": {
           "name": "calculation_participants_calculation_id_calculation_records_id_fk",
@@ -5176,7 +5191,24 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "calculation_participants_record_role_unique": {
+          "name": "calculation_participants_record_role_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "calculation_id",
+            "role"
+          ]
+        },
+        "calculation_participants_record_order_unique": {
+          "name": "calculation_participants_record_order_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "calculation_id",
+            "order"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "calculation_participants_role_check": {
@@ -5240,6 +5272,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "published_interpretation_id": {
+          "name": "published_interpretation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_result_checksum": {
+          "name": "published_result_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5286,6 +5330,27 @@
           "method": "btree",
           "with": {}
         },
+        "calculation_client_links_published_interpretation_idx": {
+          "name": "calculation_client_links_published_interpretation_idx",
+          "columns": [
+            {
+              "expression": "published_interpretation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "calculation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "calculation_client_links_record_client_unique": {
           "name": "calculation_client_links_record_client_unique",
           "columns": [
@@ -5321,6 +5386,21 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "calculation_client_links_published_interpretation_fk": {
+          "name": "calculation_client_links_published_interpretation_fk",
+          "tableFrom": "calculation_client_links",
+          "tableTo": "calculation_interpretations",
+          "columnsFrom": [
+            "published_interpretation_id",
+            "calculation_id"
+          ],
+          "columnsTo": [
+            "id",
+            "calculation_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -5334,6 +5414,14 @@
         "calculation_client_links_published_at_check": {
           "name": "calculation_client_links_published_at_check",
           "value": "\"calculation_client_links\".\"visibility\" <> 'visible_to_client' or \"calculation_client_links\".\"published_at\" is not null"
+        },
+        "calculation_client_links_published_result_checksum_check": {
+          "name": "calculation_client_links_published_result_checksum_check",
+          "value": "\"calculation_client_links\".\"published_result_checksum\" is null or \"calculation_client_links\".\"published_result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "calculation_client_links_publication_binding_check": {
+          "name": "calculation_client_links_publication_binding_check",
+          "value": "(\n        \"calculation_client_links\".\"visibility\" = 'private_to_astrologer'\n        and \"calculation_client_links\".\"published_at\" is null\n        and \"calculation_client_links\".\"published_interpretation_id\" is null\n        and \"calculation_client_links\".\"published_result_checksum\" is null\n      ) or (\n        \"calculation_client_links\".\"visibility\" = 'visible_to_client'\n        and \"calculation_client_links\".\"published_at\" is not null\n        and \"calculation_client_links\".\"published_interpretation_id\" is not null\n        and \"calculation_client_links\".\"published_result_checksum\" is not null\n      )"
         }
       },
       "isRLSEnabled": false
@@ -5440,7 +5528,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "calculation_interpretations_id_record_unique": {
+          "name": "calculation_interpretations_id_record_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "calculation_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "calculation_interpretations_source_check": {
@@ -5926,12 +6023,36 @@
           "primaryKey": false,
           "notNull": false
         },
+        "target_calculation_id": {
+          "name": "target_calculation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expected_source_checksum": {
+          "name": "expected_source_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "method": {
           "name": "method",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'natal'"
+        },
+        "interpretation_mode": {
+          "name": "interpretation_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "method_version": {
+          "name": "method_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -5958,6 +6079,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "participant_snapshot": {
+          "name": "participant_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
         "provider": {
           "name": "provider",
           "type": "text",
@@ -5970,7 +6097,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'chart-result.v1'"
+          "default": "'chart-result.v2'"
+        },
+        "execution_profile": {
+          "name": "execution_profile",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "attempts": {
           "name": "attempts",
@@ -5995,6 +6128,25 @@
         "locked_until": {
           "name": "locked_until",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_generation": {
+          "name": "lease_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "result_checksum": {
+          "name": "result_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_reproducibility_fingerprint": {
+          "name": "result_reproducibility_fingerprint",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -6110,28 +6262,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "chart_calculation_jobs_success_fingerprint_unique": {
-          "name": "chart_calculation_jobs_success_fingerprint_unique",
-          "columns": [
-            {
-              "expression": "owner_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "input_fingerprint",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"chart_calculation_jobs\".\"status\" = 'succeeded'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -6148,30 +6278,47 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "chart_calculation_jobs_client_id_client_profiles_user_id_fk": {
-          "name": "chart_calculation_jobs_client_id_client_profiles_user_id_fk",
+        "chart_calculation_jobs_client_id_users_id_fk": {
+          "name": "chart_calculation_jobs_client_id_users_id_fk",
           "tableFrom": "chart_calculation_jobs",
-          "tableTo": "client_profiles",
+          "tableTo": "users",
           "columnsFrom": [
             "client_id"
           ],
           "columnsTo": [
-            "user_id"
+            "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk": {
-          "name": "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk",
+        "chart_calculation_jobs_result_owner_fk": {
+          "name": "chart_calculation_jobs_result_owner_fk",
           "tableFrom": "chart_calculation_jobs",
           "tableTo": "calculation_records",
           "columnsFrom": [
-            "result_calculation_id"
+            "result_calculation_id",
+            "owner_user_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "owner_user_id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "chart_calculation_jobs_target_owner_fk": {
+          "name": "chart_calculation_jobs_target_owner_fk",
+          "tableFrom": "chart_calculation_jobs",
+          "tableTo": "calculation_records",
+          "columnsFrom": [
+            "target_calculation_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -6183,6 +6330,10 @@
           "name": "chart_calculation_jobs_method_check",
           "value": "\"chart_calculation_jobs\".\"method\" in ('natal', 'astrocartography', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')"
         },
+        "chart_calculation_jobs_interpretation_mode_check": {
+          "name": "chart_calculation_jobs_interpretation_mode_check",
+          "value": "\"chart_calculation_jobs\".\"interpretation_mode\" is null or (\n        \"chart_calculation_jobs\".\"interpretation_mode\" in ('adult_natal', 'child', 'legacy_unclassified')\n        and (\n          \"chart_calculation_jobs\".\"method\" = 'natal'\n          or \"chart_calculation_jobs\".\"interpretation_mode\" = 'legacy_unclassified'\n        )\n      )"
+        },
         "chart_calculation_jobs_status_check": {
           "name": "chart_calculation_jobs_status_check",
           "value": "\"chart_calculation_jobs\".\"status\" in ('queued', 'processing', 'succeeded', 'failed')"
@@ -6193,7 +6344,7 @@
         },
         "chart_calculation_jobs_schema_version_check": {
           "name": "chart_calculation_jobs_schema_version_check",
-          "value": "\"chart_calculation_jobs\".\"schema_version\" in ('chart-result.v1')"
+          "value": "\"chart_calculation_jobs\".\"schema_version\" in ('chart-result.v1', 'chart-result.v2')"
         },
         "chart_calculation_jobs_input_fingerprint_check": {
           "name": "chart_calculation_jobs_input_fingerprint_check",
@@ -6207,6 +6358,26 @@
           "name": "chart_calculation_jobs_settings_snapshot_object_check",
           "value": "jsonb_typeof(\"chart_calculation_jobs\".\"settings_snapshot\") = 'object'"
         },
+        "chart_calculation_jobs_participant_snapshot_check": {
+          "name": "chart_calculation_jobs_participant_snapshot_check",
+          "value": "coalesce((\n        jsonb_typeof(\"chart_calculation_jobs\".\"participant_snapshot\") = 'array'\n        and (\n          (\n            \"chart_calculation_jobs\".\"method\" in ('synastry', 'composite')\n            and jsonb_array_length(\"chart_calculation_jobs\".\"participant_snapshot\") = 2\n            and \"chart_calculation_jobs\".\"participant_snapshot\"->0 = jsonb_build_object(\n              'role', 'subject', 'clientId', \"chart_calculation_jobs\".\"client_id\"\n            )\n            and \"chart_calculation_jobs\".\"participant_snapshot\"->1->>'role' = 'partner'\n            and \"chart_calculation_jobs\".\"participant_snapshot\"->1 = jsonb_build_object(\n              'role', 'partner', 'clientId', \"chart_calculation_jobs\".\"participant_snapshot\"->1->>'clientId'\n            )\n            and \"chart_calculation_jobs\".\"participant_snapshot\"->1->>'clientId'\n              ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n            and \"chart_calculation_jobs\".\"participant_snapshot\"->1->>'clientId' <> \"chart_calculation_jobs\".\"client_id\"::text\n          )\n          or (\n            \"chart_calculation_jobs\".\"method\" not in ('synastry', 'composite')\n            and \"chart_calculation_jobs\".\"participant_snapshot\" = jsonb_build_array(\n              jsonb_build_object('role', 'subject', 'clientId', \"chart_calculation_jobs\".\"client_id\")\n            )\n          )\n        )\n      ), false)"
+        },
+        "chart_calculation_jobs_replacement_pair_check": {
+          "name": "chart_calculation_jobs_replacement_pair_check",
+          "value": "(\"chart_calculation_jobs\".\"target_calculation_id\" is null) = (\"chart_calculation_jobs\".\"expected_source_checksum\" is null)"
+        },
+        "chart_calculation_jobs_expected_source_checksum_check": {
+          "name": "chart_calculation_jobs_expected_source_checksum_check",
+          "value": "\"chart_calculation_jobs\".\"expected_source_checksum\" is null or \"chart_calculation_jobs\".\"expected_source_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "chart_calculation_jobs_method_version_check": {
+          "name": "chart_calculation_jobs_method_version_check",
+          "value": "coalesce((\n        (\n          \"chart_calculation_jobs\".\"schema_version\" = 'chart-result.v1'\n          and \"chart_calculation_jobs\".\"method_version\" is null\n          and \"chart_calculation_jobs\".\"execution_profile\" is null\n          and \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is null\n        )\n        or (\n          \"chart_calculation_jobs\".\"schema_version\" = 'chart-result.v2'\n          and \"chart_calculation_jobs\".\"execution_profile\" is not null\n          and \"chart_calculation_jobs\".\"method_version\" = case \"chart_calculation_jobs\".\"method\"\n            when 'natal' then 'chart.natal.kerykeion-5.12.v2'\n            when 'astrocartography' then 'chart.astrocartography.swisseph.v2'\n            when 'transit' then 'chart.transit.kerykeion-5.12.v2'\n            when 'synastry' then 'chart.synastry.kerykeion-5.12.v2'\n            when 'composite' then 'chart.composite.kerykeion-5.12.v2'\n            when 'solar_return' then 'chart.solar-return.kerykeion-5.12.v2'\n            when 'progression' then 'chart.progression.secondary-tropical-year.v2'\n            when 'horary' then 'chart.horary.kerykeion-5.12.v2'\n          end\n        )\n      ), false)"
+        },
+        "chart_calculation_jobs_execution_profile_object_check": {
+          "name": "chart_calculation_jobs_execution_profile_object_check",
+          "value": "coalesce((\n        \"chart_calculation_jobs\".\"execution_profile\" is null\n        or (\n          jsonb_typeof(\"chart_calculation_jobs\".\"execution_profile\") = 'object'\n          and \"chart_calculation_jobs\".\"execution_profile\" = jsonb_build_object(\n            'provider', \"chart_calculation_jobs\".\"execution_profile\"->'provider',\n            'kerykeionVersion', \"chart_calculation_jobs\".\"execution_profile\"->'kerykeionVersion',\n            'pyswissephVersion', \"chart_calculation_jobs\".\"execution_profile\"->'pyswissephVersion',\n            'expectedEphemeris', \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemeris',\n            'expectedEphemerisFlags', \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemerisFlags',\n            'expectedEphemerisDataRevision', \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemerisDataRevision'\n          )\n          and \"chart_calculation_jobs\".\"execution_profile\"->>'provider' = 'kerykeion'\n          and \"chart_calculation_jobs\".\"execution_profile\"->>'kerykeionVersion' = '5.12.9'\n          and \"chart_calculation_jobs\".\"execution_profile\"->>'pyswissephVersion' = '2.10.3.2'\n          and (\n            (\n              \"chart_calculation_jobs\".\"execution_profile\"->>'expectedEphemeris' = 'moshier'\n              and \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemerisFlags' in (\n                '[\"FLG_MOSEPH\", \"FLG_SPEED\"]'::jsonb,\n                '[\"FLG_SPEED\", \"FLG_MOSEPH\"]'::jsonb\n              )\n              and \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemerisDataRevision' = 'null'::jsonb\n            )\n            or (\n              \"chart_calculation_jobs\".\"execution_profile\"->>'expectedEphemeris' = 'swiss-ephemeris'\n              and \"chart_calculation_jobs\".\"execution_profile\"->'expectedEphemerisFlags' in (\n                '[\"FLG_SWIEPH\", \"FLG_SPEED\"]'::jsonb,\n                '[\"FLG_SPEED\", \"FLG_SWIEPH\"]'::jsonb\n              )\n              and \"chart_calculation_jobs\".\"execution_profile\"->>'expectedEphemerisDataRevision'\n                ~ '^sha256:[a-f0-9]{64}$'\n            )\n          )\n        )\n      ), false)"
+        },
         "chart_calculation_jobs_attempts_check": {
           "name": "chart_calculation_jobs_attempts_check",
           "value": "\"chart_calculation_jobs\".\"attempts\" >= 0"
@@ -6214,6 +6385,26 @@
         "chart_calculation_jobs_max_attempts_check": {
           "name": "chart_calculation_jobs_max_attempts_check",
           "value": "\"chart_calculation_jobs\".\"max_attempts\" > 0"
+        },
+        "chart_calculation_jobs_attempts_limit_check": {
+          "name": "chart_calculation_jobs_attempts_limit_check",
+          "value": "\"chart_calculation_jobs\".\"attempts\" <= \"chart_calculation_jobs\".\"max_attempts\""
+        },
+        "chart_calculation_jobs_lease_generation_check": {
+          "name": "chart_calculation_jobs_lease_generation_check",
+          "value": "\"chart_calculation_jobs\".\"lease_generation\" >= 0"
+        },
+        "chart_calculation_jobs_result_checksum_check": {
+          "name": "chart_calculation_jobs_result_checksum_check",
+          "value": "\"chart_calculation_jobs\".\"result_checksum\" is null or \"chart_calculation_jobs\".\"result_checksum\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "chart_calculation_jobs_result_reproducibility_fingerprint_check": {
+          "name": "chart_calculation_jobs_result_reproducibility_fingerprint_check",
+          "value": "\"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is null or \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "chart_calculation_jobs_lease_state_check": {
+          "name": "chart_calculation_jobs_lease_state_check",
+          "value": "coalesce((\n        (\n          \"chart_calculation_jobs\".\"status\" = 'queued'\n          and \"chart_calculation_jobs\".\"locked_by\" is null\n          and \"chart_calculation_jobs\".\"locked_until\" is null\n          and \"chart_calculation_jobs\".\"finished_at\" is null\n          and \"chart_calculation_jobs\".\"result_calculation_id\" is null\n          and \"chart_calculation_jobs\".\"result_checksum\" is null\n          and \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is null\n          and (\n            (\"chart_calculation_jobs\".\"last_error_code\" is null and \"chart_calculation_jobs\".\"last_error_message\" is null)\n            or (\n              length(trim(\"chart_calculation_jobs\".\"last_error_code\")) > 0\n              and length(trim(\"chart_calculation_jobs\".\"last_error_message\")) > 0\n            )\n          )\n        )\n        or (\n          \"chart_calculation_jobs\".\"status\" = 'processing'\n          and length(trim(\"chart_calculation_jobs\".\"locked_by\")) > 0\n          and \"chart_calculation_jobs\".\"locked_until\" is not null\n          and \"chart_calculation_jobs\".\"lease_generation\" > 0\n          and \"chart_calculation_jobs\".\"started_at\" is not null\n          and \"chart_calculation_jobs\".\"finished_at\" is null\n          and \"chart_calculation_jobs\".\"result_calculation_id\" is null\n          and \"chart_calculation_jobs\".\"result_checksum\" is null\n          and \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is null\n          and \"chart_calculation_jobs\".\"last_error_code\" is null\n          and \"chart_calculation_jobs\".\"last_error_message\" is null\n        )\n        or (\n          \"chart_calculation_jobs\".\"status\" = 'succeeded'\n          and \"chart_calculation_jobs\".\"locked_by\" is null\n          and \"chart_calculation_jobs\".\"locked_until\" is null\n          and \"chart_calculation_jobs\".\"started_at\" is not null\n          and \"chart_calculation_jobs\".\"finished_at\" is not null\n          and \"chart_calculation_jobs\".\"result_calculation_id\" is not null\n          and (\n            \"chart_calculation_jobs\".\"schema_version\" = 'chart-result.v1'\n            or (\n              \"chart_calculation_jobs\".\"result_checksum\" is not null\n              and \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is not null\n            )\n          )\n          and \"chart_calculation_jobs\".\"last_error_code\" is null\n          and \"chart_calculation_jobs\".\"last_error_message\" is null\n        )\n        or (\n          \"chart_calculation_jobs\".\"status\" = 'failed'\n          and \"chart_calculation_jobs\".\"locked_by\" is null\n          and \"chart_calculation_jobs\".\"locked_until\" is null\n          and \"chart_calculation_jobs\".\"started_at\" is not null\n          and \"chart_calculation_jobs\".\"finished_at\" is not null\n          and \"chart_calculation_jobs\".\"result_calculation_id\" is null\n          and \"chart_calculation_jobs\".\"result_checksum\" is null\n          and \"chart_calculation_jobs\".\"result_reproducibility_fingerprint\" is null\n          and length(trim(\"chart_calculation_jobs\".\"last_error_code\")) > 0\n          and length(trim(\"chart_calculation_jobs\".\"last_error_message\")) > 0\n        )\n      ), false)"
         }
       },
       "isRLSEnabled": false
@@ -8210,6 +8401,949 @@
       },
       "isRLSEnabled": false
     },
+    "public.flow_execution_attempts": {
+      "name": "flow_execution_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_id": {
+          "name": "token_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_version_id": {
+          "name": "flow_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "executor_key": {
+          "name": "executor_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_activation_sequence": {
+          "name": "node_activation_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fencing_token": {
+          "name": "fencing_token",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "result_code": {
+          "name": "result_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trace_summary": {
+          "name": "trace_summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_execution_attempts_token_fence_unique": {
+          "name": "flow_execution_attempts_token_fence_unique",
+          "columns": [
+            {
+              "expression": "token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "fencing_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_attempts_token_activation_attempt_unique": {
+          "name": "flow_execution_attempts_token_activation_attempt_unique",
+          "columns": [
+            {
+              "expression": "token_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "node_activation_sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_attempts_owner_run_completed_idx": {
+          "name": "flow_execution_attempts_owner_run_completed_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "completed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_execution_attempts_owner_user_id_users_id_fk": {
+          "name": "flow_execution_attempts_owner_user_id_users_id_fk",
+          "tableFrom": "flow_execution_attempts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_execution_attempts_token_run_owner_fk": {
+          "name": "flow_execution_attempts_token_run_owner_fk",
+          "tableFrom": "flow_execution_attempts",
+          "tableTo": "flow_execution_tokens",
+          "columnsFrom": [
+            "token_id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_execution_attempts_run_version_owner_fk": {
+          "name": "flow_execution_attempts_run_version_owner_fk",
+          "tableFrom": "flow_execution_attempts",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "flow_version_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_version_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_execution_attempts_id_run_owner_unique": {
+          "name": "flow_execution_attempts_id_run_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_execution_attempts_outcome_check": {
+          "name": "flow_execution_attempts_outcome_check",
+          "value": "\"flow_execution_attempts\".\"outcome\" in ('advanced', 'waiting', 'retry_scheduled', 'completed', 'failed', 'lease_expired', 'canceled')"
+        },
+        "flow_execution_attempts_node_activation_sequence_check": {
+          "name": "flow_execution_attempts_node_activation_sequence_check",
+          "value": "\"flow_execution_attempts\".\"node_activation_sequence\" > 0"
+        },
+        "flow_execution_attempts_number_check": {
+          "name": "flow_execution_attempts_number_check",
+          "value": "\"flow_execution_attempts\".\"attempt_number\" between 1 and 3 and \"flow_execution_attempts\".\"fencing_token\" >= \"flow_execution_attempts\".\"attempt_number\""
+        },
+        "flow_execution_attempts_node_id_length_check": {
+          "name": "flow_execution_attempts_node_id_length_check",
+          "value": "length(trim(\"flow_execution_attempts\".\"node_id\")) between 1 and 160"
+        },
+        "flow_execution_attempts_executor_key_length_check": {
+          "name": "flow_execution_attempts_executor_key_length_check",
+          "value": "length(trim(\"flow_execution_attempts\".\"executor_key\")) between 1 and 180"
+        },
+        "flow_execution_attempts_lease_owner_length_check": {
+          "name": "flow_execution_attempts_lease_owner_length_check",
+          "value": "length(trim(\"flow_execution_attempts\".\"lease_owner\")) between 1 and 180"
+        },
+        "flow_execution_attempts_result_code_length_check": {
+          "name": "flow_execution_attempts_result_code_length_check",
+          "value": "length(trim(\"flow_execution_attempts\".\"result_code\")) between 1 and 160"
+        },
+        "flow_execution_attempts_trace_summary_object_check": {
+          "name": "flow_execution_attempts_trace_summary_object_check",
+          "value": "jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\") = 'object'"
+        },
+        "flow_execution_attempts_trace_summary_schema_check": {
+          "name": "flow_execution_attempts_trace_summary_schema_check",
+          "value": "\"flow_execution_attempts\".\"trace_summary\" ?& array[\n          'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'\n        ]::text[]\n        and (\n          (\n            \"flow_execution_attempts\".\"outcome\" = 'advanced'\n            and \"flow_execution_attempts\".\"trace_summary\" ?& array[\n              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'\n            ]::text[]\n            and \"flow_execution_attempts\".\"trace_summary\" - array[\n              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',\n              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'\n            ]::text[] = '{}'::jsonb\n          )\n          or (\n            \"flow_execution_attempts\".\"outcome\" <> 'advanced'\n            and \"flow_execution_attempts\".\"trace_summary\" - array[\n              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'\n            ]::text[] = '{}'::jsonb\n          )\n        )\n        and jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\"->'schemaVersion') = 'string'\n        and jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\"->'outcome') = 'string'\n        and jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\"->'nodeKind') = 'string'\n        and jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\"->'reasonCode') = 'string'\n        and jsonb_typeof(\"flow_execution_attempts\".\"trace_summary\"->'resultCode') = 'string'\n        and \"flow_execution_attempts\".\"trace_summary\"->>'schemaVersion' = 'flow-runtime-trace.v1'\n        and \"flow_execution_attempts\".\"trace_summary\"->>'nodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')\n        and \"flow_execution_attempts\".\"trace_summary\"->>'nodeKind' = split_part(\"flow_execution_attempts\".\"executor_key\", ':', 1)\n        and \"flow_execution_attempts\".\"result_code\" = \"flow_execution_attempts\".\"trace_summary\"->>'resultCode'\n        and length(\"flow_execution_attempts\".\"trace_summary\"->>'resultCode') between 1 and 160\n        and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'\n        and (\n          (\n            \"flow_execution_attempts\".\"outcome\" = 'advanced'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'advanced'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' = 'FLOW_EDGE_SELECTED'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_TOKEN_ADVANCED'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'sourceHandle' in ('next', 'true', 'false', 'success', 'error', 'timeout', 'approved', 'rejected')\n            and \"flow_execution_attempts\".\"trace_summary\"->>'targetNodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')\n            and length(\"flow_execution_attempts\".\"trace_summary\"->>'selectedEdgeId') between 1 and 160\n            and \"flow_execution_attempts\".\"trace_summary\"->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'\n            and length(\"flow_execution_attempts\".\"trace_summary\"->>'targetNodeId') between 1 and 160\n            and \"flow_execution_attempts\".\"trace_summary\"->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'\n          )\n          or\n          (\n            \"flow_execution_attempts\".\"outcome\" = 'completed'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'terminal'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' = 'FLOW_GOAL_REACHED'\n          )\n          or (\n            \"flow_execution_attempts\".\"outcome\" = 'lease_expired'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'lease_expired'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' = 'FLOW_TOKEN_LEASE_EXPIRED'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_TOKEN_LEASE_EXPIRED'\n          )\n          or (\n            \"flow_execution_attempts\".\"outcome\" = 'canceled'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'canceled'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_RUN_CANCELED'\n          )\n          or (\n            \"flow_execution_attempts\".\"outcome\" = 'retry_scheduled'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'retry_scheduled'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE')\n            and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_EXECUTION_RETRY_SCHEDULED'\n          )\n          or (\n            \"flow_execution_attempts\".\"outcome\" = 'failed'\n            and \"flow_execution_attempts\".\"trace_summary\"->>'outcome' = 'failed'\n            and (\n              (\n                \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED')\n                and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_EXECUTION_FAILED_TERMINAL'\n              )\n              or (\n                \"flow_execution_attempts\".\"trace_summary\"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')\n                and \"flow_execution_attempts\".\"trace_summary\"->>'resultCode' = 'FLOW_EXECUTION_RETRY_EXHAUSTED'\n              )\n            )\n          )\n        )"
+        },
+        "flow_execution_attempts_time_order_check": {
+          "name": "flow_execution_attempts_time_order_check",
+          "value": "\"flow_execution_attempts\".\"completed_at\" >= \"flow_execution_attempts\".\"started_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_execution_tokens": {
+      "name": "flow_execution_tokens",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_version_id": {
+          "name": "flow_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_kind": {
+          "name": "node_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config_schema_version": {
+          "name": "config_schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "executor_contract_version": {
+          "name": "executor_contract_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "executor_key": {
+          "name": "executor_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'runnable'"
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "node_activation_sequence": {
+          "name": "node_activation_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "1"
+        },
+        "attempt_counter": {
+          "name": "attempt_counter",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "fencing_token": {
+          "name": "fencing_token",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "retry_policy_key": {
+          "name": "retry_policy_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'flow-execution-retry.v1'"
+        },
+        "max_attempts": {
+          "name": "max_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 3
+        },
+        "retry_base_delay_ms": {
+          "name": "retry_base_delay_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "retry_max_delay_ms": {
+          "name": "retry_max_delay_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 60000
+        },
+        "failure_disposition": {
+          "name": "failure_disposition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_reason_code": {
+          "name": "failure_reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "terminal_at": {
+          "name": "terminal_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quarantined_at": {
+          "name": "quarantined_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_execution_tokens_run_unique": {
+          "name": "flow_execution_tokens_run_unique",
+          "columns": [
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_tokens_owner_run_idx": {
+          "name": "flow_execution_tokens_owner_run_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_tokens_runnable_idx": {
+          "name": "flow_execution_tokens_runnable_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_tokens_expired_lease_idx": {
+          "name": "flow_execution_tokens_expired_lease_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_execution_tokens_quarantined_idx": {
+          "name": "flow_execution_tokens_quarantined_idx",
+          "columns": [
+            {
+              "expression": "failure_disposition",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "quarantined_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_execution_tokens_owner_user_id_users_id_fk": {
+          "name": "flow_execution_tokens_owner_user_id_users_id_fk",
+          "tableFrom": "flow_execution_tokens",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_execution_tokens_run_version_owner_fk": {
+          "name": "flow_execution_tokens_run_version_owner_fk",
+          "tableFrom": "flow_execution_tokens",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "flow_version_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_version_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_execution_tokens_id_run_owner_unique": {
+          "name": "flow_execution_tokens_id_run_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_execution_tokens_state_check": {
+          "name": "flow_execution_tokens_state_check",
+          "value": "\"flow_execution_tokens\".\"state\" in ('runnable', 'claimed', 'waiting_timer', 'waiting_signal', 'waiting_external', 'waiting_work_item', 'waiting_approval', 'retry_scheduled', 'completed', 'failed', 'canceled')"
+        },
+        "flow_execution_tokens_node_id_length_check": {
+          "name": "flow_execution_tokens_node_id_length_check",
+          "value": "length(trim(\"flow_execution_tokens\".\"node_id\")) between 1 and 160"
+        },
+        "flow_execution_tokens_node_kind_length_check": {
+          "name": "flow_execution_tokens_node_kind_length_check",
+          "value": "length(trim(\"flow_execution_tokens\".\"node_kind\")) between 1 and 80"
+        },
+        "flow_execution_tokens_node_kind_check": {
+          "name": "flow_execution_tokens_node_kind_check",
+          "value": "\"flow_execution_tokens\".\"node_kind\" in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')"
+        },
+        "flow_execution_tokens_executor_versions_check": {
+          "name": "flow_execution_tokens_executor_versions_check",
+          "value": "\"flow_execution_tokens\".\"config_schema_version\" > 0 and \"flow_execution_tokens\".\"executor_contract_version\" > 0"
+        },
+        "flow_execution_tokens_executor_key_check": {
+          "name": "flow_execution_tokens_executor_key_check",
+          "value": "\"flow_execution_tokens\".\"executor_key\" = \"flow_execution_tokens\".\"node_kind\" || ':' || \"flow_execution_tokens\".\"config_schema_version\"::text || ':' || \"flow_execution_tokens\".\"executor_contract_version\"::text"
+        },
+        "flow_execution_tokens_lease_owner_length_check": {
+          "name": "flow_execution_tokens_lease_owner_length_check",
+          "value": "\"flow_execution_tokens\".\"lease_owner\" is null or length(trim(\"flow_execution_tokens\".\"lease_owner\")) between 1 and 180"
+        },
+        "flow_execution_tokens_node_activation_sequence_check": {
+          "name": "flow_execution_tokens_node_activation_sequence_check",
+          "value": "\"flow_execution_tokens\".\"node_activation_sequence\" > 0"
+        },
+        "flow_execution_tokens_lease_state_check": {
+          "name": "flow_execution_tokens_lease_state_check",
+          "value": "(\n        \"flow_execution_tokens\".\"state\" = 'claimed'\n        and \"flow_execution_tokens\".\"claimed_at\" is not null\n        and \"flow_execution_tokens\".\"lease_owner\" is not null\n        and \"flow_execution_tokens\".\"lease_expires_at\" is not null\n        and \"flow_execution_tokens\".\"claimed_at\" <= \"flow_execution_tokens\".\"lease_expires_at\"\n        and \"flow_execution_tokens\".\"claimed_at\" <= \"flow_execution_tokens\".\"updated_at\"\n      ) or (\n        \"flow_execution_tokens\".\"state\" <> 'claimed'\n        and \"flow_execution_tokens\".\"claimed_at\" is null\n        and \"flow_execution_tokens\".\"lease_owner\" is null\n        and \"flow_execution_tokens\".\"lease_expires_at\" is null\n      )"
+        },
+        "flow_execution_tokens_attempt_counter_check": {
+          "name": "flow_execution_tokens_attempt_counter_check",
+          "value": "\"flow_execution_tokens\".\"attempt_counter\" between 0 and \"flow_execution_tokens\".\"max_attempts\""
+        },
+        "flow_execution_tokens_fencing_token_check": {
+          "name": "flow_execution_tokens_fencing_token_check",
+          "value": "\"flow_execution_tokens\".\"fencing_token\" >= \"flow_execution_tokens\".\"attempt_counter\""
+        },
+        "flow_execution_tokens_counter_state_check": {
+          "name": "flow_execution_tokens_counter_state_check",
+          "value": "(\"flow_execution_tokens\".\"state\" not in ('runnable', 'retry_scheduled')\n          or \"flow_execution_tokens\".\"attempt_counter\" < \"flow_execution_tokens\".\"max_attempts\")\n        and (\"flow_execution_tokens\".\"state\" not in ('claimed', 'retry_scheduled')\n          or \"flow_execution_tokens\".\"attempt_counter\" > 0)"
+        },
+        "flow_execution_tokens_retry_policy_check": {
+          "name": "flow_execution_tokens_retry_policy_check",
+          "value": "\"flow_execution_tokens\".\"retry_policy_key\" = 'flow-execution-retry.v1'\n        and \"flow_execution_tokens\".\"max_attempts\" = 3\n        and \"flow_execution_tokens\".\"retry_base_delay_ms\" = 1000\n        and \"flow_execution_tokens\".\"retry_max_delay_ms\" = 60000"
+        },
+        "flow_execution_tokens_failure_disposition_check": {
+          "name": "flow_execution_tokens_failure_disposition_check",
+          "value": "\"flow_execution_tokens\".\"failure_disposition\" is null\n        or \"flow_execution_tokens\".\"failure_disposition\" in ('retry_scheduled', 'failed_terminal', 'quarantined')"
+        },
+        "flow_execution_tokens_failure_reason_check": {
+          "name": "flow_execution_tokens_failure_reason_check",
+          "value": "\"flow_execution_tokens\".\"failure_reason_code\" is null\n        or \"flow_execution_tokens\".\"failure_reason_code\" in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED', 'FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')"
+        },
+        "flow_execution_tokens_failure_state_check": {
+          "name": "flow_execution_tokens_failure_state_check",
+          "value": "(\n        \"flow_execution_tokens\".\"state\" = 'retry_scheduled'\n        and \"flow_execution_tokens\".\"failure_disposition\" is not null\n        and \"flow_execution_tokens\".\"failure_disposition\" = 'retry_scheduled'\n        and \"flow_execution_tokens\".\"failure_reason_code\" is not null\n        and \"flow_execution_tokens\".\"failure_reason_code\" in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')\n        and \"flow_execution_tokens\".\"quarantined_at\" is null\n      ) or (\n        \"flow_execution_tokens\".\"state\" = 'failed'\n        and \"flow_execution_tokens\".\"failure_disposition\" is not null\n        and \"flow_execution_tokens\".\"failure_reason_code\" is not null\n        and (\n          (\"flow_execution_tokens\".\"failure_disposition\" = 'quarantined'\n            and \"flow_execution_tokens\".\"failure_reason_code\" in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE')\n            and \"flow_execution_tokens\".\"quarantined_at\" is not null)\n          or (\"flow_execution_tokens\".\"failure_disposition\" = 'failed_terminal'\n            and \"flow_execution_tokens\".\"failure_reason_code\" in ('FLOW_NODE_EXECUTION_REJECTED', 'FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')\n            and \"flow_execution_tokens\".\"quarantined_at\" is null)\n        )\n      ) or (\n        \"flow_execution_tokens\".\"state\" not in ('retry_scheduled', 'failed')\n        and \"flow_execution_tokens\".\"failure_disposition\" is null\n        and \"flow_execution_tokens\".\"failure_reason_code\" is null\n        and \"flow_execution_tokens\".\"quarantined_at\" is null\n      )"
+        },
+        "flow_execution_tokens_terminal_state_check": {
+          "name": "flow_execution_tokens_terminal_state_check",
+          "value": "(\n        \"flow_execution_tokens\".\"state\" in ('completed', 'failed', 'canceled')\n        and \"flow_execution_tokens\".\"terminal_at\" is not null\n      ) or (\n        \"flow_execution_tokens\".\"state\" not in ('completed', 'failed', 'canceled')\n        and \"flow_execution_tokens\".\"terminal_at\" is null\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_run_events": {
+      "name": "flow_run_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "flow_run_id": {
+          "name": "flow_run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "node_id": {
+          "name": "node_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt_id": {
+          "name": "attempt_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_run_events_run_sequence_unique": {
+          "name": "flow_run_events_run_sequence_unique",
+          "columns": [
+            {
+              "expression": "flow_run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_run_events_attempt_unique": {
+          "name": "flow_run_events_attempt_unique",
+          "columns": [
+            {
+              "expression": "attempt_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"flow_run_events\".\"attempt_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_run_events_owner_occurred_idx": {
+          "name": "flow_run_events_owner_occurred_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_run_events_owner_user_id_users_id_fk": {
+          "name": "flow_run_events_owner_user_id_users_id_fk",
+          "tableFrom": "flow_run_events",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_run_events_run_owner_fk": {
+          "name": "flow_run_events_run_owner_fk",
+          "tableFrom": "flow_run_events",
+          "tableTo": "flow_runs",
+          "columnsFrom": [
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_run_events_attempt_run_owner_fk": {
+          "name": "flow_run_events_attempt_run_owner_fk",
+          "tableFrom": "flow_run_events",
+          "tableTo": "flow_execution_attempts",
+          "columnsFrom": [
+            "attempt_id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_run_events_command_run_owner_fk": {
+          "name": "flow_run_events_command_run_owner_fk",
+          "tableFrom": "flow_run_events",
+          "tableTo": "flow_runtime_commands",
+          "columnsFrom": [
+            "command_id",
+            "flow_run_id",
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "resource_id",
+            "owner_user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_run_events_type_check": {
+          "name": "flow_run_events_type_check",
+          "value": "\"flow_run_events\".\"event_type\" in ('token_advanced', 'token_waiting', 'token_retry_scheduled', 'token_lease_expired', 'run_completed', 'run_failed', 'run_suppressed', 'run_canceled')"
+        },
+        "flow_run_events_sequence_check": {
+          "name": "flow_run_events_sequence_check",
+          "value": "\"flow_run_events\".\"sequence\" > 0"
+        },
+        "flow_run_events_node_id_length_check": {
+          "name": "flow_run_events_node_id_length_check",
+          "value": "\"flow_run_events\".\"node_id\" is null or length(trim(\"flow_run_events\".\"node_id\")) between 1 and 160"
+        },
+        "flow_run_events_summary_object_check": {
+          "name": "flow_run_events_summary_object_check",
+          "value": "jsonb_typeof(\"flow_run_events\".\"summary\") = 'object'"
+        },
+        "flow_run_events_summary_schema_check": {
+          "name": "flow_run_events_summary_schema_check",
+          "value": "\"flow_run_events\".\"summary\" ?& array[\n          'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'\n        ]::text[]\n        and (\n          (\n            \"flow_run_events\".\"event_type\" = 'token_advanced'\n            and \"flow_run_events\".\"summary\" ?& array[\n              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'\n            ]::text[]\n            and \"flow_run_events\".\"summary\" - array[\n              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',\n              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'\n            ]::text[] = '{}'::jsonb\n          )\n          or (\n            \"flow_run_events\".\"event_type\" <> 'token_advanced'\n            and \"flow_run_events\".\"summary\" - array[\n              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'\n            ]::text[] = '{}'::jsonb\n          )\n        )\n        and jsonb_typeof(\"flow_run_events\".\"summary\"->'schemaVersion') = 'string'\n        and jsonb_typeof(\"flow_run_events\".\"summary\"->'outcome') = 'string'\n        and jsonb_typeof(\"flow_run_events\".\"summary\"->'nodeKind') = 'string'\n        and jsonb_typeof(\"flow_run_events\".\"summary\"->'reasonCode') = 'string'\n        and jsonb_typeof(\"flow_run_events\".\"summary\"->'resultCode') = 'string'\n        and \"flow_run_events\".\"summary\"->>'schemaVersion' = 'flow-runtime-trace.v1'\n        and \"flow_run_events\".\"summary\"->>'nodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')\n        and length(\"flow_run_events\".\"summary\"->>'resultCode') between 1 and 160\n        and \"flow_run_events\".\"summary\"->>'resultCode' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'\n        and (\n          (\n            \"flow_run_events\".\"event_type\" = 'token_advanced'\n            and \"flow_run_events\".\"node_id\" is not null\n            and \"flow_run_events\".\"attempt_id\" is not null\n            and \"flow_run_events\".\"command_id\" is null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'advanced'\n            and \"flow_run_events\".\"summary\"->>'reasonCode' = 'FLOW_EDGE_SELECTED'\n            and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_TOKEN_ADVANCED'\n            and \"flow_run_events\".\"summary\"->>'sourceHandle' in ('next', 'true', 'false', 'success', 'error', 'timeout', 'approved', 'rejected')\n            and \"flow_run_events\".\"summary\"->>'targetNodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')\n            and length(\"flow_run_events\".\"summary\"->>'selectedEdgeId') between 1 and 160\n            and \"flow_run_events\".\"summary\"->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'\n            and length(\"flow_run_events\".\"summary\"->>'targetNodeId') between 1 and 160\n            and \"flow_run_events\".\"summary\"->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'\n          )\n          or\n          (\n            \"flow_run_events\".\"event_type\" = 'run_completed'\n            and \"flow_run_events\".\"attempt_id\" is not null\n            and \"flow_run_events\".\"command_id\" is null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'terminal'\n            and \"flow_run_events\".\"summary\"->>'reasonCode' = 'FLOW_GOAL_REACHED'\n          )\n          or (\n            \"flow_run_events\".\"event_type\" = 'token_lease_expired'\n            and \"flow_run_events\".\"attempt_id\" is not null\n            and \"flow_run_events\".\"command_id\" is null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'lease_expired'\n            and \"flow_run_events\".\"summary\"->>'reasonCode' = 'FLOW_TOKEN_LEASE_EXPIRED'\n            and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_TOKEN_LEASE_EXPIRED'\n          )\n          or (\n            \"flow_run_events\".\"event_type\" = 'run_canceled'\n            and \"flow_run_events\".\"command_id\" is not null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'canceled'\n            and \"flow_run_events\".\"summary\"->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'\n            and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_RUN_CANCELED'\n          )\n          or (\n            \"flow_run_events\".\"event_type\" = 'token_retry_scheduled'\n            and \"flow_run_events\".\"attempt_id\" is not null\n            and \"flow_run_events\".\"command_id\" is null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'retry_scheduled'\n            and \"flow_run_events\".\"summary\"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE')\n            and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_EXECUTION_RETRY_SCHEDULED'\n          )\n          or (\n            \"flow_run_events\".\"event_type\" = 'run_failed'\n            and \"flow_run_events\".\"command_id\" is null\n            and \"flow_run_events\".\"summary\"->>'outcome' = 'failed'\n            and (\n              (\n                \"flow_run_events\".\"summary\"->>'reasonCode' in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED')\n                and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_EXECUTION_FAILED_TERMINAL'\n              )\n              or (\n                \"flow_run_events\".\"summary\"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')\n                and \"flow_run_events\".\"summary\"->>'resultCode' = 'FLOW_EXECUTION_RETRY_EXHAUSTED'\n              )\n            )\n          )\n        )"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.flow_runs": {
       "name": "flow_runs",
       "schema": "",
@@ -8263,6 +9397,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "trace_sequence": {
+          "name": "trace_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
         },
         "created_at": {
           "name": "created_at",
@@ -8455,6 +9596,15 @@
             "owner_user_id"
           ]
         },
+        "flow_runs_id_version_owner_unique": {
+          "name": "flow_runs_id_version_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "flow_version_id",
+            "owner_user_id"
+          ]
+        },
         "flow_runs_id_event_owner_unique": {
           "name": "flow_runs_id_event_owner_unique",
           "nullsNotDistinct": false,
@@ -8484,6 +9634,10 @@
         "flow_runs_snapshot_object_check": {
           "name": "flow_runs_snapshot_object_check",
           "value": "jsonb_typeof(\"flow_runs\".\"snapshot\") = 'object'"
+        },
+        "flow_runs_trace_sequence_check": {
+          "name": "flow_runs_trace_sequence_check",
+          "value": "\"flow_runs\".\"trace_sequence\" >= 0"
         },
         "flow_runs_current_node_id_length_check": {
           "name": "flow_runs_current_node_id_length_check",
@@ -9064,6 +10218,334 @@
       },
       "isRLSEnabled": false
     },
+    "public.flow_runtime_command_outcomes": {
+      "name": "flow_runtime_command_outcomes",
+      "schema": "",
+      "columns": {
+        "command_id": {
+          "name": "command_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "response_status": {
+          "name": "response_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_runtime_command_outcomes_created_idx": {
+          "name": "flow_runtime_command_outcomes_created_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_runtime_command_outcomes_command_fk": {
+          "name": "flow_runtime_command_outcomes_command_fk",
+          "tableFrom": "flow_runtime_command_outcomes",
+          "tableTo": "flow_runtime_commands",
+          "columnsFrom": [
+            "command_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "flow_runtime_command_outcomes_response_check": {
+          "name": "flow_runtime_command_outcomes_response_check",
+          "value": "\"flow_runtime_command_outcomes\".\"response_status\" in (200, 404, 409)\n        and jsonb_typeof(\"flow_runtime_command_outcomes\".\"response_body\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.flow_runtime_commands": {
+      "name": "flow_runtime_commands",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "api_surface": {
+          "name": "api_surface",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "route_template": {
+          "name": "route_template",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "command_scope": {
+          "name": "command_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'processing'"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "replay_until": {
+          "name": "replay_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "flow_runtime_commands_scope_key_unique": {
+          "name": "flow_runtime_commands_scope_key_unique",
+          "columns": [
+            {
+              "expression": "api_surface",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "route_template",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runtime_commands_replay_until_idx": {
+          "name": "flow_runtime_commands_replay_until_idx",
+          "columns": [
+            {
+              "expression": "replay_until",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "flow_runtime_commands_owner_resource_created_idx": {
+          "name": "flow_runtime_commands_owner_resource_created_idx",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "flow_runtime_commands_actor_user_id_users_id_fk": {
+          "name": "flow_runtime_commands_actor_user_id_users_id_fk",
+          "tableFrom": "flow_runtime_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "flow_runtime_commands_owner_user_id_users_id_fk": {
+          "name": "flow_runtime_commands_owner_user_id_users_id_fk",
+          "tableFrom": "flow_runtime_commands",
+          "tableTo": "users",
+          "columnsFrom": [
+            "owner_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "flow_runtime_commands_id_resource_owner_unique": {
+          "name": "flow_runtime_commands_id_resource_owner_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "resource_id",
+            "owner_user_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "flow_runtime_commands_scope_check": {
+          "name": "flow_runtime_commands_scope_check",
+          "value": "\"flow_runtime_commands\".\"api_surface\" = 'astrologer-api'\n        and \"flow_runtime_commands\".\"route_template\" in ('/flow-runs/:runId/cancel')\n        and \"flow_runtime_commands\".\"command_scope\" in ('flows.runtime.cancel.v1')\n        and \"flow_runtime_commands\".\"route_template\" = '/flow-runs/:runId/cancel'\n        and \"flow_runtime_commands\".\"command_scope\" = 'flows.runtime.cancel.v1'"
+        },
+        "flow_runtime_commands_key_check": {
+          "name": "flow_runtime_commands_key_check",
+          "value": "length(\"flow_runtime_commands\".\"idempotency_key\") between 8 and 128\n        and \"flow_runtime_commands\".\"idempotency_key\" ~ '^[A-Za-z0-9._:-]+$'"
+        },
+        "flow_runtime_commands_request_hash_check": {
+          "name": "flow_runtime_commands_request_hash_check",
+          "value": "\"flow_runtime_commands\".\"request_hash\" ~ '^sha256:[a-f0-9]{64}$'"
+        },
+        "flow_runtime_commands_state_check": {
+          "name": "flow_runtime_commands_state_check",
+          "value": "\"flow_runtime_commands\".\"state\" in ('processing', 'succeeded', 'failed')"
+        },
+        "flow_runtime_commands_terminal_state_check": {
+          "name": "flow_runtime_commands_terminal_state_check",
+          "value": "(\n        \"flow_runtime_commands\".\"state\" = 'processing' and \"flow_runtime_commands\".\"completed_at\" is null\n      ) or (\n        \"flow_runtime_commands\".\"state\" in ('succeeded', 'failed') and \"flow_runtime_commands\".\"completed_at\" is not null\n      )"
+        },
+        "flow_runtime_commands_replay_window_check": {
+          "name": "flow_runtime_commands_replay_window_check",
+          "value": "\"flow_runtime_commands\".\"replay_until\" = \"flow_runtime_commands\".\"created_at\" + interval '24 hours'"
+        },
+        "flow_runtime_commands_completion_check": {
+          "name": "flow_runtime_commands_completion_check",
+          "value": "\"flow_runtime_commands\".\"completed_at\" is null or \"flow_runtime_commands\".\"completed_at\" >= \"flow_runtime_commands\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.client_profiles": {
       "name": "client_profiles",
       "schema": "",
@@ -9521,7 +11003,17 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "client_astrologer_relationships_identity_unique": {
+          "name": "client_astrologer_relationships_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "client_user_id",
+            "astrologer_user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "client_astrologer_relationships_source_check": {
@@ -9704,6 +11196,205 @@
         "client_join_intents_claimed_consistency_check": {
           "name": "client_join_intents_claimed_consistency_check",
           "value": "(\"client_join_intents\".\"status\" = 'claimed') = (\"client_join_intents\".\"claimed_by_client_user_id\" is not null and \"client_join_intents\".\"claimed_at\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.client_data_consents": {
+      "name": "client_data_consents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "relationship_id": {
+          "name": "relationship_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_user_id": {
+          "name": "client_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "astrologer_user_id": {
+          "name": "astrologer_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processor_code": {
+          "name": "processor_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notice_locale": {
+          "name": "notice_locale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notice_sha256": {
+          "name": "notice_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "granted_at": {
+          "name": "granted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "client_data_consents_one_current_unique": {
+          "name": "client_data_consents_one_current_unique",
+          "columns": [
+            {
+              "expression": "relationship_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"client_data_consents\".\"revoked_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "client_data_consents_client_relationship_index": {
+          "name": "client_data_consents_client_relationship_index",
+          "columns": [
+            {
+              "expression": "client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "relationship_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "granted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "client_data_consents_astrologer_client_index": {
+          "name": "client_data_consents_astrologer_client_index",
+          "columns": [
+            {
+              "expression": "astrologer_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "client_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "granted_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "client_data_consents_relationship_identity_fk": {
+          "name": "client_data_consents_relationship_identity_fk",
+          "tableFrom": "client_data_consents",
+          "tableTo": "client_astrologer_relationships",
+          "columnsFrom": [
+            "relationship_id",
+            "client_user_id",
+            "astrologer_user_id"
+          ],
+          "columnsTo": [
+            "id",
+            "client_user_id",
+            "astrologer_user_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "client_data_consents_purpose_check": {
+          "name": "client_data_consents_purpose_check",
+          "value": "length(trim(\"client_data_consents\".\"purpose\")) between 1 and 160"
+        },
+        "client_data_consents_policy_version_check": {
+          "name": "client_data_consents_policy_version_check",
+          "value": "length(trim(\"client_data_consents\".\"policy_version\")) between 1 and 160"
+        },
+        "client_data_consents_processor_code_check": {
+          "name": "client_data_consents_processor_code_check",
+          "value": "length(trim(\"client_data_consents\".\"processor_code\")) between 1 and 80"
+        },
+        "client_data_consents_notice_locale_check": {
+          "name": "client_data_consents_notice_locale_check",
+          "value": "\"client_data_consents\".\"notice_locale\" in ('ru', 'en')"
+        },
+        "client_data_consents_notice_sha256_check": {
+          "name": "client_data_consents_notice_sha256_check",
+          "value": "\"client_data_consents\".\"notice_sha256\" ~ '^sha256:[0-9a-f]{64}$'"
+        },
+        "client_data_consents_revocation_time_check": {
+          "name": "client_data_consents_revocation_time_check",
+          "value": "\"client_data_consents\".\"revoked_at\" is null or \"client_data_consents\".\"revoked_at\" >= \"client_data_consents\".\"granted_at\""
         }
       },
       "isRLSEnabled": false
@@ -16427,6 +18118,304 @@
         "audit_log_entries_metadata_check": {
           "name": "audit_log_entries_metadata_check",
           "value": "jsonb_typeof(\"audit_log_entries\".\"metadata\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.ai_usage_consent_records": {
+      "name": "ai_usage_consent_records",
+      "schema": "",
+      "columns": {
+        "usage_record_id": {
+          "name": "usage_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consent_record_id": {
+          "name": "consent_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "ai_usage_consent_records_consent_index": {
+          "name": "ai_usage_consent_records_consent_index",
+          "columns": [
+            {
+              "expression": "consent_record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ai_usage_consent_records_usage_record_id_ai_usage_records_id_fk": {
+          "name": "ai_usage_consent_records_usage_record_id_ai_usage_records_id_fk",
+          "tableFrom": "ai_usage_consent_records",
+          "tableTo": "ai_usage_records",
+          "columnsFrom": [
+            "usage_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ai_usage_consent_records_consent_record_id_client_data_consents_id_fk": {
+          "name": "ai_usage_consent_records_consent_record_id_client_data_consents_id_fk",
+          "tableFrom": "ai_usage_consent_records",
+          "tableTo": "client_data_consents",
+          "columnsFrom": [
+            "consent_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ai_usage_consent_records_pk": {
+          "name": "ai_usage_consent_records_pk",
+          "columns": [
+            "usage_record_id",
+            "consent_record_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ai_usage_records": {
+      "name": "ai_usage_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feature": {
+          "name": "feature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_id": {
+          "name": "prompt_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_safety_id": {
+          "name": "owner_safety_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "processing_authority_version": {
+          "name": "processing_authority_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resource_type": {
+          "name": "resource_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_checksum": {
+          "name": "source_checksum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finish_reason": {
+          "name": "finish_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "safe_error_code": {
+          "name": "safe_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_tokens": {
+          "name": "prompt_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completion_tokens": {
+          "name": "completion_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "total_tokens": {
+          "name": "total_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "ai_usage_records_owner_started_index": {
+          "name": "ai_usage_records_owner_started_index",
+          "columns": [
+            {
+              "expression": "owner_safety_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_usage_records_status_started_index": {
+          "name": "ai_usage_records_status_started_index",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_usage_records_feature_started_index": {
+          "name": "ai_usage_records_feature_started_index",
+          "columns": [
+            {
+              "expression": "feature",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ai_usage_records_status_check": {
+          "name": "ai_usage_records_status_check",
+          "value": "\"ai_usage_records\".\"status\" in ('started', 'succeeded', 'failed')"
+        },
+        "ai_usage_records_safe_fields_check": {
+          "name": "ai_usage_records_safe_fields_check",
+          "value": "length(trim(\"ai_usage_records\".\"feature\")) between 1 and 160\n        and length(trim(\"ai_usage_records\".\"prompt_id\")) between 1 and 160\n        and \"ai_usage_records\".\"prompt_version\" >= 1\n        and length(trim(\"ai_usage_records\".\"provider\")) between 1 and 80\n        and (\"ai_usage_records\".\"model\" is null or length(trim(\"ai_usage_records\".\"model\")) between 1 and 160)\n        and (\"ai_usage_records\".\"finish_reason\" is null or length(trim(\"ai_usage_records\".\"finish_reason\")) between 1 and 120)\n        and (\"ai_usage_records\".\"safe_error_code\" is null or \"ai_usage_records\".\"safe_error_code\" in (\n          'AI_PROVIDER_REFUSED',\n          'AI_PROVIDER_BAD_REQUEST',\n          'AI_PROVIDER_RESPONSE_INVALID',\n          'AI_PROVIDER_INCOMPLETE_RESPONSE',\n          'AI_PROVIDER_UNAVAILABLE',\n          'AI_PROVIDER_AUTHENTICATION_FAILED',\n          'AI_PROVIDER_BILLING_FAILED',\n          'AI_PROVIDER_RATE_LIMITED',\n          'AI_PROVIDER_SERVER_ERROR',\n          'AI_PROVIDER_TIMEOUT',\n          'AI_PROVIDER_UNKNOWN_FAILURE'\n        ))"
+        },
+        "ai_usage_records_owner_safety_id_check": {
+          "name": "ai_usage_records_owner_safety_id_check",
+          "value": "\"ai_usage_records\".\"owner_safety_id\" ~ '^eh_[0-9a-f]{61}$'"
+        },
+        "ai_usage_records_resource_evidence_check": {
+          "name": "ai_usage_records_resource_evidence_check",
+          "value": "(\"ai_usage_records\".\"processing_authority_version\" is null or length(trim(\"ai_usage_records\".\"processing_authority_version\")) between 1 and 160)\n        and (\n          (\n            \"ai_usage_records\".\"resource_type\" is null\n            and \"ai_usage_records\".\"resource_id\" is null\n            and \"ai_usage_records\".\"source_checksum\" is null\n          ) or (\n            \"ai_usage_records\".\"processing_authority_version\" is not null\n            and length(trim(\"ai_usage_records\".\"resource_type\")) between 1 and 80\n            and \"ai_usage_records\".\"resource_id\" is not null\n            and \"ai_usage_records\".\"source_checksum\" ~ '^sha256:[0-9a-f]{64}$'\n          )\n        )"
+        },
+        "ai_usage_records_token_counts_check": {
+          "name": "ai_usage_records_token_counts_check",
+          "value": "(\n          \"ai_usage_records\".\"prompt_tokens\" is null\n          and \"ai_usage_records\".\"completion_tokens\" is null\n          and \"ai_usage_records\".\"total_tokens\" is null\n        ) or (\n          \"ai_usage_records\".\"prompt_tokens\" >= 0\n          and \"ai_usage_records\".\"completion_tokens\" >= 0\n          and \"ai_usage_records\".\"total_tokens\" = \"ai_usage_records\".\"prompt_tokens\" + \"ai_usage_records\".\"completion_tokens\"\n        )"
+        },
+        "ai_usage_records_lifecycle_check": {
+          "name": "ai_usage_records_lifecycle_check",
+          "value": "(\n          \"ai_usage_records\".\"status\" = 'started'\n          and \"ai_usage_records\".\"model\" is null\n          and \"ai_usage_records\".\"finish_reason\" is null\n          and \"ai_usage_records\".\"safe_error_code\" is null\n          and \"ai_usage_records\".\"prompt_tokens\" is null\n          and \"ai_usage_records\".\"completion_tokens\" is null\n          and \"ai_usage_records\".\"total_tokens\" is null\n          and \"ai_usage_records\".\"duration_ms\" is null\n          and \"ai_usage_records\".\"completed_at\" is null\n        ) or (\n          \"ai_usage_records\".\"status\" = 'succeeded'\n          and \"ai_usage_records\".\"model\" is not null\n          and \"ai_usage_records\".\"finish_reason\" is not null\n          and \"ai_usage_records\".\"safe_error_code\" is null\n          and \"ai_usage_records\".\"duration_ms\" >= 0\n          and \"ai_usage_records\".\"completed_at\" >= \"ai_usage_records\".\"started_at\"\n        ) or (\n          \"ai_usage_records\".\"status\" = 'failed'\n          and \"ai_usage_records\".\"model\" is null\n          and \"ai_usage_records\".\"finish_reason\" is null\n          and \"ai_usage_records\".\"safe_error_code\" is not null\n          and \"ai_usage_records\".\"prompt_tokens\" is null\n          and \"ai_usage_records\".\"completion_tokens\" is null\n          and \"ai_usage_records\".\"total_tokens\" is null\n          and \"ai_usage_records\".\"duration_ms\" >= 0\n          and \"ai_usage_records\".\"completed_at\" >= \"ai_usage_records\".\"started_at\"\n        )"
         }
       },
       "isRLSEnabled": false

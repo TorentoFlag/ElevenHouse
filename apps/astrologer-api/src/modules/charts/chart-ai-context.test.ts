@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { DictionaryEffectiveEntry } from "@elevenhouse/domain";
-import type { StoredChartNatalCalculationPayload } from "@elevenhouse/contracts";
+import {
+  chartMethodVersions,
+  chartNatalResultV2Schema,
+  type ReproducibleChartResult
+} from "@elevenhouse/contracts";
 import { buildNatalChartAiContext, getNatalChartAiDictionaryCodes } from "./chart-ai-context";
 
 describe("chart AI context", () => {
@@ -10,7 +14,6 @@ describe("chart AI context", () => {
     const context = buildNatalChartAiContext({
       locale: "ru",
       result,
-      resultChecksum: `sha256:${"b".repeat(64)}`,
       dictionaryEntries: codes.slice(0, 3).map((code) => dictionaryEntry(code))
     });
 
@@ -26,6 +29,10 @@ describe("chart AI context", () => {
     expect(serialized).not.toContain("timezone");
     expect(serialized).not.toContain("latitude");
     expect(serialized).not.toContain("longitude");
+    expect(context).not.toHaveProperty("resultChecksum");
+    expect(serialized).not.toContain("reproducibilityFingerprint");
+    expect(serialized).not.toContain("pyswissephVersion");
+    expect(serialized).not.toContain("ephemerisFlags");
   });
 
   it("orders strongest aspects first and trims dictionary grounding", () => {
@@ -34,23 +41,62 @@ describe("chart AI context", () => {
     const context = buildNatalChartAiContext({
       locale: "ru",
       result,
-      resultChecksum: `sha256:${"b".repeat(64)}`,
       dictionaryEntries: [longEntry]
     });
 
     expect(context.majorAspects.map((aspect) => aspect.type)).toEqual(["trine", "square"]);
     expect(context.dictionaryGrounding[0]?.content.length).toBeLessThanOrEqual(1_600);
   });
+
+  it("excludes custom and modified astrologer text from the external prompt", () => {
+    const result = natalPayload();
+    const codes = getNatalChartAiDictionaryCodes(result);
+    const context = buildNatalChartAiContext({
+      locale: "ru",
+      result,
+      dictionaryEntries: [
+        dictionaryEntry(codes[0]!, "CLIENT_NAME_PRIVATE_CRM_NOTE", "custom"),
+        dictionaryEntry(codes[1]!, "CLIENT_PHONE_PRIVATE_CRM_NOTE", "modified"),
+        dictionaryEntry(codes[2]!, "Проверенная платформенная трактовка.", "platform")
+      ]
+    });
+
+    expect(context.dictionaryGrounding.map((entry) => entry.code)).toEqual([codes[2]]);
+    expect(JSON.stringify(context)).not.toContain("PRIVATE_CRM_NOTE");
+  });
+
+  it("rejects a stored result without an explicit zodiac setting instead of defaulting it", () => {
+    const result = natalPayload();
+    const invalidResult = {
+      ...result,
+      settings: {
+        ...result.settings,
+        zodiac: undefined
+      }
+    } as unknown as Extract<ReproducibleChartResult, { method: "natal" }>;
+
+    expect(() =>
+      buildNatalChartAiContext({
+        locale: "en",
+        result: invalidResult,
+        dictionaryEntries: []
+      })
+    ).toThrowError("Stored natal result must declare the tropical zodiac setting");
+  });
 });
 
-function dictionaryEntry(code: string, content = "Справочная трактовка."): DictionaryEffectiveEntry {
+function dictionaryEntry(
+  code: string,
+  content = "Справочная трактовка.",
+  source: DictionaryEffectiveEntry["source"] = "platform"
+): DictionaryEffectiveEntry {
   return {
     id: `entry-${code}`,
     categoryId: "category-1",
     categoryCode: "planets_in_signs",
     code,
     locale: "ru",
-    source: "platform",
+    source,
     title: code,
     content,
     createdAt: "2026-07-30T00:00:00.000Z",
@@ -58,7 +104,7 @@ function dictionaryEntry(code: string, content = "Справочная трак�
   };
 }
 
-function natalPayload(): StoredChartNatalCalculationPayload {
+function natalPayload(): Extract<ReproducibleChartResult, { method: "natal" }> {
   const pointIds = [
     "sun",
     "moon",
@@ -75,10 +121,19 @@ function natalPayload(): StoredChartNatalCalculationPayload {
     "north_node",
     "south_node"
   ];
-  return {
-    schemaVersion: "chart-result.v1",
+  return chartNatalResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
     method: "natal",
-    provider: { name: "kerykeion", version: "5.12", ephemeris: "swiss-ephemeris" },
+    methodVersion: chartMethodVersions.natal,
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier",
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"a".repeat(64)}`,
     settings: {
       zodiac: "tropical",
       houseSystem: "placidus",
@@ -131,11 +186,11 @@ function natalPayload(): StoredChartNatalCalculationPayload {
         }
       ],
       distributions: {
-        elements: { fire: 2, earth: 2, air: 4, water: 6 },
-        modalities: { cardinal: 4, fixed: 5, mutable: 5 },
-        polarity: { masculine: 6, feminine: 8 }
+        elements: { fire: 2, earth: 2, air: 3, water: 3 },
+        modalities: { cardinal: 3, fixed: 3, mutable: 4 },
+        polarity: { masculine: 5, feminine: 5 }
       },
       warnings: [{ code: "time_precision", message: "Exact time used" }]
     }
-  };
+  });
 }

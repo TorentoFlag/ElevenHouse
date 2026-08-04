@@ -84,7 +84,7 @@ export const chartCalculationJobsRelations = relations(chartCalculationJobs, ({ 
     references: [users.id]
   }),
   resultCalculation: one(calculationRecords, {
-    fields: [chartCalculationJobs.resultCalculationId],
-    references: [calculationRecords.id]
+    fields: [chartCalculationJobs.resultCalculationId, chartCalculationJobs.ownerUserId],
+    references: [calculationRecords.id, calculationRecords.ownerUserId]
   })
 }));

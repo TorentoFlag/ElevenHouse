@@ -424,6 +424,9 @@ async function consumeBoundedDiagnostic(response: Response): Promise<void> {
 
 function classifyHttpError(kind: RequestKind, status: number): ChartEngineError {
   if (kind === "readiness") {
+    if (status >= 500 && status <= 599) {
+      return new ChartEngineTransientError(`CHART_ENGINE_READY_HTTP_${status}`, status);
+    }
     return new ChartEngineConfigurationError(`CHART_ENGINE_READY_HTTP_${status}`, status);
   }
   if (status >= 400 && status <= 499) {

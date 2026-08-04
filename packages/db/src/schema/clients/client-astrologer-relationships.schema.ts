@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import {
   clientRelationshipSourceValues,
@@ -27,6 +36,11 @@ export const clientAstrologerRelationships = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
+    unique("client_astrologer_relationships_identity_unique").on(
+      table.id,
+      table.clientUserId,
+      table.astrologerUserId
+    ),
     uniqueIndex("client_astrologer_relationships_unique").on(
       table.clientUserId,
       table.astrologerUserId

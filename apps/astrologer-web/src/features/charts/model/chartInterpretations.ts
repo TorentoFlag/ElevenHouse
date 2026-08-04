@@ -5,7 +5,8 @@ import type {
   ChartSolarReturnAspect,
   ChartSynastryHouseOverlay,
   ChartTransitAspect,
-  StoredChartCalculationPayload
+  ChartResult,
+  DictionaryLocale
 } from "@elevenhouse/contracts";
 import {
   formatAspectTypeDisplay,
@@ -24,6 +25,7 @@ import {
   getTransitChartResult,
   romanHouses
 } from "./chartDisplay";
+import { chartEngineCopyByLocale, type ChartEngineCopy } from "./chartEngineCopy";
 
 export type ChartInterpretationAnchorGroup = "points" | "houses" | "aspects";
 export type ChartInterpretationMode = "default" | "child";
@@ -67,24 +69,25 @@ const planetAspectPointIds = new Set(pointOrder.slice(0, 10));
 const maxPlanetAspectAnchors = 12;
 
 export function buildChartInterpretationAnchors(
-  result: StoredChartCalculationPayload,
-  options: { readonly mode?: ChartInterpretationMode } = {}
+  result: ChartResult,
+  options: { readonly mode?: ChartInterpretationMode; readonly locale?: DictionaryLocale } = {}
 ): readonly ChartInterpretationAnchor[] {
+  const context = getInterpretationContext(options.locale ?? "ru");
   const synastryResult = getSynastryChartResult(result);
   if (synastryResult) {
-    return buildSynastryAnchors(synastryResult);
+    return buildSynastryAnchors(synastryResult, context);
   }
   if (result.method === "composite") {
-    return buildCompositeAnchors(result);
+    return buildCompositeAnchors(result, context);
   }
   if (result.method === "horary") {
-    return buildHoraryAnchors(result);
+    return buildHoraryAnchors(result, context);
   }
   if (result.method === "astrocartography") {
-    return buildAstrocartographyAnchors(result);
+    return buildAstrocartographyAnchors(result, context);
   }
   if (options.mode === "child" && result.method === "natal") {
-    return buildChildAnchors(result);
+    return buildChildAnchors(result, context);
   }
 
   const renderResult = getPrimaryChartRenderResult(result);
@@ -103,55 +106,60 @@ export function buildChartInterpretationAnchors(
   );
 
   return [
-    ...buildPointAnchors(renderResult.points),
-    ...buildHouseAnchors(result),
-    ...buildAspectAnchors(renderResult.aspects, pointsById),
+    ...buildPointAnchors(renderResult.points, context),
+    ...buildHouseAnchors(result, context),
+    ...buildAspectAnchors(renderResult.aspects, pointsById, context),
     ...(transitResult
       ? buildTransitAspectAnchors(
           transitResult.result.aspectsToNatal,
           transitPointsById,
-          pointsById
+          pointsById,
+          context
         )
       : []),
     ...(solarReturnResult
       ? buildSolarReturnAspectAnchors(
           solarReturnResult.result.aspectsToNatal,
           solarReturnPointsById,
-          pointsById
+          pointsById,
+          context
         )
       : []),
     ...(progressionResult
       ? buildProgressionAspectAnchors(
           progressionResult.result.aspectsToNatal,
           progressionPointsById,
-          pointsById
+          pointsById,
+          context
         )
       : [])
   ];
 }
 
 function buildChildAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   const renderResult = getPrimaryChartRenderResult(result);
   const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
 
   return [
-    ...buildChildPointAnchors(renderResult.points),
-    ...buildChildHouseAnchors(result),
-    ...buildChildAspectAnchors(renderResult.aspects, pointsById)
+    ...buildChildPointAnchors(renderResult.points, context),
+    ...buildChildHouseAnchors(result, context),
+    ...buildChildAspectAnchors(renderResult.aspects, pointsById, context)
   ];
 }
 
 function buildChildPointAnchors(
-  points: readonly ChartPoint[]
+  points: readonly ChartPoint[],
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return sortPoints(points).flatMap((point) => {
     const anchors: ChartInterpretationAnchor[] = [];
     const pointId = formatDictionaryCodePart(point.id);
-    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
-    const position = `${formatChartPointPosition(point)}${
-      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label, context.locale);
+    const position = `${formatChartPointPosition(point, context.locale)}${
+      point.house ? ` · ${context.copy.house(romanHouses[point.house] ?? "")}` : ""
     }`;
 
     if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
@@ -160,8 +168,11 @@ function buildChildPointAnchors(
         code: `child.${pointId}.${formatDictionaryCodePart(point.sign)}`,
         categoryCode: "planets_in_signs",
         group: "points",
-        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
-        meta: "Детская карта · планета в знаке",
+        label: context.copy.pointInSign(
+          pointLabel,
+          formatSignPrepositional(point.sign, context.locale)
+        ),
+        meta: context.copy.childPointSign,
         position
       });
     }
@@ -172,8 +183,11 @@ function buildChildPointAnchors(
         code: `child.${pointId}.house.${point.house}`,
         categoryCode: "planets_in_houses",
         group: "points",
-        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
-        meta: "Детская карта · планета в доме",
+        label: context.copy.pointInHouse(
+          pointLabel,
+          context.copy.house(romanHouses[point.house] ?? "")
+        ),
+        meta: context.copy.childPointHouse,
         position
       });
     }
@@ -183,7 +197,8 @@ function buildChildPointAnchors(
 }
 
 function buildChildHouseAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
@@ -195,16 +210,17 @@ function buildChildHouseAnchors(
         code: `child.house.${house.number}`,
         categoryCode: "house_meanings" as const,
         group: "houses" as const,
-        label: `${romanHouses[house.number]} дом`,
-        meta: "Детская карта · значение дома",
-        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+        label: context.copy.house(romanHouses[house.number] ?? ""),
+        meta: context.copy.childHouse,
+        position: `${formatHouseSignDisplay(position.sign, context.locale)} ${position.degree}`
       };
     });
 }
 
 function buildChildAspectAnchors(
   aspects: readonly ChartAspect[],
-  pointsById: ReadonlyMap<string, ChartPoint>
+  pointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -220,8 +236,8 @@ function buildChildAspectAnchors(
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
       const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
-      const pointALabel = getPointLabel(pointsById, pointA);
-      const pointBLabel = getPointLabel(pointsById, pointB);
+      const pointALabel = getPointLabel(pointsById, pointA, context.locale);
+      const pointBLabel = getPointLabel(pointsById, pointB, context.locale);
 
       return {
         id: `child-aspect-${pointA}-${pointB}-${aspect.type}`,
@@ -231,34 +247,39 @@ function buildChildAspectAnchors(
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
-        meta: "Детская карта · аспект",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        meta: context.copy.childAspect,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
 
 function buildCompositeAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   const renderResult = getPrimaryChartRenderResult(result);
   const pointsById = new Map(renderResult.points.map((point) => [point.id, point]));
 
   return [
-    ...buildCompositePointAnchors(renderResult.points),
-    ...buildCompositeHouseAnchors(result),
-    ...buildCompositeAspectAnchors(renderResult.aspects, pointsById)
+    ...buildCompositePointAnchors(renderResult.points, context),
+    ...buildCompositeHouseAnchors(result, context),
+    ...buildCompositeAspectAnchors(renderResult.aspects, pointsById, context)
   ];
 }
 
 function buildCompositePointAnchors(
-  points: readonly ChartPoint[]
+  points: readonly ChartPoint[],
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return sortPoints(points).flatMap((point) => {
     const anchors: ChartInterpretationAnchor[] = [];
     const pointId = formatDictionaryCodePart(point.id);
-    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
-    const position = `${formatChartPointPosition(point)}${
-      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label, context.locale);
+    const position = `${formatChartPointPosition(point, context.locale)}${
+      point.house ? ` · ${context.copy.house(romanHouses[point.house] ?? "")}` : ""
     }`;
 
     if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
@@ -267,8 +288,11 @@ function buildCompositePointAnchors(
         code: `composite.${pointId}.${formatDictionaryCodePart(point.sign)}`,
         categoryCode: "planets_in_signs",
         group: "points",
-        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
-        meta: "Композит · планета в знаке",
+        label: context.copy.pointInSign(
+          pointLabel,
+          formatSignPrepositional(point.sign, context.locale)
+        ),
+        meta: context.copy.compositePointSign,
         position
       });
     }
@@ -279,8 +303,11 @@ function buildCompositePointAnchors(
         code: `composite.${pointId}.house.${point.house}`,
         categoryCode: "planets_in_houses",
         group: "points",
-        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
-        meta: "Композит · планета в доме",
+        label: context.copy.pointInHouse(
+          pointLabel,
+          context.copy.house(romanHouses[point.house] ?? "")
+        ),
+        meta: context.copy.compositePointHouse,
         position
       });
     }
@@ -290,7 +317,8 @@ function buildCompositePointAnchors(
 }
 
 function buildCompositeHouseAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
@@ -302,16 +330,17 @@ function buildCompositeHouseAnchors(
         code: `composite.house.${house.number}`,
         categoryCode: "house_meanings" as const,
         group: "houses" as const,
-        label: `${romanHouses[house.number]} дом`,
-        meta: "Композит · значение дома",
-        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+        label: context.copy.house(romanHouses[house.number] ?? ""),
+        meta: context.copy.compositeHouse,
+        position: `${formatHouseSignDisplay(position.sign, context.locale)} ${position.degree}`
       };
     });
 }
 
 function buildCompositeAspectAnchors(
   aspects: readonly ChartAspect[],
-  pointsById: ReadonlyMap<string, ChartPoint>
+  pointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -327,8 +356,8 @@ function buildCompositeAspectAnchors(
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
       const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
-      const pointALabel = getPointLabel(pointsById, pointA);
-      const pointBLabel = getPointLabel(pointsById, pointB);
+      const pointALabel = getPointLabel(pointsById, pointA, context.locale);
+      const pointBLabel = getPointLabel(pointsById, pointB, context.locale);
 
       return {
         id: `composite-aspect-${pointA}-${pointB}-${aspect.type}`,
@@ -338,14 +367,18 @@ function buildCompositeAspectAnchors(
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
-        meta: "Композит · аспект",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        meta: context.copy.compositeAspect,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
 
 function buildHoraryAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   if (result.method !== "horary") {
     return [];
@@ -360,18 +393,22 @@ function buildHoraryAnchors(
       code: `horary.question.${category}`,
       categoryCode: "aspects",
       group: "aspects",
-      label: "Категория вопроса",
-      meta: "Хорар · категория вопроса",
-      position: formatHoraryQuestionCategoryDisplay(result.questionSnapshot.category)
+      label: context.copy.horaryCategory,
+      meta: context.copy.horaryCategoryMeta,
+      position: formatHoraryQuestionCategoryDisplay(
+        result.questionSnapshot.category,
+        context.locale
+      )
     },
-    ...buildHoraryPointAnchors(renderResult.points),
-    ...buildHoraryHouseAnchors(result),
-    ...buildHoraryAspectAnchors(renderResult.aspects, pointsById)
+    ...buildHoraryPointAnchors(renderResult.points, context),
+    ...buildHoraryHouseAnchors(result, context),
+    ...buildHoraryAspectAnchors(renderResult.aspects, pointsById, context)
   ];
 }
 
 function buildAstrocartographyAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   if (result.method !== "astrocartography") {
     return [];
@@ -385,10 +422,10 @@ function buildAstrocartographyAnchors(
     categoryCode: "planet_aspects" as const,
     group: "aspects" as const,
     label: line.label,
-    meta: "Астрокартография · линия планеты",
-    position: `${getChartPointDisplayLabel(line.point, line.point)} · ${formatAstrocartographyAngle(
+    meta: context.copy.astroLine,
+    position: `${getChartPointDisplayLabel(line.point, line.point, context.locale)} · ${formatAstrocartographyAngle(
       line.angle
-    )} · ${line.path.length} точек`
+    )} · ${context.copy.pointsCount(line.path.length)}`
   }));
 }
 
@@ -401,14 +438,15 @@ function formatAstrocartographyAngle(angle: string): string {
 }
 
 function buildHoraryPointAnchors(
-  points: readonly ChartPoint[]
+  points: readonly ChartPoint[],
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return sortPoints(points).flatMap((point) => {
     const anchors: ChartInterpretationAnchor[] = [];
     const pointId = formatDictionaryCodePart(point.id);
-    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
-    const position = `${formatChartPointPosition(point)}${
-      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label, context.locale);
+    const position = `${formatChartPointPosition(point, context.locale)}${
+      point.house ? ` · ${context.copy.house(romanHouses[point.house] ?? "")}` : ""
     }`;
 
     if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
@@ -417,8 +455,11 @@ function buildHoraryPointAnchors(
         code: `horary.${pointId}.${formatDictionaryCodePart(point.sign)}`,
         categoryCode: "planets_in_signs",
         group: "points",
-        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
-        meta: "Хорар · планета в знаке",
+        label: context.copy.pointInSign(
+          pointLabel,
+          formatSignPrepositional(point.sign, context.locale)
+        ),
+        meta: context.copy.horaryPointSign,
         position
       });
     }
@@ -429,8 +470,11 @@ function buildHoraryPointAnchors(
         code: `horary.${pointId}.house.${point.house}`,
         categoryCode: "planets_in_houses",
         group: "points",
-        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
-        meta: "Хорар · планета в доме",
+        label: context.copy.pointInHouse(
+          pointLabel,
+          context.copy.house(romanHouses[point.house] ?? "")
+        ),
+        meta: context.copy.horaryPointHouse,
         position
       });
     }
@@ -440,7 +484,8 @@ function buildHoraryPointAnchors(
 }
 
 function buildHoraryHouseAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
@@ -452,16 +497,17 @@ function buildHoraryHouseAnchors(
         code: `horary.house.${house.number}`,
         categoryCode: "house_meanings" as const,
         group: "houses" as const,
-        label: `${romanHouses[house.number]} дом`,
-        meta: "Хорар · значение дома",
-        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+        label: context.copy.house(romanHouses[house.number] ?? ""),
+        meta: context.copy.horaryHouse,
+        position: `${formatHouseSignDisplay(position.sign, context.locale)} ${position.degree}`
       };
     });
 }
 
 function buildHoraryAspectAnchors(
   aspects: readonly ChartAspect[],
-  pointsById: ReadonlyMap<string, ChartPoint>
+  pointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -477,8 +523,8 @@ function buildHoraryAspectAnchors(
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
       const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
-      const pointALabel = getPointLabel(pointsById, pointA);
-      const pointBLabel = getPointLabel(pointsById, pointB);
+      const pointALabel = getPointLabel(pointsById, pointA, context.locale);
+      const pointBLabel = getPointLabel(pointsById, pointB, context.locale);
 
       return {
         id: `horary-aspect-${pointA}-${pointB}-${aspect.type}`,
@@ -488,8 +534,11 @@ function buildHoraryAspectAnchors(
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
-        meta: "Хорар · аспект",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        meta: context.copy.horaryAspect,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
@@ -500,15 +549,18 @@ export function getChartInterpretationLookupCodes(
   return Array.from(new Set(anchors.map((anchor) => anchor.code)));
 }
 
-function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpretationAnchor[] {
+function buildPointAnchors(
+  points: readonly ChartPoint[],
+  context: InterpretationContext
+): readonly ChartInterpretationAnchor[] {
   const orderedPoints = sortPoints(points);
 
   return orderedPoints.flatMap((point) => {
     const anchors: ChartInterpretationAnchor[] = [];
     const pointId = formatDictionaryCodePart(point.id);
-    const pointLabel = getChartPointDisplayLabel(point.id, point.label);
-    const position = `${formatChartPointPosition(point)}${
-      point.house ? ` · ${romanHouses[point.house]} дом` : ""
+    const pointLabel = getChartPointDisplayLabel(point.id, point.label, context.locale);
+    const position = `${formatChartPointPosition(point, context.locale)}${
+      point.house ? ` · ${context.copy.house(romanHouses[point.house] ?? "")}` : ""
     }`;
 
     if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
@@ -517,8 +569,11 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
         code: `${pointId}_${formatDictionaryCodePart(point.sign)}`,
         categoryCode: "planets_in_signs",
         group: "points",
-        label: `${pointLabel} в ${formatSignPrepositional(point.sign)}`,
-        meta: "Планета в знаке",
+        label: context.copy.pointInSign(
+          pointLabel,
+          formatSignPrepositional(point.sign, context.locale)
+        ),
+        meta: context.copy.pointSign,
         position
       });
     }
@@ -529,8 +584,11 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
         code: `${pointId}_house_${point.house}`,
         categoryCode: "planets_in_houses",
         group: "points",
-        label: `${pointLabel} · ${romanHouses[point.house]} дом`,
-        meta: "Планета в доме",
+        label: context.copy.pointInHouse(
+          pointLabel,
+          context.copy.house(romanHouses[point.house] ?? "")
+        ),
+        meta: context.copy.pointHouse,
         position
       });
     }
@@ -540,7 +598,8 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
 }
 
 function buildHouseAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...getPrimaryChartRenderResult(result).houses]
     .sort((left, right) => left.number - right.number)
@@ -552,9 +611,9 @@ function buildHouseAnchors(
         code: `house_${house.number}`,
         categoryCode: "house_meanings" as const,
         group: "houses" as const,
-        label: `${romanHouses[house.number]} дом`,
-        meta: "Значение дома",
-        position: `${formatHouseSignDisplay(position.sign)} ${position.degree}`
+        label: context.copy.house(romanHouses[house.number] ?? ""),
+        meta: context.copy.houseMeaning,
+        position: `${formatHouseSignDisplay(position.sign, context.locale)} ${position.degree}`
       };
     });
 }
@@ -562,7 +621,8 @@ function buildHouseAnchors(
 function buildTransitAspectAnchors(
   aspects: readonly ChartTransitAspect[],
   transitPointsById: ReadonlyMap<string, ChartPoint>,
-  natalPointsById: ReadonlyMap<string, ChartPoint>
+  natalPointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -577,8 +637,8 @@ function buildTransitAspectAnchors(
     .sort((left, right) => left.orb - right.orb)
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
-      const transitPoint = getPointLabel(transitPointsById, aspect.transitPoint);
-      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+      const transitPoint = getPointLabel(transitPointsById, aspect.transitPoint, context.locale);
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint, context.locale);
 
       return {
         id: `transit-aspect-${aspect.transitPoint}-${aspect.natalPoint}-${aspect.type}`,
@@ -587,9 +647,12 @@ function buildTransitAspectAnchors(
         )}_${normalizeAspectTypeCode(aspect.type)}`,
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
-        label: `Транзитный ${transitPoint} — ${natalPoint}`,
-        meta: "Транзит к наталу",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        label: context.copy.transitLabel(transitPoint, natalPoint),
+        meta: context.copy.transitMeta,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
@@ -597,7 +660,8 @@ function buildTransitAspectAnchors(
 function buildSolarReturnAspectAnchors(
   aspects: readonly ChartSolarReturnAspect[],
   solarReturnPointsById: ReadonlyMap<string, ChartPoint>,
-  natalPointsById: ReadonlyMap<string, ChartPoint>
+  natalPointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -612,8 +676,12 @@ function buildSolarReturnAspectAnchors(
     .sort((left, right) => left.orb - right.orb)
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
-      const solarReturnPoint = getPointLabel(solarReturnPointsById, aspect.solarReturnPoint);
-      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+      const solarReturnPoint = getPointLabel(
+        solarReturnPointsById,
+        aspect.solarReturnPoint,
+        context.locale
+      );
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint, context.locale);
 
       return {
         id: `solar-return-aspect-${aspect.solarReturnPoint}-${aspect.natalPoint}-${aspect.type}`,
@@ -622,9 +690,12 @@ function buildSolarReturnAspectAnchors(
         )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(aspect.natalPoint)}`,
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
-        label: `Солярный ${solarReturnPoint} — ${natalPoint}`,
-        meta: "Соляр к наталу",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        label: context.copy.solarLabel(solarReturnPoint, natalPoint),
+        meta: context.copy.solarMeta,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
@@ -632,7 +703,8 @@ function buildSolarReturnAspectAnchors(
 function buildProgressionAspectAnchors(
   aspects: readonly ChartProgressionAspect[],
   progressionPointsById: ReadonlyMap<string, ChartPoint>,
-  natalPointsById: ReadonlyMap<string, ChartPoint>
+  natalPointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   return [...aspects]
     .filter(
@@ -647,8 +719,12 @@ function buildProgressionAspectAnchors(
     .sort((left, right) => left.orb - right.orb)
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
-      const progressedPoint = getPointLabel(progressionPointsById, aspect.progressedPoint);
-      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint);
+      const progressedPoint = getPointLabel(
+        progressionPointsById,
+        aspect.progressedPoint,
+        context.locale
+      );
+      const natalPoint = getPointLabel(natalPointsById, aspect.natalPoint, context.locale);
 
       return {
         id: `progression-aspect-${aspect.progressedPoint}-${aspect.natalPoint}-${aspect.type}`,
@@ -657,15 +733,19 @@ function buildProgressionAspectAnchors(
         )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(aspect.natalPoint)}`,
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
-        label: `Прогрессивный ${progressedPoint} — ${natalPoint}`,
-        meta: "Прогрессия к наталу",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        label: context.copy.progressionLabel(progressedPoint, natalPoint),
+        meta: context.copy.progressionMeta,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 }
 
 function buildSynastryAnchors(
-  result: StoredChartCalculationPayload
+  result: ChartResult,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   const synastryResult = getSynastryChartResult(result);
   if (!synastryResult) {
@@ -697,12 +777,16 @@ function buildSynastryAnchors(
       )}.${normalizeAspectTypeCode(aspect.type)}.${formatDictionaryCodePart(aspect.partnerPoint)}`,
       categoryCode: "planet_aspects" as const,
       group: "aspects" as const,
-      label: `${getPointLabel(primaryPointsById, aspect.primaryPoint)} — ${getPointLabel(
+      label: `${getPointLabel(primaryPointsById, aspect.primaryPoint, context.locale)} — ${getPointLabel(
         partnerPointsById,
-        aspect.partnerPoint
-      )} партнёра`,
-      meta: "Синастрический аспект",
-      position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        aspect.partnerPoint,
+        context.locale
+      )} ${context.copy.partnerSuffix}`,
+      meta: context.copy.synastryAspect,
+      position: context.copy.orb(
+        formatAspectTypeDisplay(aspect.type, context.locale),
+        aspect.orb.toFixed(2)
+      )
     }));
   const overlayAnchors = [...synastryResult.result.houseOverlays]
     .filter((overlay) =>
@@ -713,11 +797,15 @@ function buildSynastryAnchors(
     .sort(compareHouseOverlays)
     .map((overlay) => {
       const pointMap = overlay.owner === "primary" ? primaryPointsById : partnerPointsById;
-      const ownerLabel = overlay.owner === "primary" ? "клиента" : "партнёра";
+      const ownerLabel =
+        overlay.owner === "primary" ? context.copy.primaryOwner : context.copy.partnerOwner;
       const projectedOwnerCode =
         overlay.projectedHouseOwner === "primary" ? "primary_house" : "partner_house";
       const projectedOwnerLabel =
-        overlay.projectedHouseOwner === "primary" ? "клиента" : "партнёра";
+        overlay.projectedHouseOwner === "primary"
+          ? context.copy.primaryOwner
+          : context.copy.partnerOwner;
+      const projectedHouse = context.copy.house(romanHouses[overlay.projectedHouse] ?? "");
 
       return {
         id: `synastry-overlay-${overlay.owner}-${overlay.point}-${overlay.projectedHouseOwner}-${overlay.projectedHouse}`,
@@ -726,11 +814,9 @@ function buildSynastryAnchors(
         )}.${projectedOwnerCode}.${overlay.projectedHouse}`,
         categoryCode: "planets_in_houses" as const,
         group: "houses" as const,
-        label: `${getPointLabel(pointMap, overlay.point)} ${ownerLabel} · ${
-          romanHouses[overlay.projectedHouse]
-        } дом ${projectedOwnerLabel}`,
-        meta: "Синастрическое наложение",
-        position: `${romanHouses[overlay.projectedHouse]} дом ${projectedOwnerLabel}`
+        label: `${getPointLabel(pointMap, overlay.point, context.locale)} ${ownerLabel} · ${projectedHouse} ${projectedOwnerLabel}`,
+        meta: context.copy.synastryOverlay,
+        position: `${projectedHouse} ${projectedOwnerLabel}`
       };
     });
   const score = synastryResult.result.relationshipScore;
@@ -741,8 +827,8 @@ function buildSynastryAnchors(
           code: `synastry.score.${formatDictionaryCodePart(score.label)}`,
           categoryCode: "aspects",
           group: "aspects",
-          label: "Оценка совместимости",
-          meta: "Синастрический итог",
+          label: context.copy.compatibilityScore,
+          meta: context.copy.synastrySummary,
           position: `${score.label} · ${score.value.toFixed(0)}`
         }
       ]
@@ -753,7 +839,8 @@ function buildSynastryAnchors(
 
 function buildAspectAnchors(
   aspects: readonly ChartAspect[],
-  pointsById: ReadonlyMap<string, ChartPoint>
+  pointsById: ReadonlyMap<string, ChartPoint>,
+  context: InterpretationContext
 ): readonly ChartInterpretationAnchor[] {
   const aspectTypeAnchors = Array.from(new Set(aspects.map((aspect) => aspect.type))).map(
     (type) => ({
@@ -761,9 +848,9 @@ function buildAspectAnchors(
       code: normalizeAspectTypeCode(type),
       categoryCode: "aspects" as const,
       group: "aspects" as const,
-      label: formatAspectTypeDisplay(type),
-      meta: "Тип аспекта",
-      position: "Общий паттерн аспекта"
+      label: formatAspectTypeDisplay(type, context.locale),
+      meta: context.copy.aspectType,
+      position: context.copy.aspectPattern
     })
   );
   const planetPairAnchors = [...aspects]
@@ -780,8 +867,8 @@ function buildAspectAnchors(
     .slice(0, maxPlanetAspectAnchors)
     .map((aspect) => {
       const [pointA, pointB] = orderAspectPair(aspect.pointA, aspect.pointB);
-      const pointALabel = getPointLabel(pointsById, pointA);
-      const pointBLabel = getPointLabel(pointsById, pointB);
+      const pointALabel = getPointLabel(pointsById, pointA, context.locale);
+      const pointBLabel = getPointLabel(pointsById, pointB, context.locale);
 
       return {
         id: `aspect-pair-${pointA}-${pointB}`,
@@ -789,8 +876,11 @@ function buildAspectAnchors(
         categoryCode: "planet_aspects" as const,
         group: "aspects" as const,
         label: `${pointALabel} — ${pointBLabel}`,
-        meta: "Связь планет",
-        position: `${formatAspectTypeDisplay(aspect.type)} · орбис ${aspect.orb.toFixed(2)}°`
+        meta: context.copy.planetConnection,
+        position: context.copy.orb(
+          formatAspectTypeDisplay(aspect.type, context.locale),
+          aspect.orb.toFixed(2)
+        )
       };
     });
 
@@ -829,9 +919,13 @@ function getPointOrder(pointId: string): number {
   return index === -1 ? pointOrder.length : index;
 }
 
-function getPointLabel(pointsById: ReadonlyMap<string, ChartPoint>, pointId: string): string {
+function getPointLabel(
+  pointsById: ReadonlyMap<string, ChartPoint>,
+  pointId: string,
+  locale: DictionaryLocale
+): string {
   const point = pointsById.get(pointId);
-  return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
+  return getChartPointDisplayLabel(pointId, point?.label ?? pointId, locale);
 }
 
 function dedupeAnchors(
@@ -855,7 +949,8 @@ function formatDictionaryCodePart(value: string): string {
   return value.trim().toLowerCase().replaceAll("-", "_");
 }
 
-function formatSignPrepositional(sign: string): string {
+function formatSignPrepositional(sign: string, locale: DictionaryLocale): string {
+  if (locale === "en") return formatHouseSignDisplay(sign, locale);
   const normalized = sign.toLowerCase();
   const labels: Record<string, string> = {
     aries: "Овне",
@@ -872,19 +967,19 @@ function formatSignPrepositional(sign: string): string {
     pisces: "Рыбах"
   };
 
-  return labels[normalized] ?? formatHouseSignDisplay(sign);
+  return labels[normalized] ?? formatHouseSignDisplay(sign, locale);
 }
 
-function formatHoraryQuestionCategoryDisplay(category: string): string {
-  const labels: Record<string, string> = {
-    relationship: "Отношения",
-    career: "Работа",
-    money: "Деньги",
-    home: "Дом",
-    health: "Здоровье",
-    travel: "Поездка",
-    other: "Другое"
-  };
+function formatHoraryQuestionCategoryDisplay(category: string, locale: DictionaryLocale): string {
+  const categories = chartEngineCopyByLocale[locale].horary.categories;
+  return category in categories ? categories[category as keyof typeof categories] : category;
+}
 
-  return labels[category] ?? category;
+type InterpretationContext = {
+  readonly locale: DictionaryLocale;
+  readonly copy: ChartEngineCopy["interpretationAnchors"];
+};
+
+function getInterpretationContext(locale: DictionaryLocale): InterpretationContext {
+  return { locale, copy: chartEngineCopyByLocale[locale].interpretationAnchors };
 }

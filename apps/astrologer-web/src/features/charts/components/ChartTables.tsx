@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ChartAspect,
   ChartPoint,
+  ChartResult,
   DictionaryEffectiveEntryResponse,
-  DictionaryLocale,
-  StoredChartCalculationPayload
+  DictionaryLocale
 } from "@elevenhouse/contracts";
 import { listDictionaryEntriesByCodes } from "../../dictionary/api/listDictionaryEntriesByCodes";
 import {
   formatAspectTypeDisplay,
   formatHouseSignDisplay,
+  getAspectDisplaySymbol,
   getPrimaryChartRenderResult,
   getPartnerChartRenderResult,
   getProgressionChartRenderResult,
@@ -22,6 +23,7 @@ import {
   getChartPointDisplayLabel,
   getChartPointSymbol,
   getRoundedChartPointPosition,
+  getZodiacDisplaySymbol,
   romanHouses
 } from "../model/chartDisplay";
 import {
@@ -31,12 +33,13 @@ import {
   type ChartInterpretationAnchorGroup,
   type ChartInterpretationMode
 } from "../model/chartInterpretations";
+import { chartEngineCopyByLocale, type ChartEngineCopy } from "../model/chartEngineCopy";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations" | "ai";
 
 export type ChartTablesProps = {
-  readonly result: StoredChartCalculationPayload | null;
+  readonly result: ChartResult | null;
   readonly activeTab: ChartPanelTab;
   readonly locale: DictionaryLocale;
   readonly hoveredPointId: string | null;
@@ -52,12 +55,13 @@ export function ChartTables({
   onHoverPoint,
   result
 }: ChartTablesProps) {
+  const copy = chartEngineCopyByLocale[locale];
   if (!result) {
     return (
       <div className={styles.panelEmpty}>
         {activeTab === "interpretations"
-          ? "После расчёта здесь появятся трактовки из canonical result."
-          : "После расчёта здесь появятся планеты, аспекты и дома из canonical result."}
+          ? copy.tables.emptyInterpretations
+          : copy.tables.emptyTables}
       </div>
     );
   }
@@ -65,10 +69,18 @@ export function ChartTables({
   return (
     <div className={styles.tableStack}>
       {activeTab === "planets" ? (
-        <PlanetsTable hoveredPointId={hoveredPointId} onHoverPoint={onHoverPoint} result={result} />
+        <PlanetsTable
+          copy={copy}
+          hoveredPointId={hoveredPointId}
+          locale={locale}
+          onHoverPoint={onHoverPoint}
+          result={result}
+        />
       ) : null}
-      {activeTab === "aspects" ? <AspectsTable result={result} /> : null}
-      {activeTab === "houses" ? <HousesTable result={result} /> : null}
+      {activeTab === "aspects" ? (
+        <AspectsTable copy={copy} locale={locale} result={result} />
+      ) : null}
+      {activeTab === "houses" ? <HousesTable copy={copy} locale={locale} result={result} /> : null}
       {activeTab === "interpretations" ? (
         <InterpretationSummary
           interpretationMode={interpretationMode}
@@ -81,13 +93,17 @@ export function ChartTables({
 }
 
 function PlanetsTable({
+  copy,
   hoveredPointId,
+  locale,
   onHoverPoint,
   result
 }: {
+  readonly copy: ChartEngineCopy;
   readonly hoveredPointId: string | null;
+  readonly locale: DictionaryLocale;
   readonly onHoverPoint: (pointId: string | null) => void;
-  readonly result: StoredChartCalculationPayload;
+  readonly result: ChartResult;
 }) {
   const renderResult = getPrimaryChartRenderResult(result);
   const transitRenderResult = getTransitChartRenderResult(result);
@@ -97,7 +113,7 @@ function PlanetsTable({
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-planets-heading">
-      <h2 id="chart-planets-heading">Планеты</h2>
+      <h2 id="chart-planets-heading">{copy.tables.planets}</h2>
       <div className={styles.planetList}>
         {renderResult.points.map((point) => {
           const hovered = hoveredPointId === point.id;
@@ -118,7 +134,7 @@ function PlanetsTable({
                 {getChartPointSymbol(point.id, point.label)}
               </span>
               <span className={styles.pointName}>
-                {getChartPointDisplayLabel(point.id, point.label)}
+                {getChartPointDisplayLabel(point.id, point.label, locale)}
               </span>
               <span className={styles.signGlyph} aria-hidden="true">
                 {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
@@ -128,7 +144,7 @@ function PlanetsTable({
                 {point.retrograde ? <b>R</b> : null}
               </span>
               <span className={styles.pointHouse}>
-                {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                {point.house ? copy.tables.house(romanHouses[point.house] ?? "") : "—"}
               </span>
             </div>
           );
@@ -136,7 +152,7 @@ function PlanetsTable({
       </div>
       {transitRenderResult ? (
         <>
-          <h3 className={styles.matrixHeading}>Транзитные планеты</h3>
+          <h3 className={styles.matrixHeading}>{copy.tables.transitPlanets}</h3>
           <div className={styles.planetList}>
             {transitRenderResult.points.map((point) => {
               const hoverId = `transit:${point.id}`;
@@ -158,7 +174,7 @@ function PlanetsTable({
                     {getChartPointSymbol(point.id, point.label)}
                   </span>
                   <span className={styles.pointName}>
-                    {getChartPointDisplayLabel(point.id, point.label)}
+                    {getChartPointDisplayLabel(point.id, point.label, locale)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
                     {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
@@ -168,7 +184,7 @@ function PlanetsTable({
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
-                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                    {point.house ? copy.tables.house(romanHouses[point.house] ?? "") : "—"}
                   </span>
                 </div>
               );
@@ -178,7 +194,7 @@ function PlanetsTable({
       ) : null}
       {solarReturnRenderResult ? (
         <>
-          <h3 className={styles.matrixHeading}>Планеты соляра</h3>
+          <h3 className={styles.matrixHeading}>{copy.tables.solarPlanets}</h3>
           <div className={styles.planetList}>
             {solarReturnRenderResult.points.map((point) => {
               const hoverId = `solar_return:${point.id}`;
@@ -200,7 +216,7 @@ function PlanetsTable({
                     {getChartPointSymbol(point.id, point.label)}
                   </span>
                   <span className={styles.pointName}>
-                    {getChartPointDisplayLabel(point.id, point.label)}
+                    {getChartPointDisplayLabel(point.id, point.label, locale)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
                     {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
@@ -210,7 +226,7 @@ function PlanetsTable({
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
-                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                    {point.house ? copy.tables.house(romanHouses[point.house] ?? "") : "—"}
                   </span>
                 </div>
               );
@@ -220,7 +236,7 @@ function PlanetsTable({
       ) : null}
       {progressionRenderResult ? (
         <>
-          <h3 className={styles.matrixHeading}>Прогрессивные планеты</h3>
+          <h3 className={styles.matrixHeading}>{copy.tables.progressedPlanets}</h3>
           <div className={styles.planetList}>
             {progressionRenderResult.points.map((point) => {
               const hoverId = `progression:${point.id}`;
@@ -242,7 +258,7 @@ function PlanetsTable({
                     {getChartPointSymbol(point.id, point.label)}
                   </span>
                   <span className={styles.pointName}>
-                    {getChartPointDisplayLabel(point.id, point.label)}
+                    {getChartPointDisplayLabel(point.id, point.label, locale)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
                     {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
@@ -252,7 +268,7 @@ function PlanetsTable({
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
-                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                    {point.house ? copy.tables.house(romanHouses[point.house] ?? "") : "—"}
                   </span>
                 </div>
               );
@@ -262,7 +278,7 @@ function PlanetsTable({
       ) : null}
       {partnerRenderResult ? (
         <>
-          <h3 className={styles.matrixHeading}>Планеты партнёра</h3>
+          <h3 className={styles.matrixHeading}>{copy.tables.partnerPlanets}</h3>
           <div className={styles.planetList}>
             {partnerRenderResult.points.map((point) => {
               const hoverId = `partner:${point.id}`;
@@ -284,7 +300,7 @@ function PlanetsTable({
                     {getChartPointSymbol(point.id, point.label)}
                   </span>
                   <span className={styles.pointName}>
-                    {getChartPointDisplayLabel(point.id, point.label)}
+                    {getChartPointDisplayLabel(point.id, point.label, locale)}
                   </span>
                   <span className={styles.signGlyph} aria-hidden="true">
                     {getZodiacSymbol(getRoundedChartPointPosition(point).sign)}
@@ -294,7 +310,7 @@ function PlanetsTable({
                     {point.retrograde ? <b>R</b> : null}
                   </span>
                   <span className={styles.pointHouse}>
-                    {point.house ? `${romanHouses[point.house]} дом` : "—"}
+                    {point.house ? copy.tables.house(romanHouses[point.house] ?? "") : "—"}
                   </span>
                 </div>
               );
@@ -306,21 +322,31 @@ function PlanetsTable({
   );
 }
 
-function HousesTable({ result }: { readonly result: StoredChartCalculationPayload }) {
+function HousesTable({
+  copy,
+  locale,
+  result
+}: {
+  readonly copy: ChartEngineCopy;
+  readonly locale: DictionaryLocale;
+  readonly result: ChartResult;
+}) {
   const renderResult = getPrimaryChartRenderResult(result);
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-houses-heading">
-      <h2 id="chart-houses-heading">Дома</h2>
+      <h2 id="chart-houses-heading">{copy.tables.houses}</h2>
       <div className={styles.houseGrid}>
         {renderResult.houses.map((house) => (
           <div className={styles.houseCard} key={house.number}>
-            <span>{romanHouses[house.number]} дом</span>
+            <span>{copy.tables.house(romanHouses[house.number] ?? "")}</span>
             <strong>
               {getZodiacSymbol(getRoundedChartPointPosition(house).sign)}{" "}
               {getRoundedChartPointPosition(house).degree}
             </strong>
-            <small>{formatHouseSignDisplay(getRoundedChartPointPosition(house).sign)}</small>
+            <small>
+              {formatHouseSignDisplay(getRoundedChartPointPosition(house).sign, locale)}
+            </small>
           </div>
         ))}
       </div>
@@ -328,7 +354,15 @@ function HousesTable({ result }: { readonly result: StoredChartCalculationPayloa
   );
 }
 
-function AspectsTable({ result }: { readonly result: StoredChartCalculationPayload }) {
+function AspectsTable({
+  copy,
+  locale,
+  result
+}: {
+  readonly copy: ChartEngineCopy;
+  readonly locale: DictionaryLocale;
+  readonly result: ChartResult;
+}) {
   const renderResult = getPrimaryChartRenderResult(result);
   const transitResult = getTransitChartResult(result);
   const solarReturnResult = getSolarReturnChartResult(result);
@@ -345,8 +379,8 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-aspects-heading">
-      <h2 id="chart-aspects-heading">Аспекты</h2>
-      <h3 className={styles.matrixHeading}>Матрица аспектов</h3>
+      <h2 id="chart-aspects-heading">{copy.tables.aspects}</h2>
+      <h3 className={styles.matrixHeading}>{copy.tables.aspectMatrix}</h3>
       {matrixPoints.length > 1 ? (
         <div
           className={styles.aspectMatrix}
@@ -363,41 +397,44 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
               aspectsByPair={aspectsByPair}
               key={rowPoint.id}
               points={matrixPoints}
+              copy={copy}
+              locale={locale}
               rowIndex={rowIndex}
               rowPoint={rowPoint}
             />
           ))}
         </div>
       ) : (
-        <div className={styles.emptyRow}>Недостаточно точек для матрицы</div>
+        <div className={styles.emptyRow}>{copy.tables.insufficientMatrix}</div>
       )}
-      <div className={styles.aspectLegend} aria-label="Легенда аспектов">
+      <div className={styles.aspectLegend} aria-label={copy.tables.aspectLegend}>
         {aspectLegendItems.map((item) => (
           <span key={item.type}>
             <b>{item.symbol}</b>
-            {item.label}
+            {formatAspectTypeDisplay(item.type, locale)}
           </span>
         ))}
       </div>
-      <h2>Список аспектов</h2>
+      <h2>{copy.tables.aspectList}</h2>
       <div className={styles.aspectList}>
         {renderResult.aspects.length > 0 ? (
           renderResult.aspects.map((aspect, index) => (
             <div className={styles.aspectRow} key={`${aspect.pointA}-${aspect.pointB}-${index}`}>
-              <span>{formatAspectTypeDisplay(aspect.type)}</span>
+              <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
               <span>
-                {getPointLabel(result, aspect.pointA)} — {getPointLabel(result, aspect.pointB)}
+                {getPointLabel(result, aspect.pointA, locale)} —{" "}
+                {getPointLabel(result, aspect.pointB, locale)}
               </span>
               <span>{aspect.orb.toFixed(2)}°</span>
             </div>
           ))
         ) : (
-          <div className={styles.emptyRow}>Мажорные аспекты не найдены</div>
+          <div className={styles.emptyRow}>{copy.tables.noMajorAspects}</div>
         )}
       </div>
       {transitResult ? (
         <>
-          <h2>Транзитные аспекты к наталу</h2>
+          <h2>{copy.tables.transitAspects}</h2>
           <div className={styles.aspectList}>
             {transitResult.result.aspectsToNatal.length > 0 ? (
               transitResult.result.aspectsToNatal.map((aspect, index) => (
@@ -405,26 +442,27 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
                   className={styles.aspectRow}
                   key={`transit-${aspect.transitPoint}-${aspect.natalPoint}-${index}`}
                 >
-                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
                   <span>
                     {getPointLabelFromCollection(
                       transitRenderResult?.points ?? [],
-                      aspect.transitPoint
+                      aspect.transitPoint,
+                      locale
                     )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
                   </span>
                   <span>{aspect.orb.toFixed(2)}°</span>
                 </div>
               ))
             ) : (
-              <div className={styles.emptyRow}>Транзитные аспекты к наталу не найдены</div>
+              <div className={styles.emptyRow}>{copy.tables.noTransitAspects}</div>
             )}
           </div>
         </>
       ) : null}
       {solarReturnResult ? (
         <>
-          <h2>Солярные аспекты к наталу</h2>
+          <h2>{copy.tables.solarAspects}</h2>
           <div className={styles.aspectList}>
             {solarReturnResult.result.aspectsToNatal.length > 0 ? (
               solarReturnResult.result.aspectsToNatal.map((aspect, index) => (
@@ -432,26 +470,27 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
                   className={styles.aspectRow}
                   key={`solar-return-${aspect.solarReturnPoint}-${aspect.natalPoint}-${index}`}
                 >
-                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
                   <span>
                     {getPointLabelFromCollection(
                       solarReturnRenderResult?.points ?? [],
-                      aspect.solarReturnPoint
+                      aspect.solarReturnPoint,
+                      locale
                     )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
                   </span>
                   <span>{aspect.orb.toFixed(2)}°</span>
                 </div>
               ))
             ) : (
-              <div className={styles.emptyRow}>Солярные аспекты к наталу не найдены</div>
+              <div className={styles.emptyRow}>{copy.tables.noSolarAspects}</div>
             )}
           </div>
         </>
       ) : null}
       {progressionResult ? (
         <>
-          <h2>Прогрессивные аспекты к наталу</h2>
+          <h2>{copy.tables.progressionAspects}</h2>
           <div className={styles.aspectList}>
             {progressionResult.result.aspectsToNatal.length > 0 ? (
               progressionResult.result.aspectsToNatal.map((aspect, index) => (
@@ -459,26 +498,27 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
                   className={styles.aspectRow}
                   key={`progression-${aspect.progressedPoint}-${aspect.natalPoint}-${index}`}
                 >
-                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
                   <span>
                     {getPointLabelFromCollection(
                       progressionRenderResult?.points ?? [],
-                      aspect.progressedPoint
+                      aspect.progressedPoint,
+                      locale
                     )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint)}
+                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
                   </span>
                   <span>{aspect.orb.toFixed(2)}°</span>
                 </div>
               ))
             ) : (
-              <div className={styles.emptyRow}>Прогрессивные аспекты к наталу не найдены</div>
+              <div className={styles.emptyRow}>{copy.tables.noProgressionAspects}</div>
             )}
           </div>
         </>
       ) : null}
       {synastryResult ? (
         <>
-          <h2>Аспекты между картами</h2>
+          <h2>{copy.tables.betweenAspects}</h2>
           <div className={styles.aspectList}>
             {synastryResult.result.aspectsBetween.length > 0 ? (
               synastryResult.result.aspectsBetween.map((aspect, index) => (
@@ -486,19 +526,21 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
                   className={styles.aspectRow}
                   key={`synastry-${aspect.primaryPoint}-${aspect.partnerPoint}-${index}`}
                 >
-                  <span>{formatAspectTypeDisplay(aspect.type)}</span>
+                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
                   <span>
-                    {getPointLabelFromCollection(renderResult.points, aspect.primaryPoint)} —{" "}
+                    {getPointLabelFromCollection(renderResult.points, aspect.primaryPoint, locale)}{" "}
+                    —{" "}
                     {getPointLabelFromCollection(
                       partnerRenderResult?.points ?? [],
-                      aspect.partnerPoint
+                      aspect.partnerPoint,
+                      locale
                     )}
                   </span>
                   <span>{aspect.orb.toFixed(2)}°</span>
                 </div>
               ))
             ) : (
-              <div className={styles.emptyRow}>Аспекты между картами не найдены</div>
+              <div className={styles.emptyRow}>{copy.tables.noBetweenAspects}</div>
             )}
           </div>
         </>
@@ -509,11 +551,15 @@ function AspectsTable({ result }: { readonly result: StoredChartCalculationPaylo
 
 function AspectMatrixRow({
   aspectsByPair,
+  copy,
+  locale,
   points,
   rowIndex,
   rowPoint
 }: {
   readonly aspectsByPair: ReadonlyMap<string, ChartAspect>;
+  readonly copy: ChartEngineCopy;
+  readonly locale: DictionaryLocale;
   readonly points: readonly ChartPoint[];
   readonly rowIndex: number;
   readonly rowPoint: ChartPoint;
@@ -531,15 +577,16 @@ function AspectMatrixRow({
           <span
             aria-label={
               !isEmpty && aspect
-                ? `${getPointLabelFromPoint(rowPoint)} ${formatAspectTypeDisplay(aspect.type)} ${getPointLabelFromPoint(
-                    columnPoint
-                  )}, орбис ${aspect.orb.toFixed(2)}°`
+                ? `${getPointLabelFromPoint(rowPoint, locale)} ${formatAspectTypeDisplay(aspect.type, locale)} ${getPointLabelFromPoint(
+                    columnPoint,
+                    locale
+                  )}, ${copy.tables.orb} ${aspect.orb.toFixed(2)}°`
                 : undefined
             }
             className={isEmpty ? styles.aspectMatrixEmpty : styles.aspectMatrixCell}
             key={`${rowPoint.id}-${columnPoint.id}`}
           >
-            {!isEmpty && aspect ? getAspectSymbol(aspect.type) : ""}
+            {!isEmpty && aspect ? getAspectDisplaySymbol(aspect.type, locale) : ""}
           </span>
         );
       })}
@@ -554,12 +601,13 @@ function InterpretationSummary({
 }: {
   readonly interpretationMode: ChartInterpretationMode;
   readonly locale: DictionaryLocale;
-  readonly result: StoredChartCalculationPayload;
+  readonly result: ChartResult;
 }) {
   const anchors = useMemo(
-    () => buildChartInterpretationAnchors(result, { mode: interpretationMode }),
-    [interpretationMode, result]
+    () => buildChartInterpretationAnchors(result, { mode: interpretationMode, locale }),
+    [interpretationMode, locale, result]
   );
+  const copy = chartEngineCopyByLocale[locale].tables;
   const lookupCodes = useMemo(() => getChartInterpretationLookupCodes(anchors), [anchors]);
   const [dictionaryState, setDictionaryState] = useState<{
     readonly entries: readonly DictionaryEffectiveEntryResponse[];
@@ -609,24 +657,24 @@ function InterpretationSummary({
         setDictionaryState({
           entries: [],
           isLoading: false,
-          errorMessage: "Не удалось загрузить трактовки из справочника."
+          errorMessage: copy.dictionaryLoadError
         });
       });
 
     return () => {
       isMounted = false;
     };
-  }, [locale, lookupCodes]);
+  }, [copy.dictionaryLoadError, locale, lookupCodes]);
 
   const dictionaryEntriesByCode = new Map(
     dictionaryState.entries.map((entry) => [entry.code, entry])
   );
-  const anchorGroups = getInterpretationAnchorGroups(anchors);
-  const interpretationCopy = getInterpretationCopy({ interpretationMode, result });
+  const anchorGroups = getInterpretationAnchorGroups(anchors, copy);
+  const interpretationCopy = getInterpretationCopy({ copy, interpretationMode, result });
 
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
-      <h2 id="chart-interpretations-heading">Трактовки</h2>
+      <h2 id="chart-interpretations-heading">{copy.interpretations}</h2>
       <div>
         <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
         <div className={styles.interpretationGroupStack}>
@@ -646,15 +694,17 @@ function InterpretationSummary({
                       <strong>{anchor.label}</strong>
                       <small>{anchor.meta}</small>
                       <span>{anchor.position}</span>
-                      <p>{getDictionaryInterpretationText({ anchor, entry }, dictionaryState)}</p>
-                      {entry ? <em>Справочник · {entry.source}</em> : null}
+                      <p>
+                        {getDictionaryInterpretationText({ anchor, entry }, dictionaryState, copy)}
+                      </p>
+                      {entry ? <em>{copy.dictionarySource(entry.source)}</em> : null}
                       {isMissingEntry ? (
                         <a
-                          aria-label={`Создать трактовку ${anchor.code} в справочнике`}
+                          aria-label={copy.createInterpretationAria(anchor.code)}
                           className={styles.interpretationMissingAction}
                           href={getReferenceCreateInterpretationHref(anchor)}
                         >
-                          Создать трактовку
+                          {copy.createInterpretation}
                         </a>
                       ) : null}
                     </div>
@@ -670,32 +720,34 @@ function InterpretationSummary({
 }
 
 function getInterpretationCopy({
+  copy,
   interpretationMode,
   result
 }: {
+  readonly copy: ChartEngineCopy["tables"];
   readonly interpretationMode: ChartInterpretationMode;
-  readonly result: StoredChartCalculationPayload;
+  readonly result: ChartResult;
 }) {
   if (interpretationMode === "child") {
     return {
-      kicker: "Детские трактовки · библиотека"
+      kicker: copy.interpretationKickers.child
     };
   }
 
   if (result.method === "horary") {
     return {
-      kicker: "Хорар · библиотека"
+      kicker: copy.interpretationKickers.horary
     };
   }
 
   if (result.method === "astrocartography") {
     return {
-      kicker: "Астрокартография · библиотека"
+      kicker: copy.interpretationKickers.astrocartography
     };
   }
 
   return {
-    kicker: "Опорные положения · библиотека"
+    kicker: copy.interpretationKickers.default
   };
 }
 
@@ -707,10 +759,11 @@ function getDictionaryInterpretationText(
   state: {
     readonly isLoading: boolean;
     readonly errorMessage: string | null;
-  }
+  },
+  copy: ChartEngineCopy["tables"]
 ): string {
   if (state.isLoading) {
-    return "Загружаем трактовку из справочника...";
+    return copy.dictionaryLoading;
   }
 
   if (state.errorMessage) {
@@ -721,7 +774,7 @@ function getDictionaryInterpretationText(
     return input.entry.content;
   }
 
-  return `В справочнике пока нет записи ${input.anchor.code}.`;
+  return copy.dictionaryMissing(input.anchor.code);
 }
 
 function isDictionaryInterpretationMissing(input: {
@@ -745,11 +798,14 @@ function getReferenceCreateInterpretationHref(anchor: ChartInterpretationAnchor)
   return `/reference?${searchParams.toString()}`;
 }
 
-function getInterpretationAnchorGroups(anchors: readonly ChartInterpretationAnchor[]) {
+function getInterpretationAnchorGroups(
+  anchors: readonly ChartInterpretationAnchor[],
+  copy: ChartEngineCopy["tables"]
+) {
   return interpretationGroupOrder
     .map((groupId) => ({
       id: groupId,
-      title: interpretationGroupTitles[groupId],
+      title: copy.groupTitles[groupId],
       anchors: anchors.filter((anchor) => anchor.group === groupId)
     }))
     .filter((group) => group.anchors.length > 0);
@@ -761,28 +817,26 @@ const interpretationGroupOrder: readonly ChartInterpretationAnchorGroup[] = [
   "aspects"
 ];
 
-const interpretationGroupTitles: Record<ChartInterpretationAnchorGroup, string> = {
-  points: "Положения",
-  houses: "Дома",
-  aspects: "Аспекты"
-};
-
-function getPointLabel(result: StoredChartCalculationPayload, pointId: string): string {
+function getPointLabel(result: ChartResult, pointId: string, locale: DictionaryLocale): string {
   const point = getPrimaryChartRenderResult(result).points.find(
     (candidate) => candidate.id === pointId
   );
 
-  return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
+  return getChartPointDisplayLabel(pointId, point?.label ?? pointId, locale);
 }
 
-function getPointLabelFromCollection(points: readonly ChartPoint[], pointId: string): string {
+function getPointLabelFromCollection(
+  points: readonly ChartPoint[],
+  pointId: string,
+  locale: DictionaryLocale
+): string {
   const point = points.find((candidate) => candidate.id === pointId);
 
-  return getChartPointDisplayLabel(pointId, point?.label ?? pointId);
+  return getChartPointDisplayLabel(pointId, point?.label ?? pointId, locale);
 }
 
-function getPointLabelFromPoint(point: ChartPoint): string {
-  return getChartPointDisplayLabel(point.id, point.label);
+function getPointLabelFromPoint(point: ChartPoint, locale: DictionaryLocale): string {
+  return getChartPointDisplayLabel(point.id, point.label, locale);
 }
 
 function getAspectMatrixPoints(points: readonly ChartPoint[]): readonly ChartPoint[] {
@@ -795,12 +849,8 @@ function getAspectPairKey(pointA: string, pointB: string): string {
   return [pointA, pointB].sort().join(":");
 }
 
-function getAspectSymbol(type: string): string {
-  return aspectSymbols[type] ?? "•";
-}
-
 function getZodiacSymbol(sign: string): string {
-  return zodiacSymbols[sign.toLowerCase()] ?? "♈︎";
+  return getZodiacDisplaySymbol(sign);
 }
 
 const mainPointOrder = [
@@ -816,37 +866,10 @@ const mainPointOrder = [
   "pluto"
 ] as const;
 
-const zodiacSymbols: Record<string, string> = {
-  aries: "♈︎",
-  taurus: "♉︎",
-  gemini: "♊︎",
-  cancer: "♋︎",
-  leo: "♌︎",
-  virgo: "♍︎",
-  libra: "♎︎",
-  scorpio: "♏︎",
-  sagittarius: "♐︎",
-  capricorn: "♑︎",
-  aquarius: "♒︎",
-  pisces: "♓︎"
-};
-
-const aspectSymbols: Record<string, string> = {
-  conjunction: "☌",
-  sextile: "✶",
-  square: "□",
-  trine: "△",
-  opposition: "☍",
-  "semi-sextile": "⚺",
-  "semi-square": "∠",
-  quincunx: "⚻",
-  quintile: "Q"
-};
-
 const aspectLegendItems = [
-  { type: "conjunction", symbol: "☌", label: "Соединение" },
-  { type: "sextile", symbol: "✶", label: "Секстиль" },
-  { type: "square", symbol: "□", label: "Квадрат" },
-  { type: "trine", symbol: "△", label: "Тригон" },
-  { type: "opposition", symbol: "☍", label: "Оппозиция" }
+  { type: "conjunction", symbol: "☌" },
+  { type: "sextile", symbol: "✶" },
+  { type: "square", symbol: "□" },
+  { type: "trine", symbol: "△" },
+  { type: "opposition", symbol: "☍" }
 ] as const;

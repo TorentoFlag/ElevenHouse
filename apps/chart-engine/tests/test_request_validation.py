@@ -3,7 +3,6 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from chart_engine.canonical_validation import reproducibility_fingerprint_for_result
 from chart_engine.main import app
 
 
@@ -86,10 +85,6 @@ def request_payload(method: str) -> dict:
         payload["partnerInputSnapshot"] = birth_snapshot(
             birthDate="1992-04-03", birthTime="08:15"
         )
-        payload["relationshipSnapshot"] = {
-            "primaryClientId": "11111111-1111-4111-8111-111111111111",
-            "partnerClientId": "22222222-2222-4222-8222-222222222222",
-        }
     elif method == "solar_return":
         payload["solarReturnSnapshot"] = {
             "year": 2026,
@@ -148,6 +143,42 @@ def test_rejects_invalid_civil_fields(field: str, value: str) -> None:
     assert_typed_422(client.post("/v1/natal", json=payload))
 
 
+@pytest.mark.parametrize("birth_date", ["1799-12-31", "2400-01-01"])
+def test_rejects_birth_dates_outside_packaged_ephemeris_range(birth_date: str) -> None:
+    client = TestClient(app)
+    payload = request_payload("natal")
+    payload["inputSnapshot"]["birthDate"] = birth_date
+
+    response = client.post("/v1/natal", json=payload)
+
+    assert_typed_422(response)
+    assert any("CHART_EPHEMERIS_DATE_UNSUPPORTED" in issue["msg"] for issue in response.json()["detail"])
+
+
+@pytest.mark.parametrize(
+    ("method", "route", "date_field"),
+    [
+        ("transit", "/v1/transits", ("transitSnapshot", "date")),
+        ("progression", "/v1/progressions", ("progressionSnapshot", "targetDate")),
+        ("horary", "/v1/horary", ("questionSnapshot", "date")),
+    ],
+)
+def test_rejects_target_dates_outside_packaged_ephemeris_range(
+    method: str,
+    route: str,
+    date_field: tuple[str, str],
+) -> None:
+    client = TestClient(app)
+    payload = request_payload(method)
+    parent, field = date_field
+    payload[parent][field] = "2400-01-01"
+
+    response = client.post(route, json=payload)
+
+    assert_typed_422(response)
+    assert any("CHART_EPHEMERIS_DATE_UNSUPPORTED" in issue["msg"] for issue in response.json()["detail"])
+
+
 @pytest.mark.parametrize("coordinate", [float("nan"), float("inf"), float("-inf")])
 def test_rejects_non_finite_coordinates(coordinate: float) -> None:
     client = TestClient(app)
@@ -163,45 +194,27 @@ def test_rejects_non_finite_coordinates(coordinate: float) -> None:
     assert_typed_422(response)
 
 
-def test_rejects_identical_relationship_ids() -> None:
+@pytest.mark.parametrize(
+    ("method", "route"),
+    [("synastry", "/v1/synastry"), ("composite", "/v1/composite")],
+)
+def test_rejects_relationship_identity_as_unknown_provider_input(
+    method: str, route: str
+) -> None:
     client = TestClient(app)
-    payload = request_payload("synastry")
-    payload["relationshipSnapshot"]["partnerClientId"] = payload["relationshipSnapshot"][
-        "primaryClientId"
-    ]
-
-    assert_typed_422(client.post("/v1/synastry", json=payload))
-
-
-def test_rejects_equivalent_relationship_uuid_encodings() -> None:
-    client = TestClient(app)
-    payload = request_payload("synastry")
+    payload = request_payload(method)
     payload["relationshipSnapshot"] = {
-        "primaryClientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "partnerClientId": "AAAAAAAAAAAA4AAA8AAAAAAAAAAAAAAA",
+        "primaryClientId": "11111111-1111-4111-8111-111111111111",
+        "partnerClientId": "22222222-2222-4222-8222-222222222222",
     }
 
-    assert_typed_422(client.post("/v1/synastry", json=payload))
+    response = client.post(route, json=payload)
 
-
-def test_canonicalizes_relationship_ids_before_result_fingerprint() -> None:
-    client = TestClient(app)
-    payload = request_payload("synastry")
-    payload["relationshipSnapshot"] = {
-        "primaryClientId": "AAAAAAAAAAAA4AAA8AAAAAAAAAAAAAAA",
-        "partnerClientId": "BBBBBBBBBBBB4BBB8BBBBBBBBBBBBBBB",
-    }
-
-    response = client.post("/v1/synastry", json=payload)
-
-    assert response.status_code == 200, response.text
-    result = response.json()
-    assert result["relationshipSnapshot"] == {
-        "primaryClientId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        "partnerClientId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-    }
-    assert result["reproducibilityFingerprint"] == reproducibility_fingerprint_for_result(
-        result
+    assert_typed_422(response)
+    assert any(
+        issue["type"] == "extra_forbidden"
+        and issue["loc"][-1] == "relationshipSnapshot"
+        for issue in response.json()["detail"]
     )
 
 

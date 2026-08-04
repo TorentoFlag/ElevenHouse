@@ -1,21 +1,27 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { createDrizzleClientStore } from "@elevenhouse/db/clients";
+import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { RedisModule } from "../redis/redis.module";
+import { REDIS_CLIENT, type RedisClientPort } from "../redis/redis.tokens";
 import { SecurityModule } from "../security/security.module";
+import { type ClientBirthPlaceUpstreamProvider } from "./birth-place-search.provider";
 import { ClientsController } from "./clients.controller";
 import { ClientsService } from "./clients.service";
-import { NominatimBirthPlaceSearchProvider } from "./nominatim-birth-place-search.provider";
+import { GeoapifyBirthPlaceSearchProvider } from "./geoapify-birth-place-search.provider";
+import { RedisBirthPlaceSearchProvider } from "./redis-birth-place-search.provider";
 import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, RedisModule, SecurityModule],
   controllers: [ClientsController],
   providers: [
     ClientsService,
+    GeoapifyBirthPlaceSearchProvider,
     {
       provide: CLIENT_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -24,7 +30,24 @@ import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
     },
     {
       provide: BIRTH_PLACE_SEARCH_PROVIDER,
-      useClass: NominatimBirthPlaceSearchProvider
+      useFactory: (
+        redisClient: RedisClientPort,
+        geoapifyProvider: ClientBirthPlaceUpstreamProvider,
+        configService: ConfigService
+      ) => {
+        const config = configService.getOrThrow<AstrologerApiRuntimeConfig["birthPlaceSearch"]>(
+          "astrologerApi.birthPlaceSearch"
+        );
+
+        return new RedisBirthPlaceSearchProvider(redisClient, geoapifyProvider, {
+          keyPrefix: config.rateLimitRedisKeyPrefix,
+          cacheSuccessTtlSeconds: config.cacheSuccessTtlSeconds,
+          cacheEmptyTtlSeconds: config.cacheEmptyTtlSeconds,
+          lockTtlMs: config.lockTtlMs,
+          rateLimits: config.rateLimits
+        });
+      },
+      inject: [REDIS_CLIENT, GeoapifyBirthPlaceSearchProvider, ConfigService]
     }
   ],
   exports: [CLIENT_STORE, BIRTH_PLACE_SEARCH_PROVIDER]

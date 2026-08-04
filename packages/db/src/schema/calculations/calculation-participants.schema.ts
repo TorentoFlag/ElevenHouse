@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { calculationRecords } from "./calculation-records.schema";
 import {
   calculationParticipantRoleValues,
@@ -38,7 +38,7 @@ export const calculationParticipants = pgTable(
       sql`(${table.source} = 'crm_client' and ${table.clientId} is not null) or (${table.source} = 'manual' and ${table.clientId} is null)`
     ),
     check("calculation_participants_order_check", sql`${table.order} >= 0 and ${table.order} < 2`),
-    index("calculation_participants_record_role_idx").on(table.calculationId, table.role),
-    index("calculation_participants_record_order_idx").on(table.calculationId, table.order)
+    unique("calculation_participants_record_role_unique").on(table.calculationId, table.role),
+    unique("calculation_participants_record_order_unique").on(table.calculationId, table.order)
   ]
 );

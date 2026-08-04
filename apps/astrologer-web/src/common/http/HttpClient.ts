@@ -149,8 +149,9 @@ async function readResponseBody(response: Response): Promise<unknown> {
   }
 
   const contentType = response.headers.get("content-type");
+  const mediaType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
 
-  if (contentType?.includes("application/json")) {
+  if (mediaType === "application/json" || mediaType?.endsWith("+json")) {
     return response.json();
   }
 

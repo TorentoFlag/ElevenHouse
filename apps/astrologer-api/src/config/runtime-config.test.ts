@@ -3,7 +3,8 @@ import { createAstrologerApiRuntimeConfig } from "./runtime-config";
 
 const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
-  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey,
+  ASTROLOGER_API_GEOAPIFY_API_KEY: "test-geoapify-key"
 };
 const defaultAiConfig = {
   enabled: false,
@@ -27,6 +28,9 @@ const defaultTrustedStaticCode = {
   identifierNormalized: "+78005553535"
 };
 const defaultSecurityConfig = {
+  flows: {
+    publicationRolloutPhase: "legacy_v1"
+  },
   trustProxy: false,
   sessionTtlSeconds: 604800,
   sessionCookieSecure: false,
@@ -42,10 +46,19 @@ const defaultSecurityConfig = {
   instagramGraph: null,
   birthPlaceSearch: {
     enabled: true,
-    provider: "nominatim",
-    baseUrl: "https://nominatim.openstreetmap.org",
-    userAgent: "ElevenHouse/1.0 (support@elevenhouse.ai)",
-    timeoutMs: 5000
+    provider: "geoapify",
+    baseUrl: "https://api.geoapify.com",
+    apiKey: "test-geoapify-key",
+    timeoutMs: 5000,
+    cacheSuccessTtlSeconds: 2592000,
+    cacheEmptyTtlSeconds: 1800,
+    lockTtlMs: 6000,
+    rateLimitRedisKeyPrefix: "elevenhouse:astrologer-api:birth-place-search",
+    rateLimits: {
+      userPerMinute: { limit: 20, windowSeconds: 60 },
+      globalPerMinute: { limit: 120, windowSeconds: 60 },
+      globalPerDay: { limit: 2500, windowSeconds: 86400 }
+    }
   },
   allowedOrigins: ["http://localhost:5174"],
   chartEngineBaseUrl: "http://localhost:8012",
@@ -78,7 +91,11 @@ const defaultSecurityConfig = {
   billing: {
     arcPayConfigured: false
   },
-  ai: defaultAiConfig
+  ai: defaultAiConfig,
+  chartAi: {
+    enabled: false,
+    processingAuthorityVersion: null
+  }
 };
 
 describe("createAstrologerApiRuntimeConfig", () => {
@@ -100,6 +117,17 @@ describe("createAstrologerApiRuntimeConfig", () => {
       port: 4012,
       redisUrl: "redis://localhost:6379",
       ...defaultSecurityConfig
+    });
+  });
+
+  it("parses the explicit Flow manifest rollout phase", () => {
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: "manifest_v2"
+      })
+    ).toMatchObject({
+      flows: { publicationRolloutPhase: "manifest_v2" }
     });
   });
 
@@ -172,19 +200,59 @@ describe("createAstrologerApiRuntimeConfig", () => {
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
         ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED: "false",
-        ASTROLOGER_API_NOMINATIM_BASE_URL: "https://nominatim.internal/",
-        ASTROLOGER_API_NOMINATIM_USER_AGENT: "ElevenHouse QA (qa@elevenhouse.ai)",
-        ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "2500"
+        ASTROLOGER_API_GEOAPIFY_BASE_URL: "https://geoapify.internal/",
+        ASTROLOGER_API_GEOAPIFY_API_KEY: "geoapify-key",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "2500",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS: "86400",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS: "900",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: "1500",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX:
+          "elevenhouse:test:birth-place",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: "7",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE: "70",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY: "700"
       })
     ).toMatchObject({
       birthPlaceSearch: {
         enabled: false,
-        provider: "nominatim",
-        baseUrl: "https://nominatim.internal",
-        userAgent: "ElevenHouse QA (qa@elevenhouse.ai)",
-        timeoutMs: 2500
+        provider: "geoapify",
+        baseUrl: "https://geoapify.internal",
+        apiKey: "geoapify-key",
+        timeoutMs: 2500,
+        cacheSuccessTtlSeconds: 86400,
+        cacheEmptyTtlSeconds: 900,
+        lockTtlMs: 1500,
+        rateLimitRedisKeyPrefix: "elevenhouse:test:birth-place",
+        rateLimits: {
+          userPerMinute: { limit: 7, windowSeconds: 60 },
+          globalPerMinute: { limit: 70, windowSeconds: 60 },
+          globalPerDay: { limit: 700, windowSeconds: 86400 }
+        }
       }
     });
+  });
+
+  it("rejects an enabled birth-place lock that can expire before the provider timeout", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "5000",
+        ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: "5000"
+      })
+    ).toThrow(
+      "ASTROLOGER_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS must exceed ASTROLOGER_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS"
+    );
+  });
+
+  it("rejects plaintext Geoapify transport while birth-place search is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_GEOAPIFY_BASE_URL: "http://geoapify.internal"
+      })
+    ).toThrow(
+      "ASTROLOGER_API_GEOAPIFY_BASE_URL must use HTTPS when ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED=true"
+    );
   });
 
   it("rejects a private report bucket that is also anonymously served media", () => {
@@ -521,6 +589,60 @@ describe("createAstrologerApiRuntimeConfig", () => {
     ).toThrow("CHART_ENGINE_BASE_URL must not use a loopback host in production");
   });
 
+  it("rejects bracketed IPv6 loopback chart engine URLs in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+        CHART_ENGINE_BASE_URL: "http://[::1]:8012"
+      })
+    ).toThrow("CHART_ENGINE_BASE_URL must not use a loopback host in production");
+  });
+
+  it("rejects an arbitrary non-loopback chart engine origin in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.ai",
+        CHART_ENGINE_BASE_URL: "http://chart-engine.attacker.internal:8012"
+      })
+    ).toThrow("CHART_ENGINE_BASE_URL must equal http://chart-engine:8012 in production");
+  });
+
+  it("rejects a non-official Geoapify origin in production", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.ai",
+        ASTROLOGER_API_GEOAPIFY_BASE_URL: "https://geoapify-compatible.example",
+        CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
+      })
+    ).toThrow(
+      "ASTROLOGER_API_GEOAPIFY_BASE_URL must equal https://api.geoapify.com in production when birth-place search is enabled"
+    );
+  });
+
   it("parses astrologer passwordless auth settings from env", () => {
     expect(
       createAstrologerApiRuntimeConfig({
@@ -632,5 +754,129 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(config.ai.enabled).toBe(true);
     expect(config.ai.openAiApiKey).toBe("openai-secret");
     expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
+  });
+
+  it("keeps external chart AI disabled without inventing processing authority", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "false"
+    });
+
+    expect(config.chartAi).toEqual({
+      enabled: false,
+      processingAuthorityVersion: null
+    });
+  });
+
+  it("requires the global provider contour before chart AI can be enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_CHART_AI_ENABLED: "true"
+      })
+    ).toThrow("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
+  });
+
+  it("requires a registered processing authority whenever chart AI is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+        ASTROLOGER_CHART_AI_ENABLED: "true"
+      })
+    ).toThrow(
+      "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required when ASTROLOGER_CHART_AI_ENABLED=true"
+    );
+  });
+
+  it("binds chart consent to the exact official OpenAI API endpoint", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+        ASTROLOGER_OPENAI_BASE_URL: "https://compatible-proxy.example/v1",
+        ASTROLOGER_CHART_AI_ENABLED: "true",
+        ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "verified-test-authority.v1"
+      })
+    ).toThrow(
+      "ASTROLOGER_OPENAI_BASE_URL must match the processor endpoint registered for chart AI authority"
+    );
+  });
+
+  it("rejects production chart AI without verified processing authority", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        NODE_ENV: "production",
+        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+        ASTROLOGER_CHART_AI_ENABLED: "true",
+        CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
+      })
+    ).toThrow(
+      "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required in production when ASTROLOGER_CHART_AI_ENABLED=true"
+    );
+  });
+
+  it("rejects a test or arbitrary authority identifier in production", () => {
+    for (const processingAuthorityVersion of [
+      "verified-test-authority.v1",
+      "invented-production-authority.v1"
+    ]) {
+      expect(() =>
+        createAstrologerApiRuntimeConfig({
+          ...requiredSecurityConfig,
+          NODE_ENV: "production",
+          ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+          ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+          ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+          ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+          ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+          ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+          ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+          ASTROLOGER_AI_ENABLED: "true",
+          ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+          ASTROLOGER_CHART_AI_ENABLED: "true",
+          ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: processingAuthorityVersion,
+          CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
+        })
+      ).toThrow("is not registered for production chart AI");
+    }
+  });
+
+  it("exposes an explicit test authority version only when supplied", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "true",
+      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+      ASTROLOGER_CHART_AI_ENABLED: "true",
+      ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "verified-test-authority.v1"
+    });
+
+    expect(config.chartAi).toEqual({
+      enabled: true,
+      processingAuthorityVersion: "verified-test-authority.v1"
+    });
+  });
+
+  it("rejects an unbounded chart AI processing authority identifier", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_AI_ENABLED: "true",
+        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+        ASTROLOGER_CHART_AI_ENABLED: "true",
+        ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "a".repeat(161)
+      })
+    ).toThrow("ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION must be at most 160 characters");
   });
 });

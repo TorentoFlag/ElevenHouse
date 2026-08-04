@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import { users } from "../identity/accounts.schema";
 import { clientAstrologerRelationships } from "./client-astrologer-relationships.schema";
 import { clientBirthData } from "./client-birth-data.schema";
+import { clientDataConsents } from "./client-data-consents.schema";
 import { clientJoinIntents } from "./client-join-intents.schema";
 import { clientProfiles } from "./client-profiles.schema";
 
@@ -21,7 +22,7 @@ export const clientBirthDataRelations = relations(clientBirthData, ({ one }) => 
 
 export const clientAstrologerRelationshipsRelations = relations(
   clientAstrologerRelationships,
-  ({ one }) => ({
+  ({ many, one }) => ({
     client: one(users, {
       fields: [clientAstrologerRelationships.clientUserId],
       references: [users.id]
@@ -29,9 +30,25 @@ export const clientAstrologerRelationshipsRelations = relations(
     astrologer: one(users, {
       fields: [clientAstrologerRelationships.astrologerUserId],
       references: [users.id]
-    })
+    }),
+    dataConsents: many(clientDataConsents)
   })
 );
+
+export const clientDataConsentsRelations = relations(clientDataConsents, ({ one }) => ({
+  relationship: one(clientAstrologerRelationships, {
+    fields: [
+      clientDataConsents.relationshipId,
+      clientDataConsents.clientUserId,
+      clientDataConsents.astrologerUserId
+    ],
+    references: [
+      clientAstrologerRelationships.id,
+      clientAstrologerRelationships.clientUserId,
+      clientAstrologerRelationships.astrologerUserId
+    ]
+  })
+}));
 
 export const clientJoinIntentsRelations = relations(clientJoinIntents, ({ one }) => ({
   astrologer: one(users, {

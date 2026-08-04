@@ -3,6 +3,8 @@ import {
   astrologerClientResponseSchema,
   astrologerClientListResponseSchema,
   clientBirthDataListResponseSchema,
+  clientBirthPlaceReferenceParamsSchema,
+  clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
@@ -73,7 +75,7 @@ describe("client contracts", () => {
       clientBirthPlaceSearchResponseSchema.parse({
         candidates: [
           {
-            id: "nominatim:41485",
+            id: "geoapify:41485",
             label: "Rome, Lazio, Italy",
             placeName: "Rome, Italy",
             countryCode: "IT",
@@ -82,7 +84,7 @@ describe("client contracts", () => {
             timezone: "Europe/Rome",
             latitude: 41.8933,
             longitude: 12.4829,
-            provider: "nominatim",
+            provider: "geoapify",
             providerPlaceId: "41485"
           }
         ]
@@ -96,6 +98,62 @@ describe("client contracts", () => {
         }
       ]
     });
+  });
+
+  it("accepts only an opaque Geoapify place reference and one strict resolved candidate", () => {
+    const providerPlaceId = "5132009123fa5a244059c72f70125fb04840f00102f9014496730800000000";
+
+    expect(clientBirthPlaceReferenceParamsSchema.parse({ providerPlaceId })).toEqual({
+      providerPlaceId
+    });
+    expect(
+      clientBirthPlaceReferenceResponseSchema.parse({
+        id: `geoapify:${providerPlaceId}`,
+        label: "Rome, Lazio, Italy",
+        placeName: "Rome, Italy",
+        countryCode: "IT",
+        city: "Rome",
+        region: "Lazio",
+        timezone: "Europe/Rome",
+        latitude: 41.8933,
+        longitude: 12.4829,
+        provider: "geoapify",
+        providerPlaceId
+      })
+    ).toMatchObject({ provider: "geoapify", providerPlaceId, timezone: "Europe/Rome" });
+  });
+
+  it("rejects caller URLs, coordinates and extra fields as birth-place references", () => {
+    expect(() =>
+      clientBirthPlaceReferenceParamsSchema.parse({
+        providerPlaceId: "https://api.geoapify.com/v2/place-details?id=secret"
+      })
+    ).toThrow();
+    expect(() =>
+      clientBirthPlaceReferenceParamsSchema.parse({
+        providerPlaceId: "51485",
+        latitude: 41.8933,
+        longitude: 12.4829
+      })
+    ).toThrow();
+  });
+
+  it("rejects a candidate whose public id is not bound to its provider reference", () => {
+    expect(() =>
+      clientBirthPlaceReferenceResponseSchema.parse({
+        id: "geoapify:different-place",
+        label: "Rome, Lazio, Italy",
+        placeName: "Rome, Italy",
+        countryCode: "IT",
+        city: "Rome",
+        region: "Lazio",
+        timezone: "Europe/Rome",
+        latitude: 41.8933,
+        longitude: 12.4829,
+        provider: "geoapify",
+        providerPlaceId: "51485"
+      })
+    ).toThrow();
   });
 
   it("rejects invalid client list items", () => {
@@ -125,6 +183,10 @@ describe("client contracts", () => {
         relationshipStatus: "active"
       }
     });
+  });
+
+  it("rejects birth-place search queries shorter than three characters", () => {
+    expect(() => clientBirthPlaceSearchQuerySchema.parse({ query: "  Ри  " })).toThrow();
   });
 
   it("accepts a client birth-profile list with one primary profile", () => {

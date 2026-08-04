@@ -1,17 +1,14 @@
-import type {
-  ChartAspect,
-  ChartPoint,
-  StoredChartNatalCalculationPayload
-} from "@elevenhouse/contracts";
+import type { ChartAspect, ChartPoint, ReproducibleChartResult } from "@elevenhouse/contracts";
 import type { ChartInterpretationDraftPromptInput } from "@elevenhouse/ai";
 import type { DictionaryEffectiveEntry } from "@elevenhouse/domain";
 
 type ChartAiContextInput = {
   readonly locale: "ru" | "en";
-  readonly result: StoredChartNatalCalculationPayload;
-  readonly resultChecksum: string;
+  readonly result: ReproducibleNatalChartResult;
   readonly dictionaryEntries: readonly DictionaryEffectiveEntry[];
 };
+
+type ReproducibleNatalChartResult = Extract<ReproducibleChartResult, { method: "natal" }>;
 
 const pointOrder = [
   "sun",
@@ -38,7 +35,7 @@ const maxGroundingEntries = 36;
 const maxGroundingContentLength = 1_600;
 
 export function getNatalChartAiDictionaryCodes(
-  result: StoredChartNatalCalculationPayload
+  result: ReproducibleNatalChartResult
 ): readonly string[] {
   const codes: string[] = [];
   const pointsById = new Map(result.result.points.map((point) => [point.id, point]));
@@ -74,7 +71,16 @@ export function getNatalChartAiDictionaryCodes(
 export function buildNatalChartAiContext(
   input: ChartAiContextInput
 ): ChartInterpretationDraftPromptInput {
-  const groundingByCode = new Map(input.dictionaryEntries.map((entry) => [entry.code, entry]));
+  const zodiac = input.result.settings.zodiac;
+  if (zodiac !== "tropical") {
+    throw new Error("Stored natal result must declare the tropical zodiac setting");
+  }
+
+  const groundingByCode = new Map(
+    input.dictionaryEntries
+      .filter((entry) => entry.source === "platform")
+      .map((entry) => [entry.code, entry])
+  );
   const orderedGrounding = getNatalChartAiDictionaryCodes(input.result)
     .map((code) => groundingByCode.get(code))
     .filter((entry): entry is DictionaryEffectiveEntry => entry !== undefined)
@@ -90,9 +96,8 @@ export function buildNatalChartAiContext(
   return {
     locale: input.locale,
     methodCode: "natal",
-    resultChecksum: input.resultChecksum,
     settings: {
-      zodiac: input.result.settings.zodiac ?? "tropical",
+      zodiac,
       houseSystem: input.result.settings.houseSystem,
       nodeType: input.result.settings.nodeType,
       aspectPreset: input.result.settings.aspectPreset,
@@ -173,7 +178,9 @@ function normalizeCodePart(value: string): string {
 
 function trimText(value: string, maxLength: number): string {
   const normalized = value.trim().replace(/\s+/g, " ");
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trim()}…` : normalized;
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength - 1).trim()}…`
+    : normalized;
 }
 
 function round(value: number): number {

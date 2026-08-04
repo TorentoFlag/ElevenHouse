@@ -41,7 +41,8 @@ export type AiGenerationMetadata = {
 export type AiGenerationResult<TOutput> = {
   readonly output: TOutput;
   readonly provider: AiProviderName;
-  readonly model: AiModel;
+  /** Exact model identifier observed in the provider response, not the requested alias. */
+  readonly model: string;
   readonly finishReason: AiGenerationFinishReason;
   readonly usage?: AiGenerationUsage;
 };

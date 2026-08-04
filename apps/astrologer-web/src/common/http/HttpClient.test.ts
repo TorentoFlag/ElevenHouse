@@ -69,6 +69,25 @@ describe("HttpClient", () => {
     });
   });
 
+  it("parses vendor media types with the structured JSON suffix", async () => {
+    const http = new HttpClient({
+      basePath: "/api",
+      fetcher: vi.fn(
+        async () =>
+          new Response(JSON.stringify({ schemaVersion: "flow-definition-validation.v2" }), {
+            headers: {
+              "content-type":
+                "application/vnd.elevenhouse.flow-definition-validation.v2+json; charset=utf-8"
+            }
+          })
+      )
+    });
+
+    await expect(http.get("/flows/flow-1/validate")).resolves.toEqual({
+      schemaVersion: "flow-definition-validation.v2"
+    });
+  });
+
   it("forwards explicit cache mode for polling requests", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ status: "calculating" }));
     const http = new HttpClient({
@@ -215,20 +234,17 @@ describe("HttpClient", () => {
       { csrf: true }
     );
 
-    expect(fetcher).toHaveBeenCalledWith(
-      "/api/flows/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f/draft",
-      {
-        method: "PATCH",
-        credentials: "include",
-        headers: {
-          "content-type": "application/json",
-          "x-csrf-token": "signed-token"
-        },
-        body: JSON.stringify({
-          name: "Новая воронка"
-        })
-      }
-    );
+    expect(fetcher).toHaveBeenCalledWith("/api/flows/a2fb1fef-dc5c-44ec-ae36-060f455c8f0f/draft", {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": "signed-token"
+      },
+      body: JSON.stringify({
+        name: "Новая воронка"
+      })
+    });
   });
 
   it("does not add a CSRF header to unprotected requests", async () => {

@@ -30,6 +30,7 @@ type OpenAiRuntimeConfig = {
 };
 
 type OpenAiResponseBody = {
+  readonly model?: unknown;
   readonly output_text?: unknown;
   readonly output?: readonly {
     readonly content?: readonly {
@@ -110,8 +111,7 @@ export class OpenAiProvider implements AiGenerationPort {
           },
           tools: undefined
         }),
-        responseSchema: input.responseSchema,
-        model
+        responseSchema: input.responseSchema
       });
     } catch (error) {
       if (isTimeoutError(error)) {
@@ -152,12 +152,10 @@ function createReasoning(
 
 function parseOpenAiResponse<TOutput>({
   body,
-  responseSchema,
-  model
+  responseSchema
 }: {
   readonly body: unknown;
   readonly responseSchema: ZodType<TOutput>;
-  readonly model: AiModel;
 }): AiGenerationResult<TOutput> {
   const openAiBody = readOpenAiBody(body);
 
@@ -186,11 +184,12 @@ function parseOpenAiResponse<TOutput>({
   }
 
   const usage = parseUsage(openAiBody.usage);
+  const observedModel = readObservedModel(openAiBody.model);
 
   return {
     output: parsedOutput.data,
     provider: "openai",
-    model,
+    model: observedModel,
     finishReason: "completed",
     ...(usage ? { usage } : {})
   };
@@ -215,12 +214,25 @@ function readOpenAiBody(body: unknown): OpenAiResponseBody {
   }
 
   return {
+    model: body.model,
     output_text: body.output_text,
     output: body.output as OpenAiResponseBody["output"],
     status: body.status,
     incomplete_details: incompleteDetails as OpenAiResponseBody["incomplete_details"],
     usage: body.usage as OpenAiResponseBody["usage"]
   };
+}
+
+function readObservedModel(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value !== value.trim() ||
+    value.length === 0 ||
+    value.length > 160
+  ) {
+    throw new AiProviderResponseFormatError("OpenAI response model provenance was invalid");
+  }
+  return value;
 }
 
 function hasRefusal(body: OpenAiResponseBody): boolean {

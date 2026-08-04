@@ -6,8 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../../../common/http/HttpError";
 import type {
   CalculationInterpretationResponse,
+  ChartInterpretationMode,
   ChartRenderResult,
   ChartSettings,
+  ClientBirthPlaceCandidate,
   DictionaryEntriesResponse,
   StoredChartAstrocartographyCalculationPayload,
   StoredChartCalculationPayload,
@@ -19,6 +21,7 @@ import type {
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
+import type { ChartEngineMode } from "../model/chartEngineMode";
 import { ChartEnginePage, type ChartEnginePageProps } from "./ChartEnginePage";
 
 const client = {
@@ -109,6 +112,39 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: /рассчитать/i }));
 
     expect(onCreateNatalJob).toHaveBeenCalledOnce();
+  });
+
+  it("operates the overflow mode menu with roving keyboard focus and returns focus on Escape", async () => {
+    const user = userEvent.setup();
+    renderChartEnginePage({ locale: "en" });
+
+    const trigger = screen.getByRole("button", { name: /open other chart types/i });
+    await user.click(trigger);
+
+    const progression = screen.getByRole("menuitem", { name: "Progressions" });
+    const synastry = screen.getByRole("menuitem", { name: "Synastry" });
+    const astrocartography = screen.getByRole("menuitem", { name: "Astrocartography" });
+    progression.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(synastry).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(astrocartography).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(progression).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(astrocartography).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menuitem", { name: "Progressions" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("renders an English-owned empty state without Cyrillic text or accessible attributes", () => {
+    const { container } = renderChartEnginePage({ locale: "en", selectedClient: null });
+
+    expect(screen.getByRole("heading", { name: "Chart Engine" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Choose a client" })).toBeInTheDocument();
+    expect(collectRenderedStrings(container).join(" ")).not.toMatch(/[А-Яа-яЁё]/);
   });
 
   it("renders child chart mode as natal-backed and calls natal calculation", async () => {
@@ -227,6 +263,50 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: /рассчитать транзиты/i }));
 
     expect(onCreateTransitJob).toHaveBeenCalledOnce();
+  });
+
+  it("selects and clears a repeated-hour occurrence for transit civil-time changes", async () => {
+    const user = userEvent.setup();
+    const onTransitMomentChange = vi.fn();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        locale="ru"
+        mode="transit"
+        transitMoment={{
+          date: "2026-10-25",
+          time: "02:30",
+          dstOccurrence: "second"
+        }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateTransitJob={vi.fn()}
+        onTransitMomentChange={onTransitMomentChange}
+      />
+    );
+
+    expect(screen.getByLabelText("Повторный час")).toHaveValue("second");
+    expect(
+      screen.getByText("Выберите вариант только если местное время повторялось при переводе часов.")
+    ).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Повторный час"), "first");
+    expect(onTransitMomentChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dstOccurrence: "first" })
+    );
+
+    fireEvent.change(screen.getByLabelText("Дата транзита"), {
+      target: { value: "2026-10-26" }
+    });
+    expect(onTransitMomentChange).toHaveBeenLastCalledWith({
+      date: "2026-10-26",
+      time: "02:30"
+    });
   });
 
   it("switches to synastry mode and submits the partner calculation", async () => {
@@ -471,6 +551,105 @@ describe("ChartEnginePage", () => {
     expect(onCreateHoraryJob).toHaveBeenCalledOnce();
   });
 
+  it("renders English repeated-hour copy and clears the horary occurrence on timezone change", () => {
+    const onHoraryQuestionChange = vi.fn();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        locale="en"
+        mode="horary"
+        horaryQuestion={{
+          question: "Should I accept the offer?",
+          category: "career",
+          date: "2026-10-25",
+          time: "02:30",
+          timezone: "Europe/Rome",
+          latitude: 41.9028,
+          longitude: 12.4964,
+          dstOccurrence: "first"
+        }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateHoraryJob={vi.fn()}
+        onHoraryQuestionChange={onHoraryQuestionChange}
+      />
+    );
+
+    expect(screen.getByLabelText("Repeated hour")).toHaveValue("first");
+    expect(
+      screen.getByText("Choose only when the local clock time occurred twice during a DST change.")
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Question timezone"), {
+      target: { value: "Europe/Paris" }
+    });
+    expect(onHoraryQuestionChange).toHaveBeenLastCalledWith({
+      question: "Should I accept the offer?",
+      category: "career",
+      date: "2026-10-25",
+      time: "02:30",
+      timezone: "Europe/Paris",
+      latitude: 41.9028,
+      longitude: 12.4964
+    });
+  });
+
+  it("selects a horary place from production autocomplete and keeps the opaque provider reference", async () => {
+    const user = userEvent.setup();
+    const candidate = {
+      id: "geoapify:autocomplete-request-42",
+      label: "Rome, Lazio, Italy",
+      placeName: "Rome, Italy",
+      countryCode: "IT",
+      city: "Rome",
+      region: "Lazio",
+      timezone: "Europe/Rome",
+      latitude: 41.8933,
+      longitude: 12.4829,
+      provider: "geoapify" as const,
+      providerPlaceId: "autocomplete-request-42"
+    } satisfies ClientBirthPlaceCandidate;
+    const onSearchBirthPlaces = vi.fn(async () => [candidate]);
+    const onSelectHoraryPlace = vi.fn();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        mode="horary"
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        horaryQuestion={{
+          question: "Should I accept the offer?",
+          category: "career",
+          date: "2026-08-03",
+          time: "14:30",
+          timezone: "",
+          latitude: "",
+          longitude: ""
+        }}
+        onCreateNatalJob={vi.fn()}
+        onSearchBirthPlaces={onSearchBirthPlaces}
+        onSelectHoraryPlace={onSelectHoraryPlace}
+        onSettingsChange={vi.fn()}
+      />
+    );
+
+    await user.type(screen.getByLabelText("Место вопроса"), "Rome Italy");
+    await waitFor(() => expect(onSearchBirthPlaces).toHaveBeenCalledWith("Rome Italy"));
+    await user.click(await screen.findByRole("option", { name: "Rome, Lazio, Italy" }));
+
+    expect(onSelectHoraryPlace).toHaveBeenCalledWith(candidate);
+    expect(screen.getByLabelText("Место вопроса")).toHaveValue("Rome, Italy");
+  });
+
   it("renders horary single-wheel result and keeps PDF disabled", () => {
     render(
       <ChartEnginePage
@@ -649,7 +828,12 @@ describe("ChartEnginePage", () => {
     expect(post).toHaveBeenCalledWith(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
-      { csrf: true }
+      {
+        csrf: true,
+        headers: {
+          "idempotency-key": expect.stringMatching(/^charts:ai-draft:[0-9a-f-]{36}$/u)
+        }
+      }
     );
     expect(get).toHaveBeenCalledWith(`/calculations/${calculationId}`);
     await waitFor(() =>
@@ -657,6 +841,118 @@ describe("ChartEnginePage", () => {
         "Generated draft"
       )
     );
+    const firstKey = post.mock.calls[0]?.[2]?.headers?.["idempotency-key"];
+    await user.click(screen.getByRole("button", { name: "Сгенерировать заново" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    const secondKey = post.mock.calls[1]?.[2]?.headers?.["idempotency-key"];
+    expect(firstKey).toMatch(/^charts:ai-draft:[0-9a-f-]{36}$/u);
+    expect(secondKey).toMatch(/^charts:ai-draft:[0-9a-f-]{36}$/u);
+    expect(secondKey).not.toBe(firstKey);
+  });
+
+  it.each([
+    ["transport failure", new Error("network interrupted")],
+    [
+      "unknown provider outcome",
+      new HttpError(503, {
+        code: "CHART_AI_DRAFT_OUTCOME_UNKNOWN",
+        message: "Chart AI draft provider outcome requires reconciliation"
+      })
+    ]
+  ])("reuses one AI idempotency key after %s", async (_label, firstFailure) => {
+    const user = userEvent.setup();
+    const generatedRecord = calculationRecordResponse([
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        status: "draft",
+        text: "OVERVIEW\nRecovered draft"
+      }
+    ]);
+    vi.spyOn(application.http, "get").mockResolvedValue(calculationRecordResponse([]));
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockRejectedValueOnce(firstFailure)
+      .mockResolvedValueOnce(generatedRecord);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled()
+    );
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    const firstKey = post.mock.calls[0]?.[2]?.headers?.["idempotency-key"];
+
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+    const secondKey = post.mock.calls[1]?.[2]?.headers?.["idempotency-key"];
+
+    expect(firstKey).toMatch(/^charts:ai-draft:[0-9a-f-]{36}$/u);
+    expect(secondKey).toBe(firstKey);
+  });
+
+  it("starts a new AI command after a known terminal preflight failure", async () => {
+    const user = userEvent.setup();
+    const generatedRecord = calculationRecordResponse([
+      {
+        id: "66666666-6666-4666-8666-666666666666",
+        status: "draft",
+        text: "OVERVIEW\nRecovered after consent storage recovery"
+      }
+    ]);
+    vi.spyOn(application.http, "get").mockResolvedValue(calculationRecordResponse([]));
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockRejectedValueOnce(
+        new HttpError(503, {
+          code: "CHART_AI_CONSENT_EVIDENCE_UNAVAILABLE",
+          message: "Consent evidence is temporarily unavailable"
+        })
+      )
+      .mockResolvedValueOnce(generatedRecord);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled()
+    );
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+
+    const firstKey = post.mock.calls[0]?.[2]?.headers?.["idempotency-key"];
+    const secondKey = post.mock.calls[1]?.[2]?.headers?.["idempotency-key"];
+    expect(firstKey).toMatch(/^charts:ai-draft:[0-9a-f-]{36}$/u);
+    expect(secondKey).toMatch(/^charts:ai-draft:[0-9a-f-]{36}$/u);
+    expect(secondKey).not.toBe(firstKey);
   });
 
   it("keeps chart AI generation disabled when the calculation record cannot be loaded", async () => {
@@ -664,7 +960,9 @@ describe("ChartEnginePage", () => {
     const get = vi
       .spyOn(application.http, "get")
       .mockRejectedValue(new Error("Calculation fetch failed"));
-    const post = vi.spyOn(application.http, "post").mockResolvedValue(calculationRecordResponse([]));
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockResolvedValue(calculationRecordResponse([]));
 
     render(
       <ChartEnginePage
@@ -727,7 +1025,12 @@ describe("ChartEnginePage", () => {
     expect(post).toHaveBeenCalledWith(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
-      { csrf: true }
+      {
+        csrf: true,
+        headers: {
+          "idempotency-key": expect.stringMatching(/^charts:ai-draft:[0-9a-f-]{36}$/u)
+        }
+      }
     );
     expect(get).toHaveBeenCalledWith(`/calculations/${calculationId}`);
   });
@@ -1344,6 +1647,7 @@ describe("ChartEnginePage", () => {
       <ChartEnginePage
         selectedClient={client}
         mode="child_chart"
+        interpretationMode="child"
         jobState="succeeded"
         result={chartResult({
           points: [
@@ -1395,6 +1699,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.queryByText("Детская карта рассчитана")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "AI" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
 
@@ -1422,6 +1727,82 @@ describe("ChartEnginePage", () => {
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=child.sun.cancer%2Cchild.sun.house.11%2Cchild.moon.aries%2Cchild.moon.house.8%2Cchild.pluto.scorpio%2Cchild.pluto.house.7%2Cchild.house.1%2Cchild.house.7%2Cchild.aspect.sun.square.moon%2Cchild.aspect.moon.trine.pluto"
     );
+  });
+
+  it("closes an active AI surface when the persisted calculation switches to child mode", async () => {
+    const user = userEvent.setup();
+    const page = ({
+      canRequestAi,
+      interpretationMode,
+      mode
+    }: {
+      canRequestAi: boolean;
+      interpretationMode: ChartInterpretationMode;
+      mode: ChartEngineMode;
+    }) => (
+      <ChartEnginePage
+        selectedClient={client}
+        calculationId={null}
+        canRequestAi={canRequestAi}
+        mode={mode}
+        interpretationMode={interpretationMode}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+    const { rerender } = render(
+      page({ canRequestAi: true, interpretationMode: "adult_natal", mode: "natal" })
+    );
+
+    await user.click(screen.getByRole("button", { name: "AI" }));
+    expect(screen.getByRole("heading", { name: "Черновик трактовки" })).toBeInTheDocument();
+
+    rerender(page({ canRequestAi: false, interpretationMode: "child", mode: "child_chart" }));
+
+    expect(screen.queryByRole("button", { name: "AI" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Черновик трактовки" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Трактовки" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("derives Dictionary copy from persisted adult authority instead of child URL state", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(application.http, "get").mockResolvedValue({
+      entries: [],
+      total: 0,
+      counts: { sources: { all: 0, platform: 0, modified: 0, custom: 0 } }
+    } satisfies DictionaryEntriesResponse);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        mode="child_chart"
+        interpretationMode="adult_natal"
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    expect(
+      within(interpretationsPanel).getByText("Опорные положения · библиотека")
+    ).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).queryByText("Детские трактовки · библиотека")
+    ).not.toBeInTheDocument();
   });
 
   it("syncs planet hover between the wheel, detail card and right panel", async () => {
@@ -1740,6 +2121,43 @@ describe("ChartEnginePage", () => {
     });
   });
 
+  it("edits a complete client birth occurrence and clears it when the timezone changes", async () => {
+    const user = userEvent.setup();
+    const onSaveBirthData = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        locale="ru"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={onSaveBirthData}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Данные рождения" }));
+    await user.selectOptions(screen.getByLabelText("Повторный час"), "second");
+    await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
+    expect(onSaveBirthData).toHaveBeenLastCalledWith(
+      expect.objectContaining({ birthTimeDstOccurrence: "second" })
+    );
+
+    await user.click(screen.getByText(/ввести координаты вручную/i));
+    await user.clear(screen.getByLabelText("Часовой пояс"));
+    await user.type(screen.getByLabelText("Часовой пояс"), "Europe/Paris");
+    await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
+    expect(onSaveBirthData).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        birthTimezone: "Europe/Paris",
+        birthTimeDstOccurrence: null
+      })
+    );
+  });
+
   it("fills timezone and coordinates from debounced birth-place autocomplete", async () => {
     const user = userEvent.setup();
     const onSaveBirthData = vi.fn(async () => undefined);
@@ -1754,7 +2172,7 @@ describe("ChartEnginePage", () => {
         timezone: "Europe/Rome",
         latitude: 41.8933,
         longitude: 12.4829,
-        provider: "nominatim" as const,
+        provider: "geoapify" as const,
         providerPlaceId: "41485"
       }
     ]);
@@ -1822,6 +2240,181 @@ describe("ChartEnginePage", () => {
         birthLongitude: 12.4829
       })
     );
+  });
+
+  it("isolates an unsaved birth-data draft when the selected client changes", async () => {
+    const user = userEvent.setup();
+    const clientWithoutBirthData = { ...client, birthData: null } satisfies ClientSelectOption;
+    const otherClientWithoutCompleteBirthData = {
+      ...partnerClient,
+      birthData: {
+        ...partnerClient.birthData,
+        birthDate: null,
+        birthPlaceText: "Берлин, Германия",
+        birthCountryCode: "DE",
+        birthCity: "Берлин",
+        birthRegion: null,
+        birthTimezone: null,
+        birthLatitude: null,
+        birthLongitude: null
+      }
+    } satisfies ClientSelectOption;
+    const page = (selectedClient: ClientSelectOption) => (
+      <ChartEnginePage
+        selectedClient={selectedClient}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={vi.fn()}
+      />
+    );
+    const { rerender } = render(page(clientWithoutBirthData));
+
+    await user.type(screen.getByLabelText(/место рождения/i), "Rome Italy");
+    expect(screen.getByLabelText(/место рождения/i)).toHaveValue("Rome Italy");
+
+    rerender(page(otherClientWithoutCompleteBirthData));
+    expect(screen.getByLabelText(/место рождения/i)).toHaveValue("Берлин, Германия");
+
+    rerender(page(clientWithoutBirthData));
+    expect(screen.getByLabelText(/место рождения/i)).toHaveValue("");
+  });
+
+  it("discards an in-flight birth-place search when the selected client changes", async () => {
+    const user = userEvent.setup();
+    const searchResult = deferred<readonly ClientBirthPlaceCandidate[]>();
+    const onSearchBirthPlaces = vi.fn(() => searchResult.promise);
+    const clientWithoutBirthData = { ...client, birthData: null } satisfies ClientSelectOption;
+    const otherClientWithoutCompleteBirthData = {
+      ...partnerClient,
+      birthData: {
+        ...partnerClient.birthData,
+        birthDate: null,
+        birthPlaceText: "Берлин, Германия",
+        birthCountryCode: "DE",
+        birthCity: "Берлин",
+        birthRegion: null,
+        birthTimezone: null,
+        birthLatitude: null,
+        birthLongitude: null
+      }
+    } satisfies ClientSelectOption;
+    const page = (selectedClient: ClientSelectOption) => (
+      <ChartEnginePage
+        selectedClient={selectedClient}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSearchBirthPlaces={onSearchBirthPlaces}
+        onSaveBirthData={vi.fn()}
+      />
+    );
+    const { rerender } = render(page(clientWithoutBirthData));
+
+    await user.type(screen.getByLabelText(/место рождения/i), "Rome Italy");
+    await waitFor(() => expect(onSearchBirthPlaces).toHaveBeenCalledWith("Rome Italy"));
+
+    rerender(page(otherClientWithoutCompleteBirthData));
+    searchResult.resolve([
+      {
+        id: "geoapify:rome",
+        label: "Rome, Lazio, Italy",
+        placeName: "Rome, Italy",
+        countryCode: "IT",
+        city: "Rome",
+        region: "Lazio",
+        timezone: "Europe/Rome",
+        latitude: 41.8933,
+        longitude: 12.4829,
+        provider: "geoapify",
+        providerPlaceId: "rome"
+      }
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/место рождения/i)).toHaveValue("Берлин, Германия");
+      expect(screen.queryByRole("option", { name: /rome, italy/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("renders independent poll, result, saved-calculation, and link recovery actions", async () => {
+    const user = userEvent.setup();
+    const onRetryPoll = vi.fn();
+    const onRetryResult = vi.fn();
+    const onRetrySavedCalculation = vi.fn();
+    const onRetryLink = vi.fn();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="failed"
+        result={null}
+        errorMessage={null}
+        pollErrorMessage="Статус задания недоступен"
+        resultErrorMessage="Результат недоступен"
+        savedCalculationErrorMessage="Сохранённый расчёт недоступен"
+        linkErrorMessage="Привязка не выполнена"
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onRetryPoll={onRetryPoll}
+        onRetryResult={onRetryResult}
+        onRetrySavedCalculation={onRetrySavedCalculation}
+        onRetryLink={onRetryLink}
+      />
+    );
+
+    expect(screen.getByText("Статус задания недоступен")).toBeInTheDocument();
+    expect(screen.getByText("Результат недоступен")).toBeInTheDocument();
+    expect(screen.getByText("Сохранённый расчёт недоступен")).toBeInTheDocument();
+    expect(screen.getByText("Привязка не выполнена")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Повторить проверку расчёта" }));
+    await user.click(screen.getByRole("button", { name: "Повторить загрузку результата" }));
+    await user.click(
+      screen.getByRole("button", { name: "Повторить загрузку сохранённого расчёта" })
+    );
+    await user.click(screen.getByRole("button", { name: "Повторить привязку" }));
+
+    expect(onRetryPoll).toHaveBeenCalledOnce();
+    expect(onRetryResult).toHaveBeenCalledOnce();
+    expect(onRetrySavedCalculation).toHaveBeenCalledOnce();
+    expect(onRetryLink).toHaveBeenCalledOnce();
+  });
+
+  it("offers a safe navigation action when the calculation identity mismatches", async () => {
+    const user = userEvent.setup();
+    const onRecoverCalculationIdentity = vi.fn();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={null}
+        errorMessage={null}
+        identityErrorMessage="Расчёт принадлежит другим клиентам"
+        canRecoverCalculationIdentity
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onRecoverCalculationIdentity={onRecoverCalculationIdentity}
+      />
+    );
+
+    expect(screen.getByText("Расчёт принадлежит другим клиентам")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Открыть клиентов расчёта" }));
+    expect(onRecoverCalculationIdentity).toHaveBeenCalledOnce();
   });
 
   it("does not search birth places until the query has at least three characters", async () => {
@@ -2012,7 +2605,13 @@ function renderChartEnginePage(
   overrides: Partial<
     Pick<
       ChartEnginePageProps,
-      "selectedClient" | "jobState" | "result" | "errorMessage" | "isBusy" | "isResultStale"
+      | "selectedClient"
+      | "jobState"
+      | "result"
+      | "errorMessage"
+      | "isBusy"
+      | "isResultStale"
+      | "locale"
     >
   >
 ) {
@@ -2028,11 +2627,35 @@ function renderChartEnginePage(
       errorMessage={overrides.errorMessage ?? null}
       isBusy={overrides.isBusy ?? false}
       isResultStale={overrides.isResultStale ?? false}
+      locale={overrides.locale}
       settings={settings()}
       onSettingsChange={vi.fn()}
       onCreateNatalJob={vi.fn()}
     />
   );
+}
+
+function collectRenderedStrings(container: HTMLElement): string[] {
+  return [
+    container.textContent ?? "",
+    ...Array.from(container.querySelectorAll("*")).flatMap((element) =>
+      ["aria-label", "aria-description", "title", "placeholder"].flatMap((attribute) => {
+        const value = element.getAttribute(attribute);
+        return value ? [value] : [];
+      })
+    )
+  ];
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, resolve, reject };
 }
 
 function chartResult(
@@ -2076,14 +2699,13 @@ function chartResult(
   };
 }
 
-function calculationRecordResponse(
-  interpretations: readonly CalculationInterpretationResponse[]
-) {
+function calculationRecordResponse(interpretations: readonly CalculationInterpretationResponse[]) {
   return {
     id: calculationId,
     ownerUserId: "11111111-1111-4111-8111-111111111111",
     module: "chart",
     mode: "individual",
+    interpretationMode: "adult_natal",
     methodCode: "natal",
     title: "QA Natal",
     status: "calculated",

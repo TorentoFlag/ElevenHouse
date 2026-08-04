@@ -5,6 +5,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@elevenhouse/ai": fileURLToPath(new URL("./packages/ai/src/index.ts", import.meta.url)),
+      "@elevenhouse/birth-place-search": fileURLToPath(
+        new URL("./packages/birth-place-search/src/index.ts", import.meta.url)
+      ),
       "@elevenhouse/chart-engine-client": fileURLToPath(
         new URL("./packages/chart-engine-client/src/index.ts", import.meta.url)
       ),
@@ -116,6 +119,12 @@ export default defineConfig({
       ),
       "@elevenhouse/design-system/icons/Icon": fileURLToPath(
         new URL("./packages/design-system/src/icons/Icon/index.ts", import.meta.url)
+      ),
+      "@elevenhouse/domain/finance-core/reconciliation": fileURLToPath(
+        new URL("./packages/domain/src/finance-core/reconciliation.ts", import.meta.url)
+      ),
+      "@elevenhouse/domain/finance-core": fileURLToPath(
+        new URL("./packages/domain/src/finance-core/index.ts", import.meta.url)
       ),
       "@elevenhouse/domain": fileURLToPath(
         new URL("./packages/domain/src/index.ts", import.meta.url)

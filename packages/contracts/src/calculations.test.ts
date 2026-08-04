@@ -13,6 +13,7 @@ const calculationRecordResponse = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   module: "numerology",
   mode: "individual",
+  interpretationMode: null,
   methodCode: "pythagorean",
   title: "Голубев Антон, психоматрица",
   status: "calculated",
@@ -84,6 +85,21 @@ describe("calculation contracts", () => {
     expect(parsed.interpretations[0]).not.toHaveProperty("modelId");
     expect(parsed.interpretations[0]).not.toHaveProperty("promptVersion");
     expect(parsed.artifacts[0]).not.toHaveProperty("versionId");
+  });
+
+  it("exposes only authoritative persisted chart interpretation modes", () => {
+    for (const interpretationMode of ["adult_natal", "child", "legacy_unclassified"] as const) {
+      expect(
+        calculationRecordResponseSchema.parse({ ...calculationRecordResponse, interpretationMode })
+          .interpretationMode
+      ).toBe(interpretationMode);
+    }
+    expect(() =>
+      calculationRecordResponseSchema.parse({
+        ...calculationRecordResponse,
+        interpretationMode: "adult"
+      })
+    ).toThrow();
   });
 
   it("rejects internal interpretation provenance in public responses", () => {
@@ -171,6 +187,20 @@ describe("calculation contracts", () => {
       clientId: calculationRecordResponse.participants[0].clientId,
       expectedResultChecksum: calculationRecordResponse.resultChecksum
     });
+    expect(() =>
+      publishCalculationRequestSchema.parse({
+        clientId: calculationRecordResponse.participants[0].clientId,
+        expectedResultChecksum: calculationRecordResponse.resultChecksum,
+        interpretationId: calculationRecordResponse.interpretations[0]!.id
+      })
+    ).toThrow();
+    expect(() =>
+      publishCalculationRequestSchema.parse({
+        clientId: calculationRecordResponse.participants[0].clientId,
+        expectedResultChecksum: calculationRecordResponse.resultChecksum,
+        versionId: "33333333-3333-4333-8333-333333333333"
+      })
+    ).toThrow();
   });
 
   it("parses list query defaults, lists and strict calculation params", () => {
@@ -186,9 +216,9 @@ describe("calculation contracts", () => {
         total: 1
       })
     ).toMatchObject({ total: 1 });
-    expect(
-      calculationIdParamSchema.parse({ calculationId: calculationRecordResponse.id })
-    ).toEqual({ calculationId: calculationRecordResponse.id });
+    expect(calculationIdParamSchema.parse({ calculationId: calculationRecordResponse.id })).toEqual(
+      { calculationId: calculationRecordResponse.id }
+    );
     expect(() =>
       calculationIdParamSchema.parse({
         calculationId: calculationRecordResponse.id,

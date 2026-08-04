@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { calculationRecords } from "./calculation-records.schema";
 import {
   calculationInterpretationSourceValues,
@@ -40,6 +40,7 @@ export const calculationInterpretations = pgTable(
       "calculation_interpretations_approved_at_check",
       sql`${table.status} <> 'approved' or ${table.approvedAt} is not null`
     ),
+    unique("calculation_interpretations_id_record_unique").on(table.id, table.calculationId),
     index("calculation_interpretations_record_idx").on(table.calculationId)
   ]
 );

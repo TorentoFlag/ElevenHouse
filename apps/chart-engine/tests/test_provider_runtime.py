@@ -1,17 +1,21 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import active_children
+from multiprocessing import active_children, get_context
 from os import getenv
 from pathlib import Path
-from threading import Barrier, Event, Lock
 from time import monotonic, sleep
 
 import pytest
 import swisseph as swe
 from pydantic import ValidationError
 
-from chart_engine.provider_runtime import ProviderReadinessError, ProviderRuntime
+from chart_engine.provider_runtime import (
+    ProviderReadinessError,
+    ProviderReadinessUnavailableError,
+    ProviderRuntime,
+)
 from chart_engine.schemas import ChartExecutionProfile, ProviderMetadata, ProviderReadinessResponse
+from chart_engine.settings import ephemeris_data_directory, expected_ephemeris
 
 
 MOSHIER_METADATA = {
@@ -63,6 +67,15 @@ def reordered_flags_probe() -> dict:
 def hanging_probe() -> dict:
     sleep(30)
     return successful_probe()
+
+
+def slow_calculation(
+    _operation: str,
+    request: object,
+    _metadata: ProviderMetadata,
+) -> None:
+    Path(str(request)).write_text("started", encoding="utf-8")
+    sleep(0.35)
 
 
 def test_shared_readiness_fixture_parses_in_python() -> None:
@@ -125,35 +138,6 @@ def test_readiness_compares_expected_flags_without_order_sensitivity(monkeypatch
     assert set(runtime.ready().ephemerisFlags) == {"FLG_MOSEPH", "FLG_SPEED"}
 
 
-def test_provider_operations_cannot_overlap_inside_a_process() -> None:
-    runtime = ProviderRuntime()
-    start = Barrier(3)
-    state_lock = Lock()
-    active = 0
-    maximum_active = 0
-
-    def operation() -> None:
-        nonlocal active, maximum_active
-        with state_lock:
-            active += 1
-            maximum_active = max(maximum_active, active)
-        sleep(0.03)
-        with state_lock:
-            active -= 1
-
-    def worker() -> None:
-        start.wait()
-        runtime.calculate(operation)
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(worker) for _ in range(2)]
-        start.wait()
-        for future in futures:
-            future.result()
-
-    assert maximum_active == 1
-
-
 def test_readiness_executes_sentinel_and_reports_actual_profile() -> None:
     runtime = ProviderRuntime(sentinel=successful_probe)
 
@@ -201,23 +185,31 @@ def test_readiness_terminates_and_joins_a_hung_sentinel() -> None:
     assert {process.pid for process in active_children()} <= children_before
 
 
-def test_readiness_lock_contention_respects_the_same_deadline() -> None:
-    runtime = ProviderRuntime(sentinel=successful_probe, readiness_timeout_seconds=0.1)
-    operation_started = Event()
-    release_operation = Event()
-
-    def blocking_operation() -> None:
-        operation_started.set()
-        assert release_operation.wait(timeout=2)
+def test_readiness_capacity_contention_respects_the_same_deadline(tmp_path) -> None:
+    marker = tmp_path / "calculation-started"
+    runtime = ProviderRuntime(
+        sentinel=successful_probe,
+        metadata_detector=successful_probe,
+        calculation_runner=slow_calculation,
+        readiness_timeout_seconds=0.1,
+        calculation_timeout_seconds=5,
+        calculation_concurrency=1,
+        process_context=get_context("spawn"),
+    )
 
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(lambda: runtime.calculate(blocking_operation))
-        assert operation_started.wait(timeout=1)
+        future = executor.submit(runtime.calculate, "natal", str(marker))
+        deadline = monotonic() + 1
+        while not marker.exists() and monotonic() < deadline:
+            sleep(0.01)
+        assert marker.exists()
         started_at = monotonic()
-        with pytest.raises(ProviderReadinessError, match="PROVIDER_READINESS_TIMEOUT"):
+        with pytest.raises(
+            ProviderReadinessUnavailableError,
+            match="PROVIDER_READINESS_TIMEOUT",
+        ):
             runtime.ready()
         assert monotonic() - started_at < 1
-        release_operation.set()
         future.result(timeout=1)
 
 
@@ -259,6 +251,37 @@ def test_actual_swiss_backend_without_proven_data_artifacts_fails_closed(
         runtime.metadata()
 
 
+def test_actual_metadata_rejects_planet_and_moon_backend_split(monkeypatch) -> None:
+    def split_backend(_julian_day, body, _flags):
+        backend = swe.FLG_SWIEPH if body == swe.SUN else swe.FLG_MOSEPH
+        return ((0.0,) * 6, backend | swe.FLG_SPEED)
+
+    monkeypatch.setattr("chart_engine.provider_runtime.swe.calc_ut", split_backend)
+    runtime = ProviderRuntime(sentinel=successful_probe)
+
+    with pytest.raises(ProviderReadinessError, match="EPHEMERIS_BACKEND_INCONSISTENT"):
+        runtime.metadata()
+
+
+def test_actual_swiss_revision_requires_planet_and_moon_artifacts(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    (tmp_path / "sepl_18.se1").write_bytes(b"planet-data")
+    monkeypatch.setattr(
+        "chart_engine.provider_runtime._provider_ephemeris_data_path",
+        lambda: tmp_path,
+    )
+    monkeypatch.setattr(
+        "chart_engine.provider_runtime.swe.calc_ut",
+        lambda *_args: ((0.0,) * 6, swe.FLG_SWIEPH | swe.FLG_SPEED),
+    )
+    runtime = ProviderRuntime(sentinel=successful_probe)
+
+    with pytest.raises(ProviderReadinessError, match="EPHEMERIS_DATA_ARTIFACTS_INCOMPLETE"):
+        runtime.metadata()
+
+
 def test_actual_swiss_revision_is_derived_from_configured_artifact_bytes(
     monkeypatch,
     tmp_path,
@@ -287,6 +310,38 @@ def test_actual_swiss_revision_is_derived_from_configured_artifact_bytes(
     assert runtime.metadata().ephemerisDataRevision == (
         "sha256:3b536b70415998f185dcf8f3644449cf2259812307217035b2fb7aa2be7aceb0"
     )
+
+
+def test_swiss_profile_requires_an_explicit_ephemeris_data_directory(monkeypatch) -> None:
+    monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "swiss-ephemeris")
+    monkeypatch.delenv("CHART_ENGINE_EPHEMERIS_DATA_DIR", raising=False)
+
+    with pytest.raises(ValueError, match="CHART_ENGINE_EPHEMERIS_DATA_DIR_REQUIRED"):
+        ephemeris_data_directory()
+
+
+def test_production_forbids_moshier_even_when_it_is_explicit(monkeypatch) -> None:
+    monkeypatch.setenv("NODE_ENV", "production")
+    monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "moshier")
+
+    with pytest.raises(ValueError, match="CHART_ENGINE_MOSHIER_FORBIDDEN_IN_PRODUCTION"):
+        expected_ephemeris()
+
+
+def test_ephemeris_data_directory_must_be_absolute(monkeypatch) -> None:
+    monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "swiss-ephemeris")
+    monkeypatch.setenv("CHART_ENGINE_EPHEMERIS_DATA_DIR", "relative/sweph")
+
+    with pytest.raises(ValueError, match="CHART_ENGINE_EPHEMERIS_DATA_DIR_MUST_BE_ABSOLUTE"):
+        ephemeris_data_directory()
+
+
+def test_moshier_profile_forbids_an_ephemeris_data_directory(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CHART_ENGINE_EXPECTED_EPHEMERIS", "moshier")
+    monkeypatch.setenv("CHART_ENGINE_EPHEMERIS_DATA_DIR", str(tmp_path))
+
+    with pytest.raises(ValueError, match="CHART_ENGINE_EPHEMERIS_DATA_DIR_FORBIDDEN"):
+        ephemeris_data_directory()
 
 
 def test_actual_moshier_metadata_never_copies_expected_data_revision(monkeypatch) -> None:

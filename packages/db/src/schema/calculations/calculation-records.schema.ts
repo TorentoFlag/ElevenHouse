@@ -13,6 +13,7 @@ import {
 import { users } from "../identity/accounts.schema";
 import {
   calculationModeValues,
+  chartInterpretationModeValues,
   calculationModuleValues,
   calculationStatusValues,
   formatCalculationSqlValues
@@ -27,6 +28,7 @@ export const calculationRecords = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     module: text("module").notNull(),
     mode: text("mode").notNull(),
+    interpretationMode: text("interpretation_mode"),
     methodCode: text("method_code").notNull(),
     title: text("title").notNull(),
     status: text("status").notNull().default("calculated"),
@@ -48,6 +50,16 @@ export const calculationRecords = pgTable(
       sql`${table.mode} in ${sql.raw(formatCalculationSqlValues(calculationModeValues))}`
     ),
     check(
+      "calculation_records_interpretation_mode_check",
+      sql`${table.interpretationMode} is null or (
+        ${table.module} = 'chart'
+        and ${table.methodCode} = 'natal'
+        and ${table.interpretationMode} in ${sql.raw(
+          formatCalculationSqlValues(chartInterpretationModeValues)
+        )}
+      )`
+    ),
+    check(
       "calculation_records_status_check",
       sql`${table.status} in ${sql.raw(formatCalculationSqlValues(calculationStatusValues))}`
     ),
@@ -55,8 +67,14 @@ export const calculationRecords = pgTable(
       "calculation_records_request_fingerprint_check",
       sql`${table.requestFingerprint} ~ '^sha256:[a-f0-9]{64}$'`
     ),
-    check("calculation_records_input_data_object_check", sql`jsonb_typeof(${table.inputData}) = 'object'`),
-    check("calculation_records_result_data_object_check", sql`jsonb_typeof(${table.resultData}) = 'object'`),
+    check(
+      "calculation_records_input_data_object_check",
+      sql`jsonb_typeof(${table.inputData}) = 'object'`
+    ),
+    check(
+      "calculation_records_result_data_object_check",
+      sql`jsonb_typeof(${table.resultData}) = 'object'`
+    ),
     check(
       "calculation_records_result_summary_object_check",
       sql`jsonb_typeof(${table.resultSummary}) = 'object'`
@@ -66,13 +84,9 @@ export const calculationRecords = pgTable(
       sql`${table.resultChecksum} ~ '^sha256:[a-f0-9]{64}$'`
     ),
     unique("calculation_records_id_owner_unique").on(table.id, table.ownerUserId),
-    uniqueIndex("calculation_records_exact_request_unique").on(
-      table.ownerUserId,
-      table.module,
-      table.mode,
-      table.methodCode,
-      table.requestFingerprint
-    ),
+    uniqueIndex("calculation_records_exact_request_unique")
+      .on(table.ownerUserId, table.module, table.mode, table.methodCode, table.requestFingerprint)
+      .where(sql`${table.status} <> 'archived'`),
     index("calculation_records_owner_updated_id_idx").on(
       table.ownerUserId,
       table.updatedAt,

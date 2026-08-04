@@ -1,6 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
-from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel as PydanticBaseModel
@@ -35,6 +34,9 @@ CHART_ENGINE_CAPABILITIES = {
     "planetary_positions",
     "astro_calendar",
 }
+
+EPHEMERIS_MIN_DATE = date(1800, 1, 1)
+EPHEMERIS_MAX_DATE = date(2399, 12, 31)
 
 
 class ChartExecutionProfile(BaseModel):
@@ -91,6 +93,7 @@ class NatalInputSnapshot(BaseModel):
             raise ValueError("CHART_BIRTH_DATE_INVALID") from error
         if parsed.isoformat() != value:
             raise ValueError("CHART_BIRTH_DATE_INVALID")
+        _validate_ephemeris_date(parsed)
         return value
 
     @field_validator("birthTime")
@@ -153,6 +156,10 @@ class TransitSnapshot(BaseModel):
     timezone: str
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    dstOccurrence: Literal["first", "second"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @field_validator("date")
     @classmethod
@@ -175,9 +182,15 @@ class TransitSnapshot(BaseModel):
     @model_validator(mode="after")
     def validate_civil_time(self):
         try:
-            resolve_civil_time(self.date, self.time, self.timezone, None)
+            resolution = resolve_civil_time(
+                self.date,
+                self.time,
+                self.timezone,
+                self.dstOccurrence,
+            )
         except CivilTimeError as error:
             raise ValueError(str(error)) from error
+        self.dstOccurrence = resolution.occurrence
         return self
 
 
@@ -197,26 +210,6 @@ class TransitRequest(BaseModel):
         return self
 
 
-class RelationshipSnapshot(BaseModel):
-    primaryClientId: str
-    partnerClientId: str
-
-    @field_validator("primaryClientId", "partnerClientId")
-    @classmethod
-    def validate_client_id(cls, value: str) -> str:
-        try:
-            canonical_id = UUID(value)
-        except ValueError as error:
-            raise ValueError("CHART_RELATIONSHIP_CLIENT_ID_INVALID") from error
-        return str(canonical_id)
-
-    @model_validator(mode="after")
-    def validate_distinct_clients(self):
-        if self.primaryClientId == self.partnerClientId:
-            raise ValueError("CHART_RELATIONSHIP_CLIENTS_IDENTICAL")
-        return self
-
-
 class SynastryRequest(BaseModel):
     schemaVersion: Literal["chart-request.v2"]
     method: Literal["synastry"]
@@ -225,7 +218,6 @@ class SynastryRequest(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     partnerInputSnapshot: NatalInputSnapshot
-    relationshipSnapshot: RelationshipSnapshot
 
     @model_validator(mode="after")
     def validate_provider_latitudes(self):
@@ -242,7 +234,6 @@ class CompositeRequest(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     partnerInputSnapshot: NatalInputSnapshot
-    relationshipSnapshot: RelationshipSnapshot
 
     @model_validator(mode="after")
     def validate_provider_latitudes(self):
@@ -364,6 +355,10 @@ class HoraryQuestionSnapshot(BaseModel):
     timezone: str
     latitude: float = Field(ge=-90, le=90, allow_inf_nan=False)
     longitude: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    dstOccurrence: Literal["first", "second"] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @field_validator("date")
     @classmethod
@@ -386,9 +381,15 @@ class HoraryQuestionSnapshot(BaseModel):
     @model_validator(mode="after")
     def validate_civil_time(self):
         try:
-            resolve_civil_time(self.date, self.time, self.timezone, None)
+            resolution = resolve_civil_time(
+                self.date,
+                self.time,
+                self.timezone,
+                self.dstOccurrence,
+            )
         except CivilTimeError as error:
             raise ValueError(str(error)) from error
+        self.dstOccurrence = resolution.occurrence
         return self
 
 
@@ -424,6 +425,8 @@ class AstroCalendarDateRange(BaseModel):
 
     @model_validator(mode="after")
     def validate_range(self):
+        _validate_ephemeris_date(self.start)
+        _validate_ephemeris_date(self.end)
         if self.end < self.start:
             raise ValueError("Astro calendar range end cannot be before start")
         if self.end - self.start > timedelta(days=93):
@@ -441,6 +444,12 @@ class AstroCalendarClientInputSnapshot(BaseModel):
     birthTimezone: str = Field(min_length=1, max_length=100)
     birthLatitude: float = Field(ge=-90, le=90)
     birthLongitude: float = Field(ge=-180, le=180)
+
+    @field_validator("birthDate")
+    @classmethod
+    def validate_birth_date(cls, value: date) -> date:
+        _validate_ephemeris_date(value)
+        return value
 
 
 class AstroCalendarRequest(BaseModel):
@@ -854,7 +863,6 @@ class StoredChartSynastryCalculationPayload(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     partnerInputSnapshot: NatalInputSnapshot
-    relationshipSnapshot: RelationshipSnapshot
     result: ChartSynastryRenderResult
 
 
@@ -867,7 +875,6 @@ class StoredChartCompositeCalculationPayload(BaseModel):
     settings: NatalSettings
     inputSnapshot: NatalInputSnapshot
     partnerInputSnapshot: NatalInputSnapshot
-    relationshipSnapshot: RelationshipSnapshot
     result: ChartRenderResult
 
 
@@ -960,6 +967,12 @@ def _validate_calendar_date(value: str) -> None:
         raise ValueError("CHART_DATE_INVALID") from error
     if parsed.isoformat() != value:
         raise ValueError("CHART_DATE_INVALID")
+    _validate_ephemeris_date(parsed)
+
+
+def _validate_ephemeris_date(value: date) -> None:
+    if value < EPHEMERIS_MIN_DATE or value > EPHEMERIS_MAX_DATE:
+        raise ValueError("CHART_EPHEMERIS_DATE_UNSUPPORTED")
 
 
 def _validate_clock_time(value: str) -> None:

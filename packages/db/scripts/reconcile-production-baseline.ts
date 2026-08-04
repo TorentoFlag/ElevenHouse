@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { numerologyResultSchema, type NumerologyResult } from "@elevenhouse/contracts";
 import {
   calculateNumerologyCompatibility,
@@ -8,7 +9,25 @@ import {
   type NumerologyParticipantInput
 } from "@elevenhouse/domain";
 import { Client, type QueryResultRow } from "pg";
-import { flowsIntegritySql } from "./augment-flows-baseline";
+import {
+  flowDefinitionIntegritySql,
+  flowExecutionHistoryIntegritySql,
+  flowRunEventCommandIntegritySql,
+  flowRuntimeCommandIntegritySql
+} from "./augment-flows-baseline";
+import {
+  consentAiIndeterminateUpgradeSql,
+  consentAiIntegritySql,
+  consentAiPersistenceBaselineDdl
+} from "./augment-consent-ai-baseline";
+import {
+  assertChartCalculationJobs,
+  reconcileChartCalculationJobsIfPrerequisitesExist
+} from "./chart-calculation-jobs-reconciliation";
+import {
+  assertCalculationPublicationBindings,
+  reconcileCalculationPublicationBindingsIfPrerequisitesExist
+} from "./calculation-publication-reconciliation";
 import {
   canonicalFlowColumnSignatures,
   canonicalFlowConstraints,
@@ -21,9 +40,35 @@ import {
   type CatalogDefinitionManifest
 } from "./flow-definition-schema-manifest";
 import {
+  assertFlowCapabilityManifestSafety,
+  reconcileFlowCapabilityManifestSafety
+} from "./flow-capability-manifest-safety-reconciliation";
+import {
+  absentConsentAiCatalog,
+  assertConsentAiRelationshipIdentity,
+  canonicalConsentAiCatalog,
+  formatConsentAiCatalog,
+  matchesConsentAiCatalog,
+  predecessorConsentAiCatalog,
+  previousCanonicalConsentAiCatalog,
+  readConsentAiCatalog,
+  reconcileConsentAiRelationshipIdentity
+} from "./consent-ai-schema-catalog";
+import {
+  assertFlowExecutionSafety,
+  reconcileFlowExecutionSafety
+} from "./flow-execution-safety-reconciliation";
+import {
+  assertFlowOutboxSafety,
+  reconcileFlowOutboxSafety
+} from "./flow-outbox-safety-reconciliation";
+import {
   classifyBaselineHistory,
   currentBaseline,
   flowDefinitionControlBaselineDdl,
+  flowExecutionRuntimeBaselineDdl,
+  flowRunCancellationBaselineDdl,
+  flowRuntimeFoundationBaselineDdl,
   schedulingBaselineDdl,
   type MigrationLedgerRow
 } from "./production-baseline-plan";
@@ -77,15 +122,85 @@ async function main(): Promise<void> {
         );
       }
       if (history === "current") {
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
-        console.log("Current production baseline is already recorded");
+        console.log("Current production baseline is already recorded; additive safety is current");
+      } else if (history === "previous_atomic_advance") {
+        await assertFlowRuntimeCatalog(
+          previousAtomicAdvanceFlowRuntimeCatalog,
+          "approved predecessor Flows atomic-advance catalog"
+        );
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
+        await recordCurrentBaseline();
+        await assertCurrentSchemaShape();
+        await client.query("COMMIT");
+        console.log("Previous Flows atomic-advance baseline reconciled to the current baseline");
+      } else if (history === "previous_flow_safety") {
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
+        await recordCurrentBaseline();
+        await assertCurrentSchemaShape();
+        await client.query("COMMIT");
+        console.log("Previous Flow safety baseline reconciled to the current baseline");
+      } else if (history === "previous_cancellation_kernel") {
+        await assertFlowRuntimeCatalog(
+          previousCancellationFlowRuntimeCatalog,
+          "approved predecessor Flows cancellation catalog"
+        );
+        await assertFlowIntegrityFunctions(
+          flowExecutionHistoryIntegritySql,
+          1,
+          "approved predecessor Flows execution-history integrity functions"
+        );
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
+        await reconcileFlowCapabilityManifestSafety(client);
+        await assertSchemaBeforeFlowExecutionRuntime();
+        await client.query(flowRunCancellationBaselineDdl);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
+        await recordCurrentBaseline();
+        await assertCurrentSchemaShape();
+        await client.query("COMMIT");
+        console.log("Previous Flows cancellation baseline reconciled to the current baseline");
+      } else if (history === "previous_runtime_kernel") {
+        await assertFlowRuntimeCatalog(
+          predecessorFlowRuntimeCatalog,
+          "approved predecessor Flows runtime catalog"
+        );
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
+        await reconcileFlowCapabilityManifestSafety(client);
+        await assertSchemaBeforeFlowExecutionRuntime();
+        await client.query(flowExecutionRuntimeBaselineDdl);
+        await client.query(flowRunCancellationBaselineDdl);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
+        await recordCurrentBaseline();
+        await assertCurrentSchemaShape();
+        await client.query("COMMIT");
+        console.log("Previous Flows runtime baseline reconciled to the current baseline");
       } else if (history === "previous_flow_definition_control") {
-        await assertCurrentSchemaShape(previousCanonicalFlowIndexes);
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
+        await reconcileFlowCapabilityManifestSafety(client);
+        await assertSchemaBeforeFlowExecutionRuntime(previousCanonicalFlowIndexes);
+        await reconcileFlowRuntimeFoundation();
         await client.query(`
           CREATE INDEX flows_owner_definition_state_updated_idx
             ON flows (owner_user_id, definition_state, updated_at, id)
         `);
+        await client.query(flowExecutionRuntimeBaselineDdl);
+        await client.query(flowRunCancellationBaselineDdl);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -100,8 +215,14 @@ async function main(): Promise<void> {
         await client.query(schedulingBaselineDdl);
         await reconcileClientBirthDataShapeIfPresent();
         await reconcileBookingsShapeIfPresent();
-        await reconcileChartCalculationJobsIfPrerequisitesExist();
+        await reconcileChartCalculationJobsIfPrerequisitesExist(client);
+        await reconcileCalculationPublicationBindingsIfPrerequisitesExist(client);
         await reconcileFlowDefinitionControl();
+        await reconcileFlowRuntimeFoundation();
+        await client.query(flowExecutionRuntimeBaselineDdl);
+        await client.query(flowRunCancellationBaselineDdl);
+        await reconcileConsentAiPersistence();
+        await reconcileFlowSafety();
         await recordCurrentBaseline();
         await assertCurrentSchemaShape();
         await client.query("COMMIT");
@@ -457,6 +578,85 @@ function assertCanonicalObject(
 async function assertCurrentSchemaShape(
   flowIndexes: CatalogDefinitionManifest = canonicalFlowIndexes
 ): Promise<void> {
+  await assertSchemaBeforeFlowExecutionRuntime(flowIndexes);
+  await assertFlowRuntimeCatalog(currentFlowRuntimeCatalog, "current Flows runtime catalog");
+  await assertFlowIntegrityFunctions(
+    flowExecutionHistoryIntegritySql,
+    1,
+    "current Flows execution-history integrity functions"
+  );
+  await assertFlowIntegrityFunctions(
+    flowRuntimeCommandIntegritySql,
+    3,
+    "current Flows runtime-command integrity functions"
+  );
+  await assertFlowIntegrityFunctions(
+    flowRunEventCommandIntegritySql,
+    1,
+    "current Flows run-event command integrity function"
+  );
+  await assertFlowOutboxSafety(client);
+  await assertFlowExecutionSafety(client);
+  await assertConsentAiPersistence("current consent/AI persistence catalog");
+}
+
+async function reconcileFlowSafety(): Promise<void> {
+  await reconcileFlowCapabilityManifestSafety(client);
+  await reconcileFlowOutboxSafety(client);
+  await reconcileFlowExecutionSafety(client);
+}
+
+async function reconcileConsentAiPersistence(): Promise<void> {
+  const actual = await readConsentAiCatalog(client);
+  if (matchesConsentAiCatalog(actual, canonicalConsentAiCatalog)) {
+    await assertConsentAiRelationshipIdentity(client);
+    return;
+  }
+
+  if (matchesConsentAiCatalog(actual, absentConsentAiCatalog)) {
+    for (const prerequisite of ["public.client_astrologer_relationships", "public.users"]) {
+      if (!(await relationExists(prerequisite))) {
+        throw new Error(`Consent/AI persistence prerequisite is missing: ${prerequisite}`);
+      }
+    }
+    await reconcileConsentAiRelationshipIdentity(client);
+    await client.query(consentAiPersistenceBaselineDdl);
+    await assertConsentAiPersistence("reconciled consent/AI persistence catalog");
+    return;
+  }
+
+  if (matchesConsentAiCatalog(actual, previousCanonicalConsentAiCatalog)) {
+    await assertConsentAiRelationshipIdentity(client);
+    await client.query(consentAiIndeterminateUpgradeSql);
+    await assertConsentAiPersistence("upgraded indeterminate AI usage catalog");
+    return;
+  }
+
+  if (matchesConsentAiCatalog(actual, predecessorConsentAiCatalog)) {
+    await assertConsentAiRelationshipIdentity(client);
+    await client.query(consentAiIndeterminateUpgradeSql);
+    await client.query(consentAiIntegritySql);
+    await assertConsentAiPersistence("upgraded consent/AI persistence catalog");
+    return;
+  }
+
+  throw new Error(
+    `Refusing to reconcile a partial or drifted consent/AI persistence catalog: ${formatConsentAiCatalog(actual)}`
+  );
+}
+
+async function assertConsentAiPersistence(label: string): Promise<void> {
+  await assertConsentAiRelationshipIdentity(client);
+  const actual = await readConsentAiCatalog(client);
+  if (matchesConsentAiCatalog(actual, canonicalConsentAiCatalog)) return;
+  throw new Error(
+    `${label} drifted; expected=${formatConsentAiCatalog(canonicalConsentAiCatalog)} actual=${formatConsentAiCatalog(actual)}`
+  );
+}
+
+async function assertSchemaBeforeFlowExecutionRuntime(
+  flowIndexes: CatalogDefinitionManifest = canonicalFlowIndexes
+): Promise<void> {
   await assertPreSchedulingSchemaShape();
   await assertFlowDefinitionControlShape(flowIndexes);
   if (await relationExists("public.client_birth_data")) {
@@ -465,9 +665,8 @@ async function assertCurrentSchemaShape(
   if (await relationExists("public.bookings")) {
     await assertBookingsShape();
   }
-  if (await relationExists("public.chart_calculation_jobs")) {
-    await assertChartCalculationJobs();
-  }
+  await assertChartCalculationJobs(client);
+  await assertCalculationPublicationBindings(client);
   for (const relation of [
     "public.availability_schedules",
     "public.availability_weekly_periods",
@@ -537,6 +736,24 @@ async function reconcileFlowDefinitionControl(): Promise<void> {
   await client.query(flowDefinitionControlBaselineDdl);
 }
 
+async function reconcileFlowRuntimeFoundation(): Promise<void> {
+  const actual = await readFlowRuntimeCatalog();
+  if (matchesFlowRuntimeCatalog(actual, predecessorFlowRuntimeCatalog)) return;
+
+  if (matchesFlowRuntimeCatalog(actual, absentFlowRuntimeCatalog)) {
+    await client.query(flowRuntimeFoundationBaselineDdl);
+    await assertFlowRuntimeCatalog(
+      predecessorFlowRuntimeCatalog,
+      "reconciled Flows runtime foundation"
+    );
+    return;
+  }
+
+  throw new Error(
+    `Refusing to reconcile a partial or drifted Flows runtime catalog: ${formatFlowRuntimeCatalog(actual)}`
+  );
+}
+
 async function assertFlowDefinitionControlShape(
   flowIndexes: CatalogDefinitionManifest = canonicalFlowIndexes
 ): Promise<void> {
@@ -554,11 +771,17 @@ async function assertFlowDefinitionControlShape(
   await assertConstraintManifest(
     flowDefinitionRelations,
     canonicalFlowConstraints,
-    "current Flows constraints"
+    "current Flows constraints",
+    ["flow_versions_capability_manifest_schema_check"]
   );
+  await assertFlowCapabilityManifestSafety(client);
   await assertIndexManifest(flowDefinitionRelations, flowIndexes, "current Flows indexes");
   await assertTriggerManifest(canonicalFlowTriggers);
-  await assertFlowIntegrityFunctions();
+  await assertFlowIntegrityFunctions(
+    flowDefinitionIntegritySql,
+    6,
+    "current Flows definition integrity functions"
+  );
   await assertCanonicalFlowData();
 }
 
@@ -575,6 +798,281 @@ const flowDefinitionControlRelations = [
   "flow_definition_command_outcomes",
   "flow_definition_migrations"
 ] as const;
+
+const flowRuntimeRelations = [
+  "flow_runtime_events",
+  "flow_runs",
+  "flow_step_runs",
+  "flow_approvals",
+  "flow_delivery_attempts",
+  "flow_suppressions",
+  "flow_execution_tokens",
+  "flow_execution_attempts",
+  "flow_run_events",
+  "flow_runtime_commands",
+  "flow_runtime_command_outcomes"
+] as const;
+
+type FlowRuntimeCatalogFingerprint = {
+  readonly hash: string;
+  readonly relations: number;
+  readonly columns: number;
+  readonly constraints: number;
+  readonly indexes: number;
+  readonly triggers: number;
+  readonly unvalidatedConstraints: number;
+  readonly invalidIndexes: number;
+};
+
+const currentFlowRuntimeCatalog = {
+  hash: "891f9a6f20dd1114c9e1fc91e7ab697d6bd243ddb7b5598faadd10620072fc86",
+  relations: 11,
+  columns: 141,
+  constraints: 126,
+  indexes: 51,
+  triggers: 9,
+  unvalidatedConstraints: 0,
+  invalidIndexes: 0
+} as const satisfies FlowRuntimeCatalogFingerprint;
+
+const previousAtomicAdvanceFlowRuntimeCatalog = {
+  hash: "659288204c06b1a3f64cf7794ca15a3f5bc08b3b78fd78f01c31012fcf0aa5f4",
+  relations: 11,
+  columns: 139,
+  constraints: 123,
+  indexes: 50,
+  triggers: 9,
+  unvalidatedConstraints: 0,
+  invalidIndexes: 0
+} as const satisfies FlowRuntimeCatalogFingerprint;
+
+const previousCancellationFlowRuntimeCatalog = {
+  hash: "19f875366e7e5f9ff1c46b54d7e92c98dbb6f89ca32c9d0b9e053f7554166f82",
+  relations: 9,
+  columns: 113,
+  constraints: 102,
+  indexes: 42,
+  triggers: 4,
+  unvalidatedConstraints: 0,
+  invalidIndexes: 0
+} as const satisfies FlowRuntimeCatalogFingerprint;
+
+const predecessorFlowRuntimeCatalog = {
+  hash: "33fc73cbec532b9969b1a90e8e19264012a592d0e4375cdafee827bbe0827f6c",
+  relations: 6,
+  columns: 68,
+  constraints: 63,
+  indexes: 27,
+  triggers: 0,
+  unvalidatedConstraints: 0,
+  invalidIndexes: 0
+} as const satisfies FlowRuntimeCatalogFingerprint;
+
+const absentFlowRuntimeCatalog = {
+  hash: "951eae4fdab31201d23eac745115a16973cd9150de1f9512f228f1ea3da0d1e1",
+  relations: 0,
+  columns: 0,
+  constraints: 0,
+  indexes: 0,
+  triggers: 0,
+  unvalidatedConstraints: 0,
+  invalidIndexes: 0
+} as const satisfies FlowRuntimeCatalogFingerprint;
+
+async function assertFlowRuntimeCatalog(
+  expected: FlowRuntimeCatalogFingerprint,
+  label: string
+): Promise<void> {
+  const actual = await readFlowRuntimeCatalog();
+  if (matchesFlowRuntimeCatalog(actual, expected)) return;
+  throw new Error(
+    `${label} drifted; expected=${formatFlowRuntimeCatalog(expected)} actual=${formatFlowRuntimeCatalog(actual)}`
+  );
+}
+
+async function readFlowRuntimeCatalog(): Promise<FlowRuntimeCatalogFingerprint> {
+  const relations = await client.query<{
+    relation_name: string;
+    relation_kind: string;
+    persistence: string;
+    row_security: boolean;
+    force_row_security: boolean;
+    access_method: string;
+  }>(
+    `
+      SELECT relation.relname AS relation_name,
+             relation.relkind AS relation_kind,
+             relation.relpersistence AS persistence,
+             relation.relrowsecurity AS row_security,
+             relation.relforcerowsecurity AS force_row_security,
+             COALESCE(access_method.amname, '') AS access_method
+        FROM pg_class AS relation
+        JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+        LEFT JOIN pg_am AS access_method ON access_method.oid = relation.relam
+       WHERE namespace.nspname = 'public'
+         AND relation.relname = ANY($1::text[])
+    `,
+    [flowRuntimeRelations]
+  );
+  const columns = await client.query<{
+    table_name: string;
+    column_name: string;
+    udt_name: string;
+    is_nullable: string;
+    column_default: string | null;
+  }>(
+    `
+      SELECT table_name, column_name, udt_name, is_nullable, column_default
+        FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = ANY($1::text[])
+    `,
+    [flowRuntimeRelations]
+  );
+  const constraints = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+    validated: boolean;
+  }>(
+    `
+      SELECT
+            r.relname AS relation_name,
+            c.conname AS object_name,
+            pg_get_constraintdef(c.oid, false) AS definition,
+            c.convalidated AS validated
+      FROM pg_constraint c
+      JOIN pg_class r ON r.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public'
+        AND r.relname = ANY($1::text[])
+        AND c.contype <> 't'
+    `,
+    [flowRuntimeRelations]
+  );
+  const indexes = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+    valid: boolean;
+    ready: boolean;
+  }>(
+    `
+      SELECT index_catalog.tablename AS relation_name,
+             index_catalog.indexname AS object_name,
+             index_catalog.indexdef AS definition,
+             index_record.indisvalid AS valid,
+             index_record.indisready AS ready
+        FROM pg_indexes AS index_catalog
+        JOIN pg_class AS relation ON relation.relname = index_catalog.tablename
+        JOIN pg_namespace AS namespace
+          ON namespace.oid = relation.relnamespace
+         AND namespace.nspname = index_catalog.schemaname
+        JOIN pg_class AS index_relation
+          ON index_relation.relname = index_catalog.indexname
+         AND index_relation.relnamespace = namespace.oid
+        JOIN pg_index AS index_record
+          ON index_record.indexrelid = index_relation.oid
+         AND index_record.indrelid = relation.oid
+       WHERE index_catalog.schemaname = 'public'
+         AND index_catalog.tablename = ANY($1::text[])
+    `,
+    [flowRuntimeRelations]
+  );
+  const triggers = await client.query<{
+    relation_name: string;
+    object_name: string;
+    definition: string;
+    enabled: string;
+  }>(
+    `
+      SELECT
+        r.relname AS relation_name,
+        t.tgname AS object_name,
+        pg_get_triggerdef(t.oid, false) AS definition,
+        t.tgenabled AS enabled
+      FROM pg_trigger t
+      JOIN pg_class r ON r.oid = t.tgrelid
+      JOIN pg_namespace n ON n.oid = r.relnamespace
+      WHERE n.nspname = 'public'
+        AND r.relname = ANY($1::text[])
+        AND NOT t.tgisinternal
+    `,
+    [flowRuntimeRelations]
+  );
+
+  const payload = {
+    relations: relations.rows
+      .map(
+        (row) =>
+          `${row.relation_name}|kind=${row.relation_kind}|persistence=${row.persistence}|rowSecurity=${row.row_security}|forceRowSecurity=${row.force_row_security}|accessMethod=${row.access_method}`
+      )
+      .sort(),
+    columns: columns.rows
+      .map(
+        (row) =>
+          `${row.table_name}.${row.column_name}|${row.udt_name}|${row.is_nullable}|${row.column_default ?? ""}`
+      )
+      .sort(),
+    constraints: constraints.rows
+      .map(
+        (row) =>
+          `${row.relation_name}.${row.object_name}|${normalizeCatalogDefinition(
+            row.definition
+          )}|validated=${row.validated}`
+      )
+      .sort(),
+    indexes: indexes.rows
+      .map(
+        (row) =>
+          `${row.relation_name}.${row.object_name}|${normalizeCatalogDefinition(
+            row.definition
+          )}|valid=${row.valid}|ready=${row.ready}`
+      )
+      .sort(),
+    triggers: triggers.rows
+      .map(
+        (row) =>
+          `${row.relation_name}.${row.object_name}|${normalizeCatalogDefinition(row.definition)}|enabled=${row.enabled}`
+      )
+      .sort()
+  };
+
+  return {
+    hash: createHash("sha256").update(JSON.stringify(payload)).digest("hex"),
+    relations: payload.relations.length,
+    columns: payload.columns.length,
+    constraints: payload.constraints.length,
+    indexes: payload.indexes.length,
+    triggers: payload.triggers.length,
+    unvalidatedConstraints: constraints.rows.filter((row) => !row.validated).length,
+    invalidIndexes: indexes.rows.filter((row) => !row.valid || !row.ready).length
+  };
+}
+
+function matchesFlowRuntimeCatalog(
+  actual: FlowRuntimeCatalogFingerprint,
+  expected: FlowRuntimeCatalogFingerprint
+): boolean {
+  return (
+    actual.hash === expected.hash &&
+    actual.relations === expected.relations &&
+    actual.columns === expected.columns &&
+    actual.constraints === expected.constraints &&
+    actual.indexes === expected.indexes &&
+    actual.triggers === expected.triggers &&
+    actual.unvalidatedConstraints === expected.unvalidatedConstraints &&
+    actual.invalidIndexes === expected.invalidIndexes
+  );
+}
+
+function formatFlowRuntimeCatalog(value: FlowRuntimeCatalogFingerprint): string {
+  return `${value.hash}[relations=${value.relations},columns=${value.columns},constraints=${
+    value.constraints
+  },indexes=${value.indexes},triggers=${value.triggers},unvalidatedConstraints=${
+    value.unvalidatedConstraints
+  },invalidIndexes=${value.invalidIndexes}]`;
+}
 
 async function assertPredecessorFlowDefinitionShape(): Promise<void> {
   const predecessorRelations = ["flows", "flow_versions"] as const;
@@ -690,7 +1188,8 @@ async function assertColumnSignatures(
 async function assertConstraintManifest(
   relations: readonly string[],
   expected: CatalogDefinitionManifest,
-  label: string
+  label: string,
+  excludedConstraintNames: readonly string[] = []
 ): Promise<void> {
   const result = await client.query<{
     relation_name: string;
@@ -708,8 +1207,9 @@ async function assertConstraintManifest(
       WHERE n.nspname = 'public'
         AND r.relname = ANY($1::text[])
         AND c.contype <> 't'
+        AND NOT (c.conname = ANY($2::text[]))
     `,
-    [relations]
+    [relations, excludedConstraintNames]
   );
   assertDefinitionManifest(label, result.rows, expected);
 }
@@ -743,12 +1243,14 @@ async function assertTriggerManifest(expected: CatalogDefinitionManifest): Promi
     relation_name: string;
     object_name: string;
     definition: string;
+    enabled: string;
   }>(
     `
       SELECT
         r.relname AS relation_name,
         t.tgname AS object_name,
-        pg_get_triggerdef(t.oid, false) AS definition
+        pg_get_triggerdef(t.oid, false) AS definition,
+        t.tgenabled AS enabled
       FROM pg_trigger t
       JOIN pg_class r ON r.oid = t.tgrelid
       JOIN pg_namespace n ON n.oid = r.relnamespace
@@ -758,6 +1260,14 @@ async function assertTriggerManifest(expected: CatalogDefinitionManifest): Promi
     `,
     [flowDefinitionRelations]
   );
+  const disabled = result.rows.filter((row) => row.enabled !== "O");
+  if (disabled.length > 0) {
+    throw new Error(
+      `current Flows triggers drifted; disabled=${JSON.stringify(
+        disabled.map((row) => `${row.relation_name}.${row.object_name}`)
+      )}`
+    );
+  }
   assertDefinitionManifest("current Flows triggers", result.rows, expected);
 }
 
@@ -799,14 +1309,21 @@ function normalizeCatalogDefinition(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-async function assertFlowIntegrityFunctions(): Promise<void> {
-  const expectedBodies = extractFlowIntegrityFunctionBodies();
+async function assertFlowIntegrityFunctions(
+  integritySql: string,
+  expectedCount: number,
+  label: string
+): Promise<void> {
+  const expectedBodies = extractFlowIntegrityFunctionBodies(integritySql, expectedCount);
   const result = await client.query<{
     function_name: string;
     language_name: string;
     result_type: string;
+    owner_name: string;
+    current_user_name: string;
     security_definer: boolean;
     volatility: string;
+    configuration: string;
     source: string;
   }>(
     `
@@ -814,8 +1331,11 @@ async function assertFlowIntegrityFunctions(): Promise<void> {
         p.proname AS function_name,
         l.lanname AS language_name,
         pg_get_function_result(p.oid) AS result_type,
+        pg_get_userbyid(p.proowner) AS owner_name,
+        current_user AS current_user_name,
         p.prosecdef AS security_definer,
         p.provolatile AS volatility,
+        COALESCE(array_to_string(p.proconfig, E'\\n'), '') AS configuration,
         p.prosrc AS source
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -829,25 +1349,34 @@ async function assertFlowIntegrityFunctions(): Promise<void> {
 
   const actual = result.rows.map(
     (row) =>
-      `${row.function_name}|${row.language_name}|${row.result_type}|${row.security_definer}|${row.volatility}|${normalizeCatalogDefinition(row.source)}`
+      `${row.function_name}|${row.language_name}|${row.result_type}|${row.owner_name}|${row.security_definer}|${row.volatility}|${normalizeCatalogDefinition(
+        row.configuration
+      )}|${normalizeCatalogDefinition(row.source)}`
   );
+  const expectedOwner = result.rows[0]?.current_user_name ?? "";
   const expected = Object.entries(expectedBodies).map(
-    ([name, body]) => `${name}|plpgsql|trigger|false|v|${normalizeCatalogDefinition(body)}`
+    ([name, body]) =>
+      `${name}|plpgsql|trigger|${expectedOwner}|false|v||${normalizeCatalogDefinition(body)}`
   );
-  assertExactStringSet("current Flows integrity functions", actual, expected);
+  assertExactStringSet(label, actual, expected);
 }
 
-function extractFlowIntegrityFunctionBodies(): Readonly<Record<string, string>> {
+function extractFlowIntegrityFunctionBodies(
+  integritySql: string,
+  expectedCount: number
+): Readonly<Record<string, string>> {
   const bodies: Record<string, string> = {};
   const pattern =
     /CREATE OR REPLACE FUNCTION ([a-z0-9_]+)\(\)\s+RETURNS trigger\s+LANGUAGE plpgsql\s+AS \$([a-z0-9_]+)\$\n([\s\S]*?)\n\$\2\$;/g;
-  for (const match of flowsIntegritySql.matchAll(pattern)) {
+  for (const match of integritySql.matchAll(pattern)) {
     const name = match[1];
     const body = match[3];
     if (name && body) bodies[name] = body;
   }
-  if (Object.keys(bodies).length !== 6) {
-    throw new Error("Canonical Flows integrity SQL does not expose six trigger functions");
+  if (Object.keys(bodies).length !== expectedCount) {
+    throw new Error(
+      `Canonical Flows integrity SQL exposes ${Object.keys(bodies).length} trigger functions; expected ${expectedCount}`
+    );
   }
   return bodies;
 }
@@ -949,119 +1478,6 @@ async function assertCanonicalFlowData(): Promise<void> {
     result.rows[0]?.invalid_command_count !== "0"
   ) {
     throw new Error("Current production Flows data violates canonical invariants");
-  }
-}
-
-async function reconcileChartCalculationJobsIfPrerequisitesExist(): Promise<void> {
-  for (const relation of ["public.users", "public.client_profiles", "public.calculation_records"]) {
-    if (!(await relationExists(relation))) return;
-  }
-
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS chart_calculation_jobs (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-      owner_user_id uuid NOT NULL,
-      client_id uuid NOT NULL,
-      result_calculation_id uuid,
-      method text DEFAULT 'natal' NOT NULL,
-      status text DEFAULT 'queued' NOT NULL,
-      input_fingerprint text NOT NULL,
-      input_snapshot jsonb NOT NULL,
-      settings_snapshot jsonb NOT NULL,
-      provider text DEFAULT 'kerykeion' NOT NULL,
-      schema_version text DEFAULT 'chart-result.v1' NOT NULL,
-      attempts integer DEFAULT 0 NOT NULL,
-      max_attempts integer DEFAULT 3 NOT NULL,
-      locked_by text,
-      locked_until timestamp with time zone,
-      last_error_code text,
-      last_error_message text,
-      started_at timestamp with time zone,
-      finished_at timestamp with time zone,
-      created_at timestamp with time zone DEFAULT now() NOT NULL,
-      updated_at timestamp with time zone DEFAULT now() NOT NULL,
-      CONSTRAINT chart_calculation_jobs_owner_user_id_users_id_fk
-        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE cascade,
-      CONSTRAINT chart_calculation_jobs_client_id_client_profiles_user_id_fk
-        FOREIGN KEY (client_id) REFERENCES client_profiles(user_id) ON DELETE cascade,
-      CONSTRAINT chart_calculation_jobs_result_calculation_id_calculation_records_id_fk
-        FOREIGN KEY (result_calculation_id) REFERENCES calculation_records(id) ON DELETE set null,
-      CONSTRAINT chart_calculation_jobs_method_check CHECK (
-        method in ('natal', 'transit', 'synastry', 'composite', 'solar_return', 'progression')
-      ),
-      CONSTRAINT chart_calculation_jobs_status_check CHECK (
-        status in ('queued', 'processing', 'succeeded', 'failed')
-      ),
-      CONSTRAINT chart_calculation_jobs_provider_check CHECK (provider in ('kerykeion')),
-      CONSTRAINT chart_calculation_jobs_schema_version_check CHECK (
-        schema_version in ('chart-result.v1')
-      ),
-      CONSTRAINT chart_calculation_jobs_input_fingerprint_check CHECK (
-        input_fingerprint ~ '^sha256:[a-f0-9]{64}$'
-      ),
-      CONSTRAINT chart_calculation_jobs_input_snapshot_object_check CHECK (
-        jsonb_typeof(input_snapshot) = 'object'
-      ),
-      CONSTRAINT chart_calculation_jobs_settings_snapshot_object_check CHECK (
-        jsonb_typeof(settings_snapshot) = 'object'
-      ),
-      CONSTRAINT chart_calculation_jobs_attempts_check CHECK (attempts >= 0),
-      CONSTRAINT chart_calculation_jobs_max_attempts_check CHECK (max_attempts > 0)
-    );
-
-    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_owner_idx
-      ON chart_calculation_jobs USING btree (owner_user_id);
-    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_client_idx
-      ON chart_calculation_jobs USING btree (client_id);
-    CREATE INDEX IF NOT EXISTS chart_calculation_jobs_status_updated_idx
-      ON chart_calculation_jobs USING btree (status, updated_at);
-    CREATE UNIQUE INDEX IF NOT EXISTS chart_calculation_jobs_active_fingerprint_unique
-      ON chart_calculation_jobs USING btree (owner_user_id, input_fingerprint)
-      WHERE status in ('queued', 'processing');
-    CREATE UNIQUE INDEX IF NOT EXISTS chart_calculation_jobs_success_fingerprint_unique
-      ON chart_calculation_jobs USING btree (owner_user_id, input_fingerprint)
-      WHERE status = 'succeeded';
-  `);
-}
-
-async function assertChartCalculationJobs(): Promise<void> {
-  const result = await client.query<{
-    relation_count: string;
-    active_unique_count: string;
-    success_unique_count: string;
-  }>(`
-    SELECT
-      (SELECT count(*)::text
-         FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'chart_calculation_jobs'
-          AND column_name in (
-            'id',
-            'owner_user_id',
-            'client_id',
-            'result_calculation_id',
-            'input_fingerprint',
-            'input_snapshot',
-            'settings_snapshot',
-            'status'
-          )) AS relation_count,
-      (SELECT count(*)::text
-         FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND tablename = 'chart_calculation_jobs'
-          AND indexname = 'chart_calculation_jobs_active_fingerprint_unique') AS active_unique_count,
-      (SELECT count(*)::text
-         FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND tablename = 'chart_calculation_jobs'
-          AND indexname = 'chart_calculation_jobs_success_fingerprint_unique') AS success_unique_count
-  `);
-  if (
-    result.rows[0]?.relation_count !== "8" ||
-    result.rows[0]?.active_unique_count !== "1" ||
-    result.rows[0]?.success_unique_count !== "1"
-  ) {
-    throw new Error("Current production schema is missing chart calculation jobs shape");
   }
 }
 
@@ -1323,6 +1739,31 @@ const legacyToCurrentDdl = `
     DROP COLUMN version_id,
     ADD CONSTRAINT calculation_artifacts_id_calculation_unique UNIQUE (id, calculation_id);
   DROP TABLE calculation_versions;
+
+  CREATE TABLE calculation_client_links (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    calculation_id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    visibility text DEFAULT 'private_to_astrologer' NOT NULL,
+    linked_at timestamptz NOT NULL,
+    published_at timestamptz,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT calculation_client_links_visibility_check CHECK (
+      visibility IN ('private_to_astrologer', 'visible_to_client')
+    ),
+    CONSTRAINT calculation_client_links_published_at_check CHECK (
+      visibility <> 'visible_to_client' OR published_at IS NOT NULL
+    ),
+    CONSTRAINT calculation_client_links_calculation_id_calculation_records_id_fk
+      FOREIGN KEY (calculation_id) REFERENCES calculation_records(id) ON DELETE CASCADE
+  );
+  CREATE INDEX calculation_client_links_record_idx
+    ON calculation_client_links (calculation_id);
+  CREATE INDEX calculation_client_links_client_idx
+    ON calculation_client_links (client_id);
+  CREATE UNIQUE INDEX calculation_client_links_record_client_unique
+    ON calculation_client_links (calculation_id, client_id);
 
   ALTER TABLE media_assets
     DROP CONSTRAINT media_assets_purpose_check,

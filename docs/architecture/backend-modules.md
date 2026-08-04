@@ -49,6 +49,7 @@ export class AppModule {}
 
 - `booking`
 - `client-join`
+- `client-consents`
 - `client-profile`
 - `database`
 - `health`
@@ -59,9 +60,15 @@ export class AppModule {}
 - `security`
 
 `client-join` создаёт direct-link join intent по public handle и связывает его
-с client registration/login flow. `client-profile` отдаёт только связанные с
+с client registration/login flow. `client-consents` владеет owner-scoped
+grant/revoke/read surface для versioned chart-AI consent evidence; policy,
+processor identity, canonical notice hash and immutable first revocation are
+server-owned and persisted. `client-profile` отдаёт только связанные с
 клиентом профили астрологов, cabinet overview и owner-scoped primary-compatible
-multi birth profiles; это foundation client cabinet, не discovery API.
+multi birth profiles. Он также предоставляет authenticated client-only поиск
+места рождения через общий Geoapify/Redis provider contour; этот поиск
+географических данных не является поиском или discovery астрологов. Это
+foundation client cabinet, не discovery API.
 `booking`, `orders` and `payments` now provide the first direct-link command
 contour for booking intent, order creation and checkout initiation. Full public
 product/profile reads, slot-selection UI integration, materials, feed,
@@ -243,7 +250,36 @@ credentials or message bodies.
 
 ### Chart Engine
 
-`astrologer-api` owns chart request authorization, CSRF route metadata, CRM birth-data hydration, calculation-ready validation and job creation. `chart-worker` owns BullMQ delivery, leases, retries and result persistence. `apps/chart-engine` is a private Python/FastAPI runtime that wraps Kerykeion, returns ElevenHouse canonical chart JSON and exposes `/live` and `/ready` probes. Controllers do not enqueue BullMQ jobs directly; API transactions write an outbox event and the relay publishes `{ jobId }`.
+`astrologer-api` owns chart request authorization, CSRF route metadata, CRM
+birth-data hydration, calculation-ready validation and job creation.
+`chart-worker` owns BullMQ delivery, durable attempts, leases, fencing, recovery
+and result persistence. `apps/chart-engine` is a private Python/FastAPI runtime
+that wraps Kerykeion, returns ElevenHouse canonical chart JSON and exposes
+`/live` and `/ready` probes. Controllers do not enqueue BullMQ jobs directly;
+API transactions write an outbox event and the relay publishes `{ jobId }`.
+
+The Chart Engine observability contract is structured and data-minimized:
+
+- `astrologer-api` emits one `chart_job_command_completed` record for every
+  successful create/recalculate command. It contains method, duration and
+  either `active_job` plus `jobId` or `reused_result` plus `calculationId`;
+- `chart-worker` emits one terminal processing record with method, duration,
+  durable attempt, retry state and the exact lease generation/expiry when a
+  claim exists. Lease loss, unconfirmed heartbeat and completion/failure fence
+  rejection are distinct outcomes;
+- bounded queue telemetry reads four counts and at most one oldest waiting and
+  delayed job. It emits depths and ages, never queue payloads;
+- recovery emits only duration and `requeued`, `failed` and `rearmed` counts;
+- every Python provider operation and readiness probe emits deterministic JSON
+  with operation, duration, bounded result code and proven provider versions,
+  backend and data revision on success.
+
+These records must never contain birth snapshots, civil dates/times/timezones,
+place text, coordinates, horary questions/categories, prompts, interpretation
+text, chart payload/result, Redis/PostgreSQL credentials, exception messages or
+stacks. Unexpected diagnostics are reduced to a fixed known error code. A
+collection failure is observable as failure; it is never replaced by zero
+depths or another synthesized success value.
 
 `apps/workers` owns the `calculation.pdf` BullMQ queue and the outbox relay for
 render/delete jobs. Queue payloads contain identifiers only. The worker reloads

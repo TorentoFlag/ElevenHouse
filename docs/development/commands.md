@@ -4,18 +4,21 @@
 предусловия. Он описывает способ запуска, но не расширяет полномочия агента:
 правила управления процессами и разрушительных действий остаются в `AGENTS.md`.
 
-| Purpose                           | Command                                                                                                                                                                                                                                | Preconditions / authority                                                                                    |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Full verification                 | `pnpm verify`                                                                                                                                                                                                                          | No service startup; shared-layer completion gate                                                             |
-| Agent documentation verification  | `pnpm docs:check`                                                                                                                                                                                                                      | Read-only; validates canonical docs, repo skills, links and known contradictions                             |
-| Agent documentation checker tests | `pnpm docs:check:test`                                                                                                                                                                                                                 | Read-only; deterministic Node test fixtures, no services                                                     |
-| Numerology domain tests           | `pnpm test packages/domain/src/numerology`                                                                                                                                                                                             | No long-running process                                                                                      |
-| Calculation integration tests     | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts` | Load root `.env` first; both URLs must point to existing local PostgreSQL                                    |
-| Domain typecheck                  | `pnpm --filter @elevenhouse/domain typecheck`                                                                                                                                                                                          | No long-running process                                                                                      |
-| Domain build                      | `pnpm --filter @elevenhouse/domain build`                                                                                                                                                                                              | No long-running process                                                                                      |
-| Generate migration                | `pnpm db:generate`                                                                                                                                                                                                                     | Rebuild current baseline after schema changes                                                                |
-| Reconcile deployed baseline       | `pnpm --filter @elevenhouse/db db:reconcile-production-baseline`                                                                                                                                                                       | Deploy maintenance step only; requires an approved known ledger and production backup                        |
-| Reset local DB                    | `pnpm db:reset`                                                                                                                                                                                                                        | Explicitly required task; local DB only; destructive; `DATABASE_URL` must identify the active ElevenHouse DB |
+| Purpose                           | Command                                                                                                                                                                                                                                                 | Preconditions / authority                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Full verification                 | `pnpm verify`                                                                                                                                                                                                                                           | No service startup; shared-layer completion gate                                                             |
+| Agent documentation verification  | `pnpm docs:check`                                                                                                                                                                                                                                       | Read-only; validates canonical docs, repo skills, links and known contradictions                             |
+| Agent documentation checker tests | `pnpm docs:check:test`                                                                                                                                                                                                                                  | Read-only; deterministic Node test fixtures, no services                                                     |
+| Numerology domain tests           | `pnpm test packages/domain/src/numerology`                                                                                                                                                                                                              | No long-running process                                                                                      |
+| Calculation integration tests     | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts`                  | Load root `.env` first; both URLs must point to existing local PostgreSQL                                    |
+| Chart Engine Python tests         | `(cd apps/chart-engine && .venv/bin/python -m pytest -q)`                                                                                                                                                                                               | Existing project virtualenv; no service startup                                                              |
+| Chart worker focused tests        | `pnpm exec vitest run apps/chart-worker/src/chart-queue-telemetry.test.ts apps/chart-worker/src/chart-jobs.processor.test.ts apps/chart-worker/src/chart-worker-runtime.test.ts apps/chart-worker/src/runtime-config.test.ts --config vitest.config.ts` | No service startup                                                                                           |
+| Chart worker typecheck/build      | `pnpm --filter @elevenhouse/chart-worker typecheck && pnpm --filter @elevenhouse/chart-worker build`                                                                                                                                                    | No service startup                                                                                           |
+| Domain typecheck                  | `pnpm --filter @elevenhouse/domain typecheck`                                                                                                                                                                                                           | No long-running process                                                                                      |
+| Domain build                      | `pnpm --filter @elevenhouse/domain build`                                                                                                                                                                                                               | No long-running process                                                                                      |
+| Generate migration                | `pnpm db:generate`                                                                                                                                                                                                                                      | Rebuild current baseline after schema changes                                                                |
+| Reconcile deployed baseline       | `pnpm --filter @elevenhouse/db db:reconcile-production-baseline`                                                                                                                                                                                        | Deploy maintenance step only; requires an approved known ledger and production backup                        |
+| Reset local DB                    | `pnpm db:reset`                                                                                                                                                                                                                                         | Explicitly required task; local DB only; destructive; `DATABASE_URL` must identify the active ElevenHouse DB |
 
 ## Runnable now
 
@@ -43,6 +46,47 @@ pnpm docs:check
 
 Первый проверяет сам verifier на изолированных fixtures. Второй проверяет
 фактическое состояние репозитория и ничего не изменяет.
+
+### Chart Engine verification, runtime and logs
+
+Focused verification does not start a service:
+
+```bash
+(cd apps/chart-engine && .venv/bin/python -m pytest -q)
+pnpm exec vitest run \
+  apps/chart-worker/src/chart-queue-telemetry.test.ts \
+  apps/chart-worker/src/chart-jobs.processor.test.ts \
+  apps/chart-worker/src/chart-worker-runtime.test.ts \
+  apps/chart-worker/src/runtime-config.test.ts \
+  --config vitest.config.ts
+pnpm --filter @elevenhouse/chart-worker typecheck
+pnpm --filter @elevenhouse/chart-worker build
+pnpm --filter @elevenhouse/astrologer-api typecheck
+```
+
+When process-management authority is explicit and the required ports are free,
+the local services use the checked-in runtimes and fixed ports:
+
+```bash
+(cd apps/chart-engine && PYTHONPATH=src .venv/bin/uvicorn chart_engine.main:app --host 127.0.0.1 --port 8012)
+pnpm --filter @elevenhouse/chart-worker dev
+```
+
+Both runtimes write structured records to stdout. For an already-running
+production Compose project, the read-only inspection command is:
+
+```bash
+docker compose -f deployment/compose/compose.production.yml logs --no-color chart-worker chart-engine \
+  | rg 'chart calculation|chart_provider_'
+```
+
+Expected operational records include `chart_job_command_completed`,
+`chart calculation job processed`, `chart calculation recovery completed`,
+`chart calculation queue telemetry`, `chart_provider_operation` and
+`chart_provider_readiness`. Do not broaden logging to birth input, place,
+coordinates, questions, prompts, result payloads or raw exception diagnostics.
+Production requires a positive explicit `CHART_WORKER_TELEMETRY_INTERVAL_MS`;
+there is no production fallback to a default metric value or Moshier provider.
 
 ## Requires existing infrastructure
 
@@ -79,6 +123,12 @@ Production deploy запускает `db-baseline-reconciler` после backup 
 `db-migrator`. Reconciler допускает только fresh DB, текущий baseline или
 зафиксированную approved legacy history; любое другое состояние завершает
 deploy без частичного DDL благодаря одной PostgreSQL transaction.
+
+Одноразовый pre-launch reset из ADR 0012 — отдельная maintenance-процедура, а
+не режим этой команды и не запуск локального `pnpm db:reset` против production.
+Её exact-target preflight/reset/baseline команда появится здесь только вместе с
+реализацией и disposable-clone rehearsal; до этого документация не предлагает
+исполняемый destructive production shorthand.
 
 ## Process management
 

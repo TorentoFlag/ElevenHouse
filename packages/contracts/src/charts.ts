@@ -1,7 +1,10 @@
 import { z } from "@elevenhouse/validation";
-import { sha256DigestSchema } from "./calculations";
+import { chartInterpretationModeSchema, sha256DigestSchema } from "./calculations";
 
-const uuidSchema = z.string().uuid();
+const legacyUuidSchema = z.string().uuid();
+const uuidSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 
 const chartJsonRecordSchema = z.record(z.string(), z.unknown());
 
@@ -27,32 +30,51 @@ export const chartMethodVersions = {
 export type ChartCalculationMethod = keyof typeof chartMethodVersions;
 export type ChartMethodVersion = (typeof chartMethodVersions)[ChartCalculationMethod];
 
-const chartDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).superRefine((value, context) => {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year!, month! - 1, day!));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month! - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid calendar date" });
-  }
-});
+const chartDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .superRefine((value, context) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year!, month! - 1, day!));
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month! - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid calendar date" });
+    }
+    if (year! < 1800 || year! > 2399) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CHART_EPHEMERIS_DATE_UNSUPPORTED"
+      });
+    }
+  });
 
-const chartTimeSchema = z.string().regex(/^\d{2}:\d{2}$/).superRefine((value, context) => {
-  const [hours, minutes] = value.split(":").map(Number);
-  if (hours! > 23 || minutes! > 59) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid clock time" });
-  }
-});
+const chartTimeSchema = z
+  .string()
+  .regex(/^\d{2}:\d{2}$/)
+  .superRefine((value, context) => {
+    const [hours, minutes] = value.split(":").map(Number);
+    if (hours! > 23 || minutes! > 59) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid clock time" });
+    }
+  });
 
-const chartIanaTimeZoneSchema = z.string().trim().min(1).max(100).superRefine((value, context) => {
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: value });
-  } catch {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid IANA time zone" });
-  }
-});
+const chartDstOccurrenceSchema = z.enum(["first", "second"]);
+
+const chartIanaTimeZoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .superRefine((value, context) => {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: value });
+    } catch {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid IANA time zone" });
+    }
+  });
 
 export const chartExecutionProfileSchema = z
   .object({
@@ -79,7 +101,10 @@ export const chartExecutionProfileSchema = z
         message: "Moshier profiles must not declare ephemeris data revision"
       });
     }
-    if (value.expectedEphemeris === "swiss-ephemeris" && value.expectedEphemerisDataRevision === null) {
+    if (
+      value.expectedEphemeris === "swiss-ephemeris" &&
+      value.expectedEphemerisDataRevision === null
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["expectedEphemerisDataRevision"],
@@ -100,9 +125,18 @@ export const chartSettingsSchema = z
   .strict();
 export type ChartSettings = z.infer<typeof chartSettingsSchema>;
 
+export const chartRecalculateRequestSchema = z
+  .object({
+    expectedResultChecksum: sha256DigestSchema,
+    settings: chartSettingsSchema.optional()
+  })
+  .strict();
+export type ChartRecalculateRequest = z.infer<typeof chartRecalculateRequestSchema>;
+
 export const chartNatalJobCreateRequestSchema = z
   .object({
     clientId: uuidSchema,
+    interpretationMode: z.enum(["adult_natal", "child"]),
     settings: chartSettingsSchema
   })
   .strict();
@@ -124,7 +158,8 @@ export const chartTransitMomentSchema = z
     time: chartTimeSchema,
     timezone: chartIanaTimeZoneSchema.optional(),
     latitude: z.number().min(-90).max(90).optional(),
-    longitude: z.number().min(-180).max(180).optional()
+    longitude: z.number().min(-180).max(180).optional(),
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 export type ChartTransitMoment = z.infer<typeof chartTransitMomentSchema>;
@@ -197,7 +232,8 @@ export const chartHoraryQuestionSnapshotSchema = z
     time: chartTimeSchema,
     timezone: chartIanaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180)
+    longitude: z.number().min(-180).max(180),
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 export type ChartHoraryQuestionSnapshot = z.infer<typeof chartHoraryQuestionSnapshotSchema>;
@@ -214,23 +250,109 @@ export type ChartHoraryJobCreateRequest = z.infer<typeof chartHoraryJobCreateReq
 export const chartPublicJobStatusSchema = z.enum(["calculating", "succeeded", "failed"]);
 export type ChartPublicJobStatus = z.infer<typeof chartPublicJobStatusSchema>;
 
+const chartJobResponseSharedFields = {
+  id: uuidSchema,
+  interpretationMode: chartInterpretationModeSchema,
+  targetCalculationId: uuidSchema.nullable().optional().default(null),
+  expectedSourceChecksum: sha256DigestSchema.nullable().optional().default(null)
+} as const;
+const chartJobFailureCodeSchema = z.string().trim().min(1).max(100);
+const chartJobFailureMessageSchema = z.string().trim().min(1).max(500);
+
 export const chartJobResponseSchema = z
-  .object({
-    id: uuidSchema,
-    status: chartPublicJobStatusSchema,
-    calculationId: uuidSchema.nullable().optional().default(null),
-    failureCode: z.string().trim().min(1).max(100).nullable().optional().default(null),
-    failureMessage: z.string().trim().min(1).max(500).nullable().optional().default(null)
-  })
-  .strict();
+  .discriminatedUnion("status", [
+    z
+      .object({
+        ...chartJobResponseSharedFields,
+        status: z.literal("calculating"),
+        calculationId: z.null().optional().default(null),
+        failureCode: chartJobFailureCodeSchema.nullable().optional().default(null),
+        failureMessage: chartJobFailureMessageSchema.nullable().optional().default(null)
+      })
+      .strict(),
+    z
+      .object({
+        ...chartJobResponseSharedFields,
+        status: z.literal("succeeded"),
+        calculationId: uuidSchema,
+        failureCode: z.null().optional().default(null),
+        failureMessage: z.null().optional().default(null)
+      })
+      .strict(),
+    z
+      .object({
+        ...chartJobResponseSharedFields,
+        status: z.literal("failed"),
+        calculationId: z.null().optional().default(null),
+        failureCode: chartJobFailureCodeSchema,
+        failureMessage: chartJobFailureMessageSchema
+      })
+      .strict()
+  ])
+  .superRefine((value, context) => {
+    if ((value.targetCalculationId === null) !== (value.expectedSourceChecksum === null)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["targetCalculationId"],
+        message: "Chart recalculation target and checksum must be supplied together"
+      });
+    }
+    if (
+      value.status === "calculating" &&
+      (value.failureCode === null) !== (value.failureMessage === null)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["failureCode"],
+        message: "Chart job transient failure code and message must be supplied together"
+      });
+    }
+    if (
+      value.status === "succeeded" &&
+      value.targetCalculationId !== null &&
+      value.calculationId !== value.targetCalculationId
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["calculationId"],
+        message: "Replacement chart jobs must complete their exact target calculation"
+      });
+    }
+  });
 export type ChartJobResponse = z.infer<typeof chartJobResponseSchema>;
+
+export const chartCalculationCapabilityValues = [
+  "view_current",
+  "view_legacy",
+  "recalculate",
+  "link",
+  "publish",
+  "ai_draft",
+  "pdf"
+] as const;
+export const chartCalculationCapabilitySchema = z.enum(chartCalculationCapabilityValues);
+export type ChartCalculationCapability = z.infer<typeof chartCalculationCapabilitySchema>;
 
 export const chartCalculationResponseSchema = z
   .object({
     calculationId: uuidSchema,
-    result: z.unknown()
+    interpretationMode: chartInterpretationModeSchema,
+    result: z.unknown(),
+    capabilities: z
+      .array(chartCalculationCapabilitySchema)
+      .min(1)
+      .max(chartCalculationCapabilityValues.length)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.capabilities).size !== value.capabilities.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["capabilities"],
+        message: "Chart calculation capabilities must be unique"
+      });
+    }
+  });
 export type ChartCalculationResponse = z.infer<typeof chartCalculationResponseSchema>;
 
 export const createChartAiDraftRequestSchema = z
@@ -385,7 +507,7 @@ export const chartInputSnapshotSchema = z
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     birthTimePrecision: z.enum(["exact", "approximate"]),
-    dstOccurrence: z.enum(["first", "second"]).optional()
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 export type ChartInputSnapshot = z.infer<typeof chartInputSnapshotSchema>;
@@ -396,12 +518,13 @@ export const chartTransitSnapshotSchema = z
     time: chartTimeSchema,
     timezone: chartIanaTimeZoneSchema,
     latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180)
+    longitude: z.number().min(-180).max(180),
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 export type ChartTransitSnapshot = z.infer<typeof chartTransitSnapshotSchema>;
 
-export const chartSolarReturnSnapshotSchema = z
+export const chartSolarReturnRequestSnapshotSchema = z
   .object({
     year: z.number().int().min(1900).max(2100),
     returnType: z.literal("solar"),
@@ -411,9 +534,13 @@ export const chartSolarReturnSnapshotSchema = z
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180)
       })
-      .strict(),
-    resolvedAt: z.string().datetime()
+      .strict()
   })
+  .strict();
+export type ChartSolarReturnRequestSnapshot = z.infer<typeof chartSolarReturnRequestSnapshotSchema>;
+
+export const chartSolarReturnSnapshotSchema = chartSolarReturnRequestSnapshotSchema
+  .extend({ resolvedAt: z.string().datetime() })
   .strict();
 export type ChartSolarReturnSnapshot = z.infer<typeof chartSolarReturnSnapshotSchema>;
 
@@ -438,6 +565,56 @@ export const chartProgressionSnapshotSchema = chartProgressionRequestSnapshotSch
   .strict();
 export type ChartProgressionSnapshot = z.infer<typeof chartProgressionSnapshotSchema>;
 
+export const chartTransitJobInputSnapshotSchema = z
+  .object({
+    inputSnapshot: chartInputSnapshotSchema,
+    transitSnapshot: chartTransitSnapshotSchema
+  })
+  .strict();
+export type ChartTransitJobInputSnapshot = z.infer<typeof chartTransitJobInputSnapshotSchema>;
+
+export const chartRelationshipJobInputSnapshotSchema = z
+  .object({
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema
+  })
+  .strict();
+export type ChartRelationshipJobInputSnapshot = z.infer<
+  typeof chartRelationshipJobInputSnapshotSchema
+>;
+
+export const chartSolarReturnJobInputSnapshotSchema = z
+  .object({
+    inputSnapshot: chartInputSnapshotSchema,
+    solarReturnSnapshot: chartSolarReturnRequestSnapshotSchema
+  })
+  .strict();
+export type ChartSolarReturnJobInputSnapshot = z.infer<
+  typeof chartSolarReturnJobInputSnapshotSchema
+>;
+
+export const chartProgressionJobInputSnapshotSchema = z
+  .object({
+    inputSnapshot: chartInputSnapshotSchema,
+    progressionSnapshot: chartProgressionRequestSnapshotSchema
+  })
+  .strict();
+export type ChartProgressionJobInputSnapshot = z.infer<
+  typeof chartProgressionJobInputSnapshotSchema
+>;
+
+export const chartHoraryJobInputSnapshotSchema = z
+  .object({ questionSnapshot: chartHoraryQuestionSnapshotSchema })
+  .strict();
+export type ChartHoraryJobInputSnapshot = z.infer<typeof chartHoraryJobInputSnapshotSchema>;
+
+export const chartAstrocartographyJobInputSnapshotSchema = z
+  .object({ inputSnapshot: chartInputSnapshotSchema })
+  .strict();
+export type ChartAstrocartographyJobInputSnapshot = z.infer<
+  typeof chartAstrocartographyJobInputSnapshotSchema
+>;
+
 export const chartNatalCalculationRequestSchema = z
   .object({
     schemaVersion: z.literal("chart-request.v2"),
@@ -449,7 +626,12 @@ export const chartNatalCalculationRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartNatalCalculationRequestInput = z.input<typeof chartNatalCalculationRequestSchema>;
 export type ChartNatalCalculationRequest = z.infer<typeof chartNatalCalculationRequestSchema>;
@@ -465,7 +647,12 @@ export const chartAstrocartographyCalculationRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartAstrocartographyCalculationRequestInput = z.input<
   typeof chartAstrocartographyCalculationRequestSchema
@@ -486,8 +673,18 @@ export const chartTransitCalculationRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.transitSnapshot.latitude, ["transitSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.transitSnapshot.latitude,
+      ["transitSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartTransitCalculationRequestInput = z.input<
   typeof chartTransitCalculationRequestSchema
@@ -502,18 +699,22 @@ export const chartSynastryCalculationRequestSchema = z
     executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
-    partnerInputSnapshot: chartInputSnapshotSchema,
-    relationshipSnapshot: z
-      .object({
-        primaryClientId: uuidSchema,
-        partnerClientId: uuidSchema
-      })
-      .strict()
+    partnerInputSnapshot: chartInputSnapshotSchema
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.partnerInputSnapshot.latitude, ["partnerInputSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.partnerInputSnapshot.latitude,
+      ["partnerInputSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartSynastryCalculationRequestInput = z.input<
   typeof chartSynastryCalculationRequestSchema
@@ -528,18 +729,22 @@ export const chartCompositeCalculationRequestSchema = z
     executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
-    partnerInputSnapshot: chartInputSnapshotSchema,
-    relationshipSnapshot: z
-      .object({
-        primaryClientId: uuidSchema,
-        partnerClientId: uuidSchema
-      })
-      .strict()
+    partnerInputSnapshot: chartInputSnapshotSchema
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.partnerInputSnapshot.latitude, ["partnerInputSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.partnerInputSnapshot.latitude,
+      ["partnerInputSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartCompositeCalculationRequestInput = z.input<
   typeof chartCompositeCalculationRequestSchema
@@ -556,24 +761,22 @@ export const chartSolarReturnCalculationRequestSchema = z
     executionProfile: chartExecutionProfileSchema,
     settings: chartSettingsSchema,
     inputSnapshot: chartInputSnapshotSchema,
-    solarReturnSnapshot: z
-      .object({
-        year: z.number().int().min(1900).max(2100),
-        returnType: z.literal("solar"),
-        location: z
-          .object({
-            timezone: chartIanaTimeZoneSchema,
-            latitude: z.number().min(-90).max(90),
-            longitude: z.number().min(-180).max(180)
-          })
-          .strict()
-      })
-      .strict()
+    solarReturnSnapshot: chartSolarReturnRequestSnapshotSchema
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.solarReturnSnapshot.location.latitude, ["solarReturnSnapshot", "location", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.solarReturnSnapshot.location.latitude,
+      ["solarReturnSnapshot", "location", "latitude"],
+      context
+    );
   });
 export type ChartSolarReturnCalculationRequestInput = z.input<
   typeof chartSolarReturnCalculationRequestSchema
@@ -594,7 +797,12 @@ export const chartProgressionCalculationRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.inputSnapshot.latitude, ["inputSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.inputSnapshot.latitude,
+      ["inputSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartProgressionCalculationRequestInput = z.input<
   typeof chartProgressionCalculationRequestSchema
@@ -614,7 +822,12 @@ export const chartHoraryCalculationRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    addPlacidusLatitudeIssue(value.settings.houseSystem, value.questionSnapshot.latitude, ["questionSnapshot", "latitude"], context);
+    addPlacidusLatitudeIssue(
+      value.settings.houseSystem,
+      value.questionSnapshot.latitude,
+      ["questionSnapshot", "latitude"],
+      context
+    );
   });
 export type ChartHoraryCalculationRequestInput = z.input<
   typeof chartHoraryCalculationRequestSchema
@@ -951,9 +1164,7 @@ export const chartAstrocartographyPathPointSchema = z
     longitude: z.number().min(-180).max(180)
   })
   .strict();
-export type ChartAstrocartographyPathPoint = z.infer<
-  typeof chartAstrocartographyPathPointSchema
->;
+export type ChartAstrocartographyPathPoint = z.infer<typeof chartAstrocartographyPathPointSchema>;
 
 export const chartAstrocartographyLineSchema = z
   .object({
@@ -1021,7 +1232,7 @@ const legacyChartInputSnapshotSchema = z
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     birthTimePrecision: z.enum(["exact", "approximate"]),
-    dstOccurrence: z.enum(["first", "second"]).optional()
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 
@@ -1031,7 +1242,8 @@ const legacyChartTransitSnapshotSchema = z
     time: z.string().regex(/^\d{2}:\d{2}$/),
     timezone: z.string().trim().min(1).max(100),
     latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180)
+    longitude: z.number().min(-180).max(180),
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 
@@ -1072,7 +1284,8 @@ const legacyChartHoraryQuestionSnapshotSchema = z
     time: z.string().regex(/^\d{2}:\d{2}$/),
     timezone: z.string().trim().min(1).max(100),
     latitude: z.number().min(-90).max(90),
-    longitude: z.number().min(-180).max(180)
+    longitude: z.number().min(-180).max(180),
+    dstOccurrence: chartDstOccurrenceSchema.optional()
   })
   .strict();
 
@@ -1087,19 +1300,39 @@ const legacyChartRenderResultSchema = z
   .strict()
   .superRefine((value, context) => {
     const requiredPoints = [
-      "sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune",
-      "pluto", "ascendant", "midheaven", "north_node", "south_node"
+      "sun",
+      "moon",
+      "mercury",
+      "venus",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune",
+      "pluto",
+      "ascendant",
+      "midheaven",
+      "north_node",
+      "south_node"
     ];
     const pointIds = new Set(value.points.map((point) => point.id));
     for (const pointId of requiredPoints) {
       if (!pointIds.has(pointId)) {
-        context.addIssue({ code: "custom", path: ["points"], message: `Missing required chart point ${pointId}` });
+        context.addIssue({
+          code: "custom",
+          path: ["points"],
+          message: `Missing required chart point ${pointId}`
+        });
       }
     }
     const houseNumbers = new Set(value.houses.map((house) => house.number));
     for (let houseNumber = 1; houseNumber <= 12; houseNumber += 1) {
       if (!houseNumbers.has(houseNumber)) {
-        context.addIssue({ code: "custom", path: ["houses"], message: `Missing house ${houseNumber}` });
+        context.addIssue({
+          code: "custom",
+          path: ["houses"],
+          message: `Missing house ${houseNumber}`
+        });
       }
     }
   });
@@ -1221,8 +1454,8 @@ export const storedChartSynastryCalculationPayloadSchema = z
     partnerInputSnapshot: legacyChartInputSnapshotSchema,
     relationshipSnapshot: z
       .object({
-        primaryClientId: uuidSchema,
-        partnerClientId: uuidSchema
+        primaryClientId: legacyUuidSchema,
+        partnerClientId: legacyUuidSchema
       })
       .strict(),
     result: legacyChartSynastryRenderResultSchema
@@ -1242,8 +1475,8 @@ export const storedChartCompositeCalculationPayloadSchema = z
     partnerInputSnapshot: legacyChartInputSnapshotSchema,
     relationshipSnapshot: z
       .object({
-        primaryClientId: uuidSchema,
-        partnerClientId: uuidSchema
+        primaryClientId: legacyUuidSchema,
+        partnerClientId: legacyUuidSchema
       })
       .strict(),
     result: legacyChartRenderResultSchema
@@ -1321,12 +1554,13 @@ export const chartNatalResultV2Schema = storedChartNatalCalculationPayloadSchema
   inputSnapshot: chartInputSnapshotSchema,
   result: chartRenderResultSchema
 });
-export const chartAstrocartographyResultV2Schema = storedChartAstrocartographyCalculationPayloadSchema.extend({
-  ...reproducibleChartResultFields,
-  methodVersion: z.literal(chartMethodVersions.astrocartography),
-  inputSnapshot: chartInputSnapshotSchema,
-  result: chartAstrocartographyRenderResultSchema
-});
+export const chartAstrocartographyResultV2Schema =
+  storedChartAstrocartographyCalculationPayloadSchema.extend({
+    ...reproducibleChartResultFields,
+    methodVersion: z.literal(chartMethodVersions.astrocartography),
+    inputSnapshot: chartInputSnapshotSchema,
+    result: chartAstrocartographyRenderResultSchema
+  });
 export const chartTransitResultV2Schema = storedChartTransitCalculationPayloadSchema.extend({
   ...reproducibleChartResultFields,
   methodVersion: z.literal(chartMethodVersions.transit),
@@ -1334,27 +1568,33 @@ export const chartTransitResultV2Schema = storedChartTransitCalculationPayloadSc
   transitSnapshot: chartTransitSnapshotSchema,
   result: chartTransitRenderResultSchema
 });
-export const chartSynastryResultV2Schema = storedChartSynastryCalculationPayloadSchema.extend({
-  ...reproducibleChartResultFields,
-  methodVersion: z.literal(chartMethodVersions.synastry),
-  inputSnapshot: chartInputSnapshotSchema,
-  partnerInputSnapshot: chartInputSnapshotSchema,
-  result: chartSynastryRenderResultSchema
-});
-export const chartCompositeResultV2Schema = storedChartCompositeCalculationPayloadSchema.extend({
-  ...reproducibleChartResultFields,
-  methodVersion: z.literal(chartMethodVersions.composite),
-  inputSnapshot: chartInputSnapshotSchema,
-  partnerInputSnapshot: chartInputSnapshotSchema,
-  result: chartRenderResultSchema
-});
-export const chartSolarReturnResultV2Schema = storedChartSolarReturnCalculationPayloadSchema.extend({
-  ...reproducibleChartResultFields,
-  methodVersion: z.literal(chartMethodVersions.solar_return),
-  inputSnapshot: chartInputSnapshotSchema,
-  solarReturnSnapshot: chartSolarReturnSnapshotSchema,
-  result: chartSolarReturnRenderResultSchema
-});
+export const chartSynastryResultV2Schema = storedChartSynastryCalculationPayloadSchema
+  .omit({ relationshipSnapshot: true })
+  .extend({
+    ...reproducibleChartResultFields,
+    methodVersion: z.literal(chartMethodVersions.synastry),
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    result: chartSynastryRenderResultSchema
+  });
+export const chartCompositeResultV2Schema = storedChartCompositeCalculationPayloadSchema
+  .omit({ relationshipSnapshot: true })
+  .extend({
+    ...reproducibleChartResultFields,
+    methodVersion: z.literal(chartMethodVersions.composite),
+    inputSnapshot: chartInputSnapshotSchema,
+    partnerInputSnapshot: chartInputSnapshotSchema,
+    result: chartRenderResultSchema
+  });
+export const chartSolarReturnResultV2Schema = storedChartSolarReturnCalculationPayloadSchema.extend(
+  {
+    ...reproducibleChartResultFields,
+    methodVersion: z.literal(chartMethodVersions.solar_return),
+    inputSnapshot: chartInputSnapshotSchema,
+    solarReturnSnapshot: chartSolarReturnSnapshotSchema,
+    result: chartSolarReturnRenderResultSchema
+  }
+);
 export const chartProgressionResultV2Schema = storedChartProgressionCalculationPayloadSchema
   .extend({
     ...reproducibleChartResultFields,

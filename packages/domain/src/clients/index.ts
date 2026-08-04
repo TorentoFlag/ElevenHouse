@@ -2,3 +2,8 @@ export * from "./client-errors";
 export * from "./client-store";
 export * from "./client-types";
 export * from "./client-use-cases";
+export * from "./client-consent-errors";
+export * from "./client-consent-policy";
+export * from "./client-consent-store";
+export * from "./client-consent-types";
+export * from "./client-consent-use-cases";

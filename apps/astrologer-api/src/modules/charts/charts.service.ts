@@ -1,40 +1,76 @@
-import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
-import { chartInterpretationDraftPromptV1, renderChartInterpretationText } from "@elevenhouse/ai";
+import { performance } from "node:perf_hooks";
+import { HttpException, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import {
+  chartInterpretationDraftPromptV1,
+  renderChartInterpretationText,
+  type AiGenerationResult,
+  type ChartInterpretationDraftPromptOutput
+} from "@elevenhouse/ai";
 import {
   assertChartBirthDataReady,
+  authorizeChartAiParticipants,
+  buildChartAiDraftCommandRequestHash,
+  buildChartJobRequestFingerprint,
+  chartAiDraftCommandTtlMs,
+  CalculationInterpretationModeUnavailableError,
+  ChartAiDraftInProgressError,
+  ChartAiDraftOutcomeUnknownError,
   createChartJobAndRequestCalculation,
   createNatalChartJobAndRequestCalculation,
+  DEFAULT_CHART_JOB_MAX_ATTEMPTS,
+  deriveChartCalculationCapabilities,
   getCalculation,
+  assertStoredChartCalculationIntegrity,
+  assertStoredChartCalculationSelfIntegrity,
   listDictionaryEntriesByCodes,
+  prepareChartRecalculation,
+  resolveChartInterpretationMode,
   saveCalculationInterpretation,
-  sha256CanonicalJson,
+  ChartStoredResultIntegrityError,
   type AstrologerProfileStore,
   type CanonicalJson,
   type CalculationRecord,
   type CalculationStore,
+  type ChartAiDraftCommandKnownFailure,
+  type ChartAiDraftCommandResult,
+  type ChartAiDraftCommandStore,
   type ChartCalculationCommandStore,
+  type CreateOrReuseChartJobResult,
   type ChartCalculationJob,
   type ChartCalculationJobStore,
+  type ChartCalculationParticipant,
+  type ChartInterpretationMode,
+  type ChartRecalculationTarget,
   type ChartReadyBirthData,
+  type ClientConsentStore,
   type ClientStore,
   type DictionaryStore
 } from "@elevenhouse/domain";
 import {
   chartAstrocartographyJobCreateRequestSchema,
+  chartAstrocartographyJobInputSnapshotSchema,
   chartCalculationResponseSchema,
   chartCompositeJobCreateRequestSchema,
   createChartAiDraftRequestSchema,
   chartHoraryJobCreateRequestSchema,
+  chartHoraryJobInputSnapshotSchema,
+  chartInputSnapshotSchema,
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
+  chartNatalResultV2Schema,
   chartProgressionJobCreateRequestSchema,
+  chartProgressionJobInputSnapshotSchema,
+  chartRecalculateRequestSchema,
+  chartRelationshipJobInputSnapshotSchema,
   chartSolarReturnJobCreateRequestSchema,
+  chartSolarReturnJobInputSnapshotSchema,
   chartSynastryJobCreateRequestSchema,
   chartTransitJobCreateRequestSchema,
-  storedChartNatalCalculationPayloadSchema,
-  storedChartCalculationPayloadSchema,
+  chartTransitJobInputSnapshotSchema,
+  chartMethodVersions,
+  chartResultSchema,
+  type ChartCalculationMethod,
   type CalculationRecordResponse,
   type CreateChartAiDraftRequest,
   type ChartNatalJobCreateRequest,
@@ -45,6 +81,7 @@ import {
   type ChartJobResponse,
   type ChartNatalJobCreateResponse,
   type ChartProgressionJobCreateRequest,
+  type ChartRecalculateRequest,
   type ChartSolarReturnJobCreateRequest,
   type ChartSynastryJobCreateRequest,
   type ChartTransitJobCreateRequest
@@ -60,14 +97,30 @@ import { DICTIONARY_STORE } from "../dictionary/dictionary.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { chartHttpError, mapChartError } from "./chart-http-errors";
 import { buildNatalChartAiContext, getNatalChartAiDictionaryCodes } from "./chart-ai-context";
-import { CHART_COMMAND_STORE, CHART_JOB_STORE } from "./charts.tokens";
+import { ChartExecutionProfileProvider } from "./chart-execution-profile.provider";
+import {
+  CHART_AI_CONFIG,
+  CHART_AI_DRAFT_COMMAND_STORE,
+  CHART_CLIENT_CONSENT_STORE,
+  CHART_COMMAND_STORE,
+  CHART_JOB_STORE,
+  type ChartAiConfig
+} from "./charts.tokens";
 
 const calculationIdParamSchema = z.object({ calculationId: z.string().uuid() }).strict();
 const jobIdParamSchema = z.object({ jobId: z.string().uuid() }).strict();
-const providerVersion = "kerykeion-5.12";
+const idempotencyKeySchema = z
+  .string()
+  .trim()
+  .min(8)
+  .max(128)
+  .regex(/^[A-Za-z0-9._:-]+$/u);
+const CHART_AI_DRAFT_SAVE_ATTEMPTS = 2;
 
 @Injectable()
 export class ChartsService {
+  private readonly logger = new Logger(ChartsService.name);
+
   constructor(
     @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
     @Inject(CHART_COMMAND_STORE) private readonly commandStore: ChartCalculationCommandStore,
@@ -77,7 +130,13 @@ export class ChartsService {
     @Inject(ASTROLOGER_PROFILE_STORE)
     private readonly profileStore: AstrologerProfileStore,
     private readonly clock: SystemClock,
-    private readonly aiGeneration: AiGenerationService
+    private readonly aiGeneration: AiGenerationService,
+    private readonly executionProfile: ChartExecutionProfileProvider,
+    @Inject(CHART_CLIENT_CONSENT_STORE)
+    private readonly consentStore: ClientConsentStore,
+    @Inject(CHART_AI_CONFIG) private readonly chartAiConfig: ChartAiConfig,
+    @Inject(CHART_AI_DRAFT_COMMAND_STORE)
+    private readonly aiDraftCommandStore: ChartAiDraftCommandStore
   ) {}
 
   async createNatalJob(
@@ -89,6 +148,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -99,44 +159,24 @@ export class ChartsService {
       }
       const readyBirthData = assertChartBirthDataReady(client.birthData);
       const inputSnapshot = toChartInputSnapshot(readyBirthData);
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "natal",
-        clientId: parsedBody.clientId,
-        inputSnapshot: inputSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        interpretationMode: parsedBody.interpretationMode,
+        inputSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createNatalChartJobAndRequestCalculation({
         store: this.commandStore,
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "natal",
+        startedAt,
+        outcome
       });
     });
   }
@@ -150,6 +190,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -165,48 +206,29 @@ export class ChartsService {
         time: parsedBody.transit.time,
         timezone: parsedBody.transit.timezone ?? inputSnapshot.timezone,
         latitude: parsedBody.transit.latitude ?? inputSnapshot.latitude,
-        longitude: parsedBody.transit.longitude ?? inputSnapshot.longitude
+        longitude: parsedBody.transit.longitude ?? inputSnapshot.longitude,
+        ...(parsedBody.transit.dstOccurrence
+          ? { dstOccurrence: parsedBody.transit.dstOccurrence }
+          : {})
       };
       const requestSnapshot = { inputSnapshot, transitSnapshot };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "transit",
-        clientId: parsedBody.clientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "transit",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "transit",
+        startedAt,
+        outcome
       });
     });
   }
@@ -220,6 +242,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -230,45 +253,23 @@ export class ChartsService {
       }
       const inputSnapshot = toChartInputSnapshot(assertChartBirthDataReady(client.birthData));
       const requestSnapshot = { inputSnapshot };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "astrocartography",
-        clientId: parsedBody.clientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "astrocartography",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "astrocartography",
+        startedAt,
+        outcome
       });
     });
   }
@@ -282,6 +283,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       if (parsedBody.clientId === parsedBody.partnerClientId) {
         throw chartHttpError(
@@ -310,52 +312,28 @@ export class ChartsService {
       );
       const requestSnapshot = {
         inputSnapshot,
-        partnerInputSnapshot,
-        relationshipSnapshot: {
-          primaryClientId: parsedBody.clientId,
-          partnerClientId: parsedBody.partnerClientId
-        }
+        partnerInputSnapshot
       };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "synastry",
-        clientId: parsedBody.clientId,
-        partnerClientId: parsedBody.partnerClientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [
+          { role: "subject", clientId: parsedBody.clientId },
+          { role: "partner", clientId: parsedBody.partnerClientId }
+        ]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "synastry",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "synastry",
+        startedAt,
+        outcome
       });
     });
   }
@@ -369,6 +347,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       if (parsedBody.clientId === parsedBody.partnerClientId) {
         throw chartHttpError(
@@ -397,52 +376,28 @@ export class ChartsService {
       );
       const requestSnapshot = {
         inputSnapshot,
-        partnerInputSnapshot,
-        relationshipSnapshot: {
-          primaryClientId: parsedBody.clientId,
-          partnerClientId: parsedBody.partnerClientId
-        }
+        partnerInputSnapshot
       };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "composite",
-        clientId: parsedBody.clientId,
-        partnerClientId: parsedBody.partnerClientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [
+          { role: "subject", clientId: parsedBody.clientId },
+          { role: "partner", clientId: parsedBody.partnerClientId }
+        ]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "composite",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "composite",
+        startedAt,
+        outcome
       });
     });
   }
@@ -456,6 +411,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -475,45 +431,23 @@ export class ChartsService {
         }
       };
       const requestSnapshot = { inputSnapshot, solarReturnSnapshot };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "solar_return",
-        clientId: parsedBody.clientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "solar_return",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "solar_return",
+        startedAt,
+        outcome
       });
     });
   }
@@ -527,6 +461,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -541,45 +476,23 @@ export class ChartsService {
         progressionType: "secondary" as const
       };
       const requestSnapshot = { inputSnapshot, progressionSnapshot };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "progression",
-        clientId: parsedBody.clientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "progression",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "progression",
+        startedAt,
+        outcome
       });
     });
   }
@@ -593,6 +506,7 @@ export class ChartsService {
       body
     );
     const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
     return mapChartError(async () => {
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
@@ -602,47 +516,139 @@ export class ChartsService {
         throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
       }
       const requestSnapshot = { questionSnapshot: parsedBody.question };
-      const requestFingerprint = sha256CanonicalJson({
-        schemaVersion: "chart-request.v1",
-        providerVersion,
+      const job = this.buildCreationEnvelope({
+        ownerUserId,
         method: "horary",
-        clientId: parsedBody.clientId,
-        inputSnapshot: requestSnapshot as CanonicalJson,
-        settings: parsedBody.settings as CanonicalJson
+        inputSnapshot: requestSnapshot,
+        settingsSnapshot: parsedBody.settings,
+        participants: [{ role: "subject", clientId: parsedBody.clientId }]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
-        method: "horary",
-        ownerUserId,
-        clientId: parsedBody.clientId,
-        inputFingerprint: requestFingerprint,
-        inputSnapshot: requestSnapshot,
-        settingsSnapshot: parsedBody.settings,
+        ...job,
         now: this.clock.now()
       });
-      if (outcome.kind === "existing_result") {
-        const result = await this.jobStore.getOwnerScopedResult({
-          ownerUserId,
-          calculationId: outcome.calculationId
-        });
-        if (!result) {
-          throw chartHttpError(
-            404,
-            "CHART_CALCULATION_NOT_FOUND",
-            "Chart calculation was not found"
-          );
-        }
-        return chartNatalJobCreateResponseSchema.parse({
-          status: "succeeded",
-          calculationId: outcome.calculationId,
-          result: storedChartCalculationPayloadSchema.parse(result)
-        });
-      }
-      return chartNatalJobCreateResponseSchema.parse({
-        status: "calculating",
-        jobId: outcome.jobId
+      return this.toObservedJobCommandResponse({
+        operation: "create",
+        method: "horary",
+        startedAt,
+        outcome
       });
     });
+  }
+
+  private toObservedJobCommandResponse(input: {
+    readonly operation: "create" | "recalculate";
+    readonly method: ChartCalculationMethod;
+    readonly startedAt: number;
+    readonly outcome: CreateOrReuseChartJobResult;
+  }): ChartNatalJobCreateResponse {
+    const durationMs = performance.now() - input.startedAt;
+    if (input.outcome.kind === "existing_result") {
+      const response = chartNatalJobCreateResponseSchema.parse({
+        status: "succeeded",
+        calculationId: input.outcome.calculationId,
+        result: input.outcome.result
+      });
+      this.logger.log({
+        event: "chart_job_command_completed",
+        operation: input.operation,
+        method: input.method,
+        outcome: "reused_result",
+        calculationId: input.outcome.calculationId,
+        durationMs
+      });
+      return response;
+    }
+    const response = chartNatalJobCreateResponseSchema.parse({
+      status: "calculating",
+      jobId: input.outcome.jobId
+    });
+    this.logger.log({
+      event: "chart_job_command_completed",
+      operation: input.operation,
+      method: input.method,
+      outcome: "active_job",
+      jobId: input.outcome.jobId,
+      durationMs
+    });
+    return response;
+  }
+
+  private buildCreationEnvelope(input: {
+    readonly ownerUserId: string;
+    readonly method: ChartCalculationMethod;
+    readonly interpretationMode?: ChartInterpretationMode;
+    readonly inputSnapshot: unknown;
+    readonly settingsSnapshot: unknown;
+    readonly participants: readonly ChartCalculationParticipant[];
+  }) {
+    return this.buildJobEnvelope({
+      ...input,
+      targetCalculationId: null,
+      expectedSourceChecksum: null
+    });
+  }
+
+  private buildReplacementEnvelope(input: {
+    readonly ownerUserId: string;
+    readonly method: ChartCalculationMethod;
+    readonly interpretationMode: ChartInterpretationMode;
+    readonly inputSnapshot: unknown;
+    readonly settingsSnapshot: unknown;
+    readonly participants: readonly ChartCalculationParticipant[];
+    readonly targetCalculationId: string;
+    readonly expectedSourceChecksum: string;
+  }) {
+    return this.buildJobEnvelope(input);
+  }
+
+  private buildJobEnvelope(input: {
+    readonly ownerUserId: string;
+    readonly method: ChartCalculationMethod;
+    readonly interpretationMode?: ChartInterpretationMode;
+    readonly inputSnapshot: unknown;
+    readonly settingsSnapshot: unknown;
+    readonly participants: readonly ChartCalculationParticipant[];
+    readonly targetCalculationId: string | null;
+    readonly expectedSourceChecksum: string | null;
+  }) {
+    const clientId = input.participants[0]?.clientId;
+    if (!clientId) throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
+    const methodVersion = chartMethodVersions[input.method];
+    const interpretationMode =
+      input.interpretationMode ??
+      (input.method === "natal"
+        ? raiseChartJobInterpretationModeRequired()
+        : "legacy_unclassified");
+    const executionProfile = this.executionProfile.getProfile();
+    const inputFingerprint = buildChartJobRequestFingerprint({
+      ownerUserId: input.ownerUserId,
+      method: input.method,
+      interpretationMode,
+      methodVersion,
+      executionProfile,
+      settings: input.settingsSnapshot as CanonicalJson,
+      inputSnapshot: input.inputSnapshot as CanonicalJson,
+      participants: input.participants,
+      targetCalculationId: input.targetCalculationId,
+      expectedSourceChecksum: input.expectedSourceChecksum
+    });
+    return {
+      method: input.method,
+      interpretationMode,
+      methodVersion,
+      executionProfile,
+      ownerUserId: input.ownerUserId,
+      clientId,
+      participants: input.participants,
+      maxAttempts: DEFAULT_CHART_JOB_MAX_ATTEMPTS,
+      targetCalculationId: input.targetCalculationId,
+      expectedSourceChecksum: input.expectedSourceChecksum,
+      inputFingerprint,
+      inputSnapshot: input.inputSnapshot,
+      settingsSnapshot: input.settingsSnapshot
+    };
   }
 
   async getJob(jobId: string, request: AstrologerSessionRequest): Promise<ChartJobResponse> {
@@ -650,7 +656,8 @@ export class ChartsService {
     const ownerUserId = requireOwnerUserId(request);
     const job = await this.jobStore.getOwnerScopedJob({ ownerUserId, jobId: params.jobId });
     if (!job) throw chartHttpError(404, "CHART_JOB_NOT_FOUND", "Chart job was not found");
-    return toJobResponse(job);
+    const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+    return toJobResponse(job, profile?.locale === "en" ? "en" : "ru");
   }
 
   async getCalculation(
@@ -661,16 +668,23 @@ export class ChartsService {
       calculationId
     });
     const ownerUserId = requireOwnerUserId(request);
-    const result = await this.jobStore.getOwnerScopedResult({
-      ownerUserId,
-      calculationId: params.calculationId
-    });
-    if (!result) {
-      throw chartHttpError(404, "CHART_CALCULATION_NOT_FOUND", "Chart calculation was not found");
-    }
-    return chartCalculationResponseSchema.parse({
-      calculationId: params.calculationId,
-      result: storedChartCalculationPayloadSchema.parse(result)
+    return mapChartError(async () => {
+      const calculation = await getCalculation({
+        store: this.calculationStore,
+        ownerUserId,
+        calculationId: params.calculationId
+      });
+      const expectedExecutionProfile = this.executionProfile.getProfile();
+      const result = assertReadableChartCalculation(calculation, expectedExecutionProfile);
+      return chartCalculationResponseSchema.parse({
+        calculationId: calculation.id,
+        interpretationMode: resolveChartInterpretationMode(calculation, result.method),
+        result,
+        capabilities: deriveChartCalculationCapabilities({
+          calculation,
+          expectedExecutionProfile
+        })
+      });
     });
   }
 
@@ -679,14 +693,116 @@ export class ChartsService {
     body: unknown,
     request: AstrologerSessionRequest
   ): Promise<ChartNatalJobCreateResponse> {
-    parseChartContract<{ calculationId: string }>(calculationIdParamSchema, { calculationId });
-    return this.createNatalJob(body, request);
+    const params = parseChartContract<{ calculationId: string }>(calculationIdParamSchema, {
+      calculationId
+    });
+    const parsedBody = parseChartContract<ChartRecalculateRequest>(
+      chartRecalculateRequestSchema,
+      body
+    );
+    const ownerUserId = requireOwnerUserId(request);
+    const startedAt = performance.now();
+    return mapChartError(async () => {
+      const calculation = await getCalculation({
+        store: this.calculationStore,
+        ownerUserId,
+        calculationId: params.calculationId
+      });
+      const target = prepareChartRecalculation({
+        calculation,
+        ownerUserId,
+        calculationId: params.calculationId,
+        expectedResultChecksum: parsedBody.expectedResultChecksum,
+        expectedExecutionProfile: this.executionProfile.getProfile(),
+        settings: parsedBody.settings
+      });
+      const inputSnapshot = await this.reconstructCurrentInput(ownerUserId, target);
+      const outcome = await createChartJobAndRequestCalculation({
+        store: this.commandStore,
+        ...this.buildReplacementEnvelope({
+          ownerUserId,
+          method: target.method,
+          interpretationMode: target.interpretationMode,
+          inputSnapshot,
+          settingsSnapshot: target.settings,
+          participants: target.participants,
+          targetCalculationId: target.calculationId,
+          expectedSourceChecksum: target.expectedSourceChecksum
+        }),
+        now: this.clock.now()
+      });
+      return this.toObservedJobCommandResponse({
+        operation: "recalculate",
+        method: target.method,
+        startedAt,
+        outcome
+      });
+    });
+  }
+
+  private async reconstructCurrentInput(
+    ownerUserId: string,
+    target: ChartRecalculationTarget
+  ): Promise<unknown> {
+    const snapshots = new Map<"subject" | "partner", ReturnType<typeof toChartInputSnapshot>>();
+    for (const participant of target.participants) {
+      const client = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: participant.clientId
+      });
+      if (!client || (target.method !== "horary" && !client.birthData)) {
+        throw participant.role === "partner"
+          ? chartHttpError(404, "CHART_PARTNER_CLIENT_NOT_FOUND", "Partner client was not found")
+          : chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
+      }
+      if (target.method !== "horary") {
+        snapshots.set(
+          participant.role,
+          toChartInputSnapshot(assertChartBirthDataReady(client.birthData!))
+        );
+      }
+    }
+
+    if (target.method === "horary") {
+      return chartHoraryJobInputSnapshotSchema.parse(target.eventSnapshot);
+    }
+    const inputSnapshot = snapshots.get("subject");
+    if (!inputSnapshot) throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
+    if (target.method === "natal") return chartInputSnapshotSchema.parse(inputSnapshot);
+    if (target.method === "astrocartography") {
+      return chartAstrocartographyJobInputSnapshotSchema.parse({ inputSnapshot });
+    }
+    if (target.method === "transit") {
+      return chartTransitJobInputSnapshotSchema.parse({
+        inputSnapshot,
+        ...target.eventSnapshot
+      });
+    }
+    if (target.method === "synastry" || target.method === "composite") {
+      const partnerInputSnapshot = snapshots.get("partner");
+      if (!partnerInputSnapshot) throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
+      return chartRelationshipJobInputSnapshotSchema.parse({
+        inputSnapshot,
+        partnerInputSnapshot
+      });
+    }
+    if (target.method === "solar_return") {
+      return chartSolarReturnJobInputSnapshotSchema.parse({
+        inputSnapshot,
+        ...target.eventSnapshot
+      });
+    }
+    return chartProgressionJobInputSnapshotSchema.parse({
+      inputSnapshot,
+      ...target.eventSnapshot
+    });
   }
 
   async createAiDraft(
     calculationId: string,
     body: unknown,
-    request: AstrologerSessionRequest
+    request: AstrologerSessionRequest,
+    idempotencyKey: unknown
   ): Promise<CalculationRecordResponse> {
     const params = parseChartContract<{ calculationId: string }>(calculationIdParamSchema, {
       calculationId
@@ -695,6 +811,10 @@ export class ChartsService {
       createChartAiDraftRequestSchema,
       body
     );
+    const normalizedIdempotencyKey = parseChartContract<string>(
+      idempotencyKeySchema,
+      idempotencyKey
+    );
     const ownerUserId = requireOwnerUserId(request);
     return mapChartError(async () => {
       const calculation = await getCalculation({
@@ -702,57 +822,467 @@ export class ChartsService {
         ownerUserId,
         calculationId: params.calculationId
       });
+      assertAdultNatalInterpretationMode(calculation);
       const result = assertNatalChartAiCalculation(calculation);
       if (calculation.resultChecksum !== parsedBody.expectedResultChecksum) {
         throw chartHttpError(409, "CHART_RESULT_CHANGED", "Chart result changed; reload and retry");
       }
+      const commandNow = this.clock.now();
+      const command = await this.aiDraftCommandStore.acquire({
+        actorUserId: ownerUserId,
+        key: normalizedIdempotencyKey,
+        requestHash: buildChartAiDraftCommandRequestHash({
+          actorUserId: ownerUserId,
+          calculationId: calculation.id,
+          body: parsedBody
+        }),
+        now: commandNow.toISOString(),
+        expiresAt: new Date(commandNow.getTime() + chartAiDraftCommandTtlMs).toISOString()
+      });
 
-      const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
-      const locale = profile?.locale === "en" ? "en" : "ru";
-      const dictionary = await listDictionaryEntriesByCodes({
-        store: this.dictionaryStore,
-        ownerUserId,
-        locale,
-        codes: getNatalChartAiDictionaryCodes(result)
-      });
-      const generated = await this.aiGeneration.generate({
-        prompt: chartInterpretationDraftPromptV1,
-        input: chartInterpretationDraftPromptV1.inputSchema.parse(
-          buildNatalChartAiContext({
-            locale,
-            result,
-            resultChecksum: calculation.resultChecksum,
-            dictionaryEntries: dictionary.entries
-          })
-        ),
-        ownerUserId,
-        feature: "chart.interpretationDraft"
-      });
-      const saved = await saveCalculationInterpretation({
+      if (command.kind === "completed") {
+        return this.replayAiDraftCommand(command.result, calculation, ownerUserId);
+      }
+      if (command.kind === "processing") {
+        let recovered: ChartAiDraftCommandResult | null;
+        try {
+          recovered = await this.aiDraftCommandStore.completeSuccess({
+            commandId: command.commandId,
+            actorUserId: ownerUserId,
+            calculationId: calculation.id,
+            expectedResultChecksum: parsedBody.expectedResultChecksum,
+            now: this.clock.now().toISOString()
+          });
+        } catch {
+          throw new ChartAiDraftOutcomeUnknownError();
+        }
+        if (recovered) return this.replayAiDraftCommand(recovered, calculation, ownerUserId);
+        throw new ChartAiDraftInProgressError();
+      }
+
+      let participantConsents: Awaited<ReturnType<typeof authorizeChartAiParticipants>>;
+      let processingAuthorityVersion: string;
+      let locale: "ru" | "en";
+      let dictionary: Awaited<ReturnType<typeof listDictionaryEntriesByCodes>>;
+      try {
+        assertStoredChartCalculationIntegrity({
+          calculation,
+          expectedExecutionProfile: this.executionProfile.getProfile()
+        });
+        const participants = calculation.participants.map((participant) => {
+          if (participant.source !== "crm_client" || participant.clientId === null) {
+            throw chartHttpError(
+              403,
+              "CHART_AI_CONSENT_REQUIRED",
+              "Current client consent is required for chart AI generation"
+            );
+          }
+          return { clientUserId: participant.clientId };
+        });
+        participantConsents = await authorizeChartAiParticipants({
+          store: this.consentStore,
+          astrologerUserId: ownerUserId,
+          participants
+        });
+        const currentProcessingAuthorityVersion = this.chartAiConfig.processingAuthorityVersion;
+        if (!this.chartAiConfig.enabled || !currentProcessingAuthorityVersion) {
+          throw chartHttpError(
+            503,
+            "CHART_AI_PROCESSING_AUTHORITY_UNAVAILABLE",
+            "Chart AI processing authority is unavailable"
+          );
+        }
+        processingAuthorityVersion = currentProcessingAuthorityVersion;
+
+        const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
+        locale = profile?.locale === "en" ? "en" : "ru";
+        dictionary = await listDictionaryEntriesByCodes({
+          store: this.dictionaryStore,
+          ownerUserId,
+          locale,
+          codes: getNatalChartAiDictionaryCodes(result)
+        });
+      } catch (error) {
+        const mapped = await mapChartAiPreflightError(error);
+        const knownFailure =
+          (mapped ? toReplayableChartAiDraftFailure(mapped) : null) ??
+          chartAiPreflightUnavailableFailure();
+        try {
+          const completed = await this.aiDraftCommandStore.completeKnownFailure({
+            commandId: command.commandId,
+            actorUserId: ownerUserId,
+            failure: knownFailure,
+            now: this.clock.now().toISOString()
+          });
+          return this.replayAiDraftCommand(completed, calculation, ownerUserId);
+        } catch (completionError) {
+          if (completionError instanceof HttpException) throw completionError;
+          await this.markAiDraftUnknownIfPossible(command.commandId, ownerUserId);
+          throw new ChartAiDraftOutcomeUnknownError();
+        }
+      }
+
+      let generated: AiGenerationResult<ChartInterpretationDraftPromptOutput>;
+      try {
+        generated = await this.aiGeneration.generate({
+          prompt: chartInterpretationDraftPromptV1,
+          input: chartInterpretationDraftPromptV1.inputSchema.parse(
+            buildNatalChartAiContext({
+              locale,
+              result,
+              dictionaryEntries: dictionary.entries
+            })
+          ),
+          ownerUserId,
+          feature: "chart.interpretationDraft",
+          consentAuthorizations: participantConsents.map(({ clientUserId, consentId }) => ({
+            consentRecordId: consentId,
+            clientUserId,
+            astrologerUserId: ownerUserId
+          })),
+          usageEvidence: {
+            processingAuthorityVersion,
+            resourceEvidence: {
+              resourceType: "chart_calculation",
+              resourceId: calculation.id,
+              sourceChecksum: calculation.resultChecksum
+            }
+          }
+        });
+      } catch (error) {
+        const knownFailure = toKnownChartAiDraftFailure(error);
+        if (knownFailure) {
+          try {
+            const completed = await this.aiDraftCommandStore.completeKnownFailure({
+              commandId: command.commandId,
+              actorUserId: ownerUserId,
+              failure: knownFailure,
+              now: this.clock.now().toISOString()
+            });
+            return this.replayAiDraftCommand(completed, calculation, ownerUserId);
+          } catch (completionError) {
+            if (completionError instanceof HttpException) throw completionError;
+            await this.markAiDraftUnknownIfPossible(command.commandId, ownerUserId);
+            throw new ChartAiDraftOutcomeUnknownError();
+          }
+        }
+        await this.markAiDraftUnknownIfPossible(command.commandId, ownerUserId);
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
+
+      const saveCommand = {
         store: this.calculationStore,
         ownerUserId,
         calculationId: calculation.id,
         expectedResultChecksum: parsedBody.expectedResultChecksum,
-        source: "ai",
+        source: "ai" as const,
         text: renderChartInterpretationText(generated.output, locale),
         modelId: generated.model,
         promptVersion: `${chartInterpretationDraftPromptV1.id}@${chartInterpretationDraftPromptV1.version}`,
-        interpretationIdGenerator: randomUUID,
+        interpretationIdGenerator: () => command.commandId,
         now: this.clock.now()
-      });
+      };
+      let saved: CalculationRecord;
+      try {
+        saved = await retryExactChartAiDraftSave(() =>
+          saveCalculationInterpretation(saveCommand)
+        );
+      } catch {
+        let recovered: ChartAiDraftCommandResult | null;
+        try {
+          recovered = await this.aiDraftCommandStore.completeSuccess({
+            commandId: command.commandId,
+            actorUserId: ownerUserId,
+            calculationId: calculation.id,
+            expectedResultChecksum: parsedBody.expectedResultChecksum,
+            now: this.clock.now().toISOString()
+          });
+        } catch {
+          // Leave the command processing so a later retry can reconcile durable save evidence.
+          throw new ChartAiDraftOutcomeUnknownError();
+        }
+        if (recovered) {
+          return this.replayAiDraftCommand(recovered, calculation, ownerUserId);
+        }
+        await this.markAiDraftUnknownIfPossible(command.commandId, ownerUserId);
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
+
+      let completed: ChartAiDraftCommandResult | null;
+      try {
+        completed = await this.aiDraftCommandStore.completeSuccess({
+          commandId: command.commandId,
+          actorUserId: ownerUserId,
+          calculationId: calculation.id,
+          expectedResultChecksum: parsedBody.expectedResultChecksum,
+          now: this.clock.now().toISOString()
+        });
+      } catch {
+        // Keep the command processing: a retry can recover from the deterministic interpretation id.
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
+      if (!completed || completed.kind !== "success") {
+        await this.markAiDraftUnknownIfPossible(command.commandId, ownerUserId);
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
+      if (
+        completed.calculationId !== calculation.id ||
+        completed.interpretationId !== command.commandId
+      ) {
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
       return toCalculationResponse(saved);
     });
   }
+
+  private async replayAiDraftCommand(
+    result: ChartAiDraftCommandResult,
+    calculation: CalculationRecord,
+    ownerUserId: string
+  ): Promise<CalculationRecordResponse> {
+    if (result.kind === "known_failure") throw storedChartAiDraftFailure(result);
+    if (result.kind === "unknown_outcome") throw new ChartAiDraftOutcomeUnknownError();
+    if (result.calculationId !== calculation.id || result.interpretationId.length === 0) {
+      throw new ChartAiDraftOutcomeUnknownError();
+    }
+    if (
+      !calculation.interpretations.some(
+        (interpretation) =>
+          interpretation.id === result.interpretationId && interpretation.source === "ai"
+      )
+    ) {
+      const refreshed = await getCalculation({
+        store: this.calculationStore,
+        ownerUserId,
+        calculationId: result.calculationId
+      });
+      if (
+        refreshed.resultChecksum !== calculation.resultChecksum ||
+        !refreshed.interpretations.some(
+          (interpretation) =>
+            interpretation.id === result.interpretationId && interpretation.source === "ai"
+        )
+      ) {
+        throw new ChartAiDraftOutcomeUnknownError();
+      }
+      return toCalculationResponse(refreshed);
+    }
+    return toCalculationResponse(calculation);
+  }
+
+  private async markAiDraftUnknownIfPossible(
+    commandId: string,
+    actorUserId: string
+  ): Promise<void> {
+    try {
+      await this.aiDraftCommandStore.completeUnknownOutcome({
+        commandId,
+        actorUserId,
+        now: this.clock.now().toISOString()
+      });
+    } catch (error) {
+      this.logger.error({
+        event: "chart_ai_draft_unknown_outcome_persistence_failed",
+        commandId,
+        errorName: readErrorName(error)
+      });
+    }
+  }
 }
 
-function toJobResponse(job: ChartCalculationJob): ChartJobResponse {
+async function mapChartAiPreflightError(error: unknown): Promise<HttpException | null> {
+  try {
+    await mapChartError(async () => {
+      throw error;
+    });
+  } catch (mapped) {
+    return mapped instanceof HttpException ? mapped : null;
+  }
+  return null;
+}
+
+function toReplayableChartAiDraftFailure(
+  error: HttpException
+): Omit<ChartAiDraftCommandKnownFailure, "schemaVersion" | "kind"> | null {
+  const response = error.getResponse();
+  if (response === null || typeof response !== "object") return null;
+  const record = response as Record<string, unknown>;
+  const statusCode = error.getStatus();
+  if (
+    !Number.isInteger(statusCode) ||
+    statusCode < 400 ||
+    statusCode > 599 ||
+    typeof record.code !== "string" ||
+    !/^[A-Z0-9_]{1,120}$/u.test(record.code) ||
+    typeof record.message !== "string" ||
+    record.message.length < 1 ||
+    record.message.length > 240
+  ) {
+    return null;
+  }
+  return { statusCode, code: record.code, message: record.message };
+}
+
+function chartAiPreflightUnavailableFailure(): Omit<
+  ChartAiDraftCommandKnownFailure,
+  "schemaVersion" | "kind"
+> {
+  return {
+    statusCode: 503,
+    code: "CHART_AI_DRAFT_PREFLIGHT_UNAVAILABLE",
+    message: "Chart AI prerequisites are temporarily unavailable"
+  };
+}
+
+function readErrorName(error: unknown): string {
+  return error instanceof Error && error.name.length > 0 ? error.name : "UnknownError";
+}
+
+function toKnownChartAiDraftFailure(
+  error: unknown
+): Omit<ChartAiDraftCommandKnownFailure, "schemaVersion" | "kind"> | null {
+  if (!(error instanceof HttpException)) return null;
+  const statusCode = error.getStatus();
+  if (statusCode === 422) {
+    return {
+      statusCode,
+      code: "CHART_AI_DRAFT_REJECTED",
+      message: "AI generation was refused for this input"
+    };
+  }
+  if (statusCode === 429) {
+    return {
+      statusCode,
+      code: "CHART_AI_DRAFT_RATE_LIMITED",
+      message: "AI generation rate limit reached"
+    };
+  }
+  if (statusCode === 502) {
+    return {
+      statusCode,
+      code: "CHART_AI_DRAFT_OUTPUT_INVALID",
+      message: "AI generation returned invalid output"
+    };
+  }
+  return null;
+}
+
+function storedChartAiDraftFailure(result: ChartAiDraftCommandKnownFailure): HttpException {
+  return new HttpException(
+    {
+      statusCode: result.statusCode,
+      error: result.code,
+      code: result.code,
+      message: result.message
+    },
+    result.statusCode
+  );
+}
+
+function toJobResponse(job: ChartCalculationJob, locale: "ru" | "en"): ChartJobResponse {
+  const failure = toPublicChartJobFailure(job.lastErrorCode, job.lastErrorMessage, locale);
   return chartJobResponseSchema.parse({
     id: job.id,
+    interpretationMode: job.interpretationMode,
     status: job.status === "queued" || job.status === "processing" ? "calculating" : job.status,
     calculationId: job.resultCalculationId,
-    failureCode: job.lastErrorCode,
-    failureMessage: job.lastErrorMessage
+    targetCalculationId: job.targetCalculationId,
+    expectedSourceChecksum: job.expectedSourceChecksum,
+    failureCode: failure.code,
+    failureMessage: failure.message
   });
+}
+
+type ChartJobPublicFailureKind =
+  | "configuration"
+  | "durable_state"
+  | "input_or_result"
+  | "legacy"
+  | "replacement"
+  | "retry_exhausted"
+  | "transient";
+
+const chartJobPublicFailureKinds: Readonly<Record<string, ChartJobPublicFailureKind>> = {
+  legacy_job_requires_requeue: "legacy",
+  retry_exhausted: "retry_exhausted",
+  chart_job_durable_state_invalid: "durable_state",
+  chart_job_readiness_profile_unavailable: "configuration",
+  chart_provider_timeout: "transient",
+  chart_worker_shutdown: "transient",
+  chart_job_lease_expired: "transient",
+  chart_provider_transient_failure: "transient",
+  chart_job_input_invalid: "input_or_result",
+  CHART_ENGINE_BASE_URL_INVALID: "configuration",
+  CHART_ENGINE_TIMEOUT_INVALID: "configuration",
+  CHART_ENGINE_REQUEST_INVALID: "input_or_result",
+  CHART_ENGINE_RESPONSE_INVALID_JSON: "input_or_result",
+  CHART_ENGINE_RESPONSE_INVALID_SCHEMA: "input_or_result",
+  CHART_ENGINE_REDIRECT_REFUSED: "configuration",
+  CHART_ENGINE_READY_INVALID_JSON: "configuration",
+  CHART_ENGINE_READY_INVALID_SCHEMA: "configuration",
+  CHART_ENGINE_READY_EXPECTED_PROFILE_INVALID: "configuration",
+  CHART_ENGINE_READY_PROFILE_MISMATCH: "configuration",
+  CHART_REPLACEMENT_TARGET_NOT_FOUND: "replacement",
+  CHART_REPLACEMENT_SOURCE_CHANGED: "replacement",
+  CHART_REPLACEMENT_TARGET_MISMATCH: "replacement",
+  CHART_REPLACEMENT_PARTICIPANT_MISMATCH: "replacement",
+  CHART_REPLACEMENT_EXACT_KEY_CONFLICT: "replacement",
+  CHART_REPLACEMENT_RESULT_INTEGRITY_INVALID: "replacement",
+  CHART_REPLACEMENT_JOB_IDENTITY_INVALID: "replacement",
+  CHART_RESULT_CONTRACT_INVALID: "input_or_result",
+  CHART_RESULT_V2_REQUIRED: "input_or_result",
+  CHART_RESULT_REPRODUCIBILITY_FINGERPRINT_MISMATCH: "input_or_result",
+  CHART_RESULT_CHECKSUM_MISMATCH: "input_or_result",
+  CHART_RESULT_JOB_BINDING_MISMATCH: "input_or_result",
+  CHART_RESULT_EXECUTION_PROFILE_MISMATCH: "input_or_result",
+  CHART_JOB_FINGERPRINT_MISMATCH: "input_or_result",
+  CHART_PARTICIPANT_PROFILE_INVALID: "input_or_result"
+};
+
+const chartJobPublicFailureCopy: Readonly<
+  Record<"ru" | "en", Readonly<Record<ChartJobPublicFailureKind | "generic", string>>>
+> = {
+  ru: {
+    configuration: "Сервис расчёта карты временно недоступен из-за конфигурации",
+    durable_state: "Состояние расчёта не прошло проверку; запустите расчёт повторно",
+    input_or_result: "Результат расчёта не прошёл проверку; проверьте данные и повторите расчёт",
+    legacy: "Устаревший расчёт карты нужно запустить повторно",
+    replacement: "Карта изменилась; обновите страницу и повторите перерасчёт",
+    retry_exhausted: "Не удалось рассчитать карту после нескольких попыток",
+    transient: "Сервис расчёта карты временно недоступен; повторите попытку",
+    generic: "Не удалось рассчитать карту; запустите расчёт повторно"
+  },
+  en: {
+    configuration: "The chart calculation service is unavailable because of its configuration",
+    durable_state: "The calculation state failed validation; start the calculation again",
+    input_or_result: "The calculation result failed validation; check the data and try again",
+    legacy: "The legacy chart calculation must be started again",
+    replacement: "The chart changed; reload the page and run the recalculation again",
+    retry_exhausted: "Chart calculation failed after multiple attempts",
+    transient: "The chart calculation service is temporarily unavailable; try again",
+    generic: "Chart calculation failed; start the calculation again"
+  }
+};
+
+function toPublicChartJobFailure(
+  persistedCode: string | null,
+  persistedMessage: string | null,
+  locale: "ru" | "en"
+): { readonly code: string | null; readonly message: string | null } {
+  if (persistedCode === null && persistedMessage === null) {
+    return { code: null, message: null };
+  }
+  const kind =
+    persistedCode && Object.hasOwn(chartJobPublicFailureKinds, persistedCode)
+      ? chartJobPublicFailureKinds[persistedCode]
+      : undefined;
+  if (!kind) {
+    return {
+      code: "chart_calculation_failed",
+      message: chartJobPublicFailureCopy[locale].generic
+    };
+  }
+  return { code: persistedCode, message: chartJobPublicFailureCopy[locale][kind] };
 }
 
 function toChartInputSnapshot(input: ChartReadyBirthData) {
@@ -765,6 +1295,22 @@ function toChartInputSnapshot(input: ChartReadyBirthData) {
     birthTimePrecision: input.birthTimePrecision,
     ...(input.birthTimeDstOccurrence ? { dstOccurrence: input.birthTimeDstOccurrence } : {})
   };
+}
+
+async function retryExactChartAiDraftSave<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < CHART_AI_DRAFT_SAVE_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function raiseChartJobInterpretationModeRequired(): never {
+  throw new Error("CHART_NATAL_INTERPRETATION_MODE_INVALID");
 }
 
 function parseChartContract<T>(
@@ -787,6 +1333,9 @@ function requireOwnerUserId(request: AstrologerSessionRequest): string {
 }
 
 function assertNatalChartAiCalculation(calculation: CalculationRecord) {
+  if (calculation.status === "archived") {
+    throw chartHttpError(409, "CHART_CALCULATION_ARCHIVED", "Chart calculation is archived");
+  }
   if (calculation.module !== "chart") {
     throw chartHttpError(409, "CHART_CALCULATION_MISMATCH", "Calculation is not a chart result");
   }
@@ -797,7 +1346,15 @@ function assertNatalChartAiCalculation(calculation: CalculationRecord) {
       "AI draft is available for natal chart calculations first"
     );
   }
-  const parsed = storedChartNatalCalculationPayloadSchema.safeParse(calculation.resultData);
+  const readable = chartResultSchema.safeParse(calculation.resultData);
+  if (readable.success && readable.data.schemaVersion === "chart-result.v1") {
+    throw chartHttpError(
+      409,
+      "CHART_RECALCULATION_REQUIRED",
+      "Legacy chart calculation must be recalculated before AI generation"
+    );
+  }
+  const parsed = chartNatalResultV2Schema.safeParse(calculation.resultData);
   if (!parsed.success) {
     throw chartHttpError(
       409,
@@ -805,5 +1362,30 @@ function assertNatalChartAiCalculation(calculation: CalculationRecord) {
       "Stored chart calculation result is invalid"
     );
   }
-  return parsed.data;
+  const result = assertStoredChartCalculationSelfIntegrity({ calculation });
+  if (result.schemaVersion !== "chart-result.v2" || result.method !== "natal") {
+    throw new ChartStoredResultIntegrityError();
+  }
+  return result;
+}
+
+function assertAdultNatalInterpretationMode(calculation: CalculationRecord): void {
+  if ((calculation.interpretationMode ?? "legacy_unclassified") !== "adult_natal") {
+    throw new CalculationInterpretationModeUnavailableError(
+      "Chart AI draft is unavailable for this interpretation mode"
+    );
+  }
+}
+
+function assertReadableChartCalculation(
+  calculation: CalculationRecord,
+  expectedExecutionProfile: ReturnType<ChartExecutionProfileProvider["getProfile"]>
+) {
+  if (calculation.status === "archived") {
+    throw chartHttpError(409, "CHART_CALCULATION_ARCHIVED", "Chart calculation is archived");
+  }
+  if (calculation.module !== "chart") {
+    throw chartHttpError(409, "CHART_CALCULATION_MISMATCH", "Calculation is not a chart result");
+  }
+  return assertStoredChartCalculationIntegrity({ calculation, expectedExecutionProfile });
 }

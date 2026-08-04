@@ -11,12 +11,15 @@ import type {
   CalculationStatus,
   CalculationStatusFilter
 } from "./calculation-types";
+import type { ChartInterpretationMode } from "@elevenhouse/contracts";
 
 export type CalculationRecord = CalculationSavedData & {
   readonly id: string;
   readonly ownerUserId: string;
   readonly module: CalculationModule;
   readonly mode: CalculationMode;
+  /** Absent only in legacy/non-chart records that predate this chart-specific field. */
+  readonly interpretationMode?: ChartInterpretationMode | null;
   readonly methodCode: string;
   readonly title: string;
   readonly status: CalculationStatus;
@@ -37,6 +40,7 @@ export type CalculationStoreCreateInput = CalculationSavedData & {
   readonly ownerUserId: string;
   readonly module: CalculationModule;
   readonly mode: CalculationMode;
+  readonly interpretationMode?: ChartInterpretationMode | null;
   readonly methodCode: string;
   readonly title: string;
   readonly participants: readonly CalculationParticipant[];
@@ -57,6 +61,11 @@ export type CalculationStoreReplaceResultOutcome =
   | { readonly status: "updated"; readonly calculation: CalculationRecord }
   | { readonly status: "not_found" }
   | { readonly status: "exact_key_conflict" };
+
+export type CalculationStoreSaveInterpretationOutcome =
+  | CalculationRecord
+  | { readonly kind: "idempotency_conflict" }
+  | null;
 
 export type CalculationStore = {
   readonly listByOwner: (query: {
@@ -110,7 +119,7 @@ export type CalculationStore = {
     readonly promptVersion: string | null;
     readonly interpretationIdGenerator: () => string;
     readonly now: string;
-  }) => Promise<CalculationRecord | null>;
+  }) => Promise<CalculationStoreSaveInterpretationOutcome>;
   readonly approveInterpretation: (input: {
     readonly ownerUserId: string;
     readonly calculationId: string;

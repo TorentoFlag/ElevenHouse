@@ -4,7 +4,12 @@ import type {
   ClientBirthPlaceSearchResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
-import { getAstrologerClient, searchClientBirthPlaces, updateClientBirthData } from "./clientsApi";
+import {
+  getAstrologerClient,
+  resolveClientBirthPlaceReference,
+  searchClientBirthPlaces,
+  updateClientBirthData
+} from "./clientsApi";
 
 const clientUserId = "22222222-2222-4222-8222-222222222222";
 
@@ -82,13 +87,31 @@ describe("clientsApi", () => {
 
     expect(get).toHaveBeenCalledWith("/clients/birth-places?query=Rome+Italy&limit=3");
   });
+
+  it("resolves and strictly parses one opaque provider reference", async () => {
+    const candidate = placeSearchResponse().candidates[0]!;
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(candidate);
+
+    await expect(resolveClientBirthPlaceReference("51485")).resolves.toEqual(candidate);
+    expect(get).toHaveBeenCalledWith("/clients/birth-places/geoapify/51485");
+  });
+
+  it("encodes a valid opaque reference and rejects malformed provider responses", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      ...placeSearchResponse().candidates[0],
+      timezone: "Not/A_Real_Timezone"
+    });
+
+    await expect(resolveClientBirthPlaceReference("place~51485")).rejects.toThrow();
+    expect(get).toHaveBeenCalledWith("/clients/birth-places/geoapify/place~51485");
+  });
 });
 
 function placeSearchResponse(): ClientBirthPlaceSearchResponse {
   return {
     candidates: [
       {
-        id: "nominatim:41485",
+        id: "geoapify:41485",
         label: "Rome, Lazio, Italy",
         placeName: "Rome, Italy",
         countryCode: "IT",
@@ -97,7 +120,7 @@ function placeSearchResponse(): ClientBirthPlaceSearchResponse {
         timezone: "Europe/Rome",
         latitude: 41.8933,
         longitude: 12.4829,
-        provider: "nominatim",
+        provider: "geoapify",
         providerPlaceId: "41485"
       }
     ]

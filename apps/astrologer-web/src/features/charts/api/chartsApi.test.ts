@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
+import { chartMethodVersions, type ChartNatalJobCreateResponse } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 import {
   createAstrocartographyChartJob,
   createHoraryChartJob,
   createCompositeChartJob,
   createChartAiDraft,
+  createChartAiDraftIdempotencyKey,
   createNatalChartJob,
   createProgressionChartJob,
   createSolarReturnChartJob,
@@ -33,12 +34,13 @@ const now = "2026-07-22T00:00:00.000Z";
 describe("chartsApi", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("creates natal jobs with client id and settings only, preserving CSRF protection", async () => {
+  it("creates natal jobs with client id, interpretation authority and settings only", async () => {
     const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
 
     await expect(
       createNatalChartJob({
         clientId,
+        interpretationMode: "adult_natal",
         birthDate: "1990-07-15",
         settings: {
           zodiac: "tropical",
@@ -54,6 +56,7 @@ describe("chartsApi", () => {
       "/charts/natal/jobs",
       {
         clientId,
+        interpretationMode: "adult_natal",
         settings: {
           zodiac: "tropical",
           houseSystem: "placidus",
@@ -67,6 +70,107 @@ describe("chartsApi", () => {
     expect(JSON.stringify(post.mock.calls[0]?.[1])).not.toContain("birthDate");
   });
 
+  it("sends explicit child interpretation authority through the natal endpoint", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      createNatalChartJob({
+        clientId,
+        interpretationMode: "child",
+        settings: chartSettings()
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      "/charts/natal/jobs",
+      { clientId, interpretationMode: "child", settings: chartSettings() },
+      { csrf: true }
+    );
+  });
+
+  it("rejects a legacy immediate result from a new chart job instead of treating it as current", async () => {
+    vi.spyOn(application.http, "post").mockResolvedValue({
+      status: "succeeded",
+      calculationId,
+      result: chartPayload().result
+    });
+
+    await expect(
+      createNatalChartJob({
+        clientId,
+        interpretationMode: "adult_natal",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      })
+    ).rejects.toThrow();
+  });
+
+  it("binds every create endpoint to its expected immediate result method", async () => {
+    vi.spyOn(application.http, "post").mockResolvedValue({
+      status: "succeeded",
+      calculationId,
+      result: currentNatalResult()
+    });
+
+    await expect(
+      createNatalChartJob({
+        clientId,
+        interpretationMode: "adult_natal",
+        settings: chartSettings()
+      })
+    ).resolves.toMatchObject({ status: "succeeded", calculationId });
+
+    for (const createWrongMethodJob of [
+      () =>
+        createTransitChartJob({
+          clientId,
+          settings: chartSettings(),
+          transit: { date: "2026-08-03", time: "14:30" }
+        }),
+      () =>
+        createSynastryChartJob({
+          clientId,
+          partnerClientId,
+          settings: chartSettings()
+        }),
+      () =>
+        createCompositeChartJob({
+          clientId,
+          partnerClientId,
+          settings: chartSettings()
+        }),
+      () => createSolarReturnChartJob({ clientId, year: 2026, settings: chartSettings() }),
+      () =>
+        createProgressionChartJob({
+          clientId,
+          targetDate: "2026-08-03",
+          settings: chartSettings()
+        }),
+      () =>
+        createHoraryChartJob({
+          clientId,
+          settings: chartSettings(),
+          question: {
+            question: "Стоит ли принимать предложение?",
+            category: "career",
+            date: "2026-08-03",
+            time: "14:30",
+            timezone: "Europe/Moscow",
+            latitude: 55.7558,
+            longitude: 37.6173
+          }
+        }),
+      () => createAstrocartographyChartJob({ clientId, settings: chartSettings() })
+    ]) {
+      await expect(createWrongMethodJob()).rejects.toThrow("CHART_SUBMISSION_METHOD_MISMATCH");
+    }
+  });
+
   it("creates chart AI drafts with checksum only and CSRF protection", async () => {
     const response = calculationRecordResponse();
     const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
@@ -74,6 +178,7 @@ describe("chartsApi", () => {
     await expect(
       createChartAiDraft({
         calculationId,
+        idempotencyKey: "charts:ai-draft:test-command",
         body: { expectedResultChecksum: checksum }
       })
     ).resolves.toEqual(response);
@@ -81,8 +186,31 @@ describe("chartsApi", () => {
     expect(post).toHaveBeenCalledWith(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
-      { csrf: true }
+      {
+        csrf: true,
+        headers: { "idempotency-key": "charts:ai-draft:test-command" }
+      }
     );
+  });
+
+  it("keeps one chart AI command key stable across a transport retry", async () => {
+    const response = calculationRecordResponse();
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
+    const idempotencyKey = createChartAiDraftIdempotencyKey(
+      () => "11111111-1111-4111-8111-111111111111"
+    );
+    const input = {
+      calculationId,
+      idempotencyKey,
+      body: { expectedResultChecksum: checksum }
+    };
+
+    await createChartAiDraft(input);
+    await createChartAiDraft(input);
+
+    expect(idempotencyKey).toBe("charts:ai-draft:11111111-1111-4111-8111-111111111111");
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[0]?.[2]).toEqual(post.mock.calls[1]?.[2]);
   });
 
   it("does not expose a child chart job endpoint because child chart reuses natal calculations", () => {
@@ -366,17 +494,34 @@ describe("chartsApi", () => {
 
   it("loads chart job and calculation through shared response contracts", async () => {
     vi.spyOn(application.http, "get")
-      .mockResolvedValueOnce({ id: jobId, status: "calculating" })
+      .mockResolvedValueOnce({
+        id: jobId,
+        status: "calculating",
+        interpretationMode: "legacy_unclassified"
+      })
       .mockResolvedValueOnce(chartPayload());
 
     await expect(getChartJob(jobId)).resolves.toMatchObject({ id: jobId, status: "calculating" });
     await expect(getChartCalculation(calculationId)).resolves.toMatchObject({
-      schemaVersion: "chart-result.v1"
+      calculationId,
+      capabilities: ["view_legacy", "recalculate"],
+      result: { schemaVersion: "chart-result.v1" }
     });
 
     expect(application.http.get).toHaveBeenNthCalledWith(1, `/charts/jobs/${jobId}`, {
       cache: "no-store"
     });
+  });
+
+  it("rejects a calculation read whose response id differs from the requested id", async () => {
+    vi.spyOn(application.http, "get").mockResolvedValue({
+      ...chartPayload(),
+      calculationId: "66666666-6666-4666-8666-666666666666"
+    });
+
+    await expect(getChartCalculation(calculationId)).rejects.toThrow(
+      "CHART_CALCULATION_ID_MISMATCH"
+    );
   });
 
   it("recalculates an existing chart through the calculation-scoped CSRF route", async () => {
@@ -385,7 +530,8 @@ describe("chartsApi", () => {
     await expect(
       recalculateChart({
         calculationId,
-        clientId,
+        expectedResultChecksum: checksum,
+        expectedMethod: "natal",
         settings: {
           zodiac: "tropical",
           houseSystem: "placidus",
@@ -399,7 +545,7 @@ describe("chartsApi", () => {
     expect(post).toHaveBeenCalledWith(
       `/charts/calculations/${calculationId}/recalculate`,
       {
-        clientId,
+        expectedResultChecksum: checksum,
         settings: {
           zodiac: "tropical",
           houseSystem: "placidus",
@@ -410,6 +556,55 @@ describe("chartsApi", () => {
       },
       { csrf: true }
     );
+  });
+
+  it("recalculates with the expected checksum only when settings are unchanged", async () => {
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(createResponse);
+
+    await expect(
+      recalculateChart({
+        calculationId,
+        expectedResultChecksum: checksum,
+        expectedMethod: "natal"
+      })
+    ).resolves.toEqual(createResponse);
+
+    expect(post).toHaveBeenCalledWith(
+      `/charts/calculations/${calculationId}/recalculate`,
+      { expectedResultChecksum: checksum },
+      { csrf: true }
+    );
+  });
+
+  it("rejects an immediate recalculation response for another id or method", async () => {
+    const post = vi.spyOn(application.http, "post");
+    post.mockResolvedValueOnce({
+      status: "succeeded",
+      calculationId: "66666666-6666-4666-8666-666666666666",
+      result: currentNatalResult()
+    });
+
+    await expect(
+      recalculateChart({
+        calculationId,
+        expectedResultChecksum: checksum,
+        expectedMethod: "natal"
+      })
+    ).rejects.toThrow("CHART_SUBMISSION_CALCULATION_ID_MISMATCH");
+
+    post.mockResolvedValueOnce({
+      status: "succeeded",
+      calculationId,
+      result: currentNatalResult()
+    });
+
+    await expect(
+      recalculateChart({
+        calculationId,
+        expectedResultChecksum: checksum,
+        expectedMethod: "transit"
+      })
+    ).rejects.toThrow("CHART_SUBMISSION_METHOD_MISMATCH");
   });
 
   it("loads, enqueues and downloads chart PDFs through calculation-scoped routes", async () => {
@@ -452,6 +647,7 @@ describe("chartsApi", () => {
 function chartPayload() {
   return {
     calculationId,
+    interpretationMode: "legacy_unclassified" as const,
     result: {
       schemaVersion: "chart-result.v1",
       method: "natal",
@@ -482,6 +678,54 @@ function chartPayload() {
         },
         warnings: []
       }
+    },
+    capabilities: ["view_legacy", "recalculate"]
+  };
+}
+
+function chartSettings() {
+  return {
+    zodiac: "tropical" as const,
+    houseSystem: "placidus" as const,
+    nodeType: "true" as const,
+    aspectPreset: "major" as const,
+    orbMultiplier: 1
+  };
+}
+
+function currentNatalResult() {
+  return {
+    schemaVersion: "chart-result.v2" as const,
+    method: "natal" as const,
+    methodVersion: chartMethodVersions.natal,
+    provider: {
+      name: "kerykeion" as const,
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier" as const,
+      ephemerisFlags: ["FLG_MOSEPH" as const, "FLG_SPEED" as const],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"c".repeat(64)}`,
+    settings: chartSettings(),
+    inputSnapshot: {
+      birthDate: "1990-07-15",
+      birthTime: "10:30",
+      timezone: "Europe/Rome",
+      latitude: 41.9028,
+      longitude: 12.4964,
+      birthTimePrecision: "exact" as const
+    },
+    result: {
+      points: completePoints(),
+      houses: completeHouses(),
+      aspects: [],
+      distributions: {
+        elements: { fire: 3, earth: 2, air: 3, water: 2 },
+        modalities: { cardinal: 4, fixed: 3, mutable: 3 },
+        polarity: { masculine: 6, feminine: 4 }
+      },
+      warnings: []
     }
   };
 }
@@ -492,6 +736,7 @@ function calculationRecordResponse() {
     ownerUserId: "11111111-1111-4111-8111-111111111111",
     module: "chart",
     mode: "individual",
+    interpretationMode: "adult_natal",
     methodCode: "natal",
     title: "QA Natal",
     status: "calculated",

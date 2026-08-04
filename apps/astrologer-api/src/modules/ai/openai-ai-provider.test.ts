@@ -93,6 +93,7 @@ function createOpenAiResponse(options: {
   readonly status?: unknown;
   readonly incompleteReason?: unknown;
   readonly usage?: unknown;
+  readonly model?: unknown;
 } = {}): unknown {
   const outputText = Object.hasOwn(options, "outputText")
     ? options.outputText
@@ -105,8 +106,12 @@ function createOpenAiResponse(options: {
         output_tokens: 5,
         total_tokens: 15
       };
+  const model = Object.hasOwn(options, "model")
+    ? options.model
+    : "gpt-5.4-mini-2026-08-03";
 
   return {
+    model,
     output_text: outputText,
     status,
     incomplete_details: options.incompleteReason
@@ -132,7 +137,7 @@ describe("OpenAiProvider", () => {
     await expect(provider.generateStructured(createProviderInput())).resolves.toMatchObject({
       output: { content: "Generated draft" },
       provider: "openai",
-      model: "gpt-5.4-mini",
+      model: "gpt-5.4-mini-2026-08-03",
       finishReason: "completed",
       usage: {
         promptTokens: 10,
@@ -251,6 +256,21 @@ describe("OpenAiProvider", () => {
       AiProviderResponseFormatError
     );
   });
+
+  it.each([undefined, "", " ", 42])(
+    "rejects missing or malformed observed model provenance: %j",
+    async (model) => {
+      const response = createOpenAiResponse({ model });
+      if (model === undefined && typeof response === "object" && response !== null) {
+        delete (response as { model?: unknown }).model;
+      }
+      const provider = new OpenAiProvider(createConfigService(), createClient(response));
+
+      await expect(provider.generateStructured(createProviderInput())).rejects.toBeInstanceOf(
+        AiProviderResponseFormatError
+      );
+    }
+  );
 
   it("rejects output that does not match the response schema", async () => {
     const client = createClient(

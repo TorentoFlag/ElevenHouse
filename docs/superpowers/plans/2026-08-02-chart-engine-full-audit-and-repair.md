@@ -1782,11 +1782,14 @@ Task 5 intentionally does not guess a universal timeout for the valid
 
 - [ ] **Step 2: Write RED queue/relay/readiness tests**
 
-Assert relay consumes Task 6 `getQueueDispatch` and reads `{maxAttempts}` from
-PostgreSQL before `queue.add`, BullMQ
-options use that exact value, runtime config no longer supplies a competing
-attempt count, and readiness rejects missing/mismatched provider metadata or a
-job execution profile that differs from the real engine readiness profile.
+Assert relay consumes Task 6 `getQueueDispatch` before `queue.add`, but uses
+BullMQ `attempts: 1`: PostgreSQL is the only attempt/retry authority. Assert a
+retryable DB transition schedules its next outbox delivery with persisted
+exponential backoff plus jitter, and retained Bull jobs in `failed` or
+`completed` state are redriven with `Job.retry()` rather than silently treated
+as published. Runtime config supplies no competing attempt count. Readiness
+must reject missing/mismatched provider metadata or a job execution profile
+that differs from the real engine readiness profile.
 
 - [ ] **Step 3: Run RED worker tests**
 
@@ -1816,10 +1819,15 @@ final-attempt process crash cannot leave a permanent processing row.
 
 - [ ] **Step 5: Make DB attempts the only retry source**
 
-Consume `getQueueDispatch(jobId)`, remove `CHART_WORKER_ATTEMPTS`, and construct
-BullMQ job options from persisted maxAttempts plus existing backoff/
-jitter. A permanent failure writes one terminal failure; a transient failure
-returns/throws only while another durable attempt remains.
+Consume `getQueueDispatch(jobId)`, remove `CHART_WORKER_ATTEMPTS`, and set
+BullMQ `attempts: 1` for each transport delivery. PostgreSQL increments durable
+attempts and, for a retryable failure with attempts remaining, publishes a new
+outbox delivery whose `availableAt` carries exponential backoff plus jitter.
+The relay redrives retained `failed`/`completed` Bull jobs through
+`Job.retry()`. A permanent or exhausted failure writes one terminal DB
+failure. `DelayedError` is used only after BullMQ has actually moved a job to a
+delayed state; ordinary DB-scheduled retry delivery must let the old Bull job
+complete normally.
 
 - [ ] **Step 6: Run GREEN worker/package gates and commit**
 

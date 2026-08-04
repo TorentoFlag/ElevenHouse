@@ -1,7 +1,16 @@
 import { HttpException, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomUUID } from "node:crypto";
 import type { AiGenerationPort, AiGenerationResult, AiPromptDefinition } from "@elevenhouse/ai";
+import type {
+  AiUsageConsentAuthorization,
+  AiUsageResourceEvidence,
+  AiUsageSafeErrorCode,
+  NormalizedAiUsageAuthorizationEvidence
+} from "@elevenhouse/domain";
+import { normalizeAiUsageAuthorizationEvidence } from "@elevenhouse/domain";
 import { AI_GENERATION_PROVIDER, AI_RATE_LIMITER, AI_USAGE_RECORDER } from "./ai.tokens";
+import { getAiFeaturePolicy } from "./ai-feature-policy";
 import type { AiRateLimiterPort } from "./ai-rate-limiter";
 import { createAiSafetyIdentifier } from "./ai-safety-identifier";
 import {
@@ -16,12 +25,14 @@ import {
   AiProviderTimeoutError,
   AiProviderUnavailableError
 } from "./openai-ai-provider";
-import type { AiUsageRecord, AiUsageRecorderPort } from "./ai-usage-recorder";
+import type { AiUsageRecorderPort } from "./ai-usage-recorder";
 
 type AiGenerationRuntimeConfig = {
   readonly enabled: boolean;
   readonly maxOutputTokens: number;
 };
+
+const AI_USAGE_EVIDENCE_WRITE_ATTEMPTS = 2;
 
 @Injectable()
 export class AiGenerationService {
@@ -37,11 +48,51 @@ export class AiGenerationService {
     readonly input: TInput;
     readonly ownerUserId: string;
     readonly feature: string;
+    readonly consentAuthorizations?: readonly AiUsageConsentAuthorization[];
+    readonly usageEvidence?: {
+      readonly processingAuthorityVersion: string;
+      readonly resourceEvidence: AiUsageResourceEvidence;
+    };
   }): Promise<AiGenerationResult<TOutput>> {
     const aiConfig = this.configService.getOrThrow<AiGenerationRuntimeConfig>("astrologerApi.ai");
 
     if (!aiConfig.enabled) {
       throw createAiProviderHttpException();
+    }
+
+    const featurePolicy = getAiFeaturePolicy(input.feature);
+    if (!featurePolicy || featurePolicy.availability !== "enabled") {
+      throw createAiFeaturePolicyHttpException();
+    }
+    const hasConsentAuthorizations = (input.consentAuthorizations?.length ?? 0) > 0;
+    const hasUsageEvidence = input.usageEvidence !== undefined;
+    if (
+      (featurePolicy.consentEvidence === "required" &&
+        (!hasConsentAuthorizations || !hasUsageEvidence)) ||
+      (featurePolicy.consentEvidence === "forbidden" &&
+        (hasConsentAuthorizations || hasUsageEvidence))
+    ) {
+      throw createAiUsageEvidenceHttpException();
+    }
+
+    let usageAuthorizationEvidence: NormalizedAiUsageAuthorizationEvidence;
+    try {
+      usageAuthorizationEvidence = normalizeAiUsageAuthorizationEvidence({
+        consentAuthorizations: input.consentAuthorizations ?? [],
+        processingAuthorityVersion: input.usageEvidence?.processingAuthorityVersion ?? null,
+        resourceEvidence: input.usageEvidence?.resourceEvidence ?? null
+      });
+    } catch {
+      throw createAiUsageEvidenceHttpException();
+    }
+    const { consentAuthorizations, processingAuthorityVersion, resourceEvidence } =
+      usageAuthorizationEvidence;
+    if (
+      consentAuthorizations.some(
+        ({ astrologerUserId }) => astrologerUserId !== input.ownerUserId.trim().toLowerCase()
+      )
+    ) {
+      throw createAiUsageEvidenceHttpException();
     }
 
     const rateLimit = await this.rateLimiter.consume({ ownerUserId: input.ownerUserId });
@@ -56,46 +107,32 @@ export class AiGenerationService {
       );
     }
 
-    const startedAt = Date.now();
     const promptInput = input.prompt.inputSchema.parse(input.input);
+    const renderedPrompt = input.prompt.render(promptInput);
     const safetyIdentifier = createAiSafetyIdentifier(input.ownerUserId);
-    const result = await this.generateWithProvider({
+    const startedAt = new Date();
+    const monotonicStartedAt = performance.now();
+    const attemptId = randomUUID();
+    await this.startUsageAttempt({
+      attemptId,
       feature: input.feature,
-      prompt: input.prompt,
-      promptInput,
+      promptId: input.prompt.id,
+      promptVersion: input.prompt.version,
       safetyIdentifier,
-      maxOutputTokens: Math.min(input.prompt.maxOutputTokens, aiConfig.maxOutputTokens)
+      consentAuthorizations,
+      processingAuthorityVersion,
+      resourceEvidence,
+      startedAt
     });
 
-    this.usageRecorder.record(
-      createUsageRecord({
-        feature: input.feature,
-        promptId: input.prompt.id,
-        promptVersion: input.prompt.version,
-        ownerUserId: input.ownerUserId,
-        durationMs: Date.now() - startedAt,
-        result
-      })
-    );
-
-    return result;
-  }
-
-  private async generateWithProvider<TInput, TOutput>(input: {
-    readonly feature: string;
-    readonly prompt: AiPromptDefinition<TInput, TOutput>;
-    readonly promptInput: TInput;
-    readonly safetyIdentifier: string;
-    readonly maxOutputTokens: number;
-  }): Promise<AiGenerationResult<TOutput>> {
     try {
-      return await this.provider.generateStructured({
-        prompt: input.prompt.render(input.promptInput),
+      const result = await this.provider.generateStructured({
+        prompt: renderedPrompt,
         modelProfile: input.prompt.modelProfile,
         responseSchema: input.prompt.outputSchema,
-        maxOutputTokens: input.maxOutputTokens,
+        maxOutputTokens: Math.min(input.prompt.maxOutputTokens, aiConfig.maxOutputTokens),
         reasoningEffort: input.prompt.reasoningEffort,
-        safetyIdentifier: input.safetyIdentifier,
+        safetyIdentifier,
         structuredOutputName: input.prompt.structuredOutputName,
         structuredOutputJsonSchema: input.prompt.structuredOutputJsonSchema,
         metadata: {
@@ -103,18 +140,127 @@ export class AiGenerationService {
           provider: "openai",
           promptId: input.prompt.id,
           promptVersion: input.prompt.version,
-          ownerUserId: input.safetyIdentifier
+          ownerUserId: safetyIdentifier
         }
       });
+      const terminalTiming = createTerminalTiming(startedAt, monotonicStartedAt);
+      await this.completeUsageAttempt({
+        attemptId,
+        result,
+        ...terminalTiming
+      });
+      return result;
     } catch (error) {
+      if (isUsageEvidenceHttpException(error)) throw error;
+      const terminalTiming = createTerminalTiming(startedAt, monotonicStartedAt);
+      await this.failUsageAttempt({
+        attemptId,
+        safeErrorCode: toSafeAiUsageErrorCode(error),
+        ...terminalTiming
+      });
       const httpException = mapAiProviderError(error);
-      if (httpException) {
-        throw httpException;
-      }
-
-      throw error;
+      if (httpException) throw httpException;
+      throw createAiProviderHttpException();
     }
   }
+
+  private async startUsageAttempt(input: {
+    readonly attemptId: string;
+    readonly feature: string;
+    readonly promptId: string;
+    readonly promptVersion: number;
+    readonly safetyIdentifier: string;
+    readonly consentAuthorizations: readonly AiUsageConsentAuthorization[];
+    readonly processingAuthorityVersion: string | null;
+    readonly resourceEvidence: AiUsageResourceEvidence | null;
+    readonly startedAt: Date;
+  }): Promise<string> {
+    const record = {
+      attemptId: input.attemptId,
+      feature: input.feature,
+      promptId: input.promptId,
+      promptVersion: input.promptVersion,
+      provider: "openai" as const,
+      ownerSafetyId: input.safetyIdentifier,
+      consentAuthorizations: input.consentAuthorizations,
+      processingAuthorityVersion: input.processingAuthorityVersion,
+      resourceEvidence: input.resourceEvidence,
+      startedAt: input.startedAt
+    };
+    try {
+      const persistedAttemptId = await persistAiUsageEvidence(() =>
+        this.usageRecorder.start(record)
+      );
+      if (persistedAttemptId !== input.attemptId) throw new Error("AI usage attempt id mismatch");
+      return persistedAttemptId;
+    } catch {
+      throw createAiUsageEvidenceHttpException();
+    }
+  }
+
+  private async completeUsageAttempt<TOutput>(input: {
+    readonly attemptId: string;
+    readonly result: AiGenerationResult<TOutput>;
+    readonly durationMs: number;
+    readonly completedAt: Date;
+  }): Promise<void> {
+    const record = {
+      attemptId: input.attemptId,
+      model: input.result.model,
+      finishReason: input.result.finishReason,
+      durationMs: input.durationMs,
+      ...(input.result.usage ? { usage: input.result.usage } : {}),
+      completedAt: input.completedAt
+    };
+    try {
+      await persistAiUsageEvidence(() => this.usageRecorder.complete(record));
+    } catch {
+      throw createAiUsageEvidenceHttpException();
+    }
+  }
+
+  private async failUsageAttempt(input: {
+    readonly attemptId: string;
+    readonly safeErrorCode: AiUsageSafeErrorCode;
+    readonly durationMs: number;
+    readonly completedAt: Date;
+  }): Promise<void> {
+    const record = {
+      attemptId: input.attemptId,
+      safeErrorCode: input.safeErrorCode,
+      durationMs: input.durationMs,
+      completedAt: input.completedAt
+    };
+    try {
+      await persistAiUsageEvidence(() => this.usageRecorder.fail(record));
+    } catch {
+      throw createAiUsageEvidenceHttpException();
+    }
+  }
+}
+
+async function persistAiUsageEvidence<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < AI_USAGE_EVIDENCE_WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function createTerminalTiming(
+  startedAt: Date,
+  monotonicStartedAt: number
+): { readonly durationMs: number; readonly completedAt: Date } {
+  const elapsed = performance.now() - monotonicStartedAt;
+  const durationMs = Number.isFinite(elapsed) ? Math.max(0, Math.round(elapsed)) : 0;
+  return {
+    durationMs,
+    completedAt: new Date(Math.max(Date.now(), startedAt.getTime()))
+  };
 }
 
 function mapAiProviderError(error: unknown): HttpException | undefined {
@@ -130,7 +276,10 @@ function mapAiProviderError(error: unknown): HttpException | undefined {
     error instanceof AiProviderResponseFormatError ||
     error instanceof AiProviderIncompleteResponseError
   ) {
-    return new HttpException({ message: "AI generation returned invalid output" }, HttpStatus.BAD_GATEWAY);
+    return new HttpException(
+      { message: "AI generation returned invalid output" },
+      HttpStatus.BAD_GATEWAY
+    );
   }
 
   if (
@@ -154,23 +303,53 @@ function createAiProviderHttpException(): HttpException {
   );
 }
 
-function createUsageRecord<TOutput>(input: {
-  readonly feature: string;
-  readonly promptId: string;
-  readonly promptVersion: number;
-  readonly ownerUserId: string;
-  readonly durationMs: number;
-  readonly result: AiGenerationResult<TOutput>;
-}): AiUsageRecord {
-  return {
-    feature: input.feature,
-    promptId: input.promptId,
-    promptVersion: input.promptVersion,
-    ownerUserId: input.ownerUserId,
-    provider: input.result.provider,
-    model: input.result.model,
-    finishReason: input.result.finishReason,
-    durationMs: input.durationMs,
-    ...(input.result.usage ? { usage: input.result.usage } : {})
-  };
+function createAiUsageEvidenceHttpException(): HttpException {
+  return new HttpException(
+    {
+      message: "AI generation evidence is temporarily unavailable",
+      code: "AI_USAGE_EVIDENCE_UNAVAILABLE"
+    },
+    HttpStatus.SERVICE_UNAVAILABLE
+  );
+}
+
+function createAiFeaturePolicyHttpException(): HttpException {
+  return new HttpException(
+    {
+      message: "AI feature processing authority is unavailable",
+      code: "AI_FEATURE_PROCESSING_AUTHORITY_UNAVAILABLE"
+    },
+    HttpStatus.SERVICE_UNAVAILABLE
+  );
+}
+
+function isUsageEvidenceHttpException(error: unknown): boolean {
+  if (!(error instanceof HttpException) || error.getStatus() !== HttpStatus.SERVICE_UNAVAILABLE) {
+    return false;
+  }
+  const response = error.getResponse();
+  return (
+    typeof response === "object" &&
+    response !== null &&
+    "code" in response &&
+    response.code === "AI_USAGE_EVIDENCE_UNAVAILABLE"
+  );
+}
+
+function toSafeAiUsageErrorCode(error: unknown): AiUsageSafeErrorCode {
+  if (error instanceof AiProviderRefusalError) return "AI_PROVIDER_REFUSED";
+  if (error instanceof AiProviderBadRequestError) return "AI_PROVIDER_BAD_REQUEST";
+  if (error instanceof AiProviderResponseFormatError) return "AI_PROVIDER_RESPONSE_INVALID";
+  if (error instanceof AiProviderIncompleteResponseError) {
+    return "AI_PROVIDER_INCOMPLETE_RESPONSE";
+  }
+  if (error instanceof AiProviderUnavailableError) return "AI_PROVIDER_UNAVAILABLE";
+  if (error instanceof AiProviderAuthenticationError) {
+    return "AI_PROVIDER_AUTHENTICATION_FAILED";
+  }
+  if (error instanceof AiProviderBillingError) return "AI_PROVIDER_BILLING_FAILED";
+  if (error instanceof AiProviderRateLimitError) return "AI_PROVIDER_RATE_LIMITED";
+  if (error instanceof AiProviderServerError) return "AI_PROVIDER_SERVER_ERROR";
+  if (error instanceof AiProviderTimeoutError) return "AI_PROVIDER_TIMEOUT";
+  return "AI_PROVIDER_UNKNOWN_FAILURE";
 }

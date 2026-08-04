@@ -1,19 +1,27 @@
-import type { StoredChartAstrocartographyCalculationPayload } from "@elevenhouse/contracts";
-import { getChartPointDisplayLabel, getChartPointSymbol } from "../model/chartDisplay";
-import styles from "./ChartEnginePage.module.css";
+import type { ChartResult, DictionaryLocale } from "@elevenhouse/contracts";
+import { splitAstrocartographyPathAtAntimeridian } from "../model/astrocartographyProjection";
+import { getChartPointDisplayLabel } from "../model/chartDisplay";
+import { chartEngineCopyByLocale } from "../model/chartEngineCopy";
+import styles from "./AstrocartographyMap.module.css";
+import { naturalEarthLandPath } from "./naturalEarthLand";
+import { AstrocartographyLineList, formatAstrocartographyAngle } from "./AstrocartographyLineList";
 
 const width = 720;
 const height = 360;
 
 export function AstrocartographyMap({
+  locale = "ru",
   result
 }: {
-  readonly result?: StoredChartAstrocartographyCalculationPayload | null;
+  readonly locale?: DictionaryLocale;
+  readonly result?: Extract<ChartResult, { readonly method: "astrocartography" }> | null;
 }) {
+  const copy = chartEngineCopyByLocale[locale];
+
   return (
     <div className={styles.astroMapStage}>
       <svg
-        aria-label="Астрокартографическая карта"
+        aria-label={copy.map.ariaLabel}
         className={styles.astroMapSvg}
         data-testid="astrocartography-map"
         role="img"
@@ -41,29 +49,45 @@ export function AstrocartographyMap({
               y2={projectLatitude(latitude)}
             />
           ))}
-          {landMasses.map((landMass) => (
-            <ellipse className={styles.astroMapLand} key={landMass.id} {...landMass} />
-          ))}
+          <path
+            className={styles.astroMapLand}
+            clipRule="evenodd"
+            d={naturalEarthLandPath}
+            data-testid="astrocartography-land"
+            fillRule="evenodd"
+          />
         </g>
         {result ? (
           <g>
-            {result.result.lines.map((line) => (
-              <polyline
-                className={styles.astroMapLine}
-                data-angle={line.angle}
-                data-testid={`astrocartography-line-${line.id}`}
-                key={line.id}
-                points={line.path
-                  .map((point) => projectPoint(point.longitude, point.latitude))
-                  .join(" ")}
-              >
-                <title>{line.label}</title>
-              </polyline>
-            ))}
+            {result.result.lines.flatMap((line) =>
+              splitAstrocartographyPathAtAntimeridian(line.path).map((segment, index) => (
+                <polyline
+                  className={styles.astroMapLine}
+                  data-angle={line.angle}
+                  data-testid={
+                    index === 0
+                      ? `astrocartography-line-${line.id}`
+                      : `astrocartography-line-${line.id}-segment-${index + 1}`
+                  }
+                  key={`${line.id}-${index}`}
+                  points={segment
+                    .map((point) => projectPoint(point.longitude, point.latitude))
+                    .join(" ")}
+                >
+                  <title>
+                    {copy.map.lineDescription(
+                      getChartPointDisplayLabel(line.point, line.label, locale),
+                      formatAstrocartographyAngle(line.angle),
+                      `${getChartPointDisplayLabel(line.point, line.label, locale)} ${formatAstrocartographyAngle(line.angle)}`
+                    )}
+                  </title>
+                </polyline>
+              ))
+            )}
           </g>
         ) : null}
       </svg>
-      <div className={styles.astroMapLegend} aria-label="Легенда астрокартографии">
+      <div className={styles.astroMapLegend} aria-label={copy.map.legendLabel}>
         {astrocartographyAngleLegend.map((item) => (
           <span data-angle={item.angle} key={item.angle}>
             <b aria-hidden="true" />
@@ -71,17 +95,7 @@ export function AstrocartographyMap({
           </span>
         ))}
       </div>
-      {result ? (
-        <div className={styles.astroLineStack}>
-          {result.result.lines.slice(0, 8).map((line) => (
-            <div className={styles.astroLinePill} key={line.id}>
-              <span aria-hidden="true">{getChartPointSymbol(line.point, line.label)}</span>
-              <strong>{getChartPointDisplayLabel(line.point, line.label)}</strong>
-              <small>{formatAstrocartographyAngle(line.angle)}</small>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {result ? <AstrocartographyLineList copy={copy} locale={locale} result={result} /> : null}
     </div>
   );
 }
@@ -98,26 +112,9 @@ function projectLatitude(latitude: number): number {
   return ((90 - latitude) / 180) * height;
 }
 
-function formatAstrocartographyAngle(angle: string): string {
-  if (angle === "mc") return "MC";
-  if (angle === "ic") return "IC";
-  if (angle === "asc") return "Asc";
-  if (angle === "dsc") return "Dsc";
-  return angle;
-}
-
 const astrocartographyAngleLegend = [
   { angle: "mc", label: "MC" },
   { angle: "ic", label: "IC" },
   { angle: "asc", label: "Asc" },
   { angle: "dsc", label: "Dsc" }
-] as const;
-
-const landMasses = [
-  { id: "north-america", cx: 160, cy: 118, rx: 76, ry: 46 },
-  { id: "south-america", cx: 248, cy: 245, rx: 38, ry: 72 },
-  { id: "eurasia", cx: 440, cy: 112, rx: 114, ry: 45 },
-  { id: "africa", cx: 416, cy: 214, rx: 46, ry: 66 },
-  { id: "australia", cx: 586, cy: 260, rx: 44, ry: 24 },
-  { id: "greenland", cx: 258, cy: 56, rx: 30, ry: 16 }
 ] as const;

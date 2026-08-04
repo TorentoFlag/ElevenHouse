@@ -16,6 +16,7 @@ const schema = z.object({
     .max(500)
     .default(25),
   WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
+  WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   WORKERS_CALCULATION_PDF_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
   WORKERS_CALCULATION_PDF_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
   WORKERS_CALCULATION_PDF_JITTER: z.coerce.number().min(0).max(1).default(0.5),
@@ -43,6 +44,7 @@ const productionRequiredKeys = [
   "WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS",
   "WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE",
   "WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS",
+  "WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS",
   "WORKERS_CALCULATION_PDF_ATTEMPTS",
   "WORKERS_CALCULATION_PDF_BACKOFF_MS",
   "WORKERS_CALCULATION_PDF_JITTER",
@@ -69,6 +71,7 @@ export function createWorkersRuntimeConfig(
     outboxRelayIntervalMs: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS,
     outboxRelayBatchSize: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE,
     outboxLockTimeoutMs: value.WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS,
+    flowRuntimeOutboxMaxAttempts: value.WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS,
     calculationPdfAttempts: value.WORKERS_CALCULATION_PDF_ATTEMPTS,
     calculationPdfBackoffMs: value.WORKERS_CALCULATION_PDF_BACKOFF_MS,
     calculationPdfJitter: value.WORKERS_CALCULATION_PDF_JITTER,

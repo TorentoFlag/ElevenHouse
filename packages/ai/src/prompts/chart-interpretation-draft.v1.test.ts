@@ -7,7 +7,6 @@ import {
 const input = {
   locale: "ru" as const,
   methodCode: "natal" as const,
-  resultChecksum: `sha256:${"a".repeat(64)}`,
   settings: {
     zodiac: "tropical" as const,
     houseSystem: "placidus" as const,
@@ -92,10 +91,10 @@ describe("chart interpretation draft prompt", () => {
         "reflectionQuestions"
       ]
     });
-    expect(chartInterpretationDraftPromptV1.version).toBe(2);
-    expect(chartInterpretationDraftPromptV1.structuredOutputJsonSchema.properties).not.toHaveProperty(
-      "disclaimer"
-    );
+    expect(chartInterpretationDraftPromptV1.version).toBe(3);
+    expect(
+      chartInterpretationDraftPromptV1.structuredOutputJsonSchema.properties
+    ).not.toHaveProperty("disclaimer");
   });
 
   it("renders safe instructions, escapes prompt delimiters and localizes editable text", () => {
@@ -117,6 +116,13 @@ describe("chart interpretation draft prompt", () => {
     expect(rendered.messages[1]?.content).toContain("\\u003cchart_data\\u003e");
     expect(rendered.messages[1]?.content).toContain("\\u0026");
     expect(rendered.messages[1]?.content).not.toContain("birthDate");
+    expect(rendered.messages.map((message) => message.content).join("\n")).not.toMatch(/checksum/i);
+    expect(() =>
+      chartInterpretationDraftPromptV1.inputSchema.parse({
+        ...input,
+        resultChecksum: `sha256:${"a".repeat(64)}`
+      })
+    ).toThrow();
 
     expect(renderChartInterpretationText(output, "ru")).toContain("КЛЮЧЕВЫЕ ТЕМЫ");
     expect(renderChartInterpretationText(output, "en")).toContain("CORE THEMES");

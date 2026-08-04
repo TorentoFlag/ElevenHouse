@@ -1,5 +1,10 @@
-import { storedChartNatalCalculationPayloadSchema } from "@elevenhouse/contracts";
 import {
+  chartResultSchema,
+  isReproducibleChartResult,
+  type ChartExecutionProfile
+} from "@elevenhouse/contracts";
+import {
+  assertStoredChartCalculationIntegrity,
   selectCurrentApprovedCalculationInterpretation,
   type CalculationPdfJob,
   type CalculationStore,
@@ -18,7 +23,8 @@ export type ChartPdfSource = {
 
 export function createChartPdfSource(
   calculationStore: CalculationStore,
-  dictionaryStore: DictionaryStore
+  dictionaryStore: DictionaryStore,
+  expectedExecutionProfile: ChartExecutionProfile
 ): ChartPdfSource {
   return {
     load: async (job) => {
@@ -42,9 +48,30 @@ export function createChartPdfSource(
       ) {
         throw staleSource();
       }
-      const result = storedChartNatalCalculationPayloadSchema.safeParse(calculation.resultData);
-      if (!result.success) {
-        throw new CalculationPdfPermanentError("invalid_source", "Chart PDF source result is invalid");
+      const readable = chartResultSchema.safeParse(calculation.resultData);
+      if (readable.success && readable.data.schemaVersion === "chart-result.v1") {
+        throw new CalculationPdfPermanentError(
+          "invalid_source",
+          "Legacy chart PDF source must be recalculated"
+        );
+      }
+      let result;
+      try {
+        result = assertStoredChartCalculationIntegrity({
+          calculation,
+          expectedExecutionProfile
+        });
+      } catch {
+        throw new CalculationPdfPermanentError(
+          "invalid_source",
+          "Chart PDF source result is invalid"
+        );
+      }
+      if (!isReproducibleChartResult(result) || result.method !== "natal") {
+        throw new CalculationPdfPermanentError(
+          "invalid_source",
+          "Chart PDF source result is invalid"
+        );
       }
       const approvedInterpretation = selectCurrentApprovedCalculationInterpretation(
         calculation.interpretations
@@ -52,7 +79,7 @@ export function createChartPdfSource(
       if ((approvedInterpretation?.id ?? null) !== job.sourceLocator.interpretationId) {
         throw staleSource();
       }
-      const codes = buildChartPdfInterpretationCodes(result.data);
+      const codes = buildChartPdfInterpretationCodes(result);
       const dictionaryEntries =
         codes.length === 0
           ? []
@@ -69,10 +96,10 @@ export function createChartPdfSource(
         locale: job.locale,
         createdAt: job.createdAt,
         calculationTitle: calculation.title,
-        result: result.data,
+        result,
         approvedInterpretation: approvedInterpretation?.text ?? null,
         interpretations: buildChartPdfInterpretations({
-          result: result.data,
+          result,
           entries: dictionaryEntries
         })
       };

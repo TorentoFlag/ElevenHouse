@@ -9,6 +9,7 @@ import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
 import { MediaModule } from "../media/media.module";
+import { ChartExecutionProfileProvider } from "../charts/chart-execution-profile.provider";
 import { CalculationPdfService } from "./pdf/calculation-pdf.service";
 import {
   CALCULATION_PDF_ID_GENERATOR,
@@ -24,6 +25,7 @@ import { CALCULATION_STORE } from "./calculations.tokens";
   providers: [
     CalculationsService,
     CalculationPdfService,
+    ChartExecutionProfileProvider,
     {
       provide: CALCULATION_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -41,6 +43,11 @@ import { CALCULATION_STORE } from "./calculations.tokens";
       useValue: randomUUID
     }
   ],
-  exports: [CalculationsService, CalculationPdfService, CALCULATION_STORE]
+  exports: [
+    CalculationsService,
+    CalculationPdfService,
+    ChartExecutionProfileProvider,
+    CALCULATION_STORE
+  ]
 })
 export class CalculationsModule {}

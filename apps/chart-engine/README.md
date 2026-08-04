@@ -5,7 +5,8 @@ Private Python/FastAPI runtime for provider-backed chart calculations.
 ## First provider
 
 - Provider: Kerykeion 5.12.9 with PySwissEph 2.10.3.2
-- Runtime: Python >=3.10; local spike verified on Python 3.12.13
+- Runtime image: Python 3.12.13 from a digest-pinned base; Python dependencies and
+  the PEP 517 backend are version- and hash-locked
 - Public service endpoints inside the private backend network: `/live`, `/ready`, calculation routes under `/v1/*`
 - Network exposure: private backend network only; Caddy must not route this service
 
@@ -82,15 +83,45 @@ Production requires all three profile values and passes them consistently to
 
 - `CHART_ENGINE_EXPECTED_EPHEMERIS`;
 - `CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS`;
-- `CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION` when packaged Swiss data is expected.
+- `CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION` when licensed Swiss data is expected;
+- `CHART_ENGINE_EPHEMERIS_DATA_DIR`, an absolute read-only artifact directory,
+  when the Swiss profile is selected.
 
 For a licensed Swiss-data deployment, the runtime derives the revision from the
 installed Kerykeion `sweph` directory that Kerykeion 5.12.9 actually selects.
-It computes a SHA-256 manifest over sorted top-level `.se1` filenames and their
-content hashes, then compares it with the expected revision. Missing,
-unreadable or symlinked data fails closed. Moshier always reports a null data
-revision. The readiness deadline is configurable with
+It computes a SHA-256 manifest over the exact required `semo_18.se1` and
+`sepl_18.se1` content hashes, then compares it with the expected revision.
+Missing, unreadable or symlinked required data fails closed. Moshier always
+reports a null data revision. The readiness deadline is configurable with
 `CHART_ENGINE_READINESS_TIMEOUT_SECONDS` and defaults to five seconds.
 
 The image does not download or package `.se1` files. Adding ephemeris data or
 making licensing claims requires separate authority and legal review.
+
+The container builds native Python extensions in an isolated builder stage.
+The final runtime stage contains neither a compiler nor `curl`; Docker and
+Compose health checks use the standard-library HTTP client.
+
+## Calculation isolation and deadlines
+
+Every calculation runs in a fresh spawned child process. The parent enforces a
+single monotonic absolute deadline across capacity wait, process startup,
+provider execution and result transfer. On timeout or shutdown it performs a
+bounded `terminate -> join -> kill -> join` sequence and reaps the child before
+releasing capacity. A child crash or provider exception crosses the process and
+HTTP boundaries only as a typed safe error code; request data and raw provider
+diagnostics are not returned or logged.
+
+`CHART_ENGINE_CALCULATION_CONCURRENCY` is a hard per-Uvicorn-process cap and is
+`1` in the production profile. With two configured Uvicorn workers, at most two
+provider calculations can run across the service. Saturated requests wait only
+within their own absolute deadline and then fail with typed backpressure.
+
+Production requires both `CHART_ENGINE_CALCULATION_TIMEOUT_SECONDS` and
+`CHART_ENGINE_CALCULATION_CONCURRENCY`; there is no production default. The
+engine also reads the worker's explicit `CHART_WORKER_CALCULATION_TIMEOUT_MS`
+and refuses startup unless the worker deadline leaves at least five seconds for
+child cancellation, HTTP response delivery and worker-side classification. The
+production values are 110 seconds server-side and 120 seconds caller-side.
+Local development defaults to 110 seconds and concurrency `1` when these keys
+are absent.

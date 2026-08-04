@@ -47,6 +47,10 @@ describe("astrologerRoutes", () => {
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
 
     expect(isValidElement(rootRedirect?.element) && rootRedirect.element.type).toBe(Navigate);
+    expect(isValidElement(rootRedirect?.element) && rootRedirect.element.props).toMatchObject({
+      to: "/auth",
+      replace: true
+    });
     expect(isValidElement(authRoute?.element) && authRoute.element.type).toBe(AuthPage);
     expect(isValidElement(protectedRoute?.element) && protectedRoute.element.type).toBe(
       RequireCurrentAccount

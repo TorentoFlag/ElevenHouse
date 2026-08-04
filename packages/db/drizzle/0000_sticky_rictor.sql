@@ -149,17 +149,47 @@ CREATE TABLE "outbox_events" (
 	"payload" jsonb NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
+	"claim_fence" bigint DEFAULT 0 NOT NULL,
 	"available_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"locked_at" timestamp with time zone,
 	"published_at" timestamp with time zone,
+	"quarantined_at" timestamp with time zone,
+	"quarantine_reason_code" text,
 	"last_error" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "outbox_events_status_check" CHECK ("outbox_events"."status" in ('pending', 'publishing', 'published')),
+	CONSTRAINT "outbox_events_status_check" CHECK ("outbox_events"."status" in ('pending', 'publishing', 'published', 'quarantined')),
 	CONSTRAINT "outbox_events_attempts_check" CHECK ("outbox_events"."attempts" >= 0),
-	CONSTRAINT "outbox_events_pending_not_published_check" CHECK ("outbox_events"."status" <> 'pending' or "outbox_events"."published_at" is null),
-	CONSTRAINT "outbox_events_publishing_locked_check" CHECK ("outbox_events"."status" <> 'publishing' or "outbox_events"."locked_at" is not null),
-	CONSTRAINT "outbox_events_published_at_check" CHECK ("outbox_events"."status" <> 'published' or "outbox_events"."published_at" is not null)
+	CONSTRAINT "outbox_events_claim_fence_check" CHECK ("outbox_events"."claim_fence" >= 0),
+	CONSTRAINT "outbox_events_quarantine_reason_code_check" CHECK ("outbox_events"."quarantine_reason_code" is null or (
+        length("outbox_events"."quarantine_reason_code") between 3 and 120
+        and "outbox_events"."quarantine_reason_code" ~ '^[A-Z][A-Z0-9_]+$'
+      )),
+	CONSTRAINT "outbox_events_state_check" CHECK ((
+        "outbox_events"."status" = 'pending'
+        and "outbox_events"."locked_at" is null
+        and "outbox_events"."published_at" is null
+        and "outbox_events"."quarantined_at" is null
+        and "outbox_events"."quarantine_reason_code" is null
+      ) or (
+        "outbox_events"."status" = 'publishing'
+        and "outbox_events"."locked_at" is not null
+        and "outbox_events"."published_at" is null
+        and "outbox_events"."quarantined_at" is null
+        and "outbox_events"."quarantine_reason_code" is null
+      ) or (
+        "outbox_events"."status" = 'published'
+        and "outbox_events"."locked_at" is null
+        and "outbox_events"."published_at" is not null
+        and "outbox_events"."quarantined_at" is null
+        and "outbox_events"."quarantine_reason_code" is null
+      ) or (
+        "outbox_events"."status" = 'quarantined'
+        and "outbox_events"."locked_at" is null
+        and "outbox_events"."published_at" is null
+        and "outbox_events"."quarantined_at" is not null
+        and "outbox_events"."quarantine_reason_code" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "dictionary_categories" (
@@ -545,6 +575,7 @@ CREATE TABLE "calculation_records" (
 	"owner_user_id" uuid NOT NULL,
 	"module" text NOT NULL,
 	"mode" text NOT NULL,
+	"interpretation_mode" text,
 	"method_code" text NOT NULL,
 	"title" text NOT NULL,
 	"status" text DEFAULT 'calculated' NOT NULL,
@@ -558,6 +589,11 @@ CREATE TABLE "calculation_records" (
 	CONSTRAINT "calculation_records_id_owner_unique" UNIQUE("id","owner_user_id"),
 	CONSTRAINT "calculation_records_module_check" CHECK ("calculation_records"."module" in ('numerology', 'chart', 'matrix', 'human_design')),
 	CONSTRAINT "calculation_records_mode_check" CHECK ("calculation_records"."mode" in ('individual', 'compatibility')),
+	CONSTRAINT "calculation_records_interpretation_mode_check" CHECK ("calculation_records"."interpretation_mode" is null or (
+        "calculation_records"."module" = 'chart'
+        and "calculation_records"."method_code" = 'natal'
+        and "calculation_records"."interpretation_mode" in ('adult_natal', 'child', 'legacy_unclassified')
+      )),
 	CONSTRAINT "calculation_records_status_check" CHECK ("calculation_records"."status" in ('calculated', 'linked', 'published', 'archived')),
 	CONSTRAINT "calculation_records_request_fingerprint_check" CHECK ("calculation_records"."request_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
 	CONSTRAINT "calculation_records_input_data_object_check" CHECK (jsonb_typeof("calculation_records"."input_data") = 'object'),
@@ -576,6 +612,8 @@ CREATE TABLE "calculation_participants" (
 	"order" integer NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_participants_record_role_unique" UNIQUE("calculation_id","role"),
+	CONSTRAINT "calculation_participants_record_order_unique" UNIQUE("calculation_id","order"),
 	CONSTRAINT "calculation_participants_role_check" CHECK ("calculation_participants"."role" in ('subject', 'partner')),
 	CONSTRAINT "calculation_participants_source_check" CHECK ("calculation_participants"."source" in ('crm_client', 'manual')),
 	CONSTRAINT "calculation_participants_source_client_check" CHECK (("calculation_participants"."source" = 'crm_client' and "calculation_participants"."client_id" is not null) or ("calculation_participants"."source" = 'manual' and "calculation_participants"."client_id" is null)),
@@ -589,10 +627,24 @@ CREATE TABLE "calculation_client_links" (
 	"visibility" text DEFAULT 'private_to_astrologer' NOT NULL,
 	"linked_at" timestamp with time zone NOT NULL,
 	"published_at" timestamp with time zone,
+	"published_interpretation_id" uuid,
+	"published_result_checksum" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "calculation_client_links_visibility_check" CHECK ("calculation_client_links"."visibility" in ('private_to_astrologer', 'visible_to_client')),
-	CONSTRAINT "calculation_client_links_published_at_check" CHECK ("calculation_client_links"."visibility" <> 'visible_to_client' or "calculation_client_links"."published_at" is not null)
+	CONSTRAINT "calculation_client_links_published_at_check" CHECK ("calculation_client_links"."visibility" <> 'visible_to_client' or "calculation_client_links"."published_at" is not null),
+	CONSTRAINT "calculation_client_links_published_result_checksum_check" CHECK ("calculation_client_links"."published_result_checksum" is null or "calculation_client_links"."published_result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "calculation_client_links_publication_binding_check" CHECK ((
+        "calculation_client_links"."visibility" = 'private_to_astrologer'
+        and "calculation_client_links"."published_at" is null
+        and "calculation_client_links"."published_interpretation_id" is null
+        and "calculation_client_links"."published_result_checksum" is null
+      ) or (
+        "calculation_client_links"."visibility" = 'visible_to_client'
+        and "calculation_client_links"."published_at" is not null
+        and "calculation_client_links"."published_interpretation_id" is not null
+        and "calculation_client_links"."published_result_checksum" is not null
+      ))
 );
 --> statement-breakpoint
 CREATE TABLE "calculation_interpretations" (
@@ -606,6 +658,7 @@ CREATE TABLE "calculation_interpretations" (
 	"approved_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "calculation_interpretations_id_record_unique" UNIQUE("id","calculation_id"),
 	CONSTRAINT "calculation_interpretations_source_check" CHECK ("calculation_interpretations"."source" in ('ai', 'manual')),
 	CONSTRAINT "calculation_interpretations_status_check" CHECK ("calculation_interpretations"."status" in ('draft', 'approved')),
 	CONSTRAINT "calculation_interpretations_approved_at_check" CHECK ("calculation_interpretations"."status" <> 'approved' or "calculation_interpretations"."approved_at" is not null)
@@ -659,17 +712,26 @@ CREATE TABLE "chart_calculation_jobs" (
 	"owner_user_id" uuid NOT NULL,
 	"client_id" uuid NOT NULL,
 	"result_calculation_id" uuid,
+	"target_calculation_id" uuid,
+	"expected_source_checksum" text,
 	"method" text DEFAULT 'natal' NOT NULL,
+	"interpretation_mode" text,
+	"method_version" text,
 	"status" text DEFAULT 'queued' NOT NULL,
 	"input_fingerprint" text NOT NULL,
 	"input_snapshot" jsonb NOT NULL,
 	"settings_snapshot" jsonb NOT NULL,
+	"participant_snapshot" jsonb NOT NULL,
 	"provider" text DEFAULT 'kerykeion' NOT NULL,
-	"schema_version" text DEFAULT 'chart-result.v1' NOT NULL,
+	"schema_version" text DEFAULT 'chart-result.v2' NOT NULL,
+	"execution_profile" jsonb,
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"max_attempts" integer DEFAULT 3 NOT NULL,
 	"locked_by" text,
 	"locked_until" timestamp with time zone,
+	"lease_generation" integer DEFAULT 0 NOT NULL,
+	"result_checksum" text,
+	"result_reproducibility_fingerprint" text,
 	"last_error_code" text,
 	"last_error_message" text,
 	"started_at" timestamp with time zone,
@@ -677,14 +739,170 @@ CREATE TABLE "chart_calculation_jobs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "chart_calculation_jobs_method_check" CHECK ("chart_calculation_jobs"."method" in ('natal', 'astrocartography', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary')),
+	CONSTRAINT "chart_calculation_jobs_interpretation_mode_check" CHECK ("chart_calculation_jobs"."interpretation_mode" is null or (
+        "chart_calculation_jobs"."interpretation_mode" in ('adult_natal', 'child', 'legacy_unclassified')
+        and (
+          "chart_calculation_jobs"."method" = 'natal'
+          or "chart_calculation_jobs"."interpretation_mode" = 'legacy_unclassified'
+        )
+      )),
 	CONSTRAINT "chart_calculation_jobs_status_check" CHECK ("chart_calculation_jobs"."status" in ('queued', 'processing', 'succeeded', 'failed')),
 	CONSTRAINT "chart_calculation_jobs_provider_check" CHECK ("chart_calculation_jobs"."provider" in ('kerykeion')),
-	CONSTRAINT "chart_calculation_jobs_schema_version_check" CHECK ("chart_calculation_jobs"."schema_version" in ('chart-result.v1')),
+	CONSTRAINT "chart_calculation_jobs_schema_version_check" CHECK ("chart_calculation_jobs"."schema_version" in ('chart-result.v1', 'chart-result.v2')),
 	CONSTRAINT "chart_calculation_jobs_input_fingerprint_check" CHECK ("chart_calculation_jobs"."input_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
 	CONSTRAINT "chart_calculation_jobs_input_snapshot_object_check" CHECK (jsonb_typeof("chart_calculation_jobs"."input_snapshot") = 'object'),
 	CONSTRAINT "chart_calculation_jobs_settings_snapshot_object_check" CHECK (jsonb_typeof("chart_calculation_jobs"."settings_snapshot") = 'object'),
+	CONSTRAINT "chart_calculation_jobs_participant_snapshot_check" CHECK (coalesce((
+        jsonb_typeof("chart_calculation_jobs"."participant_snapshot") = 'array'
+        and (
+          (
+            "chart_calculation_jobs"."method" in ('synastry', 'composite')
+            and jsonb_array_length("chart_calculation_jobs"."participant_snapshot") = 2
+            and "chart_calculation_jobs"."participant_snapshot"->0 = jsonb_build_object(
+              'role', 'subject', 'clientId', "chart_calculation_jobs"."client_id"
+            )
+            and "chart_calculation_jobs"."participant_snapshot"->1->>'role' = 'partner'
+            and "chart_calculation_jobs"."participant_snapshot"->1 = jsonb_build_object(
+              'role', 'partner', 'clientId', "chart_calculation_jobs"."participant_snapshot"->1->>'clientId'
+            )
+            and "chart_calculation_jobs"."participant_snapshot"->1->>'clientId'
+              ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and "chart_calculation_jobs"."participant_snapshot"->1->>'clientId' <> "chart_calculation_jobs"."client_id"::text
+          )
+          or (
+            "chart_calculation_jobs"."method" not in ('synastry', 'composite')
+            and "chart_calculation_jobs"."participant_snapshot" = jsonb_build_array(
+              jsonb_build_object('role', 'subject', 'clientId', "chart_calculation_jobs"."client_id")
+            )
+          )
+        )
+      ), false)),
+	CONSTRAINT "chart_calculation_jobs_replacement_pair_check" CHECK (("chart_calculation_jobs"."target_calculation_id" is null) = ("chart_calculation_jobs"."expected_source_checksum" is null)),
+	CONSTRAINT "chart_calculation_jobs_expected_source_checksum_check" CHECK ("chart_calculation_jobs"."expected_source_checksum" is null or "chart_calculation_jobs"."expected_source_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "chart_calculation_jobs_method_version_check" CHECK (coalesce((
+        (
+          "chart_calculation_jobs"."schema_version" = 'chart-result.v1'
+          and "chart_calculation_jobs"."method_version" is null
+          and "chart_calculation_jobs"."execution_profile" is null
+          and "chart_calculation_jobs"."result_reproducibility_fingerprint" is null
+        )
+        or (
+          "chart_calculation_jobs"."schema_version" = 'chart-result.v2'
+          and "chart_calculation_jobs"."execution_profile" is not null
+          and "chart_calculation_jobs"."method_version" = case "chart_calculation_jobs"."method"
+            when 'natal' then 'chart.natal.kerykeion-5.12.v2'
+            when 'astrocartography' then 'chart.astrocartography.swisseph.v2'
+            when 'transit' then 'chart.transit.kerykeion-5.12.v2'
+            when 'synastry' then 'chart.synastry.kerykeion-5.12.v2'
+            when 'composite' then 'chart.composite.kerykeion-5.12.v2'
+            when 'solar_return' then 'chart.solar-return.kerykeion-5.12.v2'
+            when 'progression' then 'chart.progression.secondary-tropical-year.v2'
+            when 'horary' then 'chart.horary.kerykeion-5.12.v2'
+          end
+        )
+      ), false)),
+	CONSTRAINT "chart_calculation_jobs_execution_profile_object_check" CHECK (coalesce((
+        "chart_calculation_jobs"."execution_profile" is null
+        or (
+          jsonb_typeof("chart_calculation_jobs"."execution_profile") = 'object'
+          and "chart_calculation_jobs"."execution_profile" = jsonb_build_object(
+            'provider', "chart_calculation_jobs"."execution_profile"->'provider',
+            'kerykeionVersion', "chart_calculation_jobs"."execution_profile"->'kerykeionVersion',
+            'pyswissephVersion', "chart_calculation_jobs"."execution_profile"->'pyswissephVersion',
+            'expectedEphemeris', "chart_calculation_jobs"."execution_profile"->'expectedEphemeris',
+            'expectedEphemerisFlags', "chart_calculation_jobs"."execution_profile"->'expectedEphemerisFlags',
+            'expectedEphemerisDataRevision', "chart_calculation_jobs"."execution_profile"->'expectedEphemerisDataRevision'
+          )
+          and "chart_calculation_jobs"."execution_profile"->>'provider' = 'kerykeion'
+          and "chart_calculation_jobs"."execution_profile"->>'kerykeionVersion' = '5.12.9'
+          and "chart_calculation_jobs"."execution_profile"->>'pyswissephVersion' = '2.10.3.2'
+          and (
+            (
+              "chart_calculation_jobs"."execution_profile"->>'expectedEphemeris' = 'moshier'
+              and "chart_calculation_jobs"."execution_profile"->'expectedEphemerisFlags' in (
+                '["FLG_MOSEPH", "FLG_SPEED"]'::jsonb,
+                '["FLG_SPEED", "FLG_MOSEPH"]'::jsonb
+              )
+              and "chart_calculation_jobs"."execution_profile"->'expectedEphemerisDataRevision' = 'null'::jsonb
+            )
+            or (
+              "chart_calculation_jobs"."execution_profile"->>'expectedEphemeris' = 'swiss-ephemeris'
+              and "chart_calculation_jobs"."execution_profile"->'expectedEphemerisFlags' in (
+                '["FLG_SWIEPH", "FLG_SPEED"]'::jsonb,
+                '["FLG_SPEED", "FLG_SWIEPH"]'::jsonb
+              )
+              and "chart_calculation_jobs"."execution_profile"->>'expectedEphemerisDataRevision'
+                ~ '^sha256:[a-f0-9]{64}$'
+            )
+          )
+        )
+      ), false)),
 	CONSTRAINT "chart_calculation_jobs_attempts_check" CHECK ("chart_calculation_jobs"."attempts" >= 0),
-	CONSTRAINT "chart_calculation_jobs_max_attempts_check" CHECK ("chart_calculation_jobs"."max_attempts" > 0)
+	CONSTRAINT "chart_calculation_jobs_max_attempts_check" CHECK ("chart_calculation_jobs"."max_attempts" > 0),
+	CONSTRAINT "chart_calculation_jobs_attempts_limit_check" CHECK ("chart_calculation_jobs"."attempts" <= "chart_calculation_jobs"."max_attempts"),
+	CONSTRAINT "chart_calculation_jobs_lease_generation_check" CHECK ("chart_calculation_jobs"."lease_generation" >= 0),
+	CONSTRAINT "chart_calculation_jobs_result_checksum_check" CHECK ("chart_calculation_jobs"."result_checksum" is null or "chart_calculation_jobs"."result_checksum" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "chart_calculation_jobs_result_reproducibility_fingerprint_check" CHECK ("chart_calculation_jobs"."result_reproducibility_fingerprint" is null or "chart_calculation_jobs"."result_reproducibility_fingerprint" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "chart_calculation_jobs_lease_state_check" CHECK (coalesce((
+        (
+          "chart_calculation_jobs"."status" = 'queued'
+          and "chart_calculation_jobs"."locked_by" is null
+          and "chart_calculation_jobs"."locked_until" is null
+          and "chart_calculation_jobs"."finished_at" is null
+          and "chart_calculation_jobs"."result_calculation_id" is null
+          and "chart_calculation_jobs"."result_checksum" is null
+          and "chart_calculation_jobs"."result_reproducibility_fingerprint" is null
+          and (
+            ("chart_calculation_jobs"."last_error_code" is null and "chart_calculation_jobs"."last_error_message" is null)
+            or (
+              length(trim("chart_calculation_jobs"."last_error_code")) > 0
+              and length(trim("chart_calculation_jobs"."last_error_message")) > 0
+            )
+          )
+        )
+        or (
+          "chart_calculation_jobs"."status" = 'processing'
+          and length(trim("chart_calculation_jobs"."locked_by")) > 0
+          and "chart_calculation_jobs"."locked_until" is not null
+          and "chart_calculation_jobs"."lease_generation" > 0
+          and "chart_calculation_jobs"."started_at" is not null
+          and "chart_calculation_jobs"."finished_at" is null
+          and "chart_calculation_jobs"."result_calculation_id" is null
+          and "chart_calculation_jobs"."result_checksum" is null
+          and "chart_calculation_jobs"."result_reproducibility_fingerprint" is null
+          and "chart_calculation_jobs"."last_error_code" is null
+          and "chart_calculation_jobs"."last_error_message" is null
+        )
+        or (
+          "chart_calculation_jobs"."status" = 'succeeded'
+          and "chart_calculation_jobs"."locked_by" is null
+          and "chart_calculation_jobs"."locked_until" is null
+          and "chart_calculation_jobs"."started_at" is not null
+          and "chart_calculation_jobs"."finished_at" is not null
+          and "chart_calculation_jobs"."result_calculation_id" is not null
+          and (
+            "chart_calculation_jobs"."schema_version" = 'chart-result.v1'
+            or (
+              "chart_calculation_jobs"."result_checksum" is not null
+              and "chart_calculation_jobs"."result_reproducibility_fingerprint" is not null
+            )
+          )
+          and "chart_calculation_jobs"."last_error_code" is null
+          and "chart_calculation_jobs"."last_error_message" is null
+        )
+        or (
+          "chart_calculation_jobs"."status" = 'failed'
+          and "chart_calculation_jobs"."locked_by" is null
+          and "chart_calculation_jobs"."locked_until" is null
+          and "chart_calculation_jobs"."started_at" is not null
+          and "chart_calculation_jobs"."finished_at" is not null
+          and "chart_calculation_jobs"."result_calculation_id" is null
+          and "chart_calculation_jobs"."result_checksum" is null
+          and "chart_calculation_jobs"."result_reproducibility_fingerprint" is null
+          and length(trim("chart_calculation_jobs"."last_error_code")) > 0
+          and length(trim("chart_calculation_jobs"."last_error_message")) > 0
+        )
+      ), false))
 );
 --> statement-breakpoint
 CREATE TABLE "astro_calendar_generations" (
@@ -964,6 +1182,328 @@ CREATE TABLE "flow_delivery_attempts" (
 	CONSTRAINT "flow_delivery_attempts_error_message_length_check" CHECK ("flow_delivery_attempts"."error_message" is null or length(trim("flow_delivery_attempts"."error_message")) between 1 and 1000)
 );
 --> statement-breakpoint
+CREATE TABLE "flow_execution_attempts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"token_id" uuid NOT NULL,
+	"flow_version_id" uuid NOT NULL,
+	"node_id" text NOT NULL,
+	"executor_key" text NOT NULL,
+	"node_activation_sequence" bigint NOT NULL,
+	"attempt_number" bigint NOT NULL,
+	"fencing_token" bigint NOT NULL,
+	"lease_owner" text NOT NULL,
+	"outcome" text NOT NULL,
+	"result_code" text NOT NULL,
+	"trace_summary" jsonb NOT NULL,
+	"started_at" timestamp with time zone NOT NULL,
+	"completed_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_execution_attempts_id_run_owner_unique" UNIQUE("id","flow_run_id","owner_user_id"),
+	CONSTRAINT "flow_execution_attempts_outcome_check" CHECK ("flow_execution_attempts"."outcome" in ('advanced', 'waiting', 'retry_scheduled', 'completed', 'failed', 'lease_expired', 'canceled')),
+	CONSTRAINT "flow_execution_attempts_node_activation_sequence_check" CHECK ("flow_execution_attempts"."node_activation_sequence" > 0),
+	CONSTRAINT "flow_execution_attempts_number_check" CHECK ("flow_execution_attempts"."attempt_number" between 1 and 3 and "flow_execution_attempts"."fencing_token" >= "flow_execution_attempts"."attempt_number"),
+	CONSTRAINT "flow_execution_attempts_node_id_length_check" CHECK (length(trim("flow_execution_attempts"."node_id")) between 1 and 160),
+	CONSTRAINT "flow_execution_attempts_executor_key_length_check" CHECK (length(trim("flow_execution_attempts"."executor_key")) between 1 and 180),
+	CONSTRAINT "flow_execution_attempts_lease_owner_length_check" CHECK (length(trim("flow_execution_attempts"."lease_owner")) between 1 and 180),
+	CONSTRAINT "flow_execution_attempts_result_code_length_check" CHECK (length(trim("flow_execution_attempts"."result_code")) between 1 and 160),
+	CONSTRAINT "flow_execution_attempts_trace_summary_object_check" CHECK (jsonb_typeof("flow_execution_attempts"."trace_summary") = 'object'),
+	CONSTRAINT "flow_execution_attempts_trace_summary_schema_check" CHECK ("flow_execution_attempts"."trace_summary" ?& array[
+          'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
+        ]::text[]
+        and (
+          (
+            "flow_execution_attempts"."outcome" = 'advanced'
+            and "flow_execution_attempts"."trace_summary" ?& array[
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[]
+            and "flow_execution_attempts"."trace_summary" - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[] = '{}'::jsonb
+          )
+          or (
+            "flow_execution_attempts"."outcome" <> 'advanced'
+            and "flow_execution_attempts"."trace_summary" - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
+            ]::text[] = '{}'::jsonb
+          )
+        )
+        and jsonb_typeof("flow_execution_attempts"."trace_summary"->'schemaVersion') = 'string'
+        and jsonb_typeof("flow_execution_attempts"."trace_summary"->'outcome') = 'string'
+        and jsonb_typeof("flow_execution_attempts"."trace_summary"->'nodeKind') = 'string'
+        and jsonb_typeof("flow_execution_attempts"."trace_summary"->'reasonCode') = 'string'
+        and jsonb_typeof("flow_execution_attempts"."trace_summary"->'resultCode') = 'string'
+        and "flow_execution_attempts"."trace_summary"->>'schemaVersion' = 'flow-runtime-trace.v1'
+        and "flow_execution_attempts"."trace_summary"->>'nodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')
+        and "flow_execution_attempts"."trace_summary"->>'nodeKind' = split_part("flow_execution_attempts"."executor_key", ':', 1)
+        and "flow_execution_attempts"."result_code" = "flow_execution_attempts"."trace_summary"->>'resultCode'
+        and length("flow_execution_attempts"."trace_summary"->>'resultCode') between 1 and 160
+        and "flow_execution_attempts"."trace_summary"->>'resultCode' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+        and (
+          (
+            "flow_execution_attempts"."outcome" = 'advanced'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'advanced'
+            and "flow_execution_attempts"."trace_summary"->>'reasonCode' = 'FLOW_EDGE_SELECTED'
+            and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
+            and "flow_execution_attempts"."trace_summary"->>'sourceHandle' in ('next', 'true', 'false', 'success', 'error', 'timeout', 'approved', 'rejected')
+            and "flow_execution_attempts"."trace_summary"->>'targetNodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')
+            and length("flow_execution_attempts"."trace_summary"->>'selectedEdgeId') between 1 and 160
+            and "flow_execution_attempts"."trace_summary"->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and length("flow_execution_attempts"."trace_summary"->>'targetNodeId') between 1 and 160
+            and "flow_execution_attempts"."trace_summary"->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+          )
+          or
+          (
+            "flow_execution_attempts"."outcome" = 'completed'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'terminal'
+            and "flow_execution_attempts"."trace_summary"->>'reasonCode' = 'FLOW_GOAL_REACHED'
+          )
+          or (
+            "flow_execution_attempts"."outcome" = 'lease_expired'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'lease_expired'
+            and "flow_execution_attempts"."trace_summary"->>'reasonCode' = 'FLOW_TOKEN_LEASE_EXPIRED'
+            and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_TOKEN_LEASE_EXPIRED'
+          )
+          or (
+            "flow_execution_attempts"."outcome" = 'canceled'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'canceled'
+            and "flow_execution_attempts"."trace_summary"->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'
+            and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_RUN_CANCELED'
+          )
+          or (
+            "flow_execution_attempts"."outcome" = 'retry_scheduled'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'retry_scheduled'
+            and "flow_execution_attempts"."trace_summary"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE')
+            and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_EXECUTION_RETRY_SCHEDULED'
+          )
+          or (
+            "flow_execution_attempts"."outcome" = 'failed'
+            and "flow_execution_attempts"."trace_summary"->>'outcome' = 'failed'
+            and (
+              (
+                "flow_execution_attempts"."trace_summary"->>'reasonCode' in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED')
+                and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_EXECUTION_FAILED_TERMINAL'
+              )
+              or (
+                "flow_execution_attempts"."trace_summary"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')
+                and "flow_execution_attempts"."trace_summary"->>'resultCode' = 'FLOW_EXECUTION_RETRY_EXHAUSTED'
+              )
+            )
+          )
+        )),
+	CONSTRAINT "flow_execution_attempts_time_order_check" CHECK ("flow_execution_attempts"."completed_at" >= "flow_execution_attempts"."started_at")
+);
+--> statement-breakpoint
+CREATE TABLE "flow_execution_tokens" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"flow_version_id" uuid NOT NULL,
+	"node_id" text NOT NULL,
+	"node_kind" text NOT NULL,
+	"config_schema_version" integer NOT NULL,
+	"executor_contract_version" integer NOT NULL,
+	"executor_key" text NOT NULL,
+	"state" text DEFAULT 'runnable' NOT NULL,
+	"available_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"claimed_at" timestamp with time zone,
+	"lease_owner" text,
+	"lease_expires_at" timestamp with time zone,
+	"node_activation_sequence" bigint DEFAULT 1 NOT NULL,
+	"attempt_counter" bigint DEFAULT 0 NOT NULL,
+	"fencing_token" bigint DEFAULT 0 NOT NULL,
+	"retry_policy_key" text DEFAULT 'flow-execution-retry.v1' NOT NULL,
+	"max_attempts" integer DEFAULT 3 NOT NULL,
+	"retry_base_delay_ms" integer DEFAULT 1000 NOT NULL,
+	"retry_max_delay_ms" integer DEFAULT 60000 NOT NULL,
+	"failure_disposition" text,
+	"failure_reason_code" text,
+	"terminal_at" timestamp with time zone,
+	"quarantined_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_execution_tokens_id_run_owner_unique" UNIQUE("id","flow_run_id","owner_user_id"),
+	CONSTRAINT "flow_execution_tokens_state_check" CHECK ("flow_execution_tokens"."state" in ('runnable', 'claimed', 'waiting_timer', 'waiting_signal', 'waiting_external', 'waiting_work_item', 'waiting_approval', 'retry_scheduled', 'completed', 'failed', 'canceled')),
+	CONSTRAINT "flow_execution_tokens_node_id_length_check" CHECK (length(trim("flow_execution_tokens"."node_id")) between 1 and 160),
+	CONSTRAINT "flow_execution_tokens_node_kind_length_check" CHECK (length(trim("flow_execution_tokens"."node_kind")) between 1 and 80),
+	CONSTRAINT "flow_execution_tokens_node_kind_check" CHECK ("flow_execution_tokens"."node_kind" in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')),
+	CONSTRAINT "flow_execution_tokens_executor_versions_check" CHECK ("flow_execution_tokens"."config_schema_version" > 0 and "flow_execution_tokens"."executor_contract_version" > 0),
+	CONSTRAINT "flow_execution_tokens_executor_key_check" CHECK ("flow_execution_tokens"."executor_key" = "flow_execution_tokens"."node_kind" || ':' || "flow_execution_tokens"."config_schema_version"::text || ':' || "flow_execution_tokens"."executor_contract_version"::text),
+	CONSTRAINT "flow_execution_tokens_lease_owner_length_check" CHECK ("flow_execution_tokens"."lease_owner" is null or length(trim("flow_execution_tokens"."lease_owner")) between 1 and 180),
+	CONSTRAINT "flow_execution_tokens_node_activation_sequence_check" CHECK ("flow_execution_tokens"."node_activation_sequence" > 0),
+	CONSTRAINT "flow_execution_tokens_lease_state_check" CHECK ((
+        "flow_execution_tokens"."state" = 'claimed'
+        and "flow_execution_tokens"."claimed_at" is not null
+        and "flow_execution_tokens"."lease_owner" is not null
+        and "flow_execution_tokens"."lease_expires_at" is not null
+        and "flow_execution_tokens"."claimed_at" <= "flow_execution_tokens"."lease_expires_at"
+        and "flow_execution_tokens"."claimed_at" <= "flow_execution_tokens"."updated_at"
+      ) or (
+        "flow_execution_tokens"."state" <> 'claimed'
+        and "flow_execution_tokens"."claimed_at" is null
+        and "flow_execution_tokens"."lease_owner" is null
+        and "flow_execution_tokens"."lease_expires_at" is null
+      )),
+	CONSTRAINT "flow_execution_tokens_attempt_counter_check" CHECK ("flow_execution_tokens"."attempt_counter" between 0 and "flow_execution_tokens"."max_attempts"),
+	CONSTRAINT "flow_execution_tokens_fencing_token_check" CHECK ("flow_execution_tokens"."fencing_token" >= "flow_execution_tokens"."attempt_counter"),
+	CONSTRAINT "flow_execution_tokens_counter_state_check" CHECK (("flow_execution_tokens"."state" not in ('runnable', 'retry_scheduled')
+          or "flow_execution_tokens"."attempt_counter" < "flow_execution_tokens"."max_attempts")
+        and ("flow_execution_tokens"."state" not in ('claimed', 'retry_scheduled')
+          or "flow_execution_tokens"."attempt_counter" > 0)),
+	CONSTRAINT "flow_execution_tokens_retry_policy_check" CHECK ("flow_execution_tokens"."retry_policy_key" = 'flow-execution-retry.v1'
+        and "flow_execution_tokens"."max_attempts" = 3
+        and "flow_execution_tokens"."retry_base_delay_ms" = 1000
+        and "flow_execution_tokens"."retry_max_delay_ms" = 60000),
+	CONSTRAINT "flow_execution_tokens_failure_disposition_check" CHECK ("flow_execution_tokens"."failure_disposition" is null
+        or "flow_execution_tokens"."failure_disposition" in ('retry_scheduled', 'failed_terminal', 'quarantined')),
+	CONSTRAINT "flow_execution_tokens_failure_reason_check" CHECK ("flow_execution_tokens"."failure_reason_code" is null
+        or "flow_execution_tokens"."failure_reason_code" in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED', 'FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')),
+	CONSTRAINT "flow_execution_tokens_failure_state_check" CHECK ((
+        "flow_execution_tokens"."state" = 'retry_scheduled'
+        and "flow_execution_tokens"."failure_disposition" is not null
+        and "flow_execution_tokens"."failure_disposition" = 'retry_scheduled'
+        and "flow_execution_tokens"."failure_reason_code" is not null
+        and "flow_execution_tokens"."failure_reason_code" in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')
+        and "flow_execution_tokens"."quarantined_at" is null
+      ) or (
+        "flow_execution_tokens"."state" = 'failed'
+        and "flow_execution_tokens"."failure_disposition" is not null
+        and "flow_execution_tokens"."failure_reason_code" is not null
+        and (
+          ("flow_execution_tokens"."failure_disposition" = 'quarantined'
+            and "flow_execution_tokens"."failure_reason_code" in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE')
+            and "flow_execution_tokens"."quarantined_at" is not null)
+          or ("flow_execution_tokens"."failure_disposition" = 'failed_terminal'
+            and "flow_execution_tokens"."failure_reason_code" in ('FLOW_NODE_EXECUTION_REJECTED', 'FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')
+            and "flow_execution_tokens"."quarantined_at" is null)
+        )
+      ) or (
+        "flow_execution_tokens"."state" not in ('retry_scheduled', 'failed')
+        and "flow_execution_tokens"."failure_disposition" is null
+        and "flow_execution_tokens"."failure_reason_code" is null
+        and "flow_execution_tokens"."quarantined_at" is null
+      )),
+	CONSTRAINT "flow_execution_tokens_terminal_state_check" CHECK ((
+        "flow_execution_tokens"."state" in ('completed', 'failed', 'canceled')
+        and "flow_execution_tokens"."terminal_at" is not null
+      ) or (
+        "flow_execution_tokens"."state" not in ('completed', 'failed', 'canceled')
+        and "flow_execution_tokens"."terminal_at" is null
+      ))
+);
+--> statement-breakpoint
+CREATE TABLE "flow_run_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"flow_run_id" uuid NOT NULL,
+	"sequence" bigint NOT NULL,
+	"event_type" text NOT NULL,
+	"node_id" text,
+	"attempt_id" uuid,
+	"command_id" uuid,
+	"summary" jsonb NOT NULL,
+	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_run_events_type_check" CHECK ("flow_run_events"."event_type" in ('token_advanced', 'token_waiting', 'token_retry_scheduled', 'token_lease_expired', 'run_completed', 'run_failed', 'run_suppressed', 'run_canceled')),
+	CONSTRAINT "flow_run_events_sequence_check" CHECK ("flow_run_events"."sequence" > 0),
+	CONSTRAINT "flow_run_events_node_id_length_check" CHECK ("flow_run_events"."node_id" is null or length(trim("flow_run_events"."node_id")) between 1 and 160),
+	CONSTRAINT "flow_run_events_summary_object_check" CHECK (jsonb_typeof("flow_run_events"."summary") = 'object'),
+	CONSTRAINT "flow_run_events_summary_schema_check" CHECK ("flow_run_events"."summary" ?& array[
+          'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
+        ]::text[]
+        and (
+          (
+            "flow_run_events"."event_type" = 'token_advanced'
+            and "flow_run_events"."summary" ?& array[
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[]
+            and "flow_run_events"."summary" - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[] = '{}'::jsonb
+          )
+          or (
+            "flow_run_events"."event_type" <> 'token_advanced'
+            and "flow_run_events"."summary" - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
+            ]::text[] = '{}'::jsonb
+          )
+        )
+        and jsonb_typeof("flow_run_events"."summary"->'schemaVersion') = 'string'
+        and jsonb_typeof("flow_run_events"."summary"->'outcome') = 'string'
+        and jsonb_typeof("flow_run_events"."summary"->'nodeKind') = 'string'
+        and jsonb_typeof("flow_run_events"."summary"->'reasonCode') = 'string'
+        and jsonb_typeof("flow_run_events"."summary"->'resultCode') = 'string'
+        and "flow_run_events"."summary"->>'schemaVersion' = 'flow-runtime-trace.v1'
+        and "flow_run_events"."summary"->>'nodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')
+        and length("flow_run_events"."summary"->>'resultCode') between 1 and 160
+        and "flow_run_events"."summary"->>'resultCode' ~ '^[A-Za-z0-9][A-Za-z0-9._:-]*$'
+        and (
+          (
+            "flow_run_events"."event_type" = 'token_advanced'
+            and "flow_run_events"."node_id" is not null
+            and "flow_run_events"."attempt_id" is not null
+            and "flow_run_events"."command_id" is null
+            and "flow_run_events"."summary"->>'outcome' = 'advanced'
+            and "flow_run_events"."summary"->>'reasonCode' = 'FLOW_EDGE_SELECTED'
+            and "flow_run_events"."summary"->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
+            and "flow_run_events"."summary"->>'sourceHandle' in ('next', 'true', 'false', 'success', 'error', 'timeout', 'approved', 'rejected')
+            and "flow_run_events"."summary"->>'targetNodeKind' in ('booking_confirmed', 'manual_client', 'birth_data_available', 'astrologer_work_item', 'astrologer_approval', 'completed', 'suppressed', 'failed')
+            and length("flow_run_events"."summary"->>'selectedEdgeId') between 1 and 160
+            and "flow_run_events"."summary"->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and length("flow_run_events"."summary"->>'targetNodeId') between 1 and 160
+            and "flow_run_events"."summary"->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+          )
+          or
+          (
+            "flow_run_events"."event_type" = 'run_completed'
+            and "flow_run_events"."attempt_id" is not null
+            and "flow_run_events"."command_id" is null
+            and "flow_run_events"."summary"->>'outcome' = 'terminal'
+            and "flow_run_events"."summary"->>'reasonCode' = 'FLOW_GOAL_REACHED'
+          )
+          or (
+            "flow_run_events"."event_type" = 'token_lease_expired'
+            and "flow_run_events"."attempt_id" is not null
+            and "flow_run_events"."command_id" is null
+            and "flow_run_events"."summary"->>'outcome' = 'lease_expired'
+            and "flow_run_events"."summary"->>'reasonCode' = 'FLOW_TOKEN_LEASE_EXPIRED'
+            and "flow_run_events"."summary"->>'resultCode' = 'FLOW_TOKEN_LEASE_EXPIRED'
+          )
+          or (
+            "flow_run_events"."event_type" = 'run_canceled'
+            and "flow_run_events"."command_id" is not null
+            and "flow_run_events"."summary"->>'outcome' = 'canceled'
+            and "flow_run_events"."summary"->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'
+            and "flow_run_events"."summary"->>'resultCode' = 'FLOW_RUN_CANCELED'
+          )
+          or (
+            "flow_run_events"."event_type" = 'token_retry_scheduled'
+            and "flow_run_events"."attempt_id" is not null
+            and "flow_run_events"."command_id" is null
+            and "flow_run_events"."summary"->>'outcome' = 'retry_scheduled'
+            and "flow_run_events"."summary"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE')
+            and "flow_run_events"."summary"->>'resultCode' = 'FLOW_EXECUTION_RETRY_SCHEDULED'
+          )
+          or (
+            "flow_run_events"."event_type" = 'run_failed'
+            and "flow_run_events"."command_id" is null
+            and "flow_run_events"."summary"->>'outcome' = 'failed'
+            and (
+              (
+                "flow_run_events"."summary"->>'reasonCode' in ('FLOW_PINNED_GRAPH_INVALID', 'FLOW_PINNED_CAPABILITY_MANIFEST_INVALID', 'FLOW_TOKEN_NODE_NOT_FOUND', 'FLOW_TOKEN_NODE_METADATA_MISMATCH', 'FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH', 'FLOW_TOKEN_RUNTIME_STATE_INVALID', 'FLOW_RUNTIME_TRACE_INVALID', 'FLOW_NODE_EXECUTOR_UNAVAILABLE', 'FLOW_NODE_EXECUTION_REJECTED')
+                and "flow_run_events"."summary"->>'resultCode' = 'FLOW_EXECUTION_FAILED_TERMINAL'
+              )
+              or (
+                "flow_run_events"."summary"->>'reasonCode' in ('FLOW_NODE_EXECUTION_RETRYABLE', 'FLOW_NODE_EXECUTION_UNEXPECTED_FAILURE', 'FLOW_TOKEN_LEASE_EXPIRED')
+                and "flow_run_events"."summary"->>'resultCode' = 'FLOW_EXECUTION_RETRY_EXHAUSTED'
+              )
+            )
+          )
+        ))
+);
+--> statement-breakpoint
 CREATE TABLE "flow_runs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"owner_user_id" uuid NOT NULL,
@@ -973,14 +1513,17 @@ CREATE TABLE "flow_runs" (
 	"status" text DEFAULT 'pending' NOT NULL,
 	"snapshot" jsonb NOT NULL,
 	"current_node_id" text,
+	"trace_sequence" bigint DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"completed_at" timestamp with time zone,
 	CONSTRAINT "flow_runs_id_owner_unique" UNIQUE("id","owner_user_id"),
+	CONSTRAINT "flow_runs_id_version_owner_unique" UNIQUE("id","flow_version_id","owner_user_id"),
 	CONSTRAINT "flow_runs_id_event_owner_unique" UNIQUE("id","runtime_event_id","owner_user_id"),
 	CONSTRAINT "flow_runs_id_flow_event_owner_unique" UNIQUE("id","flow_id","runtime_event_id","owner_user_id"),
 	CONSTRAINT "flow_runs_status_check" CHECK ("flow_runs"."status" in ('pending', 'running', 'waiting', 'approval_required', 'completed', 'skipped', 'failed_retryable', 'failed_terminal', 'suppressed', 'expired', 'canceled')),
 	CONSTRAINT "flow_runs_snapshot_object_check" CHECK (jsonb_typeof("flow_runs"."snapshot") = 'object'),
+	CONSTRAINT "flow_runs_trace_sequence_check" CHECK ("flow_runs"."trace_sequence" >= 0),
 	CONSTRAINT "flow_runs_current_node_id_length_check" CHECK ("flow_runs"."current_node_id" is null or length(trim("flow_runs"."current_node_id")) between 1 and 160)
 );
 --> statement-breakpoint
@@ -1040,6 +1583,49 @@ CREATE TABLE "flow_suppressions" (
 	CONSTRAINT "flow_suppressions_details_object_check" CHECK (jsonb_typeof("flow_suppressions"."details") = 'object')
 );
 --> statement-breakpoint
+CREATE TABLE "flow_runtime_command_outcomes" (
+	"command_id" uuid PRIMARY KEY NOT NULL,
+	"response_status" integer NOT NULL,
+	"response_body" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_runtime_command_outcomes_response_check" CHECK ("flow_runtime_command_outcomes"."response_status" in (200, 404, 409)
+        and jsonb_typeof("flow_runtime_command_outcomes"."response_body") = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "flow_runtime_commands" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"api_surface" text NOT NULL,
+	"actor_user_id" uuid NOT NULL,
+	"owner_user_id" uuid NOT NULL,
+	"route_template" text NOT NULL,
+	"resource_id" uuid NOT NULL,
+	"command_scope" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"state" text DEFAULT 'processing' NOT NULL,
+	"completed_at" timestamp with time zone,
+	"replay_until" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "flow_runtime_commands_id_resource_owner_unique" UNIQUE("id","resource_id","owner_user_id"),
+	CONSTRAINT "flow_runtime_commands_scope_check" CHECK ("flow_runtime_commands"."api_surface" = 'astrologer-api'
+        and "flow_runtime_commands"."route_template" in ('/flow-runs/:runId/cancel')
+        and "flow_runtime_commands"."command_scope" in ('flows.runtime.cancel.v1')
+        and "flow_runtime_commands"."route_template" = '/flow-runs/:runId/cancel'
+        and "flow_runtime_commands"."command_scope" = 'flows.runtime.cancel.v1'),
+	CONSTRAINT "flow_runtime_commands_key_check" CHECK (length("flow_runtime_commands"."idempotency_key") between 8 and 128
+        and "flow_runtime_commands"."idempotency_key" ~ '^[A-Za-z0-9._:-]+$'),
+	CONSTRAINT "flow_runtime_commands_request_hash_check" CHECK ("flow_runtime_commands"."request_hash" ~ '^sha256:[a-f0-9]{64}$'),
+	CONSTRAINT "flow_runtime_commands_state_check" CHECK ("flow_runtime_commands"."state" in ('processing', 'succeeded', 'failed')),
+	CONSTRAINT "flow_runtime_commands_terminal_state_check" CHECK ((
+        "flow_runtime_commands"."state" = 'processing' and "flow_runtime_commands"."completed_at" is null
+      ) or (
+        "flow_runtime_commands"."state" in ('succeeded', 'failed') and "flow_runtime_commands"."completed_at" is not null
+      )),
+	CONSTRAINT "flow_runtime_commands_replay_window_check" CHECK ("flow_runtime_commands"."replay_until" = "flow_runtime_commands"."created_at" + interval '24 hours'),
+	CONSTRAINT "flow_runtime_commands_completion_check" CHECK ("flow_runtime_commands"."completed_at" is null or "flow_runtime_commands"."completed_at" >= "flow_runtime_commands"."created_at")
+);
+--> statement-breakpoint
 CREATE TABLE "client_profiles" (
 	"user_id" uuid PRIMARY KEY NOT NULL,
 	"display_name_snapshot" text,
@@ -1094,6 +1680,7 @@ CREATE TABLE "client_astrologer_relationships" (
 	"blocked_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "client_astrologer_relationships_identity_unique" UNIQUE("id","client_user_id","astrologer_user_id"),
 	CONSTRAINT "client_astrologer_relationships_source_check" CHECK ("client_astrologer_relationships"."source" in ('direct_link', 'booking', 'order', 'lead_magnet', 'manual')),
 	CONSTRAINT "client_astrologer_relationships_status_check" CHECK ("client_astrologer_relationships"."status" in ('active', 'archived', 'blocked')),
 	CONSTRAINT "client_astrologer_relationships_distinct_users_check" CHECK ("client_astrologer_relationships"."client_user_id" <> "client_astrologer_relationships"."astrologer_user_id")
@@ -1113,6 +1700,26 @@ CREATE TABLE "client_join_intents" (
 	CONSTRAINT "client_join_intents_status_check" CHECK ("client_join_intents"."status" in ('pending', 'claimed', 'expired')),
 	CONSTRAINT "client_join_intents_public_handle_check" CHECK ("client_join_intents"."public_handle_snapshot" ~ '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$'),
 	CONSTRAINT "client_join_intents_claimed_consistency_check" CHECK (("client_join_intents"."status" = 'claimed') = ("client_join_intents"."claimed_by_client_user_id" is not null and "client_join_intents"."claimed_at" is not null))
+);
+--> statement-breakpoint
+CREATE TABLE "client_data_consents" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"relationship_id" uuid NOT NULL,
+	"client_user_id" uuid NOT NULL,
+	"astrologer_user_id" uuid NOT NULL,
+	"purpose" text NOT NULL,
+	"policy_version" text NOT NULL,
+	"processor_code" text NOT NULL,
+	"notice_locale" text NOT NULL,
+	"notice_sha256" text NOT NULL,
+	"granted_at" timestamp with time zone NOT NULL,
+	"revoked_at" timestamp with time zone,
+	CONSTRAINT "client_data_consents_purpose_check" CHECK (length(trim("client_data_consents"."purpose")) between 1 and 160),
+	CONSTRAINT "client_data_consents_policy_version_check" CHECK (length(trim("client_data_consents"."policy_version")) between 1 and 160),
+	CONSTRAINT "client_data_consents_processor_code_check" CHECK (length(trim("client_data_consents"."processor_code")) between 1 and 80),
+	CONSTRAINT "client_data_consents_notice_locale_check" CHECK ("client_data_consents"."notice_locale" in ('ru', 'en')),
+	CONSTRAINT "client_data_consents_notice_sha256_check" CHECK ("client_data_consents"."notice_sha256" ~ '^sha256:[0-9a-f]{64}$'),
+	CONSTRAINT "client_data_consents_revocation_time_check" CHECK ("client_data_consents"."revoked_at" is null or "client_data_consents"."revoked_at" >= "client_data_consents"."granted_at")
 );
 --> statement-breakpoint
 CREATE TABLE "matrix_notes" (
@@ -1844,6 +2451,106 @@ CREATE TABLE "audit_log_entries" (
 	CONSTRAINT "audit_log_entries_metadata_check" CHECK (jsonb_typeof("audit_log_entries"."metadata") = 'object')
 );
 --> statement-breakpoint
+CREATE TABLE "ai_usage_consent_records" (
+	"usage_record_id" uuid NOT NULL,
+	"consent_record_id" uuid NOT NULL,
+	CONSTRAINT "ai_usage_consent_records_pk" PRIMARY KEY("usage_record_id","consent_record_id")
+);
+--> statement-breakpoint
+CREATE TABLE "ai_usage_records" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"status" text NOT NULL,
+	"feature" text NOT NULL,
+	"prompt_id" text NOT NULL,
+	"prompt_version" integer NOT NULL,
+	"provider" text NOT NULL,
+	"owner_safety_id" text NOT NULL,
+	"processing_authority_version" text,
+	"resource_type" text,
+	"resource_id" uuid,
+	"source_checksum" text,
+	"model" text,
+	"finish_reason" text,
+	"safe_error_code" text,
+	"prompt_tokens" integer,
+	"completion_tokens" integer,
+	"total_tokens" integer,
+	"duration_ms" integer,
+	"started_at" timestamp with time zone NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "ai_usage_records_status_check" CHECK ("ai_usage_records"."status" in ('started', 'succeeded', 'failed')),
+	CONSTRAINT "ai_usage_records_safe_fields_check" CHECK (length(trim("ai_usage_records"."feature")) between 1 and 160
+        and length(trim("ai_usage_records"."prompt_id")) between 1 and 160
+        and "ai_usage_records"."prompt_version" >= 1
+        and length(trim("ai_usage_records"."provider")) between 1 and 80
+        and ("ai_usage_records"."model" is null or length(trim("ai_usage_records"."model")) between 1 and 160)
+        and ("ai_usage_records"."finish_reason" is null or length(trim("ai_usage_records"."finish_reason")) between 1 and 120)
+        and ("ai_usage_records"."safe_error_code" is null or "ai_usage_records"."safe_error_code" in (
+          'AI_PROVIDER_REFUSED',
+          'AI_PROVIDER_BAD_REQUEST',
+          'AI_PROVIDER_RESPONSE_INVALID',
+          'AI_PROVIDER_INCOMPLETE_RESPONSE',
+          'AI_PROVIDER_UNAVAILABLE',
+          'AI_PROVIDER_AUTHENTICATION_FAILED',
+          'AI_PROVIDER_BILLING_FAILED',
+          'AI_PROVIDER_RATE_LIMITED',
+          'AI_PROVIDER_SERVER_ERROR',
+          'AI_PROVIDER_TIMEOUT',
+          'AI_PROVIDER_UNKNOWN_FAILURE'
+        ))),
+	CONSTRAINT "ai_usage_records_owner_safety_id_check" CHECK ("ai_usage_records"."owner_safety_id" ~ '^eh_[0-9a-f]{61}$'),
+	CONSTRAINT "ai_usage_records_resource_evidence_check" CHECK (("ai_usage_records"."processing_authority_version" is null or length(trim("ai_usage_records"."processing_authority_version")) between 1 and 160)
+        and (
+          (
+            "ai_usage_records"."resource_type" is null
+            and "ai_usage_records"."resource_id" is null
+            and "ai_usage_records"."source_checksum" is null
+          ) or (
+            "ai_usage_records"."processing_authority_version" is not null
+            and length(trim("ai_usage_records"."resource_type")) between 1 and 80
+            and "ai_usage_records"."resource_id" is not null
+            and "ai_usage_records"."source_checksum" ~ '^sha256:[0-9a-f]{64}$'
+          )
+        )),
+	CONSTRAINT "ai_usage_records_token_counts_check" CHECK ((
+          "ai_usage_records"."prompt_tokens" is null
+          and "ai_usage_records"."completion_tokens" is null
+          and "ai_usage_records"."total_tokens" is null
+        ) or (
+          "ai_usage_records"."prompt_tokens" >= 0
+          and "ai_usage_records"."completion_tokens" >= 0
+          and "ai_usage_records"."total_tokens" = "ai_usage_records"."prompt_tokens" + "ai_usage_records"."completion_tokens"
+        )),
+	CONSTRAINT "ai_usage_records_lifecycle_check" CHECK ((
+          "ai_usage_records"."status" = 'started'
+          and "ai_usage_records"."model" is null
+          and "ai_usage_records"."finish_reason" is null
+          and "ai_usage_records"."safe_error_code" is null
+          and "ai_usage_records"."prompt_tokens" is null
+          and "ai_usage_records"."completion_tokens" is null
+          and "ai_usage_records"."total_tokens" is null
+          and "ai_usage_records"."duration_ms" is null
+          and "ai_usage_records"."completed_at" is null
+        ) or (
+          "ai_usage_records"."status" = 'succeeded'
+          and "ai_usage_records"."model" is not null
+          and "ai_usage_records"."finish_reason" is not null
+          and "ai_usage_records"."safe_error_code" is null
+          and "ai_usage_records"."duration_ms" >= 0
+          and "ai_usage_records"."completed_at" >= "ai_usage_records"."started_at"
+        ) or (
+          "ai_usage_records"."status" = 'failed'
+          and "ai_usage_records"."model" is null
+          and "ai_usage_records"."finish_reason" is null
+          and "ai_usage_records"."safe_error_code" is not null
+          and "ai_usage_records"."prompt_tokens" is null
+          and "ai_usage_records"."completion_tokens" is null
+          and "ai_usage_records"."total_tokens" is null
+          and "ai_usage_records"."duration_ms" >= 0
+          and "ai_usage_records"."completed_at" >= "ai_usage_records"."started_at"
+        ))
+);
+--> statement-breakpoint
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auth_identities" ADD CONSTRAINT "auth_identities_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_role_assignments" ADD CONSTRAINT "user_role_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1883,6 +2590,7 @@ ALTER TABLE "verification_application_documents" ADD CONSTRAINT "verification_ap
 ALTER TABLE "calculation_records" ADD CONSTRAINT "calculation_records_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_participants" ADD CONSTRAINT "calculation_participants_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "calculation_client_links" ADD CONSTRAINT "calculation_client_links_published_interpretation_fk" FOREIGN KEY ("published_interpretation_id","calculation_id") REFERENCES "public"."calculation_interpretations"("id","calculation_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_interpretations" ADD CONSTRAINT "calculation_interpretations_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_calculation_id_calculation_records_id_fk" FOREIGN KEY ("calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_artifacts" ADD CONSTRAINT "calculation_artifacts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -1890,8 +2598,9 @@ ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_calculat
 ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_artifact_id_fk" FOREIGN KEY ("artifact_id","calculation_id") REFERENCES "public"."calculation_artifacts"("id","calculation_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "calculation_pdf_jobs" ADD CONSTRAINT "calculation_pdf_jobs_media_asset_id_fk" FOREIGN KEY ("media_asset_id","owner_user_id") REFERENCES "public"."media_assets"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_client_profiles_user_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."client_profiles"("user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_calculation_id_calculation_records_id_fk" FOREIGN KEY ("result_calculation_id") REFERENCES "public"."calculation_records"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_client_id_users_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_result_owner_fk" FOREIGN KEY ("result_calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chart_calculation_jobs" ADD CONSTRAINT "chart_calculation_jobs_target_owner_fk" FOREIGN KEY ("target_calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_generations" ADD CONSTRAINT "astro_calendar_generations_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_generation_id_astro_calendar_generations_id_fk" FOREIGN KEY ("generation_id") REFERENCES "public"."astro_calendar_generations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "astro_calendar_events" ADD CONSTRAINT "astro_calendar_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1913,6 +2622,15 @@ ALTER TABLE "flow_approvals" ADD CONSTRAINT "flow_approvals_step_run_owner_fk" F
 ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_delivery_attempts" ADD CONSTRAINT "flow_delivery_attempts_step_run_owner_fk" FOREIGN KEY ("flow_step_run_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_step_runs"("id","flow_run_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_execution_attempts" ADD CONSTRAINT "flow_execution_attempts_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_execution_attempts" ADD CONSTRAINT "flow_execution_attempts_token_run_owner_fk" FOREIGN KEY ("token_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_execution_tokens"("id","flow_run_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_execution_attempts" ADD CONSTRAINT "flow_execution_attempts_run_version_owner_fk" FOREIGN KEY ("flow_run_id","flow_version_id","owner_user_id") REFERENCES "public"."flow_runs"("id","flow_version_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_execution_tokens" ADD CONSTRAINT "flow_execution_tokens_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_execution_tokens" ADD CONSTRAINT "flow_execution_tokens_run_version_owner_fk" FOREIGN KEY ("flow_run_id","flow_version_id","owner_user_id") REFERENCES "public"."flow_runs"("id","flow_version_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_run_events" ADD CONSTRAINT "flow_run_events_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_run_events" ADD CONSTRAINT "flow_run_events_run_owner_fk" FOREIGN KEY ("flow_run_id","owner_user_id") REFERENCES "public"."flow_runs"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_run_events" ADD CONSTRAINT "flow_run_events_attempt_run_owner_fk" FOREIGN KEY ("attempt_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_execution_attempts"("id","flow_run_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_run_events" ADD CONSTRAINT "flow_run_events_command_run_owner_fk" FOREIGN KEY ("command_id","flow_run_id","owner_user_id") REFERENCES "public"."flow_runtime_commands"("id","resource_id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_flow_version_owner_fk" FOREIGN KEY ("flow_id","flow_version_id","owner_user_id") REFERENCES "public"."flow_versions"("flow_id","id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -1924,12 +2642,16 @@ ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_owner_user_id_
 ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_flow_owner_fk" FOREIGN KEY ("flow_id","owner_user_id") REFERENCES "public"."flows"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_runtime_event_owner_fk" FOREIGN KEY ("runtime_event_id","owner_user_id") REFERENCES "public"."flow_runtime_events"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "flow_suppressions" ADD CONSTRAINT "flow_suppressions_run_event_owner_fk" FOREIGN KEY ("flow_run_id","flow_id","runtime_event_id","owner_user_id") REFERENCES "public"."flow_runs"("id","flow_id","runtime_event_id","owner_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runtime_command_outcomes" ADD CONSTRAINT "flow_runtime_command_outcomes_command_fk" FOREIGN KEY ("command_id") REFERENCES "public"."flow_runtime_commands"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runtime_commands" ADD CONSTRAINT "flow_runtime_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flow_runtime_commands" ADD CONSTRAINT "flow_runtime_commands_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_profiles" ADD CONSTRAINT "client_profiles_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_birth_data" ADD CONSTRAINT "client_birth_data_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_client_user_id_users_id_fk" FOREIGN KEY ("client_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_astrologer_relationships" ADD CONSTRAINT "client_astrologer_relationships_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_astrologer_user_id_users_id_fk" FOREIGN KEY ("astrologer_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "client_join_intents" ADD CONSTRAINT "client_join_intents_claimed_by_client_user_id_users_id_fk" FOREIGN KEY ("claimed_by_client_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "client_data_consents" ADD CONSTRAINT "client_data_consents_relationship_identity_fk" FOREIGN KEY ("relationship_id","client_user_id","astrologer_user_id") REFERENCES "public"."client_astrologer_relationships"("id","client_user_id","astrologer_user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_notes" ADD CONSTRAINT "matrix_notes_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "matrix_report_drafts" ADD CONSTRAINT "matrix_report_drafts_calculation_owner_fk" FOREIGN KEY ("calculation_id","owner_user_id") REFERENCES "public"."calculation_records"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "availability_date_overrides" ADD CONSTRAINT "availability_date_overrides_schedule_owner_fk" FOREIGN KEY ("schedule_id","owner_user_id") REFERENCES "public"."availability_schedules"("id","owner_user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1991,6 +2713,8 @@ ALTER TABLE "wallet_balance_read_models" ADD CONSTRAINT "wallet_balance_read_mod
 ALTER TABLE "reconciliation_records" ADD CONSTRAINT "reconciliation_records_provider_event_id_payment_provider_events_id_fk" FOREIGN KEY ("provider_event_id") REFERENCES "public"."payment_provider_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "finance_idempotency_commands" ADD CONSTRAINT "finance_idempotency_commands_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_log_entries" ADD CONSTRAINT "audit_log_entries_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_usage_consent_records" ADD CONSTRAINT "ai_usage_consent_records_usage_record_id_ai_usage_records_id_fk" FOREIGN KEY ("usage_record_id") REFERENCES "public"."ai_usage_records"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_usage_consent_records" ADD CONSTRAINT "ai_usage_consent_records_consent_record_id_client_data_consents_id_fk" FOREIGN KEY ("consent_record_id") REFERENCES "public"."client_data_consents"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_provider_subject_unique" ON "auth_identities" USING btree ("provider","provider_subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_email_login_unique" ON "auth_identities" USING btree (lower("email")) WHERE "auth_identities"."provider" = 'email' and "auth_identities"."email" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "auth_identities_phone_login_unique" ON "auth_identities" USING btree ("phone_number") WHERE "auth_identities"."provider" = 'phone' and "auth_identities"."phone_number" is not null;--> statement-breakpoint
@@ -2019,6 +2743,7 @@ CREATE INDEX "auth_security_events_occurred_at_index" ON "auth_security_events" 
 CREATE UNIQUE INDEX "outbox_events_event_type_aggregate_id_unique" ON "outbox_events" USING btree ("event_type","aggregate_id");--> statement-breakpoint
 CREATE INDEX "outbox_events_pending_index" ON "outbox_events" USING btree ("status","available_at","created_at");--> statement-breakpoint
 CREATE INDEX "outbox_events_locked_at_index" ON "outbox_events" USING btree ("locked_at");--> statement-breakpoint
+CREATE INDEX "outbox_events_quarantined_index" ON "outbox_events" USING btree ("event_type","quarantined_at","id") WHERE "outbox_events"."status" = 'quarantined';--> statement-breakpoint
 CREATE UNIQUE INDEX "dictionary_categories_code_unique" ON "dictionary_categories" USING btree ("code");--> statement-breakpoint
 CREATE INDEX "dictionary_platform_entries_locale_status_category_index" ON "dictionary_platform_entries" USING btree ("locale","status","category_id");--> statement-breakpoint
 CREATE INDEX "dictionary_astrologer_entries_custom_owner_locale_category_index" ON "dictionary_astrologer_entries" USING btree ("owner_user_id","locale","category_id") WHERE "dictionary_astrologer_entries"."entry_type" = 'custom';--> statement-breakpoint
@@ -2056,15 +2781,14 @@ CREATE INDEX "verification_applications_status_submitted_idx" ON "verification_a
 CREATE INDEX "verification_application_documents_application_idx" ON "verification_application_documents" USING btree ("application_id");--> statement-breakpoint
 CREATE INDEX "verification_application_documents_media_idx" ON "verification_application_documents" USING btree ("media_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "verification_application_documents_application_media_unique" ON "verification_application_documents" USING btree ("application_id","media_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "calculation_records_exact_request_unique" ON "calculation_records" USING btree ("owner_user_id","module","mode","method_code","request_fingerprint");--> statement-breakpoint
+CREATE UNIQUE INDEX "calculation_records_exact_request_unique" ON "calculation_records" USING btree ("owner_user_id","module","mode","method_code","request_fingerprint") WHERE "calculation_records"."status" <> 'archived';--> statement-breakpoint
 CREATE INDEX "calculation_records_owner_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","updated_at","id");--> statement-breakpoint
 CREATE INDEX "calculation_records_owner_status_updated_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","updated_at","id");--> statement-breakpoint
 CREATE INDEX "calculation_records_owner_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","module","created_at","id");--> statement-breakpoint
 CREATE INDEX "calculation_records_owner_status_module_created_id_idx" ON "calculation_records" USING btree ("owner_user_id","status","module","created_at","id");--> statement-breakpoint
-CREATE INDEX "calculation_participants_record_role_idx" ON "calculation_participants" USING btree ("calculation_id","role");--> statement-breakpoint
-CREATE INDEX "calculation_participants_record_order_idx" ON "calculation_participants" USING btree ("calculation_id","order");--> statement-breakpoint
 CREATE INDEX "calculation_client_links_record_idx" ON "calculation_client_links" USING btree ("calculation_id");--> statement-breakpoint
 CREATE INDEX "calculation_client_links_client_idx" ON "calculation_client_links" USING btree ("client_id");--> statement-breakpoint
+CREATE INDEX "calculation_client_links_published_interpretation_idx" ON "calculation_client_links" USING btree ("published_interpretation_id","calculation_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "calculation_client_links_record_client_unique" ON "calculation_client_links" USING btree ("calculation_id","client_id");--> statement-breakpoint
 CREATE INDEX "calculation_interpretations_record_idx" ON "calculation_interpretations" USING btree ("calculation_id");--> statement-breakpoint
 CREATE INDEX "calculation_artifacts_record_idx" ON "calculation_artifacts" USING btree ("calculation_id");--> statement-breakpoint
@@ -2076,7 +2800,6 @@ CREATE INDEX "chart_calculation_jobs_owner_idx" ON "chart_calculation_jobs" USIN
 CREATE INDEX "chart_calculation_jobs_client_idx" ON "chart_calculation_jobs" USING btree ("client_id");--> statement-breakpoint
 CREATE INDEX "chart_calculation_jobs_status_updated_idx" ON "chart_calculation_jobs" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "chart_calculation_jobs_active_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" in ('queued', 'processing');--> statement-breakpoint
-CREATE UNIQUE INDEX "chart_calculation_jobs_success_fingerprint_unique" ON "chart_calculation_jobs" USING btree ("owner_user_id","input_fingerprint") WHERE "chart_calculation_jobs"."status" = 'succeeded';--> statement-breakpoint
 CREATE INDEX "astro_calendar_generations_owner_range_idx" ON "astro_calendar_generations" USING btree ("owner_user_id","range_start","range_end");--> statement-breakpoint
 CREATE INDEX "astro_calendar_generations_status_updated_idx" ON "astro_calendar_generations" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "astro_calendar_generations_fingerprint_unique" ON "astro_calendar_generations" USING btree ("owner_user_id","input_fingerprint");--> statement-breakpoint
@@ -2101,6 +2824,17 @@ CREATE INDEX "flow_approvals_run_created_idx" ON "flow_approvals" USING btree ("
 CREATE UNIQUE INDEX "flow_delivery_attempts_owner_idempotency_unique" ON "flow_delivery_attempts" USING btree ("owner_user_id","idempotency_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_delivery_attempts_step_attempt_unique" ON "flow_delivery_attempts" USING btree ("flow_step_run_id","attempt_number");--> statement-breakpoint
 CREATE INDEX "flow_delivery_attempts_owner_status_created_idx" ON "flow_delivery_attempts" USING btree ("owner_user_id","status","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_execution_attempts_token_fence_unique" ON "flow_execution_attempts" USING btree ("token_id","fencing_token");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_execution_attempts_token_activation_attempt_unique" ON "flow_execution_attempts" USING btree ("token_id","node_activation_sequence","attempt_number");--> statement-breakpoint
+CREATE INDEX "flow_execution_attempts_owner_run_completed_idx" ON "flow_execution_attempts" USING btree ("owner_user_id","flow_run_id","completed_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_execution_tokens_run_unique" ON "flow_execution_tokens" USING btree ("flow_run_id");--> statement-breakpoint
+CREATE INDEX "flow_execution_tokens_owner_run_idx" ON "flow_execution_tokens" USING btree ("owner_user_id","flow_run_id");--> statement-breakpoint
+CREATE INDEX "flow_execution_tokens_runnable_idx" ON "flow_execution_tokens" USING btree ("state","available_at","created_at","id");--> statement-breakpoint
+CREATE INDEX "flow_execution_tokens_expired_lease_idx" ON "flow_execution_tokens" USING btree ("state","lease_expires_at","id");--> statement-breakpoint
+CREATE INDEX "flow_execution_tokens_quarantined_idx" ON "flow_execution_tokens" USING btree ("failure_disposition","quarantined_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_run_events_run_sequence_unique" ON "flow_run_events" USING btree ("flow_run_id","sequence");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_run_events_attempt_unique" ON "flow_run_events" USING btree ("attempt_id") WHERE "flow_run_events"."attempt_id" is not null;--> statement-breakpoint
+CREATE INDEX "flow_run_events_owner_occurred_idx" ON "flow_run_events" USING btree ("owner_user_id","occurred_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "flow_runs_owner_flow_event_unique" ON "flow_runs" USING btree ("owner_user_id","flow_id","runtime_event_id");--> statement-breakpoint
 CREATE INDEX "flow_runs_owner_status_updated_idx" ON "flow_runs" USING btree ("owner_user_id","status","updated_at");--> statement-breakpoint
 CREATE INDEX "flow_runs_flow_created_idx" ON "flow_runs" USING btree ("flow_id","created_at","id");--> statement-breakpoint
@@ -2111,6 +2845,10 @@ CREATE INDEX "flow_step_runs_owner_run_created_idx" ON "flow_step_runs" USING bt
 CREATE UNIQUE INDEX "flow_suppressions_owner_flow_event_reason_unique" ON "flow_suppressions" USING btree ("owner_user_id","flow_id","runtime_event_id","reason");--> statement-breakpoint
 CREATE INDEX "flow_suppressions_owner_created_idx" ON "flow_suppressions" USING btree ("owner_user_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "flow_suppressions_runtime_event_idx" ON "flow_suppressions" USING btree ("runtime_event_id");--> statement-breakpoint
+CREATE INDEX "flow_runtime_command_outcomes_created_idx" ON "flow_runtime_command_outcomes" USING btree ("created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "flow_runtime_commands_scope_key_unique" ON "flow_runtime_commands" USING btree ("api_surface","actor_user_id","owner_user_id","route_template","resource_id","idempotency_key");--> statement-breakpoint
+CREATE INDEX "flow_runtime_commands_replay_until_idx" ON "flow_runtime_commands" USING btree ("replay_until");--> statement-breakpoint
+CREATE INDEX "flow_runtime_commands_owner_resource_created_idx" ON "flow_runtime_commands" USING btree ("owner_user_id","resource_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true;--> statement-breakpoint
 CREATE INDEX "client_birth_data_client_idx" ON "client_birth_data" USING btree ("client_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "client_astrologer_relationships_unique" ON "client_astrologer_relationships" USING btree ("client_user_id","astrologer_user_id");--> statement-breakpoint
@@ -2119,6 +2857,9 @@ CREATE INDEX "client_astrologer_relationships_client_status_idx" ON "client_astr
 CREATE UNIQUE INDEX "client_join_intents_token_hash_unique" ON "client_join_intents" USING btree ("token_hash");--> statement-breakpoint
 CREATE INDEX "client_join_intents_astrologer_status_idx" ON "client_join_intents" USING btree ("astrologer_user_id","status");--> statement-breakpoint
 CREATE INDEX "client_join_intents_claimed_client_idx" ON "client_join_intents" USING btree ("claimed_by_client_user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "client_data_consents_one_current_unique" ON "client_data_consents" USING btree ("relationship_id","purpose") WHERE "client_data_consents"."revoked_at" is null;--> statement-breakpoint
+CREATE INDEX "client_data_consents_client_relationship_index" ON "client_data_consents" USING btree ("client_user_id","relationship_id","granted_at");--> statement-breakpoint
+CREATE INDEX "client_data_consents_astrologer_client_index" ON "client_data_consents" USING btree ("astrologer_user_id","client_user_id","granted_at");--> statement-breakpoint
 CREATE INDEX "matrix_notes_owner_calculation_created_id_idx" ON "matrix_notes" USING btree ("owner_user_id","calculation_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "matrix_report_drafts_owner_calculation_idx" ON "matrix_report_drafts" USING btree ("owner_user_id","calculation_id");--> statement-breakpoint
 CREATE INDEX "availability_date_overrides_schedule_date_idx" ON "availability_date_overrides" USING btree ("schedule_id","local_date");--> statement-breakpoint
@@ -2199,7 +2940,11 @@ CREATE INDEX "finance_idempotency_commands_expiry_idx" ON "finance_idempotency_c
 CREATE INDEX "audit_log_entries_actor_user_id_index" ON "audit_log_entries" USING btree ("actor_user_id");--> statement-breakpoint
 CREATE INDEX "audit_log_entries_action_index" ON "audit_log_entries" USING btree ("action");--> statement-breakpoint
 CREATE INDEX "audit_log_entries_target_index" ON "audit_log_entries" USING btree ("target_type","target_id");--> statement-breakpoint
-CREATE INDEX "audit_log_entries_occurred_at_index" ON "audit_log_entries" USING btree ("occurred_at");
+CREATE INDEX "audit_log_entries_occurred_at_index" ON "audit_log_entries" USING btree ("occurred_at");--> statement-breakpoint
+CREATE INDEX "ai_usage_consent_records_consent_index" ON "ai_usage_consent_records" USING btree ("consent_record_id");--> statement-breakpoint
+CREATE INDEX "ai_usage_records_owner_started_index" ON "ai_usage_records" USING btree ("owner_safety_id","started_at");--> statement-breakpoint
+CREATE INDEX "ai_usage_records_status_started_index" ON "ai_usage_records" USING btree ("status","started_at");--> statement-breakpoint
+CREATE INDEX "ai_usage_records_feature_started_index" ON "ai_usage_records" USING btree ("feature","started_at");
 --> statement-breakpoint
 ALTER TABLE "schedule_reservations"
   ADD CONSTRAINT "schedule_reservations_active_owner_range_exclude"
@@ -2480,4 +3225,517 @@ CREATE TRIGGER "flow_definition_migrations_immutable"
 BEFORE UPDATE OR DELETE ON flow_definition_migrations
 FOR EACH ROW
 EXECUTE FUNCTION elevenhouse_guard_flow_definition_migration_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_runtime_command_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_runtime_command_guard$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+      RAISE EXCEPTION 'flow runtime command tombstones are retained for the owner lifetime'
+        USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_commands_immutable_identity';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF ROW(
+      OLD.id,
+      OLD.api_surface,
+      OLD.actor_user_id,
+      OLD.owner_user_id,
+      OLD.route_template,
+      OLD.resource_id,
+      OLD.command_scope,
+      OLD.idempotency_key,
+      OLD.request_hash,
+      OLD.replay_until,
+      OLD.created_at
+    ) IS DISTINCT FROM ROW(
+      NEW.id,
+      NEW.api_surface,
+      NEW.actor_user_id,
+      NEW.owner_user_id,
+      NEW.route_template,
+      NEW.resource_id,
+      NEW.command_scope,
+      NEW.idempotency_key,
+      NEW.request_hash,
+      NEW.replay_until,
+      NEW.created_at
+    ) THEN
+    RAISE EXCEPTION 'flow runtime command identity is immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_commands_immutable_identity';
+  END IF;
+
+  IF OLD.state <> 'processing'
+     OR NEW.state NOT IN ('succeeded', 'failed')
+     OR OLD.completed_at IS NOT NULL
+     OR NEW.completed_at IS NULL
+     OR NEW.updated_at < OLD.updated_at THEN
+    RAISE EXCEPTION 'flow runtime command permits one processing-to-terminal transition'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_commands_immutable_identity';
+  END IF;
+
+  RETURN NEW;
+END;
+$flow_runtime_command_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_runtime_commands_immutable_identity"
+BEFORE UPDATE OR DELETE ON flow_runtime_commands
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_runtime_command_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_runtime_outcome_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_runtime_outcome_guard$
+DECLARE
+  command_replay_until timestamp with time zone;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'flow runtime command outcomes are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_command_outcomes_retention';
+  END IF;
+
+  SELECT replay_until INTO command_replay_until
+    FROM flow_runtime_commands
+   WHERE id = OLD.command_id;
+  IF FOUND AND transaction_timestamp() < command_replay_until THEN
+    RAISE EXCEPTION 'flow runtime command outcome is retained through its replay window'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_command_outcomes_retention';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_runtime_outcome_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_runtime_command_outcomes_retention"
+BEFORE UPDATE OR DELETE ON flow_runtime_command_outcomes
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_runtime_outcome_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_assert_flow_runtime_command_outcome()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_runtime_command_outcome_guard$
+DECLARE
+  checked_command_id uuid;
+  command_row flow_runtime_commands%ROWTYPE;
+  outcome_row flow_runtime_command_outcomes%ROWTYPE;
+  has_outcome boolean;
+BEGIN
+  IF TG_TABLE_NAME = 'flow_runtime_commands' THEN
+    checked_command_id := COALESCE(NEW.id, OLD.id);
+  ELSE
+    checked_command_id := COALESCE(NEW.command_id, OLD.command_id);
+  END IF;
+
+  SELECT * INTO command_row
+    FROM flow_runtime_commands
+   WHERE id = checked_command_id;
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT * INTO outcome_row
+    FROM flow_runtime_command_outcomes
+   WHERE command_id = checked_command_id;
+  has_outcome := FOUND;
+
+  IF command_row.state = 'processing' THEN
+    IF has_outcome THEN
+      RAISE EXCEPTION 'processing flow runtime command cannot have an outcome'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_runtime_command_outcome_consistency';
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  IF NOT has_outcome THEN
+    IF transaction_timestamp() < command_row.replay_until THEN
+      RAISE EXCEPTION 'terminal flow runtime command requires a replay outcome'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_runtime_command_outcome_consistency';
+    END IF;
+    RETURN NULL;
+  END IF;
+
+  IF outcome_row.created_at < command_row.created_at
+     OR outcome_row.created_at > command_row.replay_until
+     OR outcome_row.created_at IS DISTINCT FROM command_row.completed_at
+     OR (command_row.state = 'succeeded' AND outcome_row.response_status <> 200)
+     OR (command_row.state = 'failed' AND outcome_row.response_status NOT IN (404, 409)) THEN
+    RAISE EXCEPTION 'flow runtime command state and outcome do not agree'
+      USING ERRCODE = '23514', CONSTRAINT = 'flow_runtime_command_outcome_consistency';
+  END IF;
+
+  RETURN NULL;
+END;
+$flow_runtime_command_outcome_guard$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_runtime_command_outcome_consistency"
+AFTER INSERT OR UPDATE OR DELETE ON flow_runtime_commands
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_runtime_command_outcome();
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_runtime_outcome_command_consistency"
+AFTER INSERT OR UPDATE OR DELETE ON flow_runtime_command_outcomes
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_runtime_command_outcome();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_assert_flow_run_event_command()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_run_event_command_guard$
+DECLARE
+  command_row flow_runtime_commands%ROWTYPE;
+BEGIN
+  IF NEW.event_type <> 'run_canceled' THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT * INTO command_row
+    FROM flow_runtime_commands
+   WHERE id = NEW.command_id;
+  IF NOT FOUND
+     OR command_row.api_surface <> 'astrologer-api'
+     OR command_row.owner_user_id <> NEW.owner_user_id
+     OR command_row.route_template <> '/flow-runs/:runId/cancel'
+     OR command_row.resource_id <> NEW.flow_run_id
+     OR command_row.command_scope <> 'flows.runtime.cancel.v1'
+     OR command_row.state <> 'succeeded' THEN
+    RAISE EXCEPTION 'cancellation event requires a succeeded runtime command'
+      USING ERRCODE = '23514', CONSTRAINT = 'flow_run_event_command_consistency';
+  END IF;
+
+  RETURN NULL;
+END;
+$flow_run_event_command_guard$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "flow_run_event_command_consistency"
+AFTER INSERT OR UPDATE ON flow_run_events
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_flow_run_event_command();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_execution_history_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_execution_history_guard$
+BEGIN
+  IF TG_OP = 'TRUNCATE' THEN
+    IF TG_TABLE_NAME = 'flow_execution_attempts' THEN
+      RAISE EXCEPTION 'flow execution attempts are immutable'
+        USING ERRCODE = '55000', CONSTRAINT = 'flow_execution_attempts_immutable';
+    END IF;
+    RAISE EXCEPTION 'flow run events are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_run_events_immutable';
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF TG_TABLE_NAME = 'flow_execution_attempts' THEN
+      RAISE EXCEPTION 'flow execution attempts are immutable'
+        USING ERRCODE = '55000', CONSTRAINT = 'flow_execution_attempts_immutable';
+    END IF;
+    RAISE EXCEPTION 'flow run events are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_run_events_immutable';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM flow_runs WHERE id = OLD.flow_run_id)
+     AND EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+    IF TG_TABLE_NAME = 'flow_execution_attempts' THEN
+      RAISE EXCEPTION 'flow execution attempts can only be deleted with their run'
+        USING ERRCODE = '55000', CONSTRAINT = 'flow_execution_attempts_immutable';
+    END IF;
+    RAISE EXCEPTION 'flow run events can only be deleted with their run'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_run_events_immutable';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_execution_history_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_execution_attempts_immutable"
+BEFORE UPDATE OR DELETE ON flow_execution_attempts
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_execution_history_mutation();
+--> statement-breakpoint
+CREATE TRIGGER "flow_execution_attempts_truncate_guard"
+BEFORE TRUNCATE ON flow_execution_attempts
+FOR EACH STATEMENT
+EXECUTE FUNCTION elevenhouse_guard_flow_execution_history_mutation();
+--> statement-breakpoint
+CREATE TRIGGER "flow_run_events_immutable"
+BEFORE UPDATE OR DELETE ON flow_run_events
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_execution_history_mutation();
+--> statement-breakpoint
+CREATE TRIGGER "flow_run_events_truncate_guard"
+BEFORE TRUNCATE ON flow_run_events
+FOR EACH STATEMENT
+EXECUTE FUNCTION elevenhouse_guard_flow_execution_history_mutation();
 -- ElevenHouse Flows integrity objects: end
+--> statement-breakpoint
+-- ElevenHouse consent and AI evidence integrity objects: begin
+
+  LOCK TABLE ai_usage_records IN ACCESS EXCLUSIVE MODE;
+  ALTER TABLE ai_usage_records
+    DROP CONSTRAINT ai_usage_records_status_check,
+    DROP CONSTRAINT ai_usage_records_safe_fields_check,
+    DROP CONSTRAINT ai_usage_records_lifecycle_check;
+  ALTER TABLE ai_usage_records
+    ADD CONSTRAINT ai_usage_records_status_check
+      CHECK (status IN ('started', 'succeeded', 'failed', 'indeterminate')),
+    ADD CONSTRAINT ai_usage_records_safe_fields_check
+      CHECK (
+        length(trim(feature)) BETWEEN 1 AND 160
+        AND length(trim(prompt_id)) BETWEEN 1 AND 160
+        AND prompt_version >= 1
+        AND length(trim(provider)) BETWEEN 1 AND 80
+        AND (model IS NULL OR length(trim(model)) BETWEEN 1 AND 160)
+        AND (finish_reason IS NULL OR length(trim(finish_reason)) BETWEEN 1 AND 120)
+        AND (safe_error_code IS NULL OR safe_error_code IN (
+          'AI_PROVIDER_REFUSED',
+          'AI_PROVIDER_BAD_REQUEST',
+          'AI_PROVIDER_RESPONSE_INVALID',
+          'AI_PROVIDER_INCOMPLETE_RESPONSE',
+          'AI_PROVIDER_UNAVAILABLE',
+          'AI_PROVIDER_AUTHENTICATION_FAILED',
+          'AI_PROVIDER_BILLING_FAILED',
+          'AI_PROVIDER_RATE_LIMITED',
+          'AI_PROVIDER_SERVER_ERROR',
+          'AI_PROVIDER_TIMEOUT',
+          'AI_PROVIDER_UNKNOWN_FAILURE',
+          'AI_USAGE_OUTCOME_INDETERMINATE'
+        ))
+      ),
+    ADD CONSTRAINT ai_usage_records_lifecycle_check
+      CHECK (
+        (
+          status = 'started'
+          AND model IS NULL
+          AND finish_reason IS NULL
+          AND safe_error_code IS NULL
+          AND prompt_tokens IS NULL
+          AND completion_tokens IS NULL
+          AND total_tokens IS NULL
+          AND duration_ms IS NULL
+          AND completed_at IS NULL
+        ) OR (
+          status = 'succeeded'
+          AND model IS NOT NULL
+          AND finish_reason IS NOT NULL
+          AND safe_error_code IS NULL
+          AND duration_ms >= 0
+          AND completed_at >= started_at
+        ) OR (
+          status = 'failed'
+          AND model IS NULL
+          AND finish_reason IS NULL
+          AND safe_error_code IS NOT NULL
+          AND prompt_tokens IS NULL
+          AND completion_tokens IS NULL
+          AND total_tokens IS NULL
+          AND duration_ms >= 0
+          AND completed_at >= started_at
+        ) OR (
+          status = 'indeterminate'
+          AND model IS NULL
+          AND finish_reason IS NULL
+          AND safe_error_code = 'AI_USAGE_OUTCOME_INDETERMINATE'
+          AND prompt_tokens IS NULL
+          AND completion_tokens IS NULL
+          AND total_tokens IS NULL
+          AND duration_ms >= 0
+          AND completed_at >= started_at
+        )
+      );
+  CREATE OR REPLACE FUNCTION elevenhouse_guard_ai_usage_record_mutation()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  AS $ai_usage_record_guard$
+  BEGIN
+    IF ROW(
+        OLD.id,
+        OLD.feature,
+        OLD.prompt_id,
+        OLD.prompt_version,
+        OLD.provider,
+        OLD.owner_safety_id,
+        OLD.processing_authority_version,
+        OLD.resource_type,
+        OLD.resource_id,
+        OLD.source_checksum,
+        OLD.started_at
+      ) IS DISTINCT FROM ROW(
+        NEW.id,
+        NEW.feature,
+        NEW.prompt_id,
+        NEW.prompt_version,
+        NEW.provider,
+        NEW.owner_safety_id,
+        NEW.processing_authority_version,
+        NEW.resource_type,
+        NEW.resource_id,
+        NEW.source_checksum,
+        NEW.started_at
+      )
+      OR OLD.status <> 'started'
+      OR NEW.status NOT IN ('succeeded', 'failed', 'indeterminate') THEN
+      RAISE EXCEPTION 'AI usage evidence permits one started-to-terminal transition'
+        USING ERRCODE = '55000', CONSTRAINT = 'ai_usage_records_one_way_lifecycle';
+    END IF;
+
+    RETURN NEW;
+  END;
+  $ai_usage_record_guard$;
+
+CREATE OR REPLACE FUNCTION elevenhouse_guard_client_data_consent_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $client_data_consent_guard$
+BEGIN
+  IF ROW(
+      OLD.id,
+      OLD.relationship_id,
+      OLD.client_user_id,
+      OLD.astrologer_user_id,
+      OLD.purpose,
+      OLD.policy_version,
+      OLD.processor_code,
+      OLD.notice_locale,
+      OLD.notice_sha256,
+      OLD.granted_at
+    ) IS DISTINCT FROM ROW(
+      NEW.id,
+      NEW.relationship_id,
+      NEW.client_user_id,
+      NEW.astrologer_user_id,
+      NEW.purpose,
+      NEW.policy_version,
+      NEW.processor_code,
+      NEW.notice_locale,
+      NEW.notice_sha256,
+      NEW.granted_at
+    )
+    OR OLD.revoked_at IS NOT NULL
+    OR NEW.revoked_at IS NULL THEN
+    RAISE EXCEPTION 'client consent evidence is immutable except for its first revocation'
+      USING ERRCODE = '55000', CONSTRAINT = 'client_data_consents_immutable_evidence';
+  END IF;
+
+  RETURN NEW;
+END;
+$client_data_consent_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "client_data_consents_immutable_evidence"
+BEFORE UPDATE ON client_data_consents
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_client_data_consent_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_ai_usage_record_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $ai_usage_record_guard$
+BEGIN
+  IF ROW(
+      OLD.id,
+      OLD.feature,
+      OLD.prompt_id,
+      OLD.prompt_version,
+      OLD.provider,
+      OLD.owner_safety_id,
+      OLD.processing_authority_version,
+      OLD.resource_type,
+      OLD.resource_id,
+      OLD.source_checksum,
+      OLD.started_at
+    ) IS DISTINCT FROM ROW(
+      NEW.id,
+      NEW.feature,
+      NEW.prompt_id,
+      NEW.prompt_version,
+      NEW.provider,
+      NEW.owner_safety_id,
+      NEW.processing_authority_version,
+      NEW.resource_type,
+      NEW.resource_id,
+      NEW.source_checksum,
+      NEW.started_at
+    )
+    OR OLD.status <> 'started'
+    OR NEW.status NOT IN ('succeeded', 'failed', 'indeterminate') THEN
+    RAISE EXCEPTION 'AI usage evidence permits one started-to-terminal transition'
+      USING ERRCODE = '55000', CONSTRAINT = 'ai_usage_records_one_way_lifecycle';
+  END IF;
+
+  RETURN NEW;
+END;
+$ai_usage_record_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "ai_usage_records_one_way_lifecycle"
+BEFORE UPDATE ON ai_usage_records
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_ai_usage_record_mutation();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION elevenhouse_guard_ai_usage_consent_record_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $ai_usage_consent_record_guard$
+DECLARE
+  usage_status text;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    SELECT status INTO usage_status
+      FROM ai_usage_records
+     WHERE id = NEW.usage_record_id;
+    IF usage_status IS DISTINCT FROM 'started' THEN
+      RAISE EXCEPTION 'AI usage consent evidence can only be attached before provider execution'
+        USING ERRCODE = '55000', CONSTRAINT = 'ai_usage_consent_records_immutable_evidence';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'AI usage consent evidence is immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'ai_usage_consent_records_immutable_evidence';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM ai_usage_records WHERE id = OLD.usage_record_id) THEN
+    RAISE EXCEPTION 'AI usage consent evidence can only be deleted with its usage record'
+      USING ERRCODE = '55000', CONSTRAINT = 'ai_usage_consent_records_immutable_evidence';
+  END IF;
+
+  RETURN OLD;
+END;
+$ai_usage_consent_record_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "ai_usage_consent_records_immutable_evidence"
+BEFORE INSERT OR UPDATE OR DELETE ON ai_usage_consent_records
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_ai_usage_consent_record_mutation();
+-- ElevenHouse consent and AI evidence integrity objects: end
+--> statement-breakpoint
+-- ElevenHouse chart job result checksum integrity: begin
+CREATE OR REPLACE FUNCTION elevenhouse_guard_chart_job_result_checksum_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $chart_job_result_checksum_guard$
+BEGIN
+  IF OLD.result_checksum IS NOT NULL
+     AND OLD.result_checksum IS DISTINCT FROM NEW.result_checksum THEN
+    RAISE EXCEPTION 'succeeded chart job result checksum is immutable'
+      USING ERRCODE = '55000',
+            CONSTRAINT = 'chart_calculation_jobs_result_checksum_immutable';
+  END IF;
+
+  RETURN NEW;
+END;
+$chart_job_result_checksum_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "chart_calculation_jobs_result_checksum_immutable"
+BEFORE UPDATE OF result_checksum ON chart_calculation_jobs
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_chart_job_result_checksum_mutation();
+-- ElevenHouse chart job result checksum integrity: end

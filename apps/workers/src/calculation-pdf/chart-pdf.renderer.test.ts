@@ -1,7 +1,13 @@
 import { PDFDocument } from "pdf-lib";
-import { storedChartNatalCalculationPayloadSchema } from "@elevenhouse/contracts";
+import {
+  chartMethodVersions,
+  chartNatalResultV2Schema,
+  type ReproducibleChartResult
+} from "@elevenhouse/contracts";
+import { buildChartResultReproducibilityFingerprint } from "@elevenhouse/domain";
 import { describe, expect, it } from "vitest";
 import type { ChartPdfDocument } from "./calculation-pdf.documents";
+import { buildChartPdfInterpretations } from "./chart-pdf.interpretations";
 import { buildChartPdfContent, createChartPdfRenderer } from "./chart-pdf.renderer";
 
 describe("Chart PDF renderer", () => {
@@ -97,6 +103,35 @@ describe("Chart PDF renderer", () => {
     });
   });
 
+  it("carries rounded zodiac positions into the next sign without minute 60", () => {
+    const content = buildChartPdfContent(rolloverDocument("en"));
+
+    expect(table(content, "Planets and points").rows[0]).toEqual([
+      "Sun",
+      "Aries",
+      "0°00'",
+      "House 1",
+      "D"
+    ]);
+    expect(table(content, "Houses").rows[0]).toEqual(["House 1", "Aries", "0°00'"]);
+    expect(table(content, "Aspects").rows[0]?.[3]).toBe("2°00'");
+    expect(JSON.stringify(content)).not.toContain("°60'");
+  });
+
+  it("carries Pisces positions into Aries in dictionary interpretation coordinates", () => {
+    const interpretations = buildChartPdfInterpretations({
+      result: rolloverDocument().result,
+      entries: []
+    });
+
+    expect(interpretations.find((item) => item.code === "sun_aries")?.position).toBe(
+      "Овен 0°00' · I дом"
+    );
+    expect(interpretations.map((item) => item.code)).not.toContain("sun_pisces");
+    expect(interpretations.find((item) => item.code === "house_1")?.position).toBe("Овен 0°00'");
+    expect(interpretations.map((item) => item.position).join(" ")).not.toContain("°60'");
+  });
+
   it("renders deterministic RU and EN PDFs", async () => {
     const renderer = createChartPdfRenderer();
     const first = await renderer.render(document());
@@ -125,18 +160,53 @@ function document(
     locale,
     createdAt: "2026-07-22T12:00:00.000Z",
     calculationTitle: "Natal chart",
-    result: storedChartNatalCalculationPayloadSchema.parse(chartResult()),
+    result: chartNatalResultV2Schema.parse(chartResult()),
     approvedInterpretation: null,
     interpretations: [],
     ...overrides
   };
 }
 
-function chartResult() {
+function rolloverDocument(locale: "ru" | "en" = "ru"): ChartPdfDocument {
+  const current = document(locale);
+  const firstPoint = current.result.result.points[0]!;
+  const firstHouse = current.result.result.houses[0]!;
+  const firstAspect = current.result.result.aspects[0]!;
+
   return {
-    schemaVersion: "chart-result.v1",
+    ...current,
+    result: {
+      ...current.result,
+      result: {
+        ...current.result.result,
+        points: [
+          { ...firstPoint, longitude: 359.999, sign: "pisces", signDegree: 29.999 },
+          ...current.result.result.points.slice(1)
+        ],
+        houses: [
+          { ...firstHouse, longitude: 359.999, sign: "pisces", signDegree: 29.999 },
+          ...current.result.result.houses.slice(1)
+        ],
+        aspects: [{ ...firstAspect, orb: 1.999 }, ...current.result.result.aspects.slice(1)]
+      }
+    }
+  };
+}
+
+function chartResult() {
+  const candidate = {
+    schemaVersion: "chart-result.v2",
     method: "natal",
-    provider: { name: "kerykeion", version: "5.12.9", ephemeris: "swiss-ephemeris" },
+    methodVersion: chartMethodVersions.natal,
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier",
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
     settings: {
       zodiac: "tropical",
       houseSystem: "placidus",
@@ -201,6 +271,10 @@ function chartResult() {
       },
       warnings: []
     }
+  } as ReproducibleChartResult;
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
   };
 }
 

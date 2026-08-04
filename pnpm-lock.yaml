@@ -41,6 +41,9 @@ importers:
       globals:
         specifier: 17.6.0
         version: 17.6.0
+      husky:
+        specifier: 9.1.7
+        version: 9.1.7
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -154,6 +157,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@elevenhouse/birth-place-search':
+        specifier: workspace:*
+        version: link:../../packages/birth-place-search
       '@elevenhouse/chart-engine-client':
         specifier: workspace:*
         version: link:../../packages/chart-engine-client
@@ -202,9 +208,6 @@ importers:
       teleproto:
         specifier: ^1.228.4
         version: 1.228.4
-      tz-lookup:
-        specifier: ^6.1.25
-        version: 6.1.25
     devDependencies:
       '@nestjs/testing':
         specifier: 11.1.26
@@ -212,9 +215,6 @@ importers:
       '@types/node':
         specifier: 25.9.2
         version: 25.9.2
-      '@types/tz-lookup':
-        specifier: ^6.1.2
-        version: 6.1.2
       tsx:
         specifier: 4.21.0
         version: 4.21.0
@@ -417,6 +417,9 @@ importers:
       '@elevenhouse/validation':
         specifier: workspace:*
         version: link:../../packages/validation
+      '@humanwhocodes/momoa':
+        specifier: 3.3.10
+        version: 3.3.10
     devDependencies:
       '@types/node':
         specifier: 25.9.2
@@ -439,6 +442,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@elevenhouse/birth-place-search':
+        specifier: workspace:*
+        version: link:../../packages/birth-place-search
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -549,6 +555,19 @@ importers:
         version: 6.0.3
 
   packages/auth:
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.2
+        version: 25.9.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/birth-place-search:
+    dependencies:
+      '@elevenhouse/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 25.9.2
@@ -1488,6 +1507,10 @@ packages:
     resolution: {integrity: sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA==}
     engines: {node: '>=12.22'}
 
+  '@humanwhocodes/momoa@3.3.10':
+    resolution: {integrity: sha512-KWiFQpSAqEIyrTXko3hFNLeQvSK8zXlJQzhhxsyVn58WFRYXST99b3Nqnu+ttOtjds2Pl2grUHGpe2NzhPynuQ==}
+    engines: {node: '>=18'}
+
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
@@ -1894,9 +1917,6 @@ packages:
 
   '@types/react@19.2.17':
     resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
-
-  '@types/tz-lookup@6.1.2':
-    resolution: {integrity: sha512-9y31Xf/8FHXrCHjvVjGZLcsayAa6ABNc8bZlk6MPOQLLlr41tICSqW3TRPRIx2nodbzdKs5N7ipHWBrUsWUiAA==}
 
   '@typescript-eslint/eslint-plugin@8.61.0':
     resolution: {integrity: sha512-bFNvl9ZczlVb+wR2Akszf3gHfKVj/8WanXaGJ3UstTA7brNKg0cNdk6X1Psu5V7MZ2oQtzZKOEzIUehaoxbDGw==}
@@ -2547,6 +2567,11 @@ packages:
   http-errors@2.0.1:
     resolution: {integrity: sha512-4FbRdAX+bSdmo4AUFuS0WNiPz8NgFt+r8ThgNWmlrjQjt1Q7ZR9+zTlce2859x4KSXrwIsaeTqDoKQmtP8pLmQ==}
     engines: {node: '>= 0.8'}
+
+  husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
@@ -3307,9 +3332,6 @@ packages:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
-
-  tz-lookup@6.1.25:
-    resolution: {integrity: sha512-fFewT9o1uDzsW1QnUU1ValqaihFnwiUiiHr1S79/fxOzKXYYvX+EHeRnpvQJ9B3Qg67wPXT6QF2Esc4pFOrvLg==}
 
   uid@2.0.2:
     resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
@@ -4140,6 +4162,8 @@ snapshots:
 
   '@humanwhocodes/module-importer@1.0.1': {}
 
+  '@humanwhocodes/momoa@3.3.10': {}
+
   '@humanwhocodes/retry@0.4.3': {}
 
   '@ioredis/commands@1.5.1': {}
@@ -4473,8 +4497,6 @@ snapshots:
   '@types/react@19.2.17':
     dependencies:
       csstype: 3.2.3
-
-  '@types/tz-lookup@6.1.2': {}
 
   '@typescript-eslint/eslint-plugin@8.61.0(@typescript-eslint/parser@8.61.0(eslint@10.4.1)(typescript@6.0.3))(eslint@10.4.1)(typescript@6.0.3)':
     dependencies:
@@ -5159,6 +5181,8 @@ snapshots:
       setprototypeof: 1.2.0
       statuses: 2.0.2
       toidentifier: 1.0.1
+
+  husky@9.1.7: {}
 
   iconv-lite@0.7.2:
     dependencies:
@@ -5866,8 +5890,6 @@ snapshots:
       - supports-color
 
   typescript@6.0.3: {}
-
-  tz-lookup@6.1.25: {}
 
   uid@2.0.2:
     dependencies:

@@ -1,13 +1,10 @@
-from chart_engine.kerykeion_adapter import calculate_natal
 from chart_engine.main import provider_runtime
 from chart_engine.schemas import NatalInputSnapshot, NatalRequest, NatalSettings
 from test_request_validation import execution_profile
 
 
 def _calculate(request: NatalRequest):
-    return provider_runtime.calculate(
-        lambda: calculate_natal(request, provider_runtime.metadata())
-    )
+    return provider_runtime.calculate("natal", request)
 
 
 def test_kerykeion_spike_maps_real_subject_points_and_houses():

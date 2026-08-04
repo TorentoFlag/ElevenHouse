@@ -73,6 +73,27 @@ def test_astro_calendar_range_rejects_ranges_over_ninety_three_days():
     assert response.status_code == 422
 
 
+def test_astro_calendar_rejects_dates_outside_packaged_ephemeris_range():
+    client = TestClient(app)
+    range_payload = {
+        **_astro_calendar_payload(),
+        "start": "2400-01-01",
+        "end": "2400-01-30",
+    }
+    client_payload = {
+        **_astro_calendar_payload(["client.birthday"]),
+        "clients": [{**_client_snapshot(), "birthDate": "1799-12-31"}],
+    }
+
+    range_response = client.post("/v1/astro-calendar/range", json=range_payload)
+    client_response = client.post("/v1/astro-calendar/range", json=client_payload)
+
+    assert range_response.status_code == 422
+    assert client_response.status_code == 422
+    assert "CHART_EPHEMERIS_DATE_UNSUPPORTED" in range_response.text
+    assert "CHART_EPHEMERIS_DATE_UNSUPPORTED" in client_response.text
+
+
 def test_astro_calendar_range_returns_client_date_events_from_owner_snapshot():
     client = TestClient(app)
 

@@ -1,11 +1,14 @@
 import type {
+  ChartResult,
   ChartInputSnapshot,
   ChartHoraryQuestionCategory,
   ChartHoraryQuestionSnapshot,
   ChartSettings,
   ClientBirthDataResponse,
-  StoredChartCalculationPayload
+  DictionaryLocale
 } from "@elevenhouse/contracts";
+import type { ChartDstOccurrence } from "./chartCivilTimeOccurrence";
+import { chartEngineCopyByLocale } from "./chartEngineCopy";
 
 export type BackendChartJobStatus =
   | "queued"
@@ -26,6 +29,7 @@ export type ChartHoraryQuestionDraft = {
   readonly timezone: string;
   readonly latitude: string | number | null | undefined;
   readonly longitude: string | number | null | undefined;
+  readonly dstOccurrence?: ChartDstOccurrence;
 };
 
 type NatalBirthData = Pick<
@@ -48,55 +52,60 @@ export function toVisibleChartJobState(status: BackendChartJobStatus): VisibleCh
 }
 
 export function getChartBirthDataReadiness(
-  birthData: NatalBirthData | null | undefined
+  birthData: NatalBirthData | null | undefined,
+  locale: DictionaryLocale = "ru"
 ): ChartBirthDataReadiness {
+  const copy = chartEngineCopyByLocale[locale].missing;
   const missing: string[] = [];
 
   if (!birthData?.birthDate) {
-    missing.push("дата рождения");
+    missing.push(copy.birthDate);
   }
   if (!birthData?.birthTime || birthData.birthTimePrecision === "unknown") {
-    missing.push("время рождения");
+    missing.push(copy.birthTime);
   }
   if (!birthData?.birthTimezone) {
-    missing.push("часовой пояс");
+    missing.push(copy.timezone);
   }
   if (birthData?.birthLatitude == null || birthData?.birthLongitude == null) {
-    missing.push("координаты места рождения");
+    missing.push(copy.coordinates);
   }
 
   return missing.length > 0 ? { ready: false, missing } : { ready: true };
 }
 
 export function getChartHoraryQuestionReadiness(
-  question: ChartHoraryQuestionDraft | null | undefined
+  question: ChartHoraryQuestionDraft | null | undefined,
+  locale: DictionaryLocale = "ru"
 ): ChartBirthDataReadiness {
+  const copy = chartEngineCopyByLocale[locale].missing;
   const missing: string[] = [];
 
   if (!question?.question.trim()) {
-    missing.push("вопрос");
+    missing.push(copy.question);
   }
   if (!question?.date) {
-    missing.push("дата вопроса");
+    missing.push(copy.questionDate);
   }
   if (!question?.time) {
-    missing.push("время вопроса");
+    missing.push(copy.questionTime);
   }
   if (!question?.timezone.trim()) {
-    missing.push("часовой пояс");
+    missing.push(copy.timezone);
   }
   if (!isFiniteNumberInRange(question?.latitude, -90, 90)) {
-    missing.push("широта вопроса");
+    missing.push(copy.questionLatitude);
   }
   if (!isFiniteNumberInRange(question?.longitude, -180, 180)) {
-    missing.push("долгота вопроса");
+    missing.push(copy.questionLongitude);
   }
 
   return missing.length > 0 ? { ready: false, missing } : { ready: true };
 }
 
 export function toChartHoraryQuestionSnapshot(
-  question: ChartHoraryQuestionDraft
+  question: ChartHoraryQuestionDraft,
+  locale: DictionaryLocale = "ru"
 ): ChartHoraryQuestionSnapshot {
   const latitude = normalizeFiniteNumber(question.latitude);
   const longitude = normalizeFiniteNumber(question.longitude);
@@ -113,7 +122,7 @@ export function toChartHoraryQuestionSnapshot(
     longitude < -180 ||
     longitude > 180
   ) {
-    throw new Error("Заполните вопрос, момент и координаты хорара");
+    throw new Error(chartEngineCopyByLocale[locale].controller.fillHorary);
   }
 
   return {
@@ -123,21 +132,23 @@ export function toChartHoraryQuestionSnapshot(
     time: question.time,
     timezone: question.timezone.trim(),
     latitude,
-    longitude
+    longitude,
+    ...(question.dstOccurrence ? { dstOccurrence: question.dstOccurrence } : {})
   };
 }
 
 export function isChartResultStale(
-  result: StoredChartCalculationPayload,
+  result: ChartResult,
   birthData: NatalBirthData | null | undefined,
   settings: ChartSettings,
-  currentMethod?: StoredChartCalculationPayload["method"],
+  currentMethod?: ChartResult["method"],
   transitMoment?: {
     readonly date: string;
     readonly time: string;
     readonly timezone?: string;
     readonly latitude?: number;
     readonly longitude?: number;
+    readonly dstOccurrence?: ChartDstOccurrence;
   },
   partnerBirthData?: NatalBirthData | null | undefined,
   solarReturnYear?: number,
@@ -219,7 +230,8 @@ export function isChartResultStale(
     (transitMoment.latitude != null &&
       !areNumbersEquivalent(result.transitSnapshot.latitude, transitMoment.latitude)) ||
     (transitMoment.longitude != null &&
-      !areNumbersEquivalent(result.transitSnapshot.longitude, transitMoment.longitude))
+      !areNumbersEquivalent(result.transitSnapshot.longitude, transitMoment.longitude)) ||
+    (result.transitSnapshot.dstOccurrence ?? null) !== (transitMoment.dstOccurrence ?? null)
   );
 }
 
@@ -241,14 +253,12 @@ function isHoraryQuestionSnapshotStale(
     snapshot.time !== current.time ||
     snapshot.timezone !== current.timezone ||
     !areNumbersEquivalent(snapshot.latitude, current.latitude) ||
-    !areNumbersEquivalent(snapshot.longitude, current.longitude)
+    !areNumbersEquivalent(snapshot.longitude, current.longitude) ||
+    (snapshot.dstOccurrence ?? null) !== (current.dstOccurrence ?? null)
   );
 }
 
-function isInputSnapshotStale(
-  snapshot: ChartInputSnapshot,
-  birthData: NatalBirthData
-): boolean {
+function isInputSnapshotStale(snapshot: ChartInputSnapshot, birthData: NatalBirthData): boolean {
   return (
     snapshot.birthDate !== birthData.birthDate ||
     snapshot.birthTime !== birthData.birthTime ||

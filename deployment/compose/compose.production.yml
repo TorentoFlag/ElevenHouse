@@ -1,6 +1,6 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     ports:
       - "80:80"
@@ -52,7 +52,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3001/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -72,12 +76,12 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
-    environment:
-      CHART_ENGINE_EXPECTED_EPHEMERIS: ${CHART_ENGINE_EXPECTED_EPHEMERIS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS: ${CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION: ${CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION:-}
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3002/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -89,7 +93,11 @@ services:
     env_file:
       - ../env/.env.production
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3003/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3003/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -102,7 +110,11 @@ services:
     env_file:
       - ../env/.env.production
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3010/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3010/ready'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -114,7 +126,11 @@ services:
     env_file:
       - ../env/.env.production
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3011/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3011/ready'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -123,8 +139,13 @@ services:
   chart-worker:
     image: ${IMAGE_NAMESPACE}/elevenhouse-chart-worker:${IMAGE_TAG}
     restart: unless-stopped
+    stop_grace_period: 135s
     env_file:
-      - ../env/.env.production
+      - path: ../env/.env.chart-worker.production
+        format: raw
+    environment:
+      NODE_ENV: production
+      CHART_WORKER_HEALTH_HOST: 0.0.0.0
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,44 +153,60 @@ services:
         condition: service_healthy
       chart-engine:
         condition: service_healthy
-    environment:
-      CHART_ENGINE_BASE_URL: http://chart-engine:8012
-      CHART_ENGINE_EXPECTED_EPHEMERIS: ${CHART_ENGINE_EXPECTED_EPHEMERIS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS: ${CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION: ${CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION:-}
-      CHART_WORKER_OUTBOX_RELAY_INTERVAL_MS: ${CHART_WORKER_OUTBOX_RELAY_INTERVAL_MS:-1000}
-      CHART_WORKER_OUTBOX_RELAY_BATCH_SIZE: ${CHART_WORKER_OUTBOX_RELAY_BATCH_SIZE:-25}
-      CHART_WORKER_OUTBOX_LOCK_TIMEOUT_MS: ${CHART_WORKER_OUTBOX_LOCK_TIMEOUT_MS:-60000}
-      CHART_WORKER_ATTEMPTS: ${CHART_WORKER_ATTEMPTS:-5}
-      CHART_WORKER_BACKOFF_MS: ${CHART_WORKER_BACKOFF_MS:-1000}
-      CHART_WORKER_JITTER: ${CHART_WORKER_JITTER:-0.5}
-      CHART_WORKER_CONCURRENCY: ${CHART_WORKER_CONCURRENCY:-2}
+    networks:
+      - default
+      - chart-provider
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3012/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3012/ready'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 6
       start_period: 30s
 
   chart-engine:
     image: ${IMAGE_NAMESPACE}/elevenhouse-chart-engine:${IMAGE_TAG}
     restart: unless-stopped
+    stop_grace_period: 120s
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - path: ../env/.env.chart-engine.production
+        format: raw
     environment:
+      NODE_ENV: production
       CHART_ENGINE_HOST: 0.0.0.0
       CHART_ENGINE_PORT: "8012"
-      CHART_ENGINE_WORKERS: ${CHART_ENGINE_WORKERS:-2}
-      CHART_ENGINE_EXPECTED_EPHEMERIS: ${CHART_ENGINE_EXPECTED_EPHEMERIS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS: ${CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS:?required}
-      CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION: ${CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION:-}
-      CHART_ENGINE_READINESS_TIMEOUT_SECONDS: ${CHART_ENGINE_READINESS_TIMEOUT_SECONDS:-5}
+      # Keep one runtime semaphore for the configured provider concurrency.
+      CHART_ENGINE_WORKERS: "1"
+      CHART_ENGINE_EPHEMERIS_DATA_DIR: /run/elevenhouse/ephemeris
+      CHART_ENGINE_READINESS_TIMEOUT_SECONDS: "5"
+    volumes:
+      - ../ephemeris:/run/elevenhouse/ephemeris:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     expose:
       - "8012"
+    networks:
+      - chart-provider
     healthcheck:
       # chart-engine also exposes /live; production gates on /ready.
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8012/ready"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8012/ready', timeout=4).read()"
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 6
       start_period: 20s
 
   notification-worker:
@@ -183,7 +220,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3013/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3013/ready'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"'
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -222,21 +263,21 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     restart: unless-stopped
     env_file:
       - ../env/.env.production
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.10.0-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
@@ -249,7 +290,7 @@ services:
       start_period: 10s
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: unless-stopped
     command: server /data --console-address ":9001"
     env_file:
@@ -264,7 +305,7 @@ services:
       start_period: 20s
 
   minio-init:
-    image: quay.io/minio/mc:latest
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     restart: "no"
     env_file:
       - ../env/.env.production
@@ -344,3 +385,7 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+
+networks:
+  chart-provider:
+    internal: true

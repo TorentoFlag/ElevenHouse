@@ -1,6 +1,7 @@
-import type { ChartAspect, ChartPoint, StoredChartNatalCalculationPayload } from "@elevenhouse/contracts";
+import type { ChartAspect, ChartPoint } from "@elevenhouse/contracts";
 import type { DictionaryEffectiveEntry } from "@elevenhouse/domain";
-import type { ChartPdfInterpretation } from "./calculation-pdf.documents";
+import type { ChartNatalPdfResult, ChartPdfInterpretation } from "./calculation-pdf.documents";
+import { formatZodiacPosition } from "./chart-pdf.position";
 
 type ChartInterpretationAnchorGroup = "points" | "houses" | "aspects";
 type ChartInterpretationDictionaryCategoryCode =
@@ -42,14 +43,12 @@ const houseDictionaryPointIds = new Set([...pointOrder.slice(0, 10), "north_node
 const planetAspectPointIds = new Set(pointOrder.slice(0, 10));
 const maxPlanetAspectAnchors = 12;
 
-export function buildChartPdfInterpretationCodes(
-  result: StoredChartNatalCalculationPayload
-): readonly string[] {
+export function buildChartPdfInterpretationCodes(result: ChartNatalPdfResult): readonly string[] {
   return Array.from(new Set(buildChartInterpretationAnchors(result).map((anchor) => anchor.code)));
 }
 
 export function buildChartPdfInterpretations(input: {
-  readonly result: StoredChartNatalCalculationPayload;
+  readonly result: ChartNatalPdfResult;
   readonly entries: readonly DictionaryEffectiveEntry[];
 }): readonly ChartPdfInterpretation[] {
   const entriesByCode = new Map(input.entries.map((entry) => [entry.code, entry]));
@@ -75,7 +74,7 @@ export function buildChartPdfInterpretations(input: {
 }
 
 function buildChartInterpretationAnchors(
-  result: StoredChartNatalCalculationPayload
+  result: ChartNatalPdfResult
 ): readonly ChartInterpretationAnchor[] {
   const pointsById = new Map(result.result.points.map((point) => [point.id, point]));
 
@@ -91,18 +90,18 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
     const anchors: ChartInterpretationAnchor[] = [];
     const pointId = formatDictionaryCodePart(point.id);
     const pointLabel = getPointLabelFromId(point.id, point.label);
-    const signLabel = signLabelFor(point.sign);
-    const position = `${signLabel} ${degree(point.signDegree)}${
+    const coordinate = formatZodiacPosition(point.sign, point.signDegree);
+    const position = `${signLabelFor(coordinate.sign)} ${coordinate.degree}${
       point.house ? ` · ${romanHouse(point.house)} дом` : ""
     }`;
 
     if (signDictionaryPointIds.has(pointId as (typeof pointOrder)[number])) {
       anchors.push({
         id: `point-sign-${point.id}`,
-        code: `${pointId}_${formatDictionaryCodePart(point.sign)}`,
+        code: `${pointId}_${formatDictionaryCodePart(coordinate.sign)}`,
         categoryCode: "planets_in_signs",
         group: "points",
-        label: `${pointLabel} в ${signPrepositional(point.sign)}`,
+        label: `${pointLabel} в ${signPrepositional(coordinate.sign)}`,
         meta: "Планета в знаке",
         position
       });
@@ -124,20 +123,22 @@ function buildPointAnchors(points: readonly ChartPoint[]): readonly ChartInterpr
   });
 }
 
-function buildHouseAnchors(
-  result: StoredChartNatalCalculationPayload
-): readonly ChartInterpretationAnchor[] {
+function buildHouseAnchors(result: ChartNatalPdfResult): readonly ChartInterpretationAnchor[] {
   return [...result.result.houses]
     .sort((left, right) => left.number - right.number)
-    .map((house) => ({
-      id: `house-${house.number}`,
-      code: `house_${house.number}`,
-      categoryCode: "house_meanings" as const,
-      group: "houses" as const,
-      label: `${romanHouse(house.number)} дом`,
-      meta: "Значение дома",
-      position: `${signLabelFor(house.sign)} ${degree(house.signDegree)}`
-    }));
+    .map((house) => {
+      const coordinate = formatZodiacPosition(house.sign, house.signDegree);
+
+      return {
+        id: `house-${house.number}`,
+        code: `house_${house.number}`,
+        categoryCode: "house_meanings" as const,
+        group: "houses" as const,
+        label: `${romanHouse(house.number)} дом`,
+        meta: "Значение дома",
+        position: `${signLabelFor(coordinate.sign)} ${coordinate.degree}`
+      };
+    });
 }
 
 function buildAspectAnchors(
@@ -158,8 +159,12 @@ function buildAspectAnchors(
   const planetPairAnchors = [...aspects]
     .filter(
       (aspect) =>
-        planetAspectPointIds.has(formatDictionaryCodePart(aspect.pointA) as (typeof pointOrder)[number]) &&
-        planetAspectPointIds.has(formatDictionaryCodePart(aspect.pointB) as (typeof pointOrder)[number])
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointA) as (typeof pointOrder)[number]
+        ) &&
+        planetAspectPointIds.has(
+          formatDictionaryCodePart(aspect.pointB) as (typeof pointOrder)[number]
+        )
     )
     .sort((left, right) => left.orb - right.orb)
     .slice(0, maxPlanetAspectAnchors)
@@ -189,7 +194,9 @@ function orderAspectPair(pointA: string, pointB: string): readonly [string, stri
 }
 
 function getPointOrder(pointId: string): number {
-  const index = pointOrder.indexOf(formatDictionaryCodePart(pointId) as (typeof pointOrder)[number]);
+  const index = pointOrder.indexOf(
+    formatDictionaryCodePart(pointId) as (typeof pointOrder)[number]
+  );
   return index === -1 ? pointOrder.length : index;
 }
 
@@ -219,12 +226,6 @@ function normalizeAspectTypeCode(type: string): string {
 
 function formatDictionaryCodePart(value: string): string {
   return value.trim().toLowerCase().replaceAll("-", "_");
-}
-
-function degree(value: number): string {
-  const degrees = Math.trunc(value);
-  const minutes = Math.round((value - degrees) * 60);
-  return `${degrees}°${String(minutes).padStart(2, "0")}'`;
 }
 
 function romanHouse(house: number): string {

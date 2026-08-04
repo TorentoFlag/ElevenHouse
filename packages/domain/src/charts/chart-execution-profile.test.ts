@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { ChartProviderMetadata } from "@elevenhouse/contracts";
 import {
+  buildChartCalculationRequestFingerprint,
+  buildChartJobRequestFingerprint,
   buildChartRequestFingerprint,
   buildChartReproducibilityFingerprint,
   buildChartResultReproducibilityFingerprint,
@@ -16,6 +19,26 @@ describe("chart execution profile", () => {
       expectedEphemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
       expectedEphemerisDataRevision: null
     });
+  });
+
+  it("canonicalizes equivalent configured provider flag order", () => {
+    expect(
+      resolveChartExecutionProfile({
+        NODE_ENV: "test",
+        CHART_ENGINE_EXPECTED_EPHEMERIS: "moshier",
+        CHART_ENGINE_EXPECTED_EPHEMERIS_FLAGS: "FLG_SPEED,FLG_MOSEPH"
+      }).expectedEphemerisFlags
+    ).toEqual(["FLG_MOSEPH", "FLG_SPEED"]);
+  });
+
+  it("rejects a configured data revision for the Moshier backend", () => {
+    expect(() =>
+      resolveChartExecutionProfile({
+        NODE_ENV: "test",
+        CHART_ENGINE_EXPECTED_EPHEMERIS: "moshier",
+        CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION: `sha256:${"a".repeat(64)}`
+      })
+    ).toThrow("CHART_ENGINE_EXPECTED_EPHEMERIS_DATA_REVISION_FORBIDDEN");
   });
 
   it("requires an explicit supported backend and data revision in production", () => {
@@ -90,6 +113,158 @@ describe("chart execution profile", () => {
     ).not.toBe(actual);
   });
 
+  it("binds ordered participant identity only to the outer chart job fingerprint", () => {
+    const profile = resolveChartExecutionProfile({ NODE_ENV: "test" });
+    const providerInput = {
+      inputSnapshot: { birthDate: "1990-07-15", latitude: 41.9028, longitude: 12.4964 },
+      partnerInputSnapshot: { birthDate: "1992-08-11", latitude: 55.7558, longitude: 37.6173 }
+    };
+    const shared = {
+      ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      method: "synastry" as const,
+      methodVersion: "chart.synastry.kerykeion-5.12.v2" as const,
+      executionProfile: profile,
+      settings: { houseSystem: "placidus", nodeType: "true" },
+      inputSnapshot: providerInput
+    };
+    const primary = "11111111-1111-4111-8111-111111111111";
+    const partner = "22222222-2222-4222-8222-222222222222";
+    const fingerprints = (
+      participants: readonly { readonly role: "subject" | "partner"; readonly clientId: string }[]
+    ) => ({
+      providerRequest: buildChartRequestFingerprint(shared),
+      reproducibility: buildChartReproducibilityFingerprint({
+        ...shared,
+        provider: localProvider()
+      }),
+      outerJob: buildChartJobRequestFingerprint({ ...shared, participants })
+    });
+
+    const forward = fingerprints([
+      { role: "subject", clientId: primary },
+      { role: "partner", clientId: partner }
+    ]);
+    const reversed = fingerprints([
+      { role: "subject", clientId: partner },
+      { role: "partner", clientId: primary }
+    ]);
+
+    expect(JSON.stringify(providerInput)).not.toContain(primary);
+    expect(JSON.stringify(providerInput)).not.toContain(partner);
+    expect(reversed.providerRequest).toBe(forward.providerRequest);
+    expect(reversed.reproducibility).toBe(forward.reproducibility);
+    expect(forward.outerJob).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(reversed.outerJob).not.toBe(forward.outerJob);
+  });
+
+  it("changes the job fingerprint with method version or execution profile provenance", () => {
+    const profile = resolveChartExecutionProfile({ NODE_ENV: "test" });
+    const base = {
+      ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      method: "natal" as const,
+      methodVersion: "chart.natal.kerykeion-5.12.v2" as const,
+      executionProfile: profile,
+      settings: { houseSystem: "placidus", nodeType: "true" },
+      inputSnapshot: { latitude: 41.9028, longitude: 12.4964 },
+      participants: [{ role: "subject" as const, clientId: "11111111-1111-4111-8111-111111111111" }]
+    };
+    const local = buildChartJobRequestFingerprint(base);
+    const swiss = buildChartJobRequestFingerprint({
+      ...base,
+      executionProfile: {
+        ...profile,
+        expectedEphemeris: "swiss-ephemeris",
+        expectedEphemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"],
+        expectedEphemerisDataRevision: `sha256:${"b".repeat(64)}`
+      }
+    });
+
+    expect(swiss).not.toBe(local);
+    expect(() =>
+      buildChartJobRequestFingerprint({
+        ...base,
+        methodVersion: "chart.transit.kerykeion-5.12.v2" as never
+      })
+    ).toThrow("CHART_METHOD_VERSION_MISMATCH");
+  });
+
+  it("binds adult-versus-child product authority to business identity but not astronomy", () => {
+    const base = {
+      ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      method: "natal" as const,
+      methodVersion: "chart.natal.kerykeion-5.12.v2" as const,
+      executionProfile: resolveChartExecutionProfile({ NODE_ENV: "test" }),
+      settings: { houseSystem: "placidus", nodeType: "true" },
+      inputSnapshot: { latitude: 41.9028, longitude: 12.4964 },
+      participants: [{ role: "subject" as const, clientId: "11111111-1111-4111-8111-111111111111" }]
+    };
+    const adult = { ...base, interpretationMode: "adult_natal" as const };
+    const child = { ...base, interpretationMode: "child" as const };
+
+    expect(buildChartCalculationRequestFingerprint(adult)).not.toBe(
+      buildChartCalculationRequestFingerprint(child)
+    );
+    expect(buildChartJobRequestFingerprint(adult)).not.toBe(buildChartJobRequestFingerprint(child));
+    expect(buildChartRequestFingerprint(adult)).toBe(buildChartRequestFingerprint(child));
+    expect(buildChartReproducibilityFingerprint({ ...adult, provider: localProvider() })).toBe(
+      buildChartReproducibilityFingerprint({ ...child, provider: localProvider() })
+    );
+  });
+
+  it("binds owner and initial-versus-replacement identity to the job fingerprint", () => {
+    const base = {
+      ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      method: "natal" as const,
+      methodVersion: "chart.natal.kerykeion-5.12.v2" as const,
+      executionProfile: resolveChartExecutionProfile({ NODE_ENV: "test" }),
+      settings: { houseSystem: "placidus", nodeType: "true" },
+      inputSnapshot: { latitude: 41.9028, longitude: 12.4964 },
+      participants: [{ role: "subject" as const, clientId: "11111111-1111-4111-8111-111111111111" }]
+    };
+    const initial = buildChartJobRequestFingerprint(base);
+    const otherOwner = buildChartJobRequestFingerprint({
+      ...base,
+      ownerUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    });
+    const replacement = buildChartJobRequestFingerprint({
+      ...base,
+      targetCalculationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      expectedSourceChecksum: `sha256:${"d".repeat(64)}`
+    });
+    const otherSourceVersion = buildChartJobRequestFingerprint({
+      ...base,
+      targetCalculationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      expectedSourceChecksum: `sha256:${"e".repeat(64)}`
+    });
+
+    expect(new Set([initial, otherOwner, replacement, otherSourceVersion])).toHaveLength(4);
+  });
+
+  it("keeps calculation identity stable while replacement command identity changes", () => {
+    const base = {
+      ownerUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      method: "natal" as const,
+      methodVersion: "chart.natal.kerykeion-5.12.v2" as const,
+      executionProfile: resolveChartExecutionProfile({ NODE_ENV: "test" }),
+      settings: { houseSystem: "placidus", nodeType: "true" },
+      inputSnapshot: { latitude: 41.9028, longitude: 12.4964 },
+      participants: [{ role: "subject" as const, clientId: "11111111-1111-4111-8111-111111111111" }]
+    };
+    const initialCalculation = buildChartCalculationRequestFingerprint(base);
+    const replacementInput = {
+      ...base,
+      targetCalculationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      expectedSourceChecksum: `sha256:${"d".repeat(64)}`
+    };
+    const replacementCalculation = buildChartCalculationRequestFingerprint(replacementInput);
+    const initialCommand = buildChartJobRequestFingerprint(base);
+    const replacementCommand = buildChartJobRequestFingerprint(replacementInput);
+
+    expect(replacementCalculation).toBe(initialCalculation);
+    expect(replacementCommand).not.toBe(initialCommand);
+    expect(replacementCommand).not.toBe(replacementCalculation);
+  });
+
   it("matches Python chart number and small-coordinate fingerprint vectors", () => {
     const provider = localProvider();
     expect(
@@ -128,7 +303,6 @@ describe("chart execution profile", () => {
     } as const;
     const inputSnapshot = { birthDate: "1990-07-15", marker: "primary" };
     const partnerInputSnapshot = { birthDate: "1992-08-11", marker: "partner" };
-    const relationshipSnapshot = { primaryClientId: "p", partnerClientId: "q" };
     const transitSnapshot = { date: "2026-07-23", marker: "transit" };
     const solarReturnSnapshot = { year: 2026, resolvedAt: "2026-07-15T01:20:01Z" };
     const questionSnapshot = { question: "Now?", date: "2026-07-23" };
@@ -185,10 +359,9 @@ describe("chart execution profile", () => {
           method: "synastry",
           methodVersion: "chart.synastry.kerykeion-5.12.v2",
           inputSnapshot,
-          partnerInputSnapshot,
-          relationshipSnapshot
+          partnerInputSnapshot
         },
-        fingerprintInput: { inputSnapshot, partnerInputSnapshot, relationshipSnapshot }
+        fingerprintInput: { inputSnapshot, partnerInputSnapshot }
       },
       {
         source: {
@@ -196,10 +369,9 @@ describe("chart execution profile", () => {
           method: "composite",
           methodVersion: "chart.composite.kerykeion-5.12.v2",
           inputSnapshot,
-          partnerInputSnapshot,
-          relationshipSnapshot
+          partnerInputSnapshot
         },
-        fingerprintInput: { inputSnapshot, partnerInputSnapshot, relationshipSnapshot }
+        fingerprintInput: { inputSnapshot, partnerInputSnapshot }
       },
       {
         source: {
@@ -237,7 +409,7 @@ describe("chart execution profile", () => {
   });
 });
 
-function localProvider() {
+function localProvider(): ChartProviderMetadata {
   return {
     name: "kerykeion" as const,
     version: "5.12.9",

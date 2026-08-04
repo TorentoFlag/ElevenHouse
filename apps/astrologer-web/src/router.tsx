@@ -16,14 +16,20 @@ import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
 import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage";
 import { FlowsPage } from "./pages/flows/FlowsPage";
+import { astrologerRouteContract } from "./router.contract";
 
 export const astrologerRoutes = [
   {
-    path: "/",
-    element: <Navigate to="/auth" replace />
+    path: astrologerRouteContract.root.path,
+    element: (
+      <Navigate
+        to={astrologerRouteContract.root.redirectTo}
+        replace={astrologerRouteContract.root.replace}
+      />
+    )
   },
   {
-    path: "/auth",
+    path: astrologerRouteContract.auth,
     element: <AuthPage />
   },
   {
@@ -33,55 +39,55 @@ export const astrologerRoutes = [
         element: <AstrologerAppLayout />,
         children: [
           {
-            path: "/dashboard",
+            path: astrologerRouteContract.protected.dashboard,
             element: <DashboardPage />
           },
           {
-            path: "/calendar",
+            path: astrologerRouteContract.protected.calendar,
             element: <CalendarPage />
           },
           {
-            path: "/finance",
+            path: astrologerRouteContract.protected.finance,
             element: <FinancePage />
           },
           {
-            path: "/flows",
+            path: astrologerRouteContract.protected.flows,
             element: <FlowsPage />
           },
           {
-            path: "/products",
+            path: astrologerRouteContract.protected.products,
             element: <ProductsPage />
           },
           {
-            path: "/reference",
+            path: astrologerRouteContract.protected.reference,
             element: <ReferencePage />
           },
           {
-            path: "/inbox",
+            path: astrologerRouteContract.protected.inbox,
             element: <InboxPage />
           },
           {
-            path: "/numerology",
+            path: astrologerRouteContract.protected.numerology,
             element: <NumerologyPage />
           },
           {
-            path: "/matrix",
+            path: astrologerRouteContract.protected.matrix,
             element: <MatrixPage />
           },
           {
-            path: "/human-design",
+            path: astrologerRouteContract.protected.humanDesign,
             element: <HumanDesignPage />
           },
           {
-            path: "/astro-calendar",
+            path: astrologerRouteContract.protected.astroCalendar,
             element: <AstroCalendarPage />
           },
           {
-            path: "/chart-engine",
+            path: astrologerRouteContract.protected.chartEngine,
             element: <ChartEngineRoute />
           },
           {
-            path: "/settings",
+            path: astrologerRouteContract.protected.settings,
             element: <SettingsPage />
           }
         ]
@@ -89,7 +95,7 @@ export const astrologerRoutes = [
     ]
   },
   {
-    path: "*",
+    path: astrologerRouteContract.notFound,
     element: <NotFoundPage />
   }
 ] satisfies RouteObject[];

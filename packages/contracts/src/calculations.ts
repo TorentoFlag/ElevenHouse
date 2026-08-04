@@ -46,6 +46,13 @@ export type CalculationModuleFilter = z.infer<typeof calculationModuleFilterSche
 export const calculationModeSchema = z.enum(["individual", "compatibility"]);
 export type CalculationMode = z.infer<typeof calculationModeSchema>;
 
+export const chartInterpretationModeSchema = z.enum([
+  "adult_natal",
+  "child",
+  "legacy_unclassified"
+]);
+export type ChartInterpretationMode = z.infer<typeof chartInterpretationModeSchema>;
+
 export const calculationStatusSchema = z.enum(["calculated", "linked", "published", "archived"]);
 export type CalculationStatus = z.infer<typeof calculationStatusSchema>;
 
@@ -71,9 +78,7 @@ export const calculationClientVisibilitySchema = z.enum([
 export type CalculationClientVisibility = z.infer<typeof calculationClientVisibilitySchema>;
 
 export const calculationInterpretationStatusSchema = z.enum(["draft", "approved"]);
-export type CalculationInterpretationStatus = z.infer<
-  typeof calculationInterpretationStatusSchema
->;
+export type CalculationInterpretationStatus = z.infer<typeof calculationInterpretationStatusSchema>;
 
 export const calculationIdParamSchema = z
   .object({
@@ -126,9 +131,7 @@ export const calculationParticipantResponseSchema = z
       });
     }
   });
-export type CalculationParticipantResponse = z.infer<
-  typeof calculationParticipantResponseSchema
->;
+export type CalculationParticipantResponse = z.infer<typeof calculationParticipantResponseSchema>;
 
 export const calculationClientLinkResponseSchema = z
   .object({
@@ -167,6 +170,7 @@ export const calculationRecordResponseSchema = z
     ownerUserId: uuidSchema,
     module: calculationModuleSchema,
     mode: calculationModeSchema,
+    interpretationMode: chartInterpretationModeSchema.nullable(),
     methodCode: z.string().trim().min(1).max(80),
     title: z.string().trim().min(1).max(200),
     status: calculationStatusSchema,
