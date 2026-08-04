@@ -11,7 +11,8 @@ const defaultPasswordlessRateLimits = {
 };
 const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
-  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey,
+  PUBLIC_API_GEOAPIFY_API_KEY: "test-geoapify-key"
 };
 const defaultCsrfConfig = {
   csrfSecret: "elevenhouse-dev-public-api-csrf-secret-change-before-production",
@@ -19,6 +20,22 @@ const defaultCsrfConfig = {
   csrfHeaderName: "x-csrf-token",
   csrfTokenTtlSeconds: 604800,
   allowedOrigins: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+  birthPlaceSearch: {
+    enabled: true,
+    provider: "geoapify",
+    baseUrl: "https://api.geoapify.com",
+    apiKey: "test-geoapify-key",
+    timeoutMs: 5000,
+    cacheSuccessTtlSeconds: 2592000,
+    cacheEmptyTtlSeconds: 1800,
+    lockTtlMs: 6000,
+    rateLimitRedisKeyPrefix: "elevenhouse:public-api:birth-place-search",
+    rateLimits: {
+      userPerMinute: { limit: 20, windowSeconds: 60 },
+      globalPerMinute: { limit: 120, windowSeconds: 60 },
+      globalPerDay: { limit: 2500, windowSeconds: 86400 }
+    }
+  },
   arcPay: {
     apiBaseUrl: "https://api.arcpay.space",
     secret: null,
@@ -204,6 +221,29 @@ describe("createPublicApiRuntimeConfig", () => {
         verifyIp: { limit: 40, windowSeconds: 900 }
       }
     });
+  });
+
+  it("parses Geoapify configuration and fails closed without a key", () => {
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_GEOAPIFY_BASE_URL: "https://geoapify.internal/",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "4000",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: "5000",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: "8"
+      }).birthPlaceSearch
+    ).toMatchObject({
+      enabled: true,
+      baseUrl: "https://geoapify.internal",
+      timeoutMs: 4000,
+      lockTtlMs: 5000,
+      rateLimits: { userPerMinute: { limit: 8, windowSeconds: 60 } }
+    });
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+      })
+    ).toThrow("PUBLIC_API_GEOAPIFY_API_KEY is required when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true");
   });
 
   it("requires an explicit passwordless code secret in production", () => {

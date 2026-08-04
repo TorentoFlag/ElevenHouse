@@ -439,6 +439,9 @@ importers:
       '@elevenhouse/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@elevenhouse/birth-place-search':
+        specifier: workspace:*
+        version: link:../../packages/birth-place-search
       '@elevenhouse/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

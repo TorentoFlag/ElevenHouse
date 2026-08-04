@@ -1,6 +1,7 @@
 import { z } from "@elevenhouse/validation";
 import { parseBase64Aes256GcmKey, publicSessionCookieName } from "@elevenhouse/auth";
 
+const officialGeoapifyBaseUrl = "https://api.geoapify.com";
 const localPublicSessionCookieName = "elevenhouse_public_session";
 const localTrustedStaticPasswordlessCode = {
   channel: "phone" as const,
@@ -71,6 +72,17 @@ const publicApiRuntimeConfigSchema = z.object({
     .trim()
     .min(1)
     .default("elevenhouse:public-api"),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  PUBLIC_API_GEOAPIFY_BASE_URL: z.string().trim().url().default(officialGeoapifyBaseUrl),
+  PUBLIC_API_GEOAPIFY_API_KEY: z.string().trim().min(1).optional(),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: z.coerce.number().int().positive().max(15000).default(5000),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS: z.coerce.number().int().positive().default(1800),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: z.coerce.number().int().positive().max(20000).default(6000),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX: z.string().trim().min(1).default("elevenhouse:public-api:birth-place-search"),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().positive().default(20),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE: z.coerce.number().int().positive().default(120),
+  PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY: z.coerce.number().int().positive().default(2500),
   ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
   ARC_PAY_SECRET: z.string().trim().min(1).optional(),
   ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
@@ -138,6 +150,22 @@ export type PublicApiRuntimeConfig = {
       readonly windowSeconds: number;
     };
   };
+  readonly birthPlaceSearch: {
+    readonly enabled: boolean;
+    readonly provider: "geoapify";
+    readonly baseUrl: string;
+    readonly apiKey?: string;
+    readonly timeoutMs: number;
+    readonly cacheSuccessTtlSeconds: number;
+    readonly cacheEmptyTtlSeconds: number;
+    readonly lockTtlMs: number;
+    readonly rateLimitRedisKeyPrefix: string;
+    readonly rateLimits: {
+      readonly userPerMinute: { readonly limit: number; readonly windowSeconds: number };
+      readonly globalPerMinute: { readonly limit: number; readonly windowSeconds: number };
+      readonly globalPerDay: { readonly limit: number; readonly windowSeconds: number };
+    };
+  };
   readonly arcPay: {
     readonly apiBaseUrl: string;
     readonly secret: string | null;
@@ -179,6 +207,23 @@ export function createPublicApiRuntimeConfig(
     throw new Error("PUBLIC_API_ALLOWED_ORIGINS is required in production");
   }
 
+  const authCodeDeliveryEncryptionKey = parseBase64Aes256GcmKey(
+    config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
+  );
+
+  if (config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED && !config.PUBLIC_API_GEOAPIFY_API_KEY) {
+    throw new Error("PUBLIC_API_GEOAPIFY_API_KEY is required when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true");
+  }
+  if (config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED && config.PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS <= config.PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS) {
+    throw new Error("PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS must exceed PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS");
+  }
+  if (config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED && new URL(config.PUBLIC_API_GEOAPIFY_BASE_URL).protocol !== "https:") {
+    throw new Error("PUBLIC_API_GEOAPIFY_BASE_URL must use HTTPS when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true");
+  }
+  if (config.NODE_ENV === "production" && config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED && !isExactRootOrigin(config.PUBLIC_API_GEOAPIFY_BASE_URL, officialGeoapifyBaseUrl)) {
+    throw new Error(`PUBLIC_API_GEOAPIFY_BASE_URL must equal ${officialGeoapifyBaseUrl} in production when birth-place search is enabled`);
+  }
+
   const arcPayPaymentMethods = parseArcPayPaymentMethods(config.ARC_PAY_PAYMENT_METHODS);
   const arcPayConfigured =
     Boolean(config.ARC_PAY_SECRET) &&
@@ -210,9 +255,7 @@ export function createPublicApiRuntimeConfig(
       allowedOrigins.length > 0
         ? allowedOrigins
         : ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
-    authCodeDeliveryEncryptionKey: parseBase64Aes256GcmKey(
-      config.AUTH_CODE_DELIVERY_ENCRYPTION_KEY
-    ),
+    authCodeDeliveryEncryptionKey,
     passwordlessCodeSecret:
       config.PUBLIC_API_PASSWORDLESS_CODE_SECRET ?? "elevenhouse-dev-passwordless-code-secret",
     passwordlessCodeTtlSeconds: config.PUBLIC_API_PASSWORDLESS_CODE_TTL_SECONDS,
@@ -240,6 +283,22 @@ export function createPublicApiRuntimeConfig(
       verifyIp: {
         limit: config.PUBLIC_API_PASSWORDLESS_VERIFY_IP_LIMIT,
         windowSeconds: config.PUBLIC_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
+      }
+    },
+    birthPlaceSearch: {
+      enabled: config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED,
+      provider: "geoapify",
+      baseUrl: stripTrailingSlashes(config.PUBLIC_API_GEOAPIFY_BASE_URL),
+      apiKey: config.PUBLIC_API_GEOAPIFY_API_KEY,
+      timeoutMs: config.PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS,
+      cacheSuccessTtlSeconds: config.PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS,
+      cacheEmptyTtlSeconds: config.PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS,
+      lockTtlMs: config.PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS,
+      rateLimitRedisKeyPrefix: config.PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX,
+      rateLimits: {
+        userPerMinute: { limit: config.PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE, windowSeconds: 60 },
+        globalPerMinute: { limit: config.PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE, windowSeconds: 60 },
+        globalPerDay: { limit: config.PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY, windowSeconds: 86400 }
       }
     },
     arcPay: {
@@ -271,4 +330,13 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
     .split(",")
     .map((origin) => origin.trim().replace(/\/+$/, ""))
     .filter(Boolean);
+}
+
+function stripTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function isExactRootOrigin(value: string, expectedOrigin: string): boolean {
+  const url = new URL(value);
+  return url.origin === expectedOrigin && url.pathname === "/" && url.search === "" && url.hash === "" && url.username === "" && url.password === "";
 }

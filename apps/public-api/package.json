@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@elevenhouse/auth": "workspace:*",
+    "@elevenhouse/birth-place-search": "workspace:*",
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
