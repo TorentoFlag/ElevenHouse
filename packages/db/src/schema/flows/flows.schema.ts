@@ -15,6 +15,7 @@ import {
   uuid
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
+import { flowCapabilityManifestSchemaPredicate } from "./flow-capability-manifest-constraint";
 import {
   flowApprovalModeValues,
   flowDefinitionStateValues,
@@ -213,6 +214,10 @@ export const flowVersions = pgTable(
         and ${table.graph}->>'schemaVersion' = 'flow-graph.v2'
         and jsonb_typeof(${table.capabilityManifest}) = 'object'
       )`
+    ),
+    check(
+      "flow_versions_capability_manifest_schema_check",
+      sql.raw(flowCapabilityManifestSchemaPredicate)
     ),
     index("flow_versions_owner_published_idx").on(table.ownerUserId, table.publishedAt),
     uniqueIndex("flow_versions_flow_version_unique").on(table.flowId, table.version),

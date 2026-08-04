@@ -9,7 +9,7 @@ import {
   flowRuns,
   flowStepRuns,
   flowSuppressions
-} from "../../schema";
+} from "../../schema/flows";
 import { createDrizzleFlowRuntimeStore } from "./drizzle-flow-runtime-store";
 
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
@@ -41,11 +41,7 @@ describe("createDrizzleFlowRuntimeStore", () => {
 
   it("creates runs, step runs and approvals in a transaction", async () => {
     const fake = createFakeDatabase({
-      transactionInsertRows: [
-        runRow(),
-        stepRunRow({ status: "approval_required" }),
-        approvalRow()
-      ]
+      transactionInsertRows: [runRow(), stepRunRow({ status: "approval_required" }), approvalRow()]
     });
 
     await expect(
@@ -214,7 +210,15 @@ describe("createDrizzleFlowRuntimeStore", () => {
       transactionInsertRows: [null],
       selectRows: [
         [runtimeEventRow()],
-        [{ ...runRow(), status: "suppressed", currentNodeId: null, completedAt: now, sourceEventId: "manual:client-1:flow-1" }],
+        [
+          {
+            ...runRow(),
+            status: "suppressed",
+            currentNodeId: null,
+            completedAt: now,
+            sourceEventId: "manual:client-1:flow-1"
+          }
+        ],
         [suppressionRow()]
       ]
     });

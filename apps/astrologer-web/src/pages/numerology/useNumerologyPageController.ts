@@ -14,6 +14,11 @@ import type {
 } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { HttpError } from "../../common/http/HttpError";
+import {
+  getManualInterpretationSaveAttempt,
+  shouldRetainManualInterpretationSaveAttempt,
+  type ManualInterpretationSaveAttempt
+} from "../../features/calculations/model/manualInterpretationSaveAttempt";
 import { getFirstLinkableClientId } from "../../features/calculations/model/calculationStatus";
 import { getNumerologyActionErrorMessage } from "../../features/numerology/model/numerologyActionErrorModel";
 import {
@@ -132,6 +137,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   const previewGuardRef = useRef(createLatestPreviewGuard());
   const aiDraftGuardRef = useRef(createLatestPreviewGuard());
   const aiDraftInFlightRef = useRef(false);
+  const manualInterpretationSaveAttemptRef = useRef<ManualInterpretationSaveAttempt | null>(null);
   const selectedCalculation = selectedResponse?.calculation ?? null;
   const pdfQuery = useNumerologyPdfQuery({
     calculationId: selectedCalculation?.id ?? "",
@@ -303,6 +309,12 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
       }, setErrorMessage);
     },
     onInterpretationChange: (value) => {
+      if (
+        manualInterpretationSaveAttemptRef.current &&
+        manualInterpretationSaveAttemptRef.current.text !== value.trim()
+      ) {
+        manualInterpretationSaveAttemptRef.current = null;
+      }
       setInterpretationText(value);
       setAiDraftErrorMessage(null);
     },
@@ -310,14 +322,32 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
     onSaveInterpretation: () => {
       if (!selectedCalculation) return;
       run(async () => {
-        const calculation = await saveInterpretationMutation.mutateAsync({
-          calculationId: selectedCalculation.id,
-          body: {
-            text: interpretationText,
-            expectedResultChecksum: selectedCalculation.resultChecksum
+        const attempt = getManualInterpretationSaveAttempt(
+          manualInterpretationSaveAttemptRef.current,
+          {
+            calculationId: selectedCalculation.id,
+            resultChecksum: selectedCalculation.resultChecksum,
+            text: interpretationText
           }
-        });
-        setSelectedResponse(toNumerologyResponse(calculation));
+        );
+        manualInterpretationSaveAttemptRef.current = attempt;
+        try {
+          const calculation = await saveInterpretationMutation.mutateAsync({
+            calculationId: selectedCalculation.id,
+            idempotencyKey: attempt.idempotencyKey,
+            body: {
+              text: attempt.text,
+              expectedResultChecksum: selectedCalculation.resultChecksum
+            }
+          });
+          manualInterpretationSaveAttemptRef.current = null;
+          setSelectedResponse(toNumerologyResponse(calculation));
+        } catch (error) {
+          if (!shouldRetainManualInterpretationSaveAttempt(error)) {
+            manualInterpretationSaveAttemptRef.current = null;
+          }
+          throw error;
+        }
       }, setErrorMessage);
     },
     onApproveInterpretation: () => {
@@ -351,6 +381,7 @@ export function useNumerologyPageController(): NumerologyPageViewProps {
   function selectCalculation(calculation: CalculationRecordResponse): void {
     previewGuardRef.current.invalidate();
     aiDraftGuardRef.current.invalidate();
+    manualInterpretationSaveAttemptRef.current = null;
     const response = toNumerologyResponse(calculation);
     setPreviewResult(null);
     setSelectedResponse(response);

@@ -151,7 +151,10 @@ describe("humanDesignApi", () => {
       url: "https://storage.example.test/report.pdf",
       expiresAt: "2026-07-23T13:00:00.000Z"
     };
-    const get = vi.spyOn(application.http, "get").mockResolvedValueOnce(pdfJob).mockResolvedValueOnce(downloadResponse);
+    const get = vi
+      .spyOn(application.http, "get")
+      .mockResolvedValueOnce(pdfJob)
+      .mockResolvedValueOnce(downloadResponse);
     const post = vi.spyOn(application.http, "post").mockResolvedValue(pdfJob);
 
     await expect(
@@ -199,6 +202,7 @@ function humanDesignCalculationResponse(
       ownerUserId: "33333333-3333-4333-8333-333333333333",
       module: "human_design",
       mode: "individual",
+      interpretationMode: null,
       methodCode: "human_design_classic",
       title: "Client — Дизайн человека",
       status: "linked",

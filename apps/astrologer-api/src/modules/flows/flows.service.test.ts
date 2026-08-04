@@ -7,8 +7,15 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import {
   compileFlowGraphV2,
+  projectFlowCapabilityManifestV1,
+  FlowRuntimeCommandBusyError,
+  FlowRuntimeCommandIntegrityError,
+  FlowRuntimeIdempotencyConflictError,
+  FlowRuntimeIdempotencyExpiredError,
+  FlowRuntimeIdempotencyKeyInvalidError,
   type FlowDefinitionControlStore,
   type FlowDefinitionQueryStore,
+  type FlowRunCancellationStore,
   type FlowRuntimeStore,
   type FlowStore
 } from "@elevenhouse/domain";
@@ -33,6 +40,7 @@ import {
 } from "../security/route-policy/route-security-metadata";
 import { FlowsController } from "./flows.controller";
 import { FlowApprovalsController } from "./flow-approvals.controller";
+import type { FlowPublicationRolloutPolicy } from "./flow-publication-rollout";
 import { FlowRunsController } from "./flow-runs.controller";
 import { FlowsService } from "./flows.service";
 
@@ -113,7 +121,8 @@ if (!graphV2Compilation.normalizedGraph || !graphV2Compilation.capabilityManifes
   throw new Error("Expected valid V2 graph fixture");
 }
 const normalizedGraphV2 = graphV2Compilation.normalizedGraph;
-const capabilityManifestV1 = graphV2Compilation.capabilityManifest;
+const capabilityManifestV2 = graphV2Compilation.capabilityManifest;
+const capabilityManifestV1 = projectFlowCapabilityManifestV1(capabilityManifestV2);
 const presentationV1: FlowPresentationV1 = {
   schemaVersion: "flow-presentation.v1",
   nodes: [
@@ -305,10 +314,15 @@ describe("FlowsService", () => {
     const store = createFlowStore();
     const definitionQueryStore = createDefinitionQueryStore();
     const runtimeStore = createRuntimeStore();
-    const service = createService({ store, definitionQueryStore, runtimeStore });
+    const service = createService({
+      store,
+      definitionQueryStore,
+      runtimeStore,
+      publicationRolloutPolicy: { phase: "manifest_v2" }
+    });
 
     await expect(
-      service.validateFlowDefinition(flowId, { graph: graphV2 }, request())
+      service.validateFlowDefinition(flowId, { graph: graphV2 }, request(), "current_v2")
     ).resolves.toMatchObject({
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
@@ -317,7 +331,13 @@ describe("FlowsService", () => {
       activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
       normalizedGraph: expect.objectContaining({ schemaVersion: "flow-graph.v2" }),
       capabilityManifest: expect.objectContaining({
-        schemaVersion: "flow-capability-manifest.v1"
+        schemaVersion: "flow-capability-manifest.v2",
+        triggerMatcher: {
+          kind: "manual_client",
+          configSchemaVersion: 1,
+          matcherContractVersion: 1,
+          eventSchemaVersion: 1
+        }
       })
     });
 
@@ -328,6 +348,72 @@ describe("FlowsService", () => {
     expect(store.transitionStatus).not.toHaveBeenCalled();
     expect(runtimeStore.createEvent).not.toHaveBeenCalled();
     expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
+  });
+
+  it("keeps valid V2 definition validation on the legacy transport by default", async () => {
+    const service = createService();
+
+    await expect(
+      service.validateFlowDefinition(flowId, { graph: graphV2 }, request())
+    ).resolves.toMatchObject({
+      schemaVersion: "flow-definition-validation.v1",
+      capabilityManifest: {
+        schemaVersion: "flow-capability-manifest.v1",
+        nodeExecutors: [
+          { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
+          { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+        ]
+      }
+    });
+  });
+
+  it("ignores current wire opt-in and persists V1 manifests while rollout is legacy", async () => {
+    const definitionStore = createDefinitionControlStore();
+    const service = createService({ definitionStore });
+
+    await expect(
+      service.validateFlowDefinition(flowId, { graph: graphV2 }, request(), "current_v2")
+    ).resolves.toMatchObject({ schemaVersion: "flow-definition-validation.v1" });
+    await expect(
+      service.publishFlow(
+        flowId,
+        { expectedRevision: 1 },
+        "flow-publish-legacy-rollout",
+        request(),
+        "current_v3"
+      )
+    ).resolves.toMatchObject({
+      version: { schemaVersion: "flow-published-version.v2" }
+    });
+    expect(definitionStore.executePublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistenceVersion: "legacy_v1",
+        responseVersion: "legacy_v2"
+      })
+    );
+  });
+
+  it("persists V2 manifests after the fleet gate while retaining legacy wire by default", async () => {
+    const definitionStore = createDefinitionControlStore();
+    const service = createService({
+      definitionStore,
+      publicationRolloutPolicy: { phase: "manifest_v2" }
+    });
+
+    await service.publishFlow(
+      flowId,
+      { expectedRevision: 1 },
+      "flow-publish-current-persistence",
+      request(),
+      "legacy_v2"
+    );
+
+    expect(definitionStore.executePublish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistenceVersion: "current_v2",
+        responseVersion: "legacy_v2"
+      })
+    );
   });
 
   it("returns migration and no-leak not-found results from definition validation", async () => {
@@ -584,6 +670,7 @@ describe("FlowsService", () => {
 
   it("blocks manual execution and approval decisions while keeping runtime reads available", async () => {
     const runtimeStore = createRuntimeStore();
+    const cancellationStore = createRunCancellationStore();
     const service = createService({
       store: createFlowStore({
         findByOwnerAndId: vi.fn(async () =>
@@ -595,7 +682,8 @@ describe("FlowsService", () => {
           })
         )
       }),
-      runtimeStore
+      runtimeStore,
+      cancellationStore
     });
 
     await expect(
@@ -613,9 +701,8 @@ describe("FlowsService", () => {
       run,
       runtime: runtimeAvailability
     });
-    await expect(service.cancelFlowRun(runId, request())).rejects.toMatchObject({
-      status: 409,
-      response: expect.objectContaining({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" })
+    await expect(service.cancelFlowRun(runId, "cancel-request-1", {}, request())).resolves.toEqual({
+      run: canceledRun
     });
     await expect(service.listFlowApprovals({ status: "pending" }, request())).resolves.toEqual({
       approvals: [approval],
@@ -637,6 +724,88 @@ describe("FlowsService", () => {
       offset: 0
     });
     expect(runtimeStore.cancelRun).not.toHaveBeenCalled();
+    expect(cancellationStore.executeCancel).toHaveBeenCalledWith({
+      command: expect.objectContaining({
+        apiSurface: "astrologer-api",
+        actorUserId: ownerUserId,
+        ownerUserId,
+        resourceId: runId,
+        scope: "flows.runtime.cancel.v1",
+        idempotencyKey: "cancel-request-1"
+      })
+    });
+  });
+
+  it.each([
+    {
+      outcome: {
+        kind: "rejected" as const,
+        response: {
+          statusCode: 404 as const,
+          body: { code: "FLOW_RUN_NOT_FOUND" as const }
+        }
+      },
+      expectedStatus: 404,
+      expectedBody: { code: "FLOW_RUN_NOT_FOUND" }
+    },
+    {
+      outcome: {
+        kind: "rejected" as const,
+        response: {
+          statusCode: 409 as const,
+          body: { code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" as const }
+        }
+      },
+      expectedStatus: 409,
+      expectedBody: { code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" }
+    },
+    {
+      outcome: {
+        kind: "rejected" as const,
+        response: {
+          statusCode: 409 as const,
+          body: { code: "FLOW_RUN_CANCEL_NOT_ALLOWED" as const, status: "completed" }
+        }
+      },
+      expectedStatus: 409,
+      expectedBody: { code: "FLOW_RUN_CANCEL_NOT_ALLOWED", status: "completed" }
+    }
+  ])(
+    "replays durable cancellation rejection $expectedStatus without reshaping its body",
+    async ({ outcome, expectedStatus, expectedBody }) => {
+      const service = createService({
+        cancellationStore: createRunCancellationStore({
+          executeCancel: vi.fn(async () => ({ kind: "replayed" as const, outcome }))
+        })
+      });
+
+      await expect(
+        service.cancelFlowRun(runId, "cancel-replay-1", {}, request())
+      ).rejects.toMatchObject({
+        status: expectedStatus,
+        response: expectedBody
+      });
+    }
+  );
+
+  it.each([
+    [new FlowRuntimeIdempotencyKeyInvalidError(), 400, "FLOW_IDEMPOTENCY_KEY_INVALID"],
+    [new FlowRuntimeIdempotencyConflictError(), 409, "FLOW_IDEMPOTENCY_KEY_REUSED"],
+    [new FlowRuntimeIdempotencyExpiredError(), 409, "FLOW_IDEMPOTENCY_KEY_EXPIRED"],
+    [new FlowRuntimeCommandBusyError(), 503, "FLOW_RUNTIME_COMMAND_BUSY"],
+    [new FlowRuntimeCommandIntegrityError(), 500, "FLOW_RUNTIME_COMMAND_INTEGRITY_ERROR"]
+  ])("maps durable cancellation command errors", async (error, status, code) => {
+    const service = createService({
+      cancellationStore: createRunCancellationStore({
+        executeCancel: vi.fn(async () => {
+          throw error;
+        })
+      })
+    });
+
+    await expect(
+      service.cancelFlowRun(runId, "cancel-errors-1", {}, request())
+    ).rejects.toMatchObject({ status, response: { code } });
   });
 
   it("consumes matching module events as unavailable without runtime persistence", async () => {
@@ -744,6 +913,12 @@ describe("FlowsController", () => {
     ).toBe(true);
     expect(
       Reflect.getMetadata(
+        idempotencyRequiredMetadataKey,
+        FlowRunsController.prototype.cancelFlowRun
+      )
+    ).toEqual({ scope: "flows.runtime.cancel.v1" });
+    expect(
+      Reflect.getMetadata(
         csrfRequiredMetadataKey,
         FlowApprovalsController.prototype.decideFlowApproval
       )
@@ -757,6 +932,8 @@ function createService(
     readonly definitionStore?: FlowDefinitionControlStore;
     readonly definitionQueryStore?: FlowDefinitionQueryStore;
     readonly runtimeStore?: FlowRuntimeStore;
+    readonly cancellationStore?: FlowRunCancellationStore;
+    readonly publicationRolloutPolicy?: FlowPublicationRolloutPolicy;
     readonly clock?: SystemClock;
   } = {}
 ) {
@@ -765,6 +942,8 @@ function createService(
     overrides.definitionStore ?? createDefinitionControlStore(),
     overrides.definitionQueryStore ?? createDefinitionQueryStore(),
     overrides.runtimeStore ?? createRuntimeStore(),
+    overrides.cancellationStore ?? createRunCancellationStore(),
+    overrides.publicationRolloutPolicy ?? { phase: "legacy_v1" },
     overrides.clock ?? ({ now: () => new Date(now) } as SystemClock)
   );
 }
@@ -1029,6 +1208,24 @@ function createRuntimeStore(overrides: Partial<FlowRuntimeStore> = {}): FlowRunt
   };
 }
 
+function createRunCancellationStore(
+  overrides: Partial<FlowRunCancellationStore> = {}
+): FlowRunCancellationStore {
+  return {
+    executeCancel: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: {
+          statusCode: 200 as const,
+          body: { run: canceledRun }
+        }
+      }
+    })),
+    ...overrides
+  };
+}
+
 const runId = "00000000-0000-4000-8000-000000000004";
 const stepRunId = "00000000-0000-4000-8000-000000000005";
 const approvalId = "00000000-0000-4000-8000-000000000006";
@@ -1069,6 +1266,13 @@ const run = {
   createdAt: now,
   updatedAt: now,
   completedAt: null
+} satisfies FlowRunResponse;
+
+const canceledRun = {
+  ...run,
+  status: "canceled",
+  updatedAt: now,
+  completedAt: now
 } satisfies FlowRunResponse;
 
 const stepRun = {

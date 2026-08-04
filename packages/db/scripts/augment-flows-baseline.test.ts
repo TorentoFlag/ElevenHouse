@@ -32,7 +32,16 @@ describe("Flows baseline augmenter", () => {
       'CREATE TRIGGER "flow_definition_command_outcomes_retention"',
       'CREATE CONSTRAINT TRIGGER "flow_definition_command_outcome_consistency"',
       'CREATE CONSTRAINT TRIGGER "flow_definition_outcome_command_consistency"',
-      'CREATE TRIGGER "flow_definition_migrations_immutable"'
+      'CREATE TRIGGER "flow_definition_migrations_immutable"',
+      'CREATE TRIGGER "flow_runtime_commands_immutable_identity"',
+      'CREATE TRIGGER "flow_runtime_command_outcomes_retention"',
+      'CREATE CONSTRAINT TRIGGER "flow_runtime_command_outcome_consistency"',
+      'CREATE CONSTRAINT TRIGGER "flow_runtime_outcome_command_consistency"',
+      'CREATE CONSTRAINT TRIGGER "flow_run_event_command_consistency"',
+      'CREATE TRIGGER "flow_execution_attempts_immutable"',
+      'CREATE TRIGGER "flow_execution_attempts_truncate_guard"',
+      'CREATE TRIGGER "flow_run_events_immutable"',
+      'CREATE TRIGGER "flow_run_events_truncate_guard"'
     ]) {
       expect(migration.split(statement)).toHaveLength(2);
     }
@@ -91,6 +100,31 @@ CREATE TABLE "flow_definition_migrations" (
   "id" uuid PRIMARY KEY,
   "flow_id" uuid NOT NULL,
   "command_id" uuid NOT NULL
+);
+CREATE TABLE "flow_runtime_commands" (
+  "id" uuid PRIMARY KEY,
+  "owner_user_id" uuid NOT NULL,
+  "state" text NOT NULL,
+  "replay_until" timestamp with time zone NOT NULL
+);
+CREATE TABLE "flow_runtime_command_outcomes" (
+  "command_id" uuid PRIMARY KEY,
+  "response_status" integer NOT NULL,
+  "created_at" timestamp with time zone NOT NULL
+);
+CREATE TABLE "flow_runs" (
+  "id" uuid PRIMARY KEY,
+  "owner_user_id" uuid NOT NULL
+);
+CREATE TABLE "flow_execution_attempts" (
+  "id" uuid PRIMARY KEY,
+  "owner_user_id" uuid NOT NULL,
+  "flow_run_id" uuid NOT NULL
+);
+CREATE TABLE "flow_run_events" (
+  "id" uuid PRIMARY KEY,
+  "owner_user_id" uuid NOT NULL,
+  "flow_run_id" uuid NOT NULL
 );
 ALTER TABLE "flows" ADD CONSTRAINT "flows_published_version_owner_fk"
   FOREIGN KEY ("id","published_version_id","owner_user_id","published_at")

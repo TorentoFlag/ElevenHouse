@@ -20,6 +20,12 @@ export const flowDefinitionRouteTemplateValues = [
   "/flows/:flowId/migrations/v2"
 ] as const;
 
+export const flowRuntimeCommandStateValues = ["processing", "succeeded", "failed"] as const;
+
+export const flowRuntimeCommandScopeValues = ["flows.runtime.cancel.v1"] as const;
+
+export const flowRuntimeCommandRouteTemplateValues = ["/flow-runs/:runId/cancel"] as const;
+
 export const flowApprovalModeValues = [
   "draft_only",
   "manual_approve",
@@ -62,6 +68,41 @@ export const flowRunStatusValues = [
 ] as const;
 
 export const flowStepRunStatusValues = flowRunStatusValues;
+
+export const flowExecutionTokenStateValues = [
+  "runnable",
+  "claimed",
+  "waiting_timer",
+  "waiting_signal",
+  "waiting_external",
+  "waiting_work_item",
+  "waiting_approval",
+  "retry_scheduled",
+  "completed",
+  "failed",
+  "canceled"
+] as const;
+
+export const flowExecutionAttemptOutcomeValues = [
+  "advanced",
+  "waiting",
+  "retry_scheduled",
+  "completed",
+  "failed",
+  "lease_expired",
+  "canceled"
+] as const;
+
+export const flowRunEventTypeValues = [
+  "token_advanced",
+  "token_waiting",
+  "token_retry_scheduled",
+  "token_lease_expired",
+  "run_completed",
+  "run_failed",
+  "run_suppressed",
+  "run_canceled"
+] as const;
 
 export const flowApprovalStatusValues = [
   "pending",

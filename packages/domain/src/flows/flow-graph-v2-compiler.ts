@@ -3,21 +3,27 @@ import {
   FLOW_GRAPH_V2_MAX_NODES,
   flowGraphV2Schema,
   type FlowCapabilityManifestV1,
+  type FlowCapabilityManifestV2,
   type FlowCapabilityRequirement,
   type FlowDefinitionValidationIssue,
+  type FlowExecutableNodeExecutorRequirement,
   type FlowGraphV2,
   type FlowGraphV2CompileIssueCode,
   type FlowNodeKindV2,
   type FlowNodeExecutorRequirement,
   type FlowNodeV2,
-  type FlowSourceHandleV2
+  type FlowSourceHandleV2,
+  type FlowTriggerMatcherRequirement
 } from "@elevenhouse/contracts";
 
 export type {
   FlowCapabilityManifestV1,
+  FlowCapabilityManifestV2,
   FlowCapabilityRequirement,
+  FlowExecutableNodeExecutorRequirement,
   FlowGraphV2CompileIssueCode,
-  FlowNodeExecutorRequirement
+  FlowNodeExecutorRequirement,
+  FlowTriggerMatcherRequirement
 } from "@elevenhouse/contracts";
 
 export type FlowGraphV2CompileIssue = Omit<FlowDefinitionValidationIssue, "code"> & {
@@ -28,7 +34,7 @@ export type FlowGraphV2CompileResult = {
   readonly publishable: boolean;
   readonly issues: readonly FlowGraphV2CompileIssue[];
   readonly normalizedGraph: FlowGraphV2 | null;
-  readonly capabilityManifest: FlowCapabilityManifestV1 | null;
+  readonly capabilityManifest: FlowCapabilityManifestV2 | null;
 };
 
 export type FlowGraphV2CompileLimits = {
@@ -347,12 +353,26 @@ function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
   };
 }
 
-function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityManifestV1 {
-  const executorMap = new Map<string, FlowNodeExecutorRequirement>();
+function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityManifestV2 {
+  const triggerNodes = nodes.filter(isTriggerNode);
+  if (triggerNodes.length !== 1) {
+    throw new Error("Publishable flow graph requires exactly one trigger node");
+  }
+  const triggerNode = triggerNodes[0]!;
+  const triggerMatcher: FlowTriggerMatcherRequirement = {
+    kind: triggerNode.kind,
+    configSchemaVersion: triggerNode.configSchemaVersion,
+    matcherContractVersion: triggerNode.executorContractVersion,
+    eventSchemaVersion: 1
+  };
+  const executorMap = new Map<string, FlowExecutableNodeExecutorRequirement>();
   const capabilities = new Set<FlowCapabilityRequirement>();
 
   for (const node of nodes) {
-    const executor: FlowNodeExecutorRequirement = {
+    for (const capability of nodeRules[node.kind].capabilities) capabilities.add(capability);
+    if (isTriggerNode(node)) continue;
+
+    const executor: FlowExecutableNodeExecutorRequirement = {
       kind: node.kind,
       configSchemaVersion: node.configSchemaVersion,
       executorContractVersion: node.executorContractVersion
@@ -361,17 +381,42 @@ function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityM
       `${executor.kind}:${executor.configSchemaVersion}:${executor.executorContractVersion}`,
       executor
     );
-    for (const capability of nodeRules[node.kind].capabilities) capabilities.add(capability);
   }
 
   return {
-    schemaVersion: "flow-capability-manifest.v1",
+    schemaVersion: "flow-capability-manifest.v2",
     executionSemanticsVersion: "flow-interpreter.v1",
+    triggerMatcher,
     nodeExecutors: [...executorMap.values()].sort((left, right) =>
       compareStableText(left.kind, right.kind)
     ),
     requiredCapabilities: [...capabilities].sort(compareStableText)
   };
+}
+
+export function projectFlowCapabilityManifestV1(
+  manifest: FlowCapabilityManifestV2
+): FlowCapabilityManifestV1 {
+  const triggerExecutor: FlowNodeExecutorRequirement = {
+    kind: manifest.triggerMatcher.kind,
+    configSchemaVersion: manifest.triggerMatcher.configSchemaVersion,
+    executorContractVersion: manifest.triggerMatcher.matcherContractVersion
+  };
+
+  return {
+    schemaVersion: "flow-capability-manifest.v1",
+    executionSemanticsVersion: manifest.executionSemanticsVersion,
+    nodeExecutors: [...manifest.nodeExecutors, triggerExecutor].sort((left, right) =>
+      compareStableText(left.kind, right.kind)
+    ),
+    requiredCapabilities: [...manifest.requiredCapabilities]
+  };
+}
+
+function isTriggerNode(
+  node: FlowNodeV2
+): node is Extract<FlowNodeV2, { kind: "booking_confirmed" | "manual_client" }> {
+  return node.kind === "booking_confirmed" || node.kind === "manual_client";
 }
 
 function containsCycle(

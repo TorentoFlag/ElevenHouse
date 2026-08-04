@@ -1,18 +1,26 @@
 import {
   createFlowDefinitionV2RequestSchema,
   createNextFlowDraftV2RequestSchema,
+  flowApprovalModeSchema,
+  flowCapabilityManifestSchema,
   flowDefinitionV2Schema,
-  flowPublishedVersionV2Schema,
+  flowGraphReadSchema,
+  flowPublishedVersionCompatibleSchema,
+  flowVersionSchema,
   migrateFlowDefinitionV2RequestSchema,
   migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
+  publishFlowDefinitionCompatibleResponseSchema,
   publishFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionV3ResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   type CreateFlowDefinitionV2Request,
   type CreateFlowDefinitionV2RequestInput,
   type CreateNextFlowDraftV2Request,
   type FlowApprovalMode,
+  type FlowCapabilityManifest,
   type FlowCapabilityManifestV1,
+  type FlowCapabilityManifestV2,
   type FlowDefinitionCommandRejection,
   type FlowDefinitionCommandRejectionResponse,
   type FlowDefinitionOriginV1,
@@ -21,11 +29,13 @@ import {
   type FlowGraphRead,
   type FlowGraphV2,
   type FlowPresentationV1,
-  type FlowPublishedVersionV2,
+  type FlowPublishedVersionCompatible,
   type MigrateFlowDefinitionV2Request,
   type MigrateFlowDefinitionV2Response,
   type PublishFlowDefinitionV2Request,
+  type PublishFlowDefinitionCompatibleResponse,
   type PublishFlowDefinitionV2Response,
+  type PublishFlowDefinitionV3Response,
   type UpdateFlowDefinitionDraftV2Request
 } from "@elevenhouse/contracts";
 
@@ -34,7 +44,12 @@ import {
   stableJson,
   type CanonicalJson
 } from "../calculations/canonical-json";
-import { compileFlowGraphV2, type FlowGraphV2CompileIssue } from "./flow-graph-v2-compiler";
+import {
+  compileFlowGraphV2,
+  projectFlowCapabilityManifestV1,
+  type FlowGraphV2CompileIssue
+} from "./flow-graph-v2-compiler";
+import { verifyFlowCapabilityManifestForGraph } from "./flow-capability-manifest-integrity";
 import { prepareFlowDefinitionV1Migration } from "./flow-definition-migration";
 import {
   prepareFlowDefinitionV2Creation,
@@ -42,6 +57,8 @@ import {
 } from "./flow-definition-templates";
 
 export const FLOW_DEFINITION_COMMAND_REPLAY_WINDOW_HOURS = 24;
+export type FlowPublicationResponseVersion = "legacy_v2" | "current_v3";
+export type FlowPublicationPersistenceVersion = "legacy_v1" | "current_v2";
 
 export type FlowDefinitionCommandScope =
   | "flows.definition.create.v2"
@@ -96,7 +113,7 @@ export type FlowDefinitionPublishedVersionRecord = {
   readonly approvalMode: FlowApprovalMode;
   readonly graph: FlowGraphRead;
   readonly presentation: FlowPresentationV1 | null;
-  readonly capabilityManifest: FlowCapabilityManifestV1 | null;
+  readonly capabilityManifest: FlowCapabilityManifest | null;
   readonly publishedAt: string;
 };
 
@@ -105,7 +122,8 @@ export type FlowDefinitionPreparedPublication = {
   readonly approvalMode: FlowApprovalMode;
   readonly graph: FlowGraphV2;
   readonly presentation: FlowPresentationV1 | null;
-  readonly capabilityManifest: FlowCapabilityManifestV1;
+  readonly capabilityManifest: FlowCapabilityManifestV2;
+  readonly legacyCapabilityManifest: FlowCapabilityManifestV1;
 };
 
 export type FlowDefinitionCommandOutcome<T> =
@@ -140,7 +158,10 @@ export type FlowDefinitionControlStore = {
     readonly prepare: (
       current: FlowDefinitionControlRecord
     ) => FlowDefinitionPreparation<FlowDefinitionPreparedPublication>;
-  }) => Promise<FlowDefinitionCommandResult<PublishFlowDefinitionV2Response>>;
+    readonly responseVersion: FlowPublicationResponseVersion;
+    readonly persistenceVersion: FlowPublicationPersistenceVersion;
+    readonly assertCreatedResponse: (response: unknown) => void;
+  }) => Promise<FlowDefinitionCommandResult<PublishFlowDefinitionCompatibleResponse>>;
   readonly executeCreateNextDraft: (input: {
     readonly command: FlowDefinitionCommand;
     readonly prepare: (
@@ -332,6 +353,84 @@ export class FlowDefinitionIntegrityError extends Error {
   }
 }
 
+export function parseFlowDefinitionPublishedVersionRecord(input: {
+  readonly id: string;
+  readonly flowId: string;
+  readonly version: number;
+  readonly sourceRevision: number | null;
+  readonly approvalMode: unknown;
+  readonly graph: unknown;
+  readonly presentation: unknown | null;
+  readonly capabilityManifest: unknown | null;
+  readonly publishedAt: string;
+}): FlowDefinitionPublishedVersionRecord {
+  const graph = flowGraphReadSchema.safeParse(input.graph);
+  const approvalMode = flowApprovalModeSchema.safeParse(input.approvalMode);
+  if (!graph.success || !approvalMode.success) throw new FlowDefinitionIntegrityError();
+
+  if (graph.data.schemaVersion === "flow-graph.v1") {
+    if (
+      input.sourceRevision !== null ||
+      input.presentation !== null ||
+      input.capabilityManifest !== null
+    ) {
+      throw new FlowDefinitionIntegrityError();
+    }
+    const version = flowVersionSchema.safeParse({
+      id: input.id,
+      flowId: input.flowId,
+      version: input.version,
+      status: "published",
+      approvalMode: approvalMode.data,
+      graph: graph.data,
+      publishedAt: input.publishedAt
+    });
+    if (!version.success) throw new FlowDefinitionIntegrityError();
+    return {
+      id: version.data.id,
+      flowId: version.data.flowId,
+      version: version.data.version,
+      sourceRevision: null,
+      approvalMode: version.data.approvalMode,
+      graph: version.data.graph,
+      presentation: null,
+      capabilityManifest: null,
+      publishedAt: version.data.publishedAt
+    };
+  }
+
+  const manifest = flowCapabilityManifestSchema.safeParse(input.capabilityManifest);
+  if (!manifest.success) throw new FlowDefinitionIntegrityError();
+  const version = flowPublishedVersionCompatibleSchema.safeParse({
+    schemaVersion:
+      manifest.data.schemaVersion === "flow-capability-manifest.v1"
+        ? "flow-published-version.v2"
+        : "flow-published-version.v3",
+    id: input.id,
+    flowId: input.flowId,
+    version: input.version,
+    sourceRevision: input.sourceRevision,
+    status: "published",
+    approvalMode: approvalMode.data,
+    graph: graph.data,
+    presentation: input.presentation,
+    capabilityManifest: manifest.data,
+    publishedAt: input.publishedAt
+  });
+  if (!version.success) throw new FlowDefinitionIntegrityError();
+  return {
+    id: version.data.id,
+    flowId: version.data.flowId,
+    version: version.data.version,
+    sourceRevision: version.data.sourceRevision,
+    approvalMode: version.data.approvalMode,
+    graph: version.data.graph,
+    presentation: version.data.presentation,
+    capabilityManifest: version.data.capabilityManifest,
+    publishedAt: version.data.publishedAt
+  };
+}
+
 export class FlowDefinitionPublishValidationError extends Error {
   readonly code = "FLOW_GRAPH_NOT_PUBLISHABLE";
 
@@ -477,8 +576,13 @@ export async function publishFlowDefinitionV2(input: {
   readonly request: PublishFlowDefinitionV2Request;
   readonly idempotencyKey: string;
   readonly now: string;
-}): Promise<PublishFlowDefinitionV2Response | null> {
+  readonly responseVersion: FlowPublicationResponseVersion;
+  readonly persistenceVersion: FlowPublicationPersistenceVersion;
+}): Promise<PublishFlowDefinitionCompatibleResponse | null> {
   const request = publishFlowDefinitionV2RequestSchema.parse(input.request);
+  if (input.responseVersion === "current_v3" && input.persistenceVersion !== "current_v2") {
+    throw new FlowDefinitionIntegrityError();
+  }
   const command = createCommand({
     routeTemplate: "/flows/:flowId/publish",
     scope: "flows.definition.publish.v2",
@@ -490,16 +594,43 @@ export async function publishFlowDefinitionV2(input: {
     request,
     now: input.now
   });
+  const assertCreatedResponse = (
+    response: unknown
+  ): PublishFlowDefinitionV2Response | PublishFlowDefinitionV3Response => {
+    const published = (
+      input.responseVersion === "current_v3"
+        ? publishFlowDefinitionV3ResponseSchema
+        : publishFlowDefinitionV2ResponseSchema
+    ).safeParse(response);
+    if (!published.success) throw new FlowDefinitionIntegrityError();
+    assertDefinitionCommandResponse(
+      published.data.flow,
+      input,
+      request.expectedRevision,
+      "versioned"
+    );
+    if (
+      published.data.version.sourceRevision !== request.expectedRevision ||
+      !publishedVersionMatchesCompiler(published.data.version)
+    ) {
+      throw new FlowDefinitionIntegrityError();
+    }
+    return published.data;
+  };
   const result = await input.store.executePublish({
     command,
-    prepare: (current) => preparePublication(current, request.expectedRevision)
+    prepare: (current) => preparePublication(current, request.expectedRevision),
+    responseVersion: input.responseVersion,
+    persistenceVersion: input.persistenceVersion,
+    assertCreatedResponse
   });
   if (commandOutcomeIsNotFound(result.outcome)) return null;
   const published = resolveCommandOutcome(
     result.outcome,
-    publishFlowDefinitionV2ResponseSchema.parse,
+    publishFlowDefinitionCompatibleResponseSchema.parse,
     200
   );
+  if (result.kind === "created") assertCreatedResponse(published);
   assertDefinitionCommandResponse(published.flow, input, request.expectedRevision, "versioned");
   if (
     published.version.sourceRevision !== request.expectedRevision ||
@@ -596,7 +727,8 @@ function preparePublication(
     approvalMode: editable.value.approvalMode,
     graph: compiled.normalizedGraph,
     presentation: editable.value.draftPresentation,
-    capabilityManifest: compiled.capabilityManifest
+    capabilityManifest: compiled.capabilityManifest,
+    legacyCapabilityManifest: projectFlowCapabilityManifestV1(compiled.capabilityManifest)
   });
 }
 
@@ -630,8 +762,11 @@ function prepareNextDraft(
       currentBaseVersionId: latestVersion.id
     });
   }
-  const version = flowPublishedVersionV2Schema.safeParse({
-    schemaVersion: "flow-published-version.v2",
+  const version = flowPublishedVersionCompatibleSchema.safeParse({
+    schemaVersion:
+      latestVersion.capabilityManifest?.schemaVersion === "flow-capability-manifest.v1"
+        ? "flow-published-version.v2"
+        : "flow-published-version.v3",
     ...latestVersion,
     status: "published"
   });
@@ -807,16 +942,18 @@ function assertDefinitionCommandResponse(
   }
 }
 
-function publishedVersionMatchesCompiler(version: FlowPublishedVersionV2): boolean {
+function publishedVersionMatchesCompiler(version: FlowPublishedVersionCompatible): boolean {
   const compiled = compileFlowGraphV2(version.graph);
+  const manifestIntegrity = verifyFlowCapabilityManifestForGraph({
+    graph: version.graph,
+    capabilityManifest: version.capabilityManifest
+  });
   return Boolean(
     compiled.publishable &&
     compiled.normalizedGraph &&
-    compiled.capabilityManifest &&
+    manifestIntegrity.valid &&
     stableJson(compiled.normalizedGraph as unknown as CanonicalJson) ===
-      stableJson(version.graph as unknown as CanonicalJson) &&
-    stableJson(compiled.capabilityManifest as unknown as CanonicalJson) ===
-      stableJson(version.capabilityManifest as unknown as CanonicalJson)
+      stableJson(version.graph as unknown as CanonicalJson)
   );
 }
 

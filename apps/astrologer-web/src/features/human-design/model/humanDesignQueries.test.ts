@@ -36,7 +36,10 @@ vi.mock("../api/humanDesignApi", () => ({
   createHumanDesignCalculation: vi.fn(),
   downloadHumanDesignPdf: vi.fn(async () => ({ url: "https://storage.example.test/report.pdf" })),
   enqueueHumanDesignPdf: vi.fn(async () => ({ job: { id: "job-id" } })),
-  getLatestHumanDesignPdf: vi.fn(async () => ({ job: null, currentResultChecksum: `sha256:${"a".repeat(64)}` })),
+  getLatestHumanDesignPdf: vi.fn(async () => ({
+    job: null,
+    currentResultChecksum: `sha256:${"a".repeat(64)}`
+  })),
   getHumanDesignTransit: vi.fn(async () => ({ result: { mode: "transit" } })),
   previewHumanDesign: vi.fn(),
   recalculateHumanDesignCalculation: vi.fn(async () => ({ calculation: { id: "calculation-id" } }))
@@ -143,6 +146,7 @@ describe("humanDesignQueries", () => {
     await expect(
       options.mutationFn({
         calculationId: "11111111-1111-4111-8111-111111111111",
+        idempotencyKey: "22222222-2222-4222-8222-222222222222",
         body: {
           text: "Edited Human Design draft",
           expectedResultChecksum: `sha256:${"a".repeat(64)}`
@@ -153,6 +157,7 @@ describe("humanDesignQueries", () => {
 
     expect(saveCalculationInterpretation).toHaveBeenCalledWith({
       calculationId: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: "22222222-2222-4222-8222-222222222222",
       body: {
         text: "Edited Human Design draft",
         expectedResultChecksum: `sha256:${"a".repeat(64)}`

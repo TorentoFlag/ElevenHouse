@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
-import { Children, isValidElement, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode
+} from "react";
 import type {
   HumanDesignCompatibilityResult,
   HumanDesignIndividualResult,
@@ -12,15 +18,15 @@ import {
   createHumanDesignTransitViewModel,
   createHumanDesignViewModel
 } from "../../features/human-design/model/humanDesignViewModel";
-import { HumanDesignCalculationMenu, renderHumanDesignCalculationMenu } from "./HumanDesignCalculationMenu";
+import {
+  HumanDesignCalculationMenu,
+  renderHumanDesignCalculationMenu
+} from "./HumanDesignCalculationMenu";
 import { HumanDesignPageView, type HumanDesignPageViewProps } from "./HumanDesignPageView";
 
 describe("HumanDesignPageView", () => {
   it("caps mobile page gutters so the workspace does not overflow the viewport", () => {
-    const css = readFileSync(
-      new URL("./HumanDesignPage.module.css", import.meta.url),
-      "utf8"
-    );
+    const css = readFileSync(new URL("./HumanDesignPage.module.css", import.meta.url), "utf8");
     const mobileBlock = css.match(/@media \(max-width: 820px\) \{[\s\S]*?\n\}/)?.[0] ?? "";
 
     expect(mobileBlock).toContain("margin: -32px -16px;");
@@ -174,7 +180,9 @@ describe("HumanDesignPageView", () => {
     const text = textOf(view);
     const aiItem = getActionMenuItem(view, "ai");
     const textarea = walk(view).find(
-      (element): element is ReactElement<{
+      (
+        element
+      ): element is ReactElement<{
         value: string;
         onChange: (event: { currentTarget: { value: string } }) => void;
       }> => element.type === "textarea"
@@ -312,15 +320,15 @@ describe("HumanDesignPageView", () => {
       "pdf",
       "ai"
     ]);
-    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Рассчитать")).toBe(
-      false
-    );
-    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Привязать")).toBe(
-      false
-    );
-    expect(walk(view).some((element) => element.type === "button" && textOf(element) === "Обновить")).toBe(
-      false
-    );
+    expect(
+      walk(view).some((element) => element.type === "button" && textOf(element) === "Рассчитать")
+    ).toBe(false);
+    expect(
+      walk(view).some((element) => element.type === "button" && textOf(element) === "Привязать")
+    ).toBe(false);
+    expect(
+      walk(view).some((element) => element.type === "button" && textOf(element) === "Обновить")
+    ).toBe(false);
     expect(
       walk(view).some((element) =>
         typeof element.props.className === "string"
@@ -347,12 +355,12 @@ describe("HumanDesignPageView", () => {
   });
 
   it("keeps compact desktop Human Design controls and bodygraph viewport-contained", () => {
-    const pageCss = readFileSync(
-      new URL("./HumanDesignPage.module.css", import.meta.url),
-      "utf8"
-    );
+    const pageCss = readFileSync(new URL("./HumanDesignPage.module.css", import.meta.url), "utf8");
     const bodygraphCss = readFileSync(
-      new URL("../../features/human-design/components/HumanDesignBodygraph.module.css", import.meta.url),
+      new URL(
+        "../../features/human-design/components/HumanDesignBodygraph.module.css",
+        import.meta.url
+      ),
       "utf8"
     );
 
@@ -395,7 +403,8 @@ describe("HumanDesignPageView", () => {
 
 function getToolbarActionMenu(root: ReactElement): ReactElement<ComponentProps<typeof ActionMenu>> {
   const menu = walk(root).find(
-    (element): element is ReactElement<ComponentProps<typeof ActionMenu>> => element.type === ActionMenu
+    (element): element is ReactElement<ComponentProps<typeof ActionMenu>> =>
+      element.type === ActionMenu
   );
 
   if (!menu) {
@@ -405,7 +414,9 @@ function getToolbarActionMenu(root: ReactElement): ReactElement<ComponentProps<t
   return menu;
 }
 
-function getCalculationMenu(root: ReactElement): ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> {
+function getCalculationMenu(
+  root: ReactElement
+): ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> {
   const menu = walk(root).find(
     (element): element is ReactElement<ComponentProps<typeof HumanDesignCalculationMenu>> =>
       element.type === HumanDesignCalculationMenu
@@ -495,6 +506,7 @@ function savedCalculation() {
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     module: "human_design" as const,
     mode: "individual" as const,
+    interpretationMode: null,
     methodCode: "human_design_classic",
     title: "Марина Краснова — Дизайн человека",
     status: "linked" as const,
@@ -602,7 +614,9 @@ function sampleResult(): HumanDesignIndividualResult {
       selectedBy: "sacral"
     },
     definition: "single" as const,
-    definitionComponents: [{ centers: ["throat" as const, "sacral" as const], channels: ["20-34" as const] }],
+    definitionComponents: [
+      { centers: ["throat" as const, "sacral" as const], channels: ["20-34" as const] }
+    ],
     definitionBasis: {
       definedCenterCount: 2,
       componentCount: 1

@@ -1,7 +1,18 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  UseGuards
+} from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
-import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { FlowsService } from "./flows.service";
 
 @Controller("flow-runs")
@@ -17,7 +28,13 @@ export class FlowRunsController {
   @Post(":runId/cancel")
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
-  cancelFlowRun(@Param("runId") runId: string, @Req() request: AstrologerSessionRequest) {
-    return this.service.cancelFlowRun(runId, request);
+  @RequireIdempotency({ scope: "flows.runtime.cancel.v1" })
+  cancelFlowRun(
+    @Param("runId") runId: string,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.cancelFlowRun(runId, idempotencyKey, body, request);
   }
 }

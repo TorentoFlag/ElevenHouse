@@ -54,7 +54,8 @@ export function humanDesignPdfQueryOptions(input: {
 }) {
   return {
     queryKey: humanDesignQueryKeys.pdf(input.calculationId, input.locale, input.resultChecksum),
-    queryFn: () => getLatestHumanDesignPdf({ calculationId: input.calculationId, locale: input.locale }),
+    queryFn: () =>
+      getLatestHumanDesignPdf({ calculationId: input.calculationId, locale: input.locale }),
     enabled: Boolean(input.calculationId && input.resultChecksum),
     refetchInterval: (query: { state: { data?: { job: { status: string } | null } } }) => {
       const status = query.state.data?.job?.status;
@@ -100,6 +101,7 @@ export const saveHumanDesignInterpretationMutationOptions = (
 ) => ({
   mutationFn: (input: {
     readonly calculationId: string;
+    readonly idempotencyKey: string;
     readonly body: SaveCalculationInterpretationRequest;
   }) => saveCalculationInterpretation(input),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
@@ -108,10 +110,8 @@ export const saveHumanDesignInterpretationMutationOptions = (
 export const approveHumanDesignInterpretationMutationOptions = (
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) => ({
-  mutationFn: (input: {
-    readonly calculationId: string;
-    readonly interpretationId: string;
-  }) => approveCalculationInterpretation(input),
+  mutationFn: (input: { readonly calculationId: string; readonly interpretationId: string }) =>
+    approveCalculationInterpretation(input),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ["calculations"] })
 });
 

@@ -3,10 +3,9 @@ import { messagingMessageDeliveryRequestedEventType } from "@elevenhouse/domain"
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createLogger, type LogRecord } from "@elevenhouse/observability";
 import { relayPendingMessagingOutboxEvents } from "./messaging-delivery.outbox-relay";
-import {
-  messagingDeliveryJobName,
-  type MessagingDeliveryQueue
-} from "./messaging-delivery.queue";
+import { messagingDeliveryJobName, type MessagingDeliveryQueue } from "./messaging-delivery.queue";
+
+const claimFence = 13n;
 
 describe("relayPendingMessagingOutboxEvents", () => {
   it("claims only messaging delivery events and marks them published after queue add", async () => {
@@ -23,7 +22,8 @@ describe("relayPendingMessagingOutboxEvents", () => {
             channelConnectionId: "6e14390f-3db1-4d1c-9344-55679c778427",
             astrologerUserId: "5e14390f-3db1-4d1c-9344-55679c778427"
           },
-          attempts: 0
+          attempts: 0,
+          claimFence
         }
       ]),
       markPublished: vi.fn(async () => undefined),
@@ -59,6 +59,7 @@ describe("relayPendingMessagingOutboxEvents", () => {
     );
     expect(store.markPublished).toHaveBeenCalledWith({
       eventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      claimFence,
       publishedAt: now
     });
     expect(JSON.stringify(logRecords)).not.toContain("messageId");
@@ -78,7 +79,8 @@ describe("relayPendingMessagingOutboxEvents", () => {
             channelConnectionId: "6e14390f-3db1-4d1c-9344-55679c778427",
             astrologerUserId: "5e14390f-3db1-4d1c-9344-55679c778427"
           },
-          attempts: 2
+          attempts: 2,
+          claimFence
         }
       ]),
       markPublished: vi.fn(async () => undefined),
@@ -102,9 +104,50 @@ describe("relayPendingMessagingOutboxEvents", () => {
     expect(store.markPublished).not.toHaveBeenCalled();
     expect(store.markPublishFailed).toHaveBeenCalledWith({
       eventId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      claimFence,
       failedAt: now,
       nextAvailableAt: new Date("2026-07-22T10:00:04.000Z"),
       errorMessage: "redis unavailable"
     });
+  });
+
+  it("propagates a stale publish claim without trying to requeue it", async () => {
+    const now = new Date("2026-07-22T10:00:00.000Z");
+    const staleClaimError = Object.assign(new Error("Outbox relay claim is stale"), {
+      name: "OutboxRelayStaleClaimError",
+      code: "OUTBOX_RELAY_STALE_CLAIM" as const
+    });
+    const store: OutboxRelayStore = {
+      claimPending: vi.fn(async () => [
+        {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          eventType: messagingMessageDeliveryRequestedEventType,
+          aggregateId: "9e14390f-3db1-4d1c-9344-55679c778427",
+          payload: {
+            messageId: "9e14390f-3db1-4d1c-9344-55679c778427",
+            threadId: "7e14390f-3db1-4d1c-9344-55679c778427",
+            channelConnectionId: "6e14390f-3db1-4d1c-9344-55679c778427",
+            astrologerUserId: "5e14390f-3db1-4d1c-9344-55679c778427"
+          },
+          attempts: 0,
+          claimFence
+        }
+      ]),
+      markPublished: vi.fn(async () => Promise.reject(staleClaimError)),
+      markPublishFailed: vi.fn(async () => undefined)
+    };
+    const queue = { add: vi.fn(async () => undefined) } as unknown as MessagingDeliveryQueue;
+
+    await expect(
+      relayPendingMessagingOutboxEvents({
+        store,
+        queue,
+        now,
+        batchSize: 10,
+        publishingLockTimeoutMs: 60_000,
+        queueOptions: { attempts: 5, backoffMs: 1_000 }
+      })
+    ).rejects.toBe(staleClaimError);
+    expect(store.markPublishFailed).not.toHaveBeenCalled();
   });
 });

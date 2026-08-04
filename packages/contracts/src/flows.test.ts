@@ -12,6 +12,7 @@ import {
   flowRunResponseSchema,
   flowStepRunResponseSchema,
   manualFlowRunResponseSchema,
+  cancelFlowRunRequestSchema,
   cancelFlowRunResponseSchema,
   listFlowApprovalsResponseSchema,
   listFlowsResponseSchema,
@@ -278,6 +279,8 @@ describe("flow contracts", () => {
       run,
       runtime: runtimeAvailability
     });
+    expect(cancelFlowRunRequestSchema.parse({})).toEqual({});
+    expect(() => cancelFlowRunRequestSchema.parse({ reason: "unsupported" })).toThrow();
     expect(cancelFlowRunResponseSchema.parse({ run: { ...run, status: "canceled" } })).toEqual({
       run: { ...run, status: "canceled" }
     });

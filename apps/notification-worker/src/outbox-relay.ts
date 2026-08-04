@@ -48,18 +48,11 @@ export async function relayPendingOutboxEvents(input: {
           outboxEventId: event.id
         })
       );
-      await input.store.markPublished({
-        eventId: event.id,
-        publishedAt: input.now
-      });
-      input.logger?.info("notification outbox event published", {
-        outboxEventId: event.id,
-        eventType: event.eventType
-      });
     } catch (error) {
       const errorMessage = normalizeErrorMessage(error);
       await input.store.markPublishFailed({
         eventId: event.id,
+        claimFence: event.claimFence,
         failedAt: input.now,
         nextAvailableAt: new Date(input.now.getTime() + nextBackoffMs(event.attempts)),
         errorMessage
@@ -70,7 +63,18 @@ export async function relayPendingOutboxEvents(input: {
         attempts: event.attempts,
         errorMessage
       });
+      continue;
     }
+
+    await input.store.markPublished({
+      eventId: event.id,
+      claimFence: event.claimFence,
+      publishedAt: input.now
+    });
+    input.logger?.info("notification outbox event published", {
+      outboxEventId: event.id,
+      eventType: event.eventType
+    });
   }
 
   return events.length;

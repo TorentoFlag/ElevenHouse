@@ -91,12 +91,7 @@ export const flowHandoffKindValues = ["approval", "manual_task", "live_session"]
 export const flowHandoffKindSchema = z.enum(flowHandoffKindValues);
 export type FlowHandoffKind = z.infer<typeof flowHandoffKindSchema>;
 
-export const flowTerminalKindValues = [
-  "completed",
-  "suppressed",
-  "expired",
-  "canceled"
-] as const;
+export const flowTerminalKindValues = ["completed", "suppressed", "expired", "canceled"] as const;
 export const flowTerminalKindSchema = z.enum(flowTerminalKindValues);
 export type FlowTerminalKind = z.infer<typeof flowTerminalKindSchema>;
 
@@ -334,9 +329,7 @@ export const flowGraphSchema = z
       });
     }
 
-    if (
-      graph.edges.some((edge) => !nodeIds.has(edge.fromNodeId) || !nodeIds.has(edge.toNodeId))
-    ) {
+    if (graph.edges.some((edge) => !nodeIds.has(edge.fromNodeId) || !nodeIds.has(edge.toNodeId))) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["edges"],
@@ -531,7 +524,10 @@ export type FlowResponse = z.infer<typeof flowResponseSchema>;
 
 export const listFlowsQuerySchema = z
   .object({
-    status: z.enum(["all", ...flowStatusValues]).optional().default("all"),
+    status: z
+      .enum(["all", ...flowStatusValues])
+      .optional()
+      .default("all"),
     limit: z.coerce.number().int().min(1).max(100).optional().default(50),
     offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
   })
@@ -571,19 +567,13 @@ export const flowRuntimeAvailabilitySchema = z
         message: "Enabled flow runtime must be executable"
       });
     }
-    if (
-      availability.mode === "enabled" &&
-      availability.historySemantics !== "durable_execution"
-    ) {
+    if (availability.mode === "enabled" && availability.historySemantics !== "durable_execution") {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Enabled flow runtime must expose durable execution history"
       });
     }
-    if (
-      availability.mode === "canary" &&
-      availability.historySemantics === "legacy_preview"
-    ) {
+    if (availability.mode === "canary" && availability.historySemantics === "legacy_preview") {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Canary flow runtime must distinguish rollout history"
@@ -616,7 +606,10 @@ export type SimulateFlowRunRequest = z.infer<typeof simulateFlowRunRequestSchema
 
 export const listFlowRunsQuerySchema = z
   .object({
-    status: z.enum(["all", ...flowRunStatusValues]).optional().default("all"),
+    status: z
+      .enum(["all", ...flowRunStatusValues])
+      .optional()
+      .default("all"),
     limit: z.coerce.number().int().min(1).max(100).optional().default(50),
     offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
   })
@@ -641,6 +634,9 @@ export const getFlowRunResponseSchema = z
   .strict();
 export type GetFlowRunResponse = z.infer<typeof getFlowRunResponseSchema>;
 
+export const cancelFlowRunRequestSchema = z.object({}).strict();
+export type CancelFlowRunRequest = z.infer<typeof cancelFlowRunRequestSchema>;
+
 export const cancelFlowRunResponseSchema = z
   .object({
     run: flowRunResponseSchema
@@ -650,7 +646,10 @@ export type CancelFlowRunResponse = z.infer<typeof cancelFlowRunResponseSchema>;
 
 export const listFlowApprovalsQuerySchema = z
   .object({
-    status: z.enum(["all", ...flowApprovalStatusValues]).optional().default("pending"),
+    status: z
+      .enum(["all", ...flowApprovalStatusValues])
+      .optional()
+      .default("pending"),
     limit: z.coerce.number().int().min(1).max(100).optional().default(50),
     offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
   })

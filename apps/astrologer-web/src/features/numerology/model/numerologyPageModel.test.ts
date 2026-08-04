@@ -39,7 +39,14 @@ describe("numerologyPageModel", () => {
     };
 
     expect(
-      buildNumerologyPageViewModel(saved, null, createInitialNumerologyForm(), null, "Изменено", false)
+      buildNumerologyPageViewModel(
+        saved,
+        null,
+        createInitialNumerologyForm(),
+        null,
+        "Изменено",
+        false
+      )
     ).toMatchObject({
       isAiDraftDisabled: true,
       aiDraftDisabledReason: "Сначала сохраните или отмените изменения",
@@ -57,6 +64,7 @@ function response(): NumerologyCalculationResponse {
       ownerUserId: "55555555-5555-4555-8555-555555555555",
       module: "numerology",
       mode: "individual",
+      interpretationMode: null,
       methodCode: "pythagorean",
       title: "Мария",
       status: "calculated",

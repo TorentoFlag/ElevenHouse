@@ -13,7 +13,9 @@ import {
   flowGraphReadSchema,
   flowGraphV2Schema,
   flowPresentationV1Schema,
+  flowPublishedVersionCompatibleSchema,
   flowPublishedVersionV2Schema,
+  flowPublishedVersionV3Schema,
   listFlowDefinitionTemplatesV2QuerySchema,
   listFlowDefinitionTemplatesV2ResponseSchema,
   listFlowDefinitionsV2QuerySchema,
@@ -22,8 +24,13 @@ import {
   migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
   publishFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionV3ResponseSchema,
+  publishFlowDefinitionCompatibleResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
+  validateFlowDefinitionResponseV1Schema,
+  validateFlowDefinitionResponseV2Schema,
+  validateFlowDefinitionCompatibleResponseSchema,
   validateFlowDefinitionResponseSchema,
   type FlowGraphV2
 } from "./flows-v2";
@@ -429,6 +436,18 @@ describe("flow definition validation contracts", () => {
     ],
     requiredCapabilities: []
   } as const;
+  const capabilityManifestV2 = {
+    schemaVersion: "flow-capability-manifest.v2",
+    executionSemanticsVersion: "flow-interpreter.v1",
+    triggerMatcher: {
+      kind: "manual_client",
+      configSchemaVersion: 1,
+      matcherContractVersion: 1,
+      eventSchemaVersion: 1
+    },
+    nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
+    requiredCapabilities: []
+  } as const;
 
   it("accepts either readable graph version as validation input", () => {
     expect(validateFlowDefinitionRequestSchema.parse({ graph: legacyGraph })).toEqual({
@@ -439,7 +458,7 @@ describe("flow definition validation contracts", () => {
     });
   });
 
-  it("parses a publishable v2 result that remains activation-blocked", () => {
+  it("keeps the historical V1 validation envelope readable for consumer-first rollout", () => {
     const response = {
       schemaVersion: "flow-definition-validation.v1",
       graphSchemaVersion: "flow-graph.v2",
@@ -452,7 +471,65 @@ describe("flow definition validation contracts", () => {
     } as const;
 
     expect(flowCapabilityManifestV1Schema.parse(capabilityManifest)).toEqual(capabilityManifest);
+    expect(validateFlowDefinitionResponseV1Schema.parse(response)).toEqual(response);
     expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
+    expect(validateFlowDefinitionCompatibleResponseSchema.parse(response)).toEqual(response);
+    expect(validateFlowDefinitionResponseV2Schema.safeParse(response).success).toBe(false);
+  });
+
+  it("accepts a versioned trigger matcher without treating the trigger as a worker executor", () => {
+    const response = {
+      schemaVersion: "flow-definition-validation.v2",
+      graphSchemaVersion: "flow-graph.v2",
+      publishable: true,
+      activatable: false,
+      issues: [],
+      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
+      normalizedGraph: manualClientGraph,
+      capabilityManifest: capabilityManifestV2
+    } as const;
+
+    expect(validateFlowDefinitionResponseV2Schema.parse(response)).toEqual(response);
+    expect(validateFlowDefinitionCompatibleResponseSchema.parse(response)).toEqual(response);
+    expect(validateFlowDefinitionResponseSchema.safeParse(response).success).toBe(false);
+    expect(validateFlowDefinitionResponseV1Schema.safeParse(response).success).toBe(false);
+    expect(
+      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+        ...response,
+        capabilityManifest: {
+          ...capabilityManifestV2,
+          nodeExecutors: [
+            ...capabilityManifestV2.nodeExecutors,
+            { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+          ]
+        }
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+        ...response,
+        capabilityManifest: {
+          ...capabilityManifestV2,
+          triggerMatcher: {
+            kind: "completed",
+            configSchemaVersion: 1,
+            matcherContractVersion: 1,
+            eventSchemaVersion: 1
+          }
+        }
+      }).success
+    ).toBe(false);
+    const { eventSchemaVersion: _eventSchemaVersion, ...unpinnedMatcher } =
+      capabilityManifestV2.triggerMatcher;
+    expect(
+      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+        ...response,
+        capabilityManifest: {
+          ...capabilityManifestV2,
+          triggerMatcher: unpinnedMatcher
+        }
+      }).success
+    ).toBe(false);
   });
 
   it("parses an explicit v1 migration blocker", () => {
@@ -612,6 +689,18 @@ describe("flow definition v2 lifecycle contracts", () => {
     ],
     requiredCapabilities: []
   } as const;
+  const capabilityManifestV2 = {
+    schemaVersion: "flow-capability-manifest.v2",
+    executionSemanticsVersion: "flow-interpreter.v1",
+    triggerMatcher: {
+      kind: "manual_client",
+      configSchemaVersion: 1,
+      matcherContractVersion: 1,
+      eventSchemaVersion: 1
+    },
+    nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
+    requiredCapabilities: []
+  } as const;
   const version = {
     schemaVersion: "flow-published-version.v2",
     id: "33333333-3333-4333-8333-333333333333",
@@ -624,6 +713,11 @@ describe("flow definition v2 lifecycle contracts", () => {
     presentation,
     capabilityManifest,
     publishedAt: "2026-08-02T18:10:00.000Z"
+  } as const;
+  const currentVersion = {
+    ...version,
+    schemaVersion: "flow-published-version.v3",
+    capabilityManifest: capabilityManifestV2
   } as const;
   const publishedDefinition = {
     ...definition,
@@ -638,9 +732,28 @@ describe("flow definition v2 lifecycle contracts", () => {
   it("parses revisioned drafts and immutable compiled versions", () => {
     expect(flowDefinitionV2Schema.parse(definition)).toEqual(definition);
     expect(flowPublishedVersionV2Schema.parse(version)).toEqual(version);
+    expect(flowPublishedVersionV2Schema.safeParse(currentVersion).success).toBe(false);
+    expect(flowPublishedVersionV3Schema.parse(currentVersion)).toEqual(currentVersion);
+    expect(flowPublishedVersionCompatibleSchema.parse(version)).toEqual(version);
+    expect(flowPublishedVersionCompatibleSchema.parse(currentVersion)).toEqual(currentVersion);
     expect(
       publishFlowDefinitionV2ResponseSchema.parse({ flow: publishedDefinition, version })
     ).toEqual({ flow: publishedDefinition, version });
+    expect(
+      publishFlowDefinitionV3ResponseSchema.parse({
+        flow: publishedDefinition,
+        version: currentVersion
+      })
+    ).toEqual({ flow: publishedDefinition, version: currentVersion });
+    expect(
+      publishFlowDefinitionCompatibleResponseSchema.parse({ flow: publishedDefinition, version })
+    ).toEqual({ flow: publishedDefinition, version });
+    expect(
+      publishFlowDefinitionCompatibleResponseSchema.parse({
+        flow: publishedDefinition,
+        version: currentVersion
+      })
+    ).toEqual({ flow: publishedDefinition, version: currentVersion });
   });
 
   it("requires a mutation field and positive expected revision", () => {

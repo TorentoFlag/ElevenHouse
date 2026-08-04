@@ -154,6 +154,7 @@ function calculationRecord(input: {
     ownerUserId: "owner",
     module: "numerology",
     mode: input.mode,
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: input.id,
     status: "calculated",

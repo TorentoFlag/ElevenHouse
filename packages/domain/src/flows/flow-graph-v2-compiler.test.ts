@@ -74,13 +74,16 @@ describe("flow graph v2 compiler", () => {
         edges: [{ id: "manual-to-completed" }]
       },
       capabilityManifest: {
-        schemaVersion: "flow-capability-manifest.v1",
+        schemaVersion: "flow-capability-manifest.v2",
         executionSemanticsVersion: "flow-interpreter.v1",
+        triggerMatcher: {
+          kind: "manual_client",
+          configSchemaVersion: 1,
+          matcherContractVersion: 1,
+          eventSchemaVersion: 1
+        },
         requiredCapabilities: [],
-        nodeExecutors: [
-          { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-          { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
-        ]
+        nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }]
       }
     });
   });
@@ -165,6 +168,18 @@ describe("flow graph v2 compiler", () => {
     const result = compileFlowGraphV2(graph);
 
     expect(result.publishable).toBe(true);
+    expect(result.capabilityManifest).toMatchObject({
+      schemaVersion: "flow-capability-manifest.v2",
+      triggerMatcher: {
+        kind: "booking_confirmed",
+        configSchemaVersion: 1,
+        matcherContractVersion: 1,
+        eventSchemaVersion: 1
+      }
+    });
+    expect(result.capabilityManifest?.nodeExecutors).not.toContainEqual(
+      expect.objectContaining({ kind: "booking_confirmed" })
+    );
     expect(result.capabilityManifest?.requiredCapabilities).toEqual([
       "bookings.events.booking_confirmed",
       "clients.birth_data.read.service_preparation",

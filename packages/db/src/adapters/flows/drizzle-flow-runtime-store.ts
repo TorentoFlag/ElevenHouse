@@ -29,7 +29,7 @@ import {
   flowRuns,
   flowStepRuns,
   flowSuppressions
-} from "../../schema";
+} from "../../schema/flows";
 
 type FlowRuntimeEventRow = typeof flowRuntimeEvents.$inferSelect;
 type FlowRunRow = typeof flowRuns.$inferSelect;
@@ -82,50 +82,53 @@ export function createDrizzleFlowRuntimeStore(database: ElevenHouseDatabase): Fl
       const row = await findRunSelectionById(database, input);
       return row ? toRunRecord(row) : null;
     },
-    cancelRun: async (input) => database.transaction(async (transaction) => {
-      const now = new Date(input.now);
-      const [updated] = await transaction
-        .update(flowRuns)
-        .set({
-          status: "canceled",
-          currentNodeId: null,
-          updatedAt: now,
-          completedAt: now
-        })
-        .where(
-          and(
-            eq(flowRuns.ownerUserId, input.ownerUserId),
-            eq(flowRuns.id, input.runId),
-            notInArray(flowRuns.status, terminalFlowRunStatuses)
+    cancelRun: async (input) =>
+      database.transaction(async (transaction) => {
+        const now = new Date(input.now);
+        const [updated] = await transaction
+          .update(flowRuns)
+          .set({
+            status: "canceled",
+            currentNodeId: null,
+            updatedAt: now,
+            completedAt: now
+          })
+          .where(
+            and(
+              eq(flowRuns.ownerUserId, input.ownerUserId),
+              eq(flowRuns.id, input.runId),
+              notInArray(flowRuns.status, terminalFlowRunStatuses)
+            )
           )
-        )
-        .returning({ id: flowRuns.id });
-      if (!updated) return null;
+          .returning({ id: flowRuns.id });
+        if (!updated) return null;
 
-      await transaction
-        .update(flowApprovals)
-        .set({
-          status: "expired",
-          decisionNote: "Flow run canceled",
-          decidedAt: now,
-          snoozedUntil: null
-        })
-        .where(
-          and(
-            eq(flowApprovals.ownerUserId, input.ownerUserId),
-            eq(flowApprovals.flowRunId, input.runId),
-            eq(flowApprovals.status, "pending")
+        await transaction
+          .update(flowApprovals)
+          .set({
+            status: "expired",
+            decisionNote: "Flow run canceled",
+            decidedAt: now,
+            snoozedUntil: null
+          })
+          .where(
+            and(
+              eq(flowApprovals.ownerUserId, input.ownerUserId),
+              eq(flowApprovals.flowRunId, input.runId),
+              eq(flowApprovals.status, "pending")
+            )
           )
-        )
-        .returning({ id: flowApprovals.id });
+          .returning({ id: flowApprovals.id });
 
-      const row = await findRunSelectionById(transaction, input);
-      return row ? toRunRecord(row) : null;
-    }),
+        const row = await findRunSelectionById(transaction, input);
+        return row ? toRunRecord(row) : null;
+      }),
     createRun: async (input) =>
       database.transaction(async (transaction) => createRunInTransaction(transaction, input)),
     createRunForEventDedupe: async (input) =>
-      database.transaction(async (transaction) => createRunForEventDedupeInTransaction(transaction, input)),
+      database.transaction(async (transaction) =>
+        createRunForEventDedupeInTransaction(transaction, input)
+      ),
     createSuppression: async (input) => {
       return createOrFindSuppression(database, input);
     },
@@ -461,20 +464,18 @@ async function insertFlowRun(
   tolerateConflict = false
 ): Promise<FlowRunRow | null> {
   const now = new Date(input.now);
-  const insert = transaction
-    .insert(flowRuns)
-    .values({
-      ownerUserId: input.ownerUserId,
-      flowId: input.flowId,
-      flowVersionId: input.flowVersionId,
-      runtimeEventId: input.runtimeEventId,
-      status: input.status,
-      snapshot: input.snapshot,
-      currentNodeId: input.currentNodeId,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: isTerminalRunStatus(input.status) ? now : null
-    });
+  const insert = transaction.insert(flowRuns).values({
+    ownerUserId: input.ownerUserId,
+    flowId: input.flowId,
+    flowVersionId: input.flowVersionId,
+    runtimeEventId: input.runtimeEventId,
+    status: input.status,
+    snapshot: input.snapshot,
+    currentNodeId: input.currentNodeId,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: isTerminalRunStatus(input.status) ? now : null
+  });
   const returning = tolerateConflict
     ? insert
         .onConflictDoNothing({
@@ -527,7 +528,9 @@ async function createRunChildren(
             input.approvals.map((approval) => ({
               ownerUserId: input.ownerUserId,
               flowRunId: runRow.id,
-              flowStepRunId: approval.stepNodeId ? (stepIdByNodeId.get(approval.stepNodeId) ?? null) : null,
+              flowStepRunId: approval.stepNodeId
+                ? (stepIdByNodeId.get(approval.stepNodeId) ?? null)
+                : null,
               status: "pending",
               kind: approval.kind,
               title: approval.title,
@@ -558,6 +561,7 @@ function selectRunRows(database: FlowDatabase, conditions: readonly SQL[]) {
       status: flowRuns.status,
       snapshot: flowRuns.snapshot,
       currentNodeId: flowRuns.currentNodeId,
+      traceSequence: flowRuns.traceSequence,
       createdAt: flowRuns.createdAt,
       updatedAt: flowRuns.updatedAt,
       completedAt: flowRuns.completedAt

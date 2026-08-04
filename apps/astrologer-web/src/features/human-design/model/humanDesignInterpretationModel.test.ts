@@ -16,20 +16,25 @@ describe("Human Design interpretation state", () => {
       saveDisabled: true,
       approveDisabled: true
     });
-    expect(getHumanDesignInterpretationState({ ...calculation(), status: "archived" }, "", false))
-      .toMatchObject({
-        aiDisabled: true,
-        aiDisabledReason: "Архивный расчёт нельзя изменять",
-        saveDisabled: true,
-        approveDisabled: true
-      });
-    expect(getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", true)).toMatchObject({
+    expect(
+      getHumanDesignInterpretationState({ ...calculation(), status: "archived" }, "", false)
+    ).toMatchObject({
+      aiDisabled: true,
+      aiDisabledReason: "Архивный расчёт нельзя изменять",
+      saveDisabled: true,
+      approveDisabled: true
+    });
+    expect(
+      getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", true)
+    ).toMatchObject({
       aiDisabled: true,
       aiDisabledReason: "Дождитесь завершения текущего действия",
       saveDisabled: true,
       approveDisabled: true
     });
-    expect(getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", false)).toMatchObject({
+    expect(
+      getHumanDesignInterpretationState(calculation(), "Сохранённый AI draft", false)
+    ).toMatchObject({
       aiDisabled: false,
       aiDisabledReason: null,
       latestText: "Сохранённый AI draft",
@@ -38,7 +43,9 @@ describe("Human Design interpretation state", () => {
       saveDisabled: true,
       approveDisabled: false
     });
-    expect(getHumanDesignInterpretationState(calculation(), "Изменённый draft", false)).toMatchObject({
+    expect(
+      getHumanDesignInterpretationState(calculation(), "Изменённый draft", false)
+    ).toMatchObject({
       isDirty: true,
       saveDisabled: false,
       approveDisabled: true
@@ -71,6 +78,7 @@ function calculation() {
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     module: "human_design" as const,
     mode: "individual" as const,
+    interpretationMode: null,
     methodCode: "human_design_classic",
     title: "Марина Краснова — Дизайн человека",
     status: "linked" as const,

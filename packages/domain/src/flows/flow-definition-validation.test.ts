@@ -6,7 +6,10 @@ import {
 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 
-import { validateFlowDefinition } from "./flow-definition-validation";
+import {
+  projectFlowDefinitionValidationV1,
+  validateFlowDefinition
+} from "./flow-definition-validation";
 
 const runtimeUnavailable = [
   "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"
@@ -61,7 +64,7 @@ describe("flow definition validation", () => {
     expect(
       validateFlowDefinition({ graph: legacyGraph, activationBlockers: runtimeUnavailable })
     ).toEqual({
-      schemaVersion: "flow-definition-validation.v1",
+      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v1",
       publishable: false,
       activatable: false,
@@ -87,6 +90,7 @@ describe("flow definition validation", () => {
     });
 
     expect(result).toMatchObject({
+      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -98,8 +102,32 @@ describe("flow definition validation", () => {
         edges: [{ id: "manual-to-completed" }]
       },
       capabilityManifest: {
+        schemaVersion: "flow-capability-manifest.v2",
+        executionSemanticsVersion: "flow-interpreter.v1",
+        triggerMatcher: {
+          kind: "manual_client",
+          configSchemaVersion: 1,
+          matcherContractVersion: 1,
+          eventSchemaVersion: 1
+        }
+      }
+    });
+  });
+
+  it("projects the current validation result into the exact legacy transport envelope", () => {
+    const current = validateFlowDefinition({
+      graph: validGraph,
+      activationBlockers: runtimeUnavailable
+    });
+
+    expect(projectFlowDefinitionValidationV1(current)).toMatchObject({
+      schemaVersion: "flow-definition-validation.v1",
+      capabilityManifest: {
         schemaVersion: "flow-capability-manifest.v1",
-        executionSemanticsVersion: "flow-interpreter.v1"
+        nodeExecutors: [
+          { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
+          { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+        ]
       }
     });
   });

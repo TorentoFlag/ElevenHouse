@@ -1,8 +1,10 @@
 import {
   flowGraphSchema,
   flowGraphV2Schema,
+  publishFlowDefinitionCompatibleResponseSchema,
   type FlowGraphRead,
   type FlowGraphV2,
+  type FlowCapabilityManifest,
   type FlowPresentationV1
 } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
@@ -14,11 +16,13 @@ import {
   FlowDefinitionIntegrityError,
   FlowDefinitionMigrationRequiredError,
   FlowDefinitionPublishValidationError,
+  parseFlowDefinitionPublishedVersionRecord,
   publishFlowDefinitionV2,
   updateFlowDefinitionDraftV2,
   type FlowDefinitionControlRecord,
   type FlowDefinitionControlStore
 } from "./flow-definition-control-plane";
+import { compileFlowGraphV2, projectFlowCapabilityManifestV1 } from "./flow-graph-v2-compiler";
 
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
 const flowId = "22222222-2222-4222-8222-222222222222";
@@ -68,6 +72,12 @@ const presentation: FlowPresentationV1 = {
   ],
   viewport: { x: 0, y: 0, zoom: 1 }
 };
+
+const graphCompilation = compileFlowGraphV2(graph);
+if (!graphCompilation.capabilityManifest) throw new Error("Expected publishable graph fixture");
+const historicalCapabilityManifest = projectFlowCapabilityManifestV1(
+  graphCompilation.capabilityManifest
+);
 
 describe("flow definition v2 control plane", () => {
   it("updates an exact draft revision through a canonical idempotent command", async () => {
@@ -176,7 +186,9 @@ describe("flow definition v2 control plane", () => {
       flowId,
       request: { expectedRevision: 3 },
       idempotencyKey: "flow-publish-0001",
-      now
+      now,
+      responseVersion: "current_v3",
+      persistenceVersion: "current_v2"
     });
 
     expect(result).toMatchObject({
@@ -188,6 +200,7 @@ describe("flow definition v2 control plane", () => {
         latestPublishedVersion: 1
       },
       version: {
+        schemaVersion: "flow-published-version.v3",
         id: versionId,
         flowId,
         sourceRevision: 3,
@@ -195,8 +208,14 @@ describe("flow definition v2 control plane", () => {
           nodes: [{ id: "completed" }, { id: "manual" }]
         },
         capabilityManifest: {
-          schemaVersion: "flow-capability-manifest.v1",
-          executionSemanticsVersion: "flow-interpreter.v1"
+          schemaVersion: "flow-capability-manifest.v2",
+          executionSemanticsVersion: "flow-interpreter.v1",
+          triggerMatcher: {
+            kind: "manual_client",
+            configSchemaVersion: 1,
+            matcherContractVersion: 1,
+            eventSchemaVersion: 1
+          }
         }
       }
     });
@@ -207,9 +226,161 @@ describe("flow definition v2 control plane", () => {
           scope: "flows.definition.publish.v2",
           expectedRevision: 3,
           requestHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/)
-        })
+        }),
+        persistenceVersion: "current_v2"
       })
     );
+  });
+
+  it("rejects a fresh v1 publication response but accepts its exact historical replay", async () => {
+    const created = createStore(
+      {},
+      {
+        publicationManifest: historicalCapabilityManifest,
+        publishResultKind: "created"
+      }
+    );
+    const replayed = createStore(
+      {},
+      {
+        publicationManifest: historicalCapabilityManifest,
+        publishResultKind: "replayed"
+      }
+    );
+    const input = {
+      actorUserId: ownerUserId,
+      ownerUserId,
+      flowId,
+      request: { expectedRevision: 3 },
+      idempotencyKey: "flow-publish-v1-boundary",
+      now,
+      responseVersion: "current_v3",
+      persistenceVersion: "current_v2"
+    } as const;
+
+    await expect(
+      publishFlowDefinitionV2({ ...input, store: created.store })
+    ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
+    expect(created.publishWrites).toBe(0);
+    await expect(
+      publishFlowDefinitionV2({ ...input, store: replayed.store })
+    ).resolves.toMatchObject({
+      version: { capabilityManifest: historicalCapabilityManifest }
+    });
+  });
+
+  it("allows an exact legacy transport projection without downgrading the prepared snapshot", async () => {
+    const fake = createStore();
+
+    await expect(
+      publishFlowDefinitionV2({
+        store: fake.store,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        flowId,
+        request: { expectedRevision: 3 },
+        idempotencyKey: "flow-publish-legacy-transport",
+        now,
+        responseVersion: "legacy_v2",
+        persistenceVersion: "current_v2"
+      })
+    ).resolves.toMatchObject({
+      version: {
+        schemaVersion: "flow-published-version.v2",
+        capabilityManifest: historicalCapabilityManifest
+      }
+    });
+    expect(fake.publishWrites).toBe(1);
+  });
+
+  it("rejects current wire publication when the persistence rollout is still legacy", async () => {
+    const fake = createStore();
+
+    await expect(
+      publishFlowDefinitionV2({
+        store: fake.store,
+        actorUserId: ownerUserId,
+        ownerUserId,
+        flowId,
+        request: { expectedRevision: 3 },
+        idempotencyKey: "flow-publish-invalid-rollout-pair",
+        now,
+        responseVersion: "current_v3",
+        persistenceVersion: "legacy_v1"
+      })
+    ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
+    expect(fake.store.executePublish).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when persisted v2 publication metadata has an unknown manifest schema", () => {
+    expect(() =>
+      parseFlowDefinitionPublishedVersionRecord({
+        id: versionId,
+        flowId,
+        version: 1,
+        sourceRevision: 3,
+        approvalMode: "manual_approve",
+        graph: normalizedGraph,
+        presentation,
+        capabilityManifest: {
+          schemaVersion: "flow-capability-manifest.forged",
+          executionSemanticsVersion: "flow-interpreter.v1",
+          nodeExecutors: [],
+          requiredCapabilities: []
+        },
+        publishedAt: now
+      })
+    ).toThrow(FlowDefinitionIntegrityError);
+  });
+
+  it("parses exact current and historical published-version records without transport fields", () => {
+    expect(
+      parseFlowDefinitionPublishedVersionRecord({
+        id: versionId,
+        flowId,
+        version: 2,
+        sourceRevision: 3,
+        approvalMode: "manual_approve",
+        graph: normalizedGraph,
+        presentation,
+        capabilityManifest: graphCompilation.capabilityManifest,
+        publishedAt: now
+      })
+    ).toEqual({
+      id: versionId,
+      flowId,
+      version: 2,
+      sourceRevision: 3,
+      approvalMode: "manual_approve",
+      graph: normalizedGraph,
+      presentation,
+      capabilityManifest: graphCompilation.capabilityManifest,
+      publishedAt: now
+    });
+
+    expect(
+      parseFlowDefinitionPublishedVersionRecord({
+        id: versionId,
+        flowId,
+        version: 1,
+        sourceRevision: null,
+        approvalMode: "manual_approve",
+        graph: legacyGraph(),
+        presentation: null,
+        capabilityManifest: null,
+        publishedAt: now
+      })
+    ).toEqual({
+      id: versionId,
+      flowId,
+      version: 1,
+      sourceRevision: null,
+      approvalMode: "manual_approve",
+      graph: legacyGraph(),
+      presentation: null,
+      capabilityManifest: null,
+      publishedAt: now
+    });
   });
 
   it("rejects an unpublishable graph and invalid idempotency key before writes", async () => {
@@ -224,7 +395,9 @@ describe("flow definition v2 control plane", () => {
         flowId,
         request: { expectedRevision: 3 },
         idempotencyKey: "flow-publish-invalid",
-        now
+        now,
+        responseVersion: "current_v3",
+        persistenceVersion: "current_v2"
       })
     ).rejects.toBeInstanceOf(FlowDefinitionPublishValidationError);
     expect(invalid.publishWrites).toBe(0);
@@ -238,7 +411,9 @@ describe("flow definition v2 control plane", () => {
         flowId,
         request: { expectedRevision: 3 },
         idempotencyKey: "bad key",
-        now
+        now,
+        responseVersion: "current_v3",
+        persistenceVersion: "current_v2"
       })
     ).rejects.toBeInstanceOf(FlowDefinitionIdempotencyKeyInvalidError);
     expect(malformedKey.store.executePublish).not.toHaveBeenCalled();
@@ -326,7 +501,13 @@ describe("flow definition v2 control plane", () => {
   });
 });
 
-function createStore(overrides: Partial<FlowDefinitionControlRecord> = {}): {
+function createStore(
+  overrides: Partial<FlowDefinitionControlRecord> = {},
+  options: {
+    readonly publicationManifest?: FlowCapabilityManifest;
+    readonly publishResultKind?: "created" | "replayed";
+  } = {}
+): {
   readonly store: FlowDefinitionControlStore;
   readonly updateWrites: number;
   readonly publishWrites: number;
@@ -367,9 +548,16 @@ function createStore(overrides: Partial<FlowDefinitionControlRecord> = {}): {
       }
       const origin = current.origin;
       if (origin === null) throw new Error("V2 publication requires definition origin");
-      publishWrites += 1;
+      const publicationManifest =
+        options.publicationManifest ??
+        (input.responseVersion === "current_v3"
+          ? prepared.value.capabilityManifest
+          : prepared.value.legacyCapabilityManifest);
       const version = {
-        schemaVersion: "flow-published-version.v2" as const,
+        schemaVersion:
+          publicationManifest.schemaVersion === "flow-capability-manifest.v1"
+            ? ("flow-published-version.v2" as const)
+            : ("flow-published-version.v3" as const),
         id: versionId,
         flowId,
         version: 1,
@@ -378,31 +566,37 @@ function createStore(overrides: Partial<FlowDefinitionControlRecord> = {}): {
         approvalMode: prepared.value.approvalMode,
         graph: prepared.value.graph,
         presentation: prepared.value.presentation,
-        capabilityManifest: prepared.value.capabilityManifest,
+        capabilityManifest: publicationManifest,
         publishedAt: now
       };
+      const body = publishFlowDefinitionCompatibleResponseSchema.parse({
+        flow: {
+          schemaVersion: "flow-definition.v2" as const,
+          ...current,
+          origin,
+          state: "versioned" as const,
+          revision: current.revision + 1,
+          draftBaseVersionId: null,
+          draftGraph: prepared.value.graph,
+          latestPublishedVersionId: versionId,
+          latestPublishedVersion: 1,
+          updatedAt: now,
+          publishedAt: now
+        },
+        version
+      });
+      const resultKind = options.publishResultKind ?? ("created" as const);
+      if (resultKind === "created") {
+        input.assertCreatedResponse(body);
+        publishWrites += 1;
+      }
       return {
-        kind: "created" as const,
+        kind: resultKind,
         outcome: {
           kind: "succeeded" as const,
           response: {
             statusCode: 200 as const,
-            body: {
-              flow: {
-                schemaVersion: "flow-definition.v2" as const,
-                ...current,
-                origin,
-                state: "versioned" as const,
-                revision: current.revision + 1,
-                draftBaseVersionId: null,
-                draftGraph: prepared.value.graph,
-                latestPublishedVersionId: versionId,
-                latestPublishedVersion: 1,
-                updatedAt: now,
-                publishedAt: now
-              },
-              version
-            }
+            body
           }
         }
       };

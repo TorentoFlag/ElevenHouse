@@ -5,10 +5,12 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
   UnprocessableEntityException
 } from "@nestjs/common";
 import {
+  cancelFlowRunRequestSchema,
   cancelFlowRunResponseSchema,
   createFlowDefinitionV2RequestSchema,
   createNextFlowDraftV2RequestSchema,
@@ -30,12 +32,12 @@ import {
   migrateFlowDefinitionV2RequestSchema,
   migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionCompatibleResponseSchema,
   simulateFlowRunRequestSchema,
   simulateFlowRunResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
-  validateFlowDefinitionResponseSchema,
+  validateFlowDefinitionResponseV2Schema,
   type CancelFlowRunResponse,
   type DecideFlowApprovalResponse,
   type FlowDefinitionDetailV2,
@@ -48,13 +50,13 @@ import {
   type ListFlowRunsResponse,
   type ManualFlowRunResponse,
   type MigrateFlowDefinitionV2Response,
-  type PublishFlowDefinitionV2Response,
+  type PublishFlowDefinitionCompatibleResponse,
   type SimulateFlowRunResponse,
-  type ValidateFlowDefinitionResponse
+  type ValidateFlowDefinitionCompatibleResponse
 } from "@elevenhouse/contracts";
 import {
   activateFlow,
-  cancelFlowRun as cancelFlowRunUseCase,
+  cancelDurableFlowRun,
   createFlowDefinitionV2,
   createNextFlowDraftV2,
   dispatchFlowRuntimeEvent,
@@ -80,6 +82,11 @@ import {
   FlowDefinitionTemplateParametersInvalidError,
   FlowDefinitionTemplateVersionConflictError,
   FlowRuntimeExecutionUnavailableError,
+  FlowRuntimeCommandBusyError,
+  FlowRuntimeCommandIntegrityError,
+  FlowRuntimeIdempotencyConflictError,
+  FlowRuntimeIdempotencyExpiredError,
+  FlowRuntimeIdempotencyKeyInvalidError,
   FlowStatusTransitionError,
   getFlowDefinitionTemplateCatalogV2,
   getFlowDefinitionV2 as getFlowDefinitionV2UseCase,
@@ -90,6 +97,7 @@ import {
   migrateFlowDefinitionV2,
   pauseFlow,
   publishFlowDefinitionV2,
+  projectFlowDefinitionValidationV1,
   simulateFlowRun,
   updateFlowDefinitionDraftV2,
   validateFlowDefinition as validateFlowDefinitionUseCase,
@@ -97,15 +105,28 @@ import {
   type DispatchFlowRuntimeEventResult,
   type FlowDefinitionControlStore,
   type FlowDefinitionQueryStore,
+  type FlowRunCancellationRejectionResponse,
+  type FlowRunCancellationStore,
   type FlowRuntimeStore,
   type FlowStore
 } from "@elevenhouse/domain";
+import type {
+  FlowPublicationResponseVersion,
+  FlowValidationResponseVersion
+} from "./flow-response-negotiation";
+import {
+  selectFlowPublicationVersions,
+  selectFlowValidationResponseVersion,
+  type FlowPublicationRolloutPolicy
+} from "./flow-publication-rollout";
 import { z, type ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import {
   FLOW_DEFINITION_CONTROL_STORE,
   FLOW_DEFINITION_QUERY_STORE,
+  FLOW_PUBLICATION_ROLLOUT_POLICY,
+  FLOW_RUN_CANCELLATION_STORE,
   FLOW_RUNTIME_STORE,
   FLOW_STORE
 } from "./flows.tokens";
@@ -125,6 +146,10 @@ export class FlowsService {
     @Inject(FLOW_DEFINITION_QUERY_STORE)
     private readonly definitionQueryStore: FlowDefinitionQueryStore,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
+    @Inject(FLOW_RUN_CANCELLATION_STORE)
+    private readonly cancellationStore: FlowRunCancellationStore,
+    @Inject(FLOW_PUBLICATION_ROLLOUT_POLICY)
+    private readonly publicationRolloutPolicy: FlowPublicationRolloutPolicy,
     private readonly clock: SystemClock
   ) {}
 
@@ -198,8 +223,9 @@ export class FlowsService {
   async validateFlowDefinition(
     flowId: string,
     body: unknown,
-    request: AstrologerSessionRequest
-  ): Promise<ValidateFlowDefinitionResponse> {
+    request: AstrologerSessionRequest,
+    responseVersion: FlowValidationResponseVersion = "legacy_v1"
+  ): Promise<ValidateFlowDefinitionCompatibleResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const flow = await mapFlowDefinitionErrors(() =>
@@ -215,12 +241,13 @@ export class FlowsService {
     const activationBlockers = FLOW_RUNTIME_AVAILABILITY.executionAvailable
       ? []
       : [FLOW_RUNTIME_AVAILABILITY.reasonCode];
-    return validateFlowDefinitionResponseSchema.parse(
-      validateFlowDefinitionUseCase({
-        graph: parsedBody.graph,
-        activationBlockers
-      })
+    const current = validateFlowDefinitionResponseV2Schema.parse(
+      validateFlowDefinitionUseCase({ graph: parsedBody.graph, activationBlockers })
     );
+    return selectFlowValidationResponseVersion(this.publicationRolloutPolicy, responseVersion) ===
+      "current_v2"
+      ? current
+      : projectFlowDefinitionValidationV1(current);
   }
 
   async updateFlowDraft(
@@ -251,11 +278,16 @@ export class FlowsService {
     flowId: string,
     body: unknown,
     idempotencyKey: string | undefined,
-    request: AstrologerSessionRequest
-  ): Promise<PublishFlowDefinitionV2Response> {
+    request: AstrologerSessionRequest,
+    responseVersion: FlowPublicationResponseVersion = "legacy_v2"
+  ): Promise<PublishFlowDefinitionCompatibleResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const command = parseContract(publishFlowDefinitionV2RequestSchema, body);
+    const publicationVersions = selectFlowPublicationVersions(
+      this.publicationRolloutPolicy,
+      responseVersion
+    );
     return mapFlowDefinitionErrors(async () => {
       const result = await publishFlowDefinitionV2({
         store: this.definitionStore,
@@ -264,10 +296,11 @@ export class FlowsService {
         flowId: parsedFlowId,
         request: command,
         idempotencyKey: idempotencyKey ?? "",
-        now: this.clock.now().toISOString()
+        now: this.clock.now().toISOString(),
+        ...publicationVersions
       });
       if (!result) throw flowDefinitionNotFound();
-      return publishFlowDefinitionV2ResponseSchema.parse(result);
+      return publishFlowDefinitionCompatibleResponseSchema.parse(result);
     });
   }
 
@@ -458,21 +491,28 @@ export class FlowsService {
 
   async cancelFlowRun(
     runId: string,
+    idempotencyKey: string | undefined,
+    body: unknown,
     request: AstrologerSessionRequest
   ): Promise<CancelFlowRunResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedRunId = parseContract(flowIdParamSchema, runId);
-    const run = await mapRuntimeExecutionUnavailable(() =>
-      cancelFlowRunUseCase({
-        runtimeStore: this.runtimeStore,
+    const parsedRequest = parseContract(cancelFlowRunRequestSchema, body ?? {});
+    const result = await mapFlowRunCancellationErrors(() =>
+      cancelDurableFlowRun({
+        store: this.cancellationStore,
+        actorUserId: ownerUserId,
         ownerUserId,
         runId: parsedRunId,
-        now: this.clock.now().toISOString()
+        idempotencyKey: idempotencyKey ?? "",
+        request: parsedRequest
       })
     );
-    if (!run) throw flowNotFound();
+    if (result.outcome.kind === "rejected") {
+      throwFlowRunCancellationRejection(result.outcome.response);
+    }
 
-    return cancelFlowRunResponseSchema.parse({ run });
+    return cancelFlowRunResponseSchema.parse(result.outcome.response.body);
   }
 
   async listFlowApprovals(
@@ -677,6 +717,36 @@ async function mapRuntimeExecutionUnavailable<T>(operation: () => Promise<T>): P
     }
     throw error;
   }
+}
+
+async function mapFlowRunCancellationErrors<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof FlowRuntimeIdempotencyKeyInvalidError) {
+      throw new BadRequestException({ code: error.code });
+    }
+    if (
+      error instanceof FlowRuntimeIdempotencyConflictError ||
+      error instanceof FlowRuntimeIdempotencyExpiredError
+    ) {
+      throw new ConflictException({ code: error.code });
+    }
+    if (error instanceof FlowRuntimeCommandBusyError) {
+      throw new ServiceUnavailableException({ code: error.code });
+    }
+    if (error instanceof FlowRuntimeCommandIntegrityError) {
+      throw new InternalServerErrorException({ code: error.code });
+    }
+    throw error;
+  }
+}
+
+function throwFlowRunCancellationRejection(response: FlowRunCancellationRejectionResponse): never {
+  if (response.statusCode === 404) {
+    throw new NotFoundException(response.body);
+  }
+  throw new ConflictException(response.body);
 }
 
 function flowRuntimeExecutionUnavailableConflict(

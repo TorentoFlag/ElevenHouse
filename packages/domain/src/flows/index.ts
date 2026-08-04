@@ -1,5 +1,6 @@
 export * from "./flow-validation";
 export * from "./flow-graph-v2-compiler";
+export * from "./flow-capability-manifest-integrity";
 export * from "./flow-definition-validation";
 export * from "./flow-definition-control-plane";
 export * from "./flow-definition-query";
@@ -14,3 +15,7 @@ export * from "./flow-runtime-store";
 export * from "./flow-runtime-use-cases";
 export * from "./flow-runtime-outbox";
 export * from "./flow-runtime-availability";
+export * from "./flow-execution-interpreter";
+export * from "./flow-execution-store";
+export * from "./flow-run-cancellation";
+export * from "./flow-runtime-dispatch-outbox-store";

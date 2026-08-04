@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
+import {
+  getManualInterpretationSaveAttempt,
+  shouldRetainManualInterpretationSaveAttempt,
+  type ManualInterpretationSaveAttempt
+} from "../../features/calculations/model/manualInterpretationSaveAttempt";
 import type { ClientSelectOption } from "../../features/clients/model/clientSelectorModel";
 import {
   createHumanDesignViewModel,
@@ -53,21 +58,22 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   const downloadPdfMutation = useDownloadHumanDesignPdfMutation();
   const [mode, setMode] = useState<HumanDesignWorkspaceMode>("individual");
   const [selectedClient, setSelectedClient] = useState<ClientSelectOption | null>(null);
-  const [selectedPartnerClient, setSelectedPartnerClient] =
-    useState<ClientSelectOption | null>(null);
-  const [savedResponse, setSavedResponse] = useState<
-    ReturnType<typeof toHumanDesignCalculationResponse> | null
-  >(null);
+  const [selectedPartnerClient, setSelectedPartnerClient] = useState<ClientSelectOption | null>(
+    null
+  );
+  const [savedResponse, setSavedResponse] = useState<ReturnType<
+    typeof toHumanDesignCalculationResponse
+  > | null>(null);
   const [transitInstantValue, setTransitInstantValue] = useState(() =>
     toDatetimeLocalValue(new Date())
   );
   const [selectedDetailKey, setSelectedDetailKey] = useState<HumanDesignDetailKey>("type");
-  const [openToolbarOverlay, setOpenToolbarOverlay] =
-    useState<HumanDesignToolbarOverlay>(null);
+  const [openToolbarOverlay, setOpenToolbarOverlay] = useState<HumanDesignToolbarOverlay>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [aiDraftErrorMessage, setAiDraftErrorMessage] = useState<string | null>(null);
   const [pdfErrorMessage, setPdfErrorMessage] = useState<string | null>(null);
   const [interpretationText, setInterpretationText] = useState("");
+  const manualInterpretationSaveAttemptRef = useRef<ManualInterpretationSaveAttempt | null>(null);
   const pdfLocale = "ru";
   const calculations = useMemo(
     () =>
@@ -81,16 +87,14 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     () =>
       savedResponse
         ? createHumanDesignViewModel(savedResponse.result)
-      : previewMutation.data
+        : previewMutation.data
           ? createHumanDesignViewModel(previewMutation.data.result)
           : null,
     [previewMutation.data, savedResponse]
   );
   const transitModel = useMemo(
     () =>
-      transitMutation.data
-        ? createHumanDesignTransitViewModel(transitMutation.data.result)
-        : null,
+      transitMutation.data ? createHumanDesignTransitViewModel(transitMutation.data.result) : null,
     [transitMutation.data]
   );
   const pdfQuery = useHumanDesignPdfQuery({
@@ -217,6 +221,12 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     },
     onSelectDetail: setSelectedDetailKey,
     onChangeAiDraftText: (value) => {
+      if (
+        manualInterpretationSaveAttemptRef.current &&
+        manualInterpretationSaveAttemptRef.current.text !== value.trim()
+      ) {
+        manualInterpretationSaveAttemptRef.current = null;
+      }
       setInterpretationText(value);
       setAiDraftErrorMessage(null);
     },
@@ -224,7 +234,9 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
       setOpenToolbarOverlay(null);
       try {
         const response = toHumanDesignCalculationResponse(calculation);
-        setMode(mode === "transit" && response.result.mode === "individual" ? "transit" : calculation.mode);
+        setMode(
+          mode === "transit" && response.result.mode === "individual" ? "transit" : calculation.mode
+        );
         setSavedResponse(response);
         setSelectedClient(toClientOptionFromHumanDesignCalculation(calculation, "subject"));
         setSelectedPartnerClient(toClientOptionFromHumanDesignCalculation(calculation, "partner"));
@@ -275,6 +287,7 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
   };
 
   function clearResultState(nextMode: HumanDesignWorkspaceMode) {
+    manualInterpretationSaveAttemptRef.current = null;
     setSavedResponse(null);
     setSelectedDetailKey(defaultDetailKey(nextMode));
     setErrorMessage(null);
@@ -487,16 +500,27 @@ export function useHumanDesignPageController(): HumanDesignPageViewProps {
     if (!savedResponse || interpretationState.saveDisabled) return;
     setErrorMessage(null);
     setAiDraftErrorMessage(null);
+    const attempt = getManualInterpretationSaveAttempt(manualInterpretationSaveAttemptRef.current, {
+      calculationId: savedResponse.calculation.id,
+      resultChecksum: savedResponse.calculation.resultChecksum,
+      text: interpretationText
+    });
+    manualInterpretationSaveAttemptRef.current = attempt;
     try {
       const calculation = await saveInterpretationMutation.mutateAsync({
         calculationId: savedResponse.calculation.id,
+        idempotencyKey: attempt.idempotencyKey,
         body: {
-          text: interpretationText,
+          text: attempt.text,
           expectedResultChecksum: savedResponse.calculation.resultChecksum
         }
       });
+      manualInterpretationSaveAttemptRef.current = null;
       setSavedResponse(toHumanDesignCalculationResponse(calculation));
     } catch (error) {
+      if (!shouldRetainManualInterpretationSaveAttempt(error)) {
+        manualInterpretationSaveAttemptRef.current = null;
+      }
       setAiDraftErrorMessage(getHumanDesignAiDraftErrorMessage(error));
     }
   }
