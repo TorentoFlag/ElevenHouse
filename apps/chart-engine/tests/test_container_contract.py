@@ -73,6 +73,7 @@ def test_chart_engine_container_uses_a_reproducible_runtime_contract() -> None:
     assert "path: ../env/.env.chart-worker.production" in chart_worker_service
     assert "format: raw" in chart_worker_service
     assert "../env/.env.production" not in chart_worker_service
+    assert "- chart-provider" in astrologer_api_service
     assert "stop_grace_period: 135s" in chart_worker_service
     assert "- chart-provider" in chart_worker_service
     assert "- chart-provider" in chart_engine_service
