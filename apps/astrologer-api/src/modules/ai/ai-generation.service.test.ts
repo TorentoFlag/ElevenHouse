@@ -239,7 +239,7 @@ describe("AiGenerationService", () => {
     expect(provider.generateStructured).not.toHaveBeenCalled();
   });
 
-  it("requires exact consent and resource evidence for the registered chart feature", async () => {
+  it("requires calculation evidence for the registered chart feature", async () => {
     const provider = { generateStructured: vi.fn() };
     const rateLimiter = {
       consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
@@ -266,6 +266,56 @@ describe("AiGenerationService", () => {
     expect(rateLimiter.consume).not.toHaveBeenCalled();
     expect(usageRecorder.start).not.toHaveBeenCalled();
     expect(provider.generateStructured).not.toHaveBeenCalled();
+  });
+
+  it("generates a chart draft without client consent when its calculation evidence is present", async () => {
+    const usageRecorder = createUsageRecorder();
+    const generateStructured = vi.fn(async () => ({
+      output: { content: "Generated" },
+      provider: "openai" as const,
+      model: "gpt-5.4-mini" as const,
+      finishReason: "completed" as const
+    }));
+    const provider: AiGenerationPort = {
+      generateStructured: generateStructured as unknown as AiGenerationPort["generateStructured"]
+    };
+    const service = new AiGenerationService(
+      provider,
+      { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
+      usageRecorder,
+      createConfigService(true)
+    );
+
+    await expect(
+      service.generate({
+        prompt,
+        input: { title: "Calculated chart" },
+        ownerUserId: consentAstrologerUserId,
+        feature: "chart.interpretationDraft",
+        consentAuthorizations: [],
+        usageEvidence: {
+          processingAuthorityVersion: "openai-processing-authority.v1",
+          resourceEvidence: {
+            resourceType: "chart_calculation",
+            resourceId: "88888888-8888-4888-8888-888888888888",
+            sourceChecksum: `sha256:${"b".repeat(64)}`
+          }
+        }
+      })
+    ).resolves.toMatchObject({ output: { content: "Generated" } });
+
+    expect(generateStructured).toHaveBeenCalledOnce();
+    expect(usageRecorder.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        consentAuthorizations: [],
+        processingAuthorityVersion: "openai-processing-authority.v1",
+        resourceEvidence: {
+          resourceType: "chart_calculation",
+          resourceId: "88888888-8888-4888-8888-888888888888",
+          sourceChecksum: `sha256:${"b".repeat(64)}`
+        }
+      })
+    );
   });
 
   it("renders prompts and records successful usage", async () => {

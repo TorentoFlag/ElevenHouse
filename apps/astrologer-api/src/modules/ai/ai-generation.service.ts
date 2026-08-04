@@ -67,10 +67,10 @@ export class AiGenerationService {
     const hasConsentAuthorizations = (input.consentAuthorizations?.length ?? 0) > 0;
     const hasUsageEvidence = input.usageEvidence !== undefined;
     if (
-      (featurePolicy.consentEvidence === "required" &&
-        (!hasConsentAuthorizations || !hasUsageEvidence)) ||
-      (featurePolicy.consentEvidence === "forbidden" &&
-        (hasConsentAuthorizations || hasUsageEvidence))
+      (featurePolicy.consentEvidence === "required" && !hasConsentAuthorizations) ||
+      (featurePolicy.consentEvidence === "forbidden" && hasConsentAuthorizations) ||
+      (featurePolicy.usageEvidence === "required" && !hasUsageEvidence) ||
+      (featurePolicy.usageEvidence === "forbidden" && hasUsageEvidence)
     ) {
       throw createAiUsageEvidenceHttpException();
     }
