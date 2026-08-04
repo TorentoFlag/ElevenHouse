@@ -227,7 +227,7 @@ describe("ChartEnginePage", () => {
     const emptyState = screen.getByRole("status", { name: "Выберите клиента" });
     expect(within(emptyState).getByText("Выберите клиента")).toBeInTheDocument();
     expect(
-      within(emptyState).getByText(/карта и данные расчёта появятся после выбора клиента/i)
+      within(emptyState).getByText(/карта появится после выбора клиента/i)
     ).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Сводка карты" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
@@ -721,7 +721,7 @@ describe("ChartEnginePage", () => {
     expect(screen.getByRole("button", { name: "Трактовки" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Планеты" })).not.toBeInTheDocument();
     expect(
-      screen.getByText("После расчёта здесь появятся трактовки из canonical result.")
+      screen.getByText("После расчёта здесь появятся трактовки.")
     ).toBeInTheDocument();
   });
 

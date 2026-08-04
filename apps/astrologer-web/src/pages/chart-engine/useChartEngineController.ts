@@ -248,7 +248,7 @@ export function useChartEngineController() {
     onError: (error, _variables, submissionContext) => {
       if (submissionContext?.epoch !== submissionEpochRef.current) return;
       setCalculationErrorMessage(
-        error instanceof Error ? error.message : controllerCopy.startFailed
+        errorMessageFrom(error, controllerCopy.startFailed) ?? controllerCopy.startFailed
       );
     }
   });
@@ -575,15 +575,19 @@ export function useChartEngineController() {
   const recalculationRecoveryErrorMessage = recoveredTargetChecksumMismatch
     ? controllerCopy.recalculationChanged
     : recalculationTargetState.errorMessage;
-  const pollErrorMessage = errorMessageFrom(jobQuery.error) ?? recalculationRecoveryErrorMessage;
-  const resultErrorMessage = errorMessageFrom(calculationQuery.error);
-  const savedCalculationErrorMessage = errorMessageFrom(savedCalculationQuery.error);
-  const clientErrorMessage = errorMessageFrom(restoredClientError);
+  const pollErrorMessage =
+    errorMessageFrom(jobQuery.error, controllerCopy.calculationFailed) ?? recalculationRecoveryErrorMessage;
+  const resultErrorMessage = errorMessageFrom(calculationQuery.error, controllerCopy.calculationFailed);
+  const savedCalculationErrorMessage = errorMessageFrom(
+    savedCalculationQuery.error,
+    controllerCopy.calculationFailed
+  );
+  const clientErrorMessage = errorMessageFrom(restoredClientError, controllerCopy.calculationFailed);
   const identityErrorMessage = getChartIdentityErrorMessage(
     calculationState.identity,
     controllerCopy
   );
-  const linkErrorMessage = errorMessageFrom(linkCalculationMutation.error);
+  const linkErrorMessage = errorMessageFrom(linkCalculationMutation.error, controllerCopy.calculationFailed);
   const horaryPlaceErrorMessage = getHoraryPlaceReferenceErrorMessage(
     horaryPlaceReferenceQuery.error,
     chartCopy
@@ -620,10 +624,12 @@ export function useChartEngineController() {
     locale: pdfLocale
   });
   const pdfErrorMessage =
-    pdfActionErrorMessage ?? errorMessageFrom(pdfQuery.error) ?? pdfAction.errorMessage;
+    pdfActionErrorMessage ??
+    errorMessageFrom(pdfQuery.error, controllerCopy.pdfFailed) ??
+    pdfAction.errorMessage;
   const jobFailureMessage =
     jobQuery.data?.status === "failed"
-      ? (jobQuery.data.failureMessage ?? controllerCopy.calculationFailed)
+      ? controllerCopy.calculationFailed
       : null;
   const handlePdfAction = async () => {
     if (pdfQuery.error) {
@@ -654,7 +660,9 @@ export function useChartEngineController() {
       });
     } catch (error) {
       closeReservedChartPdfWindow({ downloadWindow });
-      setPdfActionErrorMessage(error instanceof Error ? error.message : controllerCopy.pdfFailed);
+      setPdfActionErrorMessage(
+        errorMessageFrom(error, controllerCopy.pdfFailed) ?? controllerCopy.pdfFailed
+      );
     }
   };
   const submitPreparedCalculation = async (requestedMode: ChartEngineMode) => {
@@ -892,8 +900,7 @@ export function useChartEngineController() {
       }
     },
     isSavingBirthData: birthDataMutation.isPending,
-    birthDataError:
-      birthDataMutation.error instanceof Error ? birthDataMutation.error.message : null,
+    birthDataError: errorMessageFrom(birthDataMutation.error, controllerCopy.calculationFailed),
     onSearchBirthPlaces: async (query: string) => birthPlaceSearchMutation.mutateAsync(query),
     onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
       if (!selectedClient) {

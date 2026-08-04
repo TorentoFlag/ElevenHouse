@@ -5,6 +5,7 @@ import {
   getBrowserTimezone,
   getDefaultProgressionTargetDate,
   getDefaultTransitMoment,
+  errorMessageFrom,
   getHoraryPlaceReferenceErrorMessage
 } from "./chartEngineControllerState";
 
@@ -51,5 +52,11 @@ describe("chartEngineControllerState", () => {
     expect(
       getHoraryPlaceReferenceErrorMessage(new HttpError(status, body), chartEngineCopyByLocale.en)
     ).toBe(message);
+  });
+
+  it("never exposes a raw HTTP failure in chart workspace copy", () => {
+    expect(
+      errorMessageFrom(new HttpError(404, { message: "calculation record was not found" }), "Chart is unavailable")
+    ).toBe("Chart is unavailable");
   });
 });

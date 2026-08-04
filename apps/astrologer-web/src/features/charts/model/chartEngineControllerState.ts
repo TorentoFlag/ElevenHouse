@@ -192,7 +192,8 @@ export function shouldCommitTerminalJobRecovery(input: {
   );
 }
 
-export function errorMessageFrom(error: unknown): string | null {
+export function errorMessageFrom(error: unknown, fallbackMessage: string): string | null {
+  if (error instanceof HttpError) return fallbackMessage;
   return error instanceof Error ? error.message : null;
 }
 
