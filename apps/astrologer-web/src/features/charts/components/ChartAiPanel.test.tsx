@@ -19,6 +19,25 @@ describe("ChartAiPanel manual save idempotency", () => {
     vi.restoreAllMocks();
   });
 
+  it("explains that the client must grant AI-processing consent before generation", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(application.http, "get").mockResolvedValue(calculationRecord(calculationId));
+    vi.spyOn(application.http, "post").mockRejectedValue(
+      new HttpError(403, { code: "CHART_AI_CONSENT_REQUIRED" })
+    );
+
+    renderPanel(calculationId);
+    await screen.findByRole("textbox");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сгенерировать заново" })).toBeEnabled()
+    );
+    await user.click(screen.getByRole("button", { name: "Сгенерировать заново" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Нужно согласие клиентки на AI-трактовку. Клиентка может дать его в личном кабинете."
+    );
+  });
+
   it.each([
     ["transport failure", new Error("network interrupted")],
     ["server outcome uncertainty", new HttpError(503, null)],
