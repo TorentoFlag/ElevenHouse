@@ -82,10 +82,6 @@ export function buildChartPdfContent(document: ChartPdfDocument): readonly Chart
       items: [
         { label: labels.calculationTitle, value: document.calculationTitle },
         {
-          label: labels.provider,
-          value: `${result.provider.name} ${result.provider.version} · ${result.provider.ephemeris}`
-        },
-        {
           label: labels.houseSystem,
           value: labels.houseSystems[result.settings.houseSystem] ?? result.settings.houseSystem
         },
@@ -495,7 +491,6 @@ type Labels = {
   readonly chartWheel: string;
   readonly chartWheelCaption: string;
   readonly calculationTitle: string;
-  readonly provider: string;
   readonly houseSystem: string;
   readonly nodes: string;
   readonly orbs: string;
@@ -562,7 +557,6 @@ const ru: Labels = {
   chartWheel: "Колесо карты",
   chartWheelCaption: "Векторная схема: дома, оси, планеты и основные аспекты текущего расчёта.",
   calculationTitle: "Название",
-  provider: "Провайдер",
   houseSystem: "Система домов",
   nodes: "Узлы",
   orbs: "Орбы",
@@ -671,7 +665,6 @@ const en: Labels = {
   chartWheel: "Chart wheel",
   chartWheelCaption: "Vector map: houses, axes, planets and major aspects for the current calculation.",
   calculationTitle: "Title",
-  provider: "Provider",
   houseSystem: "House system",
   nodes: "Nodes",
   orbs: "Orbs",

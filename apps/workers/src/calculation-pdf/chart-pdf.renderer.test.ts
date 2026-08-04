@@ -11,7 +11,7 @@ import { buildChartPdfInterpretations } from "./chart-pdf.interpretations";
 import { buildChartPdfContent, createChartPdfRenderer } from "./chart-pdf.renderer";
 
 describe("Chart PDF renderer", () => {
-  it("composes natal chart metadata, points, houses, aspects and distributions", () => {
+  it("composes client-facing natal chart settings, points, houses, aspects and distributions", () => {
     const content = buildChartPdfContent(document());
 
     expect(content[0]).toMatchObject({
@@ -20,7 +20,6 @@ describe("Chart PDF renderer", () => {
     });
     expect(keyValues(content, "Расчёт").map((item) => item.label)).toEqual([
       "Название",
-      "Провайдер",
       "Система домов",
       "Узлы",
       "Орбы"
@@ -43,6 +42,20 @@ describe("Chart PDF renderer", () => {
       ["Мужская", "6"],
       ["Женская", "4"]
     ]);
+  });
+
+  it("keeps chart-engine implementation metadata out of client-facing PDFs", () => {
+    const russianContent = JSON.stringify(buildChartPdfContent(document("ru")));
+    const englishContent = JSON.stringify(buildChartPdfContent(document("en")));
+
+    for (const content of [russianContent, englishContent]) {
+      expect(content).not.toContain("kerykeion");
+      expect(content).not.toContain("5.12.9");
+      expect(content).not.toContain("moshier");
+      expect(content).not.toContain("swiss-ephemeris");
+      expect(content).not.toContain("Провайдер");
+      expect(content).not.toContain("Provider");
+    }
   });
 
   it("renders dictionary interpretations and honest missing-entry actions", () => {
