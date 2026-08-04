@@ -6,7 +6,7 @@ describe("astro calendar route registration", () => {
     const source = readFileSync(new URL("../../router.tsx", import.meta.url), "utf8");
 
     expect(source).toContain('import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage"');
-    expect(source).toContain('path: "/astro-calendar"');
+    expect(source).toContain("path: astrologerRouteContract.protected.astroCalendar");
     expect(source).toContain("element: <AstroCalendarPage />");
   });
 });

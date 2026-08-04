@@ -549,9 +549,9 @@ describe("HumanDesignService", () => {
   });
 
   it("requires an authenticated astrologer session", async () => {
-    await expect(
-      createService().service.preview(previewBody(), { headers: {} })
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(createService().service.preview(previewBody(), { headers: {} })).rejects.toThrow(
+      UnauthorizedException
+    );
   });
 });
 
@@ -645,6 +645,7 @@ function createCalculationStore(): CalculationStore {
         ownerUserId: input.ownerUserId,
         module: input.module,
         mode: input.mode,
+        interpretationMode: input.interpretationMode ?? null,
         methodCode: input.methodCode,
         title: input.title,
         status: input.linkClientIds.length ? "linked" : "calculated",

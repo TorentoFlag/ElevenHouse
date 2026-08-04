@@ -133,6 +133,7 @@ function calculation(overrides: Partial<CalculationRecordResponse>): Calculation
     ownerUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     module: "human_design",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "human_design_classic",
     title: "Марина Краснова — Дизайн человека",
     status: "linked",

@@ -160,6 +160,7 @@ function calculation(overrides: Partial<CalculationRecord> = {}): CalculationRec
     ownerUserId,
     module: "human_design",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "human_design_classic",
     title: "Марина Краснова — Дизайн человека",
     status: "linked",
@@ -191,11 +192,7 @@ function request(): AstrologerSessionRequest {
   } as AstrologerSessionRequest;
 }
 
-async function expectHttp(
-  promise: Promise<unknown>,
-  status: number,
-  code: string
-): Promise<void> {
+async function expectHttp(promise: Promise<unknown>, status: number, code: string): Promise<void> {
   const error = await promise.catch((caught: unknown) => caught);
   expect(error).toBeInstanceOf(HttpException);
   expect((error as HttpException).getStatus()).toBe(status);

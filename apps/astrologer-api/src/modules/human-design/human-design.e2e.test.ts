@@ -241,13 +241,9 @@ describe("Human Design HTTP routes", () => {
   });
 
   it("creates a linked CRM-backed calculation only with CSRF", async () => {
-    const withoutCsrf = await postJson(
-      "/human-design/calculations",
-      persistBody(),
-      {
-        cookie: `${sessionCookieName}=${sessionToken}`
-      }
-    );
+    const withoutCsrf = await postJson("/human-design/calculations", persistBody(), {
+      cookie: `${sessionCookieName}=${sessionToken}`
+    });
     const withCsrf = await postJson("/human-design/calculations", persistBody(), csrfHeaders());
 
     expect(withoutCsrf.status).toBe(403);
@@ -275,11 +271,7 @@ describe("Human Design HTTP routes", () => {
     const withoutCsrf = await postJson("/human-design/calculations", persistPairBody(), {
       cookie: `${sessionCookieName}=${sessionToken}`
     });
-    const withCsrf = await postJson(
-      "/human-design/calculations",
-      persistPairBody(),
-      csrfHeaders()
-    );
+    const withCsrf = await postJson("/human-design/calculations", persistPairBody(), csrfHeaders());
 
     expect(withoutCsrf.status).toBe(403);
     expect(withCsrf.status).toBe(201);
@@ -555,6 +547,7 @@ function createCalculationStore(): CalculationStore {
         ownerUserId: input.ownerUserId,
         module: input.module,
         mode: input.mode,
+        interpretationMode: input.interpretationMode ?? null,
         methodCode: input.methodCode,
         title: input.title,
         status: input.linkClientIds.length ? "linked" : "calculated",

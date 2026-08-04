@@ -129,6 +129,7 @@ function calculation(): CalculationRecord {
     ownerUserId,
     module: "numerology",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: "Голубев Антон",
     status: "linked",

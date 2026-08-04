@@ -148,6 +148,7 @@ function calculation(overrides: Partial<CalculationRecordResponse>): Calculation
     ownerUserId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     module: "numerology",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: "Мария, психоматрица",
     status: "calculated",
