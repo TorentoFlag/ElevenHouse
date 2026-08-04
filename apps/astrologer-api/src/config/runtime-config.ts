@@ -6,9 +6,17 @@ import { flowPublicationRolloutPhaseValues } from "../modules/flows/flow-publica
 const officialOpenAiApiBaseUrl = "https://api.openai.com/v1";
 const officialGeoapifyBaseUrl = "https://api.geoapify.com";
 const productionChartEngineBaseUrl = "http://chart-engine:8012";
+type ChartAiRuntimeEnvironment = "development" | "test" | "production";
 const chartAiProcessingAuthorityRegistry = Object.freeze({
   "verified-test-authority.v1": Object.freeze({
-    environments: Object.freeze(["development", "test"] as const),
+    environments: Object.freeze(["development", "test"] as readonly ChartAiRuntimeEnvironment[]),
+    provider: "openai" as const,
+    processorCode: chartAiConsentProcessorCode,
+    consentPolicyVersion: chartAiConsentPolicyVersion,
+    providerBaseUrl: officialOpenAiApiBaseUrl
+  }),
+  "openai-production-authority.v1": Object.freeze({
+    environments: Object.freeze(["production"] as readonly ChartAiRuntimeEnvironment[]),
     provider: "openai" as const,
     processorCode: chartAiConsentProcessorCode,
     consentPolicyVersion: chartAiConsentPolicyVersion,
@@ -728,7 +736,7 @@ function assertChartAiProcessingAuthority(
     chartAiProcessingAuthorityRegistry[
       authorityVersion as keyof typeof chartAiProcessingAuthorityRegistry
     ];
-  if (!authority || !authority.environments.includes(config.NODE_ENV as "development" | "test")) {
+  if (!authority || !authority.environments.includes(config.NODE_ENV)) {
     throw new Error(
       `ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION=${authorityVersion} is not registered for ${config.NODE_ENV} chart AI`
     );

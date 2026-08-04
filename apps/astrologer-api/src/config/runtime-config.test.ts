@@ -853,6 +853,30 @@ describe("createAstrologerApiRuntimeConfig", () => {
     }
   });
 
+  it("accepts the registered official OpenAI processing authority in production", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      NODE_ENV: "production",
+      ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+      ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
+      ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
+      ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+      ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
+      ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+      ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
+      ASTROLOGER_AI_ENABLED: "true",
+      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+      ASTROLOGER_CHART_AI_ENABLED: "true",
+      ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "openai-production-authority.v1",
+      CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
+    });
+
+    expect(config.chartAi).toEqual({
+      enabled: true,
+      processingAuthorityVersion: "openai-production-authority.v1"
+    });
+  });
+
   it("exposes an explicit test authority version only when supplied", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
