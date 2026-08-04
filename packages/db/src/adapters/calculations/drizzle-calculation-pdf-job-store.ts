@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  CALCULATION_PDF_DELETE_REQUESTED_EVENT,
   CALCULATION_PDF_REQUESTED_EVENT,
   normalizeCalculationPdfSourceLocator,
   type CalculationModule,
@@ -202,32 +203,97 @@ export function createDrizzleCalculationPdfJobStore(
     complete: async (input) => {
       const now = new Date(input.now);
       const result = await database.execute(sql<CalculationPdfJobRow>`
-        with updated_job as (
+        with target_job as (
+          select ${jobSelectColumns()}
+          from ${calculationPdfJobs}
+          inner join ${calculationRecords}
+            on ${calculationRecords.id} = ${calculationPdfJobs.calculationId}
+            and ${calculationRecords.ownerUserId} = ${calculationPdfJobs.ownerUserId}
+            and ${calculationRecords.resultChecksum} = ${calculationPdfJobs.resultChecksum}
+            and ${calculationRecords.status} <> 'archived'
+          where ${calculationPdfJobs.id} = ${input.jobId}
+            and ${calculationPdfJobs.status} in ('processing', 'ready')
+          for update of ${calculationPdfJobs}, ${calculationRecords}
+        ),
+        latest_job as (
+          select ${calculationPdfJobs.id}
+          from ${calculationPdfJobs}, target_job
+          where ${calculationPdfJobs.ownerUserId} = target_job."ownerUserId"
+            and ${calculationPdfJobs.calculationId} = target_job."calculationId"
+            and ${calculationPdfJobs.locale} = target_job."locale"
+          order by ${calculationPdfJobs.createdAt} desc, ${calculationPdfJobs.id} desc
+          limit 1
+        ),
+        completed_job as (
           update ${calculationPdfJobs}
           set "status" = 'ready', "failure_code" = null, "failure_reason" = null,
               "page_count" = ${input.pageCount}, "updated_at" = ${now}
-          where ${calculationPdfJobs.id} = ${input.jobId}
-            and ${calculationPdfJobs.status} in ('processing', 'ready')
-          returning *
+          from target_job
+          where ${calculationPdfJobs.id} = target_job."id"
+            and ${calculationPdfJobs.id} = (select "id" from latest_job)
+          returning ${jobReturningColumns()}
         ),
         updated_media as (
           update ${mediaAssets}
           set "status" = 'ready', "size_bytes" = ${input.sizeBytes},
               "checksum_sha256" = ${input.checksumSha256}, "failure_reason" = null,
               "updated_at" = ${now}
-          from updated_job
-          where ${mediaAssets.id} = updated_job.media_asset_id
+          from completed_job
+          where ${mediaAssets.id} = completed_job."mediaAssetId"
           returning ${mediaAssets.id}
         ),
         updated_artifact as (
           update ${calculationArtifacts}
           set "status" = 'ready', "updated_at" = ${now}
-          from updated_job
-          where ${calculationArtifacts.id} = updated_job.artifact_id
+          from completed_job
+          where ${calculationArtifacts.id} = completed_job."artifactId"
           returning ${calculationArtifacts.id}
+        ),
+        retired_jobs as (
+          select ${calculationPdfJobs.id}, ${calculationPdfJobs.artifactId},
+                 ${calculationPdfJobs.mediaAssetId}, ${calculationPdfJobs.calculationId}
+          from ${calculationPdfJobs}, completed_job
+          where ${calculationPdfJobs.ownerUserId} = completed_job."ownerUserId"
+            and ${calculationPdfJobs.calculationId} = completed_job."calculationId"
+            and ${calculationPdfJobs.locale} = completed_job."locale"
+            and ${calculationPdfJobs.id} <> completed_job."id"
+            and ${calculationPdfJobs.status} <> 'processing'
+          union all
+          select target_job."id", target_job."artifactId", target_job."mediaAssetId",
+                 target_job."calculationId"
+          from target_job
+          where target_job."id" <> (select "id" from latest_job)
+        ),
+        deleted_jobs as (
+          delete from ${calculationPdfJobs}
+          using retired_jobs
+          where ${calculationPdfJobs.id} = retired_jobs."id"
+          returning ${calculationPdfJobs.artifactId}, ${calculationPdfJobs.calculationId}
+        ),
+        deleted_artifacts as (
+          delete from ${calculationArtifacts}
+          using deleted_jobs
+          where ${calculationArtifacts.id} = deleted_jobs.artifact_id
+            and ${calculationArtifacts.calculationId} = deleted_jobs.calculation_id
+          returning ${calculationArtifacts.mediaAssetId}
+        ),
+        created_cleanup_events as (
+          insert into ${outboxEvents} (
+            "event_type", "aggregate_id", "payload", "status", "attempts",
+            "available_at", "created_at", "updated_at"
+          )
+          select
+            '${sql.raw(CALCULATION_PDF_DELETE_REQUESTED_EVENT)}', deleted_artifacts."media_asset_id",
+            jsonb_build_object('mediaAssetId', deleted_artifacts."media_asset_id"),
+            'pending', 0, ${now}, ${now}, ${now}
+          from deleted_artifacts
+          on conflict ("event_type", "aggregate_id") do nothing
+          returning "id"
         )
-        select ${rawJobSelectColumns()} from updated_job
-        where exists (select 1 from updated_media) and exists (select 1 from updated_artifact)
+        select ${completedJobSelectColumns()} from completed_job
+        where completed_job."status" = 'ready'
+          and exists (select 1 from updated_media)
+          and exists (select 1 from updated_artifact)
       `);
       return toOptionalJob(result.rows[0] as CalculationPdfJobRow | undefined);
     },
@@ -297,6 +363,18 @@ function rawJobSelectColumns() {
     "status" as "status", "artifact_id" as "artifactId", "media_asset_id" as "mediaAssetId",
     "failure_code" as "failureCode", "failure_reason" as "failureReason",
     "page_count" as "pageCount", "created_at" as "createdAt", "updated_at" as "updatedAt"
+  `);
+}
+
+function completedJobSelectColumns() {
+  return sql.raw(`
+    "id" as "id", "calculationId" as "calculationId", "ownerUserId" as "ownerUserId",
+    "module" as "module", "methodCode" as "methodCode",
+    "resultChecksum" as "resultChecksum", "locale" as "locale",
+    "sourceLocator" as "sourceLocator", "documentFingerprint" as "documentFingerprint",
+    "status" as "status", "artifactId" as "artifactId", "mediaAssetId" as "mediaAssetId",
+    "failureCode" as "failureCode", "failureReason" as "failureReason",
+    "pageCount" as "pageCount", "createdAt" as "createdAt", "updatedAt" as "updatedAt"
   `);
 }
 

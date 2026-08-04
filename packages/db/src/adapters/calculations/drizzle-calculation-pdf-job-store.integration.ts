@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CALCULATION_PDF_REQUESTED_EVENT } from "@elevenhouse/domain";
+import {
+  CALCULATION_PDF_DELETE_REQUESTED_EVENT,
+  CALCULATION_PDF_REQUESTED_EVENT
+} from "@elevenhouse/domain";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import { createPostgresRuntime } from "../../runtime";
 import { createDrizzleCalculationStore } from "./drizzle-calculation-store";
@@ -173,6 +176,182 @@ describe("calculation PDF Drizzle/PostgreSQL integration", () => {
 
     expect(next?.id).not.toBe(first?.id);
     expect(next?.status).toBe("queued");
+  });
+
+  it("removes a replaced ready PDF from active records and schedules its object cleanup", async () => {
+    const ownerUserId = await createUser();
+    ownerUserIds.push(ownerUserId);
+    const calculation = await createCalculation(ownerUserId);
+    const store = createDrizzleCalculationPdfJobStore(runtime.database);
+    const firstIds = candidateIds();
+    const first = await store.enqueue({
+      ...firstIds,
+      ownerUserId,
+      calculationId: calculation.id,
+      module: "numerology",
+      methodCode: "pythagorean",
+      resultChecksum: calculation.resultChecksum,
+      locale: "ru",
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      documentFingerprint: digest("f"),
+      privateStorageBucket: "calculation-pdfs",
+      storageKey: `owners/${ownerUserId}/calculation-pdfs/${firstIds.id}.pdf`,
+      originalFileName: "numerology-report.pdf",
+      now: "2026-07-15T12:00:00.000Z"
+    });
+    await store.claimForRendering({
+      jobId: first?.id ?? "",
+      now: "2026-07-15T12:01:00.000Z"
+    });
+    await store.complete({
+      jobId: first?.id ?? "",
+      checksumSha256: "a".repeat(64),
+      sizeBytes: 1_000,
+      pageCount: 1,
+      now: "2026-07-15T12:02:00.000Z"
+    });
+
+    const replacementIds = candidateIds();
+    const replacement = await store.enqueue({
+      ...replacementIds,
+      ownerUserId,
+      calculationId: calculation.id,
+      module: "numerology",
+      methodCode: "pythagorean",
+      resultChecksum: calculation.resultChecksum,
+      locale: "ru",
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      documentFingerprint: digest("e"),
+      privateStorageBucket: "calculation-pdfs",
+      storageKey: `owners/${ownerUserId}/calculation-pdfs/${replacementIds.id}.pdf`,
+      originalFileName: "numerology-report.pdf",
+      now: "2026-07-15T12:03:00.000Z"
+    });
+    await store.claimForRendering({
+      jobId: replacement?.id ?? "",
+      now: "2026-07-15T12:04:00.000Z"
+    });
+    await store.complete({
+      jobId: replacement?.id ?? "",
+      checksumSha256: "b".repeat(64),
+      sizeBytes: 2_000,
+      pageCount: 2,
+      now: "2026-07-15T12:05:00.000Z"
+    });
+
+    const state = await runtime.pool.query<{
+      active_job_ids: string[];
+      active_artifact_ids: string[];
+      replaced_media_still_exists: string;
+      cleanup_aggregate_id: string | null;
+      cleanup_payload: { mediaAssetId: string } | null;
+    }>(
+      `select
+         array(select id from calculation_pdf_jobs where calculation_id = $1 order by id) as active_job_ids,
+         array(select id from calculation_artifacts where calculation_id = $1 order by id) as active_artifact_ids,
+         (select count(*) from media_assets where id = $2) as replaced_media_still_exists,
+         (select aggregate_id from outbox_events where event_type = $3 and aggregate_id = $2) as cleanup_aggregate_id,
+         (select payload from outbox_events where event_type = $3 and aggregate_id = $2) as cleanup_payload`,
+      [
+        calculation.id,
+        first?.mediaAssetId ?? "",
+        CALCULATION_PDF_DELETE_REQUESTED_EVENT
+      ]
+    );
+    expect(state.rows[0]).toEqual({
+      active_job_ids: [replacement?.id],
+      active_artifact_ids: [replacement?.artifactId],
+      replaced_media_still_exists: "1",
+      cleanup_aggregate_id: first?.mediaAssetId,
+      cleanup_payload: { mediaAssetId: first?.mediaAssetId }
+    });
+  });
+
+  it("cleans a rendering PDF that finishes after a newer document", async () => {
+    const ownerUserId = await createUser();
+    ownerUserIds.push(ownerUserId);
+    const calculation = await createCalculation(ownerUserId);
+    const store = createDrizzleCalculationPdfJobStore(runtime.database);
+    const firstIds = candidateIds();
+    const first = await store.enqueue({
+      ...firstIds,
+      ownerUserId,
+      calculationId: calculation.id,
+      module: "numerology",
+      methodCode: "pythagorean",
+      resultChecksum: calculation.resultChecksum,
+      locale: "en",
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      documentFingerprint: digest("c"),
+      privateStorageBucket: "calculation-pdfs",
+      storageKey: `owners/${ownerUserId}/calculation-pdfs/${firstIds.id}.pdf`,
+      originalFileName: "numerology-report.pdf",
+      now: "2026-07-15T13:00:00.000Z"
+    });
+    await store.claimForRendering({
+      jobId: first?.id ?? "",
+      now: "2026-07-15T13:01:00.000Z"
+    });
+
+    const replacementIds = candidateIds();
+    const replacement = await store.enqueue({
+      ...replacementIds,
+      ownerUserId,
+      calculationId: calculation.id,
+      module: "numerology",
+      methodCode: "pythagorean",
+      resultChecksum: calculation.resultChecksum,
+      locale: "en",
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      documentFingerprint: digest("d"),
+      privateStorageBucket: "calculation-pdfs",
+      storageKey: `owners/${ownerUserId}/calculation-pdfs/${replacementIds.id}.pdf`,
+      originalFileName: "numerology-report.pdf",
+      now: "2026-07-15T13:02:00.000Z"
+    });
+    await store.claimForRendering({
+      jobId: replacement?.id ?? "",
+      now: "2026-07-15T13:03:00.000Z"
+    });
+    await expect(
+      store.complete({
+        jobId: replacement?.id ?? "",
+        checksumSha256: "c".repeat(64),
+        sizeBytes: 2_000,
+        pageCount: 2,
+        now: "2026-07-15T13:04:00.000Z"
+      })
+    ).resolves.toMatchObject({ id: replacement?.id, status: "ready" });
+    await expect(
+      store.complete({
+        jobId: first?.id ?? "",
+        checksumSha256: "d".repeat(64),
+        sizeBytes: 1_000,
+        pageCount: 1,
+        now: "2026-07-15T13:05:00.000Z"
+      })
+    ).resolves.toBeNull();
+
+    const state = await runtime.pool.query<{
+      active_job_ids: string[];
+      cleanup_aggregate_id: string | null;
+      cleanup_payload: { mediaAssetId: string } | null;
+    }>(
+      `select
+         array(select id from calculation_pdf_jobs where calculation_id = $1 order by id) as active_job_ids,
+         (select aggregate_id from outbox_events where event_type = $2 and aggregate_id = $3) as cleanup_aggregate_id,
+         (select payload from outbox_events where event_type = $2 and aggregate_id = $3) as cleanup_payload`,
+      [
+        calculation.id,
+        CALCULATION_PDF_DELETE_REQUESTED_EVENT,
+        first?.mediaAssetId ?? ""
+      ]
+    );
+    expect(state.rows[0]).toEqual({
+      active_job_ids: [replacement?.id],
+      cleanup_aggregate_id: first?.mediaAssetId,
+      cleanup_payload: { mediaAssetId: first?.mediaAssetId }
+    });
   });
 
   async function createUser(): Promise<string> {

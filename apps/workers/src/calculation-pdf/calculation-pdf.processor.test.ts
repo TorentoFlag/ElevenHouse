@@ -62,6 +62,26 @@ describe("processCalculationPdfJob", () => {
     expect(registry.render).not.toHaveBeenCalled();
   });
 
+  it("stops a render superseded while it was in progress without recording a false failure", async () => {
+    const store = createJobStore();
+    vi.mocked(store.complete).mockResolvedValueOnce(null);
+
+    const failure = await processCalculationPdfJob({
+      jobId: job().id,
+      finalAttempt: true,
+      store,
+      mediaStore: createMediaStore(),
+      registry: {
+        render: vi.fn(async () => ({ bytes: Buffer.from("%PDF"), pageCount: 1 }))
+      },
+      storage: { putPdf: vi.fn() },
+      now
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(UnrecoverableError);
+    expect(store.fail).not.toHaveBeenCalled();
+  });
+
   it("persists permanent failures and stops BullMQ retries", async () => {
     const store = createJobStore();
     const registry = {

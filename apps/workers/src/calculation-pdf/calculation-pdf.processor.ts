@@ -78,7 +78,7 @@ export async function processCalculationPdfJob(input: {
       pageCount: rendered.pageCount,
       now: input.now.toISOString()
     });
-    if (!completed) throw new Error("Calculation PDF completion could not be persisted");
+    if (!completed) throw new CalculationPdfSupersededError();
     input.logger?.info("calculation PDF job completed", {
       jobId: input.jobId,
       sizeBytes: rendered.bytes.length,
@@ -86,6 +86,9 @@ export async function processCalculationPdfJob(input: {
       checksumSha256
     });
   } catch (error) {
+    if (error instanceof CalculationPdfSupersededError) {
+      throw new UnrecoverableError(error.message);
+    }
     if (error instanceof CalculationPdfPermanentError) {
       const failed = await input.store.fail({
         jobId: input.jobId,
@@ -107,6 +110,12 @@ export async function processCalculationPdfJob(input: {
       });
     }
     throw error;
+  }
+}
+
+class CalculationPdfSupersededError extends Error {
+  constructor() {
+    super("Calculation PDF job was superseded by a newer document");
   }
 }
 
