@@ -239,6 +239,8 @@ jobs:
           ./cleanup-docker-retention.sh bootstrap-successful-release
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps workers \
+            node apps/workers/dist/validate-startup-config.js </dev/null
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
             node apps/chart-worker/dist/validate-startup-config.js </dev/null
           mv -- compose/compose.production.yml.next compose/compose.production.yml
