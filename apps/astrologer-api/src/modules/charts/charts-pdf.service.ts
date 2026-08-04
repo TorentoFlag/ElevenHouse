@@ -54,7 +54,7 @@ export class ChartsPdfService {
         calculationId: params.calculationId,
         locale: parsedQuery.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v2"
+        renderContract: "chart-natal-v3"
       });
     });
   }
@@ -75,7 +75,7 @@ export class ChartsPdfService {
         expectedResultChecksum: parsedBody.expectedResultChecksum,
         locale: parsedBody.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v2",
+        renderContract: "chart-natal-v3",
         originalFileName: parsedBody.locale === "ru" ? "Натальная карта.pdf" : "Natal chart.pdf"
       });
     });

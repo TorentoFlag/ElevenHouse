@@ -63,7 +63,7 @@ describe("ChartsPdfService", () => {
         kind: "approved_interpretation",
         interpretationId: "00000000-0000-4000-8000-000000000007"
       },
-      renderContract: "chart-natal-v2",
+      renderContract: "chart-natal-v3",
       originalFileName: "Натальная карта.pdf"
     });
   });
@@ -119,7 +119,7 @@ describe("ChartsPdfService", () => {
         kind: "approved_interpretation",
         interpretationId: "00000000-0000-4000-8000-000000000007"
       },
-      renderContract: "chart-natal-v2"
+      renderContract: "chart-natal-v3"
     });
   });
 
