@@ -256,7 +256,8 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       executionStore.claimNext({
         leaseOwner: "flows-worker-after-canceled-retry",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toBeNull();
   });
@@ -358,7 +359,8 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       executionStore.claimNext({
         leaseOwner: "flows-worker-cancel-due-retry-2",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ]);
 
@@ -606,7 +608,8 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     await executionStore.claimNext({
       leaseOwner: "flows-worker-cancel-recovery-race",
       leaseDurationMs: 30_000,
-      executorKeys: ["completed:1:1"]
+      executorKeys: ["completed:1:1"],
+      ownerScope: { kind: "all" }
     });
     await runtime.pool.query(
       `update flow_execution_tokens
@@ -1432,9 +1435,21 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
 
 async function claimExecution(
   store: ReturnType<typeof createDrizzleFlowExecutionStore>,
-  input: Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0]
+  input: Omit<
+    Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0],
+    "ownerScope"
+  > &
+    Partial<
+      Pick<
+        Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0],
+        "ownerScope"
+      >
+    >
 ): Promise<FlowExecutionClaim> {
-  const result = await store.claimNext(input);
+  const result = await store.claimNext({
+    ...input,
+    ownerScope: input.ownerScope ?? { kind: "all" }
+  });
   if (!result || result.status !== "claimed") raise("Expected claimed flow execution token");
   return result.claim;
 }

@@ -388,6 +388,24 @@ does not reduce the Definition of Done in the design spec.
       stale-readiness finding with no Blocker/High. PostgreSQL lock-time
       readiness, epoch/command persistence, exact persisted replay and API
       composition remain open, and runtime remains `definition_only`.
+- [x] 2026-08-04 14:58 MSK: worker lifecycle composition now runs bounded
+      global expired-lease recovery in both `definition_only` and canary modes,
+      while new claims remain tied to a runtime-owned, strict non-empty owner
+      allowlist. Removing an owner from canary cannot strand an old claim:
+      recovery fences it globally and any retry remains dormant until that owner
+      is admitted again. Execution and recovery use independent no-overlap lanes,
+      bounded batches, capped error backoff, sanitized deadline failures,
+      operational readiness and a fatal 45-second drain deadline before database
+      shutdown. Production config still rejects canary with
+      `WORKERS_FLOW_EXECUTION_PERSISTED_CONTROL_REQUIRED`; therefore this group
+      enables maintenance recovery, not production enrollment or claims.
+      Fresh evidence passes 6 worker files / 41 tests and 2 PostgreSQL files /
+      75 scenarios; workers typecheck/build, focused ESLint, formatting and diff
+      checks pass. The broad DB typecheck is currently blocked only by concurrent
+      Finance code missing `orderSnapshotVersion` in
+      `drizzle-provider-operation-intent-creation-uow.ts`. `docs:check:test`
+      passes 8/8; broad `docs:check` remains blocked by the concurrent
+      `finance-infrastructure`, `platform-tariffs` and `fiscal-profiles` entries.
 - [x] 2026-08-03 20:24 MSK: current retry research (accessed 2026-08-03) confirms
       the chosen product boundary across AWS Step Functions, Google Cloud
       Workflows and Azure Functions: retryability is explicit, attempts are
@@ -525,6 +543,11 @@ blocked.
   now fingerprints each distinct trigger function's canonical body, owner,
   language, volatility, security mode and configuration together with table
   durability/RLS, so a no-op function replacement changes the exact catalog.
+- 2026-08-04: applying the canary owner scope to expired-lease recovery would
+  strand a claimed token as soon as an owner is removed from the allowlist.
+  Canary scope is therefore claim authority only. Recovery is global maintenance
+  authority, runs in `definition_only`, invalidates the old fence and leaves a
+  scheduled retry dormant behind the claim gate.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -599,13 +622,19 @@ changes later steps.
   but deliberately does not depend on definition revision. Rationale: draft
   editing cannot create an ABA activation race or prevent an urgent pause.
 - **2026-08-04, activation readiness:** only published V2 graphs with a V2
-      capability manifest may enter a new epoch. A read-side activation review is
-      explanatory evidence, not command authority; rollout, worker capability,
-      resources, entitlement and quota are re-evaluated under the activation
-      transaction. The public use case supplies a private one-shot preparation
-      callback to the persistence port; neither a caller-provided attestation nor
-      an exported planner can authorize activation. Exact replay does not repeat
-      preparation. `definition_only` can never produce a ready decision.
+  capability manifest may enter a new epoch. A read-side activation review is
+  explanatory evidence, not command authority; rollout, worker capability,
+  resources, entitlement and quota are re-evaluated under the activation
+  transaction. The public use case supplies a private one-shot preparation
+  callback to the persistence port; neither a caller-provided attestation nor
+  an exported planner can authorize activation. Exact replay does not repeat
+  preparation. `definition_only` can never produce a ready decision.
+- **2026-08-04, worker rollout:** environment configuration is a deployment
+  ceiling, not enrollment authority. The worker owns the exact canary allowlist
+  passed to `claimNext`; recovery deliberately ignores that scope. Production
+  canary startup remains rejected until a versioned persisted rollout policy,
+  fresh worker-readiness leases, kill switches and automation quota authority
+  can be evaluated transactionally.
 - **2026-08-02, UI:** desktop supports graph structure editing; mobile supports
   monitoring, approvals/work and typed node configuration, but not structural
   graph editing in v2.

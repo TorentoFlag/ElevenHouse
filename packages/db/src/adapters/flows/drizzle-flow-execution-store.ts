@@ -18,6 +18,7 @@ import {
   type FlowExecutionFailure,
   type FlowExecutionFailureDisposition,
   type FlowExecutionFailureReasonCode,
+  type FlowExecutionOwnerScope,
   type FlowExecutionRunDetail,
   type FlowExecutionStore,
   type FlowExecutionTokenDetail,
@@ -37,6 +38,8 @@ import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
 
 const MAX_LEASE_DURATION_MS = 5 * 60_000;
 const MAX_RECOVERY_BATCH_SIZE = 100;
+const MAX_FLOW_EXECUTION_CANARY_OWNERS = 100;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLAIMABLE_TOKEN_STATES = ["runnable", "retry_scheduled"] as const;
 const CLAIMABLE_RUN_STATUSES = ["pending", "running", "failed_retryable"] as const;
 const EVENT_TYPE_BY_ATTEMPT_OUTCOME: Readonly<Record<string, string>> = {
@@ -175,6 +178,9 @@ async function claimNext(
           inArray(flowExecutionTokens.state, [...CLAIMABLE_TOKEN_STATES]),
           lte(flowExecutionTokens.availableAt, sql`transaction_timestamp()`),
           inArray(flowExecutionTokens.executorKey, [...input.executorKeys]),
+          input.ownerScope.kind === "all"
+            ? undefined
+            : inArray(flowExecutionTokens.ownerUserId, [...input.ownerScope.ownerUserIds]),
           inArray(flowRuns.status, [...CLAIMABLE_RUN_STATUSES])
         )
       )
@@ -791,7 +797,6 @@ async function recoverExpired(
   if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > MAX_RECOVERY_BATCH_SIZE) {
     throw new Error(`Flow recovery limit must be between 1 and ${MAX_RECOVERY_BATCH_SIZE}`);
   }
-
   let recoveredCount = 0;
   let retryScheduledCount = 0;
   let failedTerminalCount = 0;
@@ -1314,6 +1319,29 @@ function validateClaimInput(input: Parameters<FlowExecutionStore["claimNext"]>[0
   }
   if (new Set(input.executorKeys).size !== input.executorKeys.length) {
     throw new Error("Flow execution claim executor keys must be unique");
+  }
+  validateOwnerScope(input.ownerScope);
+}
+
+function validateOwnerScope(ownerScope: FlowExecutionOwnerScope): void {
+  if (ownerScope.kind === "all") return;
+  if (ownerScope.kind !== "allowlist") {
+    throw new Error("Flow execution owner scope is unsupported");
+  }
+  if (
+    ownerScope.ownerUserIds.length < 1 ||
+    ownerScope.ownerUserIds.length > MAX_FLOW_EXECUTION_CANARY_OWNERS
+  ) {
+    throw new Error(
+      `Flow execution canary owner scope requires 1 to ${MAX_FLOW_EXECUTION_CANARY_OWNERS} owners`
+    );
+  }
+  if (
+    ownerScope.ownerUserIds.some((ownerUserId) => !UUID_PATTERN.test(ownerUserId)) ||
+    new Set(ownerScope.ownerUserIds.map((ownerUserId) => ownerUserId.toLowerCase())).size !==
+      ownerScope.ownerUserIds.length
+  ) {
+    throw new Error("Flow execution canary owner ids must be unique UUIDs");
   }
 }
 

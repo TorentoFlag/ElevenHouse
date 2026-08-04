@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createWorkersRuntimeConfig } from "./runtime-config";
 
@@ -11,6 +12,19 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
       flowRuntimeOutboxMaxAttempts: 5,
+      flowExecution: {
+        rollout: { mode: "definition_only" },
+        leaseOwner: "flows-worker-local",
+        leaseDurationMs: 30_000,
+        pollIntervalMs: 1_000,
+        pollBatchSize: 10,
+        recoveryIntervalMs: 5_000,
+        recoveryBatchSize: 25,
+        operationTimeoutMs: 10_000,
+        drainTimeoutMs: 45_000,
+        errorBackoffMaxMs: 30_000,
+        errorJitter: 0.5
+      },
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
       calculationPdfJitter: 0.5,
@@ -60,6 +74,69 @@ describe("createWorkersRuntimeConfig", () => {
     expect(() =>
       createWorkersRuntimeConfig({ WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "21" })
     ).toThrow();
+  });
+
+  it("parses an explicit bounded flow execution canary owner allowlist", () => {
+    expect(
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+          "00000000-0000-4000-8000-000000000002, 00000000-0000-4000-8000-000000000001",
+        WORKERS_FLOW_EXECUTION_INSTANCE_ID: "flows-worker-canary-a",
+        WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE: "20",
+        WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: "50"
+      }).flowExecution
+    ).toEqual({
+      rollout: {
+        mode: "canary",
+        ownerScope: {
+          kind: "allowlist",
+          ownerUserIds: [
+            "00000000-0000-4000-8000-000000000001",
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        }
+      },
+      leaseOwner: "flows-worker-canary-a",
+      leaseDurationMs: 30_000,
+      pollIntervalMs: 1_000,
+      pollBatchSize: 20,
+      recoveryIntervalMs: 5_000,
+      recoveryBatchSize: 50,
+      operationTimeoutMs: 10_000,
+      drainTimeoutMs: 45_000,
+      errorBackoffMaxMs: 30_000,
+      errorJitter: 0.5
+    });
+  });
+
+  it("rejects empty, duplicated, malformed or prematurely global flow rollout", () => {
+    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MODE: "canary" })).toThrow(
+      "WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS"
+    );
+    expect(() =>
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+          "00000000-0000-4000-8000-000000000001,00000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow("unique");
+    expect(() =>
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MODE: "definition_only",
+        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "00000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow("definition_only");
+    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MODE: "enabled" })).toThrow(
+      "WORKERS_FLOW_EXECUTION_MODE"
+    );
+    expect(() =>
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+          "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+      })
+    ).toThrow("unique");
   });
 
   it("requires every external dependency and PDF tuning value explicitly in production", () => {
@@ -112,6 +189,19 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
       flowRuntimeOutboxMaxAttempts: 5,
+      flowExecution: {
+        rollout: { mode: "definition_only" },
+        leaseOwner: "flows-worker-production-a",
+        leaseDurationMs: 30_000,
+        pollIntervalMs: 1_000,
+        pollBatchSize: 10,
+        recoveryIntervalMs: 5_000,
+        recoveryBatchSize: 25,
+        operationTimeoutMs: 10_000,
+        drainTimeoutMs: 45_000,
+        errorBackoffMaxMs: 30_000,
+        errorJitter: 0.5
+      },
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
       calculationPdfJitter: 0.5,
@@ -125,7 +215,38 @@ describe("createWorkersRuntimeConfig", () => {
       }
     });
   });
+
+  it("keeps production claims closed until persisted rollout authority exists", () => {
+    expect(() =>
+      createWorkersRuntimeConfig({
+        ...productionConfig(),
+        WORKERS_FLOW_EXECUTION_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "00000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow("WORKERS_FLOW_EXECUTION_PERSISTED_CONTROL_REQUIRED");
+  });
+
+  it("keeps the checked-in production environment example executable by workers", () => {
+    const source = parseEnvironmentExample(
+      readFileSync("deployment/env/.env.production.example", "utf8")
+    );
+
+    expect(() => createWorkersRuntimeConfig({ ...source, NODE_ENV: "production" })).not.toThrow();
+  });
 });
+
+function parseEnvironmentExample(source: string): Record<string, string> {
+  return Object.fromEntries(
+    source
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#") && line.includes("="))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      })
+  );
+}
 
 function productionConfig(): Record<string, string | undefined> {
   return {
@@ -135,6 +256,18 @@ function productionConfig(): Record<string, string | undefined> {
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE: "25",
     WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: "60000",
     WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "5",
+    WORKERS_FLOW_EXECUTION_MODE: "definition_only",
+    WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "",
+    WORKERS_FLOW_EXECUTION_INSTANCE_ID: "flows-worker-production-a",
+    WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS: "30000",
+    WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS: "1000",
+    WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE: "10",
+    WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS: "5000",
+    WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: "25",
+    WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: "10000",
+    WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS: "45000",
+    WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS: "30000",
+    WORKERS_FLOW_EXECUTION_ERROR_JITTER: "0.5",
     WORKERS_CALCULATION_PDF_ATTEMPTS: "5",
     WORKERS_CALCULATION_PDF_BACKOFF_MS: "1000",
     WORKERS_CALCULATION_PDF_JITTER: "0.5",

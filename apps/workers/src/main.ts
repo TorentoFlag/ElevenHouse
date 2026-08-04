@@ -1,5 +1,6 @@
 import { createLogger } from "@elevenhouse/observability";
 import {
+  createDrizzleFlowExecutionStore,
   createDrizzleFlowRuntimeDispatchOutboxStore,
   createDrizzleFlowRuntimeStore,
   createDrizzleFlowStore
@@ -14,7 +15,11 @@ import { createDrizzleMediaAssetStore } from "@elevenhouse/db/media";
 import { createDrizzleMatrixReportStore } from "@elevenhouse/db/matrix";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
-import { dispatchFlowRuntimeEvent, resolveChartExecutionProfile } from "@elevenhouse/domain";
+import {
+  createBuiltInFlowNodeExecutorRegistry,
+  dispatchFlowRuntimeEvent,
+  resolveChartExecutionProfile
+} from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
 import { processCalculationPdfCleanup } from "./calculation-pdf/calculation-pdf.cleanup";
 import {
@@ -39,6 +44,9 @@ import { createMatrixPdfRenderer } from "./calculation-pdf/matrix-pdf.renderer";
 import { createMatrixPdfSource } from "./calculation-pdf/matrix-pdf.source";
 import { createNumerologyPdfRenderer } from "./calculation-pdf/numerology-pdf.renderer";
 import { createNumerologyPdfSource } from "./calculation-pdf/numerology-pdf.source";
+import { processNextFlowExecution } from "./flows/flow-execution.processor";
+import { recoverExpiredFlowExecutions } from "./flows/flow-execution.recovery";
+import { createFlowExecutionRuntime } from "./flows/flow-execution.runtime";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { relayPendingFlowRuntimeDispatchEvents } from "./flows/flow-runtime.outbox-relay";
 import { createWorkersRuntimeConfig } from "./runtime-config";
@@ -51,6 +59,7 @@ const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
 const flowStore = createDrizzleFlowStore(postgres.database);
 const flowRuntimeStore = createDrizzleFlowRuntimeStore(postgres.database);
+const flowExecutionStore = createDrizzleFlowExecutionStore(postgres.database);
 const flowRuntimeDispatchOutboxStore = createDrizzleFlowRuntimeDispatchOutboxStore(
   postgres.database
 );
@@ -126,6 +135,33 @@ const worker = createCalculationPdfWorker(
   config.calculationPdfConcurrency
 );
 const stopWorkerObservation = observeCalculationPdfWorker(worker, logger);
+const flowNodeExecutorRegistry = createBuiltInFlowNodeExecutorRegistry();
+const flowExecutionRuntime = createFlowExecutionRuntime({
+  rollout: config.flowExecution.rollout,
+  pollIntervalMs: config.flowExecution.pollIntervalMs,
+  pollBatchSize: config.flowExecution.pollBatchSize,
+  recoveryIntervalMs: config.flowExecution.recoveryIntervalMs,
+  operationTimeoutMs: config.flowExecution.operationTimeoutMs,
+  drainTimeoutMs: config.flowExecution.drainTimeoutMs,
+  errorBackoffMaxMs: config.flowExecution.errorBackoffMaxMs,
+  errorJitter: config.flowExecution.errorJitter,
+  processNext: (ownerScope) =>
+    processNextFlowExecution({
+      store: flowExecutionStore,
+      registry: flowNodeExecutorRegistry,
+      leaseOwner: config.flowExecution.leaseOwner,
+      leaseDurationMs: config.flowExecution.leaseDurationMs,
+      ownerScope,
+      logger
+    }),
+  recoverExpired: () =>
+    recoverExpiredFlowExecutions({
+      store: flowExecutionStore,
+      limit: config.flowExecution.recoveryBatchSize,
+      logger
+    }),
+  logger
+});
 const readinessChecks = {
   postgres: async () => {
     await postgres.pool.query("select 1");
@@ -136,7 +172,11 @@ const readinessChecks = {
   calculationPdfWorker: async () => {
     await worker.waitUntilReady();
   },
-  privateObjectStorage: async () => storage.checkReady()
+  privateObjectStorage: async () => storage.checkReady(),
+  flowExecutionRuntime: async () => {
+    const readiness = flowExecutionRuntime.getOperationalReadiness();
+    if (readiness.status !== "ready") throw new Error(readiness.errorCode);
+  }
 };
 const healthServer = createWorkerReadinessServer({
   getReadiness: () => createWorkerReadiness({ service, checks: readinessChecks })
@@ -178,9 +218,11 @@ const relay = createCalculationPdfOutboxRelay({
 let shutdownPromise: Promise<void> | null = null;
 
 async function startup(): Promise<void> {
+  await flowExecutionRuntime.runInitial();
+  flowExecutionRuntime.start();
   const readiness = await createWorkerReadiness({ service, checks: readinessChecks });
   if (readiness.status !== "ready") {
-    throw new Error("Calculation PDF worker dependencies are not ready");
+    throw new Error("Worker dependencies are not ready");
   }
   await new Promise<void>((resolve, reject) => {
     healthServer.once("error", reject);
@@ -191,7 +233,10 @@ async function startup(): Promise<void> {
   });
   await relay.runOnce();
   relay.start();
-  logger.info("calculation PDF worker ready", readiness);
+  logger.info("worker runtime ready", {
+    ...readiness,
+    flowExecutionMode: config.flowExecution.rollout.mode
+  });
 }
 
 function shutdown(): Promise<void> {
@@ -200,7 +245,9 @@ function shutdown(): Promise<void> {
 }
 
 async function shutdownOnce(): Promise<void> {
-  await relay.stop();
+  const flowExecutionStopping = flowExecutionRuntime.stop();
+  const relayStopping = relay.stop();
+  await Promise.all([flowExecutionStopping, relayStopping]);
   if (healthServer.listening) {
     await new Promise<void>((resolve, reject) =>
       healthServer.close((error) => (error ? reject(error) : resolve()))

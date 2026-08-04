@@ -217,12 +217,14 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-a",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       }),
       store.claimNext({
         leaseOwner: "flows-worker-b",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ]);
     const claimedResult = claimResults.find((candidate) => candidate?.status === "claimed");
@@ -297,6 +299,93 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     expect(persisted.events[0]?.attempt_id).toBe(persisted.attempts[0]?.id);
     await expect(store.finalize({ claim, decision })).resolves.toEqual({ status: "stale" });
     await expect(selectExecution(fixture.runId)).resolves.toEqual(persisted);
+  });
+
+  it("claims only persisted owners admitted by the canary owner scope", async () => {
+    const excluded = await createTerminalFixture({
+      availableAt: "2026-08-03T08:00:00.000Z"
+    });
+    const allowed = await createTerminalFixture({
+      availableAt: "2026-08-03T08:01:00.000Z"
+    });
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+
+    const result = await store.claimNext({
+      leaseOwner: "flows-worker-canary",
+      leaseDurationMs: 30_000,
+      executorKeys: ["completed:1:1"],
+      ownerScope: { kind: "allowlist", ownerUserIds: [allowed.ownerUserId] }
+    });
+
+    expect(result).toMatchObject({
+      status: "claimed",
+      claim: {
+        ownerUserId: allowed.ownerUserId,
+        tokenId: allowed.tokenId
+      }
+    });
+    expect((await selectExecution(excluded.runId)).token).toMatchObject({
+      state: "runnable",
+      lease_owner: null
+    });
+  });
+
+  it("rejects duplicate canary owners even when UUID casing differs", async () => {
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+
+    await expect(
+      store.claimNext({
+        leaseOwner: "flows-worker-invalid-canary",
+        leaseDurationMs: 30_000,
+        executorKeys: ["completed:1:1"],
+        ownerScope: {
+          kind: "allowlist",
+          ownerUserIds: [
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+          ]
+        }
+      })
+    ).rejects.toThrow("Flow execution canary owner ids must be unique UUIDs");
+  });
+
+  it("globally recovers a removed canary owner without making it claimable", async () => {
+    const removed = await createTerminalFixture({
+      availableAt: "2026-08-03T08:00:00.000Z"
+    });
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    await claimExecution(store, {
+      leaseOwner: "flows-worker-removed-owner",
+      leaseDurationMs: 30_000,
+      executorKeys: ["completed:1:1"],
+      ownerScope: { kind: "allowlist", ownerUserIds: [removed.ownerUserId] }
+    });
+    await expireClaimedToken(removed.tokenId);
+
+    await expect(store.recoverExpired({ limit: 1 })).resolves.toMatchObject({
+      recoveredCount: 1,
+      retryScheduledCount: 1
+    });
+
+    expect((await selectExecution(removed.runId)).token).toMatchObject({
+      state: "retry_scheduled",
+      lease_owner: null
+    });
+    await runtime.pool.query(
+      "update flow_execution_tokens set available_at = transaction_timestamp() - interval '1 second' where id = $1",
+      [removed.tokenId]
+    );
+    await expect(
+      store.claimNext({
+        leaseOwner: "flows-worker-after-removal",
+        leaseDurationMs: 30_000,
+        executorKeys: ["completed:1:1"],
+        ownerScope: {
+          kind: "allowlist",
+          ownerUserIds: ["00000000-0000-4000-8000-000000000099"]
+        }
+      })
+    ).resolves.toBeNull();
   });
 
   it("atomically advances one stable token to the persisted target node", async () => {
@@ -506,7 +595,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       const claimPromise = store.claimNext({
         leaseOwner: "flows-worker-post-validation-clock",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       });
       await barrier.entered.promise;
       await runtime.pool.query("select pg_sleep(0.05)");
@@ -593,7 +683,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       const claimPromise = store.claimNext({
         leaseOwner: "flows-worker-skip-locked",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       });
       const result = await Promise.race([
         claimPromise,
@@ -626,7 +717,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-unsupported-interpreter",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({
       status: "quarantined",
@@ -662,7 +754,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       const quarantinePromise = store.claimNext({
         leaseOwner: "flows-worker-poison-clock",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       });
       await barrier.entered.promise;
       await runtime.pool.query("select pg_sleep(0.05)");
@@ -704,7 +797,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-manifest-preflight",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({
       status: "quarantined",
@@ -733,7 +827,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-graph-preflight",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({
       status: "quarantined",
@@ -760,7 +855,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-graph-validation",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({
       status: "quarantined",
@@ -790,14 +886,16 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-poison-first",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({ status: "quarantined", tokenId: poison.tokenId });
     await expect(
       store.claimNext({
         leaseOwner: "flows-worker-after-poison",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toMatchObject({
       status: "claimed",
@@ -832,7 +930,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       store.claimNext({
         leaseOwner: "flows-worker-too-early",
         leaseDurationMs: 30_000,
-        executorKeys: ["completed:1:1"]
+        executorKeys: ["completed:1:1"],
+        ownerScope: { kind: "all" }
       })
     ).resolves.toBeNull();
 
@@ -968,7 +1067,8 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         store.claimNext({
           leaseOwner: "flows-worker-invalid-retry-metadata",
           leaseDurationMs: 30_000,
-          executorKeys: ["completed:1:1"]
+          executorKeys: ["completed:1:1"],
+          ownerScope: { kind: "all" }
         })
       ).resolves.toMatchObject({ status: "quarantined", tokenId: fixture.tokenId });
 
@@ -2667,9 +2767,21 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
 
 async function claimExecution(
   store: ReturnType<typeof createDrizzleFlowExecutionStore>,
-  input: Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0]
+  input: Omit<
+    Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0],
+    "ownerScope"
+  > &
+    Partial<
+      Pick<
+        Parameters<ReturnType<typeof createDrizzleFlowExecutionStore>["claimNext"]>[0],
+        "ownerScope"
+      >
+    >
 ): Promise<FlowExecutionClaim> {
-  const result = await store.claimNext(input);
+  const result = await store.claimNext({
+    ...input,
+    ownerScope: input.ownerScope ?? { kind: "all" }
+  });
   if (!result || result.status !== "claimed") raise("Expected claimed flow execution token");
   return result.claim;
 }

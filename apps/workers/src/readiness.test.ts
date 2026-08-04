@@ -11,7 +11,8 @@ describe("workers readiness", () => {
           postgres: vi.fn(async () => undefined),
           calculationPdfQueue: vi.fn(async () => undefined),
           calculationPdfWorker: vi.fn(async () => undefined),
-          privateObjectStorage: vi.fn(async () => undefined)
+          privateObjectStorage: vi.fn(async () => undefined),
+          flowExecutionRuntime: vi.fn(async () => undefined)
         }
       })
     ).resolves.toEqual({
@@ -22,7 +23,8 @@ describe("workers readiness", () => {
         postgres: { status: "ready" },
         calculationPdfQueue: { status: "ready" },
         calculationPdfWorker: { status: "ready" },
-        privateObjectStorage: { status: "ready" }
+        privateObjectStorage: { status: "ready" },
+        flowExecutionRuntime: { status: "ready" }
       }
     });
   });
@@ -37,7 +39,10 @@ describe("workers readiness", () => {
             throw new Error("redis unavailable");
           }),
           calculationPdfWorker: vi.fn(async () => undefined),
-          privateObjectStorage: vi.fn(async () => undefined)
+          privateObjectStorage: vi.fn(async () => undefined),
+          flowExecutionRuntime: vi.fn(async () => {
+            throw new Error("flow_execution_recovery_stale");
+          })
         }
       })
     ).resolves.toMatchObject({
@@ -46,7 +51,11 @@ describe("workers readiness", () => {
         postgres: { status: "ready" },
         calculationPdfQueue: { status: "unready", error: "redis unavailable" },
         calculationPdfWorker: { status: "ready" },
-        privateObjectStorage: { status: "ready" }
+        privateObjectStorage: { status: "ready" },
+        flowExecutionRuntime: {
+          status: "unready",
+          error: "flow_execution_recovery_stale"
+        }
       }
     });
   });

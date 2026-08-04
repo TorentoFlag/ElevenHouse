@@ -58,6 +58,10 @@ export type FlowExecutionRecoveryResult = {
   readonly quarantinedCount: number;
 };
 
+export type FlowExecutionOwnerScope =
+  | { readonly kind: "all" }
+  | { readonly kind: "allowlist"; readonly ownerUserIds: readonly string[] };
+
 export type FlowExecutionTokenDetail = {
   readonly id: string;
   readonly nodeId: string;
@@ -120,6 +124,7 @@ export type FlowExecutionStore = {
     readonly leaseOwner: string;
     readonly leaseDurationMs: number;
     readonly executorKeys: readonly FlowNodeExecutorKey[];
+    readonly ownerScope: FlowExecutionOwnerScope;
   }) => Promise<FlowExecutionClaimNextResult | null>;
   readonly finalize: (input: {
     readonly claim: FlowExecutionClaim;
