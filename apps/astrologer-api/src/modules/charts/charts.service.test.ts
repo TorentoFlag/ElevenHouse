@@ -1087,11 +1087,11 @@ describe("ChartsService", () => {
     expect(foreignCommandStore.createOrReuseChartJobAndRequestCalculation).not.toHaveBeenCalled();
   });
 
-  it("authorizes every persisted participant and saves a checksum-bound natal AI draft", async () => {
+  it("generates a checksum-bound natal AI draft without client consent", async () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const calculationStore = createCalculationStore(calculation);
     const dictionaryStore = createDictionaryStore();
-    const consentStore = createConsentStore("granted");
+    const consentStore = createConsentStore("missing");
     const aiGeneration = createAiGenerationService();
     const aiDraftCommandStore = createAiDraftCommandStore();
     const service = createService({
@@ -1114,10 +1114,7 @@ describe("ChartsService", () => {
       aiDraftIdempotencyKey
     );
 
-    expect(consentStore.findChartAiConsentEvidence).toHaveBeenCalledWith({
-      astrologerUserId: ownerUserId,
-      clientUserIds: [clientId]
-    });
+    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(aiDraftCommandStore.acquire).toHaveBeenCalledWith(
       expect.objectContaining({
         now: "2026-07-20T12:00:00.000Z",
@@ -1135,9 +1132,7 @@ describe("ChartsService", () => {
       expect.objectContaining({
         feature: "chart.interpretationDraft",
         ownerUserId,
-        consentAuthorizations: [
-          { consentRecordId: consentId, clientUserId: clientId, astrologerUserId: ownerUserId }
-        ],
+        consentAuthorizations: [],
         usageEvidence: {
           processingAuthorityVersion: "verified-test-authority.v1",
           resourceEvidence: {
@@ -1637,7 +1632,7 @@ describe("ChartsService", () => {
     );
   });
 
-  it("fails closed without current consent before profile, Dictionary, provider or save work", async () => {
+  it("generates without current consent", async () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const calculationStore = createCalculationStore(calculation);
     const dictionaryStore = createDictionaryStore();
@@ -1650,7 +1645,11 @@ describe("ChartsService", () => {
       profileStore,
       consentStore,
       aiGeneration,
-      locale: "en"
+      locale: "en",
+      chartAiConfig: {
+        enabled: true,
+        processingAuthorityVersion: "verified-test-authority.v1"
+      }
     });
 
     await expect(
@@ -1660,17 +1659,20 @@ describe("ChartsService", () => {
         request(),
         aiDraftIdempotencyKey
       )
-    ).rejects.toMatchObject({
-      status: 403,
-      response: expect.objectContaining({ code: "CHART_AI_CONSENT_REQUIRED" })
+    ).resolves.toMatchObject({
+      id: calculation.id,
+      interpretations: [expect.objectContaining({ status: "draft" })]
     });
-    expect(profileStore.findByOwnerUserId).not.toHaveBeenCalled();
-    expect(dictionaryStore.listEntriesByCodes).not.toHaveBeenCalled();
-    expect(aiGeneration.generate).not.toHaveBeenCalled();
-    expect(calculationStore.saveInterpretation).not.toHaveBeenCalled();
+    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
+    expect(profileStore.findByOwnerUserId).toHaveBeenCalledOnce();
+    expect(dictionaryStore.listEntriesByCodes).toHaveBeenCalledOnce();
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAuthorizations: [] })
+    );
+    expect(calculationStore.saveInterpretation).toHaveBeenCalledOnce();
   });
 
-  it("fails closed after consent but before Dictionary when chart AI authority is unavailable", async () => {
+  it("fails closed before profile and Dictionary when chart AI authority is unavailable", async () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const dictionaryStore = createDictionaryStore();
     const profileStore = createProfileStore("en");
@@ -1698,7 +1700,7 @@ describe("ChartsService", () => {
         code: "CHART_AI_PROCESSING_AUTHORITY_UNAVAILABLE"
       })
     });
-    expect(consentStore.findChartAiConsentEvidence).toHaveBeenCalledOnce();
+    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(profileStore.findByOwnerUserId).not.toHaveBeenCalled();
     expect(dictionaryStore.listEntriesByCodes).not.toHaveBeenCalled();
     expect(aiGeneration.generate).not.toHaveBeenCalled();
@@ -1788,7 +1790,7 @@ describe("ChartsService", () => {
     expect(JSON.stringify(logger.mock.calls)).not.toContain("dictionary storage unavailable");
   });
 
-  it("rejects manual chart participants that cannot grant relationship-scoped consent", async () => {
+  it("generates AI drafts for manual chart participants", async () => {
     const calculation = chartCalculationRecord({
       resultData: natalChartResultV2(),
       participants: [
@@ -1805,7 +1807,11 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       consentStore,
-      aiGeneration
+      aiGeneration,
+      chartAiConfig: {
+        enabled: true,
+        processingAuthorityVersion: "verified-test-authority.v1"
+      }
     });
 
     await expect(
@@ -1815,12 +1821,14 @@ describe("ChartsService", () => {
         request(),
         aiDraftIdempotencyKey
       )
-    ).rejects.toMatchObject({
-      status: 403,
-      response: expect.objectContaining({ code: "CHART_AI_CONSENT_REQUIRED" })
+    ).resolves.toMatchObject({
+      id: calculation.id,
+      interpretations: [expect.objectContaining({ status: "draft" })]
     });
     expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
-    expect(aiGeneration.generate).not.toHaveBeenCalled();
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ consentAuthorizations: [] })
+    );
   });
 
   it("rejects stale chart AI draft requests before calling the provider", async () => {
@@ -1974,7 +1982,6 @@ function createService(
     { now: () => now } as SystemClock,
     input.aiGeneration ?? createAiGenerationService(),
     (input.executionProfileProvider ?? { getProfile: () => executionProfile }) as never,
-    input.consentStore ?? createConsentStore("missing"),
     input.chartAiConfig ?? { enabled: false, processingAuthorityVersion: null },
     input.aiDraftCommandStore ?? createAiDraftCommandStore()
   );

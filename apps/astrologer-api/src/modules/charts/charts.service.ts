@@ -8,7 +8,6 @@ import {
 } from "@elevenhouse/ai";
 import {
   assertChartBirthDataReady,
-  authorizeChartAiParticipants,
   buildChartAiDraftCommandRequestHash,
   buildChartJobRequestFingerprint,
   chartAiDraftCommandTtlMs,
@@ -42,7 +41,6 @@ import {
   type ChartInterpretationMode,
   type ChartRecalculationTarget,
   type ChartReadyBirthData,
-  type ClientConsentStore,
   type ClientStore,
   type DictionaryStore
 } from "@elevenhouse/domain";
@@ -101,7 +99,6 @@ import { ChartExecutionProfileProvider } from "./chart-execution-profile.provide
 import {
   CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
-  CHART_CLIENT_CONSENT_STORE,
   CHART_COMMAND_STORE,
   CHART_JOB_STORE,
   type ChartAiConfig
@@ -132,8 +129,6 @@ export class ChartsService {
     private readonly clock: SystemClock,
     private readonly aiGeneration: AiGenerationService,
     private readonly executionProfile: ChartExecutionProfileProvider,
-    @Inject(CHART_CLIENT_CONSENT_STORE)
-    private readonly consentStore: ClientConsentStore,
     @Inject(CHART_AI_CONFIG) private readonly chartAiConfig: ChartAiConfig,
     @Inject(CHART_AI_DRAFT_COMMAND_STORE)
     private readonly aiDraftCommandStore: ChartAiDraftCommandStore
@@ -860,7 +855,6 @@ export class ChartsService {
         throw new ChartAiDraftInProgressError();
       }
 
-      let participantConsents: Awaited<ReturnType<typeof authorizeChartAiParticipants>>;
       let processingAuthorityVersion: string;
       let locale: "ru" | "en";
       let dictionary: Awaited<ReturnType<typeof listDictionaryEntriesByCodes>>;
@@ -868,21 +862,6 @@ export class ChartsService {
         assertStoredChartCalculationIntegrity({
           calculation,
           expectedExecutionProfile: this.executionProfile.getProfile()
-        });
-        const participants = calculation.participants.map((participant) => {
-          if (participant.source !== "crm_client" || participant.clientId === null) {
-            throw chartHttpError(
-              403,
-              "CHART_AI_CONSENT_REQUIRED",
-              "Current client consent is required for chart AI generation"
-            );
-          }
-          return { clientUserId: participant.clientId };
-        });
-        participantConsents = await authorizeChartAiParticipants({
-          store: this.consentStore,
-          astrologerUserId: ownerUserId,
-          participants
         });
         const currentProcessingAuthorityVersion = this.chartAiConfig.processingAuthorityVersion;
         if (!this.chartAiConfig.enabled || !currentProcessingAuthorityVersion) {
@@ -935,11 +914,7 @@ export class ChartsService {
           ),
           ownerUserId,
           feature: "chart.interpretationDraft",
-          consentAuthorizations: participantConsents.map(({ clientUserId, consentId }) => ({
-            consentRecordId: consentId,
-            clientUserId,
-            astrologerUserId: ownerUserId
-          })),
+          consentAuthorizations: [],
           usageEvidence: {
             processingAuthorityVersion,
             resourceEvidence: {
@@ -984,9 +959,7 @@ export class ChartsService {
       };
       let saved: CalculationRecord;
       try {
-        saved = await retryExactChartAiDraftSave(() =>
-          saveCalculationInterpretation(saveCommand)
-        );
+        saved = await retryExactChartAiDraftSave(() => saveCalculationInterpretation(saveCommand));
       } catch {
         let recovered: ChartAiDraftCommandResult | null;
         try {

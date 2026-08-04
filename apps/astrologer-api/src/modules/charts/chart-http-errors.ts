@@ -4,16 +4,12 @@ import {
   CalculationInterpretationModeUnavailableError,
   CalculationResultChangedError,
   CalculationValidationError,
-  ChartAiConsentRequiredError,
   ChartAiDraftIdempotencyKeyReuseError,
   ChartAiDraftInProgressError,
   ChartAiDraftOutcomeUnknownError,
   ChartBirthDataReadinessError,
   ChartParticipantRelationshipInactiveError,
-  ChartStoredResultIntegrityError,
-  ClientConsentIntegrityError,
-  ClientConsentRelationshipInactiveError,
-  ClientConsentRelationshipRequiredError
+  ChartStoredResultIntegrityError
 } from "@elevenhouse/domain";
 
 export type ChartErrorCode =
@@ -40,8 +36,6 @@ export type ChartErrorCode =
   | "CHART_STORED_RESULT_INTEGRITY_INVALID"
   | "CHART_PARTICIPANT_RELATIONSHIP_INACTIVE"
   | "CHART_RECALCULATION_REQUIRED"
-  | "CHART_AI_CONSENT_REQUIRED"
-  | "CHART_AI_CONSENT_EVIDENCE_UNAVAILABLE"
   | "CHART_AI_PROCESSING_AUTHORITY_UNAVAILABLE"
   | "CHART_AI_DRAFT_IDEMPOTENCY_KEY_REUSED"
   | "CHART_AI_DRAFT_IN_PROGRESS"
@@ -84,24 +78,6 @@ export async function mapChartError<T>(operation: () => Promise<T>): Promise<T> 
     }
     if (error instanceof ChartAiDraftOutcomeUnknownError) {
       throw chartHttpError(503, error.code, error.message);
-    }
-    if (
-      error instanceof ChartAiConsentRequiredError ||
-      error instanceof ClientConsentRelationshipRequiredError ||
-      error instanceof ClientConsentRelationshipInactiveError
-    ) {
-      throw chartHttpError(
-        403,
-        "CHART_AI_CONSENT_REQUIRED",
-        "Current client consent is required for chart AI generation"
-      );
-    }
-    if (error instanceof ClientConsentIntegrityError) {
-      throw chartHttpError(
-        503,
-        "CHART_AI_CONSENT_EVIDENCE_UNAVAILABLE",
-        "Client consent evidence is temporarily unavailable"
-      );
     }
     if (error instanceof CalculationNotFoundError) {
       throw chartHttpError(404, "CHART_CALCULATION_NOT_FOUND", "Chart calculation was not found");

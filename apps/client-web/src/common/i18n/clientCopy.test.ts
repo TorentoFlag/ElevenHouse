@@ -33,16 +33,6 @@ describe("clientCopyByLocale", () => {
     );
   });
 
-  it("contains complete chart AI consent actions for both launch locales", () => {
-    expect(clientCopyByLocale.ru.chartAiConsent.grant).toBe("Разрешить AI-черновики");
-    expect(clientCopyByLocale.en.chartAiConsent.grant).toBe("Allow AI drafts");
-    expect(clientCopyByLocale.ru.chartAiConsent.states.stale).toBe("Нужно обновить согласие");
-    expect(clientCopyByLocale.en.chartAiConsent.states.stale).toBe("Consent needs renewal");
-    expect(clientCopyByLocale.ru.chartAiConsent.acceptanceLabel).not.toBe(
-      clientCopyByLocale.en.chartAiConsent.acceptanceLabel
-    );
-  });
-
   it("contains complete birth place search states for both launch locales", () => {
     expect(clientCopyByLocale.ru.birthPlaceSearch.searching).toBe("Ищем место…");
     expect(clientCopyByLocale.en.birthPlaceSearch.searching).toBe("Searching for a place…");

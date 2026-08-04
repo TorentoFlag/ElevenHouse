@@ -3,14 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   ClientBirthDataResponse,
-  ClientCabinetOverviewResponse,
-  ClientDataConsentListResponse,
-  ClientDataConsentLocale
-} from "@elevenhouse/contracts";
-import {
-  canonicalChartAiConsentNotices,
-  chartAiConsentNoticeSha256ByLocale,
-  clientDataConsentListResponseSchema
+  ClientCabinetOverviewResponse
 } from "@elevenhouse/contracts";
 import { I18nProvider, useI18n } from "@elevenhouse/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -19,19 +12,12 @@ import { MePage } from "./MePage";
 
 const api = vi.hoisted(() => ({
   createClientBirthProfile: vi.fn(),
-  getClientDataConsents: vi.fn<
-    (locale: ClientDataConsentLocale) => Promise<ClientDataConsentListResponse>
-  >(() => new Promise<ClientDataConsentListResponse>(() => undefined)),
   getClientCabinetOverview: vi.fn(),
-  grantClientChartAiConsent: vi.fn(),
-  revokeClientDataConsent: vi.fn(),
   searchClientBirthPlaces: vi.fn(),
   updateClientBirthProfile: vi.fn()
 }));
 
 vi.mock("../../features/client-profile/api/clientProfileApi", () => api);
-
-vi.mock("../../features/client-profile/api/clientDataConsentApi", () => api);
 
 describe("MePage birth profile submission", () => {
   afterEach(() => {
@@ -84,47 +70,6 @@ describe("MePage birth profile submission", () => {
     });
     expect(await screen.findByText("Сохранено")).toBeTruthy();
   });
-
-  it("reloads the current locale after a consent mutation that overlaps a locale change", async () => {
-    const astrologerUserId = "22222222-2222-4222-8222-222222222222";
-    const grant = deferred<void>();
-    let englishLoads = 0;
-    api.getClientCabinetOverview.mockResolvedValue(
-      overview({
-        astrologers: [
-          {
-            astrologerUserId,
-            publicHandle: "alice-vega",
-            publicName: "Alice Vega",
-            relationshipStatus: "active",
-            firstLinkedAt: "2026-08-03T10:00:00.000Z",
-            lastLinkedAt: "2026-08-03T10:00:00.000Z"
-          }
-        ]
-      })
-    );
-    api.getClientDataConsents.mockImplementation(async (locale: "ru" | "en") => {
-      if (locale === "ru") return consentResponse("ru", "missing");
-      englishLoads += 1;
-      return consentResponse("en", englishLoads === 1 ? "missing" : "granted");
-    });
-    api.grantClientChartAiConsent.mockReturnValue(grant.promise);
-    renderPage();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Мои данные" }));
-    fireEvent.click(await screen.findByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Разрешить AI-черновики" }));
-    fireEvent.click(screen.getByRole("button", { name: "switch-en" }));
-    await waitFor(() => expect(api.getClientDataConsents).toHaveBeenCalledWith("en"));
-
-    grant.resolve();
-
-    expect(
-      await screen.findByText(clientCopyByLocale.en.chartAiConsent.states.granted)
-    ).toBeTruthy();
-    expect(api.getClientDataConsents).toHaveBeenLastCalledWith("en");
-    expect(englishLoads).toBe(2);
-  });
 });
 
 function renderPage() {
@@ -166,43 +111,6 @@ function overview(
     },
     ...overrides
   };
-}
-
-function consentResponse(
-  locale: "ru" | "en",
-  state: "missing" | "granted"
-): ClientDataConsentListResponse {
-  const hasConsent = state === "granted";
-  return clientDataConsentListResponseSchema.parse({
-    policy: {
-      purpose: "external_chart_ai_interpretation",
-      policyVersion: "chart-ai-external-processing.v1",
-      processorCode: "openai"
-    },
-    notice: canonicalChartAiConsentNotices[locale],
-    noticeSha256: chartAiConsentNoticeSha256ByLocale[locale],
-    consents: [
-      {
-        astrologerUserId: "22222222-2222-4222-8222-222222222222",
-        publicHandle: "alice-vega",
-        publicName: "Alice Vega",
-        relationshipStatus: "active",
-        state,
-        consentId: hasConsent ? "44444444-4444-4444-8444-444444444444" : null,
-        noticeLocale: hasConsent ? locale : null,
-        grantedAt: hasConsent ? "2026-08-03T12:00:00.000Z" : null,
-        revokedAt: null
-      }
-    ]
-  });
-}
-
-function deferred<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((nextResolve) => {
-    resolve = nextResolve;
-  });
-  return { promise, resolve };
 }
 
 function profile(overrides: Partial<ClientBirthDataResponse> = {}): ClientBirthDataResponse {

@@ -1,48 +1,29 @@
 import type { ClientCabinetOverviewResponse } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientCopy } from "../../common/i18n/clientCopy";
-import {
-  getClientDataConsents,
-  grantClientChartAiConsent,
-  revokeClientDataConsent
-} from "../../features/client-profile/api/clientDataConsentApi";
 import {
   createClientBirthProfile,
   getClientCabinetOverview,
   searchClientBirthPlaces,
   updateClientBirthProfile
 } from "../../features/client-profile/api/clientProfileApi";
-import { buildClientDataConsentCards } from "../../features/client-profile/model/clientDataConsentModel";
 import {
   buildBirthProfileRequest,
   createBirthProfileForm,
   type BirthProfileFormState
 } from "../../features/client-profile/model/birthProfileFormModel";
-import type {
-  ClientDataConsentPendingAction,
-  ClientDataConsentSectionStatus
-} from "./ClientDataConsentSection";
 import { MePageView, type ClientCabinetSection, type ClientCabinetStatus } from "./MePageView";
 
 const emptyForm = createBirthProfileForm(null);
 
 export function MePage() {
-  const { dictionary, locale } = useI18n<ClientCopy>();
+  const { dictionary } = useI18n<ClientCopy>();
   const [activeSection, setActiveSection] = useState<ClientCabinetSection>("home");
   const [form, setForm] = useState<BirthProfileFormState>(emptyForm);
   const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
   const [status, setStatus] = useState<ClientCabinetStatus>("loading");
-  const [consentResponse, setConsentResponse] = useState<Awaited<
-    ReturnType<typeof getClientDataConsents>
-  > | null>(null);
-  const [consentStatus, setConsentStatus] = useState<ClientDataConsentSectionStatus>("loading");
-  const [pendingConsentAction, setPendingConsentAction] =
-    useState<ClientDataConsentPendingAction | null>(null);
-  const consentRequestVersion = useRef(0);
-  const consentLocale = useRef(locale);
-  consentLocale.current = locale;
 
   useDocumentTitle("Кабинет клиента");
 
@@ -77,40 +58,6 @@ export function MePage() {
     return response.candidates;
   }, []);
 
-  const loadConsents = useCallback(() => {
-    const requestVersion = ++consentRequestVersion.current;
-    const requestedLocale = locale;
-    setConsentResponse(null);
-    setConsentStatus("loading");
-
-    void getClientDataConsents(requestedLocale)
-      .then((response) => {
-        if (
-          consentRequestVersion.current !== requestVersion ||
-          consentLocale.current !== requestedLocale
-        ) {
-          return;
-        }
-        setConsentResponse(response);
-        setConsentStatus("ready");
-      })
-      .catch(() => {
-        if (
-          consentRequestVersion.current === requestVersion &&
-          consentLocale.current === requestedLocale
-        ) {
-          setConsentStatus("error");
-        }
-      });
-  }, [locale]);
-
-  useEffect(() => {
-    loadConsents();
-    return () => {
-      consentRequestVersion.current += 1;
-    };
-  }, [loadConsents]);
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const requestResult = buildBirthProfileRequest(form);
@@ -135,72 +82,6 @@ export function MePage() {
     }
   }
 
-  async function runConsentMutation(
-    action: ClientDataConsentPendingAction,
-    mutate: () => Promise<unknown>
-  ) {
-    consentRequestVersion.current += 1;
-    setPendingConsentAction(action);
-    setConsentStatus("ready");
-
-    try {
-      await mutate();
-      const requestedLocale = consentLocale.current;
-      const requestVersion = ++consentRequestVersion.current;
-      const response = await getClientDataConsents(requestedLocale);
-      if (
-        consentRequestVersion.current !== requestVersion ||
-        consentLocale.current !== requestedLocale
-      ) {
-        return;
-      }
-      setConsentResponse(response);
-      setConsentStatus("ready");
-    } catch {
-      consentRequestVersion.current += 1;
-      setConsentResponse(null);
-      setConsentStatus("error");
-    } finally {
-      setPendingConsentAction((current) =>
-        current?.kind === action.kind && current.id === action.id ? null : current
-      );
-    }
-  }
-
-  async function handleGrantConsent(astrologerUserId: string) {
-    const currentResponse = consentResponse;
-    if (!currentResponse || currentResponse.notice.locale !== locale) {
-      setConsentResponse(null);
-      setConsentStatus("error");
-      return;
-    }
-
-    await runConsentMutation({ kind: "grant", id: astrologerUserId }, () =>
-      grantClientChartAiConsent(astrologerUserId, {
-        accepted: true,
-        locale,
-        noticeSha256: currentResponse.noticeSha256,
-        policyVersion: currentResponse.policy.policyVersion
-      })
-    );
-  }
-
-  async function handleRevokeConsent(consentId: string) {
-    await runConsentMutation({ kind: "revoke", id: consentId }, () =>
-      revokeClientDataConsent(consentId)
-    );
-  }
-
-  let resolvedConsentStatus = consentStatus;
-  let consentCards: ReturnType<typeof buildClientDataConsentCards> | null = null;
-  if (consentStatus === "ready" && overview && consentResponse) {
-    try {
-      consentCards = buildClientDataConsentCards(overview, consentResponse);
-    } catch {
-      resolvedConsentStatus = "error";
-    }
-  }
-
   return (
     <MePageView
       activeSection={activeSection}
@@ -209,21 +90,6 @@ export function MePage() {
         onSearch: searchBirthPlaces
       }}
       birthTimeOccurrenceCopy={dictionary.birthTimeOccurrence}
-      consentSection={{
-        cards: consentCards,
-        copy: dictionary.chartAiConsent,
-        notice: consentResponse?.notice ?? null,
-        noticeSha256: consentResponse?.noticeSha256 ?? null,
-        pendingAction: pendingConsentAction,
-        status: resolvedConsentStatus,
-        onGrant: (astrologerUserId) => {
-          void handleGrantConsent(astrologerUserId);
-        },
-        onRetry: loadConsents,
-        onRevoke: (consentId) => {
-          void handleRevokeConsent(consentId);
-        }
-      }}
       form={form}
       overview={overview}
       status={status}

@@ -44,32 +44,6 @@ export type AuthVisualCopy = {
   avatarInitials: string[];
 };
 
-export type ChartAiConsentCopy = {
-  sectionEyebrow: string;
-  sectionTitle: string;
-  sentHeading: string;
-  excludedHeading: string;
-  relationshipHeading: string;
-  acceptanceLabel: string;
-  grant: string;
-  grantAgain: string;
-  granting: string;
-  revoke: string;
-  revoking: string;
-  grantedAt: string;
-  revokedAt: string;
-  loading: string;
-  empty: string;
-  error: string;
-  retry: string;
-  states: {
-    missing: string;
-    granted: string;
-    revoked: string;
-    stale: string;
-  };
-};
-
 export type BirthPlaceSearchCopy = {
   label: string;
   placeholder: string;
@@ -93,7 +67,6 @@ export type ClientCopy = {
   auth: AuthCopy;
   birthPlaceSearch: BirthPlaceSearchCopy;
   birthTimeOccurrence: BirthTimeOccurrenceCopy;
-  chartAiConsent: ChartAiConsentCopy;
 };
 
 export const clientCopyByLocale = {
@@ -198,31 +171,6 @@ export const clientCopyByLocale = {
       first: "Первое вхождение",
       second: "Второе вхождение",
       helper: "Выберите вариант только если местное время повторялось при переводе часов."
-    },
-    chartAiConsent: {
-      sectionEyebrow: "Приватность",
-      sectionTitle: "AI-черновики интерпретаций",
-      sentHeading: "Передаётся OpenAI",
-      excludedHeading: "Не передаётся",
-      relationshipHeading: "Отдельное согласие для каждого астролога",
-      acceptanceLabel: "Я прочитал(а) условия и явно разрешаю описанную передачу данных",
-      grant: "Разрешить AI-черновики",
-      grantAgain: "Предоставить согласие заново",
-      granting: "Сохраняем согласие…",
-      revoke: "Отозвать согласие",
-      revoking: "Отзываем…",
-      grantedAt: "Предоставлено",
-      revokedAt: "Отозвано",
-      loading: "Загружаем подтверждённые согласия…",
-      empty: "Связанных астрологов пока нет — предоставлять согласие некому.",
-      error: "Не удалось подтвердить состояние согласий. AI-черновики остаются недоступны.",
-      retry: "Повторить",
-      states: {
-        missing: "Согласие не предоставлено",
-        granted: "Согласие действует",
-        revoked: "Согласие отозвано",
-        stale: "Нужно обновить согласие"
-      }
     }
   },
   en: {
@@ -326,31 +274,6 @@ export const clientCopyByLocale = {
       first: "First occurrence",
       second: "Second occurrence",
       helper: "Choose only when the local clock time occurred twice during a DST change."
-    },
-    chartAiConsent: {
-      sectionEyebrow: "Privacy",
-      sectionTitle: "AI interpretation drafts",
-      sentHeading: "Sent to OpenAI",
-      excludedHeading: "Not sent",
-      relationshipHeading: "Separate consent for each astrologer",
-      acceptanceLabel: "I have read the terms and explicitly allow the described data transfer",
-      grant: "Allow AI drafts",
-      grantAgain: "Grant consent again",
-      granting: "Saving consent…",
-      revoke: "Withdraw consent",
-      revoking: "Withdrawing…",
-      grantedAt: "Granted",
-      revokedAt: "Withdrawn",
-      loading: "Loading verified consent records…",
-      empty: "There are no linked astrologers to grant consent to yet.",
-      error: "Consent status could not be verified. AI drafts remain unavailable.",
-      retry: "Try again",
-      states: {
-        missing: "Consent not granted",
-        granted: "Consent is active",
-        revoked: "Consent withdrawn",
-        stale: "Consent needs renewal"
-      }
     }
   }
 } satisfies Record<SupportedLocale, ClientCopy>;

@@ -9,9 +9,7 @@ import {
 } from "@elevenhouse/contracts";
 import {
   buildChartResultReproducibilityFingerprint,
-  canonicalChartAiConsentNoticeHashes,
   ChartAiDraftIdempotencyKeyReuseError,
-  currentChartAiConsentPolicy,
   sha256CanonicalJson,
   type CanonicalJson
 } from "@elevenhouse/domain";
@@ -25,7 +23,6 @@ import type {
   ChartCalculationCommandStore,
   ChartCalculationJobStore,
   ChartAiDraftCommandStore,
-  ClientConsentStore,
   ClientBirthData,
   ClientStore,
   PasswordlessAuthUnitOfWork,
@@ -58,7 +55,6 @@ import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-tok
 import {
   CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
-  CHART_CLIENT_CONSENT_STORE,
   CHART_COMMAND_STORE,
   CHART_JOB_STORE
 } from "./charts.tokens";
@@ -88,12 +84,10 @@ describe("charts HTTP routes", () => {
   let moduleRef: TestingModule;
   let baseUrl: string;
   let currentCalculation: CalculationRecord;
-  let consentState: "granted" | "missing";
   let aiGenerate: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     currentCalculation = calculation();
-    consentState = "missing";
     aiGenerate = vi.fn(async () => ({
       provider: "openai" as const,
       model: "gpt-test",
@@ -162,8 +156,6 @@ describe("charts HTTP routes", () => {
       .useValue(createCommandStore())
       .overrideProvider(CHART_JOB_STORE)
       .useValue(createJobStore())
-      .overrideProvider(CHART_CLIENT_CONSENT_STORE)
-      .useValue(createConsentStore(() => consentState))
       .overrideProvider(CHART_AI_CONFIG)
       .useValue({
         enabled: true,
@@ -289,7 +281,7 @@ describe("charts HTTP routes", () => {
     });
   });
 
-  it("fails chart AI closed over HTTP before provider work when consent is missing", async () => {
+  it("generates a chart AI draft over HTTP without client consent", async () => {
     const response = await postJson(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
@@ -297,17 +289,19 @@ describe("charts HTTP routes", () => {
     );
 
     expect(response).toMatchObject({
-      status: 403,
-      body: { code: "CHART_AI_CONSENT_REQUIRED" }
+      status: 201,
+      body: {
+        id: calculationId,
+        interpretations: [expect.objectContaining({ status: "draft" })]
+      }
     });
-    expect(aiGenerate).not.toHaveBeenCalled();
+    expect(aiGenerate).toHaveBeenCalledWith(expect.objectContaining({ consentAuthorizations: [] }));
   });
 
   it.each(["child", "legacy_unclassified"] as const)(
     "blocks %s natal AI and PDF over HTTP before downstream work",
     async (interpretationMode) => {
       currentCalculation = { ...currentCalculation, interpretationMode };
-      consentState = "granted";
 
       const aiResponse = await postJson(
         `/charts/calculations/${calculationId}/ai-draft`,
@@ -332,9 +326,7 @@ describe("charts HTTP routes", () => {
     }
   );
 
-  it("generates and conditionally saves a consent-bound chart AI draft over HTTP", async () => {
-    consentState = "granted";
-
+  it("generates and conditionally saves a chart AI draft over HTTP", async () => {
     const response = await postJson(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
@@ -352,13 +344,7 @@ describe("charts HTTP routes", () => {
     });
     expect(aiGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
-        consentAuthorizations: [
-          {
-            consentRecordId: "88888888-8888-4888-8888-888888888888",
-            clientUserId: clientId,
-            astrologerUserId: ownerUserId
-          }
-        ],
+        consentAuthorizations: [],
         usageEvidence: {
           processingAuthorityVersion: "verified-test-authority.v1",
           resourceEvidence: {
@@ -372,8 +358,6 @@ describe("charts HTTP routes", () => {
   });
 
   it("requires Idempotency-Key before chart AI controller or provider work", async () => {
-    consentState = "granted";
-
     const response = await postJson(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
@@ -385,7 +369,6 @@ describe("charts HTTP routes", () => {
   });
 
   it("replays one chart AI draft and rejects cross-request key reuse over HTTP", async () => {
-    consentState = "granted";
     const key = "chart-ai:test-http-replay";
     const first = await postJson(
       `/charts/calculations/${calculationId}/ai-draft`,
@@ -423,7 +406,6 @@ describe("charts HTTP routes", () => {
   });
 
   it("returns typed 409 to a concurrent duplicate while the first provider call is live", async () => {
-    consentState = "granted";
     let releaseProvider: (() => void) | undefined;
     const providerGate = new Promise<void>((resolve) => {
       releaseProvider = resolve;
@@ -813,40 +795,6 @@ function createClientStore(): ClientStore {
           updatedAt: now.toISOString()
         } satisfies ClientBirthData
       })
-    )
-  };
-}
-
-function createConsentStore(state: () => "granted" | "missing"): ClientConsentStore {
-  return {
-    listRelationshipConsentsForClient: vi.fn(async () => []),
-    grantConsentAtomically: vi.fn(async () => ({ status: "relationship_not_found" as const })),
-    revokeConsentAtomically: vi.fn(async () => ({ status: "not_found" as const })),
-    findChartAiConsentEvidence: vi.fn(async ({ astrologerUserId, clientUserIds }) =>
-      clientUserIds.map((clientUserId: string) => ({
-        relationship: {
-          id: "99999999-9999-4999-8999-999999999999",
-          clientUserId,
-          astrologerUserId,
-          status: "active" as const
-        },
-        consent:
-          state() === "granted"
-            ? {
-                id: "88888888-8888-4888-8888-888888888888",
-                relationshipId: "99999999-9999-4999-8999-999999999999",
-                clientUserId,
-                astrologerUserId,
-                purpose: currentChartAiConsentPolicy.purpose,
-                policyVersion: currentChartAiConsentPolicy.policyVersion,
-                processorCode: currentChartAiConsentPolicy.processorCode,
-                noticeLocale: "ru" as const,
-                noticeSha256: canonicalChartAiConsentNoticeHashes.ru,
-                grantedAt: now.toISOString(),
-                revokedAt: null
-              }
-            : null
-      }))
     )
   };
 }

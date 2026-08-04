@@ -5,7 +5,6 @@ import {
   createDrizzleChartCalculationCommandStore,
   createDrizzleChartCalculationJobStore
 } from "@elevenhouse/db/charts";
-import { createDrizzleClientConsentStore } from "@elevenhouse/db/clients";
 import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { AiModule } from "../ai/ai.module";
@@ -25,7 +24,6 @@ import { ChartsService } from "./charts.service";
 import {
   CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
-  CHART_CLIENT_CONSENT_STORE,
   CHART_COMMAND_STORE,
   CHART_JOB_STORE
 } from "./charts.tokens";
@@ -58,12 +56,6 @@ import {
       provide: CHART_JOB_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleChartCalculationJobStore(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    },
-    {
-      provide: CHART_CLIENT_CONSENT_STORE,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleClientConsentStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

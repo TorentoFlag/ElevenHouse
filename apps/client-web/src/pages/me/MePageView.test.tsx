@@ -1,5 +1,4 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { canonicalChartAiConsentNotices } from "@elevenhouse/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { clientCopyByLocale } from "../../common/i18n/clientCopy";
 import { MePageView, type BirthProfileFormState } from "./MePageView";
@@ -27,18 +26,6 @@ const defaultBirthPlaceSearch = {
   onSearch: vi.fn(async () => [])
 };
 
-const defaultConsentSection = {
-  cards: [],
-  copy: clientCopyByLocale.ru.chartAiConsent,
-  notice: canonicalChartAiConsentNotices.ru,
-  noticeSha256: "sha256:ru",
-  pendingAction: null,
-  status: "ready" as const,
-  onGrant: vi.fn(),
-  onRetry: vi.fn(),
-  onRevoke: vi.fn()
-};
-
 describe("MePageView", () => {
   it("renders a direct-link-only cabinet without discovery affordances", () => {
     const markup = renderToStaticMarkup(
@@ -46,7 +33,6 @@ describe("MePageView", () => {
         activeSection="home"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
-        consentSection={defaultConsentSection}
         form={defaultForm}
         overview={{
           astrologers: [
@@ -95,22 +81,6 @@ describe("MePageView", () => {
         activeSection="data"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
-        consentSection={{
-          ...defaultConsentSection,
-          cards: [
-            {
-              astrologerUserId: "22222222-2222-4222-8222-222222222222",
-              publicName: "Алиса Вега",
-              publicHandle: "alisa-vega",
-              state: "missing",
-              consentId: null,
-              grantedAt: null,
-              revokedAt: null,
-              canGrant: true,
-              canRevoke: false
-            }
-          ]
-        }}
         form={defaultForm}
         overview={{
           astrologers: [],
@@ -153,9 +123,7 @@ describe("MePageView", () => {
     expect(markup).toContain('id="client-birth-profile-birth-place"');
     expect(markup).toContain('role="combobox"');
     expect(markup).toContain("Место подтверждено: Europe/Moscow");
-    expect(markup).toContain(canonicalChartAiConsentNotices.ru.title);
-    expect(markup).toContain("Алиса Вега");
-    expect(markup).toContain(clientCopyByLocale.ru.chartAiConsent.acceptanceLabel);
+    expect(markup).not.toContain("Согласие на AI-трактовку");
   });
 
   it("enables booking entry only for explicitly linked astrologers", () => {
@@ -164,7 +132,6 @@ describe("MePageView", () => {
         activeSection="booking"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
-        consentSection={defaultConsentSection}
         form={defaultForm}
         overview={{
           astrologers: [
@@ -212,7 +179,6 @@ describe("MePageView", () => {
         activeSection="booking"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
-        consentSection={defaultConsentSection}
         form={defaultForm}
         overview={{
           astrologers: [],
@@ -246,7 +212,6 @@ describe("MePageView", () => {
         activeSection="data"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
-        consentSection={defaultConsentSection}
         form={{
           ...defaultForm,
           birthPlaceText: "произвольный текст",

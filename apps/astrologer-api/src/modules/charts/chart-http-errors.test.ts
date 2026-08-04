@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  ChartAiConsentRequiredError,
   ChartAiDraftIdempotencyKeyReuseError,
   ChartAiDraftInProgressError,
   ChartAiDraftOutcomeUnknownError,
   ChartBirthDataReadinessError,
   ChartParticipantRelationshipInactiveError,
   ChartStoredResultIntegrityError,
-  ClientConsentIntegrityError,
-  ClientConsentRelationshipInactiveError,
-  ClientConsentRelationshipRequiredError,
   type ChartBirthDataReadinessErrorCode
 } from "@elevenhouse/domain";
 import { mapChartError } from "./chart-http-errors";
@@ -63,37 +59,6 @@ describe("mapChartError", () => {
       response: expect.objectContaining({
         code: "CHART_PARTICIPANT_RELATIONSHIP_INACTIVE",
         message: "Client relationship changed; reload and retry"
-      })
-    });
-  });
-
-  it.each([
-    new ChartAiConsentRequiredError("11111111-1111-4111-8111-111111111111", "missing"),
-    new ClientConsentRelationshipRequiredError("11111111-1111-4111-8111-111111111111"),
-    new ClientConsentRelationshipInactiveError("11111111-1111-4111-8111-111111111111", "archived")
-  ])("maps unavailable participant consent to one non-identifying response", async (error) => {
-    await expect(
-      mapChartError(async () => {
-        throw error;
-      })
-    ).rejects.toMatchObject({
-      status: 403,
-      response: expect.objectContaining({
-        code: "CHART_AI_CONSENT_REQUIRED",
-        message: "Current client consent is required for chart AI generation"
-      })
-    });
-  });
-
-  it("maps inconsistent consent evidence to an observable fail-closed response", async () => {
-    await expect(
-      mapChartError(async () => {
-        throw new ClientConsentIntegrityError();
-      })
-    ).rejects.toMatchObject({
-      status: 503,
-      response: expect.objectContaining({
-        code: "CHART_AI_CONSENT_EVIDENCE_UNAVAILABLE"
       })
     });
   });

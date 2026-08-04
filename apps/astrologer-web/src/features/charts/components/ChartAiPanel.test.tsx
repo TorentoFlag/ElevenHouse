@@ -19,7 +19,7 @@ describe("ChartAiPanel manual save idempotency", () => {
     vi.restoreAllMocks();
   });
 
-  it("explains that the client must grant AI-processing consent before generation", async () => {
+  it("does not instruct the astrologer to request client consent for a legacy response", async () => {
     const user = userEvent.setup();
     vi.spyOn(application.http, "get").mockResolvedValue(calculationRecord(calculationId));
     vi.spyOn(application.http, "post").mockRejectedValue(
@@ -33,9 +33,7 @@ describe("ChartAiPanel manual save idempotency", () => {
     );
     await user.click(screen.getByRole("button", { name: "Сгенерировать заново" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Нужно согласие клиентки на AI-трактовку. Клиентка может дать его в личном кабинете."
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось создать AI-черновик");
   });
 
   it.each([

@@ -542,8 +542,6 @@ const ruChartEngineCopy = {
     limit: "Лимит AI-генераций исчерпан. Повторите позже",
     malformed: "AI вернул некорректный черновик. Повторите генерацию",
     unavailable: "AI временно недоступен. Повторите позже",
-    consentRequired:
-      "Нужно согласие клиентки на AI-трактовку. Клиентка может дать его в личном кабинете.",
     generic: "Не удалось создать AI-черновик",
     manualConflict:
       "Этот ключ повтора уже использован для другого текста. Измените текст и повторите",
@@ -1157,8 +1155,6 @@ const enChartEngineCopy: ChartEngineCopy = {
     limit: "The AI generation limit has been reached. Try again later",
     malformed: "AI returned an invalid draft. Retry generation",
     unavailable: "AI is temporarily unavailable. Try again later",
-    consentRequired:
-      "The client must grant consent for the AI interpretation. The client can do this in their personal account.",
     generic: "Could not create the AI draft",
     manualConflict:
       "This retry key was already used for different text. Edit the text and try again",

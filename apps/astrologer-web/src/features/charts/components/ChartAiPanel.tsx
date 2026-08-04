@@ -314,9 +314,6 @@ function getDisabledReason(input: {
 
 function getChartAiDraftErrorMessage(error: unknown, copy: ChartEngineCopy["ai"]): string {
   if (error instanceof HttpError) {
-    if (readChartAiErrorCode(error.body) === "CHART_AI_CONSENT_REQUIRED") {
-      return copy.consentRequired;
-    }
     if (error.status === 409) {
       return copy.conflict;
     }

@@ -15,10 +15,6 @@ import {
   updateBirthTimeDstOccurrence,
   type BirthProfileFormState
 } from "../../features/client-profile/model/birthProfileFormModel";
-import {
-  ClientDataConsentSection,
-  type ClientDataConsentSectionProps
-} from "./ClientDataConsentSection";
 import styles from "./MePage.module.css";
 
 export type ClientCabinetSection = "home" | "booking" | "sessions" | "feed" | "data" | "billing";
@@ -41,7 +37,6 @@ export type MePageViewProps = {
     ) => Promise<readonly ClientBirthPlaceCandidate[]>;
   };
   readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
-  readonly consentSection: ClientDataConsentSectionProps;
   readonly form: BirthProfileFormState;
   readonly overview: ClientCabinetOverviewResponse | null;
   readonly status: ClientCabinetStatus;
@@ -68,7 +63,6 @@ export function MePageView({
   activeSection,
   birthPlaceSearch,
   birthTimeOccurrenceCopy,
-  consentSection,
   form,
   overview,
   status,
@@ -205,7 +199,6 @@ export function MePageView({
             <DataSection
               birthPlaceSearch={birthPlaceSearch}
               birthTimeOccurrenceCopy={birthTimeOccurrenceCopy}
-              consentSection={consentSection}
               form={form}
               profiles={safeOverview.birthProfiles}
               status={status}
@@ -391,7 +384,6 @@ function BookingEntrySection({
 function DataSection({
   birthPlaceSearch,
   birthTimeOccurrenceCopy,
-  consentSection,
   form,
   profiles,
   status,
@@ -400,7 +392,6 @@ function DataSection({
 }: {
   readonly birthPlaceSearch: MePageViewProps["birthPlaceSearch"];
   readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
-  readonly consentSection: ClientDataConsentSectionProps;
   readonly form: BirthProfileFormState;
   readonly profiles: readonly ClientBirthDataResponse[];
   readonly status: ClientCabinetStatus;
@@ -521,8 +512,6 @@ function DataSection({
           <p className={styles.errorText}>Не удалось выполнить действие</p>
         ) : null}
       </form>
-
-      <ClientDataConsentSection {...consentSection} />
     </div>
   );
 }

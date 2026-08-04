@@ -911,7 +911,7 @@ describe("ChartEnginePage", () => {
       {
         id: "66666666-6666-4666-8666-666666666666",
         status: "draft",
-        text: "OVERVIEW\nRecovered after consent storage recovery"
+        text: "OVERVIEW\nRecovered after preflight recovery"
       }
     ]);
     vi.spyOn(application.http, "get").mockResolvedValue(calculationRecordResponse([]));
@@ -919,8 +919,8 @@ describe("ChartEnginePage", () => {
       .spyOn(application.http, "post")
       .mockRejectedValueOnce(
         new HttpError(503, {
-          code: "CHART_AI_CONSENT_EVIDENCE_UNAVAILABLE",
-          message: "Consent evidence is temporarily unavailable"
+          code: "CHART_AI_DRAFT_PREFLIGHT_UNAVAILABLE",
+          message: "Chart AI preflight is temporarily unavailable"
         })
       )
       .mockResolvedValueOnce(generatedRecord);
