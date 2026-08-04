@@ -106,6 +106,34 @@ export const predecessorFlowConstraints: CatalogDefinitionManifest = {
     "CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'active'::text, 'paused'::text, 'archived'::text])))"
 };
 
+/**
+ * The first production Flow rollout used simple single-column references.
+ * It is safe to advance only when the catalog matches this exact shape; the
+ * reconciler then installs the owner-scoped predecessor constraints before
+ * applying the current Flow control-plane upgrade.
+ */
+export const legacySimpleFlowConstraints: CatalogDefinitionManifest = {
+  "flow_versions.flow_versions_approval_mode_check":
+    "CHECK ((approval_mode = ANY (ARRAY['draft_only'::text, 'manual_approve'::text, 'auto_internal'::text, 'auto_send'::text])))",
+  "flow_versions.flow_versions_flow_id_flows_id_fk":
+    "FOREIGN KEY (flow_id) REFERENCES flows(id) ON DELETE CASCADE",
+  "flow_versions.flow_versions_graph_object_check": "CHECK ((jsonb_typeof(graph) = 'object'::text))",
+  "flow_versions.flow_versions_owner_user_id_users_id_fk":
+    "FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE",
+  "flow_versions.flow_versions_pkey": "PRIMARY KEY (id)",
+  "flow_versions.flow_versions_positive_version_check": "CHECK ((version > 0))",
+  "flows.flows_approval_mode_check":
+    "CHECK ((approval_mode = ANY (ARRAY['draft_only'::text, 'manual_approve'::text, 'auto_internal'::text, 'auto_send'::text])))",
+  "flows.flows_draft_graph_object_check": "CHECK ((jsonb_typeof(draft_graph) = 'object'::text))",
+  "flows.flows_name_length_check":
+    "CHECK (((length(TRIM(BOTH FROM name)) >= 1) AND (length(TRIM(BOTH FROM name)) <= 180)))",
+  "flows.flows_owner_user_id_users_id_fk":
+    "FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE",
+  "flows.flows_pkey": "PRIMARY KEY (id)",
+  "flows.flows_status_check":
+    "CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'active'::text, 'paused'::text, 'archived'::text])))"
+};
+
 export const canonicalFlowConstraints: CatalogDefinitionManifest = {
   "flow_definition_command_outcomes.flow_definition_command_outcomes_command_fk":
     "FOREIGN KEY (command_id) REFERENCES flow_definition_commands(id) ON DELETE CASCADE",
@@ -206,6 +234,20 @@ export const predecessorFlowIndexes: CatalogDefinitionManifest = {
     "CREATE UNIQUE INDEX flow_versions_pkey ON public.flow_versions USING btree (id)",
   "flows.flows_id_owner_unique":
     "CREATE UNIQUE INDEX flows_id_owner_unique ON public.flows USING btree (id, owner_user_id)",
+  "flows.flows_owner_name_idx":
+    "CREATE INDEX flows_owner_name_idx ON public.flows USING btree (owner_user_id, name)",
+  "flows.flows_owner_status_updated_idx":
+    "CREATE INDEX flows_owner_status_updated_idx ON public.flows USING btree (owner_user_id, status, updated_at)",
+  "flows.flows_pkey": "CREATE UNIQUE INDEX flows_pkey ON public.flows USING btree (id)"
+};
+
+export const legacySimpleFlowIndexes: CatalogDefinitionManifest = {
+  "flow_versions.flow_versions_flow_version_unique":
+    "CREATE UNIQUE INDEX flow_versions_flow_version_unique ON public.flow_versions USING btree (flow_id, version)",
+  "flow_versions.flow_versions_owner_published_idx":
+    "CREATE INDEX flow_versions_owner_published_idx ON public.flow_versions USING btree (owner_user_id, published_at)",
+  "flow_versions.flow_versions_pkey":
+    "CREATE UNIQUE INDEX flow_versions_pkey ON public.flow_versions USING btree (id)",
   "flows.flows_owner_name_idx":
     "CREATE INDEX flows_owner_name_idx ON public.flows USING btree (owner_user_id, name)",
   "flows.flows_owner_status_updated_idx":

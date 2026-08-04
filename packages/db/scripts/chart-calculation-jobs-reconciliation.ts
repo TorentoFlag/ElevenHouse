@@ -550,6 +550,7 @@ async function migrateLegacyChartCalculationJobs(client: Client): Promise<void> 
     );
   }
 
+  await backfillSafeLegacySucceededSubjectParticipants(client);
   await assertLegacyChartJobData(client);
   await assertLegacySucceededRelationshipIdentity(client);
   await queryChartMigrationDdl(
@@ -669,6 +670,58 @@ async function migrateLegacyChartCalculationJobs(client: Client): Promise<void> 
     dropLegacyChartCalculationJobsSchemaDdl
   );
   await finalizeChartCalculationJobsSchema(client);
+}
+
+/**
+ * Early chart jobs predate calculation_participants. A succeeded individual
+ * chart can be repaired only if its own immutable snapshots already match the
+ * stored calculation, and the owned CRM relationship provides a non-empty
+ * display-name snapshot. Relationship charts are deliberately excluded: they
+ * require two independently provable participants.
+ */
+async function backfillSafeLegacySucceededSubjectParticipants(client: Client): Promise<void> {
+  await client.query(`
+    INSERT INTO calculation_participants (
+      calculation_id, role, source, client_id, display_name, "order"
+    )
+    SELECT
+      job.result_calculation_id,
+      'subject',
+      'crm_client',
+      job.client_id,
+      profile.display_name_snapshot,
+      0
+    FROM chart_calculation_jobs AS job
+    JOIN calculation_records AS calculation
+      ON calculation.id = job.result_calculation_id
+    JOIN client_profiles AS profile
+      ON profile.user_id = job.client_id
+    JOIN client_astrologer_relationships AS relationship
+      ON relationship.client_user_id = job.client_id
+     AND relationship.astrologer_user_id = job.owner_user_id
+     AND relationship.status = 'active'
+    WHERE job.schema_version = 'chart-result.v1'
+      AND job.status = 'succeeded'
+      AND job.method NOT IN ('synastry', 'composite')
+      AND calculation.owner_user_id = job.owner_user_id
+      AND calculation.module = 'chart'
+      AND calculation.mode = 'individual'
+      AND calculation.method_code = job.method
+      AND calculation.status = 'calculated'
+      AND calculation.request_fingerprint = job.input_fingerprint
+      AND calculation.input_data = jsonb_build_object(
+        'inputSnapshot', job.input_snapshot,
+        'settings', job.settings_snapshot
+      )
+      AND calculation.result_data->>'schemaVersion' = 'chart-result.v1'
+      AND calculation.result_data->>'method' = job.method
+      AND length(trim(profile.display_name_snapshot)) BETWEEN 1 AND 200
+      AND NOT EXISTS (
+        SELECT 1
+        FROM calculation_participants AS participant
+        WHERE participant.calculation_id = job.result_calculation_id
+      )
+  `);
 }
 
 async function assertLegacyChartJobData(client: Client): Promise<void> {

@@ -879,6 +879,48 @@ describeWithDatabase("production baseline reconciliation", () => {
     }
   }, 60_000);
 
+  it("attests additive Flow safety after the real fresh-database deploy order", async () => {
+    const freshDatabaseName = `elevenhouse_fresh_deploy_${randomUUID().replaceAll("-", "")}`;
+    const freshUrl = new URL(integrationDatabaseUrl!);
+    freshUrl.pathname = `/${freshDatabaseName}`;
+    let freshClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${freshDatabaseName}`);
+
+      const preMigrationReconciliation = await runReconciler(freshUrl.toString());
+      expect(preMigrationReconciliation, preMigrationReconciliation.output).toMatchObject({
+        exitCode: 0
+      });
+      expect(preMigrationReconciliation.output).toContain("Fresh database detected");
+
+      const migration = await runMigrator(freshUrl.toString());
+      expect(migration, migration.output).toMatchObject({ exitCode: 0 });
+
+      freshClient = new Client({ connectionString: freshUrl.toString() });
+      await freshClient.connect();
+      await expect(readCurrentFlowAdditiveSafetyEvidence(freshClient)).resolves.toEqual({
+        completedNodeConstraintCount: "0",
+        manifestConstraintCount: "0"
+      });
+
+      const postMigrationReconciliation = await runReconciler(freshUrl.toString());
+      expect(postMigrationReconciliation, postMigrationReconciliation.output).toMatchObject({
+        exitCode: 0
+      });
+      expect(postMigrationReconciliation.output).toContain(
+        "Current production baseline is already recorded; additive safety is current"
+      );
+      await expect(readCurrentFlowAdditiveSafetyEvidence(freshClient)).resolves.toEqual({
+        completedNodeConstraintCount: "1",
+        manifestConstraintCount: "1"
+      });
+    } finally {
+      await freshClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${freshDatabaseName} WITH (FORCE)`);
+    }
+  }, 60_000);
+
   it("accepts the exact checked-in current baseline with every present module", async () => {
     const currentDatabaseName = `elevenhouse_current_baseline_${randomUUID().replaceAll("-", "")}`;
     const currentUrl = new URL(integrationDatabaseUrl!);
@@ -1485,6 +1527,86 @@ describeWithDatabase("production baseline reconciliation", () => {
     }
   }, 60_000);
 
+  it("repairs an exact legacy natal participant from the active CRM snapshot before chart reconciliation", async () => {
+    const chartDatabaseName = `elevenhouse_chart_v1_subject_${randomUUID().replaceAll("-", "")}`;
+    const chartUrl = new URL(integrationDatabaseUrl!);
+    chartUrl.pathname = `/${chartDatabaseName}`;
+    let chartClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${chartDatabaseName}`);
+      chartClient = new Client({ connectionString: chartUrl.toString() });
+      await chartClient.connect();
+      await chartClient.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+      await downgradeFlowExecutionRuntime(chartClient);
+      await downgradeCalculationIdentityIndexes(chartClient);
+      await installLegacyChartJobsFixture(chartClient, { ambiguousActivePair: false });
+      await chartClient.query(`
+        UPDATE client_profiles
+           SET display_name_snapshot = 'Legacy Natal Subject'
+         WHERE user_id = '92000000-0000-4000-8000-000000000001';
+        INSERT INTO client_astrologer_relationships (
+          id, client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at
+        ) VALUES (
+          '97000000-0000-4000-8000-000000000002',
+          '92000000-0000-4000-8000-000000000001',
+          '91000000-0000-4000-8000-000000000001',
+          'manual', 'active', clock_timestamp(), clock_timestamp()
+        );
+        INSERT INTO calculation_records (
+          id, owner_user_id, module, mode, method_code, title, status,
+          request_fingerprint, input_data, result_data, result_summary, result_checksum
+        ) VALUES (
+          '94000000-0000-4000-8000-000000000002',
+          '91000000-0000-4000-8000-000000000001',
+          'chart', 'individual', 'natal', 'Legacy natal result', 'calculated',
+          'sha256:${"a".repeat(64)}',
+          '{"inputSnapshot":{},"settings":{}}'::jsonb,
+          '{"schemaVersion":"chart-result.v1","method":"natal"}'::jsonb,
+          '{}'::jsonb,
+          'sha256:${"b".repeat(64)}'
+        );
+        INSERT INTO chart_calculation_jobs (
+          id, owner_user_id, client_id, result_calculation_id, method, status,
+          input_fingerprint, input_snapshot, settings_snapshot, schema_version,
+          attempts, max_attempts, started_at, finished_at
+        ) VALUES (
+          '95000000-0000-4000-8000-000000000005',
+          '91000000-0000-4000-8000-000000000001',
+          '92000000-0000-4000-8000-000000000001',
+          '94000000-0000-4000-8000-000000000002',
+          'natal', 'succeeded',
+          'sha256:${"a".repeat(64)}', '{}', '{}', 'chart-result.v1',
+          1, 3, clock_timestamp(), clock_timestamp()
+        );
+      `);
+      await installPreviousRuntimeLedger(chartClient);
+
+      const run = await runReconciler(chartUrl.toString());
+      expect(run, run.output).toMatchObject({ exitCode: 0 });
+      await expect(
+        chartClient.query(`
+          SELECT role, source, client_id, display_name, "order"
+          FROM calculation_participants
+          WHERE calculation_id = '94000000-0000-4000-8000-000000000002'
+        `)
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            role: "subject",
+            source: "crm_client",
+            client_id: "92000000-0000-4000-8000-000000000001",
+            display_name: "Legacy Natal Subject",
+            order: 0
+          }
+        ]
+      });
+    } finally {
+      await chartClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${chartDatabaseName} WITH (FORCE)`);
+    }
+  }, 60_000);
+
   it("rolls back chart reconciliation when a legacy relationship identity is ambiguous", async () => {
     const chartDatabaseName = `elevenhouse_chart_ambiguous_${randomUUID().replaceAll("-", "")}`;
     const chartUrl = new URL(integrationDatabaseUrl!);
@@ -1928,6 +2050,65 @@ describeWithDatabase("production baseline reconciliation", () => {
            AND created_at = ${currentBaseline.createdAt}
       `);
       expect(ledger.rows[0]?.current_baseline_count).toBe("0");
+    } finally {
+      await databaseClient?.end();
+      await adminClient.query(`DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`);
+    }
+  }, 30_000);
+
+  it("upgrades the exact empty legacy simple Flow identity before the control-plane baseline", async () => {
+    const databaseName = `elevenhouse_legacy_simple_flows_${randomUUID().replaceAll("-", "")}`;
+    const databaseUrl = new URL(integrationDatabaseUrl!);
+    databaseUrl.pathname = `/${databaseName}`;
+    let databaseClient: Client | undefined;
+
+    try {
+      await adminClient.query(`CREATE DATABASE ${databaseName}`);
+      databaseClient = new Client({ connectionString: databaseUrl.toString() });
+      await databaseClient.connect();
+      await databaseClient.query(previousProductionFixtureSql());
+      await databaseClient.query(`
+        ALTER TABLE flows DROP CONSTRAINT flows_published_version_owner_fk;
+        DELETE FROM flow_versions;
+        UPDATE flows
+           SET published_version_id = NULL,
+               published_at = NULL,
+               status = 'draft';
+        ALTER TABLE flow_versions
+          DROP CONSTRAINT flow_versions_flow_owner_fk,
+          DROP CONSTRAINT flow_versions_flow_id_id_owner_unique,
+          DROP CONSTRAINT flow_versions_id_owner_unique;
+        ALTER TABLE flows DROP CONSTRAINT flows_id_owner_unique;
+        ALTER TABLE flow_versions
+          ADD CONSTRAINT flow_versions_flow_id_flows_id_fk
+          FOREIGN KEY (flow_id) REFERENCES flows(id) ON DELETE CASCADE;
+      `);
+
+      const run = await runReconciler(databaseUrl.toString());
+      expect(run, run.output).toMatchObject({ exitCode: 0 });
+      expect(run.output).toContain("Previous production baseline reconciled to the current baseline");
+
+      const state = await databaseClient.query<{
+        flow_identity_fk_count: string;
+        flow_owner_unique_count: string;
+        current_baseline_count: string;
+      }>(`
+        SELECT
+          (SELECT count(*)::text FROM pg_constraint
+            WHERE conrelid = 'flow_versions'::regclass
+              AND conname = 'flow_versions_flow_owner_fk') AS flow_identity_fk_count,
+          (SELECT count(*)::text FROM pg_constraint
+            WHERE conrelid = 'flows'::regclass
+              AND conname = 'flows_id_owner_unique') AS flow_owner_unique_count,
+          (SELECT count(*)::text FROM drizzle.__drizzle_migrations
+            WHERE hash = '${currentBaseline.hash}'
+              AND created_at = ${currentBaseline.createdAt}) AS current_baseline_count
+      `);
+      expect(state.rows[0]).toEqual({
+        flow_identity_fk_count: "1",
+        flow_owner_unique_count: "1",
+        current_baseline_count: "1"
+      });
     } finally {
       await databaseClient?.end();
       await adminClient.query(`DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`);

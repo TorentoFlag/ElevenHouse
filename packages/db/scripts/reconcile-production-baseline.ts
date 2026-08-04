@@ -33,6 +33,8 @@ import {
   canonicalFlowConstraints,
   canonicalFlowIndexes,
   canonicalFlowTriggers,
+  legacySimpleFlowConstraints,
+  legacySimpleFlowIndexes,
   predecessorFlowColumnSignatures,
   predecessorFlowConstraints,
   predecessorFlowIndexes,
@@ -731,9 +733,69 @@ async function reconcileFlowDefinitionControl(): Promise<void> {
   }
 
   if (flowsExist) {
+    await reconcileLegacySimpleFlowIdentityIfNeeded();
     await assertPredecessorFlowDefinitionShape();
   }
   await client.query(flowDefinitionControlBaselineDdl);
+}
+
+async function reconcileLegacySimpleFlowIdentityIfNeeded(): Promise<void> {
+  const relations = ["flows", "flow_versions"] as const;
+  try {
+    await assertConstraintManifest(
+      relations,
+      predecessorFlowConstraints,
+      "approved predecessor Flows constraints"
+    );
+    return;
+  } catch {
+    // Continue only when the whole older catalog is explicitly recognized.
+  }
+
+  await assertColumnSignatures(
+    relations,
+    predecessorFlowColumnSignatures,
+    "approved legacy simple Flows columns"
+  );
+  await assertConstraintManifest(
+    relations,
+    legacySimpleFlowConstraints,
+    "approved legacy simple Flows constraints"
+  );
+  await assertIndexManifest(relations, legacySimpleFlowIndexes, "approved legacy simple Flows indexes");
+
+  const state = await client.query<{
+    version_count: string;
+    published_pointer_count: string;
+  }>(`
+    SELECT
+      (SELECT count(*)::text FROM flow_versions) AS version_count,
+      (SELECT count(*)::text
+         FROM flows
+        WHERE published_version_id IS NOT NULL OR published_at IS NOT NULL) AS published_pointer_count
+  `);
+  if (state.rows[0]?.version_count !== "0" || state.rows[0]?.published_pointer_count !== "0") {
+    throw new Error("Legacy simple Flows identity cannot be upgraded without rewriting versions or pointers");
+  }
+
+  await client.query("LOCK TABLE flows, flow_versions IN ACCESS EXCLUSIVE MODE");
+  await client.query(`
+    ALTER TABLE flow_versions DROP CONSTRAINT flow_versions_flow_id_flows_id_fk;
+    ALTER TABLE flows
+      ADD CONSTRAINT flows_id_owner_unique UNIQUE (id, owner_user_id);
+    ALTER TABLE flow_versions
+      ADD CONSTRAINT flow_versions_flow_id_id_owner_unique UNIQUE (flow_id, id, owner_user_id),
+      ADD CONSTRAINT flow_versions_id_owner_unique UNIQUE (id, owner_user_id),
+      ADD CONSTRAINT flow_versions_flow_owner_fk
+        FOREIGN KEY (flow_id, owner_user_id)
+        REFERENCES flows(id, owner_user_id)
+        ON DELETE CASCADE;
+    ALTER TABLE flows
+      ADD CONSTRAINT flows_published_version_owner_fk
+        FOREIGN KEY (id, published_version_id, owner_user_id)
+        REFERENCES flow_versions(flow_id, id, owner_user_id)
+        ON DELETE RESTRICT;
+  `);
 }
 
 async function reconcileFlowRuntimeFoundation(): Promise<void> {
