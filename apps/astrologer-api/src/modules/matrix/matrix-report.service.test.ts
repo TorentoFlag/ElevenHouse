@@ -185,6 +185,7 @@ function calculationRecord(): CalculationRecord {
     ownerUserId,
     module: "matrix",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "ladini_22",
     title: "Марина — Матрица судьбы",
     status: "linked",

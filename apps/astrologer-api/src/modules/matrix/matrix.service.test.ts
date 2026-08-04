@@ -246,6 +246,7 @@ function createCalculationStore(): CalculationStore {
         ownerUserId: input.ownerUserId,
         module: input.module,
         mode: input.mode,
+        interpretationMode: input.interpretationMode ?? null,
         methodCode: input.methodCode,
         title: input.title,
         status: "calculated",

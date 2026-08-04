@@ -1,8 +1,11 @@
+import { request as httpRequest } from "node:http";
 import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Test, type TestingModule } from "@nestjs/testing";
 import { hashSessionToken } from "@elevenhouse/auth";
 import {
+  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
+  cancelFlowRunResponseSchema,
   flowDefinitionDetailV2Schema,
   flowDefinitionSummaryV2Schema,
   flowDefinitionV2Schema,
@@ -12,8 +15,9 @@ import {
   listFlowDefinitionsV2ResponseSchema,
   listFlowRunsResponseSchema,
   migrateFlowDefinitionV2ResponseSchema,
-  publishFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionCompatibleResponseSchema,
   validateFlowDefinitionResponseSchema,
+  validateFlowDefinitionResponseV2Schema,
   type FlowApproval,
   type FlowDefinitionDetailV2,
   type FlowDefinitionCommandRejectionResponse,
@@ -22,7 +26,6 @@ import {
   type FlowGraph,
   type FlowGraphV2,
   type FlowPresentationV1,
-  type FlowPublishedVersionV2,
   type FlowRuntimeEvent,
   type FlowRunResponse,
   type FlowStepRunResponse
@@ -35,6 +38,7 @@ import type {
   FlowDefinitionPublishedVersionRecord,
   FlowDefinitionQueryStore,
   FlowRecord,
+  FlowRunCancellationStore,
   FlowRuntimeStore,
   FlowStore,
   PasswordlessAuthUnitOfWork,
@@ -62,6 +66,8 @@ import { FlowsModule } from "./flows.module";
 import {
   FLOW_DEFINITION_CONTROL_STORE,
   FLOW_DEFINITION_QUERY_STORE,
+  FLOW_PUBLICATION_ROLLOUT_POLICY,
+  FLOW_RUN_CANCELLATION_STORE,
   FLOW_RUNTIME_STORE,
   FLOW_STORE
 } from "./flows.tokens";
@@ -100,6 +106,7 @@ describe("flows HTTP routes", () => {
   let flowStore: FlowStore;
   let definitionControlStore: FlowDefinitionControlStore;
   let definitionQueryStore: FlowDefinitionQueryStore;
+  let cancellationStore: FlowRunCancellationStore;
   let runtimeStore: FlowRuntimeStore;
 
   beforeEach(async () => {
@@ -107,6 +114,7 @@ describe("flows HTTP routes", () => {
     const definitionStores = createFlowDefinitionStores();
     definitionControlStore = definitionStores.controlStore;
     definitionQueryStore = definitionStores.queryStore;
+    cancellationStore = createRunCancellationStore();
     runtimeStore = createRuntimeStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
@@ -161,8 +169,12 @@ describe("flows HTTP routes", () => {
       .useValue(definitionControlStore)
       .overrideProvider(FLOW_DEFINITION_QUERY_STORE)
       .useValue(definitionQueryStore)
+      .overrideProvider(FLOW_PUBLICATION_ROLLOUT_POLICY)
+      .useValue({ phase: "manifest_v2" })
       .overrideProvider(FLOW_RUNTIME_STORE)
       .useValue(runtimeStore)
+      .overrideProvider(FLOW_RUN_CANCELLATION_STORE)
+      .useValue(cancellationStore)
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -291,7 +303,7 @@ describe("flows HTTP routes", () => {
     });
     expect(invalidUpdateResponse.status).toBe(400);
     expect(publishResponse.status).toBe(200);
-    publishFlowDefinitionV2ResponseSchema.parse(publishResponse.body);
+    publishFlowDefinitionCompatibleResponseSchema.parse(publishResponse.body);
     expect(publishResponse.body).toMatchObject({
       flow: {
         id: flowId,
@@ -300,12 +312,15 @@ describe("flows HTTP routes", () => {
         latestPublishedVersion: 1
       },
       version: {
+        schemaVersion: "flow-published-version.v2",
         flowId,
         version: 1,
         sourceRevision: 2,
         status: "published"
       }
     });
+    expect(publishResponse.contentType).toContain("application/json");
+    expect(publishResponse.vary).toBe("Accept");
     expect(nextDraftResponse.status).toBe(200);
     flowDefinitionV2Schema.parse(nextDraftResponse.body);
     expect(nextDraftResponse.body).toMatchObject({
@@ -373,7 +388,10 @@ describe("flows HTTP routes", () => {
     const validV2 = await postJson(
       `/flows/${runtimeFlowId}/validate`,
       { graph: v2Graph },
-      csrfHeaders()
+      {
+        ...csrfHeaders(),
+        accept: `${FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE}, application/json;q=0.9`
+      }
     );
     const invalidV2 = await postJson(
       `/flows/${runtimeFlowId}/validate`,
@@ -408,23 +426,29 @@ describe("flows HTTP routes", () => {
 
     expect(missingCsrf.status).toBe(403);
     expect(validV2.status).toBe(200);
-    validateFlowDefinitionResponseSchema.parse(validV2.body);
+    validateFlowDefinitionResponseV2Schema.parse(validV2.body);
     expect(validV2.body).toMatchObject({
       graphSchemaVersion: "flow-graph.v2",
+      schemaVersion: "flow-definition-validation.v2",
       publishable: true,
       activatable: false,
       activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"]
     });
+    expect(validV2.contentType).toContain(FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE);
+    expect(validV2.vary).toBe("Accept");
     expect(invalidV2.status).toBe(200);
     validateFlowDefinitionResponseSchema.parse(invalidV2.body);
     expect(invalidV2.body).toMatchObject({
       publishable: false,
+      schemaVersion: "flow-definition-validation.v1",
       activatable: false,
       activationBlockers: expect.arrayContaining([
         "FLOW_GRAPH_NOT_PUBLISHABLE",
         "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"
       ])
     });
+    expect(invalidV2.contentType).toContain("application/json");
+    expect(invalidV2.vary).toBe("Accept");
     expect(legacyV1.status).toBe(200);
     validateFlowDefinitionResponseSchema.parse(legacyV1.body);
     expect(legacyV1.body).toMatchObject({
@@ -477,9 +501,31 @@ describe("flows HTTP routes", () => {
     const missingCancelCsrf = await postJson(
       `/flow-runs/${legacyRunId}/cancel`,
       {},
-      { cookie: sessionCookieHeader() }
+      {
+        cookie: sessionCookieHeader(),
+        "idempotency-key": "flow-cancel-missing-csrf"
+      }
     );
-    const cancelResponse = await postJson(`/flow-runs/${legacyRunId}/cancel`, {}, csrfHeaders());
+    const missingCancelIdempotency = await postJson(
+      `/flow-runs/${legacyRunId}/cancel`,
+      {},
+      csrfHeaders()
+    );
+    const duplicateCancelIdempotency = await postJsonWithDuplicateIdempotency(
+      `/flow-runs/${legacyRunId}/cancel`,
+      {},
+      ["flow-cancel-http-duplicate-1", "flow-cancel-http-duplicate-2"]
+    );
+    const invalidCancelBody = await postJson(
+      `/flow-runs/${legacyRunId}/cancel`,
+      { reason: "not-part-of-cancel-v1" },
+      idempotencyHeaders("flow-cancel-http-body-1")
+    );
+    const cancelResponse = await postJson(
+      `/flow-runs/${legacyRunId}/cancel`,
+      {},
+      idempotencyHeaders("flow-cancel-http-1")
+    );
 
     expect(missingSimulateCsrf.status).toBe(403);
     expect(simulateResponse.status).toBe(409);
@@ -499,11 +545,28 @@ describe("flows HTTP routes", () => {
     expect(decisionResponse.status).toBe(409);
     expect(decisionResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
     expect(missingCancelCsrf.status).toBe(403);
-    expect(cancelResponse.status).toBe(409);
-    expect(cancelResponse.body).toMatchObject({ code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" });
+    expect(missingCancelIdempotency.status).toBe(400);
+    expect(duplicateCancelIdempotency.status).toBe(400);
+    expect(invalidCancelBody.status).toBe(400);
+    expect(invalidCancelBody.body).toMatchObject({ code: "FLOW_INVALID_REQUEST" });
+    expect(cancelResponse.status).toBe(200);
+    cancelFlowRunResponseSchema.parse(cancelResponse.body);
+    expect(cancelResponse.body).toMatchObject({
+      run: { id: legacyRunId, ownerUserId, status: "canceled" }
+    });
     expect(runtimeStore.createRunForEventDedupe).not.toHaveBeenCalled();
     expect(runtimeStore.decideApproval).not.toHaveBeenCalled();
     expect(runtimeStore.cancelRun).not.toHaveBeenCalled();
+    expect(cancellationStore.executeCancel).toHaveBeenCalledWith({
+      command: expect.objectContaining({
+        actorUserId: ownerUserId,
+        ownerUserId,
+        resourceId: legacyRunId,
+        scope: "flows.runtime.cancel.v1",
+        idempotencyKey: "flow-cancel-http-1"
+      })
+    });
+    expect(cancellationStore.executeCancel).toHaveBeenCalledTimes(1);
   });
 
   async function getJson(path: string): Promise<HttpJsonResponse> {
@@ -549,18 +612,66 @@ describe("flows HTTP routes", () => {
 
     return readJsonResponse(response);
   }
+
+  async function postJsonWithDuplicateIdempotency(
+    path: string,
+    body: unknown,
+    idempotencyKeys: readonly [string, string]
+  ): Promise<HttpJsonResponse> {
+    const payload = JSON.stringify(body);
+    const target = new URL(path, baseUrl);
+    return new Promise((resolve, reject) => {
+      const request = httpRequest(
+        target,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "content-length": Buffer.byteLength(payload),
+            cookie: authenticatedCookieHeader(),
+            origin: "http://localhost:3000",
+            [csrfHeaderName]: currentCsrfToken,
+            "idempotency-key": [...idempotencyKeys]
+          }
+        },
+        (response) => {
+          const chunks: Buffer[] = [];
+          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          response.on("end", () => {
+            resolve({
+              status: response.statusCode ?? 0,
+              body: JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>,
+              contentType: firstHeaderValue(response.headers["content-type"]),
+              vary: firstHeaderValue(response.headers.vary)
+            });
+          });
+        }
+      );
+      request.on("error", reject);
+      request.end(payload);
+    });
+  }
 });
 
 type HttpJsonResponse = {
   readonly status: number;
   readonly body: Record<string, unknown>;
+  readonly contentType: string | null;
+  readonly vary: string | null;
 };
 
 async function readJsonResponse(response: Response): Promise<HttpJsonResponse> {
   return {
     status: response.status,
-    body: (await response.json()) as Record<string, unknown>
+    body: (await response.json()) as Record<string, unknown>,
+    contentType: response.headers.get("content-type"),
+    vary: response.headers.get("vary")
   };
+}
+
+function firstHeaderValue(value: string | readonly string[] | undefined): string | null {
+  if (typeof value === "string") return value;
+  return value?.[0] ?? null;
 }
 
 function sessionCookieHeader(): string {
@@ -722,15 +833,14 @@ function createFlowDefinitionStores(): {
       replaceDefinition(prepared.value);
       return succeededCommand(200, prepared.value);
     }),
-    executePublish: vi.fn(async ({ command, prepare }) => {
+    executePublish: vi.fn(async ({ command, prepare, responseVersion, assertCreatedResponse }) => {
       const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
       if (!current) return flowDefinitionNotFoundCommand();
       const prepared = prepare(current);
       if (prepared.kind === "rejected") return rejectedCommand(prepared.response);
       if (!current.origin) raise("V2 publication requires a persisted origin");
 
-      const version = {
-        schemaVersion: "flow-published-version.v2",
+      const versionRecord = {
         id: createdVersionId,
         flowId: current.id,
         version: (current.latestPublishedVersion ?? 0) + 1,
@@ -741,7 +851,18 @@ function createFlowDefinitionStores(): {
         presentation: prepared.value.presentation,
         capabilityManifest: prepared.value.capabilityManifest,
         publishedAt: command.now
-      } satisfies FlowPublishedVersionV2;
+      };
+      const version =
+        responseVersion === "current_v3"
+          ? {
+              schemaVersion: "flow-published-version.v3" as const,
+              ...versionRecord
+            }
+          : {
+              schemaVersion: "flow-published-version.v2" as const,
+              ...versionRecord,
+              capabilityManifest: prepared.value.legacyCapabilityManifest
+            };
       const flow = flowDefinitionV2Schema.parse({
         schemaVersion: "flow-definition.v2",
         ...current,
@@ -756,13 +877,14 @@ function createFlowDefinitionStores(): {
         updatedAt: command.now,
         publishedAt: command.now
       });
-      const { schemaVersion: _schemaVersion, status: _status, ...versionRecord } = version;
-      void _schemaVersion;
+      const response = publishFlowDefinitionCompatibleResponseSchema.parse({ flow, version });
+      assertCreatedResponse(response);
+      const { status: _status, ...persistedVersion } = versionRecord;
       void _status;
-      publishedVersions.push(versionRecord);
+      publishedVersions.push(persistedVersion);
       replaceDefinition(flow);
       runtimeStatuses.set(flow.id, "published");
-      return succeededCommand(200, { flow, version });
+      return succeededCommand(200, response);
     }),
     executeCreateNextDraft: vi.fn(async ({ command, prepare }) => {
       const current = findOwnedDefinition(command.ownerUserId, command.resourceId);
@@ -1080,6 +1202,46 @@ type StoredRun = FlowRunResponse & {
 type StoredApproval = FlowApproval & {
   readonly ownerUserId: string;
 };
+
+function createRunCancellationStore(): FlowRunCancellationStore {
+  return {
+    executeCancel: vi.fn(async () => ({
+      kind: "created" as const,
+      outcome: {
+        kind: "succeeded" as const,
+        response: {
+          statusCode: 200 as const,
+          body: {
+            run: {
+              id: legacyRunId,
+              flowId: runtimeFlowId,
+              flowVersionId: runtimeVersionId,
+              ownerUserId,
+              sourceEventId: "legacy-run-cancel",
+              status: "canceled" as const,
+              snapshot: {
+                schemaVersion: "flow-run-snapshot.v1" as const,
+                flowVersionId: runtimeVersionId,
+                sourceEventId: "legacy-run-cancel",
+                subjectType: "client" as const,
+                subjectId: clientUserId,
+                occurredAt: now.toISOString(),
+                timeZone: "Europe/Moscow",
+                consent: {},
+                channels: {},
+                payload: {}
+              },
+              currentNodeId: "completed",
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+              completedAt: now.toISOString()
+            }
+          }
+        }
+      }
+    }))
+  };
+}
 
 function createRuntimeStore(): FlowRuntimeStore {
   const events: FlowRuntimeEvent[] = [];

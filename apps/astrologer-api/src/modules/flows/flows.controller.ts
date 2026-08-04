@@ -10,12 +10,23 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards
 } from "@nestjs/common";
+import {
+  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
+  FLOW_PUBLICATION_V3_MEDIA_TYPE
+} from "@elevenhouse/contracts";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { FlowsService } from "./flows.service";
+import {
+  negotiateFlowPublicationResponse,
+  negotiateFlowValidationResponse,
+  setFlowNegotiatedResponseHeaders,
+  type FlowNegotiatedResponse
+} from "./flow-response-negotiation";
 
 @Controller("flow-templates")
 @UseGuards(AstrologerSessionAuthGuard)
@@ -57,12 +68,26 @@ export class FlowsController {
   @Post(":flowId/validate")
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
-  validateFlowDefinition(
+  async validateFlowDefinition(
     @Param("flowId") flowId: string,
     @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
+    @Headers("accept") accept: string | undefined,
+    @Req() request: AstrologerSessionRequest,
+    @Res({ passthrough: true }) response: FlowNegotiatedResponse
   ) {
-    return this.service.validateFlowDefinition(flowId, body, request);
+    const result = await this.service.validateFlowDefinition(
+      flowId,
+      body,
+      request,
+      negotiateFlowValidationResponse(accept)
+    );
+    setFlowNegotiatedResponseHeaders(
+      response,
+      result.schemaVersion === "flow-definition-validation.v2"
+        ? FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE
+        : "application/json"
+    );
+    return result;
   }
 
   @Patch(":flowId/draft")
@@ -81,13 +106,28 @@ export class FlowsController {
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
   @RequireIdempotency({ scope: "flows.definition.publish.v2" })
-  publishFlow(
+  async publishFlow(
     @Param("flowId") flowId: string,
     @Body() body: unknown,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Req() request: AstrologerSessionRequest
+    @Headers("accept") accept: string | undefined,
+    @Req() request: AstrologerSessionRequest,
+    @Res({ passthrough: true }) response: FlowNegotiatedResponse
   ) {
-    return this.service.publishFlow(flowId, body, idempotencyKey, request);
+    const result = await this.service.publishFlow(
+      flowId,
+      body,
+      idempotencyKey,
+      request,
+      negotiateFlowPublicationResponse(accept)
+    );
+    setFlowNegotiatedResponseHeaders(
+      response,
+      result.version.schemaVersion === "flow-published-version.v3"
+        ? FLOW_PUBLICATION_V3_MEDIA_TYPE
+        : "application/json"
+    );
+    return result;
   }
 
   @Post(":flowId/next-draft")

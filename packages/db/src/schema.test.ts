@@ -145,8 +145,29 @@ describe("database account schema constants", () => {
   });
 
   it("keeps outbox event statuses explicit", () => {
-    expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published"]);
+    expect(outboxEventStatusValues).toEqual([
+      "pending",
+      "publishing",
+      "published",
+      "quarantined"
+    ]);
     expect(outboxEvents).toBeDefined();
+    expect(outboxEvents.claimFence).toBeDefined();
+    expect(outboxEvents.quarantinedAt).toBeDefined();
+    expect(outboxEvents.quarantineReasonCode).toBeDefined();
+
+    const migration = readFileSync(currentBaselineMigration, "utf8");
+    expect(migration).toContain('"claim_fence" bigint DEFAULT 0 NOT NULL');
+    expect(migration).toContain('"quarantined_at" timestamp with time zone');
+    expect(migration).toContain('"quarantine_reason_code" text');
+    expect(migration).toContain("outbox_events_state_check");
+    expect(migration).toContain("outbox_events_claim_fence_check");
+    expect(migration).toContain("outbox_events_quarantine_reason_code_check");
+    expect(migration).toContain('CREATE INDEX "outbox_events_quarantined_index"');
+  });
+
+  it("keeps the outbox claim fence default serializable by Drizzle Kit", () => {
+    expect(() => JSON.stringify(outboxEvents.claimFence.default)).not.toThrow();
   });
 
   it("exports verification tables and explicit values", () => {

@@ -3,13 +3,20 @@ import { describe, expect, it } from "vitest";
 
 const productionCompose = readFileSync("deployment/compose/compose.production.yml", "utf8");
 const deployWorkflow = readFileSync(".github/workflows/deploy.yml", "utf8");
-const productionBaselineReconciler =
-  "packages/db/scripts/reconcile-production-baseline.ts";
+const productionBaselineReconciler = "packages/db/scripts/reconcile-production-baseline.ts";
 
 describe("production database seed deployment", () => {
-  it("reconciles an approved legacy baseline before running migrations", () => {
+  it("reconciles before migration and attests the migrated fresh baseline before seeding", () => {
     const reconcilerRun = "run --rm -T db-baseline-reconciler";
     const migratorRun = "run --rm -T db-migrator";
+    const seederRun = "run --rm -T db-seeder";
+    const firstReconciler = deployWorkflow.indexOf(reconcilerRun);
+    const migrator = deployWorkflow.indexOf(migratorRun);
+    const secondReconciler = deployWorkflow.indexOf(
+      reconcilerRun,
+      firstReconciler + reconcilerRun.length
+    );
+    const seeder = deployWorkflow.indexOf(seederRun);
 
     expect(existsSync(productionBaselineReconciler)).toBe(true);
     expect(productionCompose).toContain("db-baseline-reconciler:");
@@ -17,9 +24,10 @@ describe("production database seed deployment", () => {
       'command: ["pnpm", "--filter", "@elevenhouse/db", "db:reconcile-production-baseline"]'
     );
     expect(deployWorkflow).toContain(reconcilerRun);
-    expect(deployWorkflow.indexOf(reconcilerRun)).toBeLessThan(
-      deployWorkflow.indexOf(migratorRun)
-    );
+    expect(firstReconciler).toBeLessThan(migrator);
+    expect(secondReconciler).toBeGreaterThan(migrator);
+    expect(secondReconciler).toBeLessThan(seeder);
+    expect(deployWorkflow.indexOf(reconcilerRun, secondReconciler + reconcilerRun.length)).toBe(-1);
   });
 
   it("runs the idempotent database seed step after migrations", () => {
@@ -37,24 +45,34 @@ describe("production database seed deployment", () => {
 
     expect(deployWorkflow).toContain(upAndWait);
     expect(deployWorkflow.indexOf(upAndWait)).toBeLessThan(
-      deployWorkflow.lastIndexOf("docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps")
+      deployWorkflow.lastIndexOf(
+        "docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps"
+      )
     );
   });
 
-  it("cleans production Docker artifacts only after successful smoke checks while retaining one rollback set", () => {
+  it("records successful release evidence after smoke and retains the last two successful sets", () => {
     const uploadCleanupScript = "deployment/server/cleanup-docker-retention.sh";
-    const captureRollbackSet = "./cleanup-docker-retention.sh capture-rollback-set";
+    const bootstrapSuccessfulRelease = "./cleanup-docker-retention.sh bootstrap-successful-release";
     const smokeCheck = "https://admin.elevenhouse.ai/api/health";
+    const recordSuccessfulRelease =
+      './cleanup-docker-retention.sh record-successful-release "${RELEASE_ID}"';
     const cleanupAfterSuccess = "./cleanup-docker-retention.sh cleanup-after-success";
 
     expect(deployWorkflow).toContain(uploadCleanupScript);
-    expect(deployWorkflow).toContain(captureRollbackSet);
+    expect(deployWorkflow).toContain(bootstrapSuccessfulRelease);
+    expect(deployWorkflow).toContain(recordSuccessfulRelease);
     expect(deployWorkflow).toContain("if: success()");
     expect(deployWorkflow).toContain(cleanupAfterSuccess);
-    expect(deployWorkflow.indexOf(captureRollbackSet)).toBeLessThan(
-      deployWorkflow.indexOf("docker compose --env-file env/.env.deploy -f compose/compose.production.yml pull")
+    expect(deployWorkflow.indexOf(bootstrapSuccessfulRelease)).toBeLessThan(
+      deployWorkflow.indexOf(
+        "docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull"
+      )
     );
     expect(deployWorkflow.lastIndexOf(smokeCheck)).toBeLessThan(
+      deployWorkflow.indexOf(recordSuccessfulRelease)
+    );
+    expect(deployWorkflow.indexOf(recordSuccessfulRelease)).toBeLessThan(
       deployWorkflow.indexOf(cleanupAfterSuccess)
     );
   });

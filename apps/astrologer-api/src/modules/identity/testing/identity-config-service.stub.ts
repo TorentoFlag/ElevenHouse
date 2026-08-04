@@ -168,6 +168,19 @@ export function createIdentityConfigServiceStub(input: {
         };
       }
 
+      if (key === "astrologerApi.chartAi") {
+        return {
+          enabled: false,
+          processingAuthorityVersion: null
+        };
+      }
+
+      if (key === "astrologerApi.flows") {
+        return {
+          publicationRolloutPhase: "legacy_v1"
+        };
+      }
+
       throw new Error(`Unexpected config key: ${key}`);
     }
   };

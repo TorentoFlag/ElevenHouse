@@ -124,6 +124,7 @@ const calculationResponse = {
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     module: "numerology",
     mode: "individual",
+    interpretationMode: null,
     methodCode: "pythagorean",
     title: "Голубев Антон, психоматрица",
     status: "calculated",

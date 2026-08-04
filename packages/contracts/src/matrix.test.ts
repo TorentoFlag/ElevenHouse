@@ -145,6 +145,7 @@ describe("Matrix contracts", () => {
         ownerUserId,
         module: "matrix",
         mode: "individual",
+        interpretationMode: null,
         methodCode: "ladini_22",
         title: "Марина Краснова — Матрица судьбы",
         status: "linked",
