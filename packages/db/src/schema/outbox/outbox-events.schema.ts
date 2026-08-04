@@ -19,8 +19,6 @@ import type {
   CalculationPdfRequestedPayload,
   ChartCalculationRequestedPayload,
   FlowRuntimeDispatchRequestedPayload,
-  FinanceEconomicPaymentCaptureAppliedPayload,
-  FinanceProviderOperationDispatchRequestedPayload,
   MessagingMessageDeliveryRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
@@ -40,8 +38,6 @@ export type OutboxEventPayload =
   | CalculationPdfRequestedPayload
   | CalculationPdfDeleteRequestedPayload
   | ChartCalculationRequestedPayload
-  | FinanceEconomicPaymentCaptureAppliedPayload
-  | FinanceProviderOperationDispatchRequestedPayload
   | FlowRuntimeDispatchRequestedPayload
   | MessagingMessageDeliveryRequestedPayload;
 

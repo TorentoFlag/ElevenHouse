@@ -423,8 +423,11 @@ function withoutEventSchema(value: {
   readonly matcherContractVersion: number;
   readonly eventSchemaVersion: number;
 }): Omit<typeof value, "eventSchemaVersion"> {
-  const { eventSchemaVersion: _eventSchemaVersion, ...rest } = value;
-  return rest;
+  return {
+    kind: value.kind,
+    configSchemaVersion: value.configSchemaVersion,
+    matcherContractVersion: value.matcherContractVersion
+  };
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

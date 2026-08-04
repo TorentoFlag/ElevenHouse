@@ -1374,7 +1374,8 @@ function toEventDetail(row: typeof flowRunEvents.$inferSelect): FlowRunEventDeta
   };
 }
 
-function assertNeverFlowExecutionDecision(_decision: never): never {
+function assertNeverFlowExecutionDecision(decision: never): never {
+  void decision;
   throw new Error("FLOW_RUNTIME_TRACE_INVALID: unsupported execution decision");
 }
 

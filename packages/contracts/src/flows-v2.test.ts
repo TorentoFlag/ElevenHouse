@@ -519,8 +519,11 @@ describe("flow definition validation contracts", () => {
         }
       }).success
     ).toBe(false);
-    const { eventSchemaVersion: _eventSchemaVersion, ...unpinnedMatcher } =
-      capabilityManifestV2.triggerMatcher;
+    const unpinnedMatcher = {
+      kind: capabilityManifestV2.triggerMatcher.kind,
+      configSchemaVersion: capabilityManifestV2.triggerMatcher.configSchemaVersion,
+      matcherContractVersion: capabilityManifestV2.triggerMatcher.matcherContractVersion
+    };
     expect(
       validateFlowDefinitionCompatibleResponseSchema.safeParse({
         ...response,
