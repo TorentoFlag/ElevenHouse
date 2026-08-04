@@ -32,4 +32,39 @@ describe("clientCopyByLocale", () => {
       "Already connected with astrologers"
     );
   });
+
+  it("contains complete chart AI consent actions for both launch locales", () => {
+    expect(clientCopyByLocale.ru.chartAiConsent.grant).toBe("Разрешить AI-черновики");
+    expect(clientCopyByLocale.en.chartAiConsent.grant).toBe("Allow AI drafts");
+    expect(clientCopyByLocale.ru.chartAiConsent.states.stale).toBe("Нужно обновить согласие");
+    expect(clientCopyByLocale.en.chartAiConsent.states.stale).toBe("Consent needs renewal");
+    expect(clientCopyByLocale.ru.chartAiConsent.acceptanceLabel).not.toBe(
+      clientCopyByLocale.en.chartAiConsent.acceptanceLabel
+    );
+  });
+
+  it("contains complete birth place search states for both launch locales", () => {
+    expect(clientCopyByLocale.ru.birthPlaceSearch.searching).toBe("Ищем место…");
+    expect(clientCopyByLocale.en.birthPlaceSearch.searching).toBe("Searching for a place…");
+    expect(clientCopyByLocale.ru.birthPlaceSearch.selectionRequired).not.toBe(
+      clientCopyByLocale.en.birthPlaceSearch.selectionRequired
+    );
+  });
+
+  it("contains explicit repeated-hour choices and guidance for both launch locales", () => {
+    expect(clientCopyByLocale.ru.birthTimeOccurrence).toEqual({
+      label: "Повторный час",
+      none: "Не выбрано",
+      first: "Первое вхождение",
+      second: "Второе вхождение",
+      helper: "Выберите вариант только если местное время повторялось при переводе часов."
+    });
+    expect(clientCopyByLocale.en.birthTimeOccurrence).toEqual({
+      label: "Repeated hour",
+      none: "Not selected",
+      first: "First occurrence",
+      second: "Second occurrence",
+      helper: "Choose only when the local clock time occurred twice during a DST change."
+    });
+  });
 });

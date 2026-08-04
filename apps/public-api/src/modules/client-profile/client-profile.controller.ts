@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -7,7 +8,7 @@ import {
   Param,
   Post,
   Put,
-  Body,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards
@@ -22,15 +23,22 @@ import type {
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { PublicSessionRequest } from "../identity/session/identity-current-session.service";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
+import { ClientBirthPlaceSearchService } from "./client-birth-place-search.service";
 import { ClientProfileService } from "./client-profile.service";
 
 @Controller("me")
 @UseGuards(PublicSessionAuthGuard)
 export class ClientProfileController {
-  constructor(@Inject(ClientProfileService) private readonly clientProfileService: ClientProfileService) {}
+  constructor(
+    @Inject(ClientProfileService) private readonly clientProfileService: ClientProfileService,
+    @Inject(ClientBirthPlaceSearchService)
+    private readonly clientBirthPlaceSearchService: ClientBirthPlaceSearchService
+  ) {}
 
   @Get("astrologers")
-  listRelatedAstrologers(@Req() request: PublicSessionRequest): Promise<RelatedAstrologerListResponse> {
+  listRelatedAstrologers(
+    @Req() request: PublicSessionRequest
+  ): Promise<RelatedAstrologerListResponse> {
     return this.clientProfileService.listRelatedAstrologers(requireClientUserId(request));
   }
 
@@ -47,6 +55,11 @@ export class ClientProfileController {
   @Get("birth-profiles")
   listBirthProfiles(@Req() request: PublicSessionRequest): Promise<ClientBirthDataListResponse> {
     return this.clientProfileService.listBirthProfiles(requireClientUserId(request));
+  }
+
+  @Get("birth-places")
+  searchBirthPlaces(@Req() request: PublicSessionRequest, @Query() query: unknown) {
+    return this.clientBirthPlaceSearchService.search(requireClientUserId(request), query);
   }
 
   @Put("birth-data")

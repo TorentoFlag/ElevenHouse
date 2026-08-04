@@ -8,6 +8,7 @@ import { ClientProfileModule } from "./modules/client-profile/client-profile.mod
 import { BookingModule } from "./modules/booking/booking.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { ClientConsentsModule } from "./modules/client-consents/client-consents.module";
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
     IdentityModule,
     ClientJoinModule,
     ClientProfileModule,
+    ClientConsentsModule,
     BookingModule,
     OrdersModule,
     PaymentsModule

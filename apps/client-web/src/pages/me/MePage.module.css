@@ -37,9 +37,9 @@
 }
 
 .brand span {
-  margin-top: var(--eh-space-2);
+  margin-top: 2px;
   color: var(--eh-color-muted);
-  font-size: var(--eh-font-size-11);
+  font-size: 11px;
   font-weight: var(--eh-font-weight-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -91,7 +91,7 @@
   display: block;
   margin-bottom: var(--eh-space-3);
   color: var(--eh-color-muted);
-  font-size: var(--eh-font-size-11);
+  font-size: 11px;
   font-weight: var(--eh-font-weight-bold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -462,7 +462,8 @@
   text-transform: uppercase;
 }
 
-.formGrid input {
+.formGrid input,
+.formGrid select {
   min-width: 0;
   min-height: 40px;
   box-sizing: border-box;
@@ -472,6 +473,15 @@
   background: var(--eh-color-night-950);
   color: var(--eh-color-moon-100);
   font: var(--eh-font-size-14) / var(--eh-line-height-120) var(--eh-font-sans);
+}
+
+.birthTimeOccurrenceHelper {
+  color: var(--eh-color-muted);
+  font-size: var(--eh-font-size-11);
+  font-weight: var(--eh-font-weight-regular);
+  letter-spacing: normal;
+  line-height: var(--eh-line-height-140);
+  text-transform: none;
 }
 
 .successText,
@@ -487,6 +497,249 @@
 
 .errorText {
   color: var(--eh-color-coral);
+}
+
+.consentSection {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--eh-space-16);
+  box-sizing: border-box;
+  padding: var(--eh-space-18);
+  border: 1px solid rgb(216 212 236 / 0.08);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--eh-color-night-860), var(--eh-color-night-900));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.03),
+    0 18px 40px -24px rgb(0 0 0 / 0.8);
+}
+
+.consentSection h2,
+.consentSection h3,
+.consentSection p {
+  margin: 0;
+}
+
+.consentSection h2 {
+  color: var(--eh-color-moon-100);
+  font-size: var(--eh-font-size-15);
+  line-height: var(--eh-line-height-120);
+}
+
+.consentSection h3 {
+  color: var(--eh-color-moon-120);
+  font-size: var(--eh-font-size-13);
+}
+
+.consentHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--eh-space-11);
+}
+
+.consentIcon {
+  width: var(--eh-length-38);
+  height: var(--eh-length-38);
+  display: grid;
+  place-items: center;
+  border-radius: var(--eh-radius-12);
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--eh-color-gold);
+}
+
+.consentProcessor,
+.consentStateGranted,
+.consentStateRestricted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  box-sizing: border-box;
+  padding: 0 var(--eh-space-9);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-pill);
+  font-size: 11px;
+  font-weight: var(--eh-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.consentProcessor {
+  color: var(--eh-color-moon-500);
+}
+
+.consentSummary,
+.consentRelationshipScope,
+.consentWithdrawal,
+.consentStateText {
+  color: var(--eh-color-moon-500);
+  font-size: var(--eh-font-size-13);
+  line-height: var(--eh-line-height-150);
+}
+
+.consentRelationshipScope {
+  padding: var(--eh-space-11) var(--eh-space-12);
+  border-left: 2px solid var(--eh-color-gold);
+  border-radius: 0 var(--eh-radius-10) var(--eh-radius-10) 0;
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--eh-color-moon-120);
+}
+
+.consentDisclosureGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--eh-space-12);
+}
+
+.consentDisclosureGrid > div {
+  min-width: 0;
+  padding: var(--eh-space-12);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-12);
+  background: rgb(9 7 25 / 0.54);
+}
+
+.consentDisclosureGrid ul,
+.consentCardList {
+  display: grid;
+  gap: var(--eh-space-8);
+  margin: var(--eh-space-10) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.consentDisclosureGrid li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--eh-space-7);
+  color: var(--eh-color-moon-500);
+  font-size: var(--eh-font-size-12);
+  line-height: var(--eh-line-height-140);
+}
+
+.consentDisclosureGrid li svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--eh-color-emerald);
+}
+
+.consentDisclosureGrid > div:last-child li svg {
+  color: var(--eh-color-muted);
+}
+
+.consentWithdrawal {
+  padding-top: var(--eh-space-12);
+  border-top: 1px solid var(--eh-color-moon-300-alpha-14);
+}
+
+.consentRelationshipHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--eh-space-12);
+  padding-top: var(--eh-space-4);
+}
+
+.consentCardList {
+  margin-top: 0;
+}
+
+.consentCard {
+  display: grid;
+  gap: var(--eh-space-11);
+  min-width: 0;
+  padding: var(--eh-space-14) var(--eh-space-16);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-12);
+  background: rgb(29 26 62 / 0.66);
+}
+
+.consentCardIdentity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--eh-space-10);
+}
+
+.consentCardIdentity strong,
+.consentCardIdentity small {
+  display: block;
+}
+
+.consentCardIdentity strong {
+  color: var(--eh-color-moon-120);
+  font-size: var(--eh-font-size-13-5);
+}
+
+.consentCardIdentity small,
+.consentEvidenceTime {
+  color: var(--eh-color-muted);
+  font-size: var(--eh-font-size-12);
+}
+
+.consentStateGranted {
+  border-color: rgb(78 200 160 / 0.3);
+  background: rgb(78 200 160 / 0.1);
+  color: var(--eh-color-emerald);
+}
+
+.consentStateRestricted {
+  border-color: rgb(244 196 48 / 0.3);
+  background: var(--eh-color-gold-alpha-14);
+  color: var(--eh-color-gold);
+}
+
+.consentAcceptance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: var(--eh-space-10);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font-size: var(--eh-font-size-12-5);
+  line-height: var(--eh-line-height-150);
+}
+
+.consentCheckboxTarget {
+  display: grid;
+  width: var(--eh-space-44);
+  height: var(--eh-space-44);
+  place-items: center;
+}
+
+.consentCheckboxTarget input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--eh-color-gold);
+}
+
+.consentCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eh-space-8);
+}
+
+.consentCardActions .primaryButton,
+.consentCardActions .secondaryButton,
+.consentError .secondaryButton {
+  min-height: var(--eh-space-44);
+}
+
+.consentError {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--eh-space-10);
+  padding: var(--eh-space-12);
+  border: 1px solid rgb(244 122 122 / 0.34);
+  border-radius: var(--eh-radius-12);
+  background: rgb(244 122 122 / 0.08);
+  color: var(--eh-color-coral);
+}
+
+.consentError p {
+  color: var(--eh-color-moon-120);
+  font-size: var(--eh-font-size-13);
+  line-height: var(--eh-line-height-140);
 }
 
 .emptyBlock {
@@ -541,7 +794,7 @@
     justify-content: center;
     gap: var(--eh-space-4);
     padding: var(--eh-space-6);
-    font-size: var(--eh-font-size-11);
+    font-size: 11px;
   }
 
   .contentShell {
@@ -565,8 +818,32 @@
   .homeGrid,
   .bookingGrid,
   .summaryGrid,
-  .formGrid {
+  .formGrid,
+  .consentDisclosureGrid {
     grid-template-columns: 1fr;
+  }
+
+  .consentCardIdentity {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .consentStateGranted,
+  .consentStateRestricted {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .consentCardActions .primaryButton,
+  .consentCardActions .secondaryButton {
+    width: 100%;
+  }
+
+  .consentError {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .consentError .secondaryButton {
+    grid-column: 1 / -1;
   }
 
   .bookingList li {

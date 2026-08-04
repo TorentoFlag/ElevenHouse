@@ -2,11 +2,15 @@ import {
   clientBirthDataListResponseSchema,
   clientBirthDataResponseSchema,
   clientBirthDataUpsertRequestSchema,
+  clientBirthPlaceSearchQuerySchema,
+  clientBirthPlaceSearchResponseSchema,
   clientCabinetOverviewResponseSchema,
   relatedAstrologerListResponseSchema,
   type ClientBirthDataListResponse,
   type ClientBirthDataResponse,
   type ClientBirthDataUpsertRequest,
+  type ClientBirthPlaceSearchQuery,
+  type ClientBirthPlaceSearchResponse,
   type ClientCabinetOverviewResponse,
   type RelatedAstrologerListResponse
 } from "@elevenhouse/contracts";
@@ -27,6 +31,23 @@ export async function getClientCabinetOverview(): Promise<ClientCabinetOverviewR
 
 export async function listClientBirthProfiles(): Promise<ClientBirthDataListResponse> {
   return clientBirthDataListResponseSchema.parse(await application.http.get("/me/birth-profiles"));
+}
+
+export async function searchClientBirthPlaces(
+  query: ClientBirthPlaceSearchQuery,
+  signal?: AbortSignal
+): Promise<ClientBirthPlaceSearchResponse> {
+  const parsed = clientBirthPlaceSearchQuerySchema.parse(query);
+  const searchParams = new URLSearchParams({
+    query: parsed.query,
+    limit: String(parsed.limit)
+  });
+
+  return clientBirthPlaceSearchResponseSchema.parse(
+    await application.http.get(`/me/birth-places?${searchParams.toString()}`, {
+      ...(signal ? { signal } : {})
+    })
+  );
 }
 
 export async function upsertClientBirthData(

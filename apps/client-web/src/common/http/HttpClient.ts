@@ -14,9 +14,10 @@ export type HttpClientCsrfOptions = {
 };
 
 export type HttpRequestOptions = {
-  readonly method?: "GET" | "POST" | "PUT";
+  readonly method?: "DELETE" | "GET" | "POST" | "PUT";
   readonly body?: unknown;
   readonly csrf?: boolean;
+  readonly signal?: AbortSignal;
 };
 
 export class HttpClient {
@@ -32,9 +33,13 @@ export class HttpClient {
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
 
-  get<TResponse>(path: string): Promise<TResponse> {
+  get<TResponse>(
+    path: string,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
     return this.request<TResponse>(path, {
-      method: "GET"
+      method: "GET",
+      ...options
     });
   }
 
@@ -57,6 +62,18 @@ export class HttpClient {
   ): Promise<TResponse> {
     return this.request<TResponse>(path, {
       method: "PUT",
+      ...options,
+      ...(body === undefined ? {} : { body })
+    });
+  }
+
+  delete<TResponse>(
+    path: string,
+    body?: unknown,
+    options: Omit<HttpRequestOptions, "method" | "body"> = {}
+  ): Promise<TResponse> {
+    return this.request<TResponse>(path, {
+      method: "DELETE",
       ...options,
       ...(body === undefined ? {} : { body })
     });
@@ -86,6 +103,7 @@ export class HttpClient {
     return {
       method,
       credentials: this.credentials,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       ...(options.body === undefined
         ? {}

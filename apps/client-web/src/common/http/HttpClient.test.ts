@@ -41,6 +41,20 @@ describe("HttpClient", () => {
     });
   });
 
+  it("forwards an AbortSignal so stale autocomplete requests can be cancelled", async () => {
+    const controller = new AbortController();
+    const fetcher = vi.fn(async () => jsonResponse({ candidates: [] }));
+    const http = new HttpClient({ basePath: "/api", fetcher });
+
+    await http.get("/me/birth-places?query=Rome", { signal: controller.signal });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/me/birth-places?query=Rome", {
+      method: "GET",
+      credentials: "include",
+      signal: controller.signal
+    });
+  });
+
   it("returns undefined for empty successful responses", async () => {
     const http = new HttpClient({
       basePath: "/api",
@@ -119,6 +133,31 @@ describe("HttpClient", () => {
         identifier: "client@example.com",
         roles: ["client"]
       })
+    });
+  });
+
+  it("sends CSRF-protected DELETE requests with an explicit JSON body", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ state: "revoked" }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_public_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.delete("/me/consents/consent-id", {}, { csrf: true });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/me/consents/consent-id", {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": "signed-token"
+      },
+      body: "{}"
     });
   });
 });

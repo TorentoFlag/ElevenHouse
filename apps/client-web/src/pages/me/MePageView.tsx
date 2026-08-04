@@ -1,23 +1,47 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type {
   ClientBirthDataResponse,
+  ClientBirthPlaceCandidate,
   ClientCabinetOverviewResponse
 } from "@elevenhouse/contracts";
 import type { FormEvent } from "react";
+import type { BirthPlaceSearchCopy, BirthTimeOccurrenceCopy } from "../../common/i18n/clientCopy";
+import { BirthPlaceAutocomplete } from "../../features/client-profile/components/BirthPlaceAutocomplete";
+import {
+  applyBirthPlaceCandidate,
+  updateBirthDate,
+  updateBirthPlaceQuery,
+  updateBirthTime,
+  updateBirthTimeDstOccurrence,
+  type BirthProfileFormState
+} from "../../features/client-profile/model/birthProfileFormModel";
+import {
+  ClientDataConsentSection,
+  type ClientDataConsentSectionProps
+} from "./ClientDataConsentSection";
 import styles from "./MePage.module.css";
 
 export type ClientCabinetSection = "home" | "booking" | "sessions" | "feed" | "data" | "billing";
-export type ClientCabinetStatus = "loading" | "ready" | "saving" | "saved" | "error";
-
-export type BirthProfileFormState = {
-  readonly label: string;
-  readonly birthDate: string;
-  readonly birthTime: string;
-  readonly birthPlaceText: string;
-};
+export type ClientCabinetStatus =
+  | "loading"
+  | "ready"
+  | "saving"
+  | "saved"
+  | "validation-error"
+  | "error";
+export type { BirthProfileFormState } from "../../features/client-profile/model/birthProfileFormModel";
 
 export type MePageViewProps = {
   readonly activeSection: ClientCabinetSection;
+  readonly birthPlaceSearch: {
+    readonly copy: BirthPlaceSearchCopy;
+    readonly onSearch: (
+      query: string,
+      signal: AbortSignal
+    ) => Promise<readonly ClientBirthPlaceCandidate[]>;
+  };
+  readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
+  readonly consentSection: ClientDataConsentSectionProps;
   readonly form: BirthProfileFormState;
   readonly overview: ClientCabinetOverviewResponse | null;
   readonly status: ClientCabinetStatus;
@@ -42,6 +66,9 @@ const navItems: ReadonlyArray<{
 
 export function MePageView({
   activeSection,
+  birthPlaceSearch,
+  birthTimeOccurrenceCopy,
+  consentSection,
   form,
   overview,
   status,
@@ -56,7 +83,10 @@ export function MePageView({
   if (isLoading) {
     return (
       <main className={styles.page} aria-busy="true">
-        <CenteredState title="Загружаем кабинет" text="Проверяем ваши связи и сохранённые данные." />
+        <CenteredState
+          title="Загружаем кабинет"
+          text="Проверяем ваши связи и сохранённые данные."
+        />
       </main>
     );
   }
@@ -67,7 +97,11 @@ export function MePageView({
         <CenteredState
           title="Не удалось загрузить кабинет"
           text="Повторите запрос. Если ошибка сохранится, мы покажем её в диагностике API."
-          action={<button className={styles.primaryButton} onClick={onRetry}>Повторить</button>}
+          action={
+            <button className={styles.primaryButton} onClick={onRetry}>
+              Повторить
+            </button>
+          }
         />
       </main>
     );
@@ -161,10 +195,17 @@ export function MePageView({
           {activeSection === "booking" ? (
             <BookingEntrySection overview={safeOverview} onSectionChange={onSectionChange} />
           ) : null}
-          {activeSection === "sessions" ? <EmptySection title="Пока нет предстоящих консультаций." /> : null}
-          {activeSection === "feed" ? <EmptySection title="Лента появится после публикаций связанных астрологов." /> : null}
+          {activeSection === "sessions" ? (
+            <EmptySection title="Пока нет предстоящих консультаций." />
+          ) : null}
+          {activeSection === "feed" ? (
+            <EmptySection title="Лента появится после публикаций связанных астрологов." />
+          ) : null}
           {activeSection === "data" ? (
             <DataSection
+              birthPlaceSearch={birthPlaceSearch}
+              birthTimeOccurrenceCopy={birthTimeOccurrenceCopy}
+              consentSection={consentSection}
               form={form}
               profiles={safeOverview.birthProfiles}
               status={status}
@@ -172,7 +213,9 @@ export function MePageView({
               onSubmit={onSubmit}
             />
           ) : null}
-          {activeSection === "billing" ? <EmptySection title="Активных подписок пока нет." /> : null}
+          {activeSection === "billing" ? (
+            <EmptySection title="Активных подписок пока нет." />
+          ) : null}
         </div>
       </section>
     </main>
@@ -220,12 +263,18 @@ function HomeSection({
       <section className={styles.sectionCard}>
         <div className={styles.sectionHeader}>
           <h2>Данные рождения</h2>
-          <button className={styles.linkButton} type="button" onClick={() => onSectionChange("data")}>
+          <button
+            className={styles.linkButton}
+            type="button"
+            onClick={() => onSectionChange("data")}
+          >
             Открыть
           </button>
         </div>
         {overview.birthProfiles.length === 0 ? (
-          <p className={styles.emptyInline}>Добавьте основной профиль, чтобы использовать его в заказах и расчётах.</p>
+          <p className={styles.emptyInline}>
+            Добавьте основной профиль, чтобы использовать его в заказах и расчётах.
+          </p>
         ) : (
           <BirthProfileList profiles={overview.birthProfiles} compact />
         )}
@@ -236,7 +285,9 @@ function HomeSection({
           <h2>Связанные астрологи</h2>
         </div>
         {overview.astrologers.length === 0 ? (
-          <p className={styles.emptyInline}>Откройте ссылку, которую дал астролог, чтобы связать кабинеты.</p>
+          <p className={styles.emptyInline}>
+            Откройте ссылку, которую дал астролог, чтобы связать кабинеты.
+          </p>
         ) : (
           <ul className={styles.relatedList}>
             {overview.astrologers.map((astrologer) => (
@@ -246,7 +297,11 @@ function HomeSection({
                   <strong>{astrologer.publicName}</strong>
                   <small>@{astrologer.publicHandle}</small>
                 </span>
-                <button className={styles.linkButton} type="button" onClick={() => onSectionChange("booking")}>
+                <button
+                  className={styles.linkButton}
+                  type="button"
+                  onClick={() => onSectionChange("booking")}
+                >
                   Записаться
                 </button>
               </li>
@@ -282,9 +337,7 @@ function BookingEntrySection({
       <section className={styles.heroCard}>
         <span className={styles.eyebrow}>Запись</span>
         <h2>Выберите связанного астролога</h2>
-        <p>
-          Онлайн-запись появится после публикации консультаций и расписания этим астрологом.
-        </p>
+        <p>Онлайн-запись появится после публикации консультаций и расписания этим астрологом.</p>
       </section>
 
       <section className={styles.sectionCard}>
@@ -315,7 +368,11 @@ function BookingEntrySection({
             <span className={styles.eyebrow}>Данные для записи</span>
             <h2>Профиль рождения</h2>
           </div>
-          <button className={styles.linkButton} type="button" onClick={() => onSectionChange("data")}>
+          <button
+            className={styles.linkButton}
+            type="button"
+            onClick={() => onSectionChange("data")}
+          >
             Открыть
           </button>
         </div>
@@ -332,12 +389,18 @@ function BookingEntrySection({
 }
 
 function DataSection({
+  birthPlaceSearch,
+  birthTimeOccurrenceCopy,
+  consentSection,
   form,
   profiles,
   status,
   onFormChange,
   onSubmit
 }: {
+  readonly birthPlaceSearch: MePageViewProps["birthPlaceSearch"];
+  readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
+  readonly consentSection: ClientDataConsentSectionProps;
   readonly form: BirthProfileFormState;
   readonly profiles: readonly ClientBirthDataResponse[];
   readonly status: ClientCabinetStatus;
@@ -372,6 +435,7 @@ function DataSection({
           <label>
             Название
             <input
+              disabled={status === "saving"}
               id="client-birth-profile-label"
               name="label"
               value={form.label}
@@ -382,40 +446,83 @@ function DataSection({
           <label>
             Дата рождения
             <input
+              disabled={status === "saving"}
               id="client-birth-profile-birth-date"
               name="birthDate"
               type="date"
               value={form.birthDate}
-              onChange={(event) => onFormChange({ ...form, birthDate: event.target.value })}
+              onChange={(event) => onFormChange(updateBirthDate(form, event.target.value))}
             />
           </label>
           <label>
             Время рождения
             <input
+              disabled={status === "saving"}
               id="client-birth-profile-birth-time"
               name="birthTime"
               type="time"
               value={form.birthTime}
-              onChange={(event) => onFormChange({ ...form, birthTime: event.target.value })}
+              onChange={(event) => onFormChange(updateBirthTime(form, event.target.value))}
             />
           </label>
           <label>
-            Место рождения
-            <input
-              id="client-birth-profile-birth-place"
-              name="birthPlaceText"
-              value={form.birthPlaceText}
-              onChange={(event) => onFormChange({ ...form, birthPlaceText: event.target.value })}
-              placeholder="Город"
-            />
+            {birthTimeOccurrenceCopy.label}
+            <select
+              aria-describedby="client-birth-profile-dst-occurrence-help"
+              disabled={status === "saving" || !form.birthTime || !form.birthTimezone}
+              id="client-birth-profile-dst-occurrence"
+              name="birthTimeDstOccurrence"
+              value={form.birthTimeDstOccurrence ?? ""}
+              onChange={(event) =>
+                onFormChange(
+                  updateBirthTimeDstOccurrence(
+                    form,
+                    event.target.value === "first" || event.target.value === "second"
+                      ? event.target.value
+                      : null
+                  )
+                )
+              }
+            >
+              <option value="">{birthTimeOccurrenceCopy.none}</option>
+              <option value="first">{birthTimeOccurrenceCopy.first}</option>
+              <option value="second">{birthTimeOccurrenceCopy.second}</option>
+            </select>
+            <small
+              className={styles.birthTimeOccurrenceHelper}
+              id="client-birth-profile-dst-occurrence-help"
+            >
+              {birthTimeOccurrenceCopy.helper}
+            </small>
           </label>
+          <BirthPlaceAutocomplete
+            copy={birthPlaceSearch.copy}
+            disabled={status === "saving"}
+            inputId="client-birth-profile-birth-place"
+            latitude={form.birthLatitude}
+            longitude={form.birthLongitude}
+            name="birthPlaceText"
+            selectedPlaceText={form.selectedBirthPlaceText}
+            timezone={form.birthTimezone}
+            validationError={
+              status === "validation-error" ? birthPlaceSearch.copy.selectionRequired : null
+            }
+            value={form.birthPlaceText}
+            onQueryChange={(value) => onFormChange(updateBirthPlaceQuery(form, value))}
+            onSearch={birthPlaceSearch.onSearch}
+            onSelect={(candidate) => onFormChange(applyBirthPlaceCandidate(form, candidate))}
+          />
         </div>
         <button className={styles.primaryButton} type="submit" disabled={status === "saving"}>
           {status === "saving" ? "Сохраняем..." : "Сохранить основной профиль"}
         </button>
         {status === "saved" ? <p className={styles.successText}>Сохранено</p> : null}
-        {status === "error" ? <p className={styles.errorText}>Не удалось выполнить действие</p> : null}
+        {status === "error" ? (
+          <p className={styles.errorText}>Не удалось выполнить действие</p>
+        ) : null}
       </form>
+
+      <ClientDataConsentSection {...consentSection} />
     </div>
   );
 }
@@ -431,7 +538,9 @@ function BirthProfileList({
     <ul className={compact ? styles.birthListCompact : styles.birthList}>
       {profiles.map((profile) => (
         <li key={profile.id}>
-          <span className={styles.birthIcon}><Icon iconName="orbit" size={18} /></span>
+          <span className={styles.birthIcon}>
+            <Icon iconName="orbit" size={18} />
+          </span>
           <span>
             <strong>{profile.label ?? "Профиль"}</strong>
             <small>

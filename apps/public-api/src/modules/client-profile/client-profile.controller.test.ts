@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { ForbiddenException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { csrfRequiredMetadataKey } from "../security/route-policy/route-security-metadata";
+import type { ClientBirthPlaceSearchService } from "./client-birth-place-search.service";
 import { ClientProfileController } from "./client-profile.controller";
 import type { ClientProfileService } from "./client-profile.service";
 
@@ -10,14 +11,23 @@ const birthDataId = "55555555-5555-4555-8555-555555555555";
 
 describe("ClientProfileController", () => {
   it("declares CSRF requirements for client birth-profile mutations", () => {
-    expect(Reflect.getMetadata(csrfRequiredMetadataKey, ClientProfileController.prototype.upsertBirthData)).toBe(
-      true
-    );
     expect(
-      Reflect.getMetadata(csrfRequiredMetadataKey, ClientProfileController.prototype.createBirthProfile)
+      Reflect.getMetadata(
+        csrfRequiredMetadataKey,
+        ClientProfileController.prototype.upsertBirthData
+      )
     ).toBe(true);
     expect(
-      Reflect.getMetadata(csrfRequiredMetadataKey, ClientProfileController.prototype.updateBirthProfile)
+      Reflect.getMetadata(
+        csrfRequiredMetadataKey,
+        ClientProfileController.prototype.createBirthProfile
+      )
+    ).toBe(true);
+    expect(
+      Reflect.getMetadata(
+        csrfRequiredMetadataKey,
+        ClientProfileController.prototype.updateBirthProfile
+      )
     ).toBe(true);
   });
 
@@ -26,7 +36,7 @@ describe("ClientProfileController", () => {
       getOverview: vi.fn(async () => ({ summary: { directLinkOnly: true } })),
       listBirthProfiles: vi.fn(async () => ({ profiles: [] }))
     } as unknown as ClientProfileService;
-    const controller = new ClientProfileController(service);
+    const controller = createController(service);
 
     await expect(controller.getOverview(clientRequest(["client"]))).resolves.toMatchObject({
       summary: { directLinkOnly: true }
@@ -43,12 +53,36 @@ describe("ClientProfileController", () => {
     );
   });
 
+  it("searches birth places only for an authenticated client owner", async () => {
+    const searchBirthPlaces = vi.fn(async () => ({ candidates: [] }));
+    const controller = createController(
+      {} as ClientProfileService,
+      {
+        search: searchBirthPlaces
+      } as unknown as ClientBirthPlaceSearchService
+    );
+
+    await expect(
+      controller.searchBirthPlaces(clientRequest(["client"]), { query: "Москва", limit: "3" })
+    ).resolves.toEqual({ candidates: [] });
+    expect(searchBirthPlaces).toHaveBeenCalledWith(clientUserId, {
+      query: "Москва",
+      limit: "3"
+    });
+    expect(() =>
+      controller.searchBirthPlaces(clientRequest(["astrologer"]), { query: "Москва" })
+    ).toThrow(ForbiddenException);
+    expect(() =>
+      controller.searchBirthPlaces({ headers: {} } as never, { query: "Москва" })
+    ).toThrow(UnauthorizedException);
+  });
+
   it("creates and updates client-owned birth profiles", async () => {
     const service = {
       createBirthProfile: vi.fn(async () => ({ id: birthDataId })),
       updateBirthProfile: vi.fn(async () => ({ id: birthDataId }))
     } as unknown as ClientProfileService;
-    const controller = new ClientProfileController(service);
+    const controller = createController(service);
     const body = birthProfileRequest({ label: "Я", birthDate: "1990-03-14" });
 
     await expect(controller.createBirthProfile(clientRequest(["client"]), body)).resolves.toEqual({
@@ -63,12 +97,16 @@ describe("ClientProfileController", () => {
   });
 
   it("returns not found when updating a missing birth profile", async () => {
-    const controller = new ClientProfileController({
+    const controller = createController({
       updateBirthProfile: vi.fn(async () => null)
     } as unknown as ClientProfileService);
 
     await expect(
-      controller.updateBirthProfile(clientRequest(["client"]), birthDataId, birthProfileRequest({ label: "Я" }))
+      controller.updateBirthProfile(
+        clientRequest(["client"]),
+        birthDataId,
+        birthProfileRequest({ label: "Я" })
+      )
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
@@ -107,4 +145,13 @@ function clientRequest(roles: readonly string[]) {
       }
     }
   } as never;
+}
+
+function createController(
+  profileService: ClientProfileService,
+  birthPlaceSearchService: ClientBirthPlaceSearchService = {
+    search: vi.fn(async () => ({ candidates: [] }))
+  } as unknown as ClientBirthPlaceSearchService
+) {
+  return new ClientProfileController(profileService, birthPlaceSearchService);
 }

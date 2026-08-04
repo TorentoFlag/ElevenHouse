@@ -4,6 +4,7 @@ import {
   createClientBirthProfile,
   getClientCabinetOverview,
   listClientBirthProfiles,
+  searchClientBirthPlaces,
   updateClientBirthProfile
 } from "./clientProfileApi";
 
@@ -48,7 +49,9 @@ describe("clientProfileApi", () => {
   });
 
   it("creates and updates birth profiles with CSRF", async () => {
-    const post = vi.spyOn(application.http, "post").mockResolvedValue(birthProfile({ label: "Мама" }));
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockResolvedValue(birthProfile({ label: "Мама" }));
     const put = vi.spyOn(application.http, "put").mockResolvedValue(birthProfile({ label: "Я" }));
 
     await expect(
@@ -97,6 +100,34 @@ describe("clientProfileApi", () => {
       expect.objectContaining({ label: "Я", isPrimary: true }),
       { csrf: true }
     );
+  });
+
+  it("searches validated client birth places with request cancellation support", async () => {
+    const controller = new AbortController();
+    const get = vi.spyOn(application.http, "get").mockResolvedValue({
+      candidates: [
+        {
+          id: "geoapify:41485",
+          label: "Rome, Lazio, Italy",
+          placeName: "Rome, Italy",
+          countryCode: "IT",
+          city: "Rome",
+          region: "Lazio",
+          timezone: "Europe/Rome",
+          latitude: 41.8933,
+          longitude: 12.4829,
+          provider: "geoapify",
+          providerPlaceId: "41485"
+        }
+      ]
+    });
+
+    await expect(
+      searchClientBirthPlaces({ query: "  Rome   Italy  ", limit: 3 }, controller.signal)
+    ).resolves.toMatchObject({ candidates: [{ timezone: "Europe/Rome" }] });
+    expect(get).toHaveBeenCalledWith("/me/birth-places?query=Rome+Italy&limit=3", {
+      signal: controller.signal
+    });
   });
 });
 

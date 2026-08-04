@@ -4,15 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../../common/system-clock.js";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "../identity/auth/identity-auth.tokens";
-import {
-  PUBLIC_AUTH_CODE_GENERATOR
-} from "../identity/passwordless/identity-passwordless.handler";
+import { PUBLIC_AUTH_CODE_GENERATOR } from "../identity/passwordless/identity-passwordless.handler";
 import {
   PASSWORDLESS_AUTH_UNIT_OF_WORK,
   PASSWORDLESS_RATE_LIMITER
 } from "../identity/passwordless/identity-passwordless.tokens";
 import { PublicSessionTokenIssuer } from "../identity/session/identity-session.service";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
+import { ClientBirthPlaceSearchService } from "./client-birth-place-search.service";
 import { ClientProfileController } from "./client-profile.controller";
 import { ClientProfileModule } from "./client-profile.module";
 import { ClientProfileService } from "./client-profile.service";
@@ -60,6 +59,9 @@ describe("ClientProfileModule", () => {
 
     expect(moduleRef.get(ClientProfileController)).toBeInstanceOf(ClientProfileController);
     expect(moduleRef.get(ClientProfileService)).toBeInstanceOf(ClientProfileService);
+    expect(moduleRef.get(ClientBirthPlaceSearchService)).toBeInstanceOf(
+      ClientBirthPlaceSearchService
+    );
 
     await moduleRef.close();
   });
@@ -111,6 +113,25 @@ function createConfigServiceStub(): Pick<ConfigService, "get" | "getOrThrow"> {
 
       if (key === "publicApi.passwordlessRateLimitRedisKeyPrefix") {
         return "elevenhouse:test";
+      }
+
+      if (key === "publicApi.birthPlaceSearch") {
+        return {
+          enabled: true,
+          provider: "geoapify",
+          baseUrl: "https://api.geoapify.test",
+          apiKey: "test-key",
+          timeoutMs: 5000,
+          cacheSuccessTtlSeconds: 2592000,
+          cacheEmptyTtlSeconds: 1800,
+          lockTtlMs: 6000,
+          rateLimitRedisKeyPrefix: "elevenhouse:test:birth-place-search",
+          rateLimits: {
+            userPerMinute: { limit: 20, windowSeconds: 60 },
+            globalPerMinute: { limit: 120, windowSeconds: 60 },
+            globalPerDay: { limit: 2500, windowSeconds: 86400 }
+          }
+        };
       }
 
       if (key === "publicApi.sessionCookieSecure") {
