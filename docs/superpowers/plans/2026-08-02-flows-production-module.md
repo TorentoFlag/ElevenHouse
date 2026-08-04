@@ -116,12 +116,304 @@ does not reduce the Definition of Done in the design spec.
       definition adapters passed 19/19 with delayed replays, focused ESLint and
       domain/web production builds passed. Independent re-review returned GO for
       the scoped commit with no remaining blocker, high or medium findings.
-- [ ] 2026-08-03 13:38 MSK: Milestone 1 network-backed browser acceptance is
-      pending because neither `astrologer-web:5174` nor `astrologer-api:3002` is
-      currently listening. Process policy forbids starting them without direct
-      lifecycle authority; reference geometry is captured, but production desktop,
-      mobile, auth, console and network evidence must still be recorded before the
-      milestone checkbox can close.
+- [x] 2026-08-03 15:08 MSK: Milestone 2-A now has a deliberately narrow
+      terminal-token kernel. PostgreSQL owns one runnable/claimed/terminal token,
+      independent attempt and fencing counters, DB-time leases, `SKIP LOCKED`
+      claiming, fenced finalize, append-only attempts/events and expired-lease
+      recovery. The pinned V2 graph and capability manifest authorize the only
+      deployed pure executor, `completed:1:1`; unsupported executors remain
+      unclaimable and activation/enrollment remain fail-closed. This is not the
+      broader Milestone 2 traversal runtime or a canary-readiness claim.
+- [x] 2026-08-03 15:08 MSK: production baseline reconciliation now distinguishes
+      exact absent, six-table predecessor and nine-table current Flows runtime
+      catalogs by PostgreSQL fingerprint. It creates a missing historical
+      foundation losslessly, rejects partial/drifted state, upgrades the exact
+      predecessor without fabricating tokens or trace, and records the current
+      baseline only after verification. Focused PostgreSQL evidence now passes
+      15/15 execution-store scenarios and 11/11 baseline-reconciliation scenarios;
+      worker processor/recovery tests pass 9/9 and DB/workers typechecks pass.
+- [x] 2026-08-03 15:39 MSK: independent runtime and migration review closed the
+      M2-A correctness findings. Finalize rejects an expired lease before
+      recovery and sources attempt audit identity from the locked PostgreSQL
+      row; claim performs exact JSON pin filtering plus domain validation before
+      leasing. Execution history rejects `UPDATE`, aggregate-independent
+      `DELETE` and `TRUNCATE`; catalog fingerprints include trigger enabled state
+      and exact predecessor histories cannot silently recreate missing runtime
+      data. Reconciliation rollback and concurrent-process serialization now
+      have real PostgreSQL fault-injection coverage.
+- [x] 2026-08-03 16:29 MSK: the shared Chart V2 prerequisite is now reconciled
+      without weakening either module. Exact historical V1 chart catalogs are
+      upgraded transactionally; real V1 relationship results reconstruct the
+      partner only from matching input/result snapshots, preserve the complete
+      succeeded calculation and reject disagreement or duplicate participant
+      identity before DDL. Exact-current and second-run evidence compares raw
+      catalog, relation OID, rows with `xmin` and migration ledger. The combined
+      PostgreSQL gate passes 32/32 scenarios: 15 execution-store and 17 baseline
+      reconciliation tests.
+- [x] 2026-08-03 17:18 MSK: Milestone 2-B adds a durable, idempotent cancellation
+      control without opening execution. PostgreSQL owns command identity,
+      canonical request hash and exact 24-hour status/body replay, including
+      owner-indistinguishable missing-run and terminal conflicts. Cancellation
+      serializes with finalize and recovery through token-first locking,
+      invalidates the fence, records the persisted claimed attempt when one
+      exists and appends one command-linked `run_canceled` trace. Runnable work
+      does not receive a fabricated attempt; legacy, inconsistent and
+      `waiting_external` work fails closed.
+- [x] 2026-08-03 17:18 MSK: the authenticated, CSRF-protected
+      `POST /flow-runs/:runId/cancel` API now remains available as an operational
+      containment control while enrollment stays `definition_only`. It requires
+      exactly one valid `Idempotency-Key` field line; distinct/raw Node HTTP
+      headers prevent duplicate field lines from being accepted after framework
+      normalization. Domain/API evidence and a real HTTP duplicate-header test
+      pass; fresh aggregate affected-surface verification remains the next gate.
+- [x] 2026-08-03 17:30 MSK: fresh cancellation affected-surface verification
+      passes 10 unit/API/worker/schema files with 80 tests and 3 real PostgreSQL
+      files with 47 integration scenarios. Focused ESLint and Prettier pass;
+      domain, workers and astrologer-api typecheck/build plus DB build pass. The
+      active local target was verified as `localhost:5432/elevenhouse`, then the
+      current single baseline reset, migrated and seeded successfully.
+- [x] 2026-08-03 17:50 MSK: independent cancellation review found four
+      production-boundary concerns. Three reproduced as failures and are now
+      closed by strict bodyless HTTP validation, succeeded-command provenance
+      checks at both adapter and deferred DB-trigger layers, and transaction-
+      local one-second lock/five-second statement budgets with retryable typed
+      `503` and full rollback. The fourth concern was an ADR mismatch rather
+      than an implementation defect: exact replay payload remains immutable for
+      24 hours and is then purgeable, while the immutable command tombstone and
+      command-linked redacted trace remain. A post-expiry retention test now
+      makes that policy explicit.
+- [x] 2026-08-03 19:04 MSK: scoped independent re-review returned `APPROVE`
+      with no remaining Critical, Important or Minor findings. A final review
+      gap was reproduced first: an enabled trigger could still call a drifted
+      no-op provenance function. Current-baseline reconciliation now compares
+      that function's exact canonical `pg_proc` body and a real PostgreSQL
+      regression proves fail-closed behavior. Fresh aggregate evidence passes
+      11 unit/API/worker/schema files with 95 tests and 3 PostgreSQL files with
+      52 integration scenarios. Focused ESLint, Prettier and diff checks pass;
+      contracts and DB typechecks plus contracts, DB, workers and API production
+      builds pass.
+- [x] 2026-08-03 20:24 MSK: Milestone 2-C1 closes the runtime-dispatch outbox
+      loss window without treating queue acceptance as execution. Claims use a
+      monotonic fence; exhausted deterministic work enters queryable quarantine
+      with an allowlisted reason, while stale acknowledge/retry writes are
+      rejected. The lossless production transition adds no business-row DML,
+      locks before exact catalog fingerprinting and preserves existing `xmin`
+      and `ctid`. Focused outbox evidence passes 12/12 PostgreSQL scenarios,
+      including invalid predecessor rollback, exact no-op, drift rejection and
+      concurrent reconciliation. A follow-up case-only drift regression keeps
+      quoted status literals case-sensitive in the catalog identity; exact
+      predecessor/current hashes are
+      `526f772ea2685024db091b0b2b621ecd2c4ae97dcf7574a091e9caecf8934d42`
+      and
+      `46f10ace3c834dc6a6c56595f0ebddda9faf98748f0f89e2f13af15cb2ed1546`;
+      relation persistence, RLS, forced RLS and access method are part of that
+      identity rather than an implicit assumption.
+- [x] 2026-08-03 20:24 MSK: Milestone 2-C2 adds durable poison and retry
+      disposition to the deliberately narrow terminal executor without enabling
+      scheduling. Executor decisions are runtime-validated before persistence;
+      definition poison is terminally quarantined without a fabricated attempt,
+      and a lost/uncertain success-finalize response is never reclassified as a
+      node failure. Tokens pin `flow-execution-retry.v1` with three total
+      attempts and capped equal-jitter DB-time backoff; unknown exceptions receive
+      one defensive retry, explicit transient errors use the full budget and
+      exhausted leases fail terminally. Recovery commits one token per short
+      transaction, due retries are reclaimable and cancelable, and cancellation
+      of a scheduled retry creates no additional attempt. Fresh evidence passes
+      35 focused unit/schema tests and 40 execution/cancellation PostgreSQL
+      scenarios after a verified local baseline reset and seed.
+- [x] 2026-08-03 20:24 MSK: the execution-safety production transition is
+      additive and lossless for the exact approved predecessor. Exact catalog
+      fingerprints are
+      `44c71eab17fca7a598255bcb9c7e1a7f9e158f881e0f746ec7a5ade27f476bd3`
+      before and
+      `4a601ef8e68f0e38538a7f624727c8a0afb499e40160e2eb4914659fd64ee65a`
+      after; reconciliation locks all three execution-history relations, rejects
+      partial drift and rejects legacy failed/retry rows whose reason cannot be
+      inferred losslessly. The fingerprint includes relation durability/RLS and
+      the exact body, owner, language, volatility, security and configuration of
+      every referenced trigger function. SQL literals remain case-sensitive in
+      the fingerprint, so a case-only change to a command-provenance predicate is
+      rejected. Twelve real PostgreSQL scenarios cover no physical
+      token/attempt/event rewrite, generated-baseline equality, body and
+      case-only function drift, relation RLS/forced-RLS, rollback, exact no-op
+      and concurrency. The generated baseline is
+      `bf9787c8efeb873169dabb94ca99af08cdd073675494c03744659142ed73a319`
+      at journal time `1785783440777`. It is the approved current production
+      identity after every present Chart, Calculation Publication, Client
+      Consent/AI and Flows transition gained an exact reconciliation path;
+      `5831a6c30c9c33aa93058f1f119dd4697253b73d7b2743f7e20ec8d7f014ccc9`
+      at `1785768455149` is its explicit Flow-safety predecessor.
+- [x] 2026-08-03 21:13 MSK: independent architecture and QA/SRE review reopened
+      M2-C2 on four correctness gaps, each reproduced with a failing PostgreSQL
+      test before repair. Finalize now locks the exact token first and compares
+      its deadline with a fresh post-lock `clock_timestamp()`; the frozen
+      transaction start time can no longer authorize a worker that waited past
+      its lease. Retry V1 is an immutable `3 / 1000 / 60000` tuple in domain,
+      schema, production DDL and runtime validation. Counter/fence constraints
+      reject zero-attempt claims and over-budget runnable/retry work, while
+      malformed expired claims enter typed quarantine without a fabricated
+      attempt. Failure reasons are disposition-specific and catalog equality now
+      detects trigger-function replacement. Fresh evidence passes 21 Flow unit
+      files / 161 tests and 5 PostgreSQL files / 63 scenarios after a verified
+      local baseline generation, reset, migration and seed. A repeat independent
+      review remains the final M2-C2 gate before traversal work starts.
+- [x] 2026-08-03 21:38 MSK: the repeat-review blockers now have deterministic
+      PostgreSQL regression coverage and fail-closed repairs. Failure-state
+      constraints explicitly require non-null disposition and reason instead of
+      relying on three-valued `CHECK` evaluation. Claim runtime validation also
+      quarantines legacy claimable rows with incomplete failure metadata. Claimed
+      timestamps must precede lease deadlines; recovery quarantines temporally
+      corrupt expired claims without entering an attempt-insert retry loop.
+      Cancellation reads `clock_timestamp()` only after the token and run locks,
+      so token, run, attempt, event and command-outcome chronology cannot predate
+      a claim written while cancellation was blocked. A forced lock-order test
+      reproduces the old failure and verifies all persisted transition times.
+      Fresh evidence at that checkpoint passed all 7 Flow PostgreSQL files / 87
+      scenarios, DB typecheck/build, focused ESLint/Prettier/diff checks and 23
+      Flow unit files / 179 tests. Production-baseline promotion remained open
+      for the final reconciliation-history review recorded below.
+- [x] 2026-08-03 22:08 MSK: pre-review production wiring and temporal hardening
+      are in place. The main production reconciler applies
+      and independently attests both Flows safety transitions for every accepted
+      history. Claim leases start from a fresh post-validation database clock;
+      future-dated claims, invalid `attempt_number > 3` histories and fences
+      below their attempt are rejected or quarantined without fabricated work.
+      Outbox identity now detects `UNLOGGED`, RLS, forced-RLS and access-method
+      drift. Deterministic cancel/retry/recovery ordering tests cover both sides
+      of each race. The full production-history reconciliation gate passes all
+      22 real PostgreSQL scenarios.
+- [x] 2026-08-03 22:41 MSK: independent architecture and QA/SRE repeat review
+      found four additional release risks; all were reproduced before repair.
+      Recovery now compares candidates with same-statement wall time and cannot
+      expire a live claim committed after its transaction began. Run claims and
+      poison quarantine share a fresh post-validation/post-lock clock with token
+      and trace history. The broad runtime catalog now detects durability, RLS,
+      forced-RLS, access-method, constraint-validation, index-validity and
+      command-function owner/config drift. The checked-in baseline and journal
+      are the approved current identity, with
+      `5831a6c30c9c33aa93058f1f119dd4697253b73d7b2743f7e20ec8d7f014ccc9`
+      classified as an exact
+      predecessor. A real `reconciler -> drizzle migrator -> reconciler` test
+      proves the migrator is a no-op after ledger promotion and existing Flow
+      rows retain their `xmin`. The full production-history gate passes 27/27.
+- [x] 2026-08-03 23:01 MSK: the final QA/SRE pass reproduced one remaining
+      microsecond chronology risk. PostgreSQL could return a later
+      `.390819` instant that JavaScript `Date` serialized as `.390000`, behind an
+      earlier `.390814` write. A deterministic PostgreSQL regression now proves
+      that transition clocks are rounded upward to the next representable
+      millisecond, and execution plus cancellation share that fail-closed clock
+      primitive. Execution passes 34/34, cancellation 25/25 and the selected
+      seven-file PostgreSQL Flows surface passes 129/129; DB typecheck and scoped
+      lint/format pass. Independent QA re-review approved the exact repair with
+      no remaining Critical or Important finding.
+- [x] 2026-08-03 23:13 MSK: product and architecture review selected the M2-D
+      atomic-advance model. Enrollment consumes the trigger and creates the
+      first token on its unique `next` target; trigger nodes do not fabricate
+      worker attempts. One stable run token carries a monotonically increasing
+      node activation sequence and run-wide fence, while its node-local attempt
+      counter resets only after a successful advance. Finalize must resolve the
+      target again from the persisted immutable graph. M2-D will prove this with
+      a test-only non-trigger executor while activation, enrollment, polling and
+      built-in condition execution remain disabled.
+- [x] 2026-08-04 10:34 MSK: the pre-enrollment capability boundary is now
+      versioned. New compilation emits `flow-capability-manifest.v2` with exactly
+      one `triggerMatcher`; `nodeExecutors` contains only downstream executable
+      nodes. Runtime parsing and published-version responses accept V1 and V2,
+      while a deterministic compatibility projection preserves integrity checks
+      and next-draft creation for immutable V1 versions. RED-to-green evidence
+      passes 22 focused unit files / 193 tests plus contracts and domain
+      typechecks. This does not enable activation, enrollment or trigger polling.
+- [x] 2026-08-04 10:52 MSK: the execution boundary now enforces that enrollment
+      triggers can never become worker tokens, attempt traces or transition
+      targets, including historical V1 manifests that still contain their
+      immutable trigger entry. Contracts and domain types narrow claims,
+      registries, decisions and traces to executable node kinds; the interpreter
+      rejects both a trigger token and an edge back into a trigger before executor
+      lookup. Cancellation derives its trace kind from the validated pinned node.
+      Drizzle source, atomic-upgrade DDL and reconciliation preflight apply the
+      same executable-only allowlist and refuse historical trigger execution data
+      without rewriting it. RED-to-green evidence passes 3 focused files / 61
+      tests and a real isolated-PostgreSQL reconciliation rollback scenario. DB,
+      API and worker typechecks report no Flow diagnostic; their remaining errors
+      are concurrent Finance, Chart and Calculation work outside this contour.
+- [x] 2026-08-04 11:23 MSK: independent QA findings on publication/runtime
+      integrity are closed in source. Every claim now verifies the complete
+      pinned graph against the exact V2 manifest or deterministic historical V1
+      projection before executor lookup. A gated publication can persist V2,
+      current validation responses expose only V2 after explicit phase and
+      media-type opt-in, and
+      `triggerMatcher.eventSchemaVersion` explicitly pins the normalized event
+      contract. Persisted publication rows cross a typed fail-closed domain
+      parser rather than JSON casts; Drizzle and transition DDL constrain exact
+      manifest top-level keys plus all V2 matcher version fields. Fresh evidence
+      passes 22 Flow unit/API/worker/schema files / 196 tests, 4 dependent
+      frontend/DB files / 37 tests, contracts build, domain typecheck and domain
+      build. DB typecheck has no Flow diagnostic; current failures are confined
+      to concurrent Finance and platform-billing work. Generated-baseline and
+      real PostgreSQL catalog acceptance remain pending below.
+- [x] 2026-08-04 12:50 MSK: independent QA blockers on fresh/current deployment
+      are closed. The checked-in baseline is an exact approved predecessor for
+      additive reconciliation: production installs the graph/manifest boundary,
+      executable-only trace constraints and completed-node invariant under the
+      existing transaction and advisory lock, then proves exact current catalog
+      identity; a second run is a no-op. PostgreSQL rejects marker-only V1/V2
+      graphs and exact domain parsing audits every immutable predecessor row in
+      bounded batches before constraint installation. Publication rollout now
+      has explicit `legacy_v1` and `manifest_v2` phases, separates response from
+      persistence versions, preserves exact replay across phase changes, and
+      merges `Vary: Accept` with existing cache dimensions. Focused evidence is
+      14 manifest-safety, 16 execution-safety, 47 execution-store, 25
+      cancellation-store and 19 definition-store PostgreSQL tests, plus 91 API
+      unit/config tests and 5 HTTP E2E tests. Full affected-surface and
+      independent QA reruns remain pending.
+- [x] 2026-08-04 13:38 MSK: the fresh/current deployment gate is independently
+      accepted. The real deploy order is now reconciler -> migrator ->
+      reconciler -> seeder; a negative PostgreSQL probe proved that late catalog
+      drift rolls both Flow safety constraints back atomically. The
+      already-current manifest path takes an `ACCESS EXCLUSIVE` lock and repeats
+      the complete domain-readability audit instead of trusting SQL shape alone.
+      Independent QA passed 48/48 targeted scenarios and accepted both original
+      blockers; the broader Flow unit contour passes 31 files / 275 tests and
+      eight real PostgreSQL suites pass 140/140.
+- [ ] 2026-08-04 13:44 MSK: activation/enrollment control is now under
+      implementation as a separate authority rather than an extension of legacy
+      `flows.status`. RED-to-green contracts and domain transition tests pass 2
+      files / 21 tests with contracts build plus contracts/domain typechecks.
+      The command shape pins definition revision, enrollment revision and active
+      version; pause pins enrollment revision, active version and exact epoch so
+      a new draft cannot disable an operational pause. Readiness is absent from
+      the strict public request and enters the private state machine only through
+      a one-shot store callback. A created success cannot bypass that callback,
+      while exact replay cannot invoke it. Independent QA accepted the original
+      stale-readiness finding with no Blocker/High. PostgreSQL lock-time
+      readiness, epoch/command persistence, exact persisted replay and API
+      composition remain open, and runtime remains `definition_only`.
+- [x] 2026-08-03 20:24 MSK: current retry research (accessed 2026-08-03) confirms
+      the chosen product boundary across AWS Step Functions, Google Cloud
+      Workflows and Azure Functions: retryability is explicit, attempts are
+      bounded, backoff is capped and exhaustion enters a catch/terminal path.
+      ElevenHouse additionally pins the policy snapshot per token so a deploy
+      cannot silently change an in-flight run.
+- [ ] 2026-08-03 23:01 MSK: repository-wide typecheck remains externally
+      blocked in the shared checkout. Domain currently fails in concurrent
+      Finance refund evidence because three codec readers are not exported;
+      workers fail in four concurrent CalculationRecord PDF fixtures where
+      `interpretationMode` is missing or optional. DB typecheck passes.
+      `docs:check:test` passes 8/8 and `docs:check` passes all 164 files. Focused
+      Flows gates are green; these unrelated source/tests were not edited.
+- [ ] 2026-08-03 16:29 MSK: a Flow-only commit remains unsafe even though the
+      generated baseline now has an approved production identity. The artifact
+      contains multiple concurrent, uncommitted source contours, including Chart
+      V2, Clients, AI and Finance; staging it without every separately owned
+      source path would make the commit internally inconsistent. Re-audit the
+      shared index and ownership before exact-path staging.
+- [ ] 2026-08-04 13:38 MSK: Milestone 1 network-backed browser acceptance is
+      partial. Existing listeners on `astrologer-web:5174` and
+      `astrologer-api:3002` are reachable, and the authenticated system Chrome
+      session proves the production `/flows` empty state plus the honest
+      available/disabled template catalog. Full exact reference comparison,
+      responsive states, console/network capture and persisted mutation reload
+      evidence remain open before the milestone checkbox can close.
 - [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
 - [ ] Milestone 2: ship durable token runtime and recovery foundation.
@@ -208,6 +500,31 @@ blocked.
   execution evidence when runtime availability is `definition_only`. Gallery
   and mobile summaries therefore suppress active-count claims and label the
   persisted state as execution-unavailable while still permitting pause.
+- 2026-08-03: approved histories before the original runtime-foundation baseline
+  could be relabeled current without creating the six Flows runtime tables.
+  Runtime reconciliation must therefore accept only an exact absent catalog or
+  exact predecessor catalog, build the missing foundation transactionally and
+  reject every partial shape.
+- 2026-08-03: attempt number and fencing token are separate monotonic identities.
+  Lease recovery consumes the old fence, appends that attempt as
+  `lease_expired`, increments only the fence and leaves the token runnable for a
+  new attempt number on the next claim.
+- 2026-08-03: the historical Chart V1 completion adapter always stored
+  relationship calculations as `individual` with one authoritative subject;
+  the partner existed only in matching job-input and result snapshots. A
+  V2-shaped migration fixture hid this production incompatibility. The
+  reconciliation fixture now parses a contract-valid V1 payload, uses a
+  canonical checksum and proves deep before/after preservation.
+- 2026-08-03: repository-wide `@elevenhouse/domain` typecheck/build is currently
+  blocked outside Flows by concurrent incomplete
+  `packages/domain/src/finance-core/source-lots.ts` work. The focused Flows
+  TypeScript compile, six-file unit gate, DB build, workers typecheck/build and
+  focused ESLint pass; do not alter or absorb the finance contour.
+- 2026-08-03: a fingerprint built only from `pg_trigger` proves trigger identity,
+  definition and enabled state but not the referenced `pg_proc`. Execution safety
+  now fingerprints each distinct trigger function's canonical body, owner,
+  language, volatility, security mode and configuration together with table
+  durability/RLS, so a no-op function replacement changes the exact catalog.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -259,6 +576,36 @@ changes later steps.
 - **2026-08-02, safety:** work items and approvals are separate write models;
   external send is disabled until action-time consent/capability checks,
   delivery reconciliation and kill switches pass.
+- **2026-08-03, lease authority:** lease validity is evaluated from a fresh
+  PostgreSQL wall-clock instant after acquiring the token row lock. Rationale:
+  `transaction_timestamp()` is fixed at transaction start and can authorize a
+  finalize that waited behind another transaction until after expiry.
+- **2026-08-03, retry policy:** `flow-execution-retry.v1` is exactly three total
+  attempts with 1000 ms base, 60000 ms cap and bounded equal jitter; persisted
+  numeric values are immutable compatibility data, not per-token tuning knobs.
+  Rationale: in-flight behavior cannot change silently across deploys.
+- **2026-08-03, atomic advance:** V2 keeps one stable token row per run. Each
+  successful source-to-target transition increments `nodeActivationSequence`,
+  resets the node-local attempt counter, preserves the run-wide fencing token
+  and appends one attempt plus one `token_advanced` event. The persisted pinned
+  graph, not worker input, owns edge/target resolution. Trigger matching belongs
+  to enrollment and places the initial token after the trigger. Rationale:
+  attempts must represent executable nodes, and a three-attempt retry budget
+  must not become a three-step run budget.
+- **2026-08-04, enrollment authority:** definition lifecycle, enrollment
+  lifecycle and run lifecycle are separate authorities. Activation uses CAS on
+  definition revision, monotonic enrollment revision and expected active
+  version; pause uses enrollment revision, active version and exact open epoch,
+  but deliberately does not depend on definition revision. Rationale: draft
+  editing cannot create an ABA activation race or prevent an urgent pause.
+- **2026-08-04, activation readiness:** only published V2 graphs with a V2
+      capability manifest may enter a new epoch. A read-side activation review is
+      explanatory evidence, not command authority; rollout, worker capability,
+      resources, entitlement and quota are re-evaluated under the activation
+      transaction. The public use case supplies a private one-shot preparation
+      callback to the persistence port; neither a caller-provided attestation nor
+      an exported planner can authorize activation. Exact replay does not repeat
+      preparation. `definition_only` can never produce a ready decision.
 - **2026-08-02, UI:** desktop supports graph structure editing; mobile supports
   monitoring, approvals/work and typed node configuration, but not structural
   graph editing in v2.
@@ -269,8 +616,10 @@ Milestone 0 is complete. The current production surface is an explicit
 definition/control plane, not a false runtime:
 
 - create, edit, publish, pause and owner-scoped history reads remain available;
-- activation, simulation, manual execution, approval decisions and run
-  cancellation fail with typed HTTP `409` before runtime mutation;
+- activation, simulation, manual execution and approval decisions fail with
+  typed HTTP `409` before runtime mutation; Milestone 0 also blocked legacy run
+  cancellation until the separate durable v2 control implemented in Milestone
+  2-B;
 - booking outbox delivery is consumed as explicit `execution_unavailable` when
   a legacy active definition matches, with no run/effect record and no payload
   logging;
@@ -292,11 +641,48 @@ The broader production module is not complete. Milestone 1 must add the strict
 v2 definition control plane; no durable execution, canary enrollment or
 external effects are enabled by this outcome.
 
-Milestone 1 is now partially implemented through strict graph compilation and
-an owner-scoped read-only validation boundary. Validation is available to the
-frontend through a shared-contract adapter, but the existing draft and publish
-commands still use the legacy persistence model. No schema, draft revision,
-immutable V2 version or activation epoch was added in this behavior group.
+Milestone 1 code delivery now includes strict graph compilation, owner-scoped
+validation, optimistic V2 drafts, immutable publication, exact command replay,
+explicit next-version drafts and fail-closed V1 migration. Its network-backed
+browser acceptance remains open under the process-lifecycle blocker recorded
+above, so the milestone checkbox stays open.
+
+Milestone 2-A is a verified internal kernel, not an enabled runtime. It proves
+one supported terminal transition, fenced persistence and lease recovery on
+PostgreSQL. Activation, enrollment and scheduling remain closed until the
+remaining Milestone 2 state machine, readiness and rollout controls exist.
+Fresh focused evidence is 6 files / 30 unit tests and 2 files / 32 real
+PostgreSQL integration tests, plus focused TypeScript compilation, DB build,
+workers typecheck/build and ESLint. Repository-wide domain gates remain blocked
+by the unrelated concurrent finance source recorded above; the generated
+baseline commit remains blocked by the separately owned uncommitted Chart V2
+source contour.
+
+Milestone 2-B adds cancellation for eligible existing v2 terminal-token runs,
+not a broader executable runtime. The API can contain runnable or claimed work
+even while new enrollment remains closed. Exact replay, failure replay, owner
+isolation, cancellation/finalize/recovery races, stale finalize, rollback,
+immutability and baseline predecessor preservation have focused unit and real
+PostgreSQL coverage. Immediate cancellation of `waiting_external` remains
+intentionally unavailable until external-command reconciliation can report an
+honest outcome. Fresh evidence is 95 focused unit/API/worker/schema tests and
+52 real PostgreSQL integration scenarios, focused lint/format/diff checks,
+contracts and DB typechecks, contracts/DB/workers/API production builds, an
+independent `APPROVE` and a successful clean local baseline reset/seed.
+Repository-wide domain/docs and browser gates remain separately blocked as
+recorded in Progress.
+
+Milestone 2-C1/C2 now adds a fenced runtime-dispatch outbox and durable
+retry/poison disposition to that still-disabled kernel. PostgreSQL enforces the
+exact retry snapshot, attempt budget, counter/fence relationships and
+disposition-specific failure reasons. Claim, finalize, recovery, cancellation
+and poison quarantine use transition-appropriate wall-clock authority; recovery
+cannot confuse a claim committed after transaction start with an expired lease.
+Exact reconciliation covers physical relation/index/constraint state,
+trigger-function behavior, deploy ordering and token/attempt/event preservation.
+This does not yet provide graph traversal, timers, signals, external effects,
+readiness canary or browser acceptance. Independent repeat review findings are
+closed; current aggregate counts are recorded in Progress after each fresh gate.
 
 Do not rewrite incomplete work as achieved. At program completion, reconcile
 this section against every `Implement` row and the Definition of Done in the
@@ -549,7 +935,10 @@ type Claim = {
   leaseExpiresAt: string;
 };
 
-type FinalizePredicate = Pick<Claim, "tokenId" | "leaseOwner" | "fencingToken">;
+type FinalizePredicate = Pick<Claim, "tokenId" | "leaseOwner" | "fencingToken"> & {
+  state: "claimed";
+  leaseExpiresAfterDatabaseTime: true;
+};
 
 type InterpreterDecision =
   | { kind: "advance"; selectedHandle: FlowSourceHandle; trace: RedactedTrace }
@@ -564,10 +953,12 @@ type InterpreterDecision =
 
 Claims are short DB transactions using database time and
 `FOR UPDATE SKIP LOCKED`. Evaluation is bounded and occurs outside the claim
-transaction. Finalize performs one-row CAS on claimed state, lease owner and
-fence, then atomically appends attempt/trace and next token, wait, human object
-or command/outbox intent. A zero-row finalize is a stale worker result and is
-discarded observably.
+transaction. Finalize performs a locked one-row CAS on claimed state, lease
+owner, database-time lease deadline and fence. PostgreSQL returns the persisted
+claim time, attempt number, owner and fence used for append-only audit; the
+worker cannot rewrite those fields. Finalize then atomically appends
+attempt/trace and next token, wait, human object or command/outbox intent. A
+zero-row finalize is a stale worker result and is discarded observably.
 
 ### Node executors
 
@@ -1054,6 +1445,58 @@ E2E is incomplete, or while required browser/DB acceptance is blocked. Report
 implemented, verified, partial, deferred, blocked, skipped, residual risk and
 unowned changes separately.
 
+### Milestone 2-A terminal-token boundary
+
+The first executable slice is `completed:1:1` only. It proves the authoritative
+claim/evaluate/finalize and expired-lease recovery kernel without opening
+activation, enrollment, timers, signals, approvals, effects, cancellation,
+redrive or quarantine. Worker functions are composed and tested but are not
+scheduled from `apps/workers/src/main.ts`; enabling polling before readiness,
+drain, poison/quarantine disposition and rollout controls exist would be a
+false canary.
+
+### Milestone 2-B cancellation boundary
+
+The first runtime control is durable cancellation of an existing v2
+terminal-token run. It is independently callable while runtime availability is
+`definition_only`, but it does not create runs, activate versions, enroll
+events, schedule workers or imply canary readiness. The command authority uses
+`(api surface, actor, owner, route, run, idempotency key)` plus a canonical
+request hash and stores the exact status/body outcome for 24-hour replay.
+
+Runnable, claimed and scheduled-retry tokens are immediately cancelable while
+their run remains pending, running or retryable-failed. Token-first row locking
+serializes cancellation with finalize and lease recovery; the first committed
+transition owns the terminal result. Cancellation fences stale work, clears the
+lease/retry disposition and appends one command-linked trace. A claimed
+cancellation records the attempt identity from locked PostgreSQL state;
+runnable and scheduled-retry cancellation creates no additional attempt.
+`waiting_external`, legacy and inconsistent state fails closed until effect
+reconciliation can distinguish provider outcome from orchestration intent.
+
+### Milestone 2-D atomic-advance boundary
+
+The next executable slice adds generic `advance` interpretation and one atomic
+PostgreSQL source-to-target transition without enabling a new product runtime.
+The executor returns only a typed source handle; the interpreter selects one
+edge, and finalize independently resolves that edge from the persisted pinned
+graph before changing state. The transaction records the source attempt,
+increments node activation and run trace sequences, rewrites the stable token to
+the target, resets its node-local retry counter and appends `token_advanced`.
+The global fence is preserved.
+
+Real PostgreSQL tests use a test-only deterministic non-trigger executor and a
+token already positioned on a non-trigger node. No trigger executor is added to
+the production registry. Activation, enrollment, worker polling, built-in
+condition reads, timers, signals, human work, approvals, effects and simulation
+remain unavailable. New published snapshots use
+`flow-capability-manifest.v2`: its singular `triggerMatcher` pins the graph's
+only trigger contract, while `nodeExecutors` excludes trigger kinds. Historical
+V1 snapshots remain readable and executable under their exact immutable shape;
+they are never rewritten in place. Their downstream executable nodes remain
+eligible for the pinned historical runtime, but their trigger entry can neither
+authorize a token nor appear in attempt/event traces or as an advance target.
+
 ---
 
 ## Idempotence and Recovery
@@ -1091,5 +1534,33 @@ unowned changes separately.
   `docs/superpowers/plans/2026-07-26-flows-persistence-api.md`,
   `docs/superpowers/plans/2026-07-28-flows-product-runtime.md`.
 - Design evidence root: `.design-qa/flows/`.
+- PostgreSQL 17 migration research, accessed 2026-08-03:
+  [ALTER TABLE and validated constraints](https://www.postgresql.org/docs/17/sql-altertable.html),
+  [explicit and advisory locking](https://www.postgresql.org/docs/17/explicit-locking.html),
+  [constraint catalog evidence](https://www.postgresql.org/docs/17/catalog-pg-constraint.html).
+- Runtime-control research, accessed 2026-08-03:
+  [Stripe idempotent requests](https://docs.stripe.com/api/idempotent_requests),
+  [Node.js HTTP message headers](https://nodejs.org/api/http.html#messageheaders),
+  [RFC 9110 field-line combination](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.2),
+  [AWS Step Functions StopExecution](https://docs.aws.amazon.com/step-functions/latest/apireference/API_StopExecution.html).
+- Retry/disposition research, accessed 2026-08-03:
+  [AWS Step Functions retry and catch](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html),
+  [Google Cloud Workflows errors](https://docs.cloud.google.com/workflows/docs/reference/syntax/error-types),
+  [Google Cloud Workflows retry steps](https://docs.cloud.google.com/workflows/docs/reference/syntax/retrying),
+  [Azure Functions error handling and retries](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-error-pages).
+- Enrollment/advance product research, accessed 2026-08-03:
+  [HubSpot enrollment triggers](https://knowledge.hubspot.com/workflows/set-your-workflow-enrollment-triggers),
+  [HubSpot workflow actions](https://knowledge.hubspot.com/workflows/choose-your-workflow-actions).
+- Matcher/target separation research, accessed 2026-08-04:
+  [Amazon EventBridge event patterns](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html),
+  [Amazon EventBridge targets](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-targets.html).
+- M3 booking prerequisite found on 2026-08-04: manual booking confirmation
+  already emits a Flows outbox event, while the paid-confirmation path does not
+  yet prove the same normalized event contract. Enrollment cannot be accepted
+  until every confirmation path emits one stable source identity and payload,
+  with duplicate/conflicting delivery behavior covered by PostgreSQL tests.
+- PostgreSQL lease-time research, accessed 2026-08-03:
+  [current date/time semantics](https://www.postgresql.org/docs/current/functions-datetime.html),
+  [row locking and `SKIP LOCKED`](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE).
 - Record exact commit ids, test output summaries, DB target evidence and browser
   artifact paths here as milestones complete.

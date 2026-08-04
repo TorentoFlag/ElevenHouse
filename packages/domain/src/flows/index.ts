@@ -19,3 +19,4 @@ export * from "./flow-execution-interpreter";
 export * from "./flow-execution-store";
 export * from "./flow-run-cancellation";
 export * from "./flow-runtime-dispatch-outbox-store";
+export * from "./flow-enrollment-control";

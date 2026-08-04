@@ -19,6 +19,7 @@ export * from "./calendar";
 export * from "./astro-calendar";
 export * from "./flows";
 export * from "./flows-v2";
+export * from "./flow-enrollment-control";
 export * from "./charts";
 export * from "./human-design";
 export * from "./messaging";
