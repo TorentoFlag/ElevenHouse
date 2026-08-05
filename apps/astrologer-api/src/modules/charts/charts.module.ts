@@ -15,6 +15,7 @@ import { DatabaseModule } from "../database/database.module";
 import { DictionaryStoreModule } from "../dictionary/dictionary-store.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { ChartsController } from "./charts.controller";
 import { ChartsPdfController } from "./charts-pdf.controller";
@@ -39,6 +40,7 @@ import {
     DatabaseModule,
     DictionaryStoreModule,
     IdentityModule,
+    PlatformEntitlementsModule,
     SecurityModule
   ],
   controllers: [ChartsController, ChartsPdfController],

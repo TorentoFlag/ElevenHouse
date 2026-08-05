@@ -30,8 +30,11 @@ import type {
   AdminPayoutRequestResponse,
   AdminPayoutQueueResponse,
   AdminPayoutQueueStatusFilter,
+  AdminPayoutStatusUpdate,
+  PayoutStatusAuthorizationInput,
   PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
+import { createPayoutStatusAuthorizationPayload } from "@elevenhouse/contracts/payouts";
 import type {
   AdminReconciliationException,
   AdminReconciliationExceptionEvidenceFilter,
@@ -43,6 +46,10 @@ import {
   type AdminFinancePoliciesApi
 } from "../api/adminFinancePoliciesApi";
 import { createAdminFinancePoliciesApi } from "../api/adminFinancePoliciesApi";
+import {
+  createAdminFinanceAuthorizationClient,
+  type AdminFinanceAuthorizationClient
+} from "../../finance-authorizations/api/adminFinanceAuthorizationsApi";
 import {
   createInitialRiskProfileForm,
   financePolicyRiskTierOptions,
@@ -58,6 +65,7 @@ import "./FinancePoliciesPage.css";
 
 export type FinancePoliciesPageProps = {
   readonly api?: AdminFinancePoliciesApi;
+  readonly authorizationClient?: AdminFinanceAuthorizationClient;
 };
 
 type AdminFinanceTab = "overview" | "payouts" | "disputes" | "reconciliation" | "policies" | "risk";
@@ -108,6 +116,13 @@ type PayoutActionForm = {
   readonly payoutRequestId: string;
   readonly externalReference: string;
   readonly transferredAt: string;
+  /**
+   * Identity of evidence already sealed by the controlled bank-evidence ingestion path.
+   * The browser never uploads or invents a private-object locator.
+   */
+  readonly proofArtifactId: string;
+  readonly proofSha256Digest: string;
+  readonly proofByteLength: string;
   readonly adminNote: string;
   readonly failureReason: string;
 };
@@ -129,6 +144,7 @@ type AdminFinanceErrorContext =
   | "policy"
   | "risk"
   | "payout_status"
+  | "payout_evidence_upload"
   | "payout_paid"
   | "payout_rejected"
   | "reversal_review"
@@ -168,9 +184,14 @@ const emptyReconciliationQueue: AdminReconciliationExceptionQueueResponse = {
 
 const emptyPolicies: readonly FinancePolicyResponse[] = [];
 
-export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPageProps) {
+export function FinancePoliciesPage({
+  api: providedApi,
+  authorizationClient: providedAuthorizationClient
+}: FinancePoliciesPageProps) {
   const defaultApi = useMemo(() => createAdminFinancePoliciesApi(), []);
   const api = providedApi ?? defaultApi;
+  const defaultAuthorizationClient = useMemo(() => createAdminFinanceAuthorizationClient(), []);
+  const authorizationClient = providedAuthorizationClient ?? defaultAuthorizationClient;
   const [tab, setTab] = useState<AdminFinanceTab>("overview");
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [selectedRiskTier, setSelectedRiskTier] = useState<RiskTier>("standard");
@@ -439,15 +460,29 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
     event.preventDefault();
     if (!selectedPayout) return;
     if (isPayoutActionBlocked(selectedPayout)) return;
+    const proofByteLength = Number(payoutAction.proofByteLength.trim());
+    if (!Number.isSafeInteger(proofByteLength) || proofByteLength <= 0) {
+      setSubmitError(
+        "Укажите положительный размер уже зарегистрированного банковского подтверждения."
+      );
+      return;
+    }
     setSavingPayout(true);
     setSubmitError(null);
     try {
-      await api.updatePayoutRequestStatus(selectedPayout.id, {
+      const update = await authorizeSensitivePayoutStatusUpdate({
         status: "paid",
+        expectedVersion: selectedPayout.version,
         externalReference: payoutAction.externalReference.trim(),
         transferredAt: payoutAction.transferredAt,
+        proofArtifact: {
+          artifactId: payoutAction.proofArtifactId.trim(),
+          sha256Digest: payoutAction.proofSha256Digest.trim(),
+          byteLength: proofByteLength
+        },
         adminNote: payoutAction.adminNote.trim() || null
       });
+      await api.updatePayoutRequestStatus(selectedPayout.id, update);
       setStatusMessage("Выплата отмечена оплаченной. Ledger списал payout pending.");
       const nextPayoutAction = emptyPayoutAction();
       payoutActionRef.current = nextPayoutAction;
@@ -455,6 +490,26 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
       await refreshFinance();
     } catch (error) {
       setSubmitError(errorMessage(error, "payout_paid"));
+    } finally {
+      setSavingPayout(false);
+    }
+  }
+
+  async function handlePayoutEvidenceUpload(file: File) {
+    if (!selectedPayout || !canMarkPayoutPaid(selectedPayout.status)) return;
+    setSavingPayout(true);
+    setSubmitError(null);
+    try {
+      const evidence = await api.uploadPayoutBankEvidence(file);
+      setPayoutAction((previous) => ({
+        ...previous,
+        proofArtifactId: evidence.artifactId,
+        proofSha256Digest: evidence.sha256Digest,
+        proofByteLength: String(evidence.byteLength)
+      }));
+      setStatusMessage("Банковское подтверждение сохранено в закрытом evidence store.");
+    } catch (error) {
+      setSubmitError(errorMessage(error, "payout_evidence_upload"));
     } finally {
       setSavingPayout(false);
     }
@@ -468,10 +523,27 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
     setSavingPayout(true);
     setSubmitError(null);
     try {
-      await api.updatePayoutRequestStatus(selectedPayout.id, {
-        status,
-        adminNote: payoutAction.adminNote.trim() || null
-      });
+      let update: AdminPayoutStatusUpdate;
+      if (status === "under_review") {
+        update = {
+          status: "under_review",
+          expectedVersion: selectedPayout.version,
+          adminNote: payoutAction.adminNote.trim() || null
+        };
+      } else if (status === "approved") {
+        update = await authorizeSensitivePayoutStatusUpdate({
+          status: "approved",
+          expectedVersion: selectedPayout.version,
+          adminNote: payoutAction.adminNote.trim() || null
+        });
+      } else {
+        update = await authorizeSensitivePayoutStatusUpdate({
+          status: "processing_manual",
+          expectedVersion: selectedPayout.version,
+          adminNote: payoutAction.adminNote.trim() || null
+        });
+      }
+      await api.updatePayoutRequestStatus(selectedPayout.id, update);
       setStatusMessage(payoutStatusMessage(status));
       await refreshFinance();
     } catch (error) {
@@ -481,19 +553,37 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
     }
   }
 
+  async function authorizeSensitivePayoutStatusUpdate(
+    update: PayoutStatusAuthorizationInput
+  ): Promise<AdminPayoutStatusUpdate> {
+    const actionKind =
+      update.status === "approved"
+        ? "payout_approve"
+        : update.status === "processing_manual"
+          ? "payout_start_processing"
+          : "payout_confirm_paid";
+    const grant = await authorizationClient.authorize({
+      actionKind,
+      aggregateId: selectedPayout!.id,
+      expectedVersion: update.expectedVersion,
+      payload: createPayoutStatusAuthorizationPayload(update)
+    });
+    return {
+      ...update,
+      authorizationId: grant.authorizationId
+    } as AdminPayoutStatusUpdate;
+  }
+
   async function handlePayoutRejected() {
     if (!selectedPayout) return;
     if (isPayoutActionBlocked(selectedPayout)) return;
-    const status =
-      selectedPayout.status === "processing_manual" ||
-      selectedPayout.status === "processing_provider"
-        ? "failed"
-        : "rejected";
+    const status = selectedPayout.status === "processing_manual" ? "failed" : "rejected";
     setSavingPayout(true);
     setSubmitError(null);
     try {
       await api.updatePayoutRequestStatus(selectedPayout.id, {
         status,
+        expectedVersion: selectedPayout.version,
         failureReason:
           payoutAction.failureReason.trim() ||
           (status === "failed" ? "Manual bank transfer failed" : "Manual payout rejected by admin"),
@@ -627,6 +717,10 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
             onClick={setTab}
             icon={<Icon iconName="users" />}
           />
+          <a className="adminFinanceNavItem" href="?section=tariffs">
+            <LayoutGrid />
+            <span>Тарифы</span>
+          </a>
         </nav>
         <div className="adminFinanceRailFooter">
           <span>Роль</span>
@@ -738,14 +832,15 @@ export function FinancePoliciesPage({ api: providedApi }: FinancePoliciesPagePro
                 saving={savingPayout}
                 onFilterChange={selectPayoutStatusFilter}
                 onSelect={(request) =>
-                  setPayoutAction((previous) => ({
-                    ...previous,
+                  setPayoutAction(() => ({
+                    ...emptyPayoutAction(),
                     payoutRequestId: request.id,
-                    transferredAt: previous.transferredAt || new Date().toISOString()
+                    transferredAt: new Date().toISOString()
                   }))
                 }
                 onChange={setPayoutAction}
                 onStatusUpdate={(status) => void handlePayoutStatusUpdate(status)}
+                onEvidenceUpload={(file) => void handlePayoutEvidenceUpload(file)}
                 onPaid={handlePayoutPaid}
                 onReject={() => void handlePayoutRejected()}
               />
@@ -875,7 +970,7 @@ function OverviewPanel(props: {
           title="Политика удержания"
           text={
             policy
-              ? `${policy.riskTier} · ${holdLabel(policy.holdDurationHours)} · ${formatBasisPoints(policy.platformFeeBps)} fee`
+              ? `${policy.riskTier} · ${holdLabel(policy.holdDurationHours)} · ${formatBasisPoints(policy.reserveBps)} reserve`
               : "Политика не настроена"
           }
           time="policy"
@@ -930,6 +1025,7 @@ function PayoutsPanel(props: {
   readonly onSelect: (request: AdminPayoutRequestResponse) => void;
   readonly onChange: (next: PayoutActionForm) => void;
   readonly onStatusUpdate: (status: "under_review" | "approved" | "processing_manual") => void;
+  readonly onEvidenceUpload: (file: File) => void;
   readonly onPaid: (event: FormEvent<HTMLFormElement>) => void;
   readonly onReject: () => void;
 }) {
@@ -940,9 +1036,7 @@ function PayoutsPanel(props: {
     !props.selectedPayout ||
     !canMarkPayoutPaid(props.selectedPayout.status);
   const failureActionTitle =
-    props.selectedPayout &&
-    (props.selectedPayout.status === "processing_manual" ||
-      props.selectedPayout.status === "processing_provider")
+    props.selectedPayout && props.selectedPayout.status === "processing_manual"
       ? "Зафиксировать ошибку"
       : "Отклонить";
   return (
@@ -1076,6 +1170,62 @@ function PayoutsPanel(props: {
                   disabled={paidActionDisabled}
                 />
               </label>
+              <label className="adminFinanceField adminFinanceFieldWide">
+                <span>Банковское подтверждение</span>
+                <input
+                  name="payoutEvidenceFile"
+                  type="file"
+                  accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) props.onEvidenceUpload(file);
+                  }}
+                  disabled={paidActionDisabled}
+                />
+                <small className="adminFinanceMuted">
+                  PDF, PNG или JPEG до 10 МБ. Файл шифруется и регистрируется сервером; реквизиты
+                  хранилища не передаются из браузера.
+                </small>
+              </label>
+              <label className="adminFinanceField adminFinanceFieldWide">
+                <span>Bank evidence artifact ID</span>
+                <input
+                  name="payoutProofArtifactId"
+                  value={props.action.proofArtifactId}
+                  readOnly
+                  placeholder="Загрузите банковское подтверждение"
+                  required
+                  disabled={paidActionDisabled}
+                />
+              </label>
+              <label className="adminFinanceField adminFinanceFieldWide">
+                <span>Evidence SHA-256</span>
+                <input
+                  name="payoutProofSha256Digest"
+                  value={props.action.proofSha256Digest}
+                  readOnly
+                  placeholder="Заполняется после безопасной загрузки"
+                  required
+                  disabled={paidActionDisabled}
+                />
+              </label>
+              <label className="adminFinanceField adminFinanceFieldWide">
+                <span>Evidence size (bytes)</span>
+                <input
+                  name="payoutProofByteLength"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={props.action.proofByteLength}
+                  readOnly
+                  required
+                  disabled={paidActionDisabled}
+                />
+              </label>
+              <p className="adminFinanceMuted adminFinanceFieldWide">
+                Выплата не будет проведена без активного доказательства, связанного с cash pool
+                ElevenHouse. Сервер повторно сверяет hash и размер при переходе в paid.
+              </p>
               <label className="adminFinanceField adminFinanceFieldWide">
                 <span>Admin note</span>
                 <textarea
@@ -1589,7 +1739,6 @@ function PoliciesPanel(props: {
             <span>Tier</span>
             <span>Hold</span>
             <span>Reserve</span>
-            <span>Fee</span>
             <span>Version</span>
           </div>
           {props.policies.map((policy) => (
@@ -1597,7 +1746,6 @@ function PoliciesPanel(props: {
               <span>{policy.riskTier}</span>
               <span>{holdLabel(policy.holdDurationHours)}</span>
               <span>{formatBasisPoints(policy.reserveBps)}</span>
-              <span>{formatBasisPoints(policy.platformFeeBps)}</span>
               <span>v{policy.policyVersion}</span>
             </div>
           ))}
@@ -1649,16 +1797,6 @@ function PoliciesPanel(props: {
             max={540}
             onChange={(reserveReleaseDelayDays) =>
               props.onPolicyFormChange({ ...props.policyForm, reserveReleaseDelayDays })
-            }
-          />
-          <NumberField
-            label="Platform fee, bps"
-            name="policyPlatformFeeBps"
-            value={props.policyForm.platformFeeBps}
-            min={0}
-            max={10000}
-            onChange={(platformFeeBps) =>
-              props.onPolicyFormChange({ ...props.policyForm, platformFeeBps })
             }
           />
           <label className="adminFinanceToggle">
@@ -1961,7 +2099,6 @@ function PayoutDetail(props: { readonly request: AdminPayoutRequestResponse }) {
   return (
     <DetailSection title="Payout detail">
       <div className="adminFinanceDetailGrid">
-        <Fact label="Provider payout" value={props.request.providerPayoutId ?? "not created"} />
         <Fact
           label="External reference"
           value={props.request.externalReference ?? "manual evidence missing"}
@@ -2142,6 +2279,9 @@ function emptyPayoutAction(): PayoutActionForm {
     payoutRequestId: "",
     externalReference: "",
     transferredAt: new Date().toISOString(),
+    proofArtifactId: "",
+    proofSha256Digest: "",
+    proofByteLength: "",
     adminNote: "",
     failureReason: ""
   };
@@ -2245,7 +2385,6 @@ function statusLabel(status: PayoutRequestResponse["status"]): string {
     under_review: "Проверка",
     approved: "Одобрена",
     processing_manual: "Банк",
-    processing_provider: "Provider",
     paid: "Оплачена",
     failed: "Ошибка",
     rejected: "Отклонена",
@@ -2259,7 +2398,7 @@ function statusTone(
 ): "neutral" | "positive" | "warning" | "danger" {
   if (status === "paid") return "positive";
   if (status === "failed" || status === "rejected" || status === "cancelled") return "danger";
-  if (status === "processing_manual" || status === "processing_provider") return "warning";
+  if (status === "processing_manual") return "warning";
   return "neutral";
 }
 
@@ -2274,7 +2413,7 @@ function isPayoutActionBlocked(request: AdminPayoutRequestResponse): boolean {
 }
 
 function canMarkPayoutPaid(status: PayoutRequestResponse["status"]): boolean {
-  return status === "processing_manual" || status === "processing_provider";
+  return status === "processing_manual";
 }
 
 function payoutStageActions(status: PayoutRequestResponse["status"]): readonly {
@@ -2284,10 +2423,7 @@ function payoutStageActions(status: PayoutRequestResponse["status"]): readonly {
 }[] {
   switch (status) {
     case "requested":
-      return [
-        { status: "under_review", label: "Взять в проверку", variant: "default" },
-        { status: "processing_manual", label: "Передать в банк", variant: "brand" }
-      ];
+      return [{ status: "under_review", label: "Взять в проверку", variant: "default" }];
     case "under_review":
       return [{ status: "approved", label: "Одобрить", variant: "brand" }];
     case "approved":
@@ -2313,7 +2449,7 @@ function payoutLedgerContext(status: PayoutRequestResponse["status"]): string {
   if (status === "failed" || status === "rejected" || status === "cancelled") {
     return "payout_failed posted";
   }
-  if (status === "processing_manual" || status === "processing_provider") {
+  if (status === "processing_manual") {
     return "payout pending reserved";
   }
   return "available to pending";
@@ -2358,6 +2494,7 @@ function actionLabel(context: AdminFinanceErrorContext): string {
     policy: "Сохранение политики",
     risk: "Сохранение риска",
     payout_status: "Смена статуса заявки на вывод",
+    payout_evidence_upload: "Загрузка банковского подтверждения",
     payout_paid: "Подтверждение ручной выплаты",
     payout_rejected: "Отклонение заявки на вывод",
     reversal_review: "Review refund/chargeback",

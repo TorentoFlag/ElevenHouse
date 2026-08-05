@@ -31,8 +31,7 @@ const summary = flowDefinitionSummaryV2Schema.parse({
   updatedAt: "2026-08-03T08:00:00.000Z",
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
-  origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-  migrationRequired: false
+  origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" }
 });
 
 const detail = flowDefinitionDetailV2Schema.parse({
@@ -115,7 +114,7 @@ describe("flow definition v2 queries", () => {
   it("turns malformed persisted query data into an observable integrity failure", async () => {
     const store = createStore();
     vi.mocked(store.listByOwner).mockResolvedValueOnce({
-      flows: [{ ...summary, migrationRequired: true }],
+      flows: [{ ...summary, graphSchemaVersion: "flow-graph.legacy" }],
       total: 1
     } as never);
 

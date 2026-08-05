@@ -1,10 +1,10 @@
-import type { PublishFlowDefinitionV2Response } from "@elevenhouse/contracts";
+import type { PublishFlowDefinitionV3Response } from "@elevenhouse/contracts";
 import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import type { PublishFlowInput } from "../api/publishFlow";
 import { publishFlowMutationOptions } from "./flowsQueryOptions";
 
 export function usePublishFlowMutation(): UseMutationResult<
-  PublishFlowDefinitionV2Response,
+  PublishFlowDefinitionV3Response,
   Error,
   PublishFlowInput
 > {

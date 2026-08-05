@@ -6,6 +6,12 @@ import {
   bookingLifecycleStateSchema,
   bookingParamsSchema,
   bookingResponseSchema,
+  cancelBookingRequestSchema,
+  cancelBookingResponseSchema,
+  completeBookingRequestSchema,
+  completeBookingResponseSchema,
+  rescheduleBookingRequestSchema,
+  rescheduleBookingResponseSchema,
   createPaidBookingHoldRequestSchema,
   calendarRangeQuerySchema,
   calendarRangeResponseSchema,
@@ -99,6 +105,7 @@ describe("calendar contracts", () => {
           productId,
           source: "manual",
           state: "confirmed",
+          lifecycleRevision: 1,
           holdExpiresAt: null,
           startAt: "2026-05-29T08:00:00.000Z",
           endAt: "2026-05-29T09:00:00.000Z",
@@ -349,6 +356,7 @@ describe("calendar contracts", () => {
         productId,
         source: "manual",
         state: "confirmed",
+        lifecycleRevision: 1,
         holdExpiresAt: null,
         startAt: "2026-05-29T08:00:00.000Z",
         endAt: "2026-05-29T09:00:00.000Z",
@@ -396,6 +404,7 @@ describe("calendar contracts", () => {
       productId,
       source: "client_paid",
       state: "hold",
+      lifecycleRevision: 0,
       holdExpiresAt: "2026-05-20T10:15:00.000Z",
       startAt: "2026-05-29T08:00:00.000Z",
       endAt: "2026-05-29T09:00:00.000Z",
@@ -422,6 +431,174 @@ describe("calendar contracts", () => {
     ).toBe(false);
   });
 
+  it("binds cancellation to an expected lifecycle revision and immutable event", () => {
+    const request = {
+      expectedLifecycleRevision: 1,
+      reasonCode: "astrologer_unavailable"
+    } as const;
+    const response = {
+      booking: {
+        id: bookingId,
+        reservationId,
+        clientUserId,
+        productId,
+        source: "manual",
+        state: "cancelled",
+        lifecycleRevision: 2,
+        holdExpiresAt: null,
+        startAt: "2026-05-29T08:00:00.000Z",
+        endAt: "2026-05-29T09:00:00.000Z",
+        productTitle: "Натальный разбор",
+        durationMinutes: 60,
+        deliveryFormat: "video",
+        priceMinor: 490000,
+        currency: "RUB",
+        timeZone: "Europe/Moscow",
+        policySnapshot: {
+          bufferBeforeMinutes: 10,
+          bufferAfterMinutes: 10,
+          minimumNoticeMinutes: 360
+        },
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      lifecycleEvent: {
+        id: "66666666-6666-4666-8666-666666666666",
+        revision: 2,
+        kind: "cancelled",
+        reasonCode: "astrologer_unavailable",
+        occurredAt: "2026-05-21T10:00:00.000Z"
+      },
+      replayed: false
+    } as const;
+
+    expect(cancelBookingRequestSchema.parse(request)).toEqual(request);
+    expect(cancelBookingResponseSchema.parse(response)).toEqual(response);
+    expect(
+      cancelBookingRequestSchema.safeParse({ ...request, expectedLifecycleRevision: 0 }).success
+    ).toBe(false);
+    expect(
+      cancelBookingRequestSchema.safeParse({ ...request, reasonCode: "refund_everything" }).success
+    ).toBe(false);
+    expect(
+      cancelBookingResponseSchema.safeParse({
+        ...response,
+        lifecycleEvent: { ...response.lifecycleEvent, revision: 3 }
+      }).success
+    ).toBe(false);
+  });
+
+  it("binds paid live completion to the current lifecycle revision", () => {
+    const request = { expectedLifecycleRevision: 2 } as const;
+    const response = {
+      booking: {
+        id: bookingId,
+        reservationId,
+        clientUserId,
+        productId,
+        source: "client_paid",
+        state: "completed",
+        lifecycleRevision: 3,
+        holdExpiresAt: null,
+        startAt: "2026-05-29T08:00:00.000Z",
+        endAt: "2026-05-29T09:00:00.000Z",
+        productTitle: "Натальный разбор",
+        durationMinutes: 60,
+        deliveryFormat: "video",
+        priceMinor: 490000,
+        currency: "RUB",
+        timeZone: "Europe/Moscow",
+        policySnapshot: {
+          bufferBeforeMinutes: 10,
+          bufferAfterMinutes: 10,
+          minimumNoticeMinutes: 360
+        },
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-29T09:01:00.000Z"
+      },
+      lifecycleEvent: {
+        id: "77777777-7777-4777-8777-777777777777",
+        revision: 3,
+        kind: "completed",
+        reasonCode: null,
+        occurredAt: "2026-05-29T09:01:00.000Z"
+      },
+      replayed: false
+    } as const;
+
+    expect(completeBookingRequestSchema.parse(request)).toEqual(request);
+    expect(completeBookingResponseSchema.parse(response)).toEqual(response);
+    expect(
+      completeBookingResponseSchema.safeParse({
+        ...response,
+        booking: { ...response.booking, source: "manual" }
+      }).success
+    ).toBe(false);
+    expect(
+      completeBookingResponseSchema.safeParse({
+        ...response,
+        lifecycleEvent: { ...response.lifecycleEvent, revision: 2 }
+      }).success
+    ).toBe(false);
+  });
+
+  it("binds an accepted reschedule to a new start and immutable lifecycle revision", () => {
+    const request = {
+      expectedLifecycleRevision: 1,
+      projectedStartAt: "2026-05-30T12:00:00.000Z"
+    } as const;
+    const response = {
+      booking: {
+        id: bookingId,
+        reservationId,
+        clientUserId,
+        productId,
+        source: "client_paid",
+        state: "confirmed",
+        lifecycleRevision: 2,
+        holdExpiresAt: null,
+        startAt: request.projectedStartAt,
+        endAt: "2026-05-30T13:00:00.000Z",
+        productTitle: "Натальный разбор",
+        durationMinutes: 60,
+        deliveryFormat: "video",
+        priceMinor: 490000,
+        currency: "RUB",
+        timeZone: "Europe/Moscow",
+        policySnapshot: {
+          bufferBeforeMinutes: 10,
+          bufferAfterMinutes: 10,
+          minimumNoticeMinutes: 360
+        },
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      lifecycleEvent: {
+        id: "77777777-7777-4777-8777-777777777777",
+        revision: 2,
+        kind: "rescheduled",
+        reasonCode: null,
+        occurredAt: "2026-05-21T10:00:00.000Z"
+      },
+      replayed: false
+    } as const;
+
+    expect(rescheduleBookingRequestSchema.parse(request)).toEqual(request);
+    expect(rescheduleBookingResponseSchema.parse(response)).toEqual(response);
+    expect(
+      rescheduleBookingRequestSchema.safeParse({ ...request, expectedLifecycleRevision: 0 }).success
+    ).toBe(false);
+    expect(
+      rescheduleBookingRequestSchema.safeParse({ ...request, projectedStartAt: "tomorrow" }).success
+    ).toBe(false);
+    expect(
+      rescheduleBookingResponseSchema.safeParse({
+        ...response,
+        lifecycleEvent: { ...response.lifecycleEvent, revision: 3 }
+      }).success
+    ).toBe(false);
+  });
+
   it("validates the public paid booking hold request and response", () => {
     const request = {
       astrologerUserId: "77777777-7777-4777-8777-777777777777",
@@ -439,6 +616,7 @@ describe("calendar contracts", () => {
         productId,
         source: "client_paid",
         state: "hold",
+        lifecycleRevision: 0,
         holdExpiresAt: "2026-05-20T10:15:00.000Z",
         startAt: request.projectedStartAt,
         endAt: "2026-05-29T09:00:00.000Z",

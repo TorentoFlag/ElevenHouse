@@ -243,9 +243,9 @@ services:
       postgres:
         condition: service_healthy
 
-  db-baseline-reconciler:
+  db-baseline-preflight:
     image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
-    command: ["pnpm", "--filter", "@elevenhouse/db", "db:reconcile-production-baseline"]
+    command: ["pnpm", "--filter", "@elevenhouse/db", "db:preflight-production-baseline"]
     profiles:
       - maintenance
     env_file:

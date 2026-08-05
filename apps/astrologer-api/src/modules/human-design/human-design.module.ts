@@ -6,6 +6,7 @@ import { CalculationsModule } from "../calculations/calculations.module";
 import { ClockModule } from "../clock/clock.module";
 import { ClientsModule } from "../clients/clients.module";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { HumanDesignController } from "./human-design.controller";
 import { HumanDesignPdfController } from "./human-design-pdf.controller";
@@ -23,6 +24,7 @@ import { HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER } from "./human-design.tokens";
     ClockModule,
     ClientsModule,
     IdentityModule,
+    PlatformEntitlementsModule,
     SecurityModule
   ],
   controllers: [HumanDesignController, HumanDesignPdfController],

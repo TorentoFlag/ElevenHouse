@@ -91,7 +91,8 @@ astrologer/client, manual payout method, открытую заявку на вы
 `processing_manual`, заявку, отменённую из-за chargeback, balanced ledger
 transactions, wallet read model и reconciliation exception. Для
 предсказуемого сценария активная `manual_review` finance policy переключается
-на fixture policy с `48` часами hold и `1000` bps platform fee.
+на fixture policy с `48` часами hold, а каждый fixture order ссылается на
+опубликованную immutable tariff version со snapshot-комиссией `800` bps.
 
 После выполнения скрипт печатает `Session cookie`, `CSRF cookie`, `CSRF header`
 и browser helper. Открой `admin-web` на `http://localhost:5175`, выполни helper

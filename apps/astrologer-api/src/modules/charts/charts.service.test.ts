@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { chartMethodVersions, type ReproducibleChartResult } from "@elevenhouse/contracts";
 import {
   buildChartResultReproducibilityFingerprint,
-  canonicalChartAiConsentNoticeHashes,
-  currentChartAiConsentPolicy,
   sha256CanonicalJson,
   type CanonicalJson
 } from "@elevenhouse/domain";
@@ -15,7 +13,6 @@ import type {
   ChartAiDraftCommandStore,
   ChartCalculationCommandStore,
   ChartCalculationJobStore,
-  ClientConsentStore,
   ClientBirthData,
   ClientStore,
   DictionaryStore
@@ -30,7 +27,6 @@ const ownerUserId = "11111111-1111-4111-8111-111111111111";
 const clientId = "22222222-2222-4222-8222-222222222222";
 const jobId = "33333333-3333-4333-8333-333333333333";
 const partnerClientId = "44444444-4444-4444-8444-444444444444";
-const consentId = "55555555-5555-4555-8555-555555555555";
 const aiDraftCommandId = "66666666-6666-4666-8666-666666666666";
 const aiDraftIdempotencyKey = "charts:ai-draft:test-command";
 const executionProfile = {
@@ -1087,24 +1083,19 @@ describe("ChartsService", () => {
     expect(foreignCommandStore.createOrReuseChartJobAndRequestCalculation).not.toHaveBeenCalled();
   });
 
-  it("generates a checksum-bound natal AI draft without client consent", async () => {
+  it("generates a checksum-bound natal AI draft", async () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const calculationStore = createCalculationStore(calculation);
     const dictionaryStore = createDictionaryStore();
-    const consentStore = createConsentStore("missing");
     const aiGeneration = createAiGenerationService();
     const aiDraftCommandStore = createAiDraftCommandStore();
     const service = createService({
       calculationStore,
       dictionaryStore,
-      consentStore,
       aiGeneration,
       aiDraftCommandStore,
       locale: "en",
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     const response = await service.createAiDraft(
@@ -1114,7 +1105,6 @@ describe("ChartsService", () => {
       aiDraftIdempotencyKey
     );
 
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(aiDraftCommandStore.acquire).toHaveBeenCalledWith(
       expect.objectContaining({
         now: "2026-07-20T12:00:00.000Z",
@@ -1132,14 +1122,10 @@ describe("ChartsService", () => {
       expect.objectContaining({
         feature: "chart.interpretationDraft",
         ownerUserId,
-        consentAuthorizations: [],
-        usageEvidence: {
-          processingAuthorityVersion: "verified-test-authority.v1",
-          resourceEvidence: {
-            resourceType: "chart_calculation",
-            resourceId: calculation.id,
-            sourceChecksum: calculation.resultChecksum
-          }
+        resourceEvidence: {
+          resourceType: "chart_calculation",
+          resourceId: calculation.id,
+          sourceChecksum: calculation.resultChecksum
         },
         input: expect.objectContaining({ locale: "en", methodCode: "natal" })
       })
@@ -1180,13 +1166,9 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore,
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1204,12 +1186,11 @@ describe("ChartsService", () => {
     expect(calculationStore.saveInterpretation).not.toHaveBeenCalled();
   });
 
-  it("replays terminal success after consent revocation and authority outage without new processing", async () => {
+  it("replays terminal success while chart AI is unavailable without new processing", async () => {
     const calculation = chartCalculationRecord({
       resultData: natalChartResultV2(),
       interpretations: [aiInterpretation(aiDraftCommandId)]
     });
-    const consentStore = createConsentStore("missing");
     const dictionaryStore = createDictionaryStore();
     const profileStore = createProfileStore("en");
     const aiGeneration = createAiGenerationService();
@@ -1222,12 +1203,11 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore,
       dictionaryStore,
       profileStore,
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: false, processingAuthorityVersion: null }
+      chartAiConfig: { enabled: false }
     });
 
     await expect(
@@ -1241,7 +1221,6 @@ describe("ChartsService", () => {
       id: calculation.id,
       interpretations: [expect.objectContaining({ id: aiDraftCommandId })]
     });
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(profileStore.findByOwnerUserId).not.toHaveBeenCalled();
     expect(dictionaryStore.listEntriesByCodes).not.toHaveBeenCalled();
     expect(aiGeneration.generate).not.toHaveBeenCalled();
@@ -1334,13 +1313,9 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1373,13 +1348,9 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1417,13 +1388,9 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore,
-      consentStore: createConsentStore("granted"),
       aiGeneration: createAiGenerationService(),
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1454,13 +1421,9 @@ describe("ChartsService", () => {
     });
     const service = createService({
       calculationStore,
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1493,13 +1456,9 @@ describe("ChartsService", () => {
     );
     const service = createService({
       calculationStore,
-      consentStore: createConsentStore("granted"),
       aiGeneration: createAiGenerationService(),
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1527,13 +1486,9 @@ describe("ChartsService", () => {
     const aiDraftCommandStore = createStatefulAiDraftCommandStore();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1562,13 +1517,9 @@ describe("ChartsService", () => {
     const aiDraftCommandStore = createStatefulAiDraftCommandStore();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1601,13 +1552,9 @@ describe("ChartsService", () => {
     const logger = vi.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore: createConsentStore("granted"),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1637,19 +1584,14 @@ describe("ChartsService", () => {
     const calculationStore = createCalculationStore(calculation);
     const dictionaryStore = createDictionaryStore();
     const profileStore = createProfileStore("en");
-    const consentStore = createConsentStore("missing");
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore,
       dictionaryStore,
       profileStore,
-      consentStore,
       aiGeneration,
       locale: "en",
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1663,12 +1605,9 @@ describe("ChartsService", () => {
       id: calculation.id,
       interpretations: [expect.objectContaining({ status: "draft" })]
     });
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(profileStore.findByOwnerUserId).toHaveBeenCalledOnce();
     expect(dictionaryStore.listEntriesByCodes).toHaveBeenCalledOnce();
-    expect(aiGeneration.generate).toHaveBeenCalledWith(
-      expect.objectContaining({ consentAuthorizations: [] })
-    );
+    expect(aiGeneration.generate).toHaveBeenCalledOnce();
     expect(calculationStore.saveInterpretation).toHaveBeenCalledOnce();
   });
 
@@ -1676,15 +1615,13 @@ describe("ChartsService", () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const dictionaryStore = createDictionaryStore();
     const profileStore = createProfileStore("en");
-    const consentStore = createConsentStore("granted");
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
       profileStore,
-      consentStore,
       aiGeneration,
-      chartAiConfig: { enabled: false, processingAuthorityVersion: null }
+      chartAiConfig: { enabled: false }
     });
 
     await expect(
@@ -1697,10 +1634,9 @@ describe("ChartsService", () => {
     ).rejects.toMatchObject({
       status: 503,
       response: expect.objectContaining({
-        code: "CHART_AI_PROCESSING_AUTHORITY_UNAVAILABLE"
+        code: "CHART_AI_UNAVAILABLE"
       })
     });
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(profileStore.findByOwnerUserId).not.toHaveBeenCalled();
     expect(dictionaryStore.listEntriesByCodes).not.toHaveBeenCalled();
     expect(aiGeneration.generate).not.toHaveBeenCalled();
@@ -1717,13 +1653,9 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
-      consentStore: createConsentStore("granted"),
       aiDraftCommandStore,
       aiGeneration,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1763,12 +1695,8 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
-      consentStore: createConsentStore("granted"),
       aiDraftCommandStore,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1802,16 +1730,11 @@ describe("ChartsService", () => {
         }
       ]
     });
-    const consentStore = createConsentStore("granted");
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore,
       aiGeneration,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1825,10 +1748,7 @@ describe("ChartsService", () => {
       id: calculation.id,
       interpretations: [expect.objectContaining({ status: "draft" })]
     });
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
-    expect(aiGeneration.generate).toHaveBeenCalledWith(
-      expect.objectContaining({ consentAuthorizations: [] })
-    );
+    expect(aiGeneration.generate).toHaveBeenCalledOnce();
   });
 
   it("rejects stale chart AI draft requests before calling the provider", async () => {
@@ -1901,18 +1821,13 @@ describe("ChartsService", () => {
       resultData: natalChartResultV2(),
       interpretationMode: "child"
     });
-    const consentStore = createConsentStore("granted");
     const aiDraftCommandStore = createAiDraftCommandStore();
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      consentStore,
       aiDraftCommandStore,
       aiGeneration,
-      chartAiConfig: {
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      }
+      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1927,7 +1842,6 @@ describe("ChartsService", () => {
       response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
     });
     expect(aiDraftCommandStore.acquire).not.toHaveBeenCalled();
-    expect(consentStore.findChartAiConsentEvidence).not.toHaveBeenCalled();
     expect(aiGeneration.generate).not.toHaveBeenCalled();
   });
 
@@ -1962,13 +1876,9 @@ function createService(
     readonly dictionaryStore?: DictionaryStore;
     readonly profileStore?: AstrologerProfileStore;
     readonly aiGeneration?: AiGenerationService;
-    readonly consentStore?: ClientConsentStore;
     readonly aiDraftCommandStore?: ChartAiDraftCommandStore;
     readonly executionProfileProvider?: { readonly getProfile: () => typeof executionProfile };
-    readonly chartAiConfig?: {
-      readonly enabled: boolean;
-      readonly processingAuthorityVersion: string | null;
-    };
+    readonly chartAiConfig?: { readonly enabled: boolean };
     readonly locale?: "ru" | "en";
   } = {}
 ): ChartsService {
@@ -1982,7 +1892,7 @@ function createService(
     { now: () => now } as SystemClock,
     input.aiGeneration ?? createAiGenerationService(),
     (input.executionProfileProvider ?? { getProfile: () => executionProfile }) as never,
-    input.chartAiConfig ?? { enabled: false, processingAuthorityVersion: null },
+    input.chartAiConfig ?? { enabled: false },
     input.aiDraftCommandStore ?? createAiDraftCommandStore()
   );
 }
@@ -2196,40 +2106,6 @@ function createAiGenerationService(): AiGenerationService {
   } as unknown as AiGenerationService;
 }
 
-function createConsentStore(state: "granted" | "missing"): ClientConsentStore {
-  return {
-    listRelationshipConsentsForClient: vi.fn(async () => []),
-    grantConsentAtomically: vi.fn(async () => ({ status: "relationship_not_found" as const })),
-    revokeConsentAtomically: vi.fn(async () => ({ status: "not_found" as const })),
-    findChartAiConsentEvidence: vi.fn(async ({ astrologerUserId, clientUserIds }) =>
-      clientUserIds.map((clientUserId: string) => ({
-        relationship: {
-          id: "66666666-6666-4666-8666-666666666666",
-          clientUserId,
-          astrologerUserId,
-          status: "active" as const
-        },
-        consent:
-          state === "granted"
-            ? {
-                id: consentId,
-                relationshipId: "66666666-6666-4666-8666-666666666666",
-                clientUserId,
-                astrologerUserId,
-                purpose: currentChartAiConsentPolicy.purpose,
-                policyVersion: currentChartAiConsentPolicy.policyVersion,
-                processorCode: currentChartAiConsentPolicy.processorCode,
-                noticeLocale: "ru" as const,
-                noticeSha256: canonicalChartAiConsentNoticeHashes.ru,
-                grantedAt: now.toISOString(),
-                revokedAt: null
-              }
-            : null
-      }))
-    )
-  };
-}
-
 function createCommandStore(
   input: {
     readonly outcome?: Awaited<
@@ -2273,10 +2149,7 @@ function createClientStore(
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
-    upsertClientBirthData: vi.fn(async () => raise()),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(async () => raise()),
-    updateClientBirthDataProfile: vi.fn(async () => raise()),
+    writeClientBirthProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(async ({ clientUserId }) => {
       const birthData = input.clients
@@ -2313,7 +2186,9 @@ function readyBirthData(input: Partial<ClientBirthData> = {}): ClientBirthData {
     birthLatitude: input.birthLatitude ?? 41.9028,
     birthLongitude: input.birthLongitude ?? 12.4964,
     source: input.source ?? "manual",
-    isPrimary: input.isPrimary ?? true,
+    revision: input.revision ?? 1,
+    lastEditedByUserId: input.lastEditedByUserId ?? ownerUserId,
+    lastEditedByRole: input.lastEditedByRole ?? "astrologer",
     createdAt: input.createdAt ?? now.toISOString(),
     updatedAt: input.updatedAt ?? now.toISOString()
   };

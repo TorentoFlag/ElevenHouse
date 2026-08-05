@@ -3,13 +3,19 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   IdempotencyKeyReuseError,
+  BookingCancellationRequiresRefundAuthorityError,
+  BookingLifecycleRevisionConflictError,
   ManualCalendarBlockConflictError,
   SlotNoLongerAvailableError,
-  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
   type ManualBookingClaim,
   type ManualBookingCommand,
   type ManualCalendarBlockClaim,
   type ManualCalendarBlockCommand,
+  type OwnerCancelBookingCommand,
+  type OwnerCompleteBookingCommand,
+  type OwnerRescheduleBookingCommand,
+  type BookingRescheduleClaim,
   type PaidBookingHoldCommand
 } from "@elevenhouse/domain";
 import { Client } from "pg";
@@ -97,41 +103,40 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     ]);
     expect(results.map((result) => result.kind).sort()).toEqual(["created", "replayed"]);
     expect(results[0]?.booking.id).toBe(results[1]?.booking.id);
+    expect(results[0]?.booking.clientDataRequirementsSnapshot).toEqual(
+      claim.productSnapshot.clientDataRequirements
+    );
     expect(createClaim).toHaveBeenCalledTimes(1);
     const outbox = await runtime.pool.query<{
       event_type: string;
       aggregate_id: string;
       status: string;
       payload: {
-        ownerUserId: string;
-        triggerKind: string;
-        sourceEventId: string;
-        subjectType: string;
-        subjectId: string;
-        payload: { bookingId: string; clientUserId: string; productId: string };
+        schemaVersion: string;
+        lifecycleEventId: string;
       };
+      revision: number;
+      event_kind: string;
     }>(
-      "select event_type, aggregate_id, status, payload from outbox_events where aggregate_id = $1",
+      `select o.event_type, o.aggregate_id, o.status, o.payload,
+              e.revision, e.event_kind
+         from outbox_events o
+         inner join booking_lifecycle_events e on e.id = o.aggregate_id
+        where e.booking_id = $1`,
       [results[0]?.booking.id]
     );
     expect(outbox.rows).toHaveLength(1);
     expect(outbox.rows[0]).toMatchObject({
-      event_type: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregate_id: results[0]?.booking.id,
+      event_type: BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
       status: "pending",
+      revision: 1,
+      event_kind: "confirmed",
       payload: {
-        ownerUserId: fixture.ownerUserId,
-        triggerKind: "booking_confirmed",
-        sourceEventId: `booking:${results[0]?.booking.id}:confirmed`,
-        subjectType: "booking",
-        subjectId: results[0]?.booking.id,
-        payload: {
-          bookingId: results[0]?.booking.id,
-          clientUserId: fixture.clientUserId,
-          productId: fixture.productId
-        }
+        schemaVersion: "booking-lifecycle-event-dispatch-request.v1",
+        lifecycleEventId: expect.any(String)
       }
     });
+    expect(outbox.rows[0]?.aggregate_id).toBe(outbox.rows[0]?.payload.lifecycleEventId);
 
     await expect(
       store.executeManualBooking({ ...command, requestHash: digest("f") }, async () => claim)
@@ -142,6 +147,457 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
         bookingId: results[0]?.booking.id ?? raise("Expected booking")
       })
     ).resolves.toBeNull();
+  });
+
+  it("emits the canonical booking-confirmed event when a paid booking is confirmed", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleBookingCommandStore(runtime.database);
+    const held = await store.executePaidHold(
+      paidBookingHoldCommand(fixture.clientUserId, "paid-booking-confirmation", "p"),
+      async () => ({
+        ...bookingClaim(fixture, "2026-05-30T12:00:00Z", "2026-05-30T13:00:00Z"),
+        holdExpiresAt: "2026-05-20T10:15:00.000Z"
+      })
+    );
+    await runtime.pool.query(
+      `update bookings
+          set state = 'pending_payment', hold_expires_at = null
+        where id = $1`,
+      [held.booking.id]
+    );
+    await runtime.pool.query(
+      `update schedule_reservations
+          set kind = 'booking', source_aggregate_id = $1, hold_expires_at = null
+        where id = $2`,
+      [held.booking.id, held.booking.reservationId]
+    );
+
+    const confirmedAt = "2026-05-20T10:05:00.000Z";
+    await expect(
+      store.confirmPaidBooking({
+        bookingId: held.booking.id,
+        orderId: randomUUID(),
+        now: confirmedAt
+      })
+    ).resolves.toMatchObject({
+      id: held.booking.id,
+      state: "confirmed",
+      updatedAt: confirmedAt
+    });
+
+    const outbox = await runtime.pool.query<{
+      event_type: string;
+      aggregate_id: string;
+      status: string;
+      payload: {
+        schemaVersion: string;
+        lifecycleEventId: string;
+      };
+      revision: number;
+      event_kind: string;
+    }>(
+      `select o.event_type, o.aggregate_id, o.status, o.payload,
+              e.revision, e.event_kind
+         from outbox_events o
+         inner join booking_lifecycle_events e on e.id = o.aggregate_id
+        where e.booking_id = $1`,
+      [held.booking.id]
+    );
+    expect(outbox.rows).toEqual([
+      expect.objectContaining({
+        event_type: BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+        status: "pending",
+        revision: 1,
+        event_kind: "confirmed",
+        payload: {
+          schemaVersion: "booking-lifecycle-event-dispatch-request.v1",
+          lifecycleEventId: expect.any(String)
+        }
+      })
+    ]);
+    expect(outbox.rows[0]?.aggregate_id).toBe(outbox.rows[0]?.payload.lifecycleEventId);
+  });
+
+  it("completes only a paid live booking after its service ends and emits one immutable outbox event", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleBookingCommandStore(runtime.database);
+    const held = await store.executePaidHold(
+      paidBookingHoldCommand(fixture.clientUserId, "paid-booking-completion", "q"),
+      async () => ({
+        ...bookingClaim(fixture, "2026-05-20T08:00:00Z", "2026-05-20T09:00:00Z"),
+        holdExpiresAt: "2026-05-20T10:15:00.000Z"
+      })
+    );
+    await runtime.pool.query(
+      `update bookings set state = 'pending_payment', hold_expires_at = null where id = $1`,
+      [held.booking.id]
+    );
+    await runtime.pool.query(
+      `update schedule_reservations
+          set kind = 'booking', source_aggregate_id = $1, hold_expires_at = null
+        where id = $2`,
+      [held.booking.id, held.booking.reservationId]
+    );
+    await store.confirmPaidBooking({
+      bookingId: held.booking.id,
+      orderId: randomUUID(),
+      now: "2026-05-20T07:00:00.000Z"
+    });
+    const command = ownerCompleteBookingCommand(
+      fixture.ownerUserId,
+      "paid-booking-completion-command",
+      "r",
+      "2026-05-20T09:01:00.000Z"
+    );
+
+    await expect(
+      store.executeOwnerCompletion(command, {
+        bookingId: held.booking.id,
+        expectedLifecycleRevision: 1
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      booking: { state: "completed", lifecycleRevision: 2 },
+      lifecycleEvent: { kind: "completed", revision: 2, occurredAt: command.now }
+    });
+    await expect(
+      store.executeOwnerCompletion(command, {
+        bookingId: held.booking.id,
+        expectedLifecycleRevision: 1
+      })
+    ).resolves.toMatchObject({ kind: "replayed" });
+
+    const history = await runtime.pool.query<{
+      state: string;
+      lifecycle_revision: number;
+      event_kind: string;
+      event_count: string;
+    }>(
+      `select b.state, b.lifecycle_revision, e.event_kind,
+              (select count(*)::text from booking_lifecycle_events where booking_id = b.id) as event_count
+         from bookings b
+         join booking_lifecycle_events e
+           on e.booking_id = b.id and e.revision = b.lifecycle_revision
+        where b.id = $1`,
+      [held.booking.id]
+    );
+    expect(history.rows).toEqual([
+      { state: "completed", lifecycle_revision: 2, event_kind: "completed", event_count: "2" }
+    ]);
+  });
+
+  it("atomically cancels a manual booking and fails paid cancellation closed", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleBookingCommandStore(runtime.database);
+    const created = await store.executeManualBooking(
+      bookingCommand(fixture.ownerUserId, "booking-cancel-source", "c"),
+      async () => bookingClaim(fixture, "2026-06-02T10:00:00Z", "2026-06-02T11:00:00Z")
+    );
+    const command = ownerCancelBookingCommand(
+      fixture.ownerUserId,
+      "booking-cancel-command",
+      "d"
+    );
+
+    const cancelled = await store.executeOwnerCancellation(command, {
+      bookingId: created.booking.id,
+      expectedLifecycleRevision: 1,
+      reasonCode: "astrologer_unavailable"
+    });
+    await expect(
+      store.executeOwnerCancellation(command, {
+        bookingId: created.booking.id,
+        expectedLifecycleRevision: 1,
+        reasonCode: "astrologer_unavailable"
+      })
+    ).resolves.toEqual({ ...cancelled, kind: "replayed" });
+    expect(cancelled).toMatchObject({
+      kind: "created",
+      booking: { state: "cancelled", lifecycleRevision: 2 },
+      lifecycleEvent: {
+        revision: 2,
+        kind: "cancelled",
+        reasonCode: "astrologer_unavailable"
+      }
+    });
+
+    const persisted = await runtime.pool.query<{
+      booking_state: string;
+      lifecycle_revision: number;
+      reservation_lifecycle: string;
+      lifecycle_event_count: string;
+      outbox_count: string;
+    }>(
+      `select b.state as booking_state,
+              b.lifecycle_revision,
+              r.lifecycle as reservation_lifecycle,
+              (select count(*)::text from booking_lifecycle_events e
+                where e.booking_id = b.id) as lifecycle_event_count,
+              (select count(*)::text from outbox_events o
+                inner join booking_lifecycle_events e on e.id = o.aggregate_id
+                where e.booking_id = b.id) as outbox_count
+         from bookings b
+         inner join schedule_reservations r on r.id = b.reservation_id
+        where b.id = $1`,
+      [created.booking.id]
+    );
+    expect(persisted.rows[0]).toEqual({
+      booking_state: "cancelled",
+      lifecycle_revision: 2,
+      reservation_lifecycle: "released",
+      lifecycle_event_count: "2",
+      outbox_count: "2"
+    });
+
+    await expect(
+      store.executeOwnerCancellation(
+        ownerCancelBookingCommand(fixture.ownerUserId, "booking-cancel-stale", "e"),
+        {
+          bookingId: created.booking.id,
+          expectedLifecycleRevision: 1,
+          reasonCode: "other"
+        }
+      )
+    ).rejects.toBeInstanceOf(BookingLifecycleRevisionConflictError);
+
+    const held = await store.executePaidHold(
+      paidBookingHoldCommand(fixture.clientUserId, "paid-cancel-source", "f"),
+      async () => ({
+        ...bookingClaim(fixture, "2026-06-03T10:00:00Z", "2026-06-03T11:00:00Z"),
+        holdExpiresAt: "2026-05-20T10:15:00.000Z"
+      })
+    );
+    await runtime.pool.query(
+      `update bookings set state = 'pending_payment', hold_expires_at = null where id = $1`,
+      [held.booking.id]
+    );
+    await runtime.pool.query(
+      `update schedule_reservations
+          set kind = 'booking', source_aggregate_id = $1, hold_expires_at = null
+        where id = $2`,
+      [held.booking.id, held.booking.reservationId]
+    );
+    await store.confirmPaidBooking({
+      bookingId: held.booking.id,
+      orderId: randomUUID(),
+      now: "2026-05-20T10:05:00.000Z"
+    });
+    await expect(
+      store.executeOwnerCancellation(
+        ownerCancelBookingCommand(fixture.ownerUserId, "paid-cancel-command", "g"),
+        {
+          bookingId: held.booking.id,
+          expectedLifecycleRevision: 1,
+          reasonCode: "client_request"
+        }
+      )
+    ).rejects.toBeInstanceOf(BookingCancellationRequiresRefundAuthorityError);
+  });
+
+  it("moves the same confirmed booking reservation and persists one replayable reschedule event", async () => {
+    const fixture = await createFixture();
+    const store = createDrizzleBookingCommandStore(runtime.database);
+    const created = await store.executeManualBooking(
+      bookingCommand(fixture.ownerUserId, "booking-reschedule-source", "r"),
+      async () => bookingClaim(fixture, "2026-06-04T10:00:00Z", "2026-06-04T11:00:00Z")
+    );
+    const command = ownerRescheduleBookingCommand(
+      fixture.ownerUserId,
+      "booking-reschedule-command",
+      "s"
+    );
+    const claim = bookingRescheduleClaim(
+      fixture,
+      created.booking.id,
+      created.booking.reservationId,
+      1,
+      "2026-06-04T12:00:00Z",
+      "2026-06-04T13:00:00Z"
+    );
+
+    const moved = await store.executeOwnerReschedule(
+      command,
+      {
+        bookingId: created.booking.id,
+        expectedLifecycleRevision: 1,
+        projectedStartAt: claim.serviceStartAt
+      },
+      async (context) => {
+        expect(context.booking).toMatchObject({
+          id: created.booking.id,
+          reservationId: created.booking.reservationId,
+          lifecycleRevision: 1,
+          state: "confirmed"
+        });
+        expect(context.scheduleId).toBe(fixture.scheduleId);
+        expect(context.availability.activeReservations).toEqual([]);
+        expect(context.availability.confirmedBookingCountByLocalDate).toEqual({});
+        return claim;
+      }
+    );
+    await expect(
+      store.executeOwnerReschedule(
+        command,
+        {
+          bookingId: created.booking.id,
+          expectedLifecycleRevision: 1,
+          projectedStartAt: claim.serviceStartAt
+        },
+        async () => raise("Replay must not recompute availability")
+      )
+    ).resolves.toEqual({ ...moved, kind: "replayed" });
+    expect(moved).toMatchObject({
+      kind: "created",
+      booking: {
+        id: created.booking.id,
+        reservationId: created.booking.reservationId,
+        clientUserId: created.booking.clientUserId,
+        productId: created.booking.productId,
+        source: "manual",
+        state: "confirmed",
+        lifecycleRevision: 2,
+        startAt: "2026-06-04T12:00:00.000Z",
+        endAt: "2026-06-04T13:00:00.000Z",
+        priceMinor: created.booking.priceMinor,
+        policySnapshot: created.booking.policySnapshot
+      },
+      lifecycleEvent: {
+        revision: 2,
+        kind: "rescheduled",
+        reasonCode: null,
+        before: {
+          startAt: "2026-06-04T10:00:00.000Z",
+          endAt: "2026-06-04T11:00:00.000Z"
+        },
+        after: {
+          startAt: "2026-06-04T12:00:00.000Z",
+          endAt: "2026-06-04T13:00:00.000Z"
+        }
+      }
+    });
+
+    const persistence = await runtime.pool.query<{
+      booking_revision: number;
+      booking_start_at: Date;
+      reservation_id: string;
+      reservation_start_at: Date;
+      lifecycle_event_count: string;
+      outbox_count: string;
+    }>(
+      `select b.lifecycle_revision as booking_revision,
+              b.service_start_at as booking_start_at,
+              r.id as reservation_id,
+              r.service_start_at as reservation_start_at,
+              (select count(*)::text from booking_lifecycle_events e
+                where e.booking_id = b.id) as lifecycle_event_count,
+              (select count(*)::text from outbox_events o
+                inner join booking_lifecycle_events e on e.id = o.aggregate_id
+                where e.booking_id = b.id) as outbox_count
+         from bookings b
+         inner join schedule_reservations r on r.id = b.reservation_id
+        where b.id = $1`,
+      [created.booking.id]
+    );
+    expect(persistence.rows[0]).toEqual({
+      booking_revision: 2,
+      booking_start_at: new Date("2026-06-04T12:00:00Z"),
+      reservation_id: created.booking.reservationId,
+      reservation_start_at: new Date("2026-06-04T12:00:00Z"),
+      lifecycle_event_count: "2",
+      outbox_count: "2"
+    });
+
+    await expect(
+      store.executeOwnerReschedule(
+        ownerRescheduleBookingCommand(fixture.ownerUserId, "booking-reschedule-stale", "t"),
+        {
+          bookingId: created.booking.id,
+          expectedLifecycleRevision: 1,
+          projectedStartAt: "2026-06-04T14:00:00Z"
+        },
+        async () => claim
+      )
+    ).rejects.toBeInstanceOf(BookingLifecycleRevisionConflictError);
+
+    const occupied = await store.executeManualBooking(
+      bookingCommand(fixture.ownerUserId, "booking-reschedule-conflict-source", "u"),
+      async () => bookingClaim(fixture, "2026-06-04T14:00:00Z", "2026-06-04T15:00:00Z")
+    );
+    await expect(
+      store.executeOwnerReschedule(
+        ownerRescheduleBookingCommand(fixture.ownerUserId, "booking-reschedule-conflict", "v"),
+        {
+          bookingId: created.booking.id,
+          expectedLifecycleRevision: 2,
+          projectedStartAt: "2026-06-04T14:00:00Z"
+        },
+        async () =>
+          bookingRescheduleClaim(
+            fixture,
+            created.booking.id,
+            created.booking.reservationId,
+            2,
+            "2026-06-04T14:00:00Z",
+            "2026-06-04T15:00:00Z"
+          )
+      )
+    ).rejects.toBeInstanceOf(SlotNoLongerAvailableError);
+    await expect(
+      store.findByOwnerAndId({ ownerUserId: fixture.ownerUserId, bookingId: created.booking.id })
+    ).resolves.toMatchObject({ lifecycleRevision: 2, startAt: "2026-06-04T12:00:00.000Z" });
+    expect(occupied.booking.state).toBe("confirmed");
+
+    const held = await store.executePaidHold(
+      paidBookingHoldCommand(fixture.clientUserId, "paid-reschedule-source", "w"),
+      async () => ({
+        ...bookingClaim(fixture, "2026-06-05T10:00:00Z", "2026-06-05T11:00:00Z"),
+        holdExpiresAt: "2026-05-20T10:15:00.000Z"
+      })
+    );
+    await runtime.pool.query(
+      "update bookings set state = 'pending_payment', hold_expires_at = null where id = $1",
+      [held.booking.id]
+    );
+    await runtime.pool.query(
+      `update schedule_reservations
+          set kind = 'booking', source_aggregate_id = $1, hold_expires_at = null
+        where id = $2`,
+      [held.booking.id, held.booking.reservationId]
+    );
+    const paid = await store.confirmPaidBooking({
+      bookingId: held.booking.id,
+      orderId: randomUUID(),
+      now: "2026-05-20T10:05:00.000Z"
+    });
+    if (!paid) throw new Error("Expected paid booking confirmation");
+    await expect(
+      store.executeOwnerReschedule(
+        ownerRescheduleBookingCommand(fixture.ownerUserId, "paid-reschedule-command", "x"),
+        {
+          bookingId: paid.id,
+          expectedLifecycleRevision: 1,
+          projectedStartAt: "2026-06-05T12:00:00Z"
+        },
+        async () =>
+          bookingRescheduleClaim(
+            fixture,
+            paid.id,
+            paid.reservationId,
+            1,
+            "2026-06-05T12:00:00Z",
+            "2026-06-05T13:00:00Z"
+          )
+      )
+    ).resolves.toMatchObject({
+      booking: {
+        id: paid.id,
+        source: "client_paid",
+        state: "confirmed",
+        lifecycleRevision: 2,
+        priceMinor: paid.priceMinor
+      },
+      lifecycleEvent: { kind: "rescheduled", revision: 2 }
+    });
   });
 
   it("releases an expired paid hold before inserting a new overlapping booking", async () => {
@@ -383,7 +839,14 @@ function bookingClaim(
       durationMinutes: 60,
       deliveryFormat: "video",
       priceMinor: 490000,
-      currency: "RUB"
+      currency: "RUB",
+      clientDataRequirements: {
+        schemaVersion: "booking-client-data-requirements.v1",
+        executionMode: "live",
+        participantMode: "solo",
+        requiredClientData: ["chart1"],
+        methods: ["natal"]
+      }
     },
     scheduleSnapshot: {
       timeZone: "Europe/Moscow",
@@ -434,6 +897,77 @@ function paidBookingHoldCommand(
     requestHash: digest(hashCharacter),
     now: "2026-05-20T10:00:00.000Z",
     expiresAt: "2026-05-20T10:15:00.000Z"
+  };
+}
+
+function ownerCancelBookingCommand(
+  actorUserId: string,
+  key: string,
+  hashCharacter: string
+): OwnerCancelBookingCommand {
+  return {
+    actorUserId,
+    scope: "bookings.owner.cancel",
+    key,
+    requestHash: digest(hashCharacter),
+    now: "2026-05-20T11:00:00.000Z",
+    expiresAt: "2026-05-21T11:00:00.000Z"
+  };
+}
+
+function ownerRescheduleBookingCommand(
+  actorUserId: string,
+  key: string,
+  hashCharacter: string
+): OwnerRescheduleBookingCommand {
+  return {
+    actorUserId,
+    scope: "bookings.owner.reschedule",
+    key,
+    requestHash: digest(hashCharacter),
+    now: "2026-05-20T11:00:00.000Z",
+    expiresAt: "2026-05-21T11:00:00.000Z"
+  };
+}
+
+function ownerCompleteBookingCommand(
+  actorUserId: string,
+  key: string,
+  hashCharacter: string,
+  now: string
+): OwnerCompleteBookingCommand {
+  return {
+    actorUserId,
+    scope: "bookings.owner.complete",
+    key,
+    requestHash: digest(hashCharacter),
+    now,
+    expiresAt: "2026-05-21T09:01:00.000Z"
+  };
+}
+
+function bookingRescheduleClaim(
+  fixture: { readonly ownerUserId: string; readonly scheduleId: string },
+  bookingId: string,
+  reservationId: string,
+  expectedLifecycleRevision: number,
+  startAt: string,
+  endAt: string
+): BookingRescheduleClaim {
+  return {
+    ownerUserId: fixture.ownerUserId,
+    bookingId,
+    reservationId,
+    scheduleId: fixture.scheduleId,
+    expectedLifecycleRevision,
+    serviceStartAt: startAt,
+    serviceEndAt: endAt,
+    occupiedStartAt: startAt,
+    occupiedEndAt: endAt,
+    scheduleSnapshot: {
+      timeZone: "Europe/Moscow",
+      policy: { bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minimumNoticeMinutes: 0 }
+    }
   };
 }
 

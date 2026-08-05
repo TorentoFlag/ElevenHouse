@@ -4,15 +4,17 @@ import {
   activateFlowVersionRequestSchema,
   activateFlowVersionResponseSchema,
   flowActivationEpochSchema,
+  flowActivationReviewQuerySchema,
   flowActivationReviewResponseSchema,
   flowEnrollmentCommandRejectionResponseSchema,
   flowEnrollmentControlSchema,
+  flowEnrollmentDetailResponseSchema,
   pauseFlowEnrollmentRequestSchema,
   pauseFlowEnrollmentResponseSchema
 } from "./flow-enrollment-control";
 
 const ids = {
-  actor: "00000000-0000-4000-8000-000000000001",
+  actorSubject: "00000000-0000-4000-8000-000000000001",
   flow: "00000000-0000-4000-8000-000000000002",
   version: "00000000-0000-4000-8000-000000000003",
   epoch: "00000000-0000-4000-8000-000000000004",
@@ -42,10 +44,10 @@ const openEpoch = {
   effectiveTo: null,
   manifestDigest: `sha256:${"a".repeat(64)}`,
   rolloutPolicyRevision: 3,
-  activatedByActorUserId: ids.actor,
+  activatedByActorSubjectId: ids.actorSubject,
   activateCommandId: ids.command,
   closeReason: null,
-  closedByActorUserId: null,
+  closedByActorSubjectId: null,
   closeCommandId: null
 } as const;
 
@@ -175,7 +177,7 @@ describe("Flow enrollment control contracts", () => {
         ...openEpoch,
         effectiveTo: "2026-08-04T09:59:59.999Z",
         closeReason: "pause_enrollment",
-        closedByActorUserId: ids.actor,
+        closedByActorSubjectId: ids.actorSubject,
         closeCommandId: ids.closeCommand
       }).success
     ).toBe(false);
@@ -190,7 +192,7 @@ describe("Flow enrollment control contracts", () => {
         ...openEpoch,
         effectiveTo: "2026-08-04T11:00:00.000Z",
         closeReason: "pause_enrollment",
-        closedByActorUserId: ids.actor,
+        closedByActorSubjectId: ids.actorSubject,
         closeCommandId: ids.closeCommand
       })
     ).toMatchObject({ closeReason: "pause_enrollment" });
@@ -199,13 +201,20 @@ describe("Flow enrollment control contracts", () => {
         ...openEpoch,
         effectiveTo: "2026-08-04T11:00:00.000Z",
         closeReason: "pause_enrollment",
-        closedByActorUserId: ids.actor,
+        closedByActorSubjectId: ids.actorSubject,
         closeCommandId: ids.command
       }).success
     ).toBe(false);
   });
 
   it("makes activation readiness explicit and internally coherent", () => {
+    expect(flowActivationReviewQuerySchema.parse({ versionId: ids.version })).toEqual({
+      versionId: ids.version
+    });
+    expect(
+      flowActivationReviewQuerySchema.safeParse({ versionId: ids.version, decision: "ready" })
+        .success
+    ).toBe(false);
     expect(
       flowActivationReviewResponseSchema.parse({
         schemaVersion: "flow-activation-review.v1",
@@ -213,6 +222,7 @@ describe("Flow enrollment control contracts", () => {
         versionId: ids.version,
         definitionRevision: 4,
         enrollmentRevision: 1,
+        expectedActiveVersionId: null,
         runtimeMode: "canary",
         rolloutPolicyRevision: 3,
         evaluatedAt: "2026-08-04T09:59:00.000Z",
@@ -228,6 +238,7 @@ describe("Flow enrollment control contracts", () => {
         versionId: ids.version,
         definitionRevision: 4,
         enrollmentRevision: 1,
+        expectedActiveVersionId: null,
         runtimeMode: "definition_only",
         rolloutPolicyRevision: 3,
         evaluatedAt: "2026-08-04T09:59:00.000Z",
@@ -243,6 +254,7 @@ describe("Flow enrollment control contracts", () => {
         versionId: ids.version,
         definitionRevision: 4,
         enrollmentRevision: 1,
+        expectedActiveVersionId: ids.version,
         runtimeMode: "canary",
         rolloutPolicyRevision: 3,
         evaluatedAt: "2026-08-04T09:59:00.000Z",
@@ -256,6 +268,37 @@ describe("Flow enrollment control contracts", () => {
         ]
       })
     ).toMatchObject({ decision: "blocked" });
+  });
+
+  it.each([
+    "FLOW_DEFINITION_ARCHIVED",
+    "FLOW_ACTIVATION_ALREADY_ACTIVE",
+    "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE",
+    "FLOW_RUNTIME_KILL_SWITCH_ENGAGED",
+    "FLOW_REQUIRED_CAPABILITY_NOT_READY",
+    "FLOW_AUTOMATION_QUOTA_NOT_READY"
+  ] as const)("accepts the persisted runtime blocker %s", (code) => {
+    expect(
+      flowActivationReviewResponseSchema.parse({
+        schemaVersion: "flow-activation-review.v1",
+        flowId: ids.flow,
+        versionId: ids.version,
+        definitionRevision: 4,
+        enrollmentRevision: 1,
+        expectedActiveVersionId: null,
+        runtimeMode: "canary",
+        rolloutPolicyRevision: 3,
+        evaluatedAt: "2026-08-04T09:59:00.000Z",
+        decision: "blocked",
+        blockers: [
+          {
+            code,
+            path: `runtime.blockers.${code}`,
+            capabilityKey: null
+          }
+        ]
+      })
+    ).toMatchObject({ blockers: [{ code }] });
   });
 
   it("binds successful command responses to one authoritative epoch", () => {
@@ -284,11 +327,57 @@ describe("Flow enrollment control contracts", () => {
           ...openEpoch,
           effectiveTo: pausedAt,
           closeReason: "pause_enrollment",
-          closedByActorUserId: ids.actor,
+          closedByActorSubjectId: ids.actorSubject,
           closeCommandId: ids.closeCommand
         }
       })
     ).toMatchObject({ enrollment: { state: "paused" }, closedEpoch: { effectiveTo: pausedAt } });
+  });
+
+  it("exposes a coherent current enrollment snapshot for CAS commands", () => {
+    expect(
+      flowEnrollmentDetailResponseSchema.parse({
+        schemaVersion: "flow-enrollment-detail.v1",
+        enrollment: activeEnrollment,
+        activeActivationEpoch: openEpoch
+      })
+    ).toMatchObject({
+      enrollment: { state: "active", activeActivationEpochId: ids.epoch },
+      activeActivationEpoch: { id: ids.epoch }
+    });
+
+    expect(
+      flowEnrollmentDetailResponseSchema.parse({
+        schemaVersion: "flow-enrollment-detail.v1",
+        enrollment: {
+          schemaVersion: "flow-enrollment-control.v1",
+          flowId: ids.flow,
+          state: "inactive",
+          definitionRevision: 4,
+          enrollmentRevision: 0,
+          activeVersionId: null,
+          activeActivationEpochId: null,
+          activeSince: null,
+          lastPausedAt: null
+        },
+        activeActivationEpoch: null
+      })
+    ).toMatchObject({ enrollment: { state: "inactive", enrollmentRevision: 0 } });
+
+    expect(
+      flowEnrollmentDetailResponseSchema.safeParse({
+        schemaVersion: "flow-enrollment-detail.v1",
+        enrollment: activeEnrollment,
+        activeActivationEpoch: null
+      }).success
+    ).toBe(false);
+    expect(
+      flowEnrollmentDetailResponseSchema.safeParse({
+        schemaVersion: "flow-enrollment-detail.v1",
+        enrollment: activeEnrollment,
+        activeActivationEpoch: { ...openEpoch, flowVersionId: ids.closeCommand }
+      }).success
+    ).toBe(false);
   });
 
   it("pins rejection codes to their HTTP status", () => {
@@ -313,5 +402,11 @@ describe("Flow enrollment control contracts", () => {
         }
       })
     ).toMatchObject({ statusCode: 409 });
+    expect(
+      flowEnrollmentCommandRejectionResponseSchema.parse({
+        statusCode: 409,
+        body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" }
+      })
+    ).toEqual({ statusCode: 409, body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" } });
   });
 });

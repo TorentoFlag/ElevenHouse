@@ -1,11 +1,12 @@
 import type {
-  FlowDefinitionDetailV2,
-  FlowDefinitionSummaryV2,
-  FlowDefinitionMigrationIssue,
+  FlowDefinitionDetailV3,
+  FlowDefinitionSummaryV3,
   FlowDefinitionTemplateDescriptorV2,
   FlowDefinitionValidationIssue,
   FlowRuntimeAvailability
 } from "@elevenhouse/contracts";
+import type { ProductResponse } from "@elevenhouse/contracts";
+import type { ReactNode } from "react";
 import type {
   CurrentFlowDefinitionDetail,
   FlowDraftCommandPayload,
@@ -16,30 +17,32 @@ import type {
 import { FlowBuilder } from "../../features/flows/ui/FlowBuilder";
 import { FlowCreateDialog } from "../../features/flows/ui/FlowCreateDialog";
 import { FlowGallery } from "../../features/flows/ui/FlowGallery";
-import { FlowLegacyMigrationPanel } from "../../features/flows/ui/FlowLegacyMigrationPanel";
 import { FlowsMobileList } from "../../features/flows/ui/FlowsMobileList";
 import styles from "./FlowsPage.module.css";
 
 export type FlowsPageViewProps = {
   readonly locale: "ru" | "en";
-  readonly flows: readonly FlowDefinitionSummaryV2[];
+  readonly flows: readonly FlowDefinitionSummaryV3[];
   readonly templates: readonly FlowDefinitionTemplateDescriptorV2[];
+  readonly products?: readonly ProductResponse[];
   readonly isLoading: boolean;
   readonly isError: boolean;
-  readonly listError?: Error | null;
   readonly templateError?: Error | null;
   readonly templatesLoading?: boolean;
   readonly onRetryList?: () => void;
   readonly onRetryTemplates?: () => void;
   readonly selectedFlowId?: string | null;
-  readonly selectedFlow?: FlowDefinitionDetailV2 | null;
+  readonly selectedFlow?: FlowDefinitionDetailV3 | null;
   readonly isLoadingSelectedFlow?: boolean;
   readonly selectedFlowError?: Error | null;
   readonly createDialogOpen?: boolean;
   readonly requestedTemplateKey?: string | null;
   readonly onRequestCreate?: () => void;
   readonly onCloseCreate?: () => void;
-  readonly onCreateTemplate?: (template: FlowDefinitionTemplateDescriptorV2) => void;
+  readonly onCreateTemplate?: (
+    template: FlowDefinitionTemplateDescriptorV2,
+    parameters: Record<string, string[]>
+  ) => void;
   readonly onCreateBlank?: () => void;
   readonly onOpenFlow?: (flowId: string) => void;
   readonly onCloseBuilder?: () => void;
@@ -47,18 +50,16 @@ export type FlowsPageViewProps = {
   readonly onSaveDraft?: (input: FlowDraftCommandPayload) => void;
   readonly onPublish?: (input: FlowPublishCommandPayload) => void;
   readonly onCreateNextDraft?: (input: FlowNextDraftCommandPayload) => void;
-  readonly onMigrate?: (flowId: string, expectedRevision: number) => void;
-  readonly onExportLegacyFlow?: (
-    flow: Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-graph.v1" }>
+  readonly onAutomationAction?: (
+    flowId: string,
+    action: "review_activation" | "pause_enrollment"
   ) => void;
-  readonly onAutomationToggle?: (flowId: string, activate: boolean) => void;
   readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onSimulate?: (flowId: string) => void;
   readonly isCreating?: boolean;
   readonly isSaving?: boolean;
   readonly isPublishing?: boolean;
   readonly isCreatingNextDraft?: boolean;
-  readonly isMigrating?: boolean;
   readonly isTogglingAutomation?: boolean;
   readonly isSimulating?: boolean;
   readonly isValidating?: boolean;
@@ -66,20 +67,19 @@ export type FlowsPageViewProps = {
   readonly saveError?: Error | null;
   readonly publishError?: Error | null;
   readonly nextDraftError?: Error | null;
-  readonly migrationError?: Error | null;
-  readonly migrationIssues?: readonly FlowDefinitionMigrationIssue[];
   readonly revisionConflict?: FlowRevisionConflict | null;
   readonly validationIssues?: readonly FlowDefinitionValidationIssue[];
   readonly validationError?: Error | null;
+  readonly workItemQueue?: ReactNode;
 };
 
 export function FlowsPageView({
   locale,
   flows,
   templates,
+  products = [],
   isLoading,
   isError,
-  listError = null,
   templateError = null,
   templatesLoading = false,
   onRetryList,
@@ -100,16 +100,13 @@ export function FlowsPageView({
   onSaveDraft,
   onPublish,
   onCreateNextDraft,
-  onMigrate,
-  onExportLegacyFlow,
-  onAutomationToggle,
+  onAutomationAction,
   runtimeAvailability = null,
   onSimulate,
   isCreating = false,
   isSaving = false,
   isPublishing = false,
   isCreatingNextDraft = false,
-  isMigrating = false,
   isTogglingAutomation = false,
   isSimulating = false,
   isValidating = false,
@@ -117,11 +114,10 @@ export function FlowsPageView({
   saveError = null,
   publishError = null,
   nextDraftError = null,
-  migrationError = null,
-  migrationIssues = [],
   revisionConflict = null,
   validationIssues = [],
-  validationError = null
+  validationError = null,
+  workItemQueue = null
 }: FlowsPageViewProps) {
   const copy = pageCopy[locale];
 
@@ -139,21 +135,6 @@ export function FlowsPageView({
             {copy.back}
           </button>
         </section>
-      );
-    }
-    if (selectedFlow.graphSchemaVersion === "flow-graph.v1") {
-      return (
-        <FlowLegacyMigrationPanel
-          flow={selectedFlow}
-          locale={locale}
-          onBack={onCloseBuilder ?? (() => undefined)}
-          onMigrate={onMigrate ?? (() => undefined)}
-          onExport={onExportLegacyFlow}
-          pending={isMigrating}
-          error={migrationError}
-          issues={migrationIssues}
-          classNames={styles}
-        />
       );
     }
     if (!onSaveDraft || !onPublish) {
@@ -192,10 +173,11 @@ export function FlowsPageView({
 
   return (
     <section className={styles.page} aria-labelledby="flows-title">
+      {workItemQueue}
       {isLoading ? <p className={styles.state}>{copy.loading}</p> : null}
       {!isLoading && isError ? (
         <div className={styles.retryState} role="alert">
-          <p className={styles.error}>{listError?.message ?? copy.loadFailed}</p>
+          <p className={styles.error}>{copy.loadFailed}</p>
           {onRetryList ? (
             <button className={styles.retryButton} type="button" onClick={onRetryList}>
               {copy.retry}
@@ -205,7 +187,6 @@ export function FlowsPageView({
       ) : null}
       {!isLoading && !isError ? (
         <>
-          {flows.length === 0 ? <p className={styles.state}>{copy.empty}</p> : null}
           {createError ? (
             <p className={styles.error} role="alert">
               {createError.message}
@@ -214,27 +195,28 @@ export function FlowsPageView({
           <FlowGallery
             flows={flows}
             locale={locale}
-            runtimeAvailability={runtimeAvailability}
             onCreateFlow={onRequestCreate}
             isCreating={isCreating}
+            emptyMessage={flows.length === 0 ? copy.empty : undefined}
             onOpenFlow={onOpenFlow}
-            onAutomationToggle={onAutomationToggle}
+            onAutomationAction={onAutomationAction}
             isTogglingAutomation={isTogglingAutomation}
             classNames={styles}
           />
           <FlowsMobileList
             flows={flows}
             locale={locale}
-            runtimeAvailability={runtimeAvailability}
             onCreateFlow={onRequestCreate}
             isCreating={isCreating}
+            emptyMessage={flows.length === 0 ? copy.empty : undefined}
             onOpenFlow={onOpenFlow}
-            onAutomationToggle={onAutomationToggle}
+            onAutomationAction={onAutomationAction}
             isTogglingAutomation={isTogglingAutomation}
             classNames={styles}
           />
           <FlowCreateDialog
             templates={templates}
+            products={products}
             locale={locale}
             open={createDialogOpen}
             pending={isCreating}

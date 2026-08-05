@@ -68,7 +68,10 @@
 Включает:
 
 - BirthData management.
-- Consent-aware sharing of birth data.
+- Один birth profile на клиента с CAS, audit history и редактированием клиентом
+  или связанным астрологом.
+- Booking eligibility и Flow readiness: при отсутствии данных создаётся обычный
+  запрос данных или задача, затем выполняется повторная проверка readiness.
 - Chart calculations.
 - `chart-worker` для тяжёлых расчётов.
 - Настройки школ/подходов, systems, orbs и других параметров расчётов.

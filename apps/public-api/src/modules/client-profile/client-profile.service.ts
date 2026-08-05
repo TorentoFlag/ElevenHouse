@@ -1,17 +1,11 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import type { ClientBirthData, ClientStore } from "@elevenhouse/domain";
+import { ClientBirthDataRevisionConflictError, writeClientBirthProfile } from "@elevenhouse/domain";
 import {
-  createClientBirthDataProfile,
-  updateClientBirthDataProfile,
-  upsertClientBirthData
-} from "@elevenhouse/domain";
-import {
-  clientBirthDataListResponseSchema,
   clientBirthDataResponseSchema,
   clientBirthDataUpsertRequestSchema,
   clientCabinetOverviewResponseSchema,
   relatedAstrologerListResponseSchema,
-  type ClientBirthDataListResponse,
   type ClientBirthDataResponse,
   type ClientBirthDataUpsertRequest,
   type ClientCabinetOverviewResponse,
@@ -23,7 +17,6 @@ import { CLIENT_PROFILE_READER, CLIENT_PROFILE_STORE } from "./client-profile.to
 export type ClientProfileReader = {
   readonly listRelatedAstrologers: (clientUserId: string) => Promise<RelatedAstrologerListResponse>;
   readonly findBirthData: (clientUserId: string) => Promise<ClientBirthData | null>;
-  readonly listBirthDataProfiles: (clientUserId: string) => Promise<readonly ClientBirthData[]>;
 };
 
 @Injectable()
@@ -32,10 +25,7 @@ export class ClientProfileService {
     @Inject(CLIENT_PROFILE_READER)
     private readonly reader: ClientProfileReader,
     @Inject(CLIENT_PROFILE_STORE)
-    private readonly store: Pick<
-      ClientStore,
-      "upsertClientBirthData" | "createClientBirthDataProfile" | "updateClientBirthDataProfile"
-    >,
+    private readonly store: Pick<ClientStore, "writeClientBirthProfile">,
     @Inject(SystemClock)
     private readonly clock: SystemClock
   ) {}
@@ -51,20 +41,15 @@ export class ClientProfileService {
     return birthData ? clientBirthDataResponseSchema.parse(birthData) : null;
   }
 
-  async listBirthProfiles(clientUserId: string): Promise<ClientBirthDataListResponse> {
-    const profiles = await this.reader.listBirthDataProfiles(clientUserId);
-    return clientBirthDataListResponseSchema.parse({ profiles });
-  }
-
   async getOverview(clientUserId: string): Promise<ClientCabinetOverviewResponse> {
-    const [related, profiles] = await Promise.all([
+    const [related, birthData] = await Promise.all([
       this.listRelatedAstrologers(clientUserId),
-      this.listBirthProfiles(clientUserId)
+      this.getBirthData(clientUserId)
     ]);
 
     return clientCabinetOverviewResponseSchema.parse({
       astrologers: related.astrologers,
-      birthProfiles: profiles.profiles,
+      birthData,
       summary: {
         directLinkOnly: true,
         upcomingBookingCount: 0,
@@ -80,54 +65,24 @@ export class ClientProfileService {
     input: ClientBirthDataUpsertRequest
   ): Promise<ClientBirthDataResponse> {
     const request = clientBirthDataUpsertRequestSchema.parse(input);
-    const birthData = await upsertClientBirthData({
-      store: this.store as ClientStore,
-      clientUserId,
-      data: {
-        ...request,
-        source: "client_profile"
-      },
-      now: this.clock.now()
-    });
-
-    return clientBirthDataResponseSchema.parse(birthData);
-  }
-
-  async createBirthProfile(
-    clientUserId: string,
-    input: ClientBirthDataUpsertRequest
-  ): Promise<ClientBirthDataResponse> {
-    const request = clientBirthDataUpsertRequestSchema.parse(input);
-    const birthData = await createClientBirthDataProfile({
-      store: this.store as ClientStore,
-      clientUserId,
-      data: {
-        ...request,
-        source: "client_profile"
-      },
-      now: this.clock.now()
-    });
-
-    return clientBirthDataResponseSchema.parse(birthData);
-  }
-
-  async updateBirthProfile(
-    clientUserId: string,
-    birthDataId: string,
-    input: ClientBirthDataUpsertRequest
-  ): Promise<ClientBirthDataResponse | null> {
-    const request = clientBirthDataUpsertRequestSchema.parse(input);
-    const birthData = await updateClientBirthDataProfile({
-      store: this.store as ClientStore,
-      clientUserId,
-      birthDataId,
-      data: {
-        ...request,
-        source: "client_profile"
-      },
-      now: this.clock.now()
-    });
-
-    return birthData ? clientBirthDataResponseSchema.parse(birthData) : null;
+    try {
+      const birthData = await writeClientBirthProfile({
+        store: this.store,
+        clientUserId,
+        actor: { userId: clientUserId, role: "client" },
+        expectedRevision: request.expectedRevision,
+        data: { ...request, source: "client_profile" },
+        now: this.clock.now()
+      });
+      return clientBirthDataResponseSchema.parse(birthData);
+    } catch (error) {
+      if (error instanceof ClientBirthDataRevisionConflictError) {
+        throw new ConflictException({
+          code: "CLIENT_BIRTH_DATA_REVISION_CONFLICT",
+          message: "Birth data was changed by another actor. Refresh and try again."
+        });
+      }
+      throw error;
+    }
   }
 }

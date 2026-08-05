@@ -8,11 +8,14 @@ import {
   type ProjectedStartEvaluation
 } from "../availability";
 import { normalizeRequiredString } from "../shared";
+import { sha256CanonicalJson } from "../calculations/canonical-json";
 import {
   BookingDailyLimitReachedError,
   BookingHorizonViolationError,
   BookingNotFoundError,
   BookingNoticeViolationError,
+  BookingLifecycleRevisionConflictError,
+  BookingRescheduleNotAllowedError,
   BookingValidationError,
   ClientRelationshipNotActiveError,
   ProductNotBookableError,
@@ -23,17 +26,27 @@ import type {
   BookingClientReader,
   BookingCommandStore,
   BookingProductReader,
+  BookingRescheduleClaim,
+  BookingRescheduleContext,
+  OwnerCompleteBookingCommand,
   ManualBookingClaim
 } from "./booking-ports";
 import type {
   Booking,
   BookingProduct,
   AvailableBookingSlotsResult,
+  CancelBookingInput,
+  CancelBookingResult,
+  CompleteBookingInput,
+  CompleteBookingResult,
   CreatePaidBookingHoldInput,
   CreatePaidBookingHoldResult,
   CreateManualBookingInput,
-  CreateManualBookingResult
+  CreateManualBookingResult,
+  RescheduleBookingInput,
+  RescheduleBookingResult
 } from "./booking-types";
+import { bookingClientDataRequirementsSchemaVersion } from "./booking-types";
 
 export async function getAvailableBookingSlots(input: {
   readonly availabilityStore: AvailabilityStore;
@@ -78,6 +91,9 @@ export async function getAvailableBookingSlots(input: {
 
 const manualBookingScope = "bookings.manual.create" as const;
 const paidBookingHoldScope = "bookings.paid.hold.create" as const;
+const ownerCancelBookingScope = "bookings.owner.cancel" as const;
+const ownerRescheduleBookingScope = "bookings.owner.reschedule" as const;
+const ownerCompleteBookingScope = "bookings.owner.complete" as const;
 const paidBookingHoldTtlMinutes = 15;
 
 export async function createManualBooking(input: {
@@ -197,6 +213,205 @@ export async function getBooking(input: {
   return booking;
 }
 
+export async function cancelBooking(input: {
+  readonly commandStore: BookingCommandStore;
+  readonly ownerUserId: string;
+  readonly bookingId: string;
+  readonly idempotencyKey: string;
+  readonly input: CancelBookingInput;
+  readonly now: Date;
+}): Promise<CancelBookingResult> {
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Booking owner is required");
+  const bookingId = normalizeRequiredString(input.bookingId, "Booking id is required");
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  if (
+    !Number.isSafeInteger(input.input.expectedLifecycleRevision) ||
+    input.input.expectedLifecycleRevision < 1
+  ) {
+    throw new BookingValidationError("Expected booking lifecycle revision is invalid");
+  }
+  const reasonCode = normalizeCancellationReasonCode(input.input.reasonCode);
+  const now = input.now.toISOString();
+  const result = await input.commandStore.executeOwnerCancellation(
+    {
+      actorUserId: ownerUserId,
+      scope: ownerCancelBookingScope,
+      key: idempotencyKey,
+      requestHash: sha256CanonicalJson({
+        schemaVersion: "booking-owner-cancel-command.v1",
+        ownerUserId,
+        bookingId,
+        expectedLifecycleRevision: input.input.expectedLifecycleRevision,
+        reasonCode
+      }),
+      now,
+      expiresAt: Temporal.Instant.from(now).add({ hours: 24 }).toString()
+    },
+    {
+      bookingId,
+      expectedLifecycleRevision: input.input.expectedLifecycleRevision,
+      reasonCode
+    }
+  );
+  return {
+    booking: result.booking,
+    lifecycleEvent: result.lifecycleEvent,
+    replayed: result.kind === "replayed"
+  };
+}
+
+export async function rescheduleBooking(input: {
+  readonly commandStore: BookingCommandStore;
+  readonly ownerUserId: string;
+  readonly bookingId: string;
+  readonly idempotencyKey: string;
+  readonly input: RescheduleBookingInput;
+  readonly now: Date;
+}): Promise<RescheduleBookingResult> {
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Booking owner is required");
+  const bookingId = normalizeRequiredString(input.bookingId, "Booking id is required");
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  if (
+    !Number.isSafeInteger(input.input.expectedLifecycleRevision) ||
+    input.input.expectedLifecycleRevision < 1
+  ) {
+    throw new BookingValidationError("Expected booking lifecycle revision is invalid");
+  }
+  const projectedStartAt = normalizeInstant(input.input.projectedStartAt);
+  const now = input.now.toISOString();
+  const result = await input.commandStore.executeOwnerReschedule(
+    {
+      actorUserId: ownerUserId,
+      scope: ownerRescheduleBookingScope,
+      key: idempotencyKey,
+      requestHash: sha256CanonicalJson({
+        schemaVersion: "booking-owner-reschedule-command.v1",
+        ownerUserId,
+        bookingId,
+        expectedLifecycleRevision: input.input.expectedLifecycleRevision,
+        projectedStartAt
+      }),
+      now,
+      expiresAt: Temporal.Instant.from(now).add({ hours: 24 }).toString()
+    },
+    {
+      bookingId,
+      expectedLifecycleRevision: input.input.expectedLifecycleRevision,
+      projectedStartAt
+    },
+    async (context) =>
+      createBookingRescheduleClaim({
+        context,
+        ownerUserId,
+        bookingId,
+        expectedLifecycleRevision: input.input.expectedLifecycleRevision,
+        projectedStartAt,
+        now
+      })
+  );
+  return {
+    booking: result.booking,
+    lifecycleEvent: result.lifecycleEvent,
+    replayed: result.kind === "replayed"
+  };
+}
+
+export async function completeBooking(input: {
+  readonly commandStore: BookingCommandStore;
+  readonly ownerUserId: string;
+  readonly bookingId: string;
+  readonly idempotencyKey: string;
+  readonly input: CompleteBookingInput;
+  readonly now: Date;
+}): Promise<CompleteBookingResult> {
+  const ownerUserId = normalizeRequiredString(input.ownerUserId, "Booking owner is required");
+  const bookingId = normalizeRequiredString(input.bookingId, "Booking id is required");
+  const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+  if (
+    !Number.isSafeInteger(input.input.expectedLifecycleRevision) ||
+    input.input.expectedLifecycleRevision < 1
+  ) {
+    throw new BookingValidationError("Expected booking lifecycle revision is invalid");
+  }
+  const now = input.now.toISOString();
+  const command: OwnerCompleteBookingCommand = {
+    actorUserId: ownerUserId,
+    scope: ownerCompleteBookingScope,
+    key: idempotencyKey,
+    requestHash: sha256CanonicalJson({
+      schemaVersion: "booking-owner-complete-command.v1",
+      ownerUserId,
+      bookingId,
+      expectedLifecycleRevision: input.input.expectedLifecycleRevision
+    }),
+    now,
+    expiresAt: Temporal.Instant.from(now).add({ hours: 24 }).toString()
+  };
+  const result = await input.commandStore.executeOwnerCompletion(command, {
+    bookingId,
+    expectedLifecycleRevision: input.input.expectedLifecycleRevision
+  });
+  return {
+    booking: result.booking,
+    lifecycleEvent: result.lifecycleEvent,
+    replayed: result.kind === "replayed"
+  };
+}
+
+function createBookingRescheduleClaim(input: {
+  readonly context: BookingRescheduleContext;
+  readonly ownerUserId: string;
+  readonly bookingId: string;
+  readonly expectedLifecycleRevision: number;
+  readonly projectedStartAt: string;
+  readonly now: string;
+}): BookingRescheduleClaim {
+  const { booking, scheduleId, availability } = input.context;
+  if (booking.ownerUserId !== input.ownerUserId || booking.id !== input.bookingId) {
+    throw new Error("Booking reschedule context does not match the command identity");
+  }
+  if (booking.lifecycleRevision !== input.expectedLifecycleRevision) {
+    throw new BookingLifecycleRevisionConflictError(
+      input.expectedLifecycleRevision,
+      booking.lifecycleRevision
+    );
+  }
+  if (booking.state !== "confirmed") {
+    throw new BookingRescheduleNotAllowedError(booking.state);
+  }
+  if (Temporal.Instant.compare(booking.startAt, input.projectedStartAt) === 0) {
+    throw new BookingValidationError("Rescheduled booking start must differ from current start");
+  }
+
+  const evaluation = evaluateProjectedStart({
+    context: availability,
+    productDurationMinutes: booking.durationMinutes,
+    projectedStartAt: input.projectedStartAt,
+    now: input.now
+  });
+  if (evaluation.kind !== "available") throwProjectedStartError(evaluation);
+
+  return {
+    ownerUserId: booking.ownerUserId,
+    bookingId: booking.id,
+    reservationId: booking.reservationId,
+    scheduleId,
+    expectedLifecycleRevision: booking.lifecycleRevision,
+    serviceStartAt: evaluation.slot.serviceStartAt,
+    serviceEndAt: evaluation.slot.serviceEndAt,
+    occupiedStartAt: evaluation.slot.occupiedStartAt,
+    occupiedEndAt: evaluation.slot.occupiedEndAt,
+    scheduleSnapshot: {
+      timeZone: availability.schedule.timeZone,
+      policy: {
+        bufferBeforeMinutes: availability.schedule.bufferBeforeMinutes,
+        bufferAfterMinutes: availability.schedule.bufferAfterMinutes,
+        minimumNoticeMinutes: availability.schedule.minimumNoticeMinutes
+      }
+    }
+  };
+}
+
 async function createBookingClaim(input: {
   readonly availabilityStore: AvailabilityStore;
   readonly clientReader: BookingClientReader;
@@ -261,7 +476,14 @@ async function createBookingClaim(input: {
       durationMinutes: product.durationMinutes,
       deliveryFormat: input.deliveryFormat,
       priceMinor: product.priceMinor,
-      currency: product.currency
+      currency: product.currency,
+      clientDataRequirements: {
+        schemaVersion: bookingClientDataRequirementsSchemaVersion,
+        executionMode: product.executionMode,
+        participantMode: product.participantMode,
+        requiredClientData: [...product.requiredClientData],
+        methods: [...product.methods]
+      }
     },
     scheduleSnapshot: {
       timeZone: schedule.timeZone,
@@ -327,6 +549,20 @@ function normalizeInstant(value: string): string {
   } catch {
     throw new BookingValidationError("Projected start instant is invalid");
   }
+}
+
+function normalizeCancellationReasonCode(
+  value: CancelBookingInput["reasonCode"]
+): CancelBookingInput["reasonCode"] {
+  if (
+    value !== "astrologer_unavailable" &&
+    value !== "client_request" &&
+    value !== "mutual_agreement" &&
+    value !== "other"
+  ) {
+    throw new BookingValidationError("Booking cancellation reason is invalid");
+  }
+  return value;
 }
 
 function hashManualBookingRequest(input: {

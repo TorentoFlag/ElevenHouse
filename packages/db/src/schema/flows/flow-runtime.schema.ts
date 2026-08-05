@@ -21,21 +21,30 @@ import {
   timestamp,
   unique,
   uniqueIndex,
-  uuid
+  uuid,
+  varchar
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
+import { bookingLifecycleEvents } from "../scheduling/booking-lifecycle-events.schema";
+import { flowActivationEpochs } from "./flow-enrollment-control.schema";
 import { flowVersions } from "./flow-versions.schema";
 import { flowRuntimeCommands } from "./flow-runtime-commands.schema";
+import { flowRuntimeRolloutPolicyVersions } from "./flow-runtime-control.schema";
 import { flows } from "./flows.schema";
 import {
   flowApprovalKindValues,
   flowApprovalStatusValues,
   flowDeliveryAttemptStatusValues,
+  flowEnrollmentPolicyKeyValues,
+  flowExecutionAuthorityBasisValues,
   flowExecutionAttemptOutcomeValues,
   flowExecutionTokenStateValues,
   flowRunEventTypeValues,
   flowRunStatusValues,
   flowRunSubjectTypeValues,
+  flowRuntimeEventClassificationValues,
+  flowRuntimeEventIngestionOutcomeValues,
+  flowRuntimeEventKindValues,
   flowRuntimeEventSourceValues,
   flowStepRunStatusValues,
   flowSuppressionReasonValues,
@@ -52,15 +61,27 @@ export const flowRuntimeEvents = pgTable(
     source: text("source").notNull(),
     sourceEventId: text("source_event_id").notNull(),
     dedupeKey: text("dedupe_key").notNull(),
+    eventKind: text("event_kind"),
     subjectType: text("subject_type").notNull(),
     subjectId: text("subject_id").notNull(),
+    occurrenceKey: text("occurrence_key"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    payloadSchemaVersion: integer("payload_schema_version"),
+    payloadDigest: varchar("payload_digest", { length: 71 }),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    classification: text("classification"),
+    redactionVersion: integer("redaction_version"),
+    retentionPolicyId: text("retention_policy_id"),
+    ingestionOutcome: text("ingestion_outcome"),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
     unique("flow_runtime_events_id_owner_unique").on(table.id, table.ownerUserId),
     uniqueIndex("flow_runtime_events_owner_dedupe_unique").on(table.ownerUserId, table.dedupeKey),
+    uniqueIndex("flow_runtime_events_source_identity_unique")
+      .on(table.source, table.sourceEventId)
+      .where(sql`${table.eventKind} is not null`),
     index("flow_runtime_events_owner_occurred_idx").on(
       table.ownerUserId,
       table.occurredAt,
@@ -89,6 +110,38 @@ export const flowRuntimeEvents = pgTable(
     check(
       "flow_runtime_events_payload_object_check",
       sql`jsonb_typeof(${table.payload}) = 'object'`
+    ),
+    check(
+      "flow_runtime_events_payload_digest_check",
+      sql`${table.payloadDigest} is null or ${table.payloadDigest} ~ '^sha256:[a-f0-9]{64}$'`
+    ),
+    check(
+      "flow_runtime_events_normalized_shape_check",
+      sql`(
+        ${table.eventKind} is null
+        and ${table.occurrenceKey} is null
+        and ${table.payloadSchemaVersion} is null
+        and ${table.payloadDigest} is null
+        and ${table.classification} is null
+        and ${table.redactionVersion} is null
+        and ${table.retentionPolicyId} is null
+        and ${table.ingestionOutcome} is null
+        and ${table.processedAt} is null
+      ) or (
+        ${table.eventKind} in ${sql.raw(formatFlowSqlValues(flowRuntimeEventKindValues))}
+        and length(trim(${table.occurrenceKey})) between 1 and 180
+        and ${table.payloadSchemaVersion} = 1
+        and ${table.payloadDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.classification} in ${sql.raw(
+          formatFlowSqlValues(flowRuntimeEventClassificationValues)
+        )}
+        and ${table.redactionVersion} = 1
+        and length(trim(${table.retentionPolicyId})) between 1 and 180
+        and ${table.ingestionOutcome} in ${sql.raw(
+          formatFlowSqlValues(flowRuntimeEventIngestionOutcomeValues)
+        )}
+        and ${table.processedAt} is not null
+      )`
     )
   ]
 );
@@ -103,6 +156,13 @@ export const flowRuns = pgTable(
     flowId: uuid("flow_id").notNull(),
     flowVersionId: uuid("flow_version_id").notNull(),
     runtimeEventId: uuid("runtime_event_id").notNull(),
+    activationEpochId: uuid("activation_epoch_id"),
+    triggerNodeId: text("trigger_node_id"),
+    occurrenceKey: text("occurrence_key"),
+    enrollmentPolicyKey: text("enrollment_policy_key"),
+    enrollmentPolicyRevision: integer("enrollment_policy_revision"),
+    executionAuthorityBasis: text("execution_authority_basis"),
+    executionAuthorityRefId: text("execution_authority_ref_id"),
     status: text("status").notNull().default("pending"),
     snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
     currentNodeId: text("current_node_id"),
@@ -147,6 +207,24 @@ export const flowRuns = pgTable(
       foreignColumns: [flowRuntimeEvents.id, flowRuntimeEvents.ownerUserId],
       name: "flow_runs_runtime_event_owner_fk"
     }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.activationEpochId, table.flowId, table.flowVersionId],
+      foreignColumns: [
+        flowActivationEpochs.id,
+        flowActivationEpochs.flowId,
+        flowActivationEpochs.flowVersionId
+      ],
+      name: "flow_runs_activation_epoch_fk"
+    }).onDelete("restrict"),
+    uniqueIndex("flow_runs_owner_stable_enrollment_unique")
+      .on(
+        table.ownerUserId,
+        table.flowId,
+        table.triggerNodeId,
+        table.enrollmentPolicyKey,
+        table.occurrenceKey
+      )
+      .where(sql`${table.activationEpochId} is not null`),
     index("flow_runs_owner_status_updated_idx").on(
       table.ownerUserId,
       table.status,
@@ -163,6 +241,31 @@ export const flowRuns = pgTable(
     check(
       "flow_runs_current_node_id_length_check",
       sql`${table.currentNodeId} is null or length(trim(${table.currentNodeId})) between 1 and 160`
+    ),
+    check(
+      "flow_runs_enrollment_shape_check",
+      sql`(
+        ${table.activationEpochId} is null
+        and ${table.triggerNodeId} is null
+        and ${table.occurrenceKey} is null
+        and ${table.enrollmentPolicyKey} is null
+        and ${table.enrollmentPolicyRevision} is null
+        and ${table.executionAuthorityBasis} is null
+        and ${table.executionAuthorityRefId} is null
+      ) or (
+        ${table.activationEpochId} is not null
+        and length(trim(${table.triggerNodeId})) between 1 and 160
+        and ${table.triggerNodeId} ~ '^[a-z0-9][a-z0-9_-]*$'
+        and length(trim(${table.occurrenceKey})) between 1 and 180
+        and ${table.enrollmentPolicyKey} in ${sql.raw(
+          formatFlowSqlValues(flowEnrollmentPolicyKeyValues)
+        )}
+        and ${table.enrollmentPolicyRevision} = 1
+        and ${table.executionAuthorityBasis} in ${sql.raw(
+          formatFlowSqlValues(flowExecutionAuthorityBasisValues)
+        )}
+        and length(trim(${table.executionAuthorityRefId})) between 1 and 180
+      )`
     )
   ]
 );
@@ -186,6 +289,12 @@ export const flowExecutionTokens = pgTable(
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     leaseOwner: text("lease_owner"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    claimControlPolicyRevision: integer("claim_control_policy_revision"),
+    claimPolicyDigest: varchar("claim_policy_digest", { length: 71 }),
+    claimWorkerSessionId: uuid("claim_worker_session_id"),
+    claimWorkerRegistrationDigest: varchar("claim_worker_registration_digest", {
+      length: 71
+    }),
     nodeActivationSequence: bigint("node_activation_sequence", { mode: "bigint" })
       .notNull()
       .default(sql`1`),
@@ -221,6 +330,11 @@ export const flowExecutionTokens = pgTable(
       foreignColumns: [flowRuns.id, flowRuns.flowVersionId, flowRuns.ownerUserId],
       name: "flow_execution_tokens_run_version_owner_fk"
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.claimControlPolicyRevision],
+      foreignColumns: [flowRuntimeRolloutPolicyVersions.revision],
+      name: "flow_execution_tokens_claim_policy_fk"
+    }).onDelete("restrict"),
     uniqueIndex("flow_execution_tokens_run_unique").on(table.flowRunId),
     index("flow_execution_tokens_owner_run_idx").on(table.ownerUserId, table.flowRunId),
     index("flow_execution_tokens_runnable_idx").on(
@@ -285,6 +399,22 @@ export const flowExecutionTokens = pgTable(
         and ${table.claimedAt} is null
         and ${table.leaseOwner} is null
         and ${table.leaseExpiresAt} is null
+      )`
+    ),
+    check(
+      "flow_execution_tokens_claim_authority_check",
+      sql`(
+        ${table.claimControlPolicyRevision} is null
+        and ${table.claimPolicyDigest} is null
+        and ${table.claimWorkerSessionId} is null
+        and ${table.claimWorkerRegistrationDigest} is null
+      ) or (
+        ${table.claimControlPolicyRevision} > 0
+        and ${table.claimPolicyDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.claimWorkerSessionId} is not null
+        and ${table.claimWorkerRegistrationDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and (${table.state} <> 'claimed'
+          or ${table.leaseOwner} = ${table.claimWorkerSessionId}::text)
       )`
     ),
     check(
@@ -388,6 +518,10 @@ export const flowExecutionAttempts = pgTable(
     attemptNumber: bigint("attempt_number", { mode: "bigint" }).notNull(),
     fencingToken: bigint("fencing_token", { mode: "bigint" }).notNull(),
     leaseOwner: text("lease_owner").notNull(),
+    controlPolicyRevision: integer("control_policy_revision"),
+    policyDigest: varchar("policy_digest", { length: 71 }),
+    workerSessionId: uuid("worker_session_id"),
+    workerRegistrationDigest: varchar("worker_registration_digest", { length: 71 }),
     outcome: text("outcome").notNull(),
     resultCode: text("result_code").notNull(),
     traceSummary: jsonb("trace_summary").$type<Record<string, unknown>>().notNull(),
@@ -415,6 +549,11 @@ export const flowExecutionAttempts = pgTable(
       foreignColumns: [flowRuns.id, flowRuns.flowVersionId, flowRuns.ownerUserId],
       name: "flow_execution_attempts_run_version_owner_fk"
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.controlPolicyRevision],
+      foreignColumns: [flowRuntimeRolloutPolicyVersions.revision],
+      name: "flow_execution_attempts_claim_policy_fk"
+    }).onDelete("restrict"),
     uniqueIndex("flow_execution_attempts_token_fence_unique").on(table.tokenId, table.fencingToken),
     uniqueIndex("flow_execution_attempts_token_activation_attempt_unique").on(
       table.tokenId,
@@ -440,6 +579,21 @@ export const flowExecutionAttempts = pgTable(
       sql`${table.attemptNumber} between 1 and ${sql.raw(
         String(flowExecutionRetryPolicyV1.maxAttempts)
       )} and ${table.fencingToken} >= ${table.attemptNumber}`
+    ),
+    check(
+      "flow_execution_attempts_claim_authority_check",
+      sql`(
+        ${table.controlPolicyRevision} is null
+        and ${table.policyDigest} is null
+        and ${table.workerSessionId} is null
+        and ${table.workerRegistrationDigest} is null
+      ) or (
+        ${table.controlPolicyRevision} > 0
+        and ${table.policyDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.workerSessionId} is not null
+        and ${table.workerRegistrationDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.leaseOwner} = ${table.workerSessionId}::text
+      )`
     ),
     check(
       "flow_execution_attempts_node_id_length_check",
@@ -520,6 +674,14 @@ export const flowExecutionAttempts = pgTable(
           )
           or
           (
+            ${table.outcome} = 'waiting'
+            and ${table.traceSummary}->>'nodeKind' = 'astrologer_work_item'
+            and ${table.traceSummary}->>'outcome' = 'waiting'
+            and ${table.traceSummary}->>'reasonCode' = 'FLOW_WORK_ITEM_CREATED'
+            and ${table.traceSummary}->>'resultCode' = 'FLOW_WAITING_WORK_ITEM'
+          )
+          or
+          (
             ${table.outcome} = 'completed'
             and ${table.traceSummary}->>'nodeKind' = 'completed'
             and ${table.traceSummary}->>'outcome' = 'terminal'
@@ -534,7 +696,9 @@ export const flowExecutionAttempts = pgTable(
           or (
             ${table.outcome} = 'canceled'
             and ${table.traceSummary}->>'outcome' = 'canceled'
-            and ${table.traceSummary}->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'
+            and ${table.traceSummary}->>'reasonCode' in (
+              'FLOW_RUN_CANCELED_BY_OWNER', 'FLOW_BOOKING_CANCELED'
+            )
             and ${table.traceSummary}->>'resultCode' = 'FLOW_RUN_CANCELED'
           )
           or (
@@ -588,6 +752,7 @@ export const flowRunEvents = pgTable(
     nodeId: text("node_id"),
     attemptId: uuid("attempt_id"),
     commandId: uuid("command_id"),
+    bookingLifecycleEventId: uuid("booking_lifecycle_event_id"),
     summary: jsonb("summary").$type<Record<string, unknown>>().notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -610,15 +775,31 @@ export const flowRunEvents = pgTable(
       columns: [table.commandId, table.flowRunId, table.ownerUserId],
       foreignColumns: [
         flowRuntimeCommands.id,
-        flowRuntimeCommands.resourceId,
+        flowRuntimeCommands.flowRunId,
         flowRuntimeCommands.ownerUserId
       ],
       name: "flow_run_events_command_run_owner_fk"
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.bookingLifecycleEventId, table.ownerUserId],
+      foreignColumns: [bookingLifecycleEvents.id, bookingLifecycleEvents.ownerUserId],
+      name: "flow_run_events_booking_lifecycle_event_owner_fk"
+    }).onDelete("restrict"),
+    unique("flow_run_events_id_run_owner_unique").on(
+      table.id,
+      table.flowRunId,
+      table.ownerUserId
+    ),
     uniqueIndex("flow_run_events_run_sequence_unique").on(table.flowRunId, table.sequence),
     uniqueIndex("flow_run_events_attempt_unique")
       .on(table.attemptId)
       .where(sql`${table.attemptId} is not null`),
+    uniqueIndex("flow_run_events_command_unique")
+      .on(table.commandId)
+      .where(sql`${table.commandId} is not null`),
+    uniqueIndex("flow_run_events_booking_lifecycle_run_unique")
+      .on(table.bookingLifecycleEventId, table.flowRunId)
+      .where(sql`${table.bookingLifecycleEventId} is not null`),
     index("flow_run_events_owner_occurred_idx").on(table.ownerUserId, table.occurredAt, table.id),
     check(
       "flow_run_events_type_check",
@@ -626,13 +807,73 @@ export const flowRunEvents = pgTable(
     ),
     check("flow_run_events_sequence_check", sql`${table.sequence} > 0`),
     check(
+      "flow_run_events_booking_lifecycle_provenance_check",
+      sql`(
+        ${table.eventType} = 'run_canceled'
+        and (${table.commandId} is null) <> (${table.bookingLifecycleEventId} is null)
+      ) or (
+        ${table.eventType} = 'booking_rescheduled'
+        and ${table.attemptId} is null
+        and ${table.commandId} is null
+        and ${table.bookingLifecycleEventId} is not null
+      ) or (
+        ${table.eventType} not in ('run_canceled', 'booking_rescheduled')
+        and ${table.bookingLifecycleEventId} is null
+      )`
+    ),
+    check(
       "flow_run_events_node_id_length_check",
       sql`${table.nodeId} is null or length(trim(${table.nodeId})) between 1 and 160`
     ),
     check("flow_run_events_summary_object_check", sql`jsonb_typeof(${table.summary}) = 'object'`),
     check(
       "flow_run_events_summary_schema_check",
-      sql`${table.summary} ?& array[
+      sql`(
+        ${table.eventType} = 'run_enrolled'
+        and ${table.nodeId} is not null
+        and ${table.attemptId} is null
+        and ${table.commandId} is null
+        and ${table.summary} ?& array[
+          'schemaVersion', 'outcome', 'reasonCode', 'resultCode', 'eventKind',
+          'activationEpochId', 'triggerNodeId', 'targetNodeId', 'targetNodeKind',
+          'enrollmentPolicyKey', 'occurrenceKey'
+        ]::text[]
+        and ${table.summary} - array[
+          'schemaVersion', 'outcome', 'reasonCode', 'resultCode', 'eventKind',
+          'activationEpochId', 'triggerNodeId', 'targetNodeId', 'targetNodeKind',
+          'enrollmentPolicyKey', 'occurrenceKey'
+        ]::text[] = '{}'::jsonb
+        and jsonb_typeof(${table.summary}->'schemaVersion') = 'string'
+        and jsonb_typeof(${table.summary}->'outcome') = 'string'
+        and jsonb_typeof(${table.summary}->'reasonCode') = 'string'
+        and jsonb_typeof(${table.summary}->'resultCode') = 'string'
+        and jsonb_typeof(${table.summary}->'eventKind') = 'string'
+        and jsonb_typeof(${table.summary}->'activationEpochId') = 'string'
+        and jsonb_typeof(${table.summary}->'triggerNodeId') = 'string'
+        and jsonb_typeof(${table.summary}->'targetNodeId') = 'string'
+        and jsonb_typeof(${table.summary}->'targetNodeKind') = 'string'
+        and jsonb_typeof(${table.summary}->'enrollmentPolicyKey') = 'string'
+        and jsonb_typeof(${table.summary}->'occurrenceKey') = 'string'
+        and ${table.summary}->>'schemaVersion' = 'flow-enrollment-trace.v1'
+        and ${table.summary}->>'outcome' = 'enrolled'
+        and ${table.summary}->>'reasonCode' = 'FLOW_TRIGGER_MATCHED'
+        and ${table.summary}->>'resultCode' = 'FLOW_RUN_ENROLLED'
+        and ${table.summary}->>'eventKind' = 'booking_confirmed'
+        and ${table.summary}->>'triggerNodeId' = ${table.nodeId}
+        and length(${table.summary}->>'triggerNodeId') between 1 and 160
+        and ${table.summary}->>'triggerNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+        and length(${table.summary}->>'targetNodeId') between 1 and 160
+        and ${table.summary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+        and ${table.summary}->>'targetNodeKind' in ${sql.raw(
+          formatFlowSqlValues(flowExecutableNodeKindV2Values)
+        )}
+        and ${table.summary}->>'enrollmentPolicyKey' in ${sql.raw(
+          formatFlowSqlValues(flowEnrollmentPolicyKeyValues)
+        )}
+        and length(${table.summary}->>'occurrenceKey') between 1 and 180
+      ) or (
+        ${table.eventType} <> 'run_enrolled'
+        and ${table.summary} ?& array[
           'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
         ]::text[]
         and (
@@ -651,7 +892,152 @@ export const flowRunEvents = pgTable(
             ]::text[] = '{}'::jsonb
           )
           or (
-            ${table.eventType} <> 'token_advanced'
+            ${table.eventType} = 'work_item_available'
+            and ${table.summary} ?& array[
+              'workItemId', 'fromRevision', 'toRevision', 'scheduledFor'
+            ]::text[]
+            and ${table.summary} - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'workItemId', 'fromRevision', 'toRevision', 'scheduledFor'
+            ]::text[] = '{}'::jsonb
+            and jsonb_typeof(${table.summary}->'workItemId') = 'string'
+            and jsonb_typeof(${table.summary}->'fromRevision') = 'number'
+            and jsonb_typeof(${table.summary}->'toRevision') = 'number'
+            and jsonb_typeof(${table.summary}->'scheduledFor') = 'string'
+            and ${table.summary}->>'workItemId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and scale((${table.summary}->>'fromRevision')::numeric) = 0
+            and scale((${table.summary}->>'toRevision')::numeric) = 0
+            and (${table.summary}->>'fromRevision')::numeric between 1 and 2147483646
+            and (${table.summary}->>'toRevision')::numeric =
+              (${table.summary}->>'fromRevision')::numeric + 1
+            and length(${table.summary}->>'scheduledFor') between 20 and 35
+          )
+          or (
+            ${table.eventType} = 'booking_rescheduled'
+            and ${table.summary} ?& array[
+              'bookingId', 'bookingLifecycleRevision',
+              'previousStartAt', 'previousEndAt', 'previousTimeZone',
+              'currentStartAt', 'currentEndAt', 'currentTimeZone',
+              'workItemId', 'fromRevision', 'toRevision',
+              'previousWorkItemStatus', 'currentWorkItemStatus',
+              'previousDueAt', 'currentDueAt',
+              'previousSnoozedUntil', 'currentSnoozedUntil', 'snoozeAdjustment'
+            ]::text[]
+            and ${table.summary} - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'bookingId', 'bookingLifecycleRevision',
+              'previousStartAt', 'previousEndAt', 'previousTimeZone',
+              'currentStartAt', 'currentEndAt', 'currentTimeZone',
+              'workItemId', 'fromRevision', 'toRevision',
+              'previousWorkItemStatus', 'currentWorkItemStatus',
+              'previousDueAt', 'currentDueAt',
+              'previousSnoozedUntil', 'currentSnoozedUntil', 'snoozeAdjustment'
+            ]::text[] = '{}'::jsonb
+            and jsonb_typeof(${table.summary}->'bookingId') = 'string'
+            and ${table.summary}->>'bookingId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and jsonb_typeof(${table.summary}->'bookingLifecycleRevision') = 'number'
+            and scale((${table.summary}->>'bookingLifecycleRevision')::numeric) = 0
+            and (${table.summary}->>'bookingLifecycleRevision')::numeric
+                  between 1 and 2147483647
+            and jsonb_typeof(${table.summary}->'previousStartAt') = 'string'
+            and jsonb_typeof(${table.summary}->'previousEndAt') = 'string'
+            and jsonb_typeof(${table.summary}->'previousTimeZone') = 'string'
+            and jsonb_typeof(${table.summary}->'currentStartAt') = 'string'
+            and jsonb_typeof(${table.summary}->'currentEndAt') = 'string'
+            and jsonb_typeof(${table.summary}->'currentTimeZone') = 'string'
+            and (${table.summary}->>'previousStartAt')::timestamptz <
+                  (${table.summary}->>'previousEndAt')::timestamptz
+            and (${table.summary}->>'currentStartAt')::timestamptz <
+                  (${table.summary}->>'currentEndAt')::timestamptz
+            and length(trim(${table.summary}->>'previousTimeZone')) between 1 and 120
+            and length(trim(${table.summary}->>'currentTimeZone')) between 1 and 120
+            and (
+              (${table.summary}->>'previousStartAt')::timestamptz IS DISTINCT FROM
+                (${table.summary}->>'currentStartAt')::timestamptz
+              or (${table.summary}->>'previousEndAt')::timestamptz IS DISTINCT FROM
+                (${table.summary}->>'currentEndAt')::timestamptz
+              or ${table.summary}->>'previousTimeZone' IS DISTINCT FROM
+                ${table.summary}->>'currentTimeZone'
+            )
+            and (
+              (
+                jsonb_typeof(${table.summary}->'workItemId') = 'null'
+                and jsonb_typeof(${table.summary}->'fromRevision') = 'null'
+                and jsonb_typeof(${table.summary}->'toRevision') = 'null'
+                and jsonb_typeof(${table.summary}->'previousWorkItemStatus') = 'null'
+                and jsonb_typeof(${table.summary}->'currentWorkItemStatus') = 'null'
+                and jsonb_typeof(${table.summary}->'previousDueAt') = 'null'
+                and jsonb_typeof(${table.summary}->'currentDueAt') = 'null'
+                and jsonb_typeof(${table.summary}->'previousSnoozedUntil') = 'null'
+                and jsonb_typeof(${table.summary}->'currentSnoozedUntil') = 'null'
+                and jsonb_typeof(${table.summary}->'snoozeAdjustment') = 'null'
+              ) or (
+                jsonb_typeof(${table.summary}->'workItemId') = 'string'
+                and ${table.summary}->>'workItemId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+                and jsonb_typeof(${table.summary}->'fromRevision') = 'number'
+                and jsonb_typeof(${table.summary}->'toRevision') = 'number'
+                and scale((${table.summary}->>'fromRevision')::numeric) = 0
+                and scale((${table.summary}->>'toRevision')::numeric) = 0
+                and (${table.summary}->>'fromRevision')::numeric between 1 and 2147483646
+                and (${table.summary}->>'toRevision')::numeric =
+                      (${table.summary}->>'fromRevision')::numeric + 1
+                and jsonb_typeof(${table.summary}->'previousWorkItemStatus') = 'string'
+                and jsonb_typeof(${table.summary}->'currentWorkItemStatus') = 'string'
+                and ${table.summary}->>'previousWorkItemStatus' in (
+                  'pending', 'in_progress', 'snoozed'
+                )
+                and ${table.summary}->>'currentWorkItemStatus' in (
+                  'pending', 'in_progress', 'snoozed'
+                )
+                and jsonb_typeof(${table.summary}->'previousDueAt') = 'string'
+                and jsonb_typeof(${table.summary}->'currentDueAt') = 'string'
+                and jsonb_typeof(${table.summary}->'previousSnoozedUntil') in ('null', 'string')
+                and jsonb_typeof(${table.summary}->'currentSnoozedUntil') in ('null', 'string')
+                and jsonb_typeof(${table.summary}->'snoozeAdjustment') = 'string'
+                and ${table.summary}->>'snoozeAdjustment' in ('unchanged', 'shortened', 'woken')
+                and (
+                  (${table.summary}->>'previousWorkItemStatus' = 'snoozed') =
+                    (jsonb_typeof(${table.summary}->'previousSnoozedUntil') = 'string')
+                )
+                and (
+                  (${table.summary}->>'currentWorkItemStatus' = 'snoozed') =
+                    (jsonb_typeof(${table.summary}->'currentSnoozedUntil') = 'string')
+                )
+                and (
+                  (
+                    ${table.summary}->>'snoozeAdjustment' = 'unchanged'
+                    and ${table.summary}->>'previousWorkItemStatus' =
+                          ${table.summary}->>'currentWorkItemStatus'
+                    and ${table.summary}->'previousSnoozedUntil' =
+                          ${table.summary}->'currentSnoozedUntil'
+                    and (
+                      ${table.summary}->>'currentWorkItemStatus' <> 'snoozed'
+                      or (${table.summary}->>'currentDueAt')::timestamptz >=
+                           (${table.summary}->>'currentSnoozedUntil')::timestamptz
+                    )
+                  ) or (
+                    ${table.summary}->>'snoozeAdjustment' = 'shortened'
+                    and ${table.summary}->>'previousWorkItemStatus' = 'snoozed'
+                    and ${table.summary}->>'currentWorkItemStatus' = 'snoozed'
+                    and (${table.summary}->>'currentSnoozedUntil')::timestamptz =
+                          (${table.summary}->>'currentDueAt')::timestamptz
+                    and (${table.summary}->>'currentSnoozedUntil')::timestamptz <
+                          (${table.summary}->>'previousSnoozedUntil')::timestamptz
+                  ) or (
+                    ${table.summary}->>'snoozeAdjustment' = 'woken'
+                    and ${table.summary}->>'previousWorkItemStatus' = 'snoozed'
+                    and ${table.summary}->>'currentWorkItemStatus' = 'pending'
+                    and jsonb_typeof(${table.summary}->'previousSnoozedUntil') = 'string'
+                    and jsonb_typeof(${table.summary}->'currentSnoozedUntil') = 'null'
+                  )
+                )
+              )
+            )
+          )
+          or (
+            ${table.eventType} not in (
+              'token_advanced', 'work_item_available', 'booking_rescheduled'
+            )
             and ${table.summary} - array[
               'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
             ]::text[] = '{}'::jsonb
@@ -672,14 +1058,8 @@ export const flowRunEvents = pgTable(
           (
             ${table.eventType} = 'token_advanced'
             and ${table.nodeId} is not null
-            and ${table.attemptId} is not null
-            and ${table.commandId} is null
             and ${table.summary}->>'outcome' = 'advanced'
-            and ${table.summary}->>'reasonCode' = 'FLOW_EDGE_SELECTED'
             and ${table.summary}->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
-            and ${table.summary}->>'sourceHandle' in ${sql.raw(
-              formatFlowSqlValues(flowSourceHandleV2Values)
-            )}
             and ${table.summary}->>'targetNodeKind' in ${sql.raw(
               formatFlowSqlValues(flowExecutableNodeKindV2Values)
             )}
@@ -687,6 +1067,55 @@ export const flowRunEvents = pgTable(
             and ${table.summary}->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
             and length(${table.summary}->>'targetNodeId') between 1 and 160
             and ${table.summary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and (
+              (
+                ${table.attemptId} is not null
+                and ${table.commandId} is null
+                and ${table.summary}->>'reasonCode' = 'FLOW_EDGE_SELECTED'
+                and ${table.summary}->>'sourceHandle' in ${sql.raw(
+                  formatFlowSqlValues(flowSourceHandleV2Values)
+                )}
+              ) or (
+                ${table.attemptId} is null
+                and ${table.commandId} is not null
+                and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
+                and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_COMPLETED'
+                and ${table.summary}->>'sourceHandle' = 'success'
+              )
+            )
+          )
+          or
+          (
+            ${table.eventType} = 'work_item_available'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is null
+            and ${table.commandId} is null
+            and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
+            and ${table.summary}->>'outcome' = 'available'
+            and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_SNOOZE_ELAPSED'
+            and ${table.summary}->>'resultCode' = 'FLOW_WORK_ITEM_AVAILABLE'
+          )
+          or
+          (
+            ${table.eventType} = 'booking_rescheduled'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is null
+            and ${table.commandId} is null
+            and ${table.bookingLifecycleEventId} is not null
+            and ${table.summary}->>'outcome' = 'rescheduled'
+            and ${table.summary}->>'reasonCode' = 'FLOW_BOOKING_RESCHEDULED'
+            and ${table.summary}->>'resultCode' = 'FLOW_BOOKING_SCHEDULE_UPDATED'
+          )
+          or
+          (
+            ${table.eventType} = 'token_waiting'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is not null
+            and ${table.commandId} is null
+            and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
+            and ${table.summary}->>'outcome' = 'waiting'
+            and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_CREATED'
+            and ${table.summary}->>'resultCode' = 'FLOW_WAITING_WORK_ITEM'
           )
           or
           (
@@ -707,10 +1136,19 @@ export const flowRunEvents = pgTable(
           )
           or (
             ${table.eventType} = 'run_canceled'
-            and ${table.commandId} is not null
             and ${table.summary}->>'outcome' = 'canceled'
-            and ${table.summary}->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'
             and ${table.summary}->>'resultCode' = 'FLOW_RUN_CANCELED'
+            and (
+              (
+                ${table.commandId} is not null
+                and ${table.bookingLifecycleEventId} is null
+                and ${table.summary}->>'reasonCode' = 'FLOW_RUN_CANCELED_BY_OWNER'
+              ) or (
+                ${table.commandId} is null
+                and ${table.bookingLifecycleEventId} is not null
+                and ${table.summary}->>'reasonCode' = 'FLOW_BOOKING_CANCELED'
+              )
+            )
           )
           or (
             ${table.eventType} = 'token_retry_scheduled'
@@ -744,7 +1182,8 @@ export const flowRunEvents = pgTable(
               )
             )
           )
-        )`
+        )
+      )`
     )
   ]
 );
@@ -998,3 +1437,71 @@ export const flowSuppressions = pgTable(
     check("flow_suppressions_details_object_check", sql`jsonb_typeof(${table.details}) = 'object'`)
   ]
 );
+
+export const flowRunIntegritySql = `CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_run_enrollment_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_run_enrollment_guard$
+BEGIN
+  IF ROW(
+    OLD.id, OLD.owner_user_id, OLD.flow_id, OLD.flow_version_id,
+    OLD.runtime_event_id, OLD.activation_epoch_id, OLD.trigger_node_id,
+    OLD.occurrence_key, OLD.enrollment_policy_key, OLD.enrollment_policy_revision,
+    OLD.execution_authority_basis, OLD.execution_authority_ref_id,
+    OLD.snapshot, OLD.created_at
+  ) IS DISTINCT FROM ROW(
+    NEW.id, NEW.owner_user_id, NEW.flow_id, NEW.flow_version_id,
+    NEW.runtime_event_id, NEW.activation_epoch_id, NEW.trigger_node_id,
+    NEW.occurrence_key, NEW.enrollment_policy_key, NEW.enrollment_policy_revision,
+    NEW.execution_authority_basis, NEW.execution_authority_ref_id,
+    NEW.snapshot, NEW.created_at
+  ) THEN
+    RAISE EXCEPTION 'Flow run enrollment identity and snapshot are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runs_enrollment_immutable';
+  END IF;
+  IF NEW.trace_sequence < OLD.trace_sequence OR NEW.updated_at < OLD.updated_at THEN
+    RAISE EXCEPTION 'Flow run trace and update time are monotonic'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runs_enrollment_immutable';
+  END IF;
+  RETURN NEW;
+END;
+$flow_run_enrollment_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_runs_enrollment_immutable"
+BEFORE UPDATE ON flow_runs
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_run_enrollment_mutation();`;
+
+export const flowRuntimeEventIntegritySql = `CREATE OR REPLACE FUNCTION elevenhouse_guard_flow_runtime_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $flow_runtime_event_guard$
+BEGIN
+  IF TG_OP = 'TRUNCATE' THEN
+    RAISE EXCEPTION 'flow runtime events are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_events_immutable';
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    RAISE EXCEPTION 'flow runtime events are immutable'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_events_immutable';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id) THEN
+    RAISE EXCEPTION 'flow runtime events are retained for the owner lifetime'
+      USING ERRCODE = '55000', CONSTRAINT = 'flow_runtime_events_immutable';
+  END IF;
+
+  RETURN OLD;
+END;
+$flow_runtime_event_guard$;
+--> statement-breakpoint
+CREATE TRIGGER "flow_runtime_events_immutable"
+BEFORE UPDATE OR DELETE ON flow_runtime_events
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_guard_flow_runtime_event_mutation();
+--> statement-breakpoint
+CREATE TRIGGER "flow_runtime_events_truncate_guard"
+BEFORE TRUNCATE ON flow_runtime_events
+FOR EACH STATEMENT
+EXECUTE FUNCTION elevenhouse_guard_flow_runtime_event_mutation();`;

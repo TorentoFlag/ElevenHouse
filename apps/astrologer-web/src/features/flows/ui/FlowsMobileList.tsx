@@ -1,16 +1,20 @@
-import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV3 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { summarizeFlowDefinitions } from "../model/flowDisplay";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowsMobileListProps = {
-  readonly flows: readonly FlowDefinitionSummaryV2[];
+  readonly flows: readonly FlowDefinitionSummaryV3[];
   readonly locale: "ru" | "en";
-  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onCreateFlow?: () => void;
   readonly isCreating?: boolean;
+  readonly emptyMessage?: string;
   readonly onOpenFlow?: (flowId: string) => void;
-  readonly onAutomationToggle?: (flowId: string, activate: boolean) => void;
+  readonly onAutomationAction?: (
+    flowId: string,
+    action: "review_activation" | "pause_enrollment"
+  ) => void;
   readonly isTogglingAutomation?: boolean;
   readonly classNames?: FlowsMobileListClassNames;
 };
@@ -20,22 +24,19 @@ export type FlowsMobileListClassNames = Readonly<Record<string, string>>;
 export function FlowsMobileList({
   flows,
   locale,
-  runtimeAvailability = null,
   onCreateFlow,
   isCreating = false,
+  emptyMessage,
   onOpenFlow,
-  onAutomationToggle,
+  onAutomationAction,
   isTogglingAutomation = false,
   classNames
 }: FlowsMobileListProps) {
   const cards = flows.map((flow) => ({
     card: buildFlowGalleryCard(flow, locale),
-    automation: buildFlowAutomationControl(flow, runtimeAvailability, locale)
+    automation: buildFlowAutomationControl(flow, locale)
   }));
-  const activeCount =
-    runtimeAvailability?.executionAvailable === true
-      ? flows.filter((flow) => flow.runtimeStatus === "active").length
-      : 0;
+  const activeCount = summarizeFlowDefinitions(flows).active;
   const className = (name: keyof FlowsMobileListClassNames) => classNames?.[name] ?? "";
   const copy = mobileCopy[locale];
 
@@ -68,13 +69,18 @@ export function FlowsMobileList({
           <Icon iconName="plus" width={18} height={18} aria-hidden="true" />
         </button>
       </header>
+      {cards.length === 0 && emptyMessage ? (
+        <p className={className("emptyState")} role="status">
+          {emptyMessage}
+        </p>
+      ) : null}
       {cards.map(({ card, automation }) => (
         <article key={card.id} className={className("mobileCard")}>
           <div className={className("mobileTitleRow")}>
             <div>
               <h2 className={className("mobileTitle")}>{card.title}</h2>
               <span className={className("statusChip")}>
-                {automation.statusLabel ?? card.runtimeStatusLabel}
+                {automation.statusLabel ?? card.automationStatusLabel}
               </span>
             </div>
             <button
@@ -83,10 +89,12 @@ export function FlowsMobileList({
               role="switch"
               aria-checked={automation.checked}
               aria-label={automation.accessibleLabel}
-              disabled={!onAutomationToggle || !automation.canToggle || isTogglingAutomation}
+              disabled={!onAutomationAction || !automation.canToggle || isTogglingAutomation}
               title={automation.title}
               onClick={() => {
-                if (automation.canToggle) onAutomationToggle?.(card.id, automation.nextActive);
+                if (automation.canToggle && automation.nextAction !== "none") {
+                  onAutomationAction?.(card.id, automation.nextAction);
+                }
               }}
             >
               <span aria-hidden="true" />
@@ -111,7 +119,7 @@ export function FlowsMobileList({
             <MobileMetric
               classNames={classNames}
               label={copy.state}
-              value={card.migrationRequired ? copy.migration : card.definitionStateLabel}
+              value={card.definitionStateLabel}
             />
           </dl>
           <button
@@ -157,7 +165,6 @@ const mobileCopy = {
     revision: "Редакция",
     version: "Версия",
     state: "Состояние",
-    migration: "Миграция"
   },
   en: {
     title: "Flows",
@@ -169,6 +176,5 @@ const mobileCopy = {
     revision: "Revision",
     version: "Version",
     state: "State",
-    migration: "Migration"
   }
 } as const;

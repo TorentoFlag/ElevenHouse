@@ -18,10 +18,17 @@ import type {
   CalculationPdfDeleteRequestedPayload,
   CalculationPdfRequestedPayload,
   ChartCalculationRequestedPayload,
-  FlowRuntimeDispatchRequestedPayload,
+  BookingLifecycleDispatchRequestedPayload,
+  FlowBookingConfirmedEnrollmentRequestedPayloadV1,
   MessagingMessageDeliveryRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
+import type {
+  FinanceEconomicPaymentCaptureAppliedPayload,
+  FinancePlatformTariffInvoiceChargePreparationRequestedPayload,
+  FinanceProviderOperationDispatchRequestedPayload,
+  FinanceSavedCardSetupPreparationRequestedPayload
+} from "@elevenhouse/domain/finance-core";
 
 export const outboxEventStatusValues = [
   "pending",
@@ -38,7 +45,12 @@ export type OutboxEventPayload =
   | CalculationPdfRequestedPayload
   | CalculationPdfDeleteRequestedPayload
   | ChartCalculationRequestedPayload
-  | FlowRuntimeDispatchRequestedPayload
+  | BookingLifecycleDispatchRequestedPayload
+  | FinanceProviderOperationDispatchRequestedPayload
+  | FinanceEconomicPaymentCaptureAppliedPayload
+  | FinanceSavedCardSetupPreparationRequestedPayload
+  | FinancePlatformTariffInvoiceChargePreparationRequestedPayload
+  | FlowBookingConfirmedEnrollmentRequestedPayloadV1
   | MessagingMessageDeliveryRequestedPayload;
 
 export const outboxEvents = pgTable(
@@ -84,6 +96,33 @@ export const outboxEvents = pgTable(
         ${table.payload} = jsonb_build_object(
           'captureApplicationReceiptId',
           ${table.aggregateId}::text
+        )
+      )`
+    ),
+    check(
+      "outbox_events_finance_saved_card_setup_preparation_payload_check",
+      sql`${table.eventType} <> 'finance.saved_card_setup.preparation_requested' or (
+        ${table.payload} = jsonb_build_object(
+          'setupSessionId',
+          ${table.aggregateId}::text
+        )
+      )`
+    ),
+    check(
+      "outbox_events_finance_platform_tariff_invoice_charge_preparation_payload_check",
+      sql`${table.eventType} <> 'finance.platform_tariff_invoice_charge.preparation_requested' or (
+        ${table.payload} = jsonb_build_object(
+          'preparationRequestId',
+          ${table.aggregateId}::text
+        )
+      )`
+    ),
+    check(
+      "outbox_events_booking_lifecycle_dispatch_payload_check",
+      sql`${table.eventType} <> 'bookings.lifecycle_event.dispatch_requested.v1' or (
+        ${table.payload} = jsonb_build_object(
+          'schemaVersion', 'booking-lifecycle-event-dispatch-request.v1',
+          'lifecycleEventId', ${table.aggregateId}::text
         )
       )`
     ),

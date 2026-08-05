@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
-import type { FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DashboardPage } from "./DashboardPage";
 
 const mocks = vi.hoisted(() => ({
   useDocumentTitle: vi.fn(),
-  useFlowApprovalsQuery: vi.fn(),
+  flowWorkItemQueuePanel: vi.fn(),
   useI18n: vi.fn()
 }));
 
@@ -19,14 +19,27 @@ vi.mock("../../common/hooks/useDocumentTitle", () => ({
   useDocumentTitle: mocks.useDocumentTitle
 }));
 
-vi.mock("../../features/flows/model/useFlowApprovalsQuery", () => ({
-  useFlowApprovalsQuery: mocks.useFlowApprovalsQuery
+vi.mock("../../features/flows/ui/FlowWorkItemQueuePanel", () => ({
+  FlowWorkItemQueuePanel: (props: {
+    locale: "ru" | "en";
+    limit: number;
+    className?: string;
+    headerAction?: React.ReactNode;
+  }) => {
+    mocks.flowWorkItemQueuePanel(props);
+    return (
+      <section data-testid="dashboard-flow-work-items" className={props.className}>
+        {props.headerAction}
+      </section>
+    );
+  }
 }));
 
 describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useI18n.mockReturnValue({
+      locale: "ru",
       dictionary: {
         dashboard: {
           documentTitle: "ElevenHouse | Кабинет",
@@ -35,86 +48,47 @@ describe("DashboardPage", () => {
         }
       }
     });
-    mocks.useFlowApprovalsQuery.mockReturnValue({
-      data: { approvals: [approval], total: 1, runtime: definitionOnlyRuntime },
-      isLoading: false,
-      error: null
-    });
   });
 
   afterEach(() => cleanup());
 
-  it("does not present legacy preview approvals as live dashboard tasks", () => {
-    render(<DashboardPage />);
+  it("mounts the compact production work-item projection instead of legacy approvals", () => {
+    renderDashboard();
 
-    expect(screen.getByText("Задачи из воронок")).toBeTruthy();
+    expect(mocks.flowWorkItemQueuePanel).toHaveBeenCalledWith(
+      expect.objectContaining({ locale: "ru", limit: 5 })
+    );
+    expect(screen.getByTestId("dashboard-flow-work-items")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Все воронки" })).toHaveProperty("pathname", "/flows");
     expect(screen.queryByText("Проверить AI-черновик")).toBeNull();
-    expect(screen.queryByText("Сообщение клиенту ожидает подтверждения.")).toBeNull();
-    expect(
-      screen.getByText(
-        "Исполнение воронок пока недоступно. Архивные подтверждения не показаны как рабочие задачи."
-      )
-    ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Открыть воронки" })).toHaveProperty(
-      "pathname",
-      "/flows"
-    );
-    expect(screen.queryByText("Сообщение отправлено")).toBeNull();
+    expect(mocks.useDocumentTitle).toHaveBeenCalledWith("ElevenHouse | Кабинет");
   });
 
-  it("renders approvals only when the server confirms durable execution history", () => {
-    mocks.useFlowApprovalsQuery.mockReturnValue({
-      data: { approvals: [approval], total: 1, runtime: durableRuntime },
-      isLoading: false,
-      isError: false,
-      error: null
+  it("localizes the projection navigation for an English operator", () => {
+    mocks.useI18n.mockReturnValue({
+      locale: "en",
+      dictionary: {
+        dashboard: {
+          documentTitle: "ElevenHouse | Dashboard",
+          kicker: "Workspace",
+          title: "Today"
+        }
+      }
     });
 
-    render(<DashboardPage />);
+    renderDashboard();
 
-    expect(screen.getByText("Проверить AI-черновик")).toBeTruthy();
-    expect(screen.getByText("Сообщение клиенту ожидает подтверждения.")).toBeTruthy();
-  });
-
-  it("shows an explicit alert when pending flow approvals fail to load", () => {
-    mocks.useFlowApprovalsQuery.mockReturnValue({
-      data: undefined,
-      isLoading: false,
-      isError: true,
-      error: new Error("network down")
-    });
-
-    render(<DashboardPage />);
-
-    expect(screen.getByRole("alert").textContent).toContain(
-      "Не удалось загрузить задачи из воронок"
+    expect(mocks.flowWorkItemQueuePanel).toHaveBeenCalledWith(
+      expect.objectContaining({ locale: "en", limit: 5 })
     );
-    expect(screen.queryByText("Нет pending-подтверждений из опубликованных воронок.")).toBeNull();
+    expect(screen.getByRole("link", { name: "All flows" })).toHaveProperty("pathname", "/flows");
   });
 });
 
-const approval = {
-  id: "55555555-5555-4555-8555-555555555555",
-  flowRunId: "44444444-4444-4444-8444-444444444444",
-  stepRunId: null,
-  status: "pending",
-  kind: "ai_output",
-  title: "Проверить AI-черновик",
-  preview: "Сообщение клиенту ожидает подтверждения.",
-  createdAt: "2026-07-28T08:01:00.000Z",
-  decidedAt: null
-};
-
-const definitionOnlyRuntime = {
-  mode: "definition_only",
-  executionAvailable: false,
-  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
-} satisfies FlowRuntimeAvailability;
-
-const durableRuntime = {
-  mode: "enabled",
-  executionAvailable: true,
-  reasonCode: null,
-  historySemantics: "durable_execution"
-} satisfies FlowRuntimeAvailability;
+function renderDashboard() {
+  return render(
+    <MemoryRouter>
+      <DashboardPage />
+    </MemoryRouter>
+  );
+}

@@ -19,7 +19,7 @@ import {
 } from "../../schema";
 import { hasPostgresConstraintViolation } from "./drizzle-idempotent-scheduling-command";
 
-type AvailabilityTransaction = Parameters<
+export type AvailabilityTransaction = Parameters<
   Parameters<ElevenHouseDatabase["transaction"]>[0]
 >[0];
 type AvailabilityDatabase = ElevenHouseDatabase | AvailabilityTransaction;
@@ -110,67 +110,84 @@ export function createDrizzleAvailabilityStore(
           schedule: await hydrateSchedule(transaction, row)
         };
       }),
-    readProjectionContext: async (input) => {
-      const [row] = await database
-        .select()
-        .from(availabilitySchedules)
-        .where(
-          and(
-            eq(availabilitySchedules.id, input.scheduleId),
-            eq(availabilitySchedules.ownerUserId, input.ownerUserId)
-          )
-        )
-        .limit(1);
-      if (!row) return null;
+    readProjectionContext: (input) => readDrizzleAvailabilityProjectionContext(database, input)
+  };
+}
 
-      const schedule = await hydrateSchedule(database, row);
-      const activeReservations = await database
-        .select({
-          occupiedStartAt: scheduleReservations.occupiedStartAt,
-          occupiedEndAt: scheduleReservations.occupiedEndAt
-        })
-        .from(scheduleReservations)
-        .where(
-          and(
-            eq(scheduleReservations.ownerUserId, input.ownerUserId),
-            eq(scheduleReservations.scheduleId, input.scheduleId),
-            eq(scheduleReservations.lifecycle, "active"),
-            or(
-              ne(scheduleReservations.kind, "hold"),
-              gt(scheduleReservations.holdExpiresAt, sql`now()`)
-            ),
-            lt(scheduleReservations.occupiedStartAt, new Date(input.rangeEndAt)),
-            gt(scheduleReservations.occupiedEndAt, new Date(input.rangeStartAt))
-          )
-        )
-        .orderBy(asc(scheduleReservations.occupiedStartAt));
-      const localDateExpression = sql<string>`to_char(${bookings.serviceStartAt} at time zone ${row.timeZone}, 'YYYY-MM-DD')`;
-      const dailyCounts = await database
-        .select({ localDate: localDateExpression, value: count() })
-        .from(bookings)
-        .innerJoin(scheduleReservations, eq(bookings.reservationId, scheduleReservations.id))
-        .where(
-          and(
-            eq(bookings.ownerUserId, input.ownerUserId),
-            eq(bookings.state, "confirmed"),
-            eq(scheduleReservations.scheduleId, input.scheduleId),
-            lt(bookings.serviceStartAt, new Date(input.rangeEndAt)),
-            gt(bookings.serviceEndAt, new Date(input.rangeStartAt))
-          )
-        )
-        .groupBy(sql`1`);
+export async function readDrizzleAvailabilityProjectionContext(
+  database: AvailabilityDatabase,
+  input: {
+    readonly ownerUserId: string;
+    readonly scheduleId: string;
+    readonly rangeStartAt: string;
+    readonly rangeEndAt: string;
+    readonly excludeReservationId?: string;
+  }
+) {
+  const [row] = await database
+    .select()
+    .from(availabilitySchedules)
+    .where(
+      and(
+        eq(availabilitySchedules.id, input.scheduleId),
+        eq(availabilitySchedules.ownerUserId, input.ownerUserId)
+      )
+    )
+    .limit(1);
+  if (!row) return null;
 
-      return {
-        schedule,
-        activeReservations: activeReservations.map((reservation) => ({
-          occupiedStartAt: reservation.occupiedStartAt.toISOString(),
-          occupiedEndAt: reservation.occupiedEndAt.toISOString()
-        })),
-        confirmedBookingCountByLocalDate: Object.fromEntries(
-          dailyCounts.map((dailyCount) => [dailyCount.localDate, Number(dailyCount.value)])
-        )
-      };
-    }
+  const schedule = await hydrateSchedule(database, row);
+  const activeReservations = await database
+    .select({
+      occupiedStartAt: scheduleReservations.occupiedStartAt,
+      occupiedEndAt: scheduleReservations.occupiedEndAt
+    })
+    .from(scheduleReservations)
+    .where(
+      and(
+        eq(scheduleReservations.ownerUserId, input.ownerUserId),
+        eq(scheduleReservations.scheduleId, input.scheduleId),
+        eq(scheduleReservations.lifecycle, "active"),
+        input.excludeReservationId
+          ? ne(scheduleReservations.id, input.excludeReservationId)
+          : undefined,
+        or(
+          ne(scheduleReservations.kind, "hold"),
+          gt(scheduleReservations.holdExpiresAt, sql`now()`)
+        ),
+        lt(scheduleReservations.occupiedStartAt, new Date(input.rangeEndAt)),
+        gt(scheduleReservations.occupiedEndAt, new Date(input.rangeStartAt))
+      )
+    )
+    .orderBy(asc(scheduleReservations.occupiedStartAt));
+  const localDateExpression = sql<string>`to_char(${bookings.serviceStartAt} at time zone ${row.timeZone}, 'YYYY-MM-DD')`;
+  const dailyCounts = await database
+    .select({ localDate: localDateExpression, value: count() })
+    .from(bookings)
+    .innerJoin(scheduleReservations, eq(bookings.reservationId, scheduleReservations.id))
+    .where(
+      and(
+        eq(bookings.ownerUserId, input.ownerUserId),
+        eq(bookings.state, "confirmed"),
+        eq(scheduleReservations.scheduleId, input.scheduleId),
+        input.excludeReservationId
+          ? ne(bookings.reservationId, input.excludeReservationId)
+          : undefined,
+        lt(bookings.serviceStartAt, new Date(input.rangeEndAt)),
+        gt(bookings.serviceEndAt, new Date(input.rangeStartAt))
+      )
+    )
+    .groupBy(sql`1`);
+
+  return {
+    schedule,
+    activeReservations: activeReservations.map((reservation) => ({
+      occupiedStartAt: reservation.occupiedStartAt.toISOString(),
+      occupiedEndAt: reservation.occupiedEndAt.toISOString()
+    })),
+    confirmedBookingCountByLocalDate: Object.fromEntries(
+      dailyCounts.map((dailyCount) => [dailyCount.localDate, Number(dailyCount.value)])
+    )
   };
 }
 

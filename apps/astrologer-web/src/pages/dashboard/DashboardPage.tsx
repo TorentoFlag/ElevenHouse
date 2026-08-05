@@ -1,20 +1,13 @@
-import type { FlowApprovalKind } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
+import { Link } from "react-router";
+
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
-import { canProjectLiveFlowRuntime } from "../../features/flows/model/flowRuntimePresentation";
-import { useFlowApprovalsQuery } from "../../features/flows/model/useFlowApprovalsQuery";
+import { FlowWorkItemQueuePanel } from "../../features/flows/ui/FlowWorkItemQueuePanel";
 import styles from "./DashboardPage.module.css";
 
 export function DashboardPage() {
-  const { dictionary } = useI18n<AstrologerCopy>();
-  const flowApprovalsQuery = useFlowApprovalsQuery({
-    status: "pending",
-    limit: 5,
-    offset: 0
-  });
-  const pendingApprovals = flowApprovalsQuery.data?.approvals ?? [];
-  const liveApprovalsAvailable = canProjectLiveFlowRuntime(flowApprovalsQuery.data?.runtime);
+  const { dictionary, locale } = useI18n<AstrologerCopy>();
 
   useDocumentTitle(dictionary.dashboard.documentTitle);
 
@@ -27,52 +20,23 @@ export function DashboardPage() {
         </h1>
       </header>
 
-      <section className={styles.flowTasks} aria-labelledby="dashboard-flow-tasks-title">
-        <div className={styles.sectionHeader}>
-          <div>
-            <p className={styles.sectionEyebrow}>Runtime</p>
-            <h2 id="dashboard-flow-tasks-title">Задачи из воронок</h2>
-          </div>
-          <a className={styles.sectionAction} href="/flows">
-            Открыть воронки
-          </a>
-        </div>
-
-        {flowApprovalsQuery.isLoading ? (
-          <p className={styles.stateText}>Загружаем подтверждения</p>
-        ) : flowApprovalsQuery.isError ? (
-          <p className={styles.errorText} role="alert">
-            Не удалось загрузить задачи из воронок
-          </p>
-        ) : !liveApprovalsAvailable ? (
-          <p className={styles.stateText}>
-            Исполнение воронок пока недоступно. Архивные подтверждения не показаны как рабочие
-            задачи.
-          </p>
-        ) : pendingApprovals.length > 0 ? (
-          <div className={styles.approvalList}>
-            {pendingApprovals.map((approval) => (
-              <article key={approval.id} className={styles.approvalCard}>
-                <div>
-                  <h3>{approval.title}</h3>
-                  <p>{approval.preview}</p>
-                </div>
-                <span>{flowApprovalKindLabel(approval.kind)}</span>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className={styles.stateText}>Нет pending-подтверждений из опубликованных воронок.</p>
-        )}
-      </section>
+      <div className={styles.flowTasks}>
+        <FlowWorkItemQueuePanel
+          locale={locale}
+          limit={5}
+          className={styles.flowTasksPanel}
+          headerAction={
+            <Link className={styles.sectionAction} to="/flows">
+              {flowTaskCopy[locale].allFlows}
+            </Link>
+          }
+        />
+      </div>
     </section>
   );
 }
 
-function flowApprovalKindLabel(kind: FlowApprovalKind) {
-  if (kind === "ai_output") return "AI";
-  if (kind === "message") return "Сообщение";
-  if (kind === "manual_task") return "Задача";
-  if (kind === "delivery") return "Выдача";
-  return "Оплата";
-}
+const flowTaskCopy = {
+  ru: { allFlows: "Все воронки" },
+  en: { allFlows: "All flows" }
+} as const;

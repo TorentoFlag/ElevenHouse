@@ -1,7 +1,7 @@
-import type { ListFlowDefinitionsV2QueryInput } from "@elevenhouse/contracts";
+import type { ListFlowDefinitionsV3QueryInput } from "@elevenhouse/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { flowListQueryOptions } from "./flowsQueryOptions";
 
-export function useFlowListQuery(query: ListFlowDefinitionsV2QueryInput) {
+export function useFlowListQuery(query: ListFlowDefinitionsV3QueryInput) {
   return useQuery(flowListQueryOptions(query));
 }

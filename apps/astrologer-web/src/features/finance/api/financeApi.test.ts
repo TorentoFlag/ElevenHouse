@@ -38,14 +38,16 @@ const overview = {
     recurringRevenueAmount: null,
     recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
   },
-  currentPlan: {
-    planId: "pro",
-    code: "pro",
+  currentTariff: {
+    tariffSeriesId: "pro",
+    tariffVersion: 2,
     name: "Pro",
-    monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
-    platformFeeBps: 400,
+    price: { amountMinor: 199_000, currency: "RUB" },
+    commissionBps: 400,
     billingCycle: "month",
-    source: "subscription"
+    state: "active",
+    startsAt: "2026-07-26T10:00:00.000Z",
+    endsAt: "2026-08-26T10:00:00.000Z"
   }
 } satisfies AstrologerFinanceOverviewResponse;
 
@@ -112,9 +114,10 @@ describe("finance API", () => {
 
     await createManualBankTransferPayoutMethod({
       displayName: "Основной счет",
+      destinationKind: "bank_account",
       recipientName: "Alisa Vega",
       bankName: "T-Bank",
-      accountNumberLast4: "4417",
+      destinationValue: "40817810099910004417",
       idempotencyKey: "finance-method-1"
     });
 
@@ -140,7 +143,7 @@ describe("finance API", () => {
       failureReason: null,
       externalReference: null,
       transferredAt: null,
-      providerPayoutId: null
+      version: 1
     });
 
     await createPayoutRequest({

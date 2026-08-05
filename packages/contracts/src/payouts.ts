@@ -1,16 +1,44 @@
 import { z } from "@elevenhouse/validation";
+import type { FinanceAuthorizationCanonicalPayload } from "./finance-authorization";
 import { moneySchema, nonZeroMoneySchema } from "./money";
-import { billingCycleSchema, billingCurrentPlanSourceSchema } from "./platform-billing";
+import { platformTariffBillingCycleSchema } from "./platform-tariffs";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
+const financeDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+
+/**
+ * A reference to a proof that has already been sealed in the finance private-object store.
+ * This is deliberately a verified artifact identity, never an uploaded blob, data URL, or
+ * arbitrary proof text supplied on the paid-status command.
+ */
+export const payoutPaidProofArtifactSchema = z
+  .object({
+    artifactId: z.string().trim().min(1).max(160),
+    sha256Digest: financeDigestSchema,
+    byteLength: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+  })
+  .strict();
+export type PayoutPaidProofArtifact = z.infer<typeof payoutPaidProofArtifactSchema>;
+
+/**
+ * Trusted identity returned only after the admin API has sealed a bank document in the private
+ * finance store and registered it against the configured ElevenHouse cash pool.
+ */
+export const payoutBankEvidenceUploadResponseSchema = payoutPaidProofArtifactSchema
+  .extend({
+    contentType: z.enum(["application/pdf", "image/png", "image/jpeg"])
+  })
+  .strict();
+export type PayoutBankEvidenceUploadResponse = z.infer<
+  typeof payoutBankEvidenceUploadResponseSchema
+>;
 
 export const payoutRequestStatusValues = [
   "requested",
   "under_review",
   "approved",
   "processing_manual",
-  "processing_provider",
   "paid",
   "failed",
   "rejected",
@@ -30,7 +58,7 @@ export const adminPayoutQueueStatusFilterValues = [
 export const adminPayoutQueueStatusFilterSchema = z.enum(adminPayoutQueueStatusFilterValues);
 export type AdminPayoutQueueStatusFilter = z.infer<typeof adminPayoutQueueStatusFilterSchema>;
 
-export const payoutMethodValues = ["manual_bank_transfer", "arc_pay_provider"] as const;
+export const payoutMethodValues = ["manual_bank_transfer"] as const;
 export const payoutMethodSchema = z.enum(payoutMethodValues);
 export type PayoutMethod = z.infer<typeof payoutMethodSchema>;
 
@@ -63,7 +91,7 @@ export const payoutRequestResponseSchema = z
     failureReason: z.string().min(1).max(2_000).nullable(),
     externalReference: z.string().min(1).max(240).nullable(),
     transferredAt: isoDateTimeSchema.nullable(),
-    providerPayoutId: z.string().min(1).max(160).nullable()
+    version: z.number().int().positive()
   })
   .superRefine((value, context) => {
     if (value.status === "paid") {
@@ -111,13 +139,11 @@ export type CreatePayoutRequest = z.infer<typeof createPayoutRequestSchema>;
 export const createManualBankTransferPayoutMethodSchema = z
   .object({
     displayName: z.string().trim().min(1).max(160),
+    destinationKind: z.enum(["bank_card", "bank_account"]),
     recipientName: z.string().trim().min(1).max(160),
     bankName: z.string().trim().min(1).max(160),
-    accountNumberLast4: z
-      .string()
-      .trim()
-      .regex(/^\d{4}$/),
-    details: z.record(z.string().min(1).max(80), z.unknown()).optional(),
+    /** Full card/account value is sealed before persistence and is never returned by the API. */
+    destinationValue: z.string().trim().min(8).max(128),
     idempotencyKey: z.string().min(1).max(160)
   })
   .strict();
@@ -143,18 +169,32 @@ export const astrologerFinancePeriodSummarySchema = z
   .strict();
 export type AstrologerFinancePeriodSummary = z.infer<typeof astrologerFinancePeriodSummarySchema>;
 
-export const astrologerFinanceCurrentPlanSchema = z
+/**
+ * The financial dashboard presents the exact tariff version chosen by the
+ * astrologer. It must never infer a fallback tariff or read mutable catalog
+ * terms when a subscription snapshot exists.
+ */
+export const astrologerFinanceCurrentTariffSchema = z
   .object({
-    planId: z.string().min(1).max(80),
-    code: z.string().min(1).max(80),
+    tariffSeriesId: z.string().min(1).max(160),
+    tariffVersion: z.number().int().positive(),
     name: z.string().min(1).max(120),
-    monthlyPrice: moneySchema,
-    platformFeeBps: z.number().int().min(0).max(10_000),
-    billingCycle: billingCycleSchema,
-    source: billingCurrentPlanSourceSchema
+    price: moneySchema,
+    commissionBps: z.number().int().min(0).max(10_000),
+    billingCycle: platformTariffBillingCycleSchema,
+    state: z.enum([
+      "incomplete_setup",
+      "awaiting_initial_payment",
+      "active",
+      "past_due",
+      "cancelled",
+      "expired"
+    ]),
+    startsAt: isoDateTimeSchema.nullable(),
+    endsAt: isoDateTimeSchema.nullable()
   })
   .strict();
-export type AstrologerFinanceCurrentPlan = z.infer<typeof astrologerFinanceCurrentPlanSchema>;
+export type AstrologerFinanceCurrentTariff = z.infer<typeof astrologerFinanceCurrentTariffSchema>;
 
 export const astrologerFinanceOverviewResponseSchema = z
   .object({
@@ -177,7 +217,7 @@ export const astrologerFinanceOverviewResponseSchema = z
       .enum(["payout_method_required", "insufficient_available_balance"])
       .nullable(),
     periodSummary: astrologerFinancePeriodSummarySchema,
-    currentPlan: astrologerFinanceCurrentPlanSchema.nullable()
+    currentTariff: astrologerFinanceCurrentTariffSchema.nullable()
   })
   .strict();
 export type AstrologerFinanceOverviewResponse = z.infer<
@@ -188,40 +228,41 @@ export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("under_review"),
+      expectedVersion: z.number().int().positive(),
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
     .strict(),
   z
     .object({
       status: z.literal("approved"),
+      expectedVersion: z.number().int().positive(),
+      authorizationId: uuidSchema,
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
     .strict(),
   z
     .object({
       status: z.literal("processing_manual"),
+      expectedVersion: z.number().int().positive(),
+      authorizationId: uuidSchema,
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
     .strict(),
   z
     .object({
-      status: z.literal("processing_provider"),
-      adminNote: z.string().min(1).max(2_000).nullable().optional(),
-      providerPayoutId: z.string().min(1).max(160).optional()
-    })
-    .strict(),
-  z
-    .object({
       status: z.literal("paid"),
+      expectedVersion: z.number().int().positive(),
+      authorizationId: uuidSchema,
       externalReference: z.string().min(1).max(240),
       transferredAt: isoDateTimeSchema,
-      adminNote: z.string().min(1).max(2_000).nullable().optional(),
-      providerPayoutId: z.string().min(1).max(160).optional()
+      proofArtifact: payoutPaidProofArtifactSchema,
+      adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
     .strict(),
   z
     .object({
       status: z.literal("failed"),
+      expectedVersion: z.number().int().positive(),
       failureReason: z.string().min(1).max(2_000),
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
@@ -229,6 +270,7 @@ export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("rejected"),
+      expectedVersion: z.number().int().positive(),
       failureReason: z.string().min(1).max(2_000),
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
@@ -236,11 +278,52 @@ export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("cancelled"),
+      expectedVersion: z.number().int().positive(),
       adminNote: z.string().min(1).max(2_000).nullable().optional()
     })
     .strict()
 ]);
 export type AdminPayoutStatusUpdate = z.infer<typeof adminPayoutStatusUpdateSchema>;
+
+/**
+ * The mutable business fields that are signed before the server has issued an authorization ID.
+ * `authorizationId` is deliberately excluded: it is the result of this ceremony, not its input.
+ */
+export type PayoutStatusAuthorizationInput =
+  | Omit<Extract<AdminPayoutStatusUpdate, { readonly status: "approved" }>, "authorizationId">
+  | Omit<
+      Extract<AdminPayoutStatusUpdate, { readonly status: "processing_manual" }>,
+      "authorizationId"
+    >
+  | Omit<Extract<AdminPayoutStatusUpdate, { readonly status: "paid" }>, "authorizationId">;
+
+/**
+ * Canonical public payload for the WebAuthn ceremony that protects an
+ * irreversible payout transition. The aggregate ID and expected version are
+ * bound separately by the authorization protocol; every mutable command field
+ * is included here so the verified grant cannot be replayed for altered
+ * instructions.
+ */
+export function createPayoutStatusAuthorizationPayload(
+  update: PayoutStatusAuthorizationInput
+): FinanceAuthorizationCanonicalPayload {
+  switch (update.status) {
+    case "approved":
+    case "processing_manual":
+      return {
+        status: update.status,
+        adminNote: update.adminNote ?? null
+      } as const;
+    case "paid":
+      return {
+        status: update.status,
+        externalReference: update.externalReference,
+        transferredAt: update.transferredAt,
+        proofArtifact: update.proofArtifact,
+        adminNote: update.adminNote ?? null
+      } as const;
+  }
+}
 
 export const adminPayoutQueueSummarySchema = z
   .object({

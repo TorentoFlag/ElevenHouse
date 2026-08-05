@@ -202,6 +202,7 @@ function createBookingStore(): BookingCommandStore {
           productId: claim.productId,
           source: "client_paid",
           state: "hold",
+          lifecycleRevision: 0,
           holdExpiresAt: claim.holdExpiresAt,
           startAt: claim.serviceStartAt,
           endAt: claim.serviceEndAt,
@@ -212,10 +213,20 @@ function createBookingStore(): BookingCommandStore {
           currency: claim.productSnapshot.currency,
           timeZone: claim.scheduleSnapshot.timeZone,
           policySnapshot: claim.scheduleSnapshot.policy,
+          clientDataRequirementsSnapshot: claim.productSnapshot.clientDataRequirements,
           createdAt: _command.now,
           updatedAt: _command.now
         } satisfies Booking
       };
+    }),
+    executeOwnerCancellation: vi.fn(async () => {
+      throw new Error("Owner cancellation is not exposed by public-api");
+    }),
+    executeOwnerReschedule: vi.fn(async () => {
+      throw new Error("Owner reschedule is not exposed by public-api");
+    }),
+    executeOwnerCompletion: vi.fn(async () => {
+      throw new Error("Owner completion is not exposed by public-api");
     }),
     confirmPaidBooking: vi.fn(async () => null),
     releasePaidBookingPaymentHold: vi.fn(async () => null),
@@ -286,6 +297,8 @@ function createProductReader(): BookingProductReader {
       participantMode: "solo" as const,
       durationMinutes: 60,
       deliveryFormats: ["video" as const],
+      requiredClientData: ["chart1" as const],
+      methods: ["natal" as const],
       priceMinor: 500_00,
       currency: "RUB" as const
     }))

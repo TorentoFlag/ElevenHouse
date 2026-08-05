@@ -3,6 +3,7 @@ import type {
   AstrologerClientListItem,
   ClientAstrologerRelationship,
   ClientBirthData,
+  ClientBirthDataEditorRole,
   ClientJoinIntent,
   ClientRelationshipSource,
   NormalizedClientBirthDataInput
@@ -32,24 +33,21 @@ export type ClientStoreUpsertProfileInput = {
   readonly now: string;
 };
 
-export type ClientStoreUpsertBirthDataInput = {
+export type ClientStoreWriteBirthProfileInput = {
   readonly clientUserId: string;
+  readonly actor: {
+    readonly userId: string;
+    readonly role: ClientBirthDataEditorRole;
+  };
+  readonly expectedRevision: number | null;
   readonly data: NormalizedClientBirthDataInput;
   readonly now: string;
 };
 
-export type ClientStoreCreateBirthDataProfileInput = {
-  readonly clientUserId: string;
-  readonly data: NormalizedClientBirthDataInput;
-  readonly now: string;
-};
-
-export type ClientStoreUpdateBirthDataProfileInput = {
-  readonly clientUserId: string;
-  readonly birthDataId: string;
-  readonly data: NormalizedClientBirthDataInput;
-  readonly now: string;
-};
+export type ClientStoreWriteBirthProfileResult =
+  | { readonly kind: "written"; readonly profile: ClientBirthData }
+  | { readonly kind: "conflict" }
+  | { readonly kind: "not_related" };
 
 export type ClientStoreListAstrologerClientsInput = {
   readonly astrologerUserId: string;
@@ -84,18 +82,9 @@ export type ClientJoinIntentClaimStore = {
 export type ClientStore = ClientJoinIntentClaimStore & {
   readonly createJoinIntent: (input: ClientStoreCreateJoinIntentInput) => Promise<ClientJoinIntent>;
   readonly upsertClientProfile: (input: ClientStoreUpsertProfileInput) => Promise<void>;
-  readonly upsertClientBirthData: (
-    input: ClientStoreUpsertBirthDataInput
-  ) => Promise<ClientBirthData>;
-  readonly listClientBirthDataProfiles: (
-    clientUserId: string
-  ) => Promise<readonly ClientBirthData[]>;
-  readonly createClientBirthDataProfile: (
-    input: ClientStoreCreateBirthDataProfileInput
-  ) => Promise<ClientBirthData>;
-  readonly updateClientBirthDataProfile: (
-    input: ClientStoreUpdateBirthDataProfileInput
-  ) => Promise<ClientBirthData | null>;
+  readonly writeClientBirthProfile: (
+    input: ClientStoreWriteBirthProfileInput
+  ) => Promise<ClientStoreWriteBirthProfileResult>;
   readonly listAstrologerClients: (
     input: ClientStoreListAstrologerClientsInput
   ) => Promise<AstrologerClientList>;

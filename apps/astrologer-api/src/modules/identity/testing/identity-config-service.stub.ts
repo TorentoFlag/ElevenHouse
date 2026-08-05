@@ -170,8 +170,7 @@ export function createIdentityConfigServiceStub(input: {
 
       if (key === "astrologerApi.chartAi") {
         return {
-          enabled: false,
-          processingAuthorityVersion: null
+          enabled: false
         };
       }
 

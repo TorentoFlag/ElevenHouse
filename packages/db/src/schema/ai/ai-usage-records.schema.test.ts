@@ -1,7 +1,7 @@
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
-import { aiUsageConsentRecords, aiUsageRecords } from "./index";
+import { aiUsageRecords } from "./index";
 
 describe("durable AI usage persistence schema", () => {
   it("stores a started/succeeded/failed/indeterminate lifecycle using only safe evidence", () => {
@@ -14,7 +14,6 @@ describe("durable AI usage persistence schema", () => {
       "promptVersion",
       "provider",
       "ownerSafetyId",
-      "processingAuthorityVersion",
       "resourceType",
       "resourceId",
       "sourceChecksum",
@@ -42,7 +41,7 @@ describe("durable AI usage persistence schema", () => {
     );
   });
 
-  it("enforces lifecycle consistency, token arithmetic and normalized consent FKs", () => {
+  it("enforces lifecycle consistency, token arithmetic and bounded resource evidence", () => {
     const config = getTableConfig(aiUsageRecords);
     expect(config.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
@@ -52,19 +51,6 @@ describe("durable AI usage persistence schema", () => {
         "ai_usage_records_resource_evidence_check",
         "ai_usage_records_token_counts_check",
         "ai_usage_records_lifecycle_check"
-      ])
-    );
-    expect(getTableName(aiUsageConsentRecords)).toBe("ai_usage_consent_records");
-    expect(Object.keys(getTableColumns(aiUsageConsentRecords))).toEqual([
-      "usageRecordId",
-      "consentRecordId"
-    ]);
-    expect(
-      getTableConfig(aiUsageConsentRecords).foreignKeys.map((foreignKey) => foreignKey.getName())
-    ).toEqual(
-      expect.arrayContaining([
-        "ai_usage_consent_records_usage_record_id_ai_usage_records_id_fk",
-        "ai_usage_consent_records_consent_record_id_client_data_consents_id_fk"
       ])
     );
   });

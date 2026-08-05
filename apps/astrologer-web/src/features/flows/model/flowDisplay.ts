@@ -1,10 +1,9 @@
 import type {
   FlowApprovalMode,
   FlowDefinitionState,
-  FlowDefinitionSummaryV2,
+  FlowDefinitionSummaryV3,
   FlowNodeKindV2,
-  FlowSourceHandleV2,
-  FlowStatus
+  FlowSourceHandleV2
 } from "@elevenhouse/contracts";
 
 export type FlowDisplayLocale = "ru" | "en";
@@ -16,8 +15,20 @@ export function flowDefinitionStateLabel(
   return definitionStateLabels[locale][state];
 }
 
-export function flowRuntimeStatusLabel(status: FlowStatus, locale: FlowDisplayLocale): string {
-  return runtimeStatusLabels[locale][status];
+export function flowAutomationStateLabel(
+  flow: FlowDefinitionSummaryV3,
+  locale: FlowDisplayLocale
+): string {
+  const labels = automationStateLabels[locale];
+  const enrollment = flow.enrollment.control;
+  if (enrollment.state === "active") {
+    return enrollment.activeVersionId === flow.latestPublishedVersionId
+      ? labels.active
+      : labels.otherVersionActive;
+  }
+  if (enrollment.state === "paused") return labels.paused;
+  if (flow.state === "archived") return labels.archived;
+  return flow.latestPublishedVersionId === null ? labels.notPublished : labels.notRunning;
 }
 
 export function flowApprovalModeLabel(mode: FlowApprovalMode, locale: FlowDisplayLocale): string {
@@ -45,7 +56,7 @@ export type FlowDefinitionGallerySummary = {
 };
 
 export function summarizeFlowDefinitions(
-  flows: readonly FlowDefinitionSummaryV2[]
+  flows: readonly FlowDefinitionSummaryV3[]
 ): FlowDefinitionGallerySummary {
   return flows.reduce<FlowDefinitionGallerySummary>(
     (summary, flow) => ({
@@ -53,8 +64,8 @@ export function summarizeFlowDefinitions(
       editableDrafts: summary.editableDrafts + (flow.state === "draft" ? 1 : 0),
       versioned: summary.versioned + (flow.state === "versioned" ? 1 : 0),
       archived: summary.archived + (flow.state === "archived" ? 1 : 0),
-      active: summary.active + (flow.runtimeStatus === "active" ? 1 : 0),
-      paused: summary.paused + (flow.runtimeStatus === "paused" ? 1 : 0)
+      active: summary.active + (flow.enrollment.control.state === "active" ? 1 : 0),
+      paused: summary.paused + (flow.enrollment.control.state === "paused" ? 1 : 0)
     }),
     { total: 0, editableDrafts: 0, versioned: 0, archived: 0, active: 0, paused: 0 }
   );
@@ -65,22 +76,24 @@ const definitionStateLabels = {
   en: { draft: "Draft", versioned: "Published", archived: "Archived" }
 } satisfies Record<FlowDisplayLocale, Record<FlowDefinitionState, string>>;
 
-const runtimeStatusLabels = {
+const automationStateLabels = {
   ru: {
-    draft: "Не опубликована",
-    published: "Не запущена",
+    notPublished: "Не опубликована",
+    notRunning: "Не запущена",
     active: "Активна",
+    otherVersionActive: "Активна другая версия",
     paused: "На паузе",
     archived: "В архиве"
   },
   en: {
-    draft: "Not published",
-    published: "Not running",
+    notPublished: "Not published",
+    notRunning: "Not running",
     active: "Active",
+    otherVersionActive: "Another version is active",
     paused: "Paused",
     archived: "Archived"
   }
-} satisfies Record<FlowDisplayLocale, Record<FlowStatus, string>>;
+} as const;
 
 const approvalModeLabels = {
   ru: {
@@ -102,6 +115,7 @@ const nodeKindLabels = {
     booking_confirmed: "Запись подтверждена",
     manual_client: "Ручной запуск",
     birth_data_available: "Данные рождения",
+    natal_chart_request: "Расчёт натальной карты",
     astrologer_work_item: "Задача астрологу",
     astrologer_approval: "Решение астролога",
     completed: "Завершено",
@@ -112,6 +126,7 @@ const nodeKindLabels = {
     booking_confirmed: "Booking confirmed",
     manual_client: "Manual start",
     birth_data_available: "Birth data",
+    natal_chart_request: "Natal chart calculation",
     astrologer_work_item: "Astrologer task",
     astrologer_approval: "Astrologer approval",
     completed: "Completed",

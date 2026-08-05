@@ -4,12 +4,10 @@ import {
   index,
   integer,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uuid
 } from "drizzle-orm/pg-core";
-import { clientDataConsents } from "../clients/client-data-consents.schema";
 
 export const aiUsageRecords = pgTable(
   "ai_usage_records",
@@ -21,7 +19,6 @@ export const aiUsageRecords = pgTable(
     promptVersion: integer("prompt_version").notNull(),
     provider: text("provider").notNull(),
     ownerSafetyId: text("owner_safety_id").notNull(),
-    processingAuthorityVersion: text("processing_authority_version"),
     resourceType: text("resource_type"),
     resourceId: uuid("resource_id"),
     sourceChecksum: text("source_checksum"),
@@ -72,19 +69,15 @@ export const aiUsageRecords = pgTable(
     ),
     check(
       "ai_usage_records_resource_evidence_check",
-      sql`(${table.processingAuthorityVersion} is null or length(trim(${table.processingAuthorityVersion})) between 1 and 160)
-        and (
-          (
-            ${table.resourceType} is null
-            and ${table.resourceId} is null
-            and ${table.sourceChecksum} is null
-          ) or (
-            ${table.processingAuthorityVersion} is not null
-            and length(trim(${table.resourceType})) between 1 and 80
-            and ${table.resourceId} is not null
-            and ${table.sourceChecksum} ~ '^sha256:[0-9a-f]{64}$'
-          )
-        )`
+      sql`(
+        ${table.resourceType} is null
+        and ${table.resourceId} is null
+        and ${table.sourceChecksum} is null
+      ) or (
+        length(trim(${table.resourceType})) between 1 and 80
+        and ${table.resourceId} is not null
+        and ${table.sourceChecksum} ~ '^sha256:[0-9a-f]{64}$'
+      )`
     ),
     check(
       "ai_usage_records_token_counts_check",
@@ -139,24 +132,5 @@ export const aiUsageRecords = pgTable(
           and ${table.completedAt} >= ${table.startedAt}
         )`
     )
-  ]
-);
-
-export const aiUsageConsentRecords = pgTable(
-  "ai_usage_consent_records",
-  {
-    usageRecordId: uuid("usage_record_id")
-      .notNull()
-      .references(() => aiUsageRecords.id, { onDelete: "cascade" }),
-    consentRecordId: uuid("consent_record_id")
-      .notNull()
-      .references(() => clientDataConsents.id, { onDelete: "restrict" })
-  },
-  (table) => [
-    primaryKey({
-      name: "ai_usage_consent_records_pk",
-      columns: [table.usageRecordId, table.consentRecordId]
-    }),
-    index("ai_usage_consent_records_consent_index").on(table.consentRecordId)
   ]
 );

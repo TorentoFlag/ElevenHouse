@@ -34,6 +34,7 @@ export const flowRuntimeCommands = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     routeTemplate: text("route_template").notNull(),
     resourceId: uuid("resource_id").notNull(),
+    flowRunId: uuid("flow_run_id"),
     commandScope: text("command_scope").notNull(),
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
@@ -57,6 +58,11 @@ export const flowRuntimeCommands = pgTable(
       table.resourceId,
       table.ownerUserId
     ),
+    unique("flow_runtime_commands_id_run_owner_unique").on(
+      table.id,
+      table.flowRunId,
+      table.ownerUserId
+    ),
     check(
       "flow_runtime_commands_scope_check",
       sql`${table.apiSurface} = 'astrologer-api'
@@ -64,8 +70,17 @@ export const flowRuntimeCommands = pgTable(
           formatFlowSqlValues(flowRuntimeCommandRouteTemplateValues)
         )}
         and ${table.commandScope} in ${sql.raw(formatFlowSqlValues(flowRuntimeCommandScopeValues))}
-        and ${table.routeTemplate} = '/flow-runs/:runId/cancel'
-        and ${table.commandScope} = 'flows.runtime.cancel.v1'`
+        and (
+          (${table.routeTemplate} = '/flow-runs/:runId/cancel'
+            and ${table.commandScope} = 'flows.runtime.cancel.v1'
+            and ${table.flowRunId} = ${table.resourceId})
+          or (${table.routeTemplate} = '/flow-work-items/:workItemId/start'
+            and ${table.commandScope} = 'flows.work-items.start.v1')
+          or (${table.routeTemplate} = '/flow-work-items/:workItemId/snooze'
+            and ${table.commandScope} = 'flows.work-items.snooze.v1')
+          or (${table.routeTemplate} = '/flow-work-items/:workItemId/complete'
+            and ${table.commandScope} = 'flows.work-items.complete.v1')
+        )`
     ),
     check(
       "flow_runtime_commands_key_check",

@@ -6,8 +6,13 @@ import {
   PaymentWebhookOrderNotFoundError,
   PaymentWebhookProviderContextMismatchError
 } from "@elevenhouse/domain";
-import { ArcPayWebhookPayloadError, parseArcPayWebhook } from "../arc-pay/arc-pay-webhook";
-import { verifyArcPayWebhookSignature } from "../arc-pay/arc-pay-signature";
+import {
+  ArcPayWebhookPayloadError,
+  parseArcPayWebhook,
+  parseArcPayWebhookTransportEnvelope
+} from "../arc-pay/arc-pay-webhook";
+import { inspectArcPayWebhookSignature } from "../arc-pay/arc-pay-signature";
+import type { FinanceWebhookIngress } from "./finance-reversal-webhook-ingress";
 import type { PaymentWebhookProcessor } from "./payment-webhook.processor";
 
 type WebhookHeaders = Readonly<Record<string, string | undefined>>;
@@ -16,7 +21,8 @@ type WebhookResponse = { readonly statusCode: number; readonly body: Record<stri
 export type PaymentWebhookHandler = {
   readonly handle: (input: {
     readonly headers: WebhookHeaders;
-    readonly rawBody: string;
+    /** Untouched HTTP bytes when invoked from the real server. */
+    readonly rawBody: string | Uint8Array;
   }) => Promise<WebhookResponse>;
 };
 
@@ -25,6 +31,12 @@ export function createPaymentWebhookHandler(input: {
   readonly timestampToleranceSeconds: number;
   readonly now?: () => Date;
   readonly processor: PaymentWebhookProcessor;
+  /**
+   * Captures, refunds and chargebacks are acknowledged only after durable ingress. Their
+   * canonical workers apply V2 accounting effects later; this boundary must never run a legacy
+   * projector for client money.
+   */
+  readonly financeIngress?: FinanceWebhookIngress;
 }): PaymentWebhookHandler {
   return {
     async handle(request) {
@@ -32,22 +44,47 @@ export function createPaymentWebhookHandler(input: {
         return { statusCode: 503, body: { error: "webhook_not_configured" } };
       }
       const now = (input.now ?? (() => new Date()))();
-      if (
-        !verifyArcPayWebhookSignature({
-          headers: request.headers,
-          rawBody: request.rawBody,
-          secret: input.webhookSecret,
-          timestampToleranceSeconds: input.timestampToleranceSeconds,
-          now
-        })
-      ) {
+      const signature = inspectArcPayWebhookSignature({
+        headers: request.headers,
+        rawBody: request.rawBody,
+        secret: input.webhookSecret,
+        timestampToleranceSeconds: input.timestampToleranceSeconds,
+        now
+      });
+      if (signature.kind !== "verified") {
         return { statusCode: 401, body: { error: "invalid_webhook_signature" } };
       }
 
       try {
-        const webhookId = request.headers["webhook-id"];
-        if (!webhookId) throw new ArcPayWebhookPayloadError();
-        const event = parseArcPayWebhook({ webhookId, rawBody: request.rawBody });
+        const rawBody = decodeWebhookJsonBody(request.rawBody);
+        const transport = parseArcPayWebhookTransportEnvelope({
+          webhookId: signature.webhookId,
+          rawBody
+        });
+        if (
+          transport.providerEventType === "payment.captured" ||
+          transport.providerEventType === "payment.refunded" ||
+          transport.providerEventType === "payment.chargeback"
+        ) {
+          if (!input.financeIngress) {
+            return {
+              statusCode: 503,
+              body: {
+                error: canonicalIngressConfigurationError(transport.providerEventType)
+              }
+            };
+          }
+          const result = await input.financeIngress.store({
+            signature,
+            transport,
+            rawBody: exactRawBytes(request.rawBody)
+          });
+          return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
+        }
+        const event = parseArcPayWebhook({
+          webhookId: signature.webhookId,
+          rawBody
+        });
         const result = await input.processor.process(event);
         return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
       } catch (error) {
@@ -55,6 +92,18 @@ export function createPaymentWebhookHandler(input: {
       }
     }
   };
+}
+
+function canonicalIngressConfigurationError(
+  eventType: "payment.captured" | "payment.refunded" | "payment.chargeback"
+): "canonical_capture_not_configured" | "canonical_refund_not_configured" | "canonical_chargeback_not_configured" {
+  if (eventType === "payment.captured") return "canonical_capture_not_configured";
+  if (eventType === "payment.refunded") return "canonical_refund_not_configured";
+  return "canonical_chargeback_not_configured";
+}
+
+function exactRawBytes(rawBody: string | Uint8Array): Uint8Array {
+  return typeof rawBody === "string" ? new TextEncoder().encode(rawBody) : rawBody;
 }
 
 export function createPaymentWebhookServer(input: {
@@ -111,7 +160,7 @@ function requestPathname(request: IncomingMessage): string {
   return new URL(request.url ?? "/", "http://127.0.0.1").pathname;
 }
 
-async function readRawBody(request: IncomingMessage): Promise<string> {
+async function readRawBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
@@ -120,7 +169,16 @@ async function readRawBody(request: IncomingMessage): Promise<string> {
     if (size > 1_048_576) throw new PayloadTooLargeError();
     chunks.push(buffer);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks);
+}
+
+function decodeWebhookJsonBody(rawBody: string | Uint8Array): string {
+  if (typeof rawBody === "string") return rawBody;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(rawBody);
+  } catch {
+    throw new ArcPayWebhookPayloadError();
+  }
 }
 
 class PayloadTooLargeError extends Error {}

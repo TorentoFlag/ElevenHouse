@@ -9,6 +9,7 @@ export type ProductsResultsProps = {
   readonly locale: ProductLocale;
   readonly actions: ProductCardActions;
   readonly isActionPending: boolean;
+  readonly canManageProducts?: boolean;
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly loadingLabel: string;
@@ -22,6 +23,7 @@ export function ProductsResults({
   locale,
   actions,
   isActionPending,
+  canManageProducts = true,
   isLoading,
   isError,
   loadingLabel,
@@ -45,6 +47,7 @@ export function ProductsResults({
               locale={locale}
               actions={actions}
               isActionPending={isActionPending}
+              canManageProducts={canManageProducts}
             />
           ))}
         </div>

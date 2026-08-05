@@ -1,11 +1,20 @@
 import { createHmac } from "node:crypto";
 import type { PoolClient, QueryResult, QueryResultRow } from "pg";
 import { hashSessionToken } from "@elevenhouse/auth";
+import {
+  canonicalizePlatformTariffTerms,
+  createPlatformTariffDraft,
+  publishPlatformTariffDraft
+} from "@elevenhouse/domain";
 import type { PostgresRuntime } from "../runtime";
 
 export type AdminFinanceBrowserFixtureOptions = {
   readonly sessionCookieName?: string;
   readonly astrologerSessionCookieName?: string;
+  readonly astrologerCsrfCookieName?: string;
+  readonly astrologerCsrfHeaderName?: string;
+  readonly astrologerCsrfSecret?: string;
+  readonly astrologerCsrfTokenTtlSeconds?: number;
   readonly csrfCookieName?: string;
   readonly csrfHeaderName?: string;
   readonly csrfSecret?: string;
@@ -24,6 +33,10 @@ export type AdminFinanceBrowserFixtureResult = {
   readonly astrologerSessionTokenHash: string;
   readonly astrologerSessionCookieName: string;
   readonly astrologerSessionCookie: string;
+  readonly astrologerCsrfCookieName: string;
+  readonly astrologerCsrfHeaderName: string;
+  readonly astrologerCsrfToken: string;
+  readonly astrologerCsrfCookie: string;
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
   readonly csrfToken: string;
@@ -45,6 +58,8 @@ const fixture = {
   authSecurityEventId: "10000000-0000-4000-8000-000000000005",
   productId: "10000000-0000-4000-8000-000000000006",
   financePolicyId: "10000000-0000-4000-8000-000000000007",
+  tariffSubscriptionId: "10000000-0000-4000-8000-000000000038",
+  tariffSeriesId: "dev-finance-pro",
   payoutMethodId: "10000000-0000-4000-8000-000000000008",
   openPayoutRequestId: "10000000-0000-4000-8000-000000000009",
   chargebackBlockedPayoutRequestId: "10000000-0000-4000-8000-000000000010",
@@ -83,6 +98,10 @@ const now = "2026-07-28T10:00:00.000Z";
 const sessionExpiresAt = "2099-01-01T00:00:00.000Z";
 const defaultSessionCookieName = "elevenhouse_admin_session";
 const defaultAstrologerSessionCookieName = "elevenhouse_astrologer_session";
+const defaultAstrologerCsrfCookieName = "elevenhouse_astrologer_csrf";
+const defaultAstrologerCsrfHeaderName = "x-csrf-token";
+const defaultAstrologerCsrfSecret =
+  "elevenhouse-dev-astrologer-api-csrf-secret-change-before-production";
 const defaultCsrfCookieName = "elevenhouse_admin_csrf";
 const defaultCsrfHeaderName = "x-csrf-token";
 const defaultCsrfSecret = "development-admin-csrf-secret-32-bytes-minimum";
@@ -91,11 +110,37 @@ const defaultCsrfNonce = "elevenhouse-dev-admin-finance-csrf";
 const csrfTokenVersion = "v1";
 const chargebackBlockedFailureReason =
   "Provider chargeback blocked payout before paid confirmation";
+const fixturePayoutDestinationFingerprint =
+  "sha256:4a0bd4999fd35e1fce58d6d62f3ec2f4bcfc4a22f4b209c47e5d8c690b4e319b";
+const fixturePayoutDestinationRedactedDisplay = "Счёт •••• 4242";
+const fixturePayoutDestinationRef = "kms://dev-fixture/payout-destination-v1";
 
-const platformFeeBps = 800;
+const tariffCommissionBps = 800;
 const chargebackGrossAmountMinor = 50_000;
 const chargebackPlatformFeeAmountMinor = 4_000;
 const chargebackAstrologerNetAmountMinor = 46_000;
+const fixtureTariff = publishPlatformTariffDraft(
+  createPlatformTariffDraft({
+    tariffSeriesId: fixture.tariffSeriesId,
+    version: 1,
+    name: "Dev Finance Pro",
+    tagline: "Isolated finance acceptance fixture",
+    monthlyPriceMinor: 2_500,
+    yearlyPriceMinor: 25_000,
+    monthlyRecurringFrequencyDays: 31,
+    yearlyRecurringFrequencyDays: 365,
+    clientSaleCommissionBps: tariffCommissionBps,
+    seatsLimit: 1,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 0,
+    // The shared acceptance product must be sale-enabled so the related client journey can
+    // exercise real entitlement enforcement instead of a browser-only imitation.
+    features: ["products"]
+  })
+);
 
 const saleScenarios = [
   {
@@ -183,6 +228,16 @@ export async function seedAdminFinanceBrowserFixture(
   const sessionCookieName = options.sessionCookieName ?? defaultSessionCookieName;
   const astrologerSessionCookieName =
     options.astrologerSessionCookieName ?? defaultAstrologerSessionCookieName;
+  const astrologerCsrfCookieName =
+    options.astrologerCsrfCookieName ?? defaultAstrologerCsrfCookieName;
+  const astrologerCsrfHeaderName =
+    options.astrologerCsrfHeaderName ?? defaultAstrologerCsrfHeaderName;
+  const astrologerCsrfToken = createCsrfToken({
+    sessionTokenHash: astrologerSessionTokenHash,
+    csrfSecret: options.astrologerCsrfSecret ?? defaultAstrologerCsrfSecret,
+    ttlSeconds: options.astrologerCsrfTokenTtlSeconds ?? defaultCsrfTokenTtlSeconds,
+    now: options.csrfNow ?? new Date()
+  });
   const csrfCookieName = options.csrfCookieName ?? defaultCsrfCookieName;
   const csrfHeaderName = options.csrfHeaderName ?? defaultCsrfHeaderName;
   const csrfToken = createCsrfToken({
@@ -193,6 +248,7 @@ export async function seedAdminFinanceBrowserFixture(
   });
   const sessionCookie = `${sessionCookieName}=${fixture.sessionToken}`;
   const astrologerSessionCookie = `${astrologerSessionCookieName}=${fixture.astrologerSessionToken}`;
+  const astrologerCsrfCookie = `${astrologerCsrfCookieName}=${astrologerCsrfToken}`;
   const csrfCookie = `${csrfCookieName}=${csrfToken}`;
   return {
     adminUserId: fixture.adminUserId,
@@ -205,6 +261,10 @@ export async function seedAdminFinanceBrowserFixture(
     astrologerSessionTokenHash,
     astrologerSessionCookieName,
     astrologerSessionCookie,
+    astrologerCsrfCookieName,
+    astrologerCsrfHeaderName,
+    astrologerCsrfToken,
+    astrologerCsrfCookie,
     csrfCookieName,
     csrfHeaderName,
     csrfToken,
@@ -216,6 +276,7 @@ export async function seedAdminFinanceBrowserFixture(
     ].join("; "),
     astrologerBrowserConsoleHelper: [
       `document.cookie = "${astrologerSessionCookie}; Path=/; SameSite=Lax"`,
+      `document.cookie = "${astrologerCsrfCookie}; Path=/; SameSite=Lax"`,
       "location.reload()"
     ].join("; "),
     openPayoutRequestId: fixture.openPayoutRequestId,
@@ -340,19 +401,97 @@ async function seedFinancePolicy(client: Queryable): Promise<void> {
     client,
     `insert into finance_policies
        (id, policy_version, risk_tier, hold_duration_hours, reserve_bps,
-        reserve_release_delay_days, platform_fee_bps, provider_settlement_required,
+        reserve_release_delay_days, provider_settlement_required,
         is_active, created_by_user_id, snapshotted_at, created_at)
-     values ($1, 970001, 'manual_review', 48, 0, 0, $4, true, true, $2, $3, $3)
+     values ($1, 970001, 'manual_review', 48, 0, 0, true, true, $2, $3, $3)
      on conflict (id) do update
      set hold_duration_hours = excluded.hold_duration_hours,
          reserve_bps = excluded.reserve_bps,
          reserve_release_delay_days = excluded.reserve_release_delay_days,
-         platform_fee_bps = excluded.platform_fee_bps,
          provider_settlement_required = excluded.provider_settlement_required,
          is_active = true,
          created_by_user_id = excluded.created_by_user_id,
          snapshotted_at = excluded.snapshotted_at`,
-    [fixture.financePolicyId, fixture.adminUserId, now, platformFeeBps]
+    [fixture.financePolicyId, fixture.adminUserId, now]
+  );
+  await query(
+    client,
+    `insert into astrologer_risk_profiles
+       (astrologer_user_id, risk_tier, manual_risk_tier, manual_override_reason,
+        reviewed_by_user_id, reviewed_at, updated_at)
+     values ($1, 'manual_review', null, null, null, null, $2)
+     on conflict (astrologer_user_id) do update
+     set risk_tier = excluded.risk_tier, manual_risk_tier = null, manual_override_reason = null,
+         reviewed_by_user_id = null, reviewed_at = null, updated_at = excluded.updated_at`,
+    [fixture.astrologerUserId, now]
+  );
+
+  await query(
+    client,
+    `insert into platform_tariff_series (id, code, created_at)
+     values ($1, $2, $3)
+     on conflict (id) do nothing`,
+    [fixtureTariff.tariffSeriesId, fixtureTariff.tariffSeriesId, now]
+  );
+  await query(
+    client,
+    `insert into platform_tariff_versions
+       (tariff_series_id, version, draft_revision, lifecycle, name, tagline,
+        monthly_price_minor, yearly_price_minor, monthly_recurring_frequency_days,
+        yearly_recurring_frequency_days, currency, client_sale_commission_bps,
+        seats_limit, bookings_limit, ai_requests_limit, automation_limit, is_popular,
+        display_order, canonical_preimage, canonical_digest, created_at, published_at)
+     values ($1, $2, $3, 'published', $4, $5, $6, $7, $8, $9, 'RUB', $10,
+       $11, $12, $13, $14, $15, $16, $17, $18, $19, $19)
+     on conflict (tariff_series_id, version) do nothing`,
+    [
+      fixtureTariff.tariffSeriesId,
+      fixtureTariff.version,
+      fixtureTariff.draftRevision,
+      fixtureTariff.name,
+      fixtureTariff.tagline,
+      fixtureTariff.monthlyPriceMinor,
+      fixtureTariff.yearlyPriceMinor,
+      fixtureTariff.monthlyRecurringFrequencyDays,
+      fixtureTariff.yearlyRecurringFrequencyDays,
+      fixtureTariff.clientSaleCommissionBps,
+      fixtureTariff.seatsLimit,
+      fixtureTariff.bookingsLimit,
+      fixtureTariff.aiRequestsLimit,
+      fixtureTariff.automationLimit,
+      fixtureTariff.isPopular,
+      fixtureTariff.displayOrder,
+      canonicalizePlatformTariffTerms(fixtureTariff),
+      fixtureTariff.canonicalDigest,
+      now
+    ]
+  );
+  await query(
+    client,
+    `insert into platform_tariff_version_capabilities (tariff_series_id, tariff_version, capability)
+     values ($1, $2, 'products')
+     on conflict (tariff_series_id, tariff_version, capability) do nothing`,
+    [fixtureTariff.tariffSeriesId, fixtureTariff.version]
+  );
+  await query(
+    client,
+    `insert into platform_tariff_subscriptions
+       (id, owner_user_id, tariff_series_id, tariff_version, tariff_version_digest,
+        commission_bps_snapshot, billing_cycle, state, version, starts_at, ends_at, created_at, updated_at)
+     values ($1, $2, $3, $4, $5, $6, 'month', 'active', 1, $7, $8, $7, $7)
+     on conflict (id) do update
+     set state = excluded.state, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
+         commission_bps_snapshot = excluded.commission_bps_snapshot, updated_at = excluded.updated_at`,
+    [
+      fixture.tariffSubscriptionId,
+      fixture.astrologerUserId,
+      fixtureTariff.tariffSeriesId,
+      fixtureTariff.version,
+      fixtureTariff.canonicalDigest,
+      fixtureTariff.clientSaleCommissionBps,
+      now,
+      sessionExpiresAt
+    ]
   );
 }
 
@@ -375,33 +514,42 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into orders
-       (id, client_user_id, astrologer_user_id, product_id, status,
+       (id, client_user_id, astrologer_user_id, product_id, product_title_snapshot, status,
         gross_amount_minor, gross_currency, platform_fee_amount_minor, platform_fee_currency,
         astrologer_net_amount_minor, astrologer_net_currency, finance_policy_snapshot_id,
         finance_policy_risk_tier, finance_policy_hold_duration_hours,
         finance_policy_reserve_bps, finance_policy_reserve_release_delay_days,
-        finance_policy_platform_fee_bps, finance_policy_provider_settlement_required,
+        tariff_series_id, tariff_version, tariff_version_digest, tariff_commission_bps,
+        finance_policy_provider_settlement_required,
         created_at, updated_at)
-     values ($1, $2, $3, $4, 'chargeback', $7, 'RUB', $8, 'RUB', $9, 'RUB',
-       $5, 'manual_review', 48, 0, 0, $10, true, $6, $6)
+     values ($1, $2, $3, $4, $5, 'chargeback', $6, 'RUB', $7, 'RUB', $8, 'RUB',
+       $9, 'manual_review', 48, 0, 0, $10, $11, $12, $13, true, $14, $14)
      on conflict (id) do update
      set status = excluded.status,
+         product_title_snapshot = excluded.product_title_snapshot,
          gross_amount_minor = excluded.gross_amount_minor,
          platform_fee_amount_minor = excluded.platform_fee_amount_minor,
          astrologer_net_amount_minor = excluded.astrologer_net_amount_minor,
-         finance_policy_platform_fee_bps = excluded.finance_policy_platform_fee_bps,
+         tariff_series_id = excluded.tariff_series_id,
+         tariff_version = excluded.tariff_version,
+         tariff_version_digest = excluded.tariff_version_digest,
+         tariff_commission_bps = excluded.tariff_commission_bps,
          updated_at = excluded.updated_at`,
     [
       fixture.chargebackOrderId,
       fixture.clientUserId,
       fixture.astrologerUserId,
       fixture.productId,
-      fixture.financePolicyId,
-      now,
+      "Dev finance consultation",
       chargebackGrossAmountMinor,
       chargebackPlatformFeeAmountMinor,
       chargebackAstrologerNetAmountMinor,
-      platformFeeBps
+      fixture.financePolicyId,
+      fixtureTariff.tariffSeriesId,
+      fixtureTariff.version,
+      fixtureTariff.canonicalDigest,
+      tariffCommissionBps,
+      now
     ]
   );
   await query(
@@ -439,32 +587,41 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
     await query(
       client,
       `insert into orders
-         (id, client_user_id, astrologer_user_id, product_id, status,
+         (id, client_user_id, astrologer_user_id, product_id, product_title_snapshot, status,
           gross_amount_minor, gross_currency, platform_fee_amount_minor, platform_fee_currency,
           astrologer_net_amount_minor, astrologer_net_currency, finance_policy_snapshot_id,
           finance_policy_risk_tier, finance_policy_hold_duration_hours,
           finance_policy_reserve_bps, finance_policy_reserve_release_delay_days,
-          finance_policy_platform_fee_bps, finance_policy_provider_settlement_required,
+          tariff_series_id, tariff_version, tariff_version_digest, tariff_commission_bps,
+          finance_policy_provider_settlement_required,
           created_at, updated_at)
-       values ($1, $2, $3, $4, 'paid', $5, 'RUB', $6, 'RUB', $7, 'RUB',
-         $8, 'manual_review', 48, 0, 0, $9, true, $10, $10)
+       values ($1, $2, $3, $4, $5, 'paid', $6, 'RUB', $7, 'RUB', $8, 'RUB',
+         $9, 'manual_review', 48, 0, 0, $10, $11, $12, $13, true, $14, $14)
        on conflict (id) do update
        set status = excluded.status,
+           product_title_snapshot = excluded.product_title_snapshot,
            gross_amount_minor = excluded.gross_amount_minor,
            platform_fee_amount_minor = excluded.platform_fee_amount_minor,
            astrologer_net_amount_minor = excluded.astrologer_net_amount_minor,
-           finance_policy_platform_fee_bps = excluded.finance_policy_platform_fee_bps,
+           tariff_series_id = excluded.tariff_series_id,
+           tariff_version = excluded.tariff_version,
+           tariff_version_digest = excluded.tariff_version_digest,
+           tariff_commission_bps = excluded.tariff_commission_bps,
            updated_at = excluded.updated_at`,
       [
         sale.orderId,
         fixture.clientUserId,
         fixture.astrologerUserId,
         fixture.productId,
+        sale.title,
         sale.grossAmountMinor,
         sale.platformFeeAmountMinor,
         sale.astrologerNetAmountMinor,
         fixture.financePolicyId,
-        platformFeeBps,
+        fixtureTariff.tariffSeriesId,
+        fixtureTariff.version,
+        fixtureTariff.canonicalDigest,
+        tariffCommissionBps,
         sale.receivedAt
       ]
     );
@@ -530,47 +687,62 @@ async function seedPayouts(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into payout_methods
-       (id, astrologer_user_id, method, currency, display_name,
-        manual_bank_transfer_details, provider, environment, provider_payout_account_id,
-        is_default, created_at, updated_at)
-     values ($1, $2, 'manual_bank_transfer', 'RUB', 'Dev manual bank transfer',
-       jsonb_build_object(
-         'recipientName', 'Dev Finance Astrologer',
-         'bankName', 'Dev Bank',
-         'accountNumberLast4', '4242'
-       ),
-       null, null, null, true, $3, $3)
+       (id, astrologer_user_id, method, currency, display_name, is_default, created_at, updated_at)
+     values ($1, $2, 'manual_bank_transfer', 'RUB', 'Dev manual bank transfer', true, $3, $3)
      on conflict (id) do update
      set display_name = excluded.display_name,
-         manual_bank_transfer_details = excluded.manual_bank_transfer_details,
          is_default = true,
          updated_at = excluded.updated_at`,
     [fixture.payoutMethodId, fixture.astrologerUserId, now]
   );
   await query(
     client,
+    `insert into payout_method_versions
+       (payout_method_id, version, destination_kind, beneficiary_fingerprint, redacted_display,
+        sealed_destination_ref, created_at)
+     values ($1, 1, 'bank_account', $2, $3, $4, $5)
+     on conflict (payout_method_id, version) do update
+     set destination_kind = excluded.destination_kind,
+         beneficiary_fingerprint = excluded.beneficiary_fingerprint,
+         redacted_display = excluded.redacted_display,
+         sealed_destination_ref = excluded.sealed_destination_ref`,
+    [
+      fixture.payoutMethodId,
+      fixturePayoutDestinationFingerprint,
+      fixturePayoutDestinationRedactedDisplay,
+      fixturePayoutDestinationRef,
+      now
+    ]
+  );
+  await query(
+    client,
     `insert into payout_requests
-       (id, astrologer_user_id, payout_method_id, status, amount_minor, currency,
-        method, provider, environment, requested_at, reviewed_at, completed_at,
+       (id, astrologer_user_id, payout_method_id, payout_method_version, destination_kind,
+        beneficiary_fingerprint, redacted_display, sealed_destination_ref, status, amount_minor, currency,
+        method, requested_at, reviewed_at, completed_at,
         admin_user_id, admin_note, failure_reason, external_reference,
-        transferred_at, provider_payout_id, metadata, created_at, updated_at)
+        transferred_at, metadata, created_at, updated_at)
      values
-       ($1, $3, $4, 'requested', 1000000, 'RUB', 'manual_bank_transfer', null, null,
-        '2026-07-28T09:00:00.000Z', null, null, null, null, null, null, null, null,
+       ($1, $3, $4, 1, 'bank_account', $11, $12, $13, 'requested', 1000000, 'RUB', 'manual_bank_transfer',
+        '2026-07-28T09:00:00.000Z', null, null, null, null, null, null, null,
         jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'open-manual-payout'),
         $7, $7),
-       ($2, $3, $4, 'cancelled', $10, 'RUB', 'manual_bank_transfer', null, null,
+       ($2, $3, $4, 1, 'bank_account', $11, $12, $13, 'cancelled', $10, 'RUB', 'manual_bank_transfer',
         '2026-07-28T09:05:00.000Z', $6, $6, null,
-        'Blocked automatically by provider chargeback wh_dev_chargeback_1 for order 10000000-0000-4000-8000-000000000011',
-        $5, null, null, null,
+        'Blocked automatically by provider chargeback wh_dev_chargeback_1 for order 10000000-0000-4000-8000-000000000011', $5, null, null,
         jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'chargeback-blocked-payout'),
         $7, $7),
-       ($8, $3, $4, 'processing_manual', 1500000, 'RUB', 'manual_bank_transfer', null, null,
-        '2026-07-28T09:03:00.000Z', $6, null, $9, null, null, null, null, null,
+       ($8, $3, $4, 1, 'bank_account', $11, $12, $13, 'processing_manual', 1500000, 'RUB', 'manual_bank_transfer',
+        '2026-07-28T09:03:00.000Z', $6, null, $9, null, null, null, null,
         jsonb_build_object('source', 'seed-dev-admin-finance', 'scenario', 'processing-manual-payout'),
         $7, $7)
      on conflict (id) do update
-     set status = excluded.status,
+     set payout_method_version = excluded.payout_method_version,
+         destination_kind = excluded.destination_kind,
+         beneficiary_fingerprint = excluded.beneficiary_fingerprint,
+         redacted_display = excluded.redacted_display,
+         sealed_destination_ref = excluded.sealed_destination_ref,
+         status = excluded.status,
          amount_minor = excluded.amount_minor,
          reviewed_at = excluded.reviewed_at,
          completed_at = excluded.completed_at,
@@ -579,7 +751,9 @@ async function seedPayouts(client: Queryable): Promise<void> {
          failure_reason = excluded.failure_reason,
          external_reference = excluded.external_reference,
          transferred_at = excluded.transferred_at,
-         provider_payout_id = excluded.provider_payout_id,
+         paid_proof_artifact_id = null,
+         paid_proof_artifact_digest = null,
+         paid_proof_artifact_byte_length = null,
          metadata = excluded.metadata,
          updated_at = excluded.updated_at`,
     [
@@ -592,7 +766,10 @@ async function seedPayouts(client: Queryable): Promise<void> {
       now,
       fixture.processingPayoutRequestId,
       fixture.adminUserId,
-      chargebackAstrologerNetAmountMinor
+      chargebackAstrologerNetAmountMinor,
+      fixturePayoutDestinationFingerprint,
+      fixturePayoutDestinationRedactedDisplay,
+      fixturePayoutDestinationRef
     ]
   );
 }

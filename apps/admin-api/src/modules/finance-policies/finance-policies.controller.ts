@@ -24,7 +24,10 @@ import type {
   OrderResponse
 } from "@elevenhouse/contracts";
 import { AdminSessionAuthGuard } from "../identity/auth/identity-auth.guard";
-import type { AdminSessionRequest } from "../identity/session/identity-current-session.service";
+import type {
+  AdminAuthenticatedAccount,
+  AdminSessionRequest
+} from "../identity/session/identity-current-session.service";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
 import { FinancePoliciesService } from "./finance-policies.service";
 
@@ -129,7 +132,7 @@ export class FinancePoliciesController {
     @Body() body: unknown
   ): Promise<PayoutRequestResponse> {
     return this.service.updatePayoutRequestStatus(
-      requireAdminUserId(request),
+      requireAdminAccount(request),
       payoutRequestId,
       body
     );
@@ -137,9 +140,13 @@ export class FinancePoliciesController {
 }
 
 function requireAdminUserId(request: AdminSessionRequest): string {
+  return requireAdminAccount(request).id;
+}
+
+function requireAdminAccount(request: AdminSessionRequest): AdminAuthenticatedAccount {
   const account = request.currentAdminAccount;
   if (!account) {
     throw new UnauthorizedException("Valid admin session is required");
   }
-  return account.id;
+  return account;
 }

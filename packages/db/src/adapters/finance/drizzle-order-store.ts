@@ -72,6 +72,7 @@ async function insertOrder(
       clientUserId: input.clientUserId,
       astrologerUserId: input.astrologerUserId,
       productId: input.productId,
+      productTitleSnapshot: input.productTitleSnapshot,
       directLinkIntentId: input.directLinkIntentId,
       bookingId: input.bookingId ?? null,
       status: input.status ?? "pending_payment",
@@ -86,7 +87,10 @@ async function insertOrder(
       financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
       financePolicyReserveBps: input.financePolicyReserveBps,
       financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
-      financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+      tariffSeriesId: input.tariffSeriesId,
+      tariffVersion: input.tariffVersion,
+      tariffVersionDigest: input.tariffVersionDigest,
+      tariffCommissionBps: input.tariffCommissionBps,
       financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
       createdAt: timestamp,
       updatedAt: timestamp
@@ -171,7 +175,6 @@ async function applyFinancePolicyToOrder(
       financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
       financePolicyReserveBps: input.financePolicyReserveBps,
       financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
-      financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
       financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
       updatedAt: new Date(input.now)
     })
@@ -194,6 +197,7 @@ function toFinanceOrder(row: OrderRow): FinanceOrder {
     clientUserId: row.clientUserId,
     astrologerUserId: row.astrologerUserId,
     productId: row.productId,
+    productTitleSnapshot: row.productTitleSnapshot,
     directLinkIntentId: row.directLinkIntentId,
     bookingId: row.bookingId,
     status: row.status as FinanceOrder["status"],
@@ -205,7 +209,10 @@ function toFinanceOrder(row: OrderRow): FinanceOrder {
     financePolicyHoldDurationHours: row.financePolicyHoldDurationHours,
     financePolicyReserveBps: row.financePolicyReserveBps,
     financePolicyReserveReleaseDelayDays: row.financePolicyReserveReleaseDelayDays,
-    financePolicyPlatformFeeBps: row.financePolicyPlatformFeeBps,
+    tariffSeriesId: row.tariffSeriesId,
+    tariffVersion: row.tariffVersion,
+    tariffVersionDigest: row.tariffVersionDigest as FinanceOrder["tariffVersionDigest"],
+    tariffCommissionBps: row.tariffCommissionBps,
     financePolicyProviderSettlementRequired: row.financePolicyProviderSettlementRequired,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()

@@ -1,7 +1,8 @@
 export type ClientBirthTimePrecision = "exact" | "approximate" | "unknown";
 export type ClientBirthTimeDstOccurrence = "first" | "second";
 
-export type ClientBirthDataSource = "client_profile" | "booking" | "import" | "manual";
+export type ClientBirthDataSource = "client_profile" | "import" | "manual";
+export type ClientBirthDataEditorRole = "client" | "astrologer";
 
 export type ClientRelationshipSource =
   | "direct_link"
@@ -28,7 +29,6 @@ export type ClientBirthDataInput = {
   readonly birthLatitude?: number | null;
   readonly birthLongitude?: number | null;
   readonly source: ClientBirthDataSource;
-  readonly isPrimary?: boolean | null;
 };
 
 export type NormalizedClientBirthDataInput = {
@@ -45,12 +45,14 @@ export type NormalizedClientBirthDataInput = {
   readonly birthLatitude: number | null;
   readonly birthLongitude: number | null;
   readonly source: ClientBirthDataSource;
-  readonly isPrimary: boolean;
 };
 
 export type ClientBirthData = NormalizedClientBirthDataInput & {
   readonly id: string;
   readonly clientUserId: string;
+  readonly revision: number;
+  readonly lastEditedByUserId: string;
+  readonly lastEditedByRole: ClientBirthDataEditorRole;
   readonly createdAt: string;
   readonly updatedAt: string;
 };

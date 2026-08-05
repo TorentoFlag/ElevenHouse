@@ -17,7 +17,6 @@ import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createClient as createRedisClient } from "redis";
 
 const expectedTables = [
-  "ai_usage_consent_records",
   "ai_usage_records",
   "astrologer_profiles",
   "audit_log_entries",
@@ -30,7 +29,6 @@ const expectedTables = [
   "chart_calculation_jobs",
   "client_astrologer_relationships",
   "client_birth_data",
-  "client_data_consents",
   "client_profiles",
   "idempotency_commands",
   "matrix_notes",
@@ -357,9 +355,6 @@ export async function collectSmokeResidue(pool, context) {
         (select count(*)::int from client_astrologer_relationships
           where (client_user_id = $6 and astrologer_user_id = $2)
              or id = any($3::uuid[])) as relationships,
-        (select count(*)::int from client_data_consents
-          where relationship_id = $7 or client_user_id = $6 or astrologer_user_id = $2
-             or id = any($3::uuid[])) as consents,
         (select count(*)::int from chart_calculation_jobs
           where owner_user_id = $2 or client_id = $6 or id = any($3::uuid[])) as chart_jobs,
         (select count(*)::int from calculation_records
@@ -384,13 +379,10 @@ export async function collectSmokeResidue(pool, context) {
           where id = any($3::uuid[]) or aggregate_id = any($3::uuid[])) as outbox,
         (select count(*)::int from audit_log_entries
           where id = any($3::uuid[]) or actor_user_id = any($1::uuid[])
-             or target_id = any($8::text[]) or metadata @> jsonb_build_object('namespace', $4::text))
+             or target_id = any($7::text[]) or metadata @> jsonb_build_object('namespace', $4::text))
           as audits,
         (select count(*)::int from ai_usage_records
           where id = any($3::uuid[]) or resource_id = any($3::uuid[])) as ai_usage,
-        (select count(*)::int from ai_usage_consent_records
-          where usage_record_id = any($3::uuid[]) or consent_record_id = any($3::uuid[]))
-          as ai_usage_consents,
         (select count(*)::int from idempotency_commands
           where id = any($3::uuid[]) or actor_user_id = $2) as idempotency_commands,
         (select count(*)::int from matrix_notes
@@ -407,7 +399,6 @@ export async function collectSmokeResidue(pool, context) {
       context.namespace,
       `${smokeUserAgentPrefix}${context.runId}`,
       context.clientUserId,
-      context.relationshipId,
       resourceIds
     ]
   );
@@ -744,8 +735,6 @@ async function cleanupSmokeData(pool, config, context) {
       } else {
         await deleteOwnedStorageObjects(config, context, resources.storageObjects);
 
-        // Deleting the immutable usage parent is the only allowed path; PostgreSQL
-        // cascades its equally immutable consent evidence after the parent is gone.
         await deleteIdRows(client, "ai_usage_records", resources.aiUsageIds);
         await deleteIdRows(client, "idempotency_commands", resources.idempotencyCommandIds);
         await deleteIdRows(client, "audit_log_entries", resources.auditIds);
@@ -761,7 +750,6 @@ async function cleanupSmokeData(pool, config, context) {
         await deleteIdRows(client, "calculation_records", resources.calculationIds);
         await deleteIdRows(client, "media_variants", resources.mediaVariantIds);
         await deleteIdRows(client, "media_assets", resources.mediaAssetIds);
-        await deleteIdRows(client, "client_data_consents", resources.consentIds);
         await deleteIdRows(client, "client_birth_data", resources.birthDataIds);
         await deleteIdRows(client, "client_astrologer_relationships", resources.relationshipIds);
         await deleteIdRows(client, "user_sessions", resources.sessionIds);
@@ -864,29 +852,15 @@ async function discoverOwnedResources(client, context) {
     [context.astrologerUserId, calculationIds]
   );
   for (const pdfJob of pdfJobs) registerOwnedCalculationPdfDelivery(context, "render", pdfJob.id);
-  const consentRows = await rows(
-    client,
-    `
-      select id
-      from client_data_consents
-      where relationship_id = $1 or client_user_id = $2 or astrologer_user_id = $3
-      for update
-    `,
-    [context.relationshipId, context.clientUserId, context.astrologerUserId]
-  );
-  const consentIds = ids(consentRows);
   const aiUsageRows = await rows(
     client,
     `
-      select usage.id
-      from ai_usage_records usage
-      left join ai_usage_consent_records consent_usage
-        on consent_usage.usage_record_id = usage.id
-      where usage.resource_id = any($1::uuid[])
-         or consent_usage.consent_record_id = any($2::uuid[])
-      for update of usage
+      select id
+      from ai_usage_records
+      where resource_id = any($1::uuid[])
+      for update
     `,
-    [calculationIds, consentIds]
+    [calculationIds]
   );
   const mediaRows = await rows(
     client,
@@ -926,7 +900,6 @@ async function discoverOwnedResources(client, context) {
     ...ids(chartJobs),
     ...calculationIds,
     ...ids(pdfJobs),
-    ...consentIds,
     ...ids(aiUsageRows),
     ...mediaAssetIds,
     ...ids(variantRows),
@@ -1025,7 +998,6 @@ async function discoverOwnedResources(client, context) {
     calculationIds,
     pdfJobs,
     pdfJobIds: ids(pdfJobs),
-    consentIds,
     aiUsageIds: ids(aiUsageRows),
     mediaAssetIds,
     mediaVariantIds: ids(variantRows),
@@ -1619,7 +1591,6 @@ function assertAllowedTable(tableName) {
     "chart_calculation_jobs",
     "client_astrologer_relationships",
     "client_birth_data",
-    "client_data_consents",
     "idempotency_commands",
     "matrix_notes",
     "matrix_report_drafts",

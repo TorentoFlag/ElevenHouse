@@ -12,6 +12,7 @@ import {
   AdminFinancePoliciesApiError,
   type AdminFinancePoliciesApi
 } from "../api/adminFinancePoliciesApi";
+import type { AdminFinanceAuthorizationClient } from "../../finance-authorizations/api/adminFinanceAuthorizationsApi";
 import { FinancePoliciesPage } from "./FinancePoliciesPage";
 
 describe("FinancePoliciesPage", () => {
@@ -29,10 +30,18 @@ describe("FinancePoliciesPage", () => {
     expect(html).not.toContain("Admin surface");
   });
 
+  it("keeps tariff administration discoverable from the finance workspace", () => {
+    render(<FinancePoliciesPage api={apiStub()} />);
+
+    expect(screen.getByRole("link", { name: "Тарифы" }).getAttribute("href")).toBe(
+      "?section=tariffs"
+    );
+  });
+
   it("reloads admin queues with server-backed payout and reconciliation filters", async () => {
     const api = apiStub();
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     await waitFor(() => expect(api.listPayoutRequests).toHaveBeenCalledWith({ status: "open" }));
 
@@ -107,7 +116,7 @@ describe("FinancePoliciesPage", () => {
       ]
     });
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Споры" }));
     await screen.findByText("Provider chargeback");
@@ -159,13 +168,13 @@ describe("FinancePoliciesPage", () => {
           failureReason: "Provider chargeback blocked payout before paid confirmation",
           externalReference: null,
           transferredAt: null,
-          providerPayoutId: null,
+          version: 1,
           blockedByChargeback: true
         }
       ]
     });
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
     fireEvent.click(screen.getByRole("button", { name: "Закрытые" }));
@@ -183,13 +192,14 @@ describe("FinancePoliciesPage", () => {
 
   it("lets operators move a new payout through review, approval and manual processing before paid", async () => {
     const api = apiStub();
+    const authorizationClient = authorizationStub();
     vi.mocked(api.listPayoutRequests)
-      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "requested" })]))
-      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "under_review" })]))
-      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "approved" })]))
-      .mockResolvedValue(payoutQueue([payoutRequest({ status: "processing_manual" })]));
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "requested", version: 1 })]))
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "under_review", version: 2 })]))
+      .mockResolvedValueOnce(payoutQueue([payoutRequest({ status: "approved", version: 3 })]))
+      .mockResolvedValue(payoutQueue([payoutRequest({ status: "processing_manual", version: 4 })]));
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationClient} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
 
@@ -199,6 +209,7 @@ describe("FinancePoliciesPage", () => {
         "11111111-1111-4111-8111-111111111111",
         {
           status: "under_review",
+          expectedVersion: 1,
           adminNote: null
         }
       )
@@ -210,6 +221,8 @@ describe("FinancePoliciesPage", () => {
         "11111111-1111-4111-8111-111111111111",
         {
           status: "approved",
+          expectedVersion: 2,
+          authorizationId: "22222222-2222-4222-8222-222222222222",
           adminNote: null
         }
       )
@@ -221,6 +234,8 @@ describe("FinancePoliciesPage", () => {
         "11111111-1111-4111-8111-111111111111",
         {
           status: "processing_manual",
+          expectedVersion: 3,
+          authorizationId: "33333333-3333-4333-8333-333333333333",
           adminNote: null
         }
       )
@@ -229,6 +244,7 @@ describe("FinancePoliciesPage", () => {
     fireEvent.change(screen.getByLabelText("External reference"), {
       target: { value: "bank-transfer-1001" }
     });
+    await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     await waitFor(() =>
@@ -236,12 +252,50 @@ describe("FinancePoliciesPage", () => {
         "11111111-1111-4111-8111-111111111111",
         {
           status: "paid",
+          expectedVersion: 4,
+          authorizationId: "44444444-4444-4444-8444-444444444444",
           externalReference: "bank-transfer-1001",
           transferredAt: expect.any(String),
+          proofArtifact: {
+            artifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
+            sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            byteLength: 1024
+          },
           adminNote: null
         }
       )
     );
+    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(1, {
+      actionKind: "payout_approve",
+      aggregateId: "11111111-1111-4111-8111-111111111111",
+      expectedVersion: 2,
+      payload: { status: "approved", adminNote: null }
+    });
+    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(2, {
+      actionKind: "payout_start_processing",
+      aggregateId: "11111111-1111-4111-8111-111111111111",
+      expectedVersion: 3,
+      payload: { status: "processing_manual", adminNote: null }
+    });
+    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(3, {
+      actionKind: "payout_confirm_paid",
+      aggregateId: "11111111-1111-4111-8111-111111111111",
+      expectedVersion: 4,
+      payload: expect.objectContaining({ status: "paid", externalReference: "bank-transfer-1001" })
+    });
+  });
+
+  it("does not offer a bank handoff before a second administrator has approved the payout", async () => {
+    const api = apiStub();
+    vi.mocked(api.listPayoutRequests).mockResolvedValue(
+      payoutQueue([payoutRequest({ status: "requested", version: 1 })])
+    );
+
+    render(<FinancePoliciesPage api={api} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
+
+    expect(screen.getByRole("button", { name: "Взять в проверку" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Передать в банк" })).toBeNull();
   });
 
   it("shows an actionable CSRF/session error for protected finance mutations", async () => {
@@ -253,12 +307,13 @@ describe("FinancePoliciesPage", () => {
       })
     );
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
     fireEvent.change(screen.getByLabelText("External reference"), {
       target: { value: "bank-transfer-1001" }
     });
+    await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     const alert = await screen.findByRole("alert");
@@ -275,12 +330,13 @@ describe("FinancePoliciesPage", () => {
       })
     );
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
     fireEvent.change(screen.getByLabelText("External reference"), {
       target: { value: "bank-transfer-1001" }
     });
+    await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     const alert = await screen.findByRole("alert");
@@ -297,12 +353,13 @@ describe("FinancePoliciesPage", () => {
       })
     );
 
-    render(<FinancePoliciesPage api={api} />);
+    render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
     fireEvent.change(screen.getByLabelText("External reference"), {
       target: { value: "bank-transfer-1001" }
     });
+    await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     const alert = await screen.findByRole("alert");
@@ -325,6 +382,7 @@ describe("FinancePoliciesPage", () => {
     fireEvent.change(screen.getByLabelText("External reference"), {
       target: { value: "bank-transfer-1001" }
     });
+    await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     await screen.findByRole("alert");
@@ -375,7 +433,7 @@ describe("FinancePoliciesPage", () => {
     expect(screen.getByText("Admin resolution audit")).toBeTruthy();
   });
 
-  it("shows payout detail evidence for provider reference, audit actor and terminal timestamps", async () => {
+  it("shows payout detail evidence for bank reference, audit actor and terminal timestamps", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(
       payoutQueue([
@@ -386,8 +444,7 @@ describe("FinancePoliciesPage", () => {
           adminUserId: "77777777-7777-4777-8777-777777777777",
           adminNote: "Paid from bank cabinet after ledger check",
           externalReference: "bank-transfer-777",
-          transferredAt: "2026-07-24T10:03:00.000Z",
-          providerPayoutId: "arc-payout-777"
+          transferredAt: "2026-07-24T10:03:00.000Z"
         })
       ])
     );
@@ -397,8 +454,6 @@ describe("FinancePoliciesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
 
     expect(await screen.findByText("Payout detail")).toBeTruthy();
-    expect(screen.getByText("Provider payout")).toBeTruthy();
-    expect(screen.getByText("arc-payout-777")).toBeTruthy();
     expect(screen.getAllByText("External reference").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("bank-transfer-777")).toBeTruthy();
     expect(screen.getByText("Admin actor")).toBeTruthy();
@@ -515,6 +570,19 @@ describe("FinancePoliciesPage", () => {
   });
 });
 
+async function uploadPaidPayoutEvidence(api: AdminFinancePoliciesApi): Promise<void> {
+  const file = new File(["%PDF-"], "bank-receipt.pdf", { type: "application/pdf" });
+  const input = await waitFor(() => {
+    const element = document.querySelector<HTMLInputElement>('input[name="payoutEvidenceFile"]');
+    if (!element) throw new Error("Payout evidence file input is not available");
+    return element;
+  });
+  fireEvent.change(input, {
+    target: { files: [file] }
+  });
+  await waitFor(() => expect(api.uploadPayoutBankEvidence).toHaveBeenCalledWith(file));
+}
+
 function payoutQueue(requests: AdminPayoutRequestResponse[]): AdminPayoutQueueResponse {
   return {
     summary: {
@@ -550,7 +618,7 @@ function payoutRequest(
     failureReason: null,
     externalReference: null,
     transferredAt: null,
-    providerPayoutId: null,
+    version: 1,
     blockedByChargeback: false,
     ...overrides
   };
@@ -622,6 +690,31 @@ function apiStub(): AdminFinancePoliciesApi {
       exceptions: []
     })),
     resolveReconciliationException: vi.fn(),
-    updatePayoutRequestStatus: vi.fn()
+    updatePayoutRequestStatus: vi.fn(),
+    uploadPayoutBankEvidence: vi.fn(async () => ({
+      artifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
+      sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      byteLength: 1024,
+      contentType: "application/pdf" as const
+    }))
+  };
+}
+
+function authorizationStub(): AdminFinanceAuthorizationClient {
+  return {
+    authorize: vi
+      .fn()
+      .mockResolvedValueOnce({
+        authorizationId: "22222222-2222-4222-8222-222222222222",
+        expiresAt: "2026-08-05T10:05:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        authorizationId: "33333333-3333-4333-8333-333333333333",
+        expiresAt: "2026-08-05T10:05:00.000Z"
+      })
+      .mockResolvedValue({
+        authorizationId: "44444444-4444-4444-8444-444444444444",
+        expiresAt: "2026-08-05T10:05:00.000Z"
+      })
   };
 }

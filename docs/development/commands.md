@@ -17,7 +17,6 @@
 | Domain typecheck                  | `pnpm --filter @elevenhouse/domain typecheck`                                                                                                                                                                                                           | No long-running process                                                                                      |
 | Domain build                      | `pnpm --filter @elevenhouse/domain build`                                                                                                                                                                                                               | No long-running process                                                                                      |
 | Generate migration                | `pnpm db:generate`                                                                                                                                                                                                                                      | Rebuild current baseline after schema changes                                                                |
-| Reconcile deployed baseline       | `pnpm --filter @elevenhouse/db db:reconcile-production-baseline`                                                                                                                                                                                        | Deploy maintenance step only; requires an approved known ledger and production backup                        |
 | Reset local DB                    | `pnpm db:reset`                                                                                                                                                                                                                                         | Explicitly required task; local DB only; destructive; `DATABASE_URL` must identify the active ElevenHouse DB |
 
 ## Runnable now
@@ -119,16 +118,18 @@ private object-storage settings. Локальные defaults разрешены 
 object storage. Compose задаёт `stop_grace_period: 60s`; Redis queue transport
 должен сохранять AOF и использовать `maxmemory-policy=noeviction`.
 
-Production deploy запускает `db-baseline-reconciler` после backup и до
-`db-migrator`. Reconciler допускает только fresh DB, текущий baseline или
-зафиксированную approved legacy history; любое другое состояние завершает
-deploy без частичного DDL благодаря одной PostgreSQL transaction.
+Ordinary production deploy запускает fail-closed `db-baseline-preflight` до
+остановки writers. Любая неизвестная migration history останавливает deploy до
+backup и schema mutation.
 
-Одноразовый pre-launch reset из ADR 0012 — отдельная maintenance-процедура, а
-не режим этой команды и не запуск локального `pnpm db:reset` против production.
-Её exact-target preflight/reset/baseline команда появится здесь только вместе с
-реализацией и disposable-clone rehearsal; до этого документация не предлагает
-исполняемый destructive production shorthand.
+Одноразовый pre-launch reset из ADR 0012 доступен только в ручном
+`Deploy Production` workflow с `prelaunch_reset=true`. После writer quiesce,
+zero-client-session fence и backup workflow запускает
+`db:reset-production-prelaunch` с exact target `postgres:5432/elevenhouse` и
+release-bound confirmation. Затем `db-migrator` применяет fresh baseline, а
+`db-seeder` вставляет только reviewed system data. Push-driven deploy не может
+включить reset; локальный `pnpm db:reset` никогда не используется против
+production.
 
 ## Process management
 

@@ -7,7 +7,6 @@ export type FinancePolicySnapshot = {
   readonly holdDurationHours: number;
   readonly reserveBps: number;
   readonly reserveReleaseDelayDays: number;
-  readonly platformFeeBps: number;
   readonly providerSettlementRequired: boolean;
   readonly isActive: boolean;
   readonly createdByUserId: string | null;
@@ -23,7 +22,6 @@ export type AstrologerRiskProfile = {
   readonly holdDurationHoursOverride: number | null;
   readonly reserveBpsOverride: number | null;
   readonly reserveReleaseDelayDaysOverride: number | null;
-  readonly platformFeeBpsOverride: number | null;
   readonly providerSettlementRequiredOverride: boolean | null;
   readonly reviewedByUserId: string | null;
   readonly reviewedAt: string | null;
@@ -47,7 +45,6 @@ export type CreateFinancePolicyInput = {
   readonly holdDurationHours: number;
   readonly reserveBps: number;
   readonly reserveReleaseDelayDays: number;
-  readonly platformFeeBps: number;
   readonly providerSettlementRequired: boolean;
   readonly createdByUserId: string | null;
   readonly now: string;
@@ -61,7 +58,6 @@ export type UpsertAstrologerRiskProfileInput = {
   readonly holdDurationHoursOverride: number | null;
   readonly reserveBpsOverride: number | null;
   readonly reserveReleaseDelayDaysOverride: number | null;
-  readonly platformFeeBpsOverride: number | null;
   readonly providerSettlementRequiredOverride: boolean | null;
   readonly reviewedByUserId: string | null;
   readonly reviewedAt: string | null;

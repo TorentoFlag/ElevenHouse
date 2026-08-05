@@ -21,6 +21,8 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
 import { AiGenerationService } from "../ai/ai-generation.service";
+import { createAiUsageRecorderStub } from "../ai/testing/ai-usage-recorder.stub";
+import { AI_USAGE_RECORDER } from "../ai/ai.tokens";
 import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import {
@@ -38,6 +40,8 @@ import { CALCULATION_STORE } from "../calculations/calculations.tokens";
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
+import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
+import { createActivePlatformTariffEntitlementStore } from "../platform-entitlements/testing/active-platform-tariff-entitlement-store";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { HumanDesignModule } from "./human-design.module";
@@ -135,8 +139,12 @@ describe("Human Design HTTP routes", () => {
       .useValue(createProfileStore())
       .overrideProvider(AiGenerationService)
       .useValue(createAiGenerationService())
+      .overrideProvider(AI_USAGE_RECORDER)
+      .useValue(createAiUsageRecorderStub())
       .overrideProvider(HUMAN_DESIGN_RESOLVED_INPUT_PROVIDER)
       .useValue(resolvedInputProvider)
+      .overrideProvider(PLATFORM_TARIFF_ENTITLEMENT_STORE)
+      .useValue(createActivePlatformTariffEntitlementStore({ ownerUserId, features: ["ai", "hd"] }))
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -504,10 +512,7 @@ function createClientStore(): ClientStore {
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
-    upsertClientBirthData: vi.fn(async () => raise()),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(async () => raise()),
-    updateClientBirthDataProfile: vi.fn(async () => raise()),
+    writeClientBirthProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(async (input) => ({
       clientUserId: input.clientUserId,
@@ -677,7 +682,9 @@ function readyBirthData(): ClientBirthData {
     birthLatitude: 41.9,
     birthLongitude: 12.49,
     source: "manual",
-    isPrimary: true,
+    revision: 1,
+    lastEditedByUserId: ownerUserId,
+    lastEditedByRole: "astrologer",
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };

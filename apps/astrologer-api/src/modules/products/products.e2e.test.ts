@@ -19,7 +19,10 @@ import type {
   ProductStore,
   ProductStoreCreateInput,
   ProductTemplate,
-  ProductTemplateStore
+  ProductTemplateStore,
+  PlatformTariffEntitlementStore,
+  PlatformTariffSubscriptionSnapshot,
+  PlatformTariffVersion
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
@@ -37,6 +40,7 @@ import {
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { MEDIA_ASSET_STORE } from "../media/media.tokens";
+import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
@@ -65,10 +69,12 @@ describe("products HTTP routes", () => {
   let baseUrl: string;
   let productStore: ProductStore;
   let productTemplateStore: ProductTemplateStore;
+  let entitlementStore: ReturnType<typeof createEntitlementStore>;
 
   beforeEach(async () => {
     productStore = createProductStore();
     productTemplateStore = createProductTemplateStore();
+    entitlementStore = createEntitlementStore();
     const authStore = createAuthStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
@@ -121,6 +127,8 @@ describe("products HTTP routes", () => {
       .useValue(productStore)
       .overrideProvider(PRODUCT_TEMPLATE_STORE)
       .useValue(productTemplateStore)
+      .overrideProvider(PLATFORM_TARIFF_ENTITLEMENT_STORE)
+      .useValue(entitlementStore)
       .overrideProvider(MEDIA_ASSET_STORE)
       .useValue(createMediaAssetStore())
       .compile();
@@ -158,6 +166,47 @@ describe("products HTTP routes", () => {
         archived: 0
       }
     });
+  });
+
+  it("does not expose a tariff-gated product surface when the astrologer was never entitled", async () => {
+    entitlementStore.findCurrentSubscription.mockResolvedValueOnce(null);
+
+    const response = await getJson("/products");
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({
+      code: "entitlement_required",
+      capability: "products",
+      operation: "read",
+      access: "deny"
+    });
+  });
+
+  it("keeps product reads available but blocks mutations from a historical grant", async () => {
+    const tariff = productEntitlementTariff();
+    entitlementStore.findCurrentSubscription.mockResolvedValue(null);
+    entitlementStore.findLatestHistoricalCapabilityGrant.mockResolvedValue({
+      subscription: {
+        ...productActiveSubscription(tariff),
+        state: "expired",
+        startsAt: "2026-05-01T00:00:00.000Z",
+        endsAt: "2026-06-01T00:00:00.000Z"
+      },
+      tariff: { ...tariff, lifecycle: "retired" }
+    });
+
+    const list = await getJson("/products");
+    const create = await postJson("/products", validCreateBody(), csrfHeaders());
+
+    expect(list.status).toBe(200);
+    expect(create.status).toBe(403);
+    expect(create.body).toMatchObject({
+      code: "entitlement_required",
+      capability: "products",
+      operation: "mutation",
+      access: "read_only"
+    });
+    expect(productStore.create).not.toHaveBeenCalled();
   });
 
   it("creates, transitions, duplicates and summarizes products with CSRF protection", async () => {
@@ -385,6 +434,63 @@ function createAuthStore(): AuthSessionAuthenticationStore {
         ]
       };
     })
+  };
+}
+
+function createEntitlementStore() {
+  const tariff = productEntitlementTariff();
+  const subscription = productActiveSubscription(tariff);
+  return {
+    findCurrentSubscription: vi.fn(
+      async (): Promise<PlatformTariffSubscriptionSnapshot | null> => subscription
+    ),
+    findTariffVersion: vi.fn(async () => tariff),
+    findLatestHistoricalCapabilityGrant: vi.fn(
+      async (): Promise<Awaited<
+        ReturnType<PlatformTariffEntitlementStore["findLatestHistoricalCapabilityGrant"]>
+      >> => null
+    )
+  } satisfies PlatformTariffEntitlementStore;
+}
+
+function productActiveSubscription(
+  tariff: PlatformTariffVersion
+): PlatformTariffSubscriptionSnapshot {
+  return {
+    subscriptionId: "4d550054-7248-4b73-895d-8a945d40bb5d",
+    ownerUserId,
+    tariffSeriesId: tariff.tariffSeriesId,
+    tariffVersion: tariff.version,
+    tariffVersionDigest: tariff.canonicalDigest,
+    commissionBpsSnapshot: tariff.clientSaleCommissionBps,
+    version: 1,
+    state: "active",
+    startsAt: "2026-07-01T00:00:00.000Z",
+    endsAt: "2026-08-01T00:00:00.000Z"
+  };
+}
+
+function productEntitlementTariff(): PlatformTariffVersion {
+  return {
+    tariffSeriesId: "pro",
+    version: 1,
+    draftRevision: 1,
+    lifecycle: "published",
+    name: "Pro",
+    tagline: "",
+    monthlyPriceMinor: 10_000,
+    yearlyPriceMinor: 100_000,
+    monthlyRecurringFrequencyDays: 31,
+    yearlyRecurringFrequencyDays: 365,
+    clientSaleCommissionBps: 1000,
+    seatsLimit: null,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 1,
+    features: ["products"],
+    canonicalDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   };
 }
 

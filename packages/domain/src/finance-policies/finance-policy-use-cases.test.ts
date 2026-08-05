@@ -39,7 +39,6 @@ describe("finance policy use cases", () => {
       holdDurationHours: 48,
       reserveBps: 0,
       reserveReleaseDelayDays: 0,
-      platformFeeBps: 1_000,
       providerSettlementRequired: true
     });
 
@@ -50,7 +49,6 @@ describe("finance policy use cases", () => {
       holdDurationHours: 48,
       reserveBps: 0,
       reserveReleaseDelayDays: 0,
-      platformFeeBps: 1_000,
       providerSettlementRequired: true,
       createdByUserId: null,
       now: now.toISOString()
@@ -62,7 +60,6 @@ describe("finance policy use cases", () => {
       id: "44444444-4444-4444-8444-444444444444",
       policyVersion: 7,
       holdDurationHours: 48,
-      platformFeeBps: 1_000
     });
     const store = createStore({ activePolicy: existing, latestVersion: 12 });
 
@@ -75,7 +72,6 @@ describe("finance policy use cases", () => {
           holdDurationHours: 72,
           reserveBps: 500,
           reserveReleaseDelayDays: 30,
-          platformFeeBps: 1_200,
           providerSettlementRequired: true
         },
         now,
@@ -85,7 +81,6 @@ describe("finance policy use cases", () => {
       id: policyId,
       policyVersion: 13,
       holdDurationHours: 72,
-      platformFeeBps: 1_200
     });
 
     expect(store.createPolicySnapshot).toHaveBeenCalledWith(
@@ -98,7 +93,6 @@ describe("finance policy use cases", () => {
       id: "44444444-4444-4444-8444-444444444444",
       policyVersion: 7,
       holdDurationHours: 48,
-      platformFeeBps: 1_000
     });
   });
 
@@ -117,7 +111,6 @@ describe("finance policy use cases", () => {
           holdDurationHoursOverride: 168,
           reserveBpsOverride: 2_000,
           reserveReleaseDelayDaysOverride: 90,
-          platformFeeBpsOverride: null,
           providerSettlementRequiredOverride: true
         },
         now
@@ -141,7 +134,6 @@ describe("finance policy use cases", () => {
       holdDurationHoursOverride: 168,
       reserveBpsOverride: 2_000,
       reserveReleaseDelayDaysOverride: 90,
-      platformFeeBpsOverride: null,
       providerSettlementRequiredOverride: true,
       reviewedByUserId: adminUserId,
       reviewedAt: now.toISOString(),
@@ -153,7 +145,6 @@ describe("finance policy use cases", () => {
     const oldPolicy = policySnapshot({
       id: "55555555-5555-4555-8555-555555555555",
       policyVersion: 3,
-      platformFeeBps: 1_000
     });
     const store = createStore({ activePolicy: oldPolicy, latestVersion: 3 });
     const orderSnapshotPolicyId = oldPolicy.id;
@@ -166,7 +157,6 @@ describe("finance policy use cases", () => {
         holdDurationHours: 24,
         reserveBps: 0,
         reserveReleaseDelayDays: 0,
-        platformFeeBps: 2_000,
         providerSettlementRequired: true
       },
       now,
@@ -177,7 +167,6 @@ describe("finance policy use cases", () => {
     expect(store.createPolicySnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         id: policyId,
-        platformFeeBps: 2_000
       })
     );
   });
@@ -190,7 +179,6 @@ describe("finance policy use cases", () => {
         holdDurationHours: 168,
         reserveBps: 2_000,
         reserveReleaseDelayDays: 90,
-        platformFeeBps: 1_500
       })
     });
     const orderStore = createOrderStore({ order: order({ status: "paid" }) });
@@ -211,7 +199,6 @@ describe("finance policy use cases", () => {
         financePolicyHoldDurationHours: 168,
         financePolicyReserveBps: 2_000,
         financePolicyReserveReleaseDelayDays: 90,
-        financePolicyPlatformFeeBps: 1_500
       }
     });
 
@@ -222,7 +209,6 @@ describe("finance policy use cases", () => {
       financePolicyHoldDurationHours: 168,
       financePolicyReserveBps: 2_000,
       financePolicyReserveReleaseDelayDays: 90,
-      financePolicyPlatformFeeBps: 1_500,
       financePolicyProviderSettlementRequired: true,
       now: now.toISOString()
     });
@@ -287,7 +273,6 @@ function createStore(
         holdDurationHours: activePolicy.holdDurationHours,
         reserveBps: activePolicy.reserveBps,
         reserveReleaseDelayDays: activePolicy.reserveReleaseDelayDays,
-        platformFeeBps: activePolicy.platformFeeBps,
         providerSettlementRequired: activePolicy.providerSettlementRequired
       };
     }),
@@ -299,7 +284,6 @@ function createStore(
         holdDurationHours: input.holdDurationHours,
         reserveBps: input.reserveBps,
         reserveReleaseDelayDays: input.reserveReleaseDelayDays,
-        platformFeeBps: input.platformFeeBps,
         providerSettlementRequired: input.providerSettlementRequired,
         createdByUserId: input.createdByUserId,
         snapshottedAt: input.now,
@@ -328,7 +312,6 @@ function createOrderStore(input: {
         financePolicyHoldDurationHours: policyInput.financePolicyHoldDurationHours,
         financePolicyReserveBps: policyInput.financePolicyReserveBps,
         financePolicyReserveReleaseDelayDays: policyInput.financePolicyReserveReleaseDelayDays,
-        financePolicyPlatformFeeBps: policyInput.financePolicyPlatformFeeBps,
         financePolicyProviderSettlementRequired:
           policyInput.financePolicyProviderSettlementRequired,
         updatedAt: policyInput.now
@@ -343,6 +326,7 @@ function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
     clientUserId: "55555555-5555-4555-8555-555555555555",
     astrologerUserId,
     productId: "66666666-6666-4666-8666-666666666666",
+    productTitleSnapshot: "Natal reading",
     directLinkIntentId: null,
     bookingId: null,
     status: "pending_payment",
@@ -354,7 +338,10 @@ function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
     financePolicyHoldDurationHours: 48,
     financePolicyReserveBps: 0,
     financePolicyReserveReleaseDelayDays: 0,
-    financePolicyPlatformFeeBps: 1_000,
+    tariffSeriesId: "pro",
+    tariffVersion: 1,
+    tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    tariffCommissionBps: 1_000,
     financePolicyProviderSettlementRequired: true,
     createdAt: "2026-07-24T10:00:00.000Z",
     updatedAt: "2026-07-24T10:00:00.000Z",
@@ -370,7 +357,6 @@ function policySnapshot(overrides: Partial<FinancePolicySnapshot> = {}): Finance
     holdDurationHours: 48,
     reserveBps: 0,
     reserveReleaseDelayDays: 0,
-    platformFeeBps: 1_000,
     providerSettlementRequired: true,
     isActive: true,
     createdByUserId: null,
@@ -389,7 +375,6 @@ function riskProfile(input: UpsertAstrologerRiskProfileInput): AstrologerRiskPro
     holdDurationHoursOverride: input.holdDurationHoursOverride,
     reserveBpsOverride: input.reserveBpsOverride,
     reserveReleaseDelayDaysOverride: input.reserveReleaseDelayDaysOverride,
-    platformFeeBpsOverride: input.platformFeeBpsOverride,
     providerSettlementRequiredOverride: input.providerSettlementRequiredOverride,
     reviewedByUserId: input.reviewedByUserId,
     reviewedAt: input.reviewedAt,

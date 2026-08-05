@@ -477,16 +477,29 @@ function suppressionRow(overrides: Record<string, unknown> = {}) {
 
 function snapshot(): FlowRunSnapshot {
   return {
-    schemaVersion: "flow-run-snapshot.v1",
-    flowVersionId: versionId,
-    sourceEventId: "manual:client-1:flow-1",
-    subjectType: "client",
-    subjectId: "client-1",
-    occurredAt: now.toISOString(),
-    timeZone: "Europe/Moscow",
-    consent: {},
-    channels: {},
-    payload: {}
+    schemaVersion: "flow-run-snapshot.v2",
+    enrollment: {
+      activationEpochId: "88888888-8888-4888-8888-888888888888",
+      triggerNodeId: "booking-confirmed",
+      occurrenceKey: "99999999-9999-4999-8999-999999999999",
+      policyKey: "once_per_occurrence",
+      policyRevision: 1,
+      rolloutPolicyRevision: 1,
+      eventOccurredAt: now.toISOString(),
+      enrolledAt: now.toISOString()
+    },
+    subject: {
+      type: "booking",
+      bookingId: "99999999-9999-4999-8999-999999999999",
+      clientUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      productId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      startAt: "2026-08-01T10:00:00.000Z",
+      endAt: "2026-08-01T11:00:00.000Z"
+    },
+    executionAuthority: {
+      basis: "current_entitlement",
+      referenceId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    }
   };
 }
 

@@ -6,7 +6,6 @@ import {
   PayoutInsufficientAvailableBalanceError,
   PayoutMinimumAmountError,
   PayoutMethodAlreadyConfiguredError,
-  PayoutMethodMismatchError,
   PayoutMethodMissingError,
   requestAstrologerPayout,
   releaseAstrologerFundsFromHold,
@@ -101,12 +100,10 @@ describe("payout use cases", () => {
 
     const method = await createManualPayoutMethod({
       store,
+      payoutMethodId: "33333333-3333-4333-8333-333333333333",
       astrologerUserId,
       displayName: "Основной счет",
-      recipientName: "Alisa Vega",
-      bankName: "T-Bank",
-      accountNumberLast4: "4417",
-      details: { bik: "044525974" },
+      destination: sealedDestination("33333333-3333-4333-8333-333333333333"),
       now
     });
 
@@ -114,24 +111,17 @@ describe("payout use cases", () => {
       astrologerUserId,
       method: "manual_bank_transfer",
       displayName: "Основной счет",
-      manualBankTransferDetails: {
-        recipientName: "Alisa Vega",
-        bankName: "T-Bank",
-        accountNumberLast4: "4417",
-        bik: "044525974"
-      },
+      destination: expect.objectContaining({ redactedDisplay: "Счёт •••• 4417" }),
       isDefault: true
     });
 
     await expect(
       createManualPayoutMethod({
         store,
+        payoutMethodId: "55555555-5555-4555-8555-555555555555",
         astrologerUserId,
         displayName: "Другой счет",
-        recipientName: "Alisa Vega",
-        bankName: "T-Bank",
-        accountNumberLast4: "1111",
-        details: {},
+        destination: sealedDestination("55555555-5555-4555-8555-555555555555"),
         now
       })
     ).rejects.toBeInstanceOf(PayoutMethodAlreadyConfiguredError);
@@ -223,20 +213,6 @@ describe("payout use cases", () => {
     ).rejects.toBeInstanceOf(PayoutInsufficientAvailableBalanceError);
   });
 
-  it("rejects payout request when requested method does not match configured default method", async () => {
-    await expect(
-      requestAstrologerPayout({
-        store: createStore({ availableAmountMinor: 25_000_00, method: defaultMethod() }),
-        astrologerUserId,
-        amount: { amountMinor: 10_000_00, currency: "RUB" },
-        minimumPayoutAmount: { amountMinor: 1_000_00, currency: "RUB" },
-        method: "arc_pay_provider",
-        metadata: {},
-        now
-      })
-    ).rejects.toBeInstanceOf(PayoutMethodMismatchError);
-  });
-
   it("posts paid and failed status updates to ledger once terminal state changes", async () => {
     const store = createStore({
       availableAmountMinor: 25_000_00,
@@ -247,11 +223,13 @@ describe("payout use cases", () => {
     const paid = await approvePayoutStatusUpdate({
       store,
       payoutRequestId,
+      expectedVersion: 1,
       adminUserId,
       update: {
         status: "paid",
         externalReference: "bank-transfer-1001",
         transferredAt: now,
+        proofArtifact: proofArtifact(),
         adminNote: "Paid from bank cabinet"
       },
       now
@@ -281,17 +259,43 @@ describe("payout use cases", () => {
     const replay = await approvePayoutStatusUpdate({
       store,
       payoutRequestId,
+      expectedVersion: 2,
       adminUserId,
       update: {
         status: "paid",
         externalReference: "bank-transfer-1001",
         transferredAt: now,
+        proofArtifact: proofArtifact(),
         adminNote: "Paid from bank cabinet"
       },
       now
     });
     expect(replay.status).toBe("paid");
     expect(store.ledgerTransactions).toHaveLength(1);
+  });
+
+  it("rejects a paid transition without an immutable proof artifact", async () => {
+    const store = createStore({
+      availableAmountMinor: 25_000_00,
+      method: defaultMethod(),
+      request: payoutRequest({ status: "processing_manual" })
+    });
+
+    await expect(
+      approvePayoutStatusUpdate({
+        store,
+        payoutRequestId,
+        expectedVersion: 1,
+        adminUserId,
+        update: {
+          status: "paid",
+          externalReference: "bank-transfer-1001",
+          transferredAt: now
+        } as never,
+        now
+      })
+    ).rejects.toMatchObject({ code: "payout_status_evidence_invalid" });
+    expect(store.ledgerTransactions).toHaveLength(0);
   });
 
   it("returns payout pending money to available when manual transfer fails", async () => {
@@ -304,6 +308,7 @@ describe("payout use cases", () => {
     const failed = await approvePayoutStatusUpdate({
       store,
       payoutRequestId,
+      expectedVersion: 1,
       adminUserId,
       update: {
         status: "failed",
@@ -349,6 +354,7 @@ describe("payout use cases", () => {
     const rejected = await approvePayoutStatusUpdate({
       store,
       payoutRequestId,
+      expectedVersion: 1,
       adminUserId,
       update: {
         status: "rejected",
@@ -398,6 +404,7 @@ describe("payout use cases", () => {
     const cancelled = await approvePayoutStatusUpdate({
       store,
       payoutRequestId,
+      expectedVersion: 1,
       adminUserId,
       update: {
         status: "cancelled",
@@ -480,21 +487,19 @@ function createStore(input: {
     ledgerTransactions,
     findDefaultMethod: async () => method,
     createMethod: async (createInput) => {
-      method = {
+      const createdMethod: PayoutMethodRecord = {
         id: payoutMethodId,
         astrologerUserId: createInput.astrologerUserId,
         method: createInput.method,
         currency: createInput.currency,
         displayName: createInput.displayName,
-        manualBankTransferDetails: createInput.manualBankTransferDetails,
-        provider: createInput.provider,
-        environment: createInput.environment,
-        providerPayoutAccountId: createInput.providerPayoutAccountId,
+        destination: createInput.destination,
         isDefault: createInput.isDefault,
         createdAt: createInput.now,
         updatedAt: createInput.now
       };
-      return method;
+      method = createdMethod;
+      return createdMethod;
     },
     findWalletBalance: async () => balance(input.availableAmountMinor),
     summarizePeriod: vi.fn(async (): Promise<FinancePeriodSummary> => financePeriodSummary()),
@@ -509,6 +514,7 @@ function createStore(input: {
     findRequestById: async (id) => (id === request?.id ? request : null),
     updateRequestStatus: async (updateInput) => {
       if (!request || updateInput.payoutRequestId !== request.id) return null;
+      if (updateInput.expectedVersion !== request.version) return null;
       request = {
         ...request,
         status: updateInput.status,
@@ -517,7 +523,8 @@ function createStore(input: {
         failureReason: updateInput.failureReason ?? null,
         externalReference: updateInput.externalReference ?? null,
         transferredAt: updateInput.transferredAt ?? null,
-        providerPayoutId: updateInput.providerPayoutId ?? null,
+        paidProofArtifact: updateInput.proofArtifact ?? null,
+        version: request.version + 1,
         reviewedAt: updateInput.adminUserId ? updateInput.now : request.reviewedAt,
         completedAt: isTerminalPayoutStatus(updateInput.status)
           ? updateInput.now
@@ -571,14 +578,31 @@ function defaultMethod(): PayoutMethodRecord {
     method: "manual_bank_transfer",
     currency: "RUB",
     displayName: "Счет •• 4417",
-    manualBankTransferDetails: { recipient: "Astrologer" },
-    provider: null,
-    environment: null,
-    providerPayoutAccountId: null,
+    destination: sealedDestination(payoutMethodId),
     isDefault: true,
     createdAt: now,
     updatedAt: now
   };
+}
+
+function sealedDestination(methodId: string) {
+  return {
+    kind: "sealed_payout_destination_snapshot" as const,
+    payoutMethodId: methodId,
+    payoutMethodVersion: 1,
+    destinationKind: "bank_account" as const,
+    beneficiaryFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
+    redactedDisplay: "Счёт •••• 4417",
+    sealedDestinationRef: "kms://test/payout-destination"
+  };
+}
+
+function proofArtifact() {
+  return {
+    artifactId: "manual-payout-proof:44444444-4444-4444-8444-444444444444",
+    sha256Digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    byteLength: 1024
+  } as const;
 }
 
 function payoutRequest(
@@ -591,8 +615,6 @@ function payoutRequest(
     status: overrides.status ?? "requested",
     amount: { amountMinor: overrides.amountMinor ?? 10_000_00, currency: "RUB" },
     method: "manual_bank_transfer",
-    provider: null,
-    environment: null,
     requestedAt: now,
     reviewedAt: null,
     completedAt: null,
@@ -601,11 +623,14 @@ function payoutRequest(
     failureReason: null,
     externalReference: null,
     transferredAt: null,
-    providerPayoutId: null,
+    version: 1,
     metadata: overrides.metadata ?? {},
     createdAt: now,
     updatedAt: now,
-    ...overrides
+    ...overrides,
+    payoutMethodVersion: overrides.payoutMethodVersion ?? 1,
+    destination: overrides.destination ?? sealedDestination(payoutMethodId),
+    paidProofArtifact: overrides.paidProofArtifact ?? null
   };
 }
 

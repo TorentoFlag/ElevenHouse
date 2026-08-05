@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import type {
-  FlowDefinitionDetailV2,
-  FlowDefinitionSummaryV2,
+  FlowDefinitionDetailV3,
+  FlowDefinitionSummaryV3,
   FlowDefinitionTemplateDescriptorV2,
-  FlowRuntimeAvailability
+  PublishFlowDefinitionV3Response
 } from "@elevenhouse/contracts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FlowsPage } from "./FlowsPage";
 
@@ -15,12 +15,14 @@ const mocks = vi.hoisted(() => ({
   useDocumentTitle: vi.fn(),
   useFlowListQuery: vi.fn(),
   useFlowTemplatesQuery: vi.fn(),
+  useProductListQuery: vi.fn(),
   useFlowDefinitionQuery: vi.fn(),
+  useFlowActivationReviewQuery: vi.fn(),
+  useFlowEnrollmentQuery: vi.fn(),
   useActivateFlowMutation: vi.fn(),
   useCreateFlowMutation: vi.fn(),
   useCreateNextFlowDraftMutation: vi.fn(),
-  useMigrateFlowDefinitionMutation: vi.fn(),
-  usePauseFlowMutation: vi.fn(),
+  usePauseFlowEnrollmentMutation: vi.fn(),
   useUpdateFlowDraftMutation: vi.fn(),
   usePublishFlowMutation: vi.fn(),
   useValidateFlowDefinitionMutation: vi.fn()
@@ -28,6 +30,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@elevenhouse/i18n", () => ({
   useI18n: () => ({ locale: mocks.locale })
+}));
+vi.mock("react-router", () => ({
+  useLocation: () => ({ search: window.location.search })
 }));
 vi.mock("../../common/hooks/useDocumentTitle", () => ({
   useDocumentTitle: mocks.useDocumentTitle
@@ -38,8 +43,17 @@ vi.mock("../../features/flows/model/useFlowListQuery", () => ({
 vi.mock("../../features/flows/model/useFlowTemplatesQuery", () => ({
   useFlowTemplatesQuery: mocks.useFlowTemplatesQuery
 }));
+vi.mock("../../features/products/model/useProductListQuery", () => ({
+  useProductListQuery: mocks.useProductListQuery
+}));
 vi.mock("../../features/flows/model/useFlowDefinitionQuery", () => ({
   useFlowDefinitionQuery: mocks.useFlowDefinitionQuery
+}));
+vi.mock("../../features/flows/model/useFlowActivationReviewQuery", () => ({
+  useFlowActivationReviewQuery: mocks.useFlowActivationReviewQuery
+}));
+vi.mock("../../features/flows/model/useFlowEnrollmentQuery", () => ({
+  useFlowEnrollmentQuery: mocks.useFlowEnrollmentQuery
 }));
 vi.mock("../../features/flows/model/useActivateFlowMutation", () => ({
   useActivateFlowMutation: mocks.useActivateFlowMutation
@@ -50,11 +64,8 @@ vi.mock("../../features/flows/model/useCreateFlowMutation", () => ({
 vi.mock("../../features/flows/model/useCreateNextFlowDraftMutation", () => ({
   useCreateNextFlowDraftMutation: mocks.useCreateNextFlowDraftMutation
 }));
-vi.mock("../../features/flows/model/useMigrateFlowDefinitionMutation", () => ({
-  useMigrateFlowDefinitionMutation: mocks.useMigrateFlowDefinitionMutation
-}));
-vi.mock("../../features/flows/model/usePauseFlowMutation", () => ({
-  usePauseFlowMutation: mocks.usePauseFlowMutation
+vi.mock("../../features/flows/model/usePauseFlowEnrollmentMutation", () => ({
+  usePauseFlowEnrollmentMutation: mocks.usePauseFlowEnrollmentMutation
 }));
 vi.mock("../../features/flows/model/useUpdateFlowDraftMutation", () => ({
   useUpdateFlowDraftMutation: mocks.useUpdateFlowDraftMutation
@@ -65,21 +76,18 @@ vi.mock("../../features/flows/model/usePublishFlowMutation", () => ({
 vi.mock("../../features/flows/model/useValidateFlowDefinitionMutation", () => ({
   useValidateFlowDefinitionMutation: mocks.useValidateFlowDefinitionMutation
 }));
+vi.mock("../../features/flows/ui/FlowWorkItemQueuePanel", () => ({
+  FlowWorkItemQueuePanel: ({ locale }: { locale: "ru" | "en" }) => (
+    <div data-testid="flow-work-item-queue-panel">{locale}</div>
+  )
+}));
 
-const definitionOnlyRuntime: FlowRuntimeAvailability = {
-  mode: "definition_only",
-  executionAvailable: false,
-  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
-};
-
-const flow: FlowDefinitionSummaryV2 = {
-  schemaVersion: "flow-definition-summary.v2",
+const flow: FlowDefinitionSummaryV3 = {
+  schemaVersion: "flow-definition-summary.v3",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Запись на консультацию",
   state: "draft",
-  runtimeStatus: "draft",
   approvalMode: "manual_approve",
   revision: 3,
   draftBaseVersionId: null,
@@ -90,12 +98,12 @@ const flow: FlowDefinitionSummaryV2 = {
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-  migrationRequired: false
+  enrollment: inactiveEnrollment(3)
 };
 
-const flowDetail: Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-graph.v2" }> = {
+const flowDetail: Extract<FlowDefinitionDetailV3, { graphSchemaVersion: "flow-graph.v2" }> = {
   ...flow,
-  schemaVersion: "flow-definition-detail.v2",
+  schemaVersion: "flow-definition-detail.v3",
   draftGraph: {
     schemaVersion: "flow-graph.v2",
     nodes: [
@@ -120,7 +128,7 @@ const flowDetail: Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-gr
 const availableTemplate: FlowDefinitionTemplateDescriptorV2 = {
   schemaVersion: "flow-definition-template.v2",
   key: "manual-consultation-preparation",
-  version: 1,
+  version: 2,
   name: "Подготовка консультации вручную",
   description: "Создать внутреннюю задачу подготовки и завершить ее вручную.",
   category: "service_delivery",
@@ -131,7 +139,7 @@ const availableTemplate: FlowDefinitionTemplateDescriptorV2 = {
   blockerCode: null
 };
 
-const detailResponses = new Map<string, FlowDefinitionDetailV2>();
+const detailResponses = new Map<string, FlowDefinitionDetailV3>();
 
 describe("FlowsPage", () => {
   beforeEach(() => {
@@ -142,19 +150,19 @@ describe("FlowsPage", () => {
     window.history.replaceState(null, "", "/flows");
     mocks.useFlowListQuery.mockReturnValue({
       data: {
-        schemaVersion: "flow-definition-list.v2",
+        schemaVersion: "flow-definition-list.v3",
         flows: [flow],
-        total: 1,
-        runtime: definitionOnlyRuntime
+        total: 1
       },
       isLoading: false,
       isError: false,
-      error: null
+      error: null,
+      refetch: vi.fn()
     });
     mocks.useFlowTemplatesQuery.mockReturnValue({
       data: {
         schemaVersion: "flow-definition-template-catalog.v2",
-        catalogVersion: 1,
+        catalogVersion: 2,
         locale: "ru",
         templates: [availableTemplate]
       },
@@ -162,16 +170,34 @@ describe("FlowsPage", () => {
       isError: false,
       error: null
     });
+    mocks.useProductListQuery.mockReturnValue({
+      data: { products: [], total: 0, counts: { all: 0, active: 0, draft: 0, archived: 0 } },
+      isLoading: false,
+      isError: false,
+      error: null
+    });
     mocks.useFlowDefinitionQuery.mockImplementation((flowId: string | null) => ({
       data: flowId ? detailResponses.get(flowId) : undefined,
       isLoading: false,
-      error: null
+      error: null,
+      refetch: vi.fn()
     }));
+    mocks.useFlowActivationReviewQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn()
+    });
+    mocks.useFlowEnrollmentQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn()
+    });
     mocks.useCreateFlowMutation.mockReturnValue(mutation());
     mocks.useCreateNextFlowDraftMutation.mockReturnValue(mutation());
-    mocks.useMigrateFlowDefinitionMutation.mockReturnValue(mutation());
     mocks.useActivateFlowMutation.mockReturnValue(mutation());
-    mocks.usePauseFlowMutation.mockReturnValue(mutation());
+    mocks.usePauseFlowEnrollmentMutation.mockReturnValue(mutation());
     mocks.useUpdateFlowDraftMutation.mockReturnValue(mutation());
     mocks.usePublishFlowMutation.mockReturnValue(mutation());
     mocks.useValidateFlowDefinitionMutation.mockReturnValue(
@@ -181,13 +207,13 @@ describe("FlowsPage", () => {
 
   afterEach(() => cleanup());
 
-  it("loads the V2 list and localized template catalog", () => {
+  it("loads the V3 list and localized template catalog", () => {
     render(<FlowsPage />);
 
     expect(mocks.useDocumentTitle).toHaveBeenCalledWith("Воронки");
     expect(mocks.useFlowListQuery).toHaveBeenCalledWith({
       state: "all",
-      runtimeStatus: "all",
+      enrollmentState: "all",
       limit: 50,
       offset: 0
     });
@@ -195,8 +221,16 @@ describe("FlowsPage", () => {
     expect(screen.getAllByText(flow.name)).toHaveLength(2);
   });
 
+  it("shows the work-item queue on the flow list and removes it inside the builder", () => {
+    render(<FlowsPage />);
+
+    expect(screen.getByTestId("flow-work-item-queue-panel").textContent).toBe("ru");
+    openFlow(flow.name);
+    expect(screen.queryByTestId("flow-work-item-queue-panel")).toBeNull();
+  });
+
   it("creates a server-backed template definition and opens its returned detail", () => {
-    const createdDetail: FlowDefinitionDetailV2 = {
+    const createdDetail: FlowDefinitionDetailV3 = {
       ...flowDetail,
       id: "33333333-3333-4333-8333-333333333333",
       name: availableTemplate.name
@@ -219,7 +253,7 @@ describe("FlowsPage", () => {
           source: {
             type: "template",
             templateKey: availableTemplate.key,
-            templateVersion: 1,
+            templateVersion: availableTemplate.version,
             parameters: {}
           }
         },
@@ -253,8 +287,10 @@ describe("FlowsPage", () => {
   it("saves the exact local draft before publishing with the returned revision", () => {
     const updateDraft = vi.fn();
     const publish = vi.fn();
+    const activate = vi.fn();
     mocks.useUpdateFlowDraftMutation.mockReturnValue(mutation(updateDraft));
     mocks.usePublishFlowMutation.mockReturnValue(mutation(publish));
+    mocks.useActivateFlowMutation.mockReturnValue(mutation(activate));
     render(<FlowsPage />);
 
     openFlow(flow.name);
@@ -290,14 +326,23 @@ describe("FlowsPage", () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) })
     );
+
+    const publication = publishedFlow();
+    act(() => publish.mock.calls[0]![1].onSuccess(publication));
+
+    expect(screen.getByRole("heading", { name: "Проверка запуска" })).toBeTruthy();
+    expect(mocks.useFlowActivationReviewQuery).toHaveBeenLastCalledWith(
+      publication.flow.id,
+      publication.version.id
+    );
+    expect(activate).not.toHaveBeenCalled();
   });
 
   it("creates the next draft from the exact published version", () => {
     const versioned = versionedFlow();
-    const detail: Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-graph.v2" }> = {
+    const detail: Extract<FlowDefinitionDetailV3, { graphSchemaVersion: "flow-graph.v2" }> = {
       ...flowDetail,
       state: versioned.state,
-      runtimeStatus: versioned.runtimeStatus,
       revision: versioned.revision,
       latestPublishedVersionId: versioned.latestPublishedVersionId,
       latestPublishedVersion: versioned.latestPublishedVersion,
@@ -363,102 +408,6 @@ describe("FlowsPage", () => {
     );
   });
 
-  it("migrates a legacy definition explicitly with optimistic revision", () => {
-    const legacy = legacyFlow();
-    detailResponses.set(legacy.id, legacy);
-    listFlows([legacySummary(legacy)]);
-    const mutate = vi.fn();
-    mocks.useMigrateFlowDefinitionMutation.mockReturnValue(mutation(mutate));
-    render(<FlowsPage />);
-
-    openFlow(legacy.name);
-    fireEvent.click(screen.getByRole("button", { name: "Мигрировать в V2" }));
-
-    expect(mutate).toHaveBeenCalledWith(
-      {
-        flowId: legacy.id,
-        body: {
-          schemaVersion: "flow-definition-migrate.v2",
-          expectedRevision: legacy.revision,
-          targetGraphSchemaVersion: "flow-graph.v2"
-        },
-        idempotencyKey: expect.stringMatching(/^flows:migrate:/)
-      },
-      expect.objectContaining({ onSuccess: expect.any(Function) })
-    );
-  });
-
-  it("downloads the exact legacy server detail as JSON", () => {
-    const legacy = legacyFlow();
-    detailResponses.set(legacy.id, legacy);
-    listFlows([legacySummary(legacy)]);
-    const createObjectURL = vi.fn(() => "blob:legacy-flow");
-    const revokeObjectURL = vi.fn();
-    const originalCreateObjectURL = URL.createObjectURL;
-    const originalRevokeObjectURL = URL.revokeObjectURL;
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: createObjectURL
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: revokeObjectURL
-    });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-
-    try {
-      render(<FlowsPage />);
-      openFlow(legacy.name);
-      fireEvent.click(screen.getByRole("button", { name: "Скачать JSON" }));
-
-      expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-      expect(click.mock.instances[0]).toMatchObject({
-        href: "blob:legacy-flow",
-        download: `flow-${legacy.id}-legacy-v1.json`
-      });
-      expect(revokeObjectURL).toHaveBeenCalledWith("blob:legacy-flow");
-    } finally {
-      click.mockRestore();
-      Object.defineProperty(URL, "createObjectURL", {
-        configurable: true,
-        value: originalCreateObjectURL
-      });
-      Object.defineProperty(URL, "revokeObjectURL", {
-        configurable: true,
-        value: originalRevokeObjectURL
-      });
-    }
-  });
-
-  it("blocks activation from definition-only evidence but permits pausing persisted active state", () => {
-    const versioned = versionedFlow();
-    const active: FlowDefinitionSummaryV2 = {
-      ...versioned,
-      id: "55555555-5555-4555-8555-555555555555",
-      name: "Активная воронка",
-      runtimeStatus: "active"
-    };
-    listFlows([versioned, active]);
-    const activate = vi.fn();
-    const pause = vi.fn();
-    mocks.useActivateFlowMutation.mockReturnValue(mutation(activate));
-    mocks.usePauseFlowMutation.mockReturnValue(mutation(pause));
-    render(<FlowsPage />);
-
-    const unavailable = screen.getAllByRole("switch", {
-      name: "Исполнение этой версии воронки недоступно"
-    });
-    unavailable.forEach((control) => fireEvent.click(control));
-    expect(activate).not.toHaveBeenCalled();
-
-    fireEvent.click(
-      screen.getAllByRole("switch", {
-        name: "Исполнение отключено; сохраненную активацию можно поставить на паузу"
-      })[0]!
-    );
-    expect(pause).toHaveBeenCalledWith(active.id);
-  });
-
   it("opens an AstroCalendar recommendation without inventing unsupported graph context", () => {
     const unavailableTemplate: FlowDefinitionTemplateDescriptorV2 = {
       ...availableTemplate,
@@ -495,6 +444,16 @@ describe("FlowsPage", () => {
     fireEvent.click(templateButton);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("opens the exact flow when an operational deep link changes on the mounted route", async () => {
+    const page = render(<FlowsPage />);
+
+    window.history.replaceState(null, "", `/flows?flowId=${flow.id}`);
+    page.rerender(<FlowsPage />);
+
+    await waitFor(() => expect(mocks.useFlowDefinitionQuery).toHaveBeenCalledWith(flow.id));
+    expect(screen.getByText(flowDetail.name)).toBeTruthy();
+  });
 });
 
 function mutation(mutate = vi.fn()) {
@@ -503,7 +462,7 @@ function mutation(mutate = vi.fn()) {
 
 function validValidation() {
   return {
-    schemaVersion: "flow-definition-validation.v1" as const,
+    schemaVersion: "flow-definition-validation.v2" as const,
     graphSchemaVersion: "flow-graph.v2" as const,
     publishable: true,
     activatable: false,
@@ -511,31 +470,71 @@ function validValidation() {
     activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE" as const],
     normalizedGraph: flowDetail.draftGraph,
     capabilityManifest: {
-      schemaVersion: "flow-capability-manifest.v1" as const,
+      schemaVersion: "flow-capability-manifest.v2" as const,
       executionSemanticsVersion: "flow-interpreter.v1" as const,
-      nodeExecutors: [
-        {
-          kind: "manual_client" as const,
-          configSchemaVersion: 1 as const,
-          executorContractVersion: 1 as const
-        }
-      ],
+      triggerMatcher: {
+        kind: "manual_client" as const,
+        configSchemaVersion: 1 as const,
+        matcherContractVersion: 1 as const,
+        eventSchemaVersion: 1 as const
+      },
+      nodeExecutors: [],
       requiredCapabilities: []
     }
   };
 }
 
-function listFlows(flows: readonly FlowDefinitionSummaryV2[]) {
+function publishedFlow(): PublishFlowDefinitionV3Response {
+  const versionId = "44444444-4444-4444-8444-444444444444";
+  const publishedAt = "2026-07-30T14:45:00.000Z";
+  const capabilityManifest = validValidation().capabilityManifest!;
+
+  return {
+    flow: {
+      schemaVersion: "flow-definition.v2",
+      id: flow.id,
+      ownerUserId: flow.ownerUserId,
+      name: flow.name,
+      origin: flow.origin!,
+      state: "versioned",
+      approvalMode: flow.approvalMode,
+      revision: 4,
+      draftBaseVersionId: null,
+      draftGraph: flowDetail.draftGraph,
+      draftPresentation: flowDetail.draftPresentation,
+      latestPublishedVersionId: versionId,
+      latestPublishedVersion: 1,
+      createdAt: flow.createdAt,
+      updatedAt: publishedAt,
+      publishedAt
+    },
+    version: {
+      schemaVersion: "flow-published-version.v3",
+      id: versionId,
+      flowId: flow.id,
+      version: 1,
+      sourceRevision: 4,
+      status: "published",
+      approvalMode: flow.approvalMode,
+      graph: flowDetail.draftGraph,
+      presentation: flowDetail.draftPresentation,
+      capabilityManifest,
+      publishedAt
+    }
+  };
+}
+
+function listFlows(flows: readonly FlowDefinitionSummaryV3[]) {
   mocks.useFlowListQuery.mockReturnValue({
     data: {
-      schemaVersion: "flow-definition-list.v2",
+      schemaVersion: "flow-definition-list.v3",
       flows,
-      total: flows.length,
-      runtime: definitionOnlyRuntime
+      total: flows.length
     },
     isLoading: false,
     isError: false,
-    error: null
+    error: null,
+    refetch: vi.fn()
   });
 }
 
@@ -543,74 +542,32 @@ function openFlow(name: string) {
   fireEvent.click(screen.getByRole("button", { name: `Открыть схему: ${name}` }));
 }
 
-function versionedFlow(): FlowDefinitionSummaryV2 {
+function versionedFlow(): FlowDefinitionSummaryV3 {
   return {
     ...flow,
     state: "versioned",
-    runtimeStatus: "published",
     revision: 5,
     latestPublishedVersionId: "44444444-4444-4444-8444-444444444444",
     latestPublishedVersion: 1,
-    publishedAt: "2026-07-30T14:45:00.000Z"
+    publishedAt: "2026-07-30T14:45:00.000Z",
+    enrollment: inactiveEnrollment(5)
   };
 }
 
-function legacyFlow(): Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-graph.v1" }> {
+function inactiveEnrollment(definitionRevision: number): FlowDefinitionSummaryV3["enrollment"] {
   return {
-    schemaVersion: "flow-definition-detail.v2",
-    id: flow.id,
-    ownerUserId: flow.ownerUserId,
-    name: "Legacy-входящие",
-    state: "draft",
-    runtimeStatus: "draft",
-    approvalMode: "manual_approve",
-    revision: 6,
-    draftBaseVersionId: null,
-    latestPublishedVersionId: null,
-    latestPublishedVersion: null,
-    createdAt: flow.createdAt,
-    updatedAt: flow.updatedAt,
-    publishedAt: null,
-    graphSchemaVersion: "flow-graph.v1",
-    origin: null,
-    migrationRequired: true,
-    draftGraph: {
-      schemaVersion: "flow-graph.v1",
-      nodes: [
-        {
-          id: "lead-created",
-          category: "trigger",
-          kind: "lead_created",
-          title: "Новый лид",
-          config: {}
-        }
-      ],
-      edges: []
-    },
-    draftPresentation: null
-  };
-}
-
-function legacySummary(
-  detail: Extract<FlowDefinitionDetailV2, { graphSchemaVersion: "flow-graph.v1" }>
-): FlowDefinitionSummaryV2 {
-  return {
-    schemaVersion: "flow-definition-summary.v2",
-    id: detail.id,
-    ownerUserId: detail.ownerUserId,
-    name: detail.name,
-    state: detail.state,
-    runtimeStatus: detail.runtimeStatus,
-    approvalMode: detail.approvalMode,
-    revision: detail.revision,
-    draftBaseVersionId: detail.draftBaseVersionId,
-    latestPublishedVersionId: detail.latestPublishedVersionId,
-    latestPublishedVersion: detail.latestPublishedVersion,
-    createdAt: detail.createdAt,
-    updatedAt: detail.updatedAt,
-    publishedAt: detail.publishedAt,
-    graphSchemaVersion: "flow-graph.v1",
-    origin: null,
-    migrationRequired: true
+    schemaVersion: "flow-enrollment-read-authority.v1",
+    authority: "enrollment_v1",
+    control: {
+      schemaVersion: "flow-enrollment-control.v1",
+      flowId: "11111111-1111-4111-8111-111111111111",
+      state: "inactive",
+      definitionRevision,
+      enrollmentRevision: 0,
+      activeVersionId: null,
+      activeActivationEpochId: null,
+      activeSince: null,
+      lastPausedAt: null
+    }
   };
 }

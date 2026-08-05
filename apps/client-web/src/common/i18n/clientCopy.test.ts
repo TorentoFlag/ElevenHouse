@@ -57,4 +57,15 @@ describe("clientCopyByLocale", () => {
       helper: "Choose only when the local clock time occurred twice during a DST change."
     });
   });
+
+  it("contains complete translated copy for the relationship-scoped purchase flow", () => {
+    expect(clientCopyByLocale.ru.purchaseFlow.title).toBe("Выберите услугу связанного астролога");
+    expect(clientCopyByLocale.en.purchaseFlow.title).toBe(
+      "Choose a service from your connected astrologer"
+    );
+    expect(clientCopyByLocale.ru.purchaseFlow.checkoutRequiresHttps).toContain("HTTPS");
+    expect(clientCopyByLocale.en.purchaseFlow.checkoutRequiresHttps).toContain("HTTPS");
+    expect(clientCopyByLocale.ru.purchaseFlow.deliveryFormats.video).toBe("Видео");
+    expect(clientCopyByLocale.en.purchaseFlow.deliveryFormats.video).toBe("Video");
+  });
 });

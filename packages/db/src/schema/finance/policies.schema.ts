@@ -22,7 +22,6 @@ export const financePolicies = pgTable(
     holdDurationHours: integer("hold_duration_hours").notNull().default(48),
     reserveBps: integer("reserve_bps").notNull().default(0),
     reserveReleaseDelayDays: integer("reserve_release_delay_days").notNull().default(0),
-    platformFeeBps: integer("platform_fee_bps").notNull(),
     providerSettlementRequired: boolean("provider_settlement_required").notNull().default(true),
     isActive: boolean("is_active").notNull().default(true),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
@@ -45,10 +44,6 @@ export const financePolicies = pgTable(
       "finance_policies_reserve_release_delay_check",
       sql`${table.reserveReleaseDelayDays} between 0 and 540`
     ),
-    check(
-      "finance_policies_platform_fee_bps_check",
-      sql`${table.platformFeeBps} between 0 and 10000`
-    ),
     uniqueIndex("finance_policies_version_unique").on(table.policyVersion),
     uniqueIndex("finance_policies_active_risk_tier_unique")
       .on(table.riskTier)
@@ -69,7 +64,6 @@ export const astrologerRiskProfiles = pgTable(
     holdDurationHoursOverride: integer("hold_duration_hours_override"),
     reserveBpsOverride: integer("reserve_bps_override"),
     reserveReleaseDelayDaysOverride: integer("reserve_release_delay_days_override"),
-    platformFeeBpsOverride: integer("platform_fee_bps_override"),
     providerSettlementRequiredOverride: boolean("provider_settlement_required_override"),
     reviewedByUserId: uuid("reviewed_by_user_id").references(() => users.id, {
       onDelete: "set null"
@@ -99,10 +93,6 @@ export const astrologerRiskProfiles = pgTable(
     check(
       "astrologer_risk_profiles_reserve_release_override_check",
       sql`${table.reserveReleaseDelayDaysOverride} is null or ${table.reserveReleaseDelayDaysOverride} between 0 and 540`
-    ),
-    check(
-      "astrologer_risk_profiles_fee_override_check",
-      sql`${table.platformFeeBpsOverride} is null or ${table.platformFeeBpsOverride} between 0 and 10000`
     ),
     check(
       "astrologer_risk_profiles_manual_override_check",

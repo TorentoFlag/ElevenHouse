@@ -17,6 +17,8 @@ export type HttpRequestOptions = {
   readonly method?: "DELETE" | "GET" | "POST" | "PUT";
   readonly body?: unknown;
   readonly csrf?: boolean;
+  /** Request-command key. It is intentionally a named option, not arbitrary headers. */
+  readonly idempotencyKey?: string;
   readonly signal?: AbortSignal;
 };
 
@@ -126,6 +128,14 @@ export class HttpClient {
       if (token) {
         headers[this.csrf.headerName] = token;
       }
+    }
+
+    const idempotencyKey = options.idempotencyKey?.trim();
+    if (idempotencyKey) {
+      if (idempotencyKey.length > 160 || /[\r\n]/.test(idempotencyKey)) {
+        throw new Error("Invalid Idempotency-Key header value");
+      }
+      headers["idempotency-key"] = idempotencyKey;
     }
 
     return headers;

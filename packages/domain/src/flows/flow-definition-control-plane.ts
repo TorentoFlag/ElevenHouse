@@ -6,12 +6,8 @@ import {
   flowDefinitionV2Schema,
   flowGraphReadSchema,
   flowPublishedVersionCompatibleSchema,
-  flowVersionSchema,
-  migrateFlowDefinitionV2RequestSchema,
-  migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
   publishFlowDefinitionCompatibleResponseSchema,
-  publishFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV3ResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   type CreateFlowDefinitionV2Request,
@@ -19,22 +15,17 @@ import {
   type CreateNextFlowDraftV2Request,
   type FlowApprovalMode,
   type FlowCapabilityManifest,
-  type FlowCapabilityManifestV1,
   type FlowCapabilityManifestV2,
   type FlowDefinitionCommandRejection,
   type FlowDefinitionCommandRejectionResponse,
   type FlowDefinitionOriginV1,
   type FlowDefinitionState,
   type FlowDefinitionV2,
-  type FlowGraphRead,
   type FlowGraphV2,
   type FlowPresentationV1,
   type FlowPublishedVersionCompatible,
-  type MigrateFlowDefinitionV2Request,
-  type MigrateFlowDefinitionV2Response,
   type PublishFlowDefinitionV2Request,
   type PublishFlowDefinitionCompatibleResponse,
-  type PublishFlowDefinitionV2Response,
   type PublishFlowDefinitionV3Response,
   type UpdateFlowDefinitionDraftV2Request
 } from "@elevenhouse/contracts";
@@ -46,33 +37,26 @@ import {
 } from "../calculations/canonical-json";
 import {
   compileFlowGraphV2,
-  projectFlowCapabilityManifestV1,
   type FlowGraphV2CompileIssue
 } from "./flow-graph-v2-compiler";
 import { verifyFlowCapabilityManifestForGraph } from "./flow-capability-manifest-integrity";
-import { prepareFlowDefinitionV1Migration } from "./flow-definition-migration";
 import {
   prepareFlowDefinitionV2Creation,
   type FlowDefinitionPreparedCreate
 } from "./flow-definition-templates";
 
 export const FLOW_DEFINITION_COMMAND_REPLAY_WINDOW_HOURS = 24;
-export type FlowPublicationResponseVersion = "legacy_v2" | "current_v3";
-export type FlowPublicationPersistenceVersion = "legacy_v1" | "current_v2";
-
 export type FlowDefinitionCommandScope =
   | "flows.definition.create.v2"
   | "flows.definition.update-draft.v2"
   | "flows.definition.publish.v2"
-  | "flows.definition.create-next-draft.v2"
-  | "flows.definition.migrate.v2";
+  | "flows.definition.create-next-draft.v2";
 
 export type FlowDefinitionRouteTemplate =
   | "/flows"
   | "/flows/:flowId/draft"
   | "/flows/:flowId/publish"
-  | "/flows/:flowId/next-draft"
-  | "/flows/:flowId/migrations/v2";
+  | "/flows/:flowId/next-draft";
 
 export type FlowDefinitionCommand = {
   readonly apiSurface: "astrologer-api";
@@ -91,12 +75,12 @@ export type FlowDefinitionControlRecord = {
   readonly id: string;
   readonly ownerUserId: string;
   readonly name: string;
-  readonly origin: FlowDefinitionOriginV1 | null;
+  readonly origin: FlowDefinitionOriginV1;
   readonly state: FlowDefinitionState;
   readonly approvalMode: FlowApprovalMode;
   readonly revision: number;
   readonly draftBaseVersionId: string | null;
-  readonly draftGraph: FlowGraphRead;
+  readonly draftGraph: FlowGraphV2;
   readonly draftPresentation: FlowPresentationV1 | null;
   readonly latestPublishedVersionId: string | null;
   readonly latestPublishedVersion: number | null;
@@ -109,9 +93,9 @@ export type FlowDefinitionPublishedVersionRecord = {
   readonly id: string;
   readonly flowId: string;
   readonly version: number;
-  readonly sourceRevision: number | null;
+  readonly sourceRevision: number;
   readonly approvalMode: FlowApprovalMode;
-  readonly graph: FlowGraphRead;
+  readonly graph: FlowGraphV2;
   readonly presentation: FlowPresentationV1 | null;
   readonly capabilityManifest: FlowCapabilityManifest | null;
   readonly publishedAt: string;
@@ -123,7 +107,6 @@ export type FlowDefinitionPreparedPublication = {
   readonly graph: FlowGraphV2;
   readonly presentation: FlowPresentationV1 | null;
   readonly capabilityManifest: FlowCapabilityManifestV2;
-  readonly legacyCapabilityManifest: FlowCapabilityManifestV1;
 };
 
 export type FlowDefinitionCommandOutcome<T> =
@@ -158,8 +141,6 @@ export type FlowDefinitionControlStore = {
     readonly prepare: (
       current: FlowDefinitionControlRecord
     ) => FlowDefinitionPreparation<FlowDefinitionPreparedPublication>;
-    readonly responseVersion: FlowPublicationResponseVersion;
-    readonly persistenceVersion: FlowPublicationPersistenceVersion;
     readonly assertCreatedResponse: (response: unknown) => void;
   }) => Promise<FlowDefinitionCommandResult<PublishFlowDefinitionCompatibleResponse>>;
   readonly executeCreateNextDraft: (input: {
@@ -169,13 +150,6 @@ export type FlowDefinitionControlStore = {
       latestVersion: FlowDefinitionPublishedVersionRecord | null
     ) => FlowDefinitionPreparation<FlowDefinitionV2>;
   }) => Promise<FlowDefinitionCommandResult<FlowDefinitionV2>>;
-  readonly executeMigration: (input: {
-    readonly command: FlowDefinitionCommand;
-    readonly prepare: (
-      current: FlowDefinitionControlRecord,
-      latestVersion: FlowDefinitionPublishedVersionRecord | null
-    ) => FlowDefinitionPreparation<MigrateFlowDefinitionV2Response>;
-  }) => Promise<FlowDefinitionCommandResult<MigrateFlowDefinitionV2Response>>;
 };
 
 export class FlowDefinitionRevisionConflictError extends Error {
@@ -263,39 +237,6 @@ export class FlowDefinitionTemplateParametersInvalidError extends Error {
   }
 }
 
-export class FlowDefinitionGraphAlreadyV2Error extends Error {
-  readonly code = "FLOW_GRAPH_ALREADY_V2";
-
-  constructor() {
-    super("Flow definition already uses graph V2");
-    this.name = "FlowDefinitionGraphAlreadyV2Error";
-  }
-}
-
-export class FlowDefinitionMigrationNotAllowedError extends Error {
-  readonly code = "FLOW_DEFINITION_MIGRATION_NOT_ALLOWED";
-
-  constructor(readonly state: FlowDefinitionState) {
-    super("Flow definition cannot be migrated in its current state");
-    this.name = "FlowDefinitionMigrationNotAllowedError";
-  }
-}
-
-export class FlowDefinitionMigrationBlockedError extends Error {
-  readonly code = "FLOW_GRAPH_MIGRATION_BLOCKED";
-
-  constructor(
-    readonly issues: readonly {
-      readonly code: "unsupported_node" | "unsupported_edge" | "invalid_legacy_graph";
-      readonly path: string;
-      readonly message: string;
-    }[]
-  ) {
-    super("Flow graph cannot be migrated without changing its semantics");
-    this.name = "FlowDefinitionMigrationBlockedError";
-  }
-}
-
 export class FlowDefinitionNotEditableError extends Error {
   readonly code = "FLOW_DRAFT_NOT_EDITABLE";
 
@@ -323,15 +264,6 @@ export class FlowDefinitionNextDraftBaseConflictError extends Error {
   ) {
     super("Flow next-draft base version no longer matches the latest version");
     this.name = "FlowDefinitionNextDraftBaseConflictError";
-  }
-}
-
-export class FlowDefinitionMigrationRequiredError extends Error {
-  readonly code = "FLOW_GRAPH_MIGRATION_REQUIRED";
-
-  constructor() {
-    super("Flow graph v1 requires explicit migration before V2 commands");
-    this.name = "FlowDefinitionMigrationRequiredError";
   }
 }
 
@@ -368,44 +300,10 @@ export function parseFlowDefinitionPublishedVersionRecord(input: {
   const approvalMode = flowApprovalModeSchema.safeParse(input.approvalMode);
   if (!graph.success || !approvalMode.success) throw new FlowDefinitionIntegrityError();
 
-  if (graph.data.schemaVersion === "flow-graph.v1") {
-    if (
-      input.sourceRevision !== null ||
-      input.presentation !== null ||
-      input.capabilityManifest !== null
-    ) {
-      throw new FlowDefinitionIntegrityError();
-    }
-    const version = flowVersionSchema.safeParse({
-      id: input.id,
-      flowId: input.flowId,
-      version: input.version,
-      status: "published",
-      approvalMode: approvalMode.data,
-      graph: graph.data,
-      publishedAt: input.publishedAt
-    });
-    if (!version.success) throw new FlowDefinitionIntegrityError();
-    return {
-      id: version.data.id,
-      flowId: version.data.flowId,
-      version: version.data.version,
-      sourceRevision: null,
-      approvalMode: version.data.approvalMode,
-      graph: version.data.graph,
-      presentation: null,
-      capabilityManifest: null,
-      publishedAt: version.data.publishedAt
-    };
-  }
-
   const manifest = flowCapabilityManifestSchema.safeParse(input.capabilityManifest);
   if (!manifest.success) throw new FlowDefinitionIntegrityError();
   const version = flowPublishedVersionCompatibleSchema.safeParse({
-    schemaVersion:
-      manifest.data.schemaVersion === "flow-capability-manifest.v1"
-        ? "flow-published-version.v2"
-        : "flow-published-version.v3",
+    schemaVersion: "flow-published-version.v3",
     id: input.id,
     flowId: input.flowId,
     version: input.version,
@@ -487,56 +385,6 @@ export async function createFlowDefinitionV2(input: {
   return definition;
 }
 
-export async function migrateFlowDefinitionV2(input: {
-  readonly store: FlowDefinitionControlStore;
-  readonly actorUserId: string;
-  readonly ownerUserId: string;
-  readonly flowId: string;
-  readonly request: MigrateFlowDefinitionV2Request;
-  readonly idempotencyKey: string;
-  readonly now: string;
-}): Promise<MigrateFlowDefinitionV2Response | null> {
-  const request = migrateFlowDefinitionV2RequestSchema.parse(input.request);
-  const command = createCommand({
-    routeTemplate: "/flows/:flowId/migrations/v2",
-    scope: "flows.definition.migrate.v2",
-    actorUserId: input.actorUserId,
-    ownerUserId: input.ownerUserId,
-    resourceId: input.flowId,
-    expectedRevision: request.expectedRevision,
-    idempotencyKey: input.idempotencyKey,
-    request,
-    now: input.now
-  });
-  const result = await input.store.executeMigration({
-    command,
-    prepare: (current, latestVersion) => {
-      const prepared = prepareFlowDefinitionV1Migration({
-        current,
-        latestVersion,
-        request,
-        now: command.now
-      });
-      if (prepared.kind === "integrity_failure") throw new FlowDefinitionIntegrityError();
-      return prepared;
-    }
-  });
-  if (commandOutcomeIsNotFound(result.outcome)) return null;
-  const migrated = resolveCommandOutcome(
-    result.outcome,
-    migrateFlowDefinitionV2ResponseSchema.parse,
-    200
-  );
-  assertDefinitionCommandResponse(migrated.flow, input, request.expectedRevision, "draft");
-  if (
-    migrated.migration.sourceRevision !== request.expectedRevision ||
-    (result.kind === "created" && migrated.migration.migratedAt !== command.now)
-  ) {
-    throw new FlowDefinitionIntegrityError();
-  }
-  return migrated;
-}
-
 export async function updateFlowDefinitionDraftV2(input: {
   readonly store: FlowDefinitionControlStore;
   readonly actorUserId: string;
@@ -576,13 +424,8 @@ export async function publishFlowDefinitionV2(input: {
   readonly request: PublishFlowDefinitionV2Request;
   readonly idempotencyKey: string;
   readonly now: string;
-  readonly responseVersion: FlowPublicationResponseVersion;
-  readonly persistenceVersion: FlowPublicationPersistenceVersion;
 }): Promise<PublishFlowDefinitionCompatibleResponse | null> {
   const request = publishFlowDefinitionV2RequestSchema.parse(input.request);
-  if (input.responseVersion === "current_v3" && input.persistenceVersion !== "current_v2") {
-    throw new FlowDefinitionIntegrityError();
-  }
   const command = createCommand({
     routeTemplate: "/flows/:flowId/publish",
     scope: "flows.definition.publish.v2",
@@ -594,14 +437,8 @@ export async function publishFlowDefinitionV2(input: {
     request,
     now: input.now
   });
-  const assertCreatedResponse = (
-    response: unknown
-  ): PublishFlowDefinitionV2Response | PublishFlowDefinitionV3Response => {
-    const published = (
-      input.responseVersion === "current_v3"
-        ? publishFlowDefinitionV3ResponseSchema
-        : publishFlowDefinitionV2ResponseSchema
-    ).safeParse(response);
+  const assertCreatedResponse = (response: unknown): PublishFlowDefinitionV3Response => {
+    const published = publishFlowDefinitionV3ResponseSchema.safeParse(response);
     if (!published.success) throw new FlowDefinitionIntegrityError();
     assertDefinitionCommandResponse(
       published.data.flow,
@@ -620,8 +457,6 @@ export async function publishFlowDefinitionV2(input: {
   const result = await input.store.executePublish({
     command,
     prepare: (current) => preparePublication(current, request.expectedRevision),
-    responseVersion: input.responseVersion,
-    persistenceVersion: input.persistenceVersion,
     assertCreatedResponse
   });
   if (commandOutcomeIsNotFound(result.outcome)) return null;
@@ -727,8 +562,7 @@ function preparePublication(
     approvalMode: editable.value.approvalMode,
     graph: compiled.normalizedGraph,
     presentation: editable.value.draftPresentation,
-    capabilityManifest: compiled.capabilityManifest,
-    legacyCapabilityManifest: projectFlowCapabilityManifestV1(compiled.capabilityManifest)
+    capabilityManifest: compiled.capabilityManifest
   });
 }
 
@@ -738,9 +572,6 @@ function prepareNextDraft(
   request: CreateNextFlowDraftV2Request,
   now: string
 ): FlowDefinitionPreparation<FlowDefinitionV2> {
-  if (current.draftGraph.schemaVersion === "flow-graph.v1") {
-    return rejected(409, { code: "FLOW_GRAPH_MIGRATION_REQUIRED" });
-  }
   const definition = parsePersistedDefinition(current);
   if (definition.kind === "rejected") return definition;
   const revisionConflict = checkRevision(definition.value, request.expectedRevision);
@@ -752,9 +583,6 @@ function prepareNextDraft(
     });
   }
   if (!latestVersion) throw new FlowDefinitionIntegrityError();
-  if (latestVersion.graph.schemaVersion === "flow-graph.v1") {
-    return rejected(409, { code: "FLOW_GRAPH_MIGRATION_REQUIRED" });
-  }
   if (request.baseVersionId !== latestVersion.id) {
     return rejected(409, {
       code: "FLOW_NEXT_DRAFT_BASE_CONFLICT",
@@ -763,10 +591,7 @@ function prepareNextDraft(
     });
   }
   const version = flowPublishedVersionCompatibleSchema.safeParse({
-    schemaVersion:
-      latestVersion.capabilityManifest?.schemaVersion === "flow-capability-manifest.v1"
-        ? "flow-published-version.v2"
-        : "flow-published-version.v3",
+    schemaVersion: "flow-published-version.v3",
     ...latestVersion,
     status: "published"
   });
@@ -798,9 +623,6 @@ function parseEditableDraft(
   current: FlowDefinitionControlRecord,
   expectedRevision: number
 ): FlowDefinitionPreparation<FlowDefinitionV2> {
-  if (current.draftGraph.schemaVersion === "flow-graph.v1") {
-    return rejected(409, { code: "FLOW_GRAPH_MIGRATION_REQUIRED" });
-  }
   const definition = parsePersistedDefinition(current);
   if (definition.kind === "rejected") return definition;
   const revisionConflict = checkRevision(definition.value, expectedRevision);
@@ -889,12 +711,6 @@ function rejectionToError(rejection: FlowDefinitionCommandRejection): Error {
         rejection.expectedBaseVersionId,
         rejection.currentBaseVersionId
       );
-    case "FLOW_GRAPH_MIGRATION_REQUIRED":
-      return new FlowDefinitionMigrationRequiredError();
-    case "FLOW_GRAPH_ALREADY_V2":
-      return new FlowDefinitionGraphAlreadyV2Error();
-    case "FLOW_DEFINITION_MIGRATION_NOT_ALLOWED":
-      return new FlowDefinitionMigrationNotAllowedError(rejection.state);
     case "FLOW_IDEMPOTENCY_KEY_INVALID":
       return new FlowDefinitionIdempotencyKeyInvalidError();
     case "FLOW_IDEMPOTENCY_KEY_REUSED":
@@ -917,8 +733,6 @@ function rejectionToError(rejection: FlowDefinitionCommandRejection): Error {
         rejection.templateKey,
         rejection.parameterPaths
       );
-    case "FLOW_GRAPH_MIGRATION_BLOCKED":
-      return new FlowDefinitionMigrationBlockedError(rejection.issues);
     case "FLOW_DRAFT_MUTATION_INVALID":
       return new FlowDefinitionDraftMutationInvalidError();
     case "FLOW_GRAPH_NOT_PUBLISHABLE":
@@ -969,8 +783,7 @@ function createCommand(input: {
     | CreateFlowDefinitionV2Request
     | UpdateFlowDefinitionDraftV2Request
     | PublishFlowDefinitionV2Request
-    | CreateNextFlowDraftV2Request
-    | MigrateFlowDefinitionV2Request;
+    | CreateNextFlowDraftV2Request;
   readonly now: string;
 }): FlowDefinitionCommand {
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);

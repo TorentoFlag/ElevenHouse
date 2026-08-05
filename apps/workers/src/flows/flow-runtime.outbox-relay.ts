@@ -1,48 +1,54 @@
 import {
-  flowRuntimeEventSourceSchema,
-  flowRunSubjectTypeSchema,
-  flowTriggerKindSchema
-} from "@elevenhouse/contracts";
-import {
-  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+  FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FlowBookingEnrollmentDeferredError,
+  FlowBookingEnrollmentIntegrityError,
+  FlowBookingLifecycleDeferredError,
+  FlowBookingLifecycleIntegrityError,
+  FlowBookingLifecycleRuntimeDeferredError,
+  bookingLifecycleDispatchRequestedPayloadSchema,
+  flowBookingConfirmedEnrollmentRequestedPayloadV1Schema,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
-  type DispatchFlowRuntimeEventResult,
+  type FlowBookingConfirmedEnrollmentRequestedPayloadV1,
+  type FlowBookingEnrollmentResult,
+  type FlowBookingLifecycleProcessingResult,
   type FlowRuntimeDispatchOutboxReason,
-  type FlowRuntimeDispatchOutboxStore,
-  type FlowRuntimeDispatchRequestedPayload
+  type FlowRuntimeDispatchOutboxStore
 } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
-import { z } from "@elevenhouse/validation";
 
-export type FlowRuntimeOutboxDispatcher = (
-  input: FlowRuntimeDispatchRequestedPayload & { readonly now: string }
-) => Promise<DispatchFlowRuntimeEventResult>;
+export type FlowBookingEnrollmentDispatcher = (
+  input: FlowBookingConfirmedEnrollmentRequestedPayloadV1
+) => Promise<FlowBookingEnrollmentResult>;
 
-const payloadSchema = z
-  .object({
-    ownerUserId: z.string().uuid(),
-    triggerKind: flowTriggerKindSchema,
-    source: flowRuntimeEventSourceSchema,
-    sourceEventId: z.string().trim().min(1).max(180),
-    subjectType: flowRunSubjectTypeSchema,
-    subjectId: z.string().trim().min(1).max(180),
-    occurredAt: z.string().datetime(),
-    timeZone: z.string().trim().min(1).max(120),
-    payload: z.record(z.string(), z.unknown()).default({})
-  })
-  .strict();
+export type FlowBookingLifecycleDispatcher = (
+  lifecycleEventId: string
+) => Promise<FlowBookingLifecycleProcessingResult>;
 
-export async function relayPendingFlowRuntimeDispatchEvents(input: {
+type FlowRuntimeOutboxRelayInput = {
   readonly store: FlowRuntimeDispatchOutboxStore;
-  readonly dispatch: FlowRuntimeOutboxDispatcher;
+  readonly enrollBookingConfirmed: FlowBookingEnrollmentDispatcher;
+  readonly processBookingLifecycleEvent: FlowBookingLifecycleDispatcher;
   readonly now: Date;
   readonly batchSize: number;
   readonly publishingLockTimeoutMs: number;
   readonly maxAttempts: number;
+  readonly enrollmentDeferDelayMs: number;
   readonly logger?: Logger;
-}): Promise<number> {
+};
+
+export async function relayPendingFlowRuntimeDispatchEvents(
+  input: FlowRuntimeOutboxRelayInput
+): Promise<number> {
   if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1) {
     throw new Error("Flow runtime dispatch outbox maxAttempts must be a positive integer");
+  }
+  if (
+    !Number.isInteger(input.enrollmentDeferDelayMs) ||
+    input.enrollmentDeferDelayMs < 1 ||
+    input.enrollmentDeferDelayMs > 86_400_000
+  ) {
+    throw new Error("Flow booking enrollment defer delay must be a positive bounded integer");
   }
 
   const batch = await input.store.claimBatch({
@@ -55,58 +61,190 @@ export async function relayPendingFlowRuntimeDispatchEvents(input: {
   }
 
   for (const event of batch.claimed) {
-    if (event.eventType !== FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT) {
-      await quarantine(input, event, "FLOW_RUNTIME_DISPATCH_EVENT_TYPE_UNSUPPORTED");
+    if (event.eventType === BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED) {
+      await relayBookingLifecycleEvent(input, event);
       continue;
     }
-
-    const parsedPayload = payloadSchema.safeParse(event.payload);
-    if (!parsedPayload.success) {
-      await quarantine(input, event, "FLOW_RUNTIME_DISPATCH_PAYLOAD_INVALID");
+    if (event.eventType === FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT) {
+      await relayBookingEnrollment(input, event);
       continue;
     }
-
-    const payload = parsedPayload.data;
-    if (payload.subjectType === "booking" && payload.subjectId !== event.aggregateId) {
-      await quarantine(input, event, "FLOW_RUNTIME_DISPATCH_AGGREGATE_MISMATCH");
-      continue;
-    }
-
-    let dispatchResult: DispatchFlowRuntimeEventResult;
-    try {
-      dispatchResult = await input.dispatch({ ...payload, now: input.now.toISOString() });
-    } catch {
-      await handleTransientFailure(input, event);
-      continue;
-    }
-
-    const disposition = await input.store.markPublished({
-      eventId: event.id,
-      claimFence: event.claimFence
-    });
-    if (disposition.status === "stale") {
-      logStaleDisposition(input.logger, event, "published");
-      continue;
-    }
-
-    if (dispatchResult.status === "execution_unavailable") {
-      input.logger?.info("flow runtime dispatch outbox event ignored", {
-        outboxEventId: event.id,
-        eventType: event.eventType,
-        aggregateId: event.aggregateId,
-        matchedFlows: dispatchResult.matchedFlows,
-        reasonCode: dispatchResult.reasonCode
-      });
-    } else {
-      input.logger?.info("flow runtime dispatch outbox event published", {
-        outboxEventId: event.id,
-        eventType: event.eventType,
-        aggregateId: event.aggregateId
-      });
-    }
+    await quarantine(input, event, "FLOW_RUNTIME_DISPATCH_EVENT_TYPE_UNSUPPORTED");
   }
 
   return batch.claimed.length + batch.quarantined.length;
+}
+
+async function relayBookingLifecycleEvent(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = bookingLifecycleDispatchRequestedPayloadSchema.safeParse(event.payload);
+  if (!parsedPayload.success) {
+    await quarantine(input, event, "FLOW_BOOKING_LIFECYCLE_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.data.lifecycleEventId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_BOOKING_LIFECYCLE_AGGREGATE_MISMATCH");
+    return;
+  }
+
+  let result: FlowBookingLifecycleProcessingResult;
+  try {
+    result = await input.processBookingLifecycleEvent(parsedPayload.data.lifecycleEventId);
+  } catch (error) {
+    if (
+      error instanceof FlowBookingLifecycleDeferredError ||
+      error instanceof FlowBookingLifecycleRuntimeDeferredError
+    ) {
+      await deferLifecycle(input, event);
+      return;
+    }
+    if (error instanceof FlowBookingLifecycleIntegrityError) {
+      await quarantine(input, event, error.code);
+      return;
+    }
+    if (error instanceof FlowBookingEnrollmentDeferredError) {
+      await deferLifecycle(input, event);
+      return;
+    }
+    if (error instanceof FlowBookingEnrollmentIntegrityError) {
+      await quarantine(input, event, toEnrollmentQuarantineReason(error.code));
+      return;
+    }
+    await handleTransientFailure(input, event);
+    return;
+  }
+
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow booking lifecycle outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    bookingId: result.bookingId,
+    lifecycleRevision: result.appliedRevision,
+    lifecycleEventKind: result.eventKind,
+    outcome: result.outcome,
+    replayed: result.replayed,
+    affectedRunCount: result.affectedRunCount,
+    affectedWorkItemCount: result.affectedWorkItemCount
+  });
+}
+
+async function relayBookingEnrollment(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = flowBookingConfirmedEnrollmentRequestedPayloadV1Schema.safeParse(
+    event.payload
+  );
+  if (!parsedPayload.success) {
+    await quarantine(input, event, "FLOW_BOOKING_ENROLLMENT_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.data.subjectId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_BOOKING_ENROLLMENT_AGGREGATE_MISMATCH");
+    return;
+  }
+
+  let result: FlowBookingEnrollmentResult;
+  try {
+    result = await input.enrollBookingConfirmed(parsedPayload.data);
+  } catch (error) {
+    if (error instanceof FlowBookingEnrollmentDeferredError) {
+      await deferEnrollment(input, event);
+      return;
+    }
+    if (error instanceof FlowBookingEnrollmentIntegrityError) {
+      await quarantine(input, event, toEnrollmentQuarantineReason(error.code));
+      return;
+    }
+    await handleTransientFailure(input, event);
+    return;
+  }
+
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow booking enrollment outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    outcome: result.status,
+    replayed: result.replayed,
+    runCount: result.runs.length
+  });
+}
+
+function toEnrollmentQuarantineReason(
+  code: FlowBookingEnrollmentIntegrityError["code"]
+): FlowRuntimeDispatchOutboxReason {
+  if (code === "FLOW_BOOKING_ENROLLMENT_EVENT_PROVENANCE_INVALID") {
+    return "FLOW_BOOKING_ENROLLMENT_PROVENANCE_INVALID";
+  }
+  if (code === "FLOW_BOOKING_ENROLLMENT_EVENT_PROVENANCE_CONFLICT") {
+    return "FLOW_BOOKING_ENROLLMENT_PROVENANCE_CONFLICT";
+  }
+  return code;
+}
+
+async function markPublished(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<boolean> {
+  const disposition = await input.store.markPublished({
+    eventId: event.id,
+    claimFence: event.claimFence
+  });
+  if (disposition.status === "stale") {
+    logStaleDisposition(input.logger, event, "published");
+    return false;
+  }
+  return true;
+}
+
+async function deferEnrollment(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const disposition = await input.store.markDeferred({
+    eventId: event.id,
+    claimFence: event.claimFence,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_BOOKING_ENROLLMENT_DEFERRED"
+  });
+  if (disposition.status === "stale") {
+    logStaleDisposition(input.logger, event, "deferred");
+    return;
+  }
+  input.logger?.info("flow booking enrollment outbox event deferred", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_BOOKING_ENROLLMENT_DEFERRED"
+  });
+}
+
+async function deferLifecycle(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const disposition = await input.store.markDeferred({
+    eventId: event.id,
+    claimFence: event.claimFence,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_BOOKING_LIFECYCLE_DEFERRED"
+  });
+  if (disposition.status === "stale") {
+    logStaleDisposition(input.logger, event, "deferred");
+    return;
+  }
+  input.logger?.info("flow booking lifecycle outbox event deferred", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_BOOKING_LIFECYCLE_DEFERRED"
+  });
 }
 
 async function handleTransientFailure(
@@ -186,7 +324,7 @@ function logQuarantined(
 function logStaleDisposition(
   logger: Logger | undefined,
   event: ClaimedFlowRuntimeDispatchOutboxEvent,
-  attemptedDisposition: "published" | "retry" | "quarantined"
+  attemptedDisposition: "published" | "retry" | "deferred" | "quarantined"
 ): void {
   logger?.warn("flow runtime dispatch outbox disposition is stale", {
     outboxEventId: event.id,

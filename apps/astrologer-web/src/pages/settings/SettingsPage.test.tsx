@@ -1,14 +1,19 @@
 import { Children, isValidElement, type ReactElement } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { AstrologerProfileResponse, BillingOverviewResponse } from "@elevenhouse/contracts";
+import type {
+  AstrologerProfileResponse,
+  AstrologerTariffCatalogResponse
+} from "@elevenhouse/contracts";
 import { SettingsPage } from "./SettingsPage";
 
 const mocks = vi.hoisted(() => ({
   useI18n: vi.fn(),
   useDocumentTitle: vi.fn(),
   useState: vi.fn(),
+  useRef: vi.fn(),
   useCurrentAstrologerProfileQuery: vi.fn(),
-  useCurrentBillingOverviewQuery: vi.fn(),
+  useAstrologerTariffCatalogQuery: vi.fn(),
+  useStartAstrologerTariffSubscriptionMutation: vi.fn(),
   useCurrentAstrologerVerificationQuery: vi.fn(),
   useSubmitAstrologerVerificationMutation: vi.fn(),
   useUpsertAstrologerProfileMutation: vi.fn(),
@@ -20,7 +25,8 @@ vi.mock("react", async (importOriginal) => {
 
   return {
     ...actual,
-    useState: mocks.useState
+    useState: mocks.useState,
+    useRef: mocks.useRef
   };
 });
 
@@ -40,9 +46,16 @@ vi.mock("../../features/astrologer-profile/model/useUpsertAstrologerProfileMutat
   useUpsertAstrologerProfileMutation: mocks.useUpsertAstrologerProfileMutation
 }));
 
-vi.mock("../../features/platform-billing/model/useCurrentBillingOverviewQuery", () => ({
-  useCurrentBillingOverviewQuery: mocks.useCurrentBillingOverviewQuery
+vi.mock("../../features/platform-tariffs/model/useAstrologerTariffCatalogQuery", () => ({
+  useAstrologerTariffCatalogQuery: mocks.useAstrologerTariffCatalogQuery
 }));
+
+vi.mock(
+  "../../features/platform-tariffs/model/useStartAstrologerTariffSubscriptionMutation",
+  () => ({
+    useStartAstrologerTariffSubscriptionMutation: mocks.useStartAstrologerTariffSubscriptionMutation
+  })
+);
 
 vi.mock("../../features/verification/model/useCurrentAstrologerVerificationQuery", () => ({
   useCurrentAstrologerVerificationQuery: mocks.useCurrentAstrologerVerificationQuery
@@ -60,6 +73,7 @@ describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useState.mockImplementation((initial: unknown) => [initial, vi.fn()]);
+    mocks.useRef.mockImplementation((initial: unknown) => ({ current: initial }));
     mocks.settingsPageView.mockImplementation(() => null);
     mocks.useI18n.mockReturnValue({
       dictionary: {
@@ -75,9 +89,15 @@ describe("SettingsPage", () => {
       isLoading: false,
       isError: false
     });
-    mocks.useCurrentBillingOverviewQuery.mockReturnValue({
-      data: billingOverview,
+    mocks.useAstrologerTariffCatalogQuery.mockReturnValue({
+      data: tariffCatalog,
       isLoading: false,
+      isError: false
+    });
+    mocks.useStartAstrologerTariffSubscriptionMutation.mockReturnValue({
+      mutate: vi.fn(),
+      data: null,
+      isPending: false,
       isError: false
     });
     mocks.useCurrentAstrologerVerificationQuery.mockReturnValue({
@@ -108,20 +128,65 @@ describe("SettingsPage", () => {
         locale: "ru",
         profile,
         profileIntegrityIssues: [],
-        billingOverview,
+        tariffCatalog,
         verification,
-        selectedBillingCycle: null,
+        selectedBillingCycle: "month",
         activeSectionId: "profile",
         isLoading: false,
         isError: false,
-        isBillingLoading: false,
-        isBillingError: false,
+        isTariffLoading: false,
+        isTariffError: false,
         isVerificationLoading: false,
         isVerificationError: false,
         isSubmittingVerification: false,
         isSavingProfile: false
       })
     );
+  });
+
+  it("uses the tariff API state instead of legacy provider checkout data", () => {
+    renderElement(<SettingsPage />);
+
+    expect(mocks.useAstrologerTariffCatalogQuery).toHaveBeenCalled();
+    expect(mocks.useStartAstrologerTariffSubscriptionMutation).toHaveBeenCalled();
+    expect(getLatestMockProps(mocks.settingsPageView)).toEqual(
+      expect.objectContaining({
+        tariffCatalog,
+        tariffSelectionResult: null,
+        isTariffLoading: false,
+        isTariffError: false,
+        isSelectingTariff: false
+      })
+    );
+  });
+
+  it("keeps one unresolved tariff selection on the same idempotency key", () => {
+    const mutate = vi.fn();
+    mocks.useStartAstrologerTariffSubscriptionMutation.mockReturnValue({
+      mutate,
+      data: null,
+      isPending: false,
+      isError: false
+    });
+
+    renderElement(<SettingsPage />);
+    const props = getLatestMockProps(mocks.settingsPageView) as {
+      onSelectTariff: (
+        tariff: (typeof tariffCatalog.tariffs)[number],
+        billingCycle: "month" | "year"
+      ) => void;
+    };
+    props.onSelectTariff(tariffCatalog.tariffs[0]!, "year");
+    props.onSelectTariff(tariffCatalog.tariffs[0]!, "year");
+
+    expect(mutate).toHaveBeenCalledTimes(2);
+    const firstCommand = mutate.mock.calls[0]?.[0] as { idempotencyKey: string; body: unknown };
+    const secondCommand = mutate.mock.calls[1]?.[0] as { idempotencyKey: string; body: unknown };
+    expect(firstCommand).toMatchObject({
+      body: { tariffSeriesId: "pro", version: 1, billingCycle: "year" },
+      idempotencyKey: expect.stringMatching(/^tariffs:subscription:/)
+    });
+    expect(secondCommand.idempotencyKey).toBe(firstCommand.idempotencyKey);
   });
 
   it("submits verification applications through the mutation hook", () => {
@@ -252,56 +317,30 @@ const profile = {
   updatedAt: "2026-07-03T00:00:00.000Z"
 } satisfies AstrologerProfileResponse;
 
-const billingOverview = {
-  provider: {
-    code: "arc_pay",
-    status: "not_configured",
-    managePaymentMethodUrl: null,
-    checkoutUrl: null
-  },
-  billingCycle: "month",
-  currentPlan: {
-    id: "start",
-    code: "start",
-    name: "Старт",
-    tagline: "Чтобы начать практику",
-    monthlyPriceMinor: 0,
-    yearlyPriceMinor: 0,
-    currency: "RUB",
-    platformFeeBps: 800,
-    seatsLimit: 1,
-    bookingsLimit: 30,
-    aiRequestsLimit: 20,
-    automationLimit: 1,
-    isPopular: false,
-    isActive: true,
-    features: ["engine", "pdf", "natal", "page"]
-  },
-  currentPlanSource: "default",
-  integrityIssues: [],
-  currentSubscription: null,
-  plans: [
+const tariffCatalog = {
+  tariffs: [
     {
-      id: "start",
-      code: "start",
-      name: "Старт",
-      tagline: "Чтобы начать практику",
-      monthlyPriceMinor: 0,
-      yearlyPriceMinor: 0,
-      currency: "RUB",
-      platformFeeBps: 800,
+      tariffSeriesId: "pro",
+      version: 1,
+      name: "Pro",
+      tagline: "Для активной практики",
+      monthlyPriceMinor: 199_000,
+      yearlyPriceMinor: 1_910_400,
+      monthlyRecurringFrequencyDays: 31,
+      yearlyRecurringFrequencyDays: 365,
+      clientSaleCommissionBps: 400,
       seatsLimit: 1,
-      bookingsLimit: 30,
-      aiRequestsLimit: 20,
-      automationLimit: 1,
-      isPopular: false,
-      isActive: true,
-      features: ["engine", "pdf", "natal", "page"]
+      bookingsLimit: null,
+      aiRequestsLimit: null,
+      automationLimit: null,
+      isPopular: true,
+      displayOrder: 1,
+      features: ["products", "analytics"],
+      lifecycle: "published"
     }
   ],
-  paymentMethod: null,
-  invoices: []
-} satisfies BillingOverviewResponse;
+  currentSubscription: null
+} satisfies AstrologerTariffCatalogResponse;
 
 const verification = {
   status: "none",

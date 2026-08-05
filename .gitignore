@@ -5,6 +5,8 @@ coverage/
 .env
 .env.*
 !.env.example
+!deployment/env/.env.chart-engine.production.example
+!deployment/env/.env.chart-worker.production.example
 pnpm-debug.log*
 *.tsbuildinfo
 

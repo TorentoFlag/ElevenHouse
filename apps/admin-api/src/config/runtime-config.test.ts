@@ -12,7 +12,9 @@ describe("createAdminApiRuntimeConfig", () => {
       csrfCookieName: "elevenhouse_admin_csrf",
       csrfHeaderName: "x-csrf-token",
       csrfTokenTtlSeconds: 604800,
-      allowedOrigins: ["http://localhost:5175"]
+      allowedOrigins: ["http://localhost:5175"],
+      financeWebAuthn: null,
+      financePayoutEvidence: null
     });
   });
 
@@ -38,7 +40,9 @@ describe("createAdminApiRuntimeConfig", () => {
       csrfCookieName: "admin_csrf",
       csrfHeaderName: "x-admin-csrf",
       csrfTokenTtlSeconds: 900,
-      allowedOrigins: ["https://admin.elevenhouse.com", "https://ops.elevenhouse.com"]
+      allowedOrigins: ["https://admin.elevenhouse.com", "https://ops.elevenhouse.com"],
+      financeWebAuthn: null,
+      financePayoutEvidence: null
     });
   });
 
@@ -57,5 +61,35 @@ describe("createAdminApiRuntimeConfig", () => {
         ADMIN_API_ALLOWED_ORIGINS: "https://admin.elevenhouse.com"
       })
     ).toThrow("ADMIN_API_CSRF_SECRET is required in production");
+  });
+
+  it("fails closed when payout evidence storage is enabled without a full KMS/cash-pool configuration", () => {
+    expect(() =>
+      createAdminApiRuntimeConfig({
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED: "true"
+      })
+    ).toThrow("ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED requires private artifact storage");
+  });
+
+  it("requires an exact matching WebAuthn RP configuration and HTTPS in production", () => {
+    expect(
+      createAdminApiRuntimeConfig({
+        ADMIN_API_FINANCE_WEBAUTHN_RP_ID: "admin.elevenhouse.com",
+        ADMIN_API_FINANCE_WEBAUTHN_ORIGIN: "https://admin.elevenhouse.com"
+      }).financeWebAuthn
+    ).toEqual({ rpId: "admin.elevenhouse.com", origin: "https://admin.elevenhouse.com" });
+    expect(() =>
+      createAdminApiRuntimeConfig({
+        ADMIN_API_FINANCE_WEBAUTHN_RP_ID: "admin.elevenhouse.com",
+        ADMIN_API_FINANCE_WEBAUTHN_ORIGIN: "https://other.elevenhouse.com"
+      })
+    ).toThrow("must match the WebAuthn origin host");
+    expect(() =>
+      createAdminApiRuntimeConfig({
+        NODE_ENV: "production",
+        ADMIN_API_ALLOWED_ORIGINS: "https://admin.elevenhouse.com",
+        ADMIN_API_CSRF_SECRET: "admin-csrf-secret-value-at-least-32-bytes"
+      })
+    ).toThrow("ADMIN_API_FINANCE_WEBAUTHN_RP_ID and ADMIN_API_FINANCE_WEBAUTHN_ORIGIN are required");
   });
 });

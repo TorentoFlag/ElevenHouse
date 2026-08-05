@@ -21,6 +21,8 @@ export type FinanceOrder = {
   readonly clientUserId: string;
   readonly astrologerUserId: string;
   readonly productId: string;
+  /** Immutable fiscal label captured when the client accepts this order. */
+  readonly productTitleSnapshot: string;
   readonly directLinkIntentId: string | null;
   readonly bookingId: string | null;
   readonly status: OrderStatus;
@@ -32,7 +34,10 @@ export type FinanceOrder = {
   readonly financePolicyHoldDurationHours: number;
   readonly financePolicyReserveBps: number;
   readonly financePolicyReserveReleaseDelayDays: number;
-  readonly financePolicyPlatformFeeBps: number;
+  readonly tariffSeriesId: string;
+  readonly tariffVersion: number;
+  readonly tariffVersionDigest: `sha256:${string}`;
+  readonly tariffCommissionBps: number;
   readonly financePolicyProviderSettlementRequired: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -43,6 +48,7 @@ export type CreateFinanceOrderRecordInput = {
   readonly clientUserId: string;
   readonly astrologerUserId: string;
   readonly productId: string;
+  readonly productTitleSnapshot: string;
   readonly directLinkIntentId: string | null;
   readonly bookingId?: string | null;
   readonly status?: OrderStatus;
@@ -54,7 +60,10 @@ export type CreateFinanceOrderRecordInput = {
   readonly financePolicyHoldDurationHours: number;
   readonly financePolicyReserveBps: number;
   readonly financePolicyReserveReleaseDelayDays: number;
-  readonly financePolicyPlatformFeeBps: number;
+  readonly tariffSeriesId: string;
+  readonly tariffVersion: number;
+  readonly tariffVersionDigest: `sha256:${string}`;
+  readonly tariffCommissionBps: number;
   readonly financePolicyProviderSettlementRequired: boolean;
   readonly now: string;
 };
@@ -72,7 +81,6 @@ export type ApplyFinancePolicyToOrderInput = {
   readonly financePolicyHoldDurationHours: number;
   readonly financePolicyReserveBps: number;
   readonly financePolicyReserveReleaseDelayDays: number;
-  readonly financePolicyPlatformFeeBps: number;
   readonly financePolicyProviderSettlementRequired: boolean;
   readonly now: string;
 };

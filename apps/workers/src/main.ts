@@ -1,10 +1,21 @@
+import { randomUUID } from "node:crypto";
+
 import { createLogger } from "@elevenhouse/observability";
 import {
-  createDrizzleFlowExecutionStore,
+  createDrizzleFlowBookingEnrollmentStore,
+  createDrizzleFlowBirthDataReadinessReader,
+  createDrizzleFlowBookingLifecycleStore,
+  createDrizzleFlowNatalChartRequester,
+  createDrizzleFlowRuntimeOwnerSubjectStore,
   createDrizzleFlowRuntimeDispatchOutboxStore,
-  createDrizzleFlowRuntimeStore,
-  createDrizzleFlowStore
+  createDrizzleFlowWorkItemWakeStore,
+  createDrizzleFlowWorkerExecutionStore,
+  createDrizzleFlowWorkerReadinessStore,
+  runFlowEnrollmentControlOutcomeRetention,
+  runFlowRuntimeControlOutcomeRetention,
+  runFlowWorkerRegistrationRetention
 } from "@elevenhouse/db";
+import { createDrizzleChartCalculationCommandStore } from "@elevenhouse/db/charts";
 import {
   createDrizzleCalculationPdfCleanupStore,
   createDrizzleCalculationPdfJobStore,
@@ -17,7 +28,8 @@ import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import {
   createBuiltInFlowNodeExecutorRegistry,
-  dispatchFlowRuntimeEvent,
+  createFlowBookingEnrollmentWorkerRequirementKeys,
+  createFlowExecutionWorkerRequirementKeys,
   resolveChartExecutionProfile
 } from "@elevenhouse/domain";
 import { UnrecoverableError } from "bullmq";
@@ -47,9 +59,13 @@ import { createNumerologyPdfSource } from "./calculation-pdf/numerology-pdf.sour
 import { processNextFlowExecution } from "./flows/flow-execution.processor";
 import { recoverExpiredFlowExecutions } from "./flows/flow-execution.recovery";
 import { createFlowExecutionRuntime } from "./flows/flow-execution.runtime";
+import { wakeDueFlowWorkItems } from "./flows/flow-work-item-wake";
+import { createFlowRuntimeControlMaintenance } from "./flows/flow-runtime-control.maintenance";
+import { createFlowWorkerControl } from "./flows/flow-worker-control";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { relayPendingFlowRuntimeDispatchEvents } from "./flows/flow-runtime.outbox-relay";
 import { createWorkersRuntimeConfig } from "./runtime-config";
+import { shutdownWorkerRuntime } from "./worker-shutdown";
 
 const service = "workers";
 const logger = createLogger(service);
@@ -57,12 +73,37 @@ const config = createWorkersRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
-const flowStore = createDrizzleFlowStore(postgres.database);
-const flowRuntimeStore = createDrizzleFlowRuntimeStore(postgres.database);
-const flowExecutionStore = createDrizzleFlowExecutionStore(postgres.database);
+const flowWorkerSessionId = randomUUID();
+const flowWorkerIdentity = {
+  instanceId: config.flowExecution.instanceId,
+  sessionId: flowWorkerSessionId
+} as const;
+const flowExecutionStore = createDrizzleFlowWorkerExecutionStore(
+  postgres.database,
+  flowWorkerIdentity
+);
+const flowRuntimeOwnerSubjectStore = createDrizzleFlowRuntimeOwnerSubjectStore(
+  postgres.database
+);
+const flowWorkerReadinessStore = createDrizzleFlowWorkerReadinessStore(postgres.database);
 const flowRuntimeDispatchOutboxStore = createDrizzleFlowRuntimeDispatchOutboxStore(
   postgres.database
 );
+const flowBookingEnrollmentStore = createDrizzleFlowBookingEnrollmentStore(
+  postgres.database,
+  flowWorkerIdentity
+);
+const flowBookingLifecycleStore = createDrizzleFlowBookingLifecycleStore(
+  postgres.database,
+  flowWorkerIdentity
+);
+const flowBirthDataReadinessReader = createDrizzleFlowBirthDataReadinessReader(postgres.database);
+const chartExecutionProfile = resolveChartExecutionProfile(process.env);
+const flowNatalChartRequester = createDrizzleFlowNatalChartRequester(postgres.database, {
+  commandStore: createDrizzleChartCalculationCommandStore(postgres.database),
+  executionProfile: chartExecutionProfile
+});
+const flowWorkItemWakeStore = createDrizzleFlowWorkItemWakeStore(postgres.database);
 const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
 const pdfJobStore = createDrizzleCalculationPdfJobStore(postgres.database);
 const pdfCleanupStore = createDrizzleCalculationPdfCleanupStore(postgres.database);
@@ -75,7 +116,7 @@ const numerologyRenderer = createNumerologyPdfRenderer();
 const chartSource = createChartPdfSource(
   calculationStore,
   dictionaryStore,
-  resolveChartExecutionProfile(process.env)
+  chartExecutionProfile
 );
 const chartRenderer = createChartPdfRenderer();
 const humanDesignSource = createHumanDesignPdfSource(calculationStore);
@@ -135,29 +176,40 @@ const worker = createCalculationPdfWorker(
   config.calculationPdfConcurrency
 );
 const stopWorkerObservation = observeCalculationPdfWorker(worker, logger);
-const flowNodeExecutorRegistry = createBuiltInFlowNodeExecutorRegistry();
+const flowNodeExecutorRegistry = createBuiltInFlowNodeExecutorRegistry({
+  birthDataReadinessReader: flowBirthDataReadinessReader,
+  natalChartRequester: flowNatalChartRequester
+});
+let flowWorkerControl: ReturnType<typeof createFlowWorkerControl> | null = null;
+let flowWorkerFatalShutdownStarted = false;
 const flowExecutionRuntime = createFlowExecutionRuntime({
-  rollout: config.flowExecution.rollout,
+  deploymentCeiling: { mode: config.flowExecution.deploymentCeiling.mode },
   pollIntervalMs: config.flowExecution.pollIntervalMs,
   pollBatchSize: config.flowExecution.pollBatchSize,
   recoveryIntervalMs: config.flowExecution.recoveryIntervalMs,
+  workItemWakeIntervalMs: config.flowExecution.workItemWakeIntervalMs,
   operationTimeoutMs: config.flowExecution.operationTimeoutMs,
   drainTimeoutMs: config.flowExecution.drainTimeoutMs,
   errorBackoffMaxMs: config.flowExecution.errorBackoffMaxMs,
   errorJitter: config.flowExecution.errorJitter,
-  processNext: (ownerScope) =>
-    processNextFlowExecution({
-      store: flowExecutionStore,
-      registry: flowNodeExecutorRegistry,
-      leaseOwner: config.flowExecution.leaseOwner,
-      leaseDurationMs: config.flowExecution.leaseDurationMs,
-      ownerScope,
-      logger
-    }),
+  processNext: () =>
+    flowWorkerControl?.isClaimingAllowed()
+      ? processNextFlowExecution({
+          store: flowExecutionStore,
+          registry: flowNodeExecutorRegistry,
+          logger
+        })
+      : Promise.resolve({ status: "idle" as const }),
   recoverExpired: () =>
     recoverExpiredFlowExecutions({
       store: flowExecutionStore,
       limit: config.flowExecution.recoveryBatchSize,
+      logger
+    }),
+  wakeDueWorkItems: () =>
+    wakeDueFlowWorkItems({
+      store: flowWorkItemWakeStore,
+      limit: config.flowExecution.workItemWakeBatchSize,
       logger
     }),
   logger
@@ -176,6 +228,12 @@ const readinessChecks = {
   flowExecutionRuntime: async () => {
     const readiness = flowExecutionRuntime.getOperationalReadiness();
     if (readiness.status !== "ready") throw new Error(readiness.errorCode);
+  },
+  flowWorkerControl: async () => {
+    const readiness = flowWorkerControl?.getOperationalReadiness();
+    if (!readiness || readiness.status !== "ready") {
+      throw new Error(readiness?.errorCode ?? "flow_worker_readiness_not_initialized");
+    }
   }
 };
 const healthServer = createWorkerReadinessServer({
@@ -198,27 +256,77 @@ const relay = createCalculationPdfOutboxRelay({
       },
       logger
     });
+    if (!flowWorkerControl?.isClaimingAllowed()) return;
     await relayPendingFlowRuntimeDispatchEvents({
       store: flowRuntimeDispatchOutboxStore,
-      dispatch: (event) =>
-        dispatchFlowRuntimeEvent({
-          flowStore,
-          runtimeStore: flowRuntimeStore,
-          ...event
+      enrollBookingConfirmed: (request) =>
+        flowBookingEnrollmentStore.enrollBookingConfirmed({
+          request,
+          latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
+          futureSkewToleranceMs:
+            config.flowBookingEnrollment.futureSkewToleranceMs
+        }),
+      processBookingLifecycleEvent: (lifecycleEventId) =>
+        flowBookingLifecycleStore.processBookingLifecycleEvent({
+          lifecycleEventId,
+          latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
+          futureSkewToleranceMs:
+            config.flowBookingEnrollment.futureSkewToleranceMs
         }),
       now,
       batchSize: config.outboxRelayBatchSize,
       publishingLockTimeoutMs: config.outboxLockTimeoutMs,
       maxAttempts: config.flowRuntimeOutboxMaxAttempts,
+      enrollmentDeferDelayMs: config.flowBookingEnrollment.deferDelayMs,
       logger
     });
   },
   onError: (error) => logger.error("calculation PDF outbox relay failed", { error })
 });
+const flowRuntimeControlMaintenance = createFlowRuntimeControlMaintenance({
+  intervalMs: config.flowRuntimeControl.maintenanceIntervalMs,
+  runOnce: async () => {
+    const enrollmentOutcomeRetention =
+      await runFlowEnrollmentControlOutcomeRetention(postgres.database, {
+        batchSize: config.flowRuntimeControl.retentionBatchSize
+      });
+    const outcomeRetention = await runFlowRuntimeControlOutcomeRetention(postgres.database, {
+      batchSize: config.flowRuntimeControl.retentionBatchSize
+    });
+    const registrationRetention = await runFlowWorkerRegistrationRetention(postgres.database, {
+      batchSize: config.flowRuntimeControl.retentionBatchSize
+    });
+    if (
+      enrollmentOutcomeRetention.purged > 0 ||
+      outcomeRetention.purged > 0 ||
+      registrationRetention.retired > 0 ||
+      registrationRetention.purged > 0
+    ) {
+      logger.info("flow runtime control retention applied", {
+        enrollmentCommandOutcomesPurged: enrollmentOutcomeRetention.purged,
+        commandOutcomesPurged: outcomeRetention.purged,
+        workerRegistrationsRetired: registrationRetention.retired,
+        workerRegistrationsPurged: registrationRetention.purged
+      });
+    }
+  },
+  logger
+});
 let shutdownPromise: Promise<void> | null = null;
 
 async function startup(): Promise<void> {
-  await flowExecutionRuntime.runInitial();
+  await Promise.all([
+    readinessChecks.postgres(),
+    readinessChecks.calculationPdfQueue(),
+    readinessChecks.calculationPdfWorker(),
+    readinessChecks.privateObjectStorage()
+  ]);
+  await flowExecutionRuntime.runRecoveryOnce();
+  await flowRuntimeControlMaintenance.runOnce();
+  flowWorkerControl = await initializeFlowWorkerControl();
+  flowWorkerControl.start();
+  await flowExecutionRuntime.runWorkItemWakeOnce();
+  await flowExecutionRuntime.runExecutionOnce();
   flowExecutionRuntime.start();
   const readiness = await createWorkerReadiness({ service, checks: readinessChecks });
   if (readiness.status !== "ready") {
@@ -233,10 +341,59 @@ async function startup(): Promise<void> {
   });
   await relay.runOnce();
   relay.start();
+  flowRuntimeControlMaintenance.start();
   logger.info("worker runtime ready", {
     ...readiness,
-    flowExecutionMode: config.flowExecution.rollout.mode
+    flowExecutionDeploymentCeiling: config.flowExecution.deploymentCeiling.mode,
+    flowWorkerSessionId
   });
+}
+
+async function initializeFlowWorkerControl() {
+  const ownerMappings = await flowRuntimeOwnerSubjectStore.resolveOrCreateActive({
+    ownerUserIds:
+      config.flowExecution.deploymentCeiling.mode === "canary"
+        ? config.flowExecution.deploymentCeiling.ownerUserIds
+        : []
+  });
+  const control = createFlowWorkerControl({
+    store: flowWorkerReadinessStore,
+    registration: {
+      schemaVersion: "flow-worker-registration.v2",
+      sessionId: flowWorkerSessionId,
+      instanceId: config.flowExecution.instanceId,
+      roles: ["enrollment", "executor"],
+      maxRuntimeMode: config.flowExecution.deploymentCeiling.mode,
+      maxCanaryOwnerSubjectIds: ownerMappings.map((mapping) => mapping.ownerSubjectId),
+      requirementKeys: [
+        ...new Set([
+          ...createFlowBookingEnrollmentWorkerRequirementKeys(),
+          ...createFlowExecutionWorkerRequirementKeys(flowNodeExecutorRegistry.executorKeys)
+        ])
+      ].sort(),
+      deploymentId: config.flowRuntimeControl.deploymentId,
+      buildId: config.flowRuntimeControl.buildId
+    },
+    heartbeatIntervalMaxMs: config.flowRuntimeControl.heartbeatIntervalMaxMs,
+    logger,
+    onFatal: (error) => {
+      if (flowWorkerFatalShutdownStarted) return;
+      flowWorkerFatalShutdownStarted = true;
+      void shutdown()
+        .catch(() => undefined)
+        .finally(() => {
+          logger.error("flow worker control terminated", {
+            errorCode:
+              "code" in error && typeof error.code === "string"
+                ? error.code
+                : "FLOW_WORKER_CONTROL_FATAL"
+          });
+          process.exit(1);
+        });
+    }
+  });
+  await control.register();
+  return control;
 }
 
 function shutdown(): Promise<void> {
@@ -245,25 +402,38 @@ function shutdown(): Promise<void> {
 }
 
 async function shutdownOnce(): Promise<void> {
-  const flowExecutionStopping = flowExecutionRuntime.stop();
-  const relayStopping = relay.stop();
-  await Promise.all([flowExecutionStopping, relayStopping]);
-  if (healthServer.listening) {
-    await new Promise<void>((resolve, reject) =>
-      healthServer.close((error) => (error ? reject(error) : resolve()))
-    );
-  }
-  stopWorkerObservation();
-  await worker.close();
-  await queue.close();
-  await postgres.close();
+  await shutdownWorkerRuntime({
+    beginDrain: () => flowWorkerControl?.beginDrain() ?? Promise.resolve(),
+    stopConcurrent: [
+      () => flowExecutionRuntime.stop(),
+      () => flowWorkerControl?.stop() ?? Promise.resolve(),
+      () => flowRuntimeControlMaintenance.stop(),
+      () => relay.stop()
+    ],
+    closeHealthServer: () =>
+      healthServer.listening
+        ? new Promise<void>((resolve, reject) =>
+            healthServer.close((error) => (error ? reject(error) : resolve()))
+          )
+        : Promise.resolve(),
+    stopWorkerObservation,
+    closeCalculationWorker: () => worker.close(),
+    closeQueue: () => queue.close(),
+    closePostgres: () => postgres.close()
+  });
 }
 
-startup().catch((error: unknown) => {
-  shutdown().finally(() => {
+startup().catch(async (error: unknown) => {
+  try {
+    await shutdown();
+  } catch {
+    logger.error("calculation PDF worker shutdown failed", {
+      errorCode: "WORKER_SHUTDOWN_FAILED"
+    });
+  } finally {
     logger.error("calculation PDF worker startup failed", { error });
     process.exit(1);
-  });
+  }
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

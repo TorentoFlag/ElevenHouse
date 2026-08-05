@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 
-import type { FlowDefinitionDetailV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionDetailV3, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowBuilder } from "./FlowBuilder";
 
 const flow = {
-  schemaVersion: "flow-definition-detail.v2",
+  schemaVersion: "flow-definition-detail.v3",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Подготовка консультации",
   state: "draft",
-  runtimeStatus: "draft",
   approvalMode: "manual_approve",
   revision: 4,
   draftBaseVersionId: null,
@@ -22,7 +21,21 @@ const flow = {
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-  migrationRequired: false,
+  enrollment: {
+    schemaVersion: "flow-enrollment-read-authority.v1",
+    authority: "enrollment_v1",
+    control: {
+      schemaVersion: "flow-enrollment-control.v1",
+      flowId: "11111111-1111-4111-8111-111111111111",
+      state: "inactive",
+      definitionRevision: 4,
+      enrollmentRevision: 0,
+      activeVersionId: null,
+      activeActivationEpochId: null,
+      activeSince: null,
+      lastPausedAt: null
+    }
+  },
   draftGraph: {
     schemaVersion: "flow-graph.v2",
     nodes: [
@@ -42,13 +55,13 @@ const flow = {
     nodes: [{ nodeId: "manual-client", position: { x: 80, y: 120 } }],
     viewport: { x: 0, y: 0, zoom: 1 }
   }
-} satisfies FlowDefinitionDetailV2;
+} satisfies FlowDefinitionDetailV3;
 
 const definitionOnlyRuntime = {
   mode: "definition_only",
   executionAvailable: false,
   reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
+  historySemantics: "durable_execution"
 } satisfies FlowRuntimeAvailability;
 
 describe("FlowBuilder", () => {
@@ -315,12 +328,11 @@ describe("FlowBuilder", () => {
     const versioned = {
       ...flow,
       state: "versioned",
-      runtimeStatus: "published",
       revision: 5,
       latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
       latestPublishedVersion: 1,
       publishedAt: "2026-07-28T08:30:00.000Z"
-    } satisfies FlowDefinitionDetailV2;
+    } satisfies FlowDefinitionDetailV3;
     renderBuilder({ flow: versioned, onCreateNextDraft });
 
     expect(screen.getByLabelText("Название узла")).toHaveProperty("disabled", true);
@@ -338,12 +350,11 @@ describe("FlowBuilder", () => {
     const archived = {
       ...flow,
       state: "archived",
-      runtimeStatus: "archived",
       revision: 6,
       latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
       latestPublishedVersion: 1,
       publishedAt: "2026-07-28T08:30:00.000Z"
-    } satisfies FlowDefinitionDetailV2;
+    } satisfies FlowDefinitionDetailV3;
 
     renderBuilder({ flow: archived, onCreateNextDraft: vi.fn() });
 

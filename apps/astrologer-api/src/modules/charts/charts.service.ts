@@ -855,7 +855,6 @@ export class ChartsService {
         throw new ChartAiDraftInProgressError();
       }
 
-      let processingAuthorityVersion: string;
       let locale: "ru" | "en";
       let dictionary: Awaited<ReturnType<typeof listDictionaryEntriesByCodes>>;
       try {
@@ -863,16 +862,13 @@ export class ChartsService {
           calculation,
           expectedExecutionProfile: this.executionProfile.getProfile()
         });
-        const currentProcessingAuthorityVersion = this.chartAiConfig.processingAuthorityVersion;
-        if (!this.chartAiConfig.enabled || !currentProcessingAuthorityVersion) {
+        if (!this.chartAiConfig.enabled) {
           throw chartHttpError(
             503,
-            "CHART_AI_PROCESSING_AUTHORITY_UNAVAILABLE",
-            "Chart AI processing authority is unavailable"
+            "CHART_AI_UNAVAILABLE",
+            "Chart AI is unavailable"
           );
         }
-        processingAuthorityVersion = currentProcessingAuthorityVersion;
-
         const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
         locale = profile?.locale === "en" ? "en" : "ru";
         dictionary = await listDictionaryEntriesByCodes({
@@ -914,14 +910,10 @@ export class ChartsService {
           ),
           ownerUserId,
           feature: "chart.interpretationDraft",
-          consentAuthorizations: [],
-          usageEvidence: {
-            processingAuthorityVersion,
-            resourceEvidence: {
-              resourceType: "chart_calculation",
-              resourceId: calculation.id,
-              sourceChecksum: calculation.resultChecksum
-            }
+          resourceEvidence: {
+            resourceType: "chart_calculation",
+            resourceId: calculation.id,
+            sourceChecksum: calculation.resultChecksum
           }
         });
       } catch (error) {

@@ -5,10 +5,10 @@
 `public-api` обслуживает высоконагруженные client-facing flows. В текущем коде
 реализованы health, identity/passwordless/session, direct-link client join,
 related-astrologer read, cabinet overview, client birth-profile routes and the
-first direct-link booking/order/payment command contour. Full public profile
-read model, public product/slot selection reads, client-facing checkout UI,
-materials, feed, subscriptions, journal and client-visible calculation delivery
-remain incomplete contours on this surface.
+relationship-scoped purchase-option and slot reads, booking/order/payment
+commands and client checkout-state reads. Full public profile read model,
+materials, feed, client recurring subscriptions, journal and client-visible
+calculation delivery remain incomplete contours on this surface.
 
 Ответственности:
 
@@ -37,17 +37,16 @@ GET  /me/overview
 GET  /me/birth-places
 GET  /me/birth-data
 PUT  /me/birth-data
-GET  /me/birth-profiles
-POST /me/birth-profiles
-PUT  /me/birth-profiles/:birthDataId
-GET  /me/consents?locale=ru|en
-PUT  /me/consents/:astrologerUserId/chart-ai
-DELETE /me/consents/:consentId
 GET  /a/:handle
 POST /booking/intent
 POST /booking/:intentId/select-slot
+GET  /me/astrologers/:astrologerUserId/purchase-options
+GET  /me/astrologers/:astrologerUserId/available-slots?productId=<uuid>&start=<instant>&end=<instant>
 POST /orders
+GET  /orders/:orderId
 POST /payments/checkout
+GET  /payments/checkout-preparations/:checkoutPreparationId
+GET  /payments/checkout-preparations/:checkoutPreparationId/action
 GET  /me/orders
 GET  /me/bookings
 ```
@@ -74,6 +73,21 @@ reactivate the explicit client-astrologer relationship, after which pending
 context must be cleared. `GET /me/astrologers` lists only active explicit
 relationships; it cannot search, recommend or enumerate unrelated astrologers.
 
+`GET /me/astrologers/:astrologerUserId/purchase-options` and its
+`available-slots` child route are client-role, owner-scoped reads. They first
+require an active explicit client-astrologer relationship, and reveal only
+positive-price one-time or pack products that the astrologer's active tariff,
+capabilities and finance policy currently permit. They are not a catalogue or
+subscription purchase surface. A live product also requires a server-created
+booking hold before `POST /orders` accepts the purchase command.
+
+`GET /orders/:orderId` is owner-scoped for the client that created the order.
+`GET /payments/checkout-preparations/:checkoutPreparationId` returns only the
+authoritative preparation state. It never reveals a provider URL or provider
+payload. The separate `/action` route is the only redirect boundary: after the
+worker has sealed a ready checkout artifact it responds with a no-store 303 to
+the provider; before then it does not redirect.
+
 `GET /me/overview` is client-role and owner scoped. It returns only explicit
 client-astrologer relationships, saved birth profiles and current cabinet
 summary counters. The `directLinkOnly: true` summary flag is an invariant, not a
@@ -88,26 +102,13 @@ failures are explicit `4xx`/`5xx` responses; this route has no browser-side or
 alternate-provider fallback. Selecting a candidate and persisting a birth
 profile remain separate operations.
 
-`GET/PUT /me/birth-data` is client-role and owner scoped. It is the
-primary-profile compatibility route: reads and updates the client's current
-primary reusable birth-data record.
-
-`GET /me/birth-profiles`, `POST /me/birth-profiles` and
-`PUT /me/birth-profiles/:birthDataId` are client-role and owner scoped.
-They support multiple saved birth profiles with at most one primary profile per
-client. Birth-profile mutations require CSRF. Sharing any saved birth profile
-with an astrologer/order is a separate consent-bound workflow and is not implied
-by profile storage.
-
-`GET /me/consents` is client-role and owner scoped. It returns the canonical,
-locale-bound external chart-AI notice and consent evidence only for explicit
-client-astrologer relationships. Inactive relationships remain visible when
-needed to revoke existing evidence, but cannot receive a new grant. Grant and
-revoke mutations require CSRF and strict shared contracts. The server owns the
-purpose, processor and relationship identity, persists the exact policy version,
-notice locale/hash and timestamps, permits only the first revocation, and blocks
-new external chart-AI processing immediately after revocation or stale policy
-evidence. Profile storage and an active relationship never imply consent.
+`GET/PUT /me/birth-data` is client-role and owner scoped. It reads and updates
+the client's only reusable birth profile. `PUT` requires CSRF and an explicit
+`expectedRevision`; it applies compare-and-swap and returns `409` on a stale
+revision. There is no profile selection, sharing grant, consent endpoint or
+per-booking birth-data access API in this contour. An astrologer write is
+permitted only through the owner-scoped CRM route and an active server-side
+client-astrologer relationship.
 
 ## Astrologer API
 
@@ -185,7 +186,17 @@ DELETE /dictionary/platform-entries/:platformEntryId/override
 POST /dictionary/ai-draft
 GET  /astrologer-profile/me
 PUT  /astrologer-profile/me
-GET  /platform-billing/me
+GET  /tariffs
+POST /tariffs/subscriptions
+GET  /tariffs/subscriptions/:subscriptionId/saved-card-disclosure
+POST /tariffs/subscriptions/:subscriptionId/saved-card-setup
+GET  /tariffs/subscriptions/:subscriptionId/saved-card-setup
+POST /tariffs/saved-card-setups/:setupSessionId/execute
+POST /tariffs/saved-card-setups/:setupSessionId/complete-3ds-method
+GET  /tariffs/saved-card-setups/:setupSessionId
+GET  /tariffs/invoices/:invoiceId/payment-status
+GET  /tariffs/subscriptions/:subscriptionId/payment-status
+POST /tariffs/invoices/:invoiceId/complete-3ds-method
 GET  /verification/me
 POST /verification/applications
 GET  /calculations?module=numerology&status=all
@@ -246,10 +257,13 @@ GET /flow-templates
 GET /flows
 POST /flows
 GET /flows/:flowId
+GET /flows/:flowId/enrollment
+GET /flows/:flowId/activation-review
 POST /flows/:flowId/validate
 PATCH /flows/:flowId/draft
 POST /flows/:flowId/publish
 POST /flows/:flowId/activate
+POST /flows/:flowId/pause-enrollment
 POST /flows/:flowId/pause
 POST /flows/:flowId/simulate
 POST /flows/:flowId/manual-runs
@@ -286,10 +300,70 @@ receive the legacy publication envelope. Idempotency replay returns the exact
 stored response across phase changes; `Vary` appends `Accept` without removing
 existing cache dimensions such as `Origin`.
 
-Create/edit/publish, read-only history and pausing an already active legacy flow
-remain available. Activation, simulation, manual run creation and approval
-decision fail before runtime-store mutation; authenticated HTTP commands return
-typed `409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE`.
+Definition list/detail reads use the legacy V2 JSON representation unless the
+client sends the exact vendor media type
+`application/vnd.elevenhouse.flow-definition-list.v3+json` or
+`application/vnd.elevenhouse.flow-definition-detail.v3+json`. Negotiated V3
+responses are non-cacheable, set `Vary: Accept` and replace ambiguous
+`runtimeStatus` with an enrollment-authority projection. Current authority is
+returned as `enrollment_v1`; a historical `flows.status=active` row is exposed
+explicitly as `legacy_active` until it is drained. The server never merges both
+authorities into a guessed status.
+
+`GET /flows/:flowId/enrollment` is the owner-scoped, non-cacheable CAS read for
+enrollment authority. A never-activated definition is projected as `inactive`
+at enrollment revision zero without fabricating a persisted epoch. An active
+enrollment includes its exact open activation epoch; inactive and paused
+enrollments include no open epoch. Missing and foreign-owned definitions are
+indistinguishable `404 FLOW_DEFINITION_NOT_FOUND`; a torn control/epoch snapshot
+fails closed with `500 FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR`.
+
+`GET /flows/:flowId/activation-review?versionId=<uuid>` is an authenticated,
+owner-scoped and non-cacheable read. It requires neither CSRF nor an
+`Idempotency-Key`. A repeatable-read, read-only PostgreSQL snapshot evaluates
+the exact published version, definition/enrollment CAS, legacy status, rollout
+policy, worker readiness, product dependencies, entitlement and automation
+quota. The response returns `definitionRevision`, `enrollmentRevision` and
+`expectedActiveVersionId` together with typed blockers, so the client can build
+one exact activation command. The review is advisory: activation locks and
+re-evaluates all evidence transactionally and a stale snapshot returns typed
+`409` rather than being retried automatically. Missing and foreign-owned
+definitions or versions share `404 FLOW_DEFINITION_NOT_FOUND`; corrupt
+authority returns `500 FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR`.
+
+`POST /flows/:flowId/activate` and
+`POST /flows/:flowId/pause-enrollment` are authenticated, owner-scoped,
+CSRF-protected enrollment commands. Both require a valid `Idempotency-Key` and
+strict shared-contract request body. Activation pins definition revision,
+enrollment revision, target published version and expected active version.
+Pause pins enrollment revision, active version and exact open epoch but does not
+depend on definition revision, so draft editing cannot block an urgent stop.
+PostgreSQL serializes the command with definition and enrollment authority,
+re-evaluates activation readiness inside the command transaction, stores the
+exact response for 24-hour replay and preserves an immutable command tombstone
+after replay payload expiry. Key reuse with different canonical content and
+every stale CAS input return typed `409`; bounded lock/statement timeouts roll
+back and return retryable `503 FLOW_ENROLLMENT_COMMAND_BUSY`. Corrupt authority
+returns typed `500` instead of a guessed state.
+
+Activation opens one immutable effective-time epoch and atomically closes a
+previous epoch as `version_switch`; pause closes the exact current epoch as
+`pause_enrollment`. Pausing stops only future enrollment. Existing accepted runs
+continue under their pinned version and runtime policy. The current persisted
+runtime mode remains `definition_only`, so a valid activation is rejected as
+`409 FLOW_ACTIVATION_BLOCKED` with explicit readiness blockers and creates no
+epoch.
+
+`POST /flows/:flowId/pause` remains only as a transitional drain for a
+historical `flows.status=active` definition that has no active enrollment
+authority. It serializes on the same flow row as activation, is idempotent after
+the legacy status is paused and returns
+`409 FLOW_LEGACY_PAUSE_NOT_APPLICABLE` if authoritative enrollment is active.
+It is never an alias for `pause-enrollment` and never fabricates an activation
+epoch. Create/edit/publish and read-only history remain available. Simulation,
+manual run creation and approval decision still fail with typed
+`409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE` while the static legacy runtime surface
+remains disabled.
 
 `POST /flow-runs/:runId/cancel` is an independent operational control for
 existing durable v2 terminal-token runs; it does not enable activation,

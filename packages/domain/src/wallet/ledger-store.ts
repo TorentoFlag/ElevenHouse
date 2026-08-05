@@ -35,7 +35,7 @@ export type LedgerOperationType =
   | "chargeback_recorded"
   | "manual_adjustment";
 
-export type FinanceOperationKind = "sale" | "payout" | "refund" | "adjustment";
+export type FinanceLedgerOperationKind = "sale" | "payout" | "refund" | "adjustment";
 export type FinanceOperationDirection = "inflow" | "outflow" | "neutral";
 
 export type LedgerOperationAmountBreakdown = {
@@ -113,7 +113,7 @@ export type SummarizeLedgerPeriodInput = {
 export type LedgerOperation = {
   readonly id: string;
   readonly operationType: LedgerOperationType;
-  readonly kind: FinanceOperationKind;
+  readonly kind: FinanceLedgerOperationKind;
   readonly direction: FinanceOperationDirection;
   readonly amount: Money;
   readonly signedAmountMinor: number;

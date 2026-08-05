@@ -43,6 +43,7 @@ describe("durable flow run cancellation", () => {
       ownerUserId,
       routeTemplate: "/flow-runs/:runId/cancel",
       resourceId: runId,
+      flowRunId: runId,
       scope: "flows.runtime.cancel.v1",
       idempotencyKey: "cancel-request-1",
       requestHash: sha256CanonicalJson({
@@ -137,16 +138,29 @@ function succeededResult(
             sourceEventId: "booking-confirmed-1",
             status: "canceled",
             snapshot: {
-              schemaVersion: "flow-run-snapshot.v1",
-              flowVersionId: "10000000-0000-4000-8000-000000000005",
-              sourceEventId: "booking-confirmed-1",
-              subjectType: "booking",
-              subjectId: "10000000-0000-4000-8000-000000000006",
-              occurredAt: "2026-08-03T12:00:00.000Z",
-              timeZone: "Europe/Moscow",
-              consent: {},
-              channels: {},
-              payload: {}
+              schemaVersion: "flow-run-snapshot.v2",
+              enrollment: {
+                activationEpochId: "10000000-0000-4000-8000-000000000007",
+                triggerNodeId: "booking-confirmed",
+                occurrenceKey: "10000000-0000-4000-8000-000000000006",
+                policyKey: "once_per_occurrence",
+                policyRevision: 1,
+                rolloutPolicyRevision: 1,
+                eventOccurredAt: "2026-08-03T12:00:00.000Z",
+                enrolledAt: "2026-08-03T12:00:00.000Z"
+              },
+              subject: {
+                type: "booking",
+                bookingId: "10000000-0000-4000-8000-000000000006",
+                clientUserId: "10000000-0000-4000-8000-000000000008",
+                productId: "10000000-0000-4000-8000-000000000009",
+                startAt: "2026-08-03T12:00:00.000Z",
+                endAt: "2026-08-03T13:00:00.000Z"
+              },
+              executionAuthority: {
+                basis: "current_entitlement",
+                referenceId: "10000000-0000-4000-8000-000000000010"
+              }
             },
             currentNodeId: "done",
             createdAt: "2026-08-03T12:00:00.000Z",

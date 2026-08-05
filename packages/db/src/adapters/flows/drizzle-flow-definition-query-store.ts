@@ -9,7 +9,7 @@ import {
 import { FlowDefinitionIntegrityError, type FlowDefinitionQueryStore } from "@elevenhouse/domain";
 
 import type { ElevenHouseDatabase } from "../../runtime";
-import { flowVersions, flows } from "../../schema";
+import { flowVersions, flows } from "../../schema/flows";
 
 type FlowTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
 type FlowDatabase = ElevenHouseDatabase | FlowTransaction;
@@ -129,42 +129,24 @@ function flowListPredicate(
 function toSummary(row: FlowSummaryRow): FlowDefinitionSummaryV2 {
   return parsePersisted(() => {
     const common = toCommonReadFields(row, "flow-definition-summary.v2");
-    return row.graphSchemaVersion === "flow-graph.v1"
-      ? flowDefinitionSummaryV2Schema.parse({
-          ...common,
-          graphSchemaVersion: "flow-graph.v1",
-          origin: null,
-          migrationRequired: true
-        })
-      : flowDefinitionSummaryV2Schema.parse({
-          ...common,
-          graphSchemaVersion: row.graphSchemaVersion,
-          origin: row.origin,
-          migrationRequired: false
-        });
+    return flowDefinitionSummaryV2Schema.parse({
+      ...common,
+      graphSchemaVersion: row.graphSchemaVersion,
+      origin: row.origin
+    });
   });
 }
 
 function toDetail(row: FlowDetailRow): FlowDefinitionDetailV2 {
   return parsePersisted(() => {
     const common = toCommonReadFields(row, "flow-definition-detail.v2");
-    return row.graphSchemaVersion === "flow-graph.v1"
-      ? flowDefinitionDetailV2Schema.parse({
-          ...common,
-          graphSchemaVersion: "flow-graph.v1",
-          origin: null,
-          migrationRequired: true,
-          draftGraph: row.draftGraph,
-          draftPresentation: null
-        })
-      : flowDefinitionDetailV2Schema.parse({
-          ...common,
-          graphSchemaVersion: row.graphSchemaVersion,
-          origin: row.origin,
-          migrationRequired: false,
-          draftGraph: row.draftGraph,
-          draftPresentation: row.draftPresentation
-        });
+    return flowDefinitionDetailV2Schema.parse({
+      ...common,
+      graphSchemaVersion: row.graphSchemaVersion,
+      origin: row.origin,
+      draftGraph: row.draftGraph,
+      draftPresentation: row.draftPresentation
+    });
   });
 }
 

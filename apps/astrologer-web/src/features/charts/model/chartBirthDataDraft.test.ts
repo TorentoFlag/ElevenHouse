@@ -77,7 +77,9 @@ function birthData(clientUserId: string, birthDate: string): ClientBirthDataResp
     birthLatitude: 41.9028,
     birthLongitude: 12.4964,
     source: "client_profile",
-    isPrimary: true,
+    revision: 1,
+    lastEditedByUserId: clientUserId,
+    lastEditedByRole: "client",
     createdAt: "2026-08-03T10:00:00.000Z",
     updatedAt: "2026-08-03T10:00:00.000Z"
   };

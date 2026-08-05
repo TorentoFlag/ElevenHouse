@@ -34,6 +34,7 @@ describe("clientsApi", () => {
 
     await expect(
       updateClientBirthData(clientUserId, {
+        expectedRevision: 1,
         label: "Основные данные",
         birthDate: "1990-07-15",
         birthTime: "10:30",
@@ -45,8 +46,7 @@ describe("clientsApi", () => {
         birthTimezone: "Europe/Rome",
         birthTimeDstOccurrence: null,
         birthLatitude: 41.9028,
-        birthLongitude: 12.4964,
-        isPrimary: true
+        birthLongitude: 12.4964
       })
     ).resolves.toMatchObject({
       client: {
@@ -60,6 +60,7 @@ describe("clientsApi", () => {
     expect(put).toHaveBeenCalledWith(
       `/clients/${clientUserId}/birth-data`,
       {
+        expectedRevision: 1,
         label: "Основные данные",
         birthDate: "1990-07-15",
         birthTime: "10:30",
@@ -71,8 +72,7 @@ describe("clientsApi", () => {
         birthTimezone: "Europe/Rome",
         birthTimeDstOccurrence: null,
         birthLatitude: 41.9028,
-        birthLongitude: 12.4964,
-        isPrimary: true
+        birthLongitude: 12.4964
       },
       { csrf: true }
     );
@@ -151,7 +151,9 @@ function response(): AstrologerClientResponse {
         birthLatitude: 41.9028,
         birthLongitude: 12.4964,
         source: "manual",
-        isPrimary: true,
+        revision: 1,
+        lastEditedByUserId: clientUserId,
+        lastEditedByRole: "client",
         createdAt: "2026-07-20T12:00:00.000Z",
         updatedAt: "2026-07-20T12:00:00.000Z"
       }

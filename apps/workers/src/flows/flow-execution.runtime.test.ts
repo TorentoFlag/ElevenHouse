@@ -1,3 +1,4 @@
+import type { FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFlowExecutionRuntime } from "./flow-execution.runtime";
@@ -6,19 +7,23 @@ describe("createFlowExecutionRuntime", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("keeps claims inert but globally recovers expired leases in definition-only mode", async () => {
+  it("keeps claims inert but runs recovery and work-item wake in definition-only mode", async () => {
     const processNext = vi.fn();
     const recoverExpired = vi.fn(async () => ({ status: "idle" }));
+    const workItemWake = wakeResult();
+    const wakeDueWorkItems = vi.fn(async () => workItemWake);
     const runtime = createRuntime({
-      rollout: { mode: "definition_only" },
+      deploymentCeiling: { mode: "definition_only" },
       processNext,
-      recoverExpired
+      recoverExpired,
+      wakeDueWorkItems
     });
 
     await expect(runtime.runInitial()).resolves.toEqual({
       status: "completed",
       execution: { status: "disabled", processedCount: 0 },
-      recovery: { status: "idle" }
+      recovery: { status: "idle" },
+      workItemWake
     });
     runtime.start();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -26,6 +31,7 @@ describe("createFlowExecutionRuntime", () => {
 
     expect(processNext).not.toHaveBeenCalled();
     expect(recoverExpired).toHaveBeenCalledTimes(13);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(13);
     expect(runtime.getState()).toEqual({ lifecycle: "stopped", mode: "definition_only" });
   });
 
@@ -42,10 +48,7 @@ describe("createFlowExecutionRuntime", () => {
       processedCount: 2
     });
     expect(processNext).toHaveBeenCalledTimes(3);
-    expect(processNext).toHaveBeenNthCalledWith(1, {
-      kind: "allowlist",
-      ownerUserIds: ["00000000-0000-4000-8000-000000000001"]
-    });
+    expect(processNext).toHaveBeenNthCalledWith(1);
 
     const alwaysApplied = vi.fn(async () => ({ status: "applied" }));
     const bounded = createRuntime({ processNext: alwaysApplied, pollBatchSize: 3 });
@@ -81,14 +84,17 @@ describe("createFlowExecutionRuntime", () => {
     expect(stopped).toBe(true);
   });
 
-  it("runs polling and recovery on independent intervals without overlap", async () => {
+  it("runs polling, recovery, and work-item wake on independent intervals", async () => {
     const processNext = vi.fn(async () => ({ status: "idle" }));
     const recoverExpired = vi.fn(async () => ({ status: "idle" }));
+    const wakeDueWorkItems = vi.fn(async () => wakeResult());
     const runtime = createRuntime({
       processNext,
       recoverExpired,
+      wakeDueWorkItems,
       pollIntervalMs: 1_000,
-      recoveryIntervalMs: 5_000
+      recoveryIntervalMs: 5_000,
+      workItemWakeIntervalMs: 2_000
     });
 
     runtime.start();
@@ -97,6 +103,175 @@ describe("createFlowExecutionRuntime", () => {
 
     expect(processNext).toHaveBeenCalledTimes(5);
     expect(recoverExpired).toHaveBeenCalledTimes(1);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(2);
+  });
+
+  it("backs off only failed work-item wake cycles and resets their cadence after success", async () => {
+    const processNext = vi.fn(async () => ({ status: "idle" }));
+    const wakeDueWorkItems = vi
+      .fn<() => Promise<FlowWorkItemWakeSweepResult>>()
+      .mockRejectedValueOnce(new Error("first wake failure"))
+      .mockRejectedValueOnce(new Error("second wake failure"))
+      .mockResolvedValue(wakeResult());
+    const runtime = createRuntime({
+      processNext,
+      wakeDueWorkItems,
+      pollIntervalMs: 1_000,
+      workItemWakeIntervalMs: 1_000,
+      errorBackoffMaxMs: 8_000,
+      errorJitter: 0
+    });
+
+    runtime.start();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(1);
+    expect(processNext).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(1);
+    expect(processNext).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(2);
+    expect(processNext).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(3);
+    expect(processNext).toHaveBeenCalledTimes(7);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(4);
+    expect(processNext).toHaveBeenCalledTimes(8);
+    await runtime.stop();
+  });
+
+  it("deduplicates overlapping work-item wake ticks", async () => {
+    const pending = deferred<FlowWorkItemWakeSweepResult>();
+    const wakeDueWorkItems = vi.fn(() => pending.promise);
+    const runtime = createRuntime({ wakeDueWorkItems });
+
+    const first = runtime.runWorkItemWakeOnce();
+    const second = runtime.runWorkItemWakeOnce();
+
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(1);
+    const result = wakeResult({ wokenCount: 1 });
+    pending.resolve(result);
+    await expect(Promise.all([first, second])).resolves.toEqual([result, result]);
+    await runtime.stop();
+  });
+
+  it("keeps readiness unready after integrity failures until a clean work-item sweep", async () => {
+    const integrityFailure = wakeResult({ integrityFailureCount: 2 });
+    const clean = wakeResult({ wokenCount: 0, staleCount: 0 });
+    const wakeDueWorkItems = vi
+      .fn<() => Promise<FlowWorkItemWakeSweepResult>>()
+      .mockResolvedValueOnce(integrityFailure)
+      .mockResolvedValue(clean);
+    const runtime = createRuntime({
+      deploymentCeiling: { mode: "definition_only" },
+      wakeDueWorkItems
+    });
+
+    await expect(runtime.runInitial()).resolves.toMatchObject({ workItemWake: integrityFailure });
+    runtime.start();
+    expect(runtime.getOperationalReadiness()).toMatchObject({
+      status: "unready",
+      errorCode: "flow_work_item_wake_integrity_failure"
+    });
+
+    await expect(runtime.runWorkItemWakeOnce()).resolves.toBe(clean);
+    expect(runtime.getOperationalReadiness()).toMatchObject({
+      status: "ready",
+      errorCode: null
+    });
+    await runtime.stop();
+  });
+
+  it("propagates the exact work-item wake rejection and logs only a stable code", async () => {
+    const failure = new Error("database unavailable: sensitive details");
+    const wakeDueWorkItems = vi
+      .fn<() => Promise<FlowWorkItemWakeSweepResult>>()
+      .mockResolvedValueOnce(wakeResult())
+      .mockRejectedValueOnce(failure);
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const runtime = createRuntime({
+      deploymentCeiling: { mode: "definition_only" },
+      wakeDueWorkItems,
+      logger
+    });
+
+    await runtime.runInitial();
+    runtime.start();
+    await expect(runtime.runWorkItemWakeOnce()).rejects.toBe(failure);
+
+    expect(runtime.getOperationalReadiness()).toMatchObject({
+      status: "unready",
+      errorCode: "flow_work_item_wake_failed"
+    });
+    expect(logger.error).toHaveBeenCalledWith("flow work item wake failed", {
+      errorCode: "flow_work_item_wake_failed"
+    });
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain("sensitive details");
+    await runtime.stop();
+  });
+
+  it("reports a work-item wake deadline without starting overlapping work", async () => {
+    const pending = deferred<FlowWorkItemWakeSweepResult>();
+    const wakeDueWorkItems = vi
+      .fn<() => Promise<FlowWorkItemWakeSweepResult>>()
+      .mockResolvedValueOnce(wakeResult())
+      .mockImplementationOnce(() => pending.promise);
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const runtime = createRuntime({
+      deploymentCeiling: { mode: "definition_only" },
+      wakeDueWorkItems,
+      logger,
+      operationTimeoutMs: 1_000
+    });
+
+    await runtime.runInitial();
+    runtime.start();
+    const first = runtime.runWorkItemWakeOnce();
+    const rejected = expect(first).rejects.toThrow("FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED");
+    await vi.advanceTimersByTimeAsync(1_000);
+    await rejected;
+
+    const second = runtime.runWorkItemWakeOnce();
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(2);
+    expect(runtime.getOperationalReadiness()).toMatchObject({
+      status: "unready",
+      errorCode: "flow_work_item_wake_deadline_exceeded"
+    });
+    expect(logger.error).toHaveBeenCalledWith("flow work item wake failed", {
+      errorCode: "flow_work_item_wake_deadline_exceeded"
+    });
+
+    const completed = wakeResult({ wokenCount: 1 });
+    pending.resolve(completed);
+    await expect(second).resolves.toBe(completed);
+    await runtime.stop();
+  });
+
+  it("clears the wake timer and drains the real in-flight work-item sweep on stop", async () => {
+    const pending = deferred<FlowWorkItemWakeSweepResult>();
+    const wakeDueWorkItems = vi.fn(() => pending.promise);
+    const runtime = createRuntime({
+      wakeDueWorkItems,
+      workItemWakeIntervalMs: 1_000,
+      drainTimeoutMs: 2_000
+    });
+
+    const wake = runtime.runWorkItemWakeOnce();
+    runtime.start();
+    let stopped = false;
+    const stopping = runtime.stop().then(() => {
+      stopped = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(stopped).toBe(false);
+    expect(wakeDueWorkItems).toHaveBeenCalledTimes(1);
+    const result = wakeResult();
+    pending.resolve(result);
+    await expect(wake).resolves.toBe(result);
+    await stopping;
+    expect(runtime.getState()).toMatchObject({ lifecycle: "stopped" });
   });
 
   it("backs off failed claim cycles and resets to the poll interval after success", async () => {
@@ -131,7 +306,7 @@ describe("createFlowExecutionRuntime", () => {
   });
 
   it("reports operational readiness only after initial recovery and while running", async () => {
-    const runtime = createRuntime({ rollout: { mode: "definition_only" } });
+    const runtime = createRuntime({ deploymentCeiling: { mode: "definition_only" } });
 
     expect(runtime.getOperationalReadiness()).toEqual({
       status: "unready",
@@ -209,36 +384,42 @@ describe("createFlowExecutionRuntime", () => {
   it("rejects a forged global owner scope in canary mode", () => {
     expect(() =>
       createRuntime({
-        rollout: {
-          mode: "canary",
-          ownerScope: { kind: "all" }
-        } as never
+        deploymentCeiling: { mode: "enabled" } as never
       })
-    ).toThrow("FLOW_EXECUTION_CANARY_SCOPE_INVALID");
+    ).toThrow("FLOW_EXECUTION_DEPLOYMENT_CEILING_INVALID");
   });
 });
 
 function createRuntime(overrides: Partial<Parameters<typeof createFlowExecutionRuntime>[0]> = {}) {
   return createFlowExecutionRuntime({
-    rollout: {
-      mode: "canary",
-      ownerScope: {
-        kind: "allowlist",
-        ownerUserIds: ["00000000-0000-4000-8000-000000000001"]
-      }
-    },
+    deploymentCeiling: { mode: "canary" },
     pollIntervalMs: 1_000,
     pollBatchSize: 10,
     recoveryIntervalMs: 5_000,
+    workItemWakeIntervalMs: 5_000,
     operationTimeoutMs: 10_000,
     drainTimeoutMs: 20_000,
     errorBackoffMaxMs: 30_000,
     errorJitter: 0.5,
     processNext: vi.fn(async () => ({ status: "idle" })),
     recoverExpired: vi.fn(async () => ({ status: "idle" })),
+    wakeDueWorkItems: vi.fn(async () => wakeResult()),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     ...overrides
   });
+}
+
+function wakeResult(
+  overrides: Partial<FlowWorkItemWakeSweepResult> = {}
+): FlowWorkItemWakeSweepResult {
+  return {
+    asOf: "2026-08-05T09:00:00.000Z",
+    wokenCount: 0,
+    staleCount: 0,
+    integrityFailureCount: 0,
+    hasMore: false,
+    ...overrides
+  };
 }
 
 function deferred<T>() {

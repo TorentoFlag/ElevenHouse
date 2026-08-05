@@ -22,7 +22,6 @@ describe("createAdminFinancePoliciesApi", () => {
         holdDurationHours: 72,
         reserveBps: 500,
         reserveReleaseDelayDays: 14,
-        platformFeeBps: 1200,
         providerSettlementRequired: true,
         isActive: true,
         createdByUserId: "22222222-2222-4222-8222-222222222222",
@@ -40,7 +39,6 @@ describe("createAdminFinancePoliciesApi", () => {
       holdDurationHours: 72,
       reserveBps: 500,
       reserveReleaseDelayDays: 14,
-      platformFeeBps: 1200,
       providerSettlementRequired: true
     });
 
@@ -89,7 +87,7 @@ describe("createAdminFinancePoliciesApi", () => {
           failureReason: null,
           externalReference: "bank-transfer-1001",
           transferredAt: "2026-07-24T10:20:00.000Z",
-          providerPayoutId: null
+          version: 2
         })
       );
     const api = createAdminFinancePoliciesApi({
@@ -102,8 +100,15 @@ describe("createAdminFinancePoliciesApi", () => {
     });
     await api.updatePayoutRequestStatus("11111111-1111-4111-8111-111111111111", {
       status: "paid",
+      expectedVersion: 1,
+      authorizationId: "22222222-2222-4222-8222-222222222222",
       externalReference: "bank-transfer-1001",
       transferredAt: "2026-07-24T10:20:00.000Z",
+      proofArtifact: {
+        artifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
+        sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        byteLength: 1024
+      },
       adminNote: "Paid manually"
     });
 
@@ -122,6 +127,43 @@ describe("createAdminFinancePoliciesApi", () => {
       1,
       "/admin/finance/payout-requests?status=processing",
       expect.objectContaining({ credentials: "include" })
+    );
+  });
+
+  it("uploads raw bank evidence only through the authenticated admin API route", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({
+        artifactId: "payout-bank-evidence:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        byteLength: 5,
+        contentType: "application/pdf"
+      })
+    );
+    const api = createAdminFinancePoliciesApi({
+      baseUrl: "https://admin-api.test",
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d])], "receipt.pdf", {
+      type: "application/pdf"
+    });
+
+    await expect(api.uploadPayoutBankEvidence(file)).resolves.toMatchObject({
+      byteLength: 5,
+      contentType: "application/pdf"
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://admin-api.test/admin/finance/payout-evidence",
+      expect.objectContaining({
+        method: "POST",
+        body: file,
+        credentials: "include",
+        headers: expect.objectContaining({
+          "content-type": "application/pdf",
+          "x-csrf-token": "csrf-token",
+          "idempotency-key": expect.stringMatching(/^payout-evidence:/)
+        })
+      })
     );
   });
 

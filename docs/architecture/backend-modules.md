@@ -49,7 +49,6 @@ export class AppModule {}
 
 - `booking`
 - `client-join`
-- `client-consents`
 - `client-profile`
 - `database`
 - `health`
@@ -60,12 +59,12 @@ export class AppModule {}
 - `security`
 
 `client-join` создаёт direct-link join intent по public handle и связывает его
-с client registration/login flow. `client-consents` владеет owner-scoped
-grant/revoke/read surface для versioned chart-AI consent evidence; policy,
-processor identity, canonical notice hash and immutable first revocation are
-server-owned and persisted. `client-profile` отдаёт только связанные с
-клиентом профили астрологов, cabinet overview и owner-scoped primary-compatible
-multi birth profiles. Он также предоставляет authenticated client-only поиск
+с client registration/login flow. `client-profile` отдаёт только связанные с
+клиентом профили астрологов, cabinet overview и один owner-scoped birth profile
+на клиента. Профиль обновляется через CAS, хранит revision, последнего редактора
+и immutable history; астролог редактирует его только при активной явной связи с
+клиентом. Отдельных consent/grant/revoke и per-booking доступа к birth data нет.
+Он также предоставляет authenticated client-only поиск
 места рождения через общий Geoapify/Redis provider contour; этот поиск
 географических данных не является поиском или discovery астрологов. Это
 foundation client cabinet, не discovery API.
@@ -74,6 +73,12 @@ contour for booking intent, order creation and checkout initiation. Full public
 product/profile reads, slot-selection UI integration, materials, feed,
 subscriptions, journal and client-visible calculation delivery remain separate
 incomplete contours.
+
+`platform-tariffs` owns the astrologer-facing tariff catalogue, selection and
+saved-card subscription/read state. It persists finance commands and worker
+work requests, but never calls ArcPay from an authenticated HTTP request.
+`platform-entitlements` is the composition boundary for the centralized
+capability guard; browser locks are presentation only, never authorization.
 
 `apps/astrologer-api` сейчас содержит:
 
@@ -99,6 +104,8 @@ incomplete contours.
 - `matrix`
 - `numerology`
 - `platform-billing`
+- `platform-entitlements`
+- `platform-tariffs`
 - `products`
 - `redis`
 - `security`
@@ -108,8 +115,11 @@ incomplete contours.
 
 - `database`
 - `finance-policies`
+- `fiscal-profiles`
 - `health`
 - `identity`
+- `platform-tariffs`
+- `saved-card-disclosures`
 - `security`
 
 Это отдельная внутренняя API-поверхность с техническим `health` module и первым
@@ -119,6 +129,13 @@ idempotent finance commands and durable audit writes. Broader user,
 verification, moderation, payment-support and platform-settings workflows still
 belong in future `admin-api` feature modules, not in `public-api` or
 `astrologer-api`.
+
+`platform-tariffs` governs versioned tariff drafts and publication with audit,
+CSRF, idempotency and expected-revision checks. `fiscal-profiles` owns the same
+internal lifecycle for versioned fiscal configuration; publication stays
+fail-closed until matching readiness evidence exists. `saved-card-disclosures`
+owns locale-specific recurring-card disclosures and their immutable publication
+history. None of these internal modules enables provider I/O by itself.
 
 ## Основные модули
 
@@ -131,19 +148,26 @@ belong in future `admin-api` feature modules, not in `public-api` or
 - `Products`: consultations, packages, subscriptions, recorded products, courses.
 - `Availability`: schedule, slots, timezone-aware availability.
 - `Booking`: booking intents, slot holds, confirmations, reschedules, cancellations.
-- `Orders`: purchase lifecycle независимо от деталей payment provider.
+- `Orders`: purchase lifecycle независимо от деталей payment provider; live
+  product purchase requires an existing server-side booking hold.
+- `ClientCommerce` (`public-api`): relationship-scoped client purchase-option
+  and slot reads. It composes relationship ownership, active tariff capability,
+  finance-policy authority, products and scheduling without exposing a public
+  astrologer or product catalogue.
 - `Payments/Billing`: payment attempts, webhooks, refunds, provider adapters.
 - `Wallet/Ledger`: баланс астролога, ledger entries, payouts, adjustments.
 - `Flows`: Flows owns automation definitions, versions, runtime runs and approvals.
   It orchestrates module use cases through explicit ports/jobs and must not
   implement payment, booking, messaging delivery or chart calculation logic
-  inside controllers or app-local scripts. The current deployable surface is
-  `definition_only`: legacy runtime history remains readable and explicitly
-  marked `legacy_preview`, while activation, simulation, enrollment, manual
-  execution, run cancellation and approval decisions fail closed until the
-  PostgreSQL durable `flow-graph.v2` interpreter is available.
+  inside controllers or app-local scripts. Definitions, persistence and runtime
+  are V2-only. A confirmed booking is eligible only when its service requires
+  chart data; missing profile readiness creates a durable human work item and
+  rechecks readiness before a chart command is requested.
 - `Subscriptions`: recurring client subscriptions и platform plans для астрологов.
-- `BirthData`: дата, время, место рождения и правила consented sharing.
+- `BirthData`: единственный client-owned профиль даты, времени и места
+  рождения. Клиент и астролог с активной явной client--astrologer связью могут
+  вносить правки через CAS; source, actor и immutable history обязательны.
+  Отдельного consent/grant/revoke и per-booking профиля нет.
 - `Calculations`: owner-scoped current calculation result, participants, client
   links, interpretations, publication checksum and artifacts. The module stores
   one current result and does not maintain result-version history. It also owns

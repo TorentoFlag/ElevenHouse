@@ -533,6 +533,99 @@
   font-size: 15px;
 }
 
+.tariffPaymentWorkflow {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 22px;
+}
+
+.tariffPaymentDisclosure,
+.tariffPaymentCard,
+.tariffPaymentThreeDs {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+}
+
+.tariffPaymentDisclosure h3,
+.tariffPaymentCard h3,
+.tariffPaymentThreeDs h3 {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.tariffPaymentDisclosure p,
+.tariffPaymentCard p,
+.tariffPaymentThreeDs p {
+  margin: 0;
+  color: var(--eh-color-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.tariffPaymentCheckbox,
+.tariffPaymentContact {
+  display: grid;
+  gap: 7px;
+  color: var(--eh-color-moon-300);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.tariffPaymentCheckbox {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+}
+
+.tariffPaymentCheckbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--settings-accent);
+}
+
+.tariffPaymentContact input,
+.tariffHostedField {
+  min-height: 42px;
+  border: 1px solid var(--settings-line-strong);
+  border-radius: 9px;
+  background: var(--settings-surface-2);
+  color: var(--eh-color-moon-120);
+}
+
+.tariffPaymentContact input {
+  padding: 0 12px;
+  font: inherit;
+}
+
+.tariffPaymentContact input:focus-visible {
+  outline: 2px solid var(--settings-accent);
+  outline-offset: 2px;
+}
+
+.tariffHostedField {
+  overflow: hidden;
+  padding: 8px 11px;
+}
+
+.tariffHostedField iframe {
+  width: 100%;
+  min-height: 24px;
+  border: 0;
+}
+
+.tariffHostedFieldRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
 .settingsGroup {
   margin-bottom: 28px;
 }

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { flowGraphSchema } from "./flows";
 import {
   createFlowDefinitionV2RequestSchema,
   createNextFlowDraftV2RequestSchema,
-  flowCapabilityManifestV1Schema,
   flowDefinitionCommandRejectionResponseSchema,
   flowDefinitionDetailV2Schema,
   flowDefinitionSummaryV2Schema,
@@ -14,23 +12,17 @@ import {
   flowGraphV2Schema,
   flowPresentationV1Schema,
   flowPublishedVersionCompatibleSchema,
-  flowPublishedVersionV2Schema,
   flowPublishedVersionV3Schema,
   listFlowDefinitionTemplatesV2QuerySchema,
   listFlowDefinitionTemplatesV2ResponseSchema,
   listFlowDefinitionsV2QuerySchema,
   listFlowDefinitionsV2ResponseSchema,
-  migrateFlowDefinitionV2RequestSchema,
-  migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV3ResponseSchema,
   publishFlowDefinitionCompatibleResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
-  validateFlowDefinitionResponseV1Schema,
   validateFlowDefinitionResponseV2Schema,
-  validateFlowDefinitionCompatibleResponseSchema,
   validateFlowDefinitionResponseSchema,
   type FlowGraphV2
 } from "./flows-v2";
@@ -67,34 +59,35 @@ const manualClientGraph = {
   ]
 } satisfies FlowGraphV2;
 
-const legacyGraph = flowGraphSchema.parse({
-  schemaVersion: "flow-graph.v1",
-  nodes: [
-    {
-      id: "trigger-booking",
-      category: "trigger",
-      kind: "booking_confirmed",
-      title: "Запись подтверждена",
-      config: {}
-    }
-  ],
-  edges: []
-});
-
 describe("flow graph v2 contracts", () => {
   it("parses a minimal strict executable graph", () => {
     expect(flowGraphV2Schema.parse(manualClientGraph)).toEqual(manualClientGraph);
   });
 
-  it("keeps v1 and v2 readable through an explicit read union", () => {
-    expect(flowGraphReadSchema.parse(legacyGraph)).toEqual(legacyGraph);
+  it("accepts only V2 flow graphs", () => {
     expect(flowGraphReadSchema.parse(manualClientGraph)).toEqual(manualClientGraph);
+    expect(
+      flowGraphReadSchema.safeParse({
+        schemaVersion: "flow-graph.legacy",
+        nodes: [],
+        edges: []
+      }).success
+    ).toBe(false);
+    expect(
+      validateFlowDefinitionRequestSchema.safeParse({
+        graph: {
+          schemaVersion: "flow-graph.legacy",
+          nodes: [],
+          edges: []
+        }
+      }).success
+    ).toBe(false);
   });
 
-  it("keeps list summaries lightweight and discriminates readable V1 from editable V2", () => {
-    const common = {
+  it("keeps list summaries lightweight and V2-only", () => {
+    const current = {
       schemaVersion: "flow-definition-summary.v2",
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "44444444-4444-4444-8444-444444444444",
       ownerUserId: "22222222-2222-4222-8222-222222222222",
       name: "Consultation preparation",
       state: "draft",
@@ -106,34 +99,17 @@ describe("flow graph v2 contracts", () => {
       latestPublishedVersion: null,
       createdAt: "2026-08-02T18:00:00.000Z",
       updatedAt: "2026-08-02T18:00:00.000Z",
-      publishedAt: null
-    } as const;
-    const legacy = {
-      ...common,
-      graphSchemaVersion: "flow-graph.v1",
-      origin: null,
-      migrationRequired: true
-    } as const;
-    const current = {
-      ...common,
-      id: "44444444-4444-4444-8444-444444444444",
+      publishedAt: null,
       graphSchemaVersion: "flow-graph.v2",
-      origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-      migrationRequired: false
+      origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" }
     } as const;
 
-    expect(flowDefinitionSummaryV2Schema.parse(legacy)).toEqual(legacy);
     expect(flowDefinitionSummaryV2Schema.parse(current)).toEqual(current);
     expect(
       flowDefinitionSummaryV2Schema.safeParse({
-        ...legacy,
-        draftGraph: legacyGraph
-      }).success
-    ).toBe(false);
-    expect(
-      flowDefinitionSummaryV2Schema.safeParse({
         ...current,
-        latestPublishedVersionId: "33333333-3333-4333-8333-333333333333"
+        graphSchemaVersion: "flow-graph.legacy",
+        origin: null
       }).success
     ).toBe(false);
     expect(
@@ -143,45 +119,45 @@ describe("flow graph v2 contracts", () => {
     expect(
       listFlowDefinitionsV2ResponseSchema.parse({
         schemaVersion: "flow-definition-list.v2",
-        flows: [legacy, current],
-        total: 2,
-        runtime: {
-          mode: "definition_only",
-          executionAvailable: false,
-          reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-          historySemantics: "legacy_preview"
-        }
-      }).flows
-    ).toHaveLength(2);
-    expect(
-      listFlowDefinitionsV2ResponseSchema.safeParse({
-        schemaVersion: "flow-definition-list.v2",
-        flows: [legacy, current],
+        flows: [current],
         total: 1,
         runtime: {
           mode: "definition_only",
           executionAvailable: false,
           reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-          historySemantics: "legacy_preview"
+          historySemantics: "durable_execution"
+        }
+      }).flows
+    ).toHaveLength(1);
+    expect(
+      listFlowDefinitionsV2ResponseSchema.safeParse({
+        schemaVersion: "flow-definition-list.v2",
+        flows: [current],
+        total: 0,
+        runtime: {
+          mode: "definition_only",
+          executionAvailable: false,
+          reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+          historySemantics: "durable_execution"
         }
       }).success
     ).toBe(false);
     expect(
       listFlowDefinitionsV2ResponseSchema.safeParse({
         schemaVersion: "flow-definition-list.v2",
-        flows: [legacy, legacy],
+        flows: [current, current],
         total: 2,
         runtime: {
           mode: "definition_only",
           executionAvailable: false,
           reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-          historySemantics: "legacy_preview"
+          historySemantics: "durable_execution"
         }
       }).success
     ).toBe(false);
   });
 
-  it("returns a full detail while making V1 migration and V2 editability explicit", () => {
+  it("returns a full editable V2 detail", () => {
     const common = {
       schemaVersion: "flow-definition-detail.v2",
       id: "11111111-1111-4111-8111-111111111111",
@@ -198,19 +174,10 @@ describe("flow graph v2 contracts", () => {
       updatedAt: "2026-08-02T18:00:00.000Z",
       publishedAt: null
     } as const;
-    const legacy = {
-      ...common,
-      graphSchemaVersion: "flow-graph.v1",
-      origin: null,
-      migrationRequired: true,
-      draftGraph: legacyGraph,
-      draftPresentation: null
-    } as const;
     const current = {
       ...common,
       graphSchemaVersion: "flow-graph.v2",
       origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-      migrationRequired: false,
       draftGraph: manualClientGraph,
       draftPresentation: {
         schemaVersion: "flow-presentation.v1",
@@ -222,12 +189,12 @@ describe("flow graph v2 contracts", () => {
       }
     } as const;
 
-    expect(flowDefinitionDetailV2Schema.parse(legacy)).toEqual(legacy);
     expect(flowDefinitionDetailV2Schema.parse(current)).toEqual(current);
     expect(
       flowDefinitionDetailV2Schema.safeParse({
-        ...legacy,
-        migrationRequired: false
+        ...current,
+        graphSchemaVersion: "flow-graph.legacy",
+        origin: null
       }).success
     ).toBe(false);
     expect(
@@ -324,6 +291,22 @@ describe("flow graph v2 contracts", () => {
         config: { purpose: "service_preparation" }
       },
       {
+        id: "natal-chart",
+        kind: "natal_chart_request",
+        displayTitle: "Рассчитать натальную карту",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          interpretationMode: "adult_natal",
+          settings: {
+            houseSystem: "placidus",
+            nodeType: "true",
+            aspectPreset: "major",
+            orbMultiplier: 1
+          }
+        }
+      },
+      {
         id: "work-item",
         kind: "astrologer_work_item",
         displayTitle: "Подготовить консультацию",
@@ -333,7 +316,14 @@ describe("flow graph v2 contracts", () => {
           taskKind: "consultation_preparation",
           taskTitle: "Подготовить консультацию",
           instructions: "Проверьте исходные данные и ключевые тезисы.",
-          priority: "normal"
+          priority: "normal",
+          duePolicy: {
+            kind: "before_booking_start",
+            leadTimeMinutes: 1_440
+          },
+          completionRequirements: {
+            resultSummary: "required"
+          }
         }
       },
       {
@@ -362,7 +352,7 @@ describe("flow graph v2 contracts", () => {
         displayTitle: "Остановлено политикой",
         configSchemaVersion: 1,
         executorContractVersion: 1,
-        config: { reasonCode: "birth_data_access_denied" }
+        config: { reasonCode: "birth_data_missing" }
       },
       {
         id: "failed",
@@ -382,6 +372,38 @@ describe("flow graph v2 contracts", () => {
       });
       expect(result.success, node.kind).toBe(true);
     }
+
+    expect(nodes.find((node) => node.kind === "astrologer_work_item")).toMatchObject({
+      config: {
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+        completionRequirements: { resultSummary: "required" }
+      }
+    });
+  });
+
+  it("bounds work-item booking lead time and rejects unknown completion requirements", () => {
+    const result = flowGraphV2Schema.safeParse({
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        {
+          id: "work-item",
+          kind: "astrologer_work_item",
+          displayTitle: "Подготовить консультацию",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: {
+            taskKind: "consultation_preparation",
+            taskTitle: "Подготовить консультацию",
+            priority: "normal",
+            duePolicy: { kind: "before_booking_start", leadTimeMinutes: 525_601 },
+            completionRequirements: { resultSummary: "required", attachment: "required" }
+          }
+        }
+      ],
+      edges: []
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects duplicate booking product filters", () => {
@@ -427,15 +449,6 @@ describe("flow presentation v1 contracts", () => {
 });
 
 describe("flow definition validation contracts", () => {
-  const capabilityManifest = {
-    schemaVersion: "flow-capability-manifest.v1",
-    executionSemanticsVersion: "flow-interpreter.v1",
-    nodeExecutors: [
-      { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-      { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
-    ],
-    requiredCapabilities: []
-  } as const;
   const capabilityManifestV2 = {
     schemaVersion: "flow-capability-manifest.v2",
     executionSemanticsVersion: "flow-interpreter.v1",
@@ -449,32 +462,10 @@ describe("flow definition validation contracts", () => {
     requiredCapabilities: []
   } as const;
 
-  it("accepts either readable graph version as validation input", () => {
-    expect(validateFlowDefinitionRequestSchema.parse({ graph: legacyGraph })).toEqual({
-      graph: legacyGraph
-    });
+  it("accepts the V2 graph as validation input", () => {
     expect(validateFlowDefinitionRequestSchema.parse({ graph: manualClientGraph })).toEqual({
       graph: manualClientGraph
     });
-  });
-
-  it("keeps the historical V1 validation envelope readable for consumer-first rollout", () => {
-    const response = {
-      schemaVersion: "flow-definition-validation.v1",
-      graphSchemaVersion: "flow-graph.v2",
-      publishable: true,
-      activatable: false,
-      issues: [],
-      activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
-      normalizedGraph: manualClientGraph,
-      capabilityManifest
-    } as const;
-
-    expect(flowCapabilityManifestV1Schema.parse(capabilityManifest)).toEqual(capabilityManifest);
-    expect(validateFlowDefinitionResponseV1Schema.parse(response)).toEqual(response);
-    expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
-    expect(validateFlowDefinitionCompatibleResponseSchema.parse(response)).toEqual(response);
-    expect(validateFlowDefinitionResponseV2Schema.safeParse(response).success).toBe(false);
   });
 
   it("accepts a versioned trigger matcher without treating the trigger as a worker executor", () => {
@@ -490,11 +481,9 @@ describe("flow definition validation contracts", () => {
     } as const;
 
     expect(validateFlowDefinitionResponseV2Schema.parse(response)).toEqual(response);
-    expect(validateFlowDefinitionCompatibleResponseSchema.parse(response)).toEqual(response);
-    expect(validateFlowDefinitionResponseSchema.safeParse(response).success).toBe(false);
-    expect(validateFlowDefinitionResponseV1Schema.safeParse(response).success).toBe(false);
+    expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
     expect(
-      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+      validateFlowDefinitionResponseSchema.safeParse({
         ...response,
         capabilityManifest: {
           ...capabilityManifestV2,
@@ -506,7 +495,7 @@ describe("flow definition validation contracts", () => {
       }).success
     ).toBe(false);
     expect(
-      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+      validateFlowDefinitionResponseSchema.safeParse({
         ...response,
         capabilityManifest: {
           ...capabilityManifestV2,
@@ -525,7 +514,7 @@ describe("flow definition validation contracts", () => {
       matcherContractVersion: capabilityManifestV2.triggerMatcher.matcherContractVersion
     };
     expect(
-      validateFlowDefinitionCompatibleResponseSchema.safeParse({
+      validateFlowDefinitionResponseSchema.safeParse({
         ...response,
         capabilityManifest: {
           ...capabilityManifestV2,
@@ -535,32 +524,9 @@ describe("flow definition validation contracts", () => {
     ).toBe(false);
   });
 
-  it("parses an explicit v1 migration blocker", () => {
-    const response = {
-      schemaVersion: "flow-definition-validation.v1",
-      graphSchemaVersion: "flow-graph.v1",
-      publishable: false,
-      activatable: false,
-      issues: [
-        {
-          code: "migration_required",
-          severity: "error",
-          blocking: true,
-          path: "schemaVersion",
-          message: "Flow graph v1 requires explicit migration before publishing."
-        }
-      ],
-      activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED", "FLOW_RUNTIME_EXECUTION_UNAVAILABLE"],
-      normalizedGraph: null,
-      capabilityManifest: null
-    } as const;
-
-    expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
-  });
-
   it("rejects contradictory publish and activation claims", () => {
     const missingCompiledSnapshot = {
-      schemaVersion: "flow-definition-validation.v1",
+      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -577,13 +543,13 @@ describe("flow definition validation contracts", () => {
       validateFlowDefinitionResponseSchema.safeParse({
         ...missingCompiledSnapshot,
         normalizedGraph: manualClientGraph,
-        capabilityManifest,
+        capabilityManifest: capabilityManifestV2,
         activatable: true
       }).success
     ).toBe(false);
   });
 
-  it("rejects partial compile artifacts and version-specific blocker contradictions", () => {
+  it("rejects partial compile artifacts and blocker contradictions", () => {
     const compilerIssue = {
       code: "missing_required_source_handle",
       severity: "error",
@@ -591,15 +557,8 @@ describe("flow definition validation contracts", () => {
       path: "nodes.manual",
       message: "Manual trigger requires a next edge."
     } as const;
-    const migrationIssue = {
-      code: "migration_required",
-      severity: "error",
-      blocking: true,
-      path: "schemaVersion",
-      message: "Migration required."
-    } as const;
     const invalidV2 = {
-      schemaVersion: "flow-definition-validation.v1",
+      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: false,
       activatable: false,
@@ -624,33 +583,7 @@ describe("flow definition validation contracts", () => {
     expect(
       validateFlowDefinitionResponseSchema.safeParse({
         ...invalidV2,
-        issues: [migrationIssue],
-        activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED"]
-      }).success
-    ).toBe(false);
-
-    const validV1 = {
-      ...invalidV2,
-      graphSchemaVersion: "flow-graph.v1",
-      issues: [migrationIssue],
-      activationBlockers: ["FLOW_GRAPH_MIGRATION_REQUIRED"]
-    } as const;
-    expect(
-      validateFlowDefinitionResponseSchema.safeParse({
-        ...validV1,
-        activationBlockers: ["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"]
-      }).success
-    ).toBe(false);
-    expect(
-      validateFlowDefinitionResponseSchema.safeParse({
-        ...validV1,
-        issues: [compilerIssue]
-      }).success
-    ).toBe(false);
-    expect(
-      validateFlowDefinitionResponseSchema.safeParse({
-        ...validV1,
-        capabilityManifest
+        capabilityManifest: capabilityManifestV2
       }).success
     ).toBe(false);
   });
@@ -683,6 +616,7 @@ describe("flow definition v2 lifecycle contracts", () => {
     updatedAt: "2026-08-02T18:05:00.000Z",
     publishedAt: null
   } as const;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- V1 fixture is retained while exercising V3 parser rejection.
   const capabilityManifest = {
     schemaVersion: "flow-capability-manifest.v1",
     executionSemanticsVersion: "flow-interpreter.v1",
@@ -705,7 +639,7 @@ describe("flow definition v2 lifecycle contracts", () => {
     requiredCapabilities: []
   } as const;
   const version = {
-    schemaVersion: "flow-published-version.v2",
+    schemaVersion: "flow-published-version.v3",
     id: "33333333-3333-4333-8333-333333333333",
     flowId: definition.id,
     version: 1,
@@ -714,13 +648,8 @@ describe("flow definition v2 lifecycle contracts", () => {
     approvalMode: "manual_approve",
     graph: manualClientGraph,
     presentation,
-    capabilityManifest,
+    capabilityManifest: capabilityManifestV2,
     publishedAt: "2026-08-02T18:10:00.000Z"
-  } as const;
-  const currentVersion = {
-    ...version,
-    schemaVersion: "flow-published-version.v3",
-    capabilityManifest: capabilityManifestV2
   } as const;
   const publishedDefinition = {
     ...definition,
@@ -734,29 +663,20 @@ describe("flow definition v2 lifecycle contracts", () => {
 
   it("parses revisioned drafts and immutable compiled versions", () => {
     expect(flowDefinitionV2Schema.parse(definition)).toEqual(definition);
-    expect(flowPublishedVersionV2Schema.parse(version)).toEqual(version);
-    expect(flowPublishedVersionV2Schema.safeParse(currentVersion).success).toBe(false);
-    expect(flowPublishedVersionV3Schema.parse(currentVersion)).toEqual(currentVersion);
+    expect(flowPublishedVersionV3Schema.parse(version)).toEqual(version);
     expect(flowPublishedVersionCompatibleSchema.parse(version)).toEqual(version);
-    expect(flowPublishedVersionCompatibleSchema.parse(currentVersion)).toEqual(currentVersion);
-    expect(
-      publishFlowDefinitionV2ResponseSchema.parse({ flow: publishedDefinition, version })
-    ).toEqual({ flow: publishedDefinition, version });
     expect(
       publishFlowDefinitionV3ResponseSchema.parse({
         flow: publishedDefinition,
-        version: currentVersion
+        version
       })
-    ).toEqual({ flow: publishedDefinition, version: currentVersion });
-    expect(
-      publishFlowDefinitionCompatibleResponseSchema.parse({ flow: publishedDefinition, version })
     ).toEqual({ flow: publishedDefinition, version });
     expect(
       publishFlowDefinitionCompatibleResponseSchema.parse({
         flow: publishedDefinition,
-        version: currentVersion
+        version
       })
-    ).toEqual({ flow: publishedDefinition, version: currentVersion });
+    ).toEqual({ flow: publishedDefinition, version });
   });
 
   it("requires a mutation field and positive expected revision", () => {
@@ -843,19 +763,19 @@ describe("flow definition v2 lifecycle contracts", () => {
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV2ResponseSchema.safeParse({
+      publishFlowDefinitionV3ResponseSchema.safeParse({
         flow: publishedDefinition,
         version: { ...version, sourceRevision: 1 }
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV2ResponseSchema.safeParse({
+      publishFlowDefinitionV3ResponseSchema.safeParse({
         flow: publishedDefinition,
         version: { ...version, approvalMode: "draft_only" }
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV2ResponseSchema.safeParse({
+      publishFlowDefinitionV3ResponseSchema.safeParse({
         flow: publishedDefinition,
         version: {
           ...version,
@@ -1030,148 +950,4 @@ describe("flow definition v2 create, template and migration contracts", () => {
     ).toMatchObject({ source: { parameters: { product_id: expect.any(String) } } });
   });
 
-  it("requires an exact legacy revision and validates migration evidence", () => {
-    expect(
-      migrateFlowDefinitionV2RequestSchema.parse({
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 3,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      })
-    ).toMatchObject({ expectedRevision: 3, targetGraphSchemaVersion: "flow-graph.v2" });
-    expect(
-      migrateFlowDefinitionV2RequestSchema.safeParse({
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 0,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      }).success
-    ).toBe(false);
-
-    const migratedFlow = flowDefinitionV2Schema.parse({
-      schemaVersion: "flow-definition.v2",
-      id: "11111111-1111-4111-8111-111111111111",
-      ownerUserId: "22222222-2222-4222-8222-222222222222",
-      name: "Legacy draft",
-      origin: {
-        schemaVersion: "flow-definition-origin.v1",
-        type: "migration",
-        sourceGraphSchemaVersion: "flow-graph.v1",
-        sourceVersionId: null
-      },
-      state: "draft",
-      approvalMode: "manual_approve",
-      revision: 4,
-      draftBaseVersionId: null,
-      draftGraph: {
-        schemaVersion: "flow-graph.v2",
-        nodes: [manualClientGraph.nodes[0]],
-        edges: []
-      },
-      draftPresentation: {
-        schemaVersion: "flow-presentation.v1",
-        nodes: [{ nodeId: manualClientGraph.nodes[0]!.id, position: { x: 80, y: 120 } }],
-        viewport: { x: 0, y: 0, zoom: 1 }
-      },
-      latestPublishedVersionId: null,
-      latestPublishedVersion: null,
-      createdAt: "2026-08-02T18:00:00.000Z",
-      updatedAt: "2026-08-02T18:10:00.000Z",
-      publishedAt: null
-    });
-    const migration = {
-      schemaVersion: "flow-definition-migration.v1",
-      sourceGraphSchemaVersion: "flow-graph.v1",
-      targetGraphSchemaVersion: "flow-graph.v2",
-      sourceVersionId: null,
-      sourceRevision: 3,
-      sourceGraphHash: `sha256:${"a".repeat(64)}`,
-      migratedAt: "2026-08-02T18:10:00.000Z"
-    } as const;
-
-    expect(migrateFlowDefinitionV2ResponseSchema.parse({ flow: migratedFlow, migration })).toEqual({
-      flow: migratedFlow,
-      migration
-    });
-    expect(
-      migrateFlowDefinitionV2ResponseSchema.safeParse({
-        flow: migratedFlow,
-        migration: { ...migration, sourceRevision: 2 }
-      }).success
-    ).toBe(false);
-  });
-
-  it("binds template and migration failures to exact persisted HTTP statuses", () => {
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: {
-          code: "FLOW_TEMPLATE_VERSION_CONFLICT",
-          templateKey: availableTemplate.key,
-          requestedVersion: 2,
-          currentVersion: 1
-        }
-      })
-    ).toMatchObject({ statusCode: 409 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: {
-          code: "FLOW_TEMPLATE_NOT_AVAILABLE",
-          templateKey: legacyTemplate.key,
-          reasonCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
-        }
-      })
-    ).toMatchObject({ statusCode: 409 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 404,
-        body: {
-          code: "FLOW_TEMPLATE_NOT_FOUND",
-          templateKey: "unknown-template"
-        }
-      })
-    ).toMatchObject({ statusCode: 404 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 422,
-        body: {
-          code: "FLOW_TEMPLATE_PARAMETERS_INVALID",
-          templateKey: availableTemplate.key,
-          parameterPaths: ["product_id"]
-        }
-      })
-    ).toMatchObject({ statusCode: 422 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 422,
-        body: {
-          code: "FLOW_GRAPH_MIGRATION_BLOCKED",
-          issues: [
-            {
-              code: "unsupported_node",
-              path: "nodes.send-message",
-              message: "Legacy send_message has no lossless V2 mapping."
-            }
-          ]
-        }
-      })
-    ).toMatchObject({ statusCode: 422 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: { code: "FLOW_GRAPH_ALREADY_V2" }
-      })
-    ).toMatchObject({ statusCode: 409 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: { code: "FLOW_DEFINITION_MIGRATION_NOT_ALLOWED", state: "archived" }
-      })
-    ).toMatchObject({ statusCode: 409 });
-    expect(
-      flowDefinitionCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: { code: "FLOW_IDEMPOTENCY_KEY_EXPIRED" }
-      })
-    ).toMatchObject({ statusCode: 409 });
-  });
 });

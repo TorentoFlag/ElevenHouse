@@ -129,6 +129,9 @@ export default defineConfig({
       "@elevenhouse/domain": fileURLToPath(
         new URL("./packages/domain/src/index.ts", import.meta.url)
       ),
+      "@elevenhouse/finance-infrastructure": fileURLToPath(
+        new URL("./packages/finance-infrastructure/src/index.ts", import.meta.url)
+      ),
       "@elevenhouse/numerology-presentation": fileURLToPath(
         new URL("./packages/numerology-presentation/src/index.ts", import.meta.url)
       ),

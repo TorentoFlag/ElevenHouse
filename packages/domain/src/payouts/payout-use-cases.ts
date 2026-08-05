@@ -1,4 +1,6 @@
 import type { Money } from "../money";
+import type { SealedPayoutDestinationSnapshot } from "../finance-core/finance-payout-destination-vault";
+import { hasAsciiControlCharacter } from "../finance-core/finance-string-validation";
 import type {
   CreateLedgerTransactionInput,
   FinancePeriodSummary,
@@ -9,10 +11,12 @@ import type {
 import type {
   CreatePayoutMethodInput,
   PayoutMethodRecord,
+  PayoutPaidProofArtifact,
   PayoutRequestRecord,
   PayoutRequestStatus,
   PayoutStore
 } from "./payout-store";
+import { PayoutStatusEvidenceError } from "./payout-store";
 
 export type { PayoutMethodRecord, PayoutRequestRecord } from "./payout-store";
 
@@ -55,12 +59,11 @@ export type GetAstrologerFinanceOverviewInput = {
 
 export type CreateManualPayoutMethodInput = {
   readonly store: PayoutMethodCommandStore;
+  /** Stable id lets KMS sealing and database idempotency converge on one immutable method. */
+  readonly payoutMethodId: string;
   readonly astrologerUserId: string;
   readonly displayName: string;
-  readonly recipientName: string;
-  readonly bankName: string;
-  readonly accountNumberLast4: string;
-  readonly details: Record<string, unknown>;
+  readonly destination: SealedPayoutDestinationSnapshot;
   readonly now: string;
 };
 
@@ -86,6 +89,7 @@ export type ReleaseAstrologerFundsFromHoldInput = {
 export type ApprovePayoutStatusUpdateInput = {
   readonly store: PayoutStatusCommandStore;
   readonly payoutRequestId: string;
+  readonly expectedVersion: number;
   readonly adminUserId: string;
   readonly update: PayoutStatusUpdate;
   readonly now: string;
@@ -97,16 +101,11 @@ export type PayoutStatusUpdate =
       readonly adminNote?: string | null;
     }
   | {
-      readonly status: "processing_provider";
-      readonly adminNote?: string | null;
-      readonly providerPayoutId?: string;
-    }
-  | {
       readonly status: "paid";
       readonly externalReference: string;
       readonly transferredAt: string;
+      readonly proofArtifact: PayoutPaidProofArtifact;
       readonly adminNote?: string | null;
-      readonly providerPayoutId?: string;
     }
   | {
       readonly status: "failed" | "rejected";
@@ -181,6 +180,14 @@ export class PayoutStatusTransitionError extends Error {
   ) {
     super(`Invalid payout status transition: ${from} -> ${to}`);
     this.name = "PayoutStatusTransitionError";
+  }
+}
+
+export class PayoutVersionConflictError extends Error {
+  readonly code = "payout_version_conflict";
+
+  constructor() {
+    super("Payout request changed before this transition could be applied");
   }
 }
 
@@ -263,6 +270,8 @@ export async function requestAstrologerPayout(
   const request = await input.store.createRequest({
     astrologerUserId: input.astrologerUserId,
     payoutMethodId: method.id,
+    payoutMethodVersion: method.destination.payoutMethodVersion,
+    destination: method.destination,
     amount: input.amount,
     metadata: input.metadata,
     now: input.now
@@ -280,19 +289,12 @@ function toCreateManualPayoutMethodInput(
   input: CreateManualPayoutMethodInput
 ): CreatePayoutMethodInput {
   return {
+    id: input.payoutMethodId,
     astrologerUserId: input.astrologerUserId,
     method: "manual_bank_transfer",
     currency: "RUB",
     displayName: input.displayName,
-    manualBankTransferDetails: {
-      ...input.details,
-      recipientName: input.recipientName,
-      bankName: input.bankName,
-      accountNumberLast4: input.accountNumberLast4
-    },
-    provider: null,
-    environment: null,
-    providerPayoutAccountId: null,
+    destination: input.destination,
     isDefault: true,
     now: input.now
   };
@@ -328,11 +330,14 @@ export async function approvePayoutStatusUpdate(
 ): Promise<PayoutRequestRecord> {
   const before = await input.store.findRequestById(input.payoutRequestId);
   if (!before) throw new PayoutRequestNotFoundError();
+  if (before.version !== input.expectedVersion) throw new PayoutVersionConflictError();
   if (before.status === input.update.status) return before;
   assertPayoutTransition(before.status, input.update.status);
+  if (input.update.status === "paid") assertPaidProofArtifact(input.update.proofArtifact);
 
   const updated = await input.store.updateRequestStatus({
     payoutRequestId: input.payoutRequestId,
+    expectedVersion: input.expectedVersion,
     status: input.update.status,
     adminUserId: input.adminUserId,
     adminNote: "adminNote" in input.update ? (input.update.adminNote ?? null) : null,
@@ -340,11 +345,12 @@ export async function approvePayoutStatusUpdate(
     externalReference:
       "externalReference" in input.update ? input.update.externalReference : undefined,
     transferredAt: "transferredAt" in input.update ? input.update.transferredAt : undefined,
-    providerPayoutId:
-      "providerPayoutId" in input.update ? input.update.providerPayoutId : undefined,
+    proofArtifact: "proofArtifact" in input.update ? input.update.proofArtifact : undefined,
     now: input.now
   });
-  if (!updated) throw new PayoutRequestNotFoundError();
+  // The request was observed immediately above; a null conditional write means a concurrent
+  // transition won the optimistic lock, never that the request silently disappeared.
+  if (!updated) throw new PayoutVersionConflictError();
 
   const ledgerTransaction = createPayoutStatusLedgerTransaction({
     before,
@@ -444,7 +450,6 @@ function createPayoutStatusLedgerTransaction(input: {
       metadata: {
         adminUserId: input.adminUserId,
         externalReference: input.after.externalReference,
-        providerPayoutId: input.after.providerPayoutId
       },
       entries: [
         {
@@ -536,14 +541,12 @@ const allowedPayoutTransitions: Record<PayoutRequestStatus, readonly PayoutReque
     "under_review",
     "approved",
     "processing_manual",
-    "processing_provider",
     "rejected",
     "cancelled"
   ],
-  under_review: ["approved", "processing_manual", "processing_provider", "rejected", "cancelled"],
-  approved: ["processing_manual", "processing_provider", "rejected", "cancelled"],
+  under_review: ["approved", "processing_manual", "rejected", "cancelled"],
+  approved: ["processing_manual", "rejected", "cancelled"],
   processing_manual: ["paid", "failed"],
-  processing_provider: ["paid", "failed"],
   paid: [],
   failed: [],
   rejected: [],
@@ -553,5 +556,25 @@ const allowedPayoutTransitions: Record<PayoutRequestStatus, readonly PayoutReque
 function assertPositiveRubMoney(amount: Money): void {
   if (amount.currency !== "RUB" || amount.amountMinor <= 0) {
     throw new Error("Payout money must be a positive RUB amount");
+  }
+}
+
+function assertPaidProofArtifact(value: PayoutPaidProofArtifact): void {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    typeof value.artifactId !== "string" ||
+    value.artifactId.length < 1 ||
+    value.artifactId.length > 160 ||
+    value.artifactId.trim() !== value.artifactId ||
+    hasAsciiControlCharacter(value.artifactId) ||
+    typeof value.sha256Digest !== "string" ||
+    !/^sha256:[a-f0-9]{64}$/.test(value.sha256Digest) ||
+    !Number.isSafeInteger(value.byteLength) ||
+    value.byteLength <= 0
+  ) {
+    throw new PayoutStatusEvidenceError(
+      "Paid payout requests require an immutable bank transfer proof artifact"
+    );
   }
 }

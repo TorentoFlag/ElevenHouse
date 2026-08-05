@@ -422,15 +422,14 @@ function EventCard({ event }: { readonly event: AstroCalendarEvent }) {
               Написать
             </button>
           ) : null}
-          <button
+          <a
             className={styles.futureButton}
-            type="button"
-            disabled
-            title="Автоматизации появятся после отдельного production-контура"
+            href={astroCalendarFlowSetupHref(event)}
+            title="Настроить воронку для астрособытия"
           >
             <Icon iconName="flow" width={14} height={14} aria-hidden="true" />
             Автоматизировать
-          </button>
+          </a>
         </div>
       </div>
     </article>
@@ -528,6 +527,21 @@ function eventSuggestion(event: AstroCalendarEvent): string {
     return "Спец-разбор периода затмений без автозапуска";
   }
   return "Оффер или контент-повод по глобальному событию";
+}
+
+function astroCalendarFlowSetupHref(event: AstroCalendarEvent): string {
+  const searchParams = new URLSearchParams({
+    source: "astro_calendar",
+    eventId: event.id,
+    suggestedTemplateKey: "sleeping-client-reactivation"
+  });
+  const primaryClient = event.clientRefs[0];
+
+  if (primaryClient) {
+    searchParams.set("clientId", primaryClient.clientId);
+  }
+
+  return `/flows?${searchParams.toString()}`;
 }
 
 function createFilteredInterpretationResponse(

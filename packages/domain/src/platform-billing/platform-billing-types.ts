@@ -1,38 +1,6 @@
-export type PlatformPlanFeatureCode =
-  | "engine"
-  | "pdf"
-  | "natal"
-  | "synastry"
-  | "forecast"
-  | "solar"
-  | "matrix"
-  | "numerology"
-  | "hd"
-  | "horar"
-  | "vedic"
-  | "astrocal"
-  | "child"
-  | "page"
-  | "products"
-  | "calendar"
-  | "crm"
-  | "funnels"
-  | "group"
-  | "ai"
-  | "aicontent"
-  | "triggers"
-  | "content"
-  | "autopost"
-  | "journal"
-  | "video"
-  | "recordings"
-  | "inbox"
-  | "analytics"
-  | "refs"
-  | "team"
-  | "whitelabel"
-  | "api"
-  | "priority";
+import type { PlatformPlanFeatureCode } from "@elevenhouse/contracts";
+
+export type { PlatformPlanFeatureCode } from "@elevenhouse/contracts";
 
 export type BillingCycle = "month" | "year";
 export type PlatformSubscriptionStatus = "active" | "past_due" | "canceled" | "incomplete";

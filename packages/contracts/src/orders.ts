@@ -25,6 +25,7 @@ export const orderResponseSchema = z
     clientUserId: uuidSchema,
     astrologerUserId: uuidSchema,
     productId: uuidSchema,
+    productTitleSnapshot: z.string().trim().min(1).max(128),
     directLinkIntentId: uuidSchema.nullable(),
     bookingId: uuidSchema.nullable(),
     status: orderStatusSchema,
@@ -36,7 +37,6 @@ export const orderResponseSchema = z
     financePolicyHoldDurationHours: z.number().int().min(0).max(24 * 180),
     financePolicyReserveBps: z.number().int().min(0).max(10_000),
     financePolicyReserveReleaseDelayDays: z.number().int().min(0).max(540),
-    financePolicyPlatformFeeBps: z.number().int().min(0).max(10_000),
     financePolicyProviderSettlementRequired: z.boolean(),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema
@@ -82,3 +82,6 @@ export const createOrderRequestSchema = z
     clientBirthDataId: value.clientBirthDataId ?? null
   }));
 export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
+
+export const orderParamsSchema = z.object({ orderId: uuidSchema }).strict();
+export type OrderParams = z.infer<typeof orderParamsSchema>;

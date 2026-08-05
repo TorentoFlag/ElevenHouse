@@ -529,6 +529,7 @@ async function blockOpenPayoutRequestsForChargeback(input: {
     const status = chargebackBlockedPayoutStatus(request);
     const updated = await input.store.updateRequestStatus({
       payoutRequestId: request.id,
+      expectedVersion: request.version,
       status,
       adminUserId: null,
       adminNote: `Blocked automatically by provider chargeback ${input.providerEvent.providerWebhookId} for order ${input.order.id}`,
@@ -552,7 +553,7 @@ async function blockOpenPayoutRequestsForChargeback(input: {
 function chargebackBlockedPayoutStatus(
   request: PayoutRequestRecord
 ): Extract<PayoutRequestStatus, "cancelled" | "failed"> {
-  return request.status === "processing_manual" || request.status === "processing_provider"
+  return request.status === "processing_manual"
     ? "failed"
     : "cancelled";
 }
@@ -561,8 +562,7 @@ const chargebackBlockablePayoutStatuses = [
   "requested",
   "under_review",
   "approved",
-  "processing_manual",
-  "processing_provider"
+  "processing_manual"
 ] as const satisfies readonly PayoutRequestStatus[];
 
 function createChargebackBlockedPayoutReleaseLedgerTransaction(input: {

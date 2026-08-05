@@ -12,18 +12,31 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
       flowRuntimeOutboxMaxAttempts: 5,
+      flowBookingEnrollment: {
+        latenessHorizonMs: 604_800_000,
+        futureSkewToleranceMs: 300_000,
+        deferDelayMs: 30_000
+      },
       flowExecution: {
-        rollout: { mode: "definition_only" },
-        leaseOwner: "flows-worker-local",
-        leaseDurationMs: 30_000,
+        deploymentCeiling: { mode: "definition_only" },
+        instanceId: "flows-worker-local",
         pollIntervalMs: 1_000,
         pollBatchSize: 10,
         recoveryIntervalMs: 5_000,
         recoveryBatchSize: 25,
+        workItemWakeIntervalMs: 5_000,
+        workItemWakeBatchSize: 25,
         operationTimeoutMs: 10_000,
         drainTimeoutMs: 45_000,
         errorBackoffMaxMs: 30_000,
         errorJitter: 0.5
+      },
+      flowRuntimeControl: {
+        heartbeatIntervalMaxMs: 2_000,
+        maintenanceIntervalMs: 60_000,
+        retentionBatchSize: 100,
+        deploymentId: "local-deployment",
+        buildId: "local-build"
       },
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
@@ -45,6 +58,9 @@ describe("createWorkersRuntimeConfig", () => {
       createWorkersRuntimeConfig({
         REDIS_URL: "rediss://worker:secret@redis.internal:6380/2",
         WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "7",
+        WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS: "86400000",
+        WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS: "60000",
+        WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS: "15000",
         WORKERS_CALCULATION_PDF_ATTEMPTS: "7",
         WORKERS_CALCULATION_PDF_JITTER: "0.25",
         WORKERS_CALCULATION_PDF_CONCURRENCY: "4",
@@ -55,6 +71,11 @@ describe("createWorkersRuntimeConfig", () => {
     ).toMatchObject({
       redisUrl: "rediss://worker:secret@redis.internal:6380/2",
       flowRuntimeOutboxMaxAttempts: 7,
+      flowBookingEnrollment: {
+        latenessHorizonMs: 86_400_000,
+        futureSkewToleranceMs: 60_000,
+        deferDelayMs: 15_000
+      },
       calculationPdfAttempts: 7,
       calculationPdfJitter: 0.25,
       calculationPdfConcurrency: 4,
@@ -74,35 +95,52 @@ describe("createWorkersRuntimeConfig", () => {
     expect(() =>
       createWorkersRuntimeConfig({ WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "21" })
     ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS: "2678400001"
+      })
+    ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS: "3600001"
+      })
+    ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS: "0" })
+    ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: "999" })
+    ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: "101" })
+    ).toThrow();
   });
 
   it("parses an explicit bounded flow execution canary owner allowlist", () => {
     expect(
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_EXECUTION_MODE: "canary",
-        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS:
           "00000000-0000-4000-8000-000000000002, 00000000-0000-4000-8000-000000000001",
         WORKERS_FLOW_EXECUTION_INSTANCE_ID: "flows-worker-canary-a",
         WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE: "20",
         WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: "50"
       }).flowExecution
     ).toEqual({
-      rollout: {
+      deploymentCeiling: {
         mode: "canary",
-        ownerScope: {
-          kind: "allowlist",
-          ownerUserIds: [
-            "00000000-0000-4000-8000-000000000001",
-            "00000000-0000-4000-8000-000000000002"
-          ]
-        }
+        ownerUserIds: [
+          "00000000-0000-4000-8000-000000000001",
+          "00000000-0000-4000-8000-000000000002"
+        ]
       },
-      leaseOwner: "flows-worker-canary-a",
-      leaseDurationMs: 30_000,
+      instanceId: "flows-worker-canary-a",
       pollIntervalMs: 1_000,
       pollBatchSize: 20,
       recoveryIntervalMs: 5_000,
       recoveryBatchSize: 50,
+      workItemWakeIntervalMs: 5_000,
+      workItemWakeBatchSize: 25,
       operationTimeoutMs: 10_000,
       drainTimeoutMs: 45_000,
       errorBackoffMaxMs: 30_000,
@@ -111,29 +149,29 @@ describe("createWorkersRuntimeConfig", () => {
   });
 
   it("rejects empty, duplicated, malformed or prematurely global flow rollout", () => {
-    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MODE: "canary" })).toThrow(
-      "WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS"
+    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "canary" })).toThrow(
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS"
     );
     expect(() =>
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_EXECUTION_MODE: "canary",
-        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS:
           "00000000-0000-4000-8000-000000000001,00000000-0000-4000-8000-000000000001"
       })
     ).toThrow("unique");
     expect(() =>
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_EXECUTION_MODE: "definition_only",
-        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "00000000-0000-4000-8000-000000000001"
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "definition_only",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "00000000-0000-4000-8000-000000000001"
       })
     ).toThrow("definition_only");
-    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MODE: "enabled" })).toThrow(
-      "WORKERS_FLOW_EXECUTION_MODE"
+    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" })).toThrow(
+      "WORKERS_FLOW_EXECUTION_MAX_MODE"
     );
     expect(() =>
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_EXECUTION_MODE: "canary",
-        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS:
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS:
           "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa,AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
       })
     ).toThrow("unique");
@@ -153,6 +191,18 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: undefined
       })
     ).toThrow("WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS");
+    expect(() =>
+      createWorkersRuntimeConfig({
+        ...productionConfig(),
+        WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS: undefined
+      })
+    ).toThrow("WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS");
+    expect(() =>
+      createWorkersRuntimeConfig({
+        ...productionConfig(),
+        WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: undefined
+      })
+    ).toThrow("WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS");
   });
 
   it("rejects local object-storage defaults and insecure endpoints in production", () => {
@@ -189,18 +239,31 @@ describe("createWorkersRuntimeConfig", () => {
       outboxRelayBatchSize: 25,
       outboxLockTimeoutMs: 60000,
       flowRuntimeOutboxMaxAttempts: 5,
+      flowBookingEnrollment: {
+        latenessHorizonMs: 604_800_000,
+        futureSkewToleranceMs: 300_000,
+        deferDelayMs: 30_000
+      },
       flowExecution: {
-        rollout: { mode: "definition_only" },
-        leaseOwner: "flows-worker-production-a",
-        leaseDurationMs: 30_000,
+        deploymentCeiling: { mode: "definition_only" },
+        instanceId: "flows-worker-production-a",
         pollIntervalMs: 1_000,
         pollBatchSize: 10,
         recoveryIntervalMs: 5_000,
         recoveryBatchSize: 25,
+        workItemWakeIntervalMs: 5_000,
+        workItemWakeBatchSize: 25,
         operationTimeoutMs: 10_000,
         drainTimeoutMs: 45_000,
         errorBackoffMaxMs: 30_000,
         errorJitter: 0.5
+      },
+      flowRuntimeControl: {
+        heartbeatIntervalMaxMs: 2_000,
+        maintenanceIntervalMs: 60_000,
+        retentionBatchSize: 100,
+        deploymentId: "production-deployment-001",
+        buildId: "production-build-001"
       },
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
@@ -216,14 +279,18 @@ describe("createWorkersRuntimeConfig", () => {
     });
   });
 
-  it("keeps production claims closed until persisted rollout authority exists", () => {
-    expect(() =>
+  it("accepts production canary only as a bounded deployment ceiling", () => {
+    expect(
       createWorkersRuntimeConfig({
         ...productionConfig(),
-        WORKERS_FLOW_EXECUTION_MODE: "canary",
-        WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "00000000-0000-4000-8000-000000000001"
-      })
-    ).toThrow("WORKERS_FLOW_EXECUTION_PERSISTED_CONTROL_REQUIRED");
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS:
+          "00000000-0000-4000-8000-000000000001"
+      }).flowExecution.deploymentCeiling
+    ).toEqual({
+      mode: "canary",
+      ownerUserIds: ["00000000-0000-4000-8000-000000000001"]
+    });
   });
 
   it("keeps the checked-in production environment example executable by workers", () => {
@@ -256,18 +323,27 @@ function productionConfig(): Record<string, string | undefined> {
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE: "25",
     WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: "60000",
     WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: "5",
-    WORKERS_FLOW_EXECUTION_MODE: "definition_only",
-    WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: "",
+    WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS: "604800000",
+    WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS: "300000",
+    WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS: "30000",
+    WORKERS_FLOW_EXECUTION_MAX_MODE: "definition_only",
+    WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "",
     WORKERS_FLOW_EXECUTION_INSTANCE_ID: "flows-worker-production-a",
-    WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS: "30000",
     WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS: "1000",
     WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE: "10",
     WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS: "5000",
     WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: "25",
+    WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: "5000",
+    WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: "25",
     WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: "10000",
     WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS: "45000",
     WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS: "30000",
     WORKERS_FLOW_EXECUTION_ERROR_JITTER: "0.5",
+    WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS: "2000",
+    WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS: "60000",
+    WORKERS_FLOW_RUNTIME_CONTROL_RETENTION_BATCH_SIZE: "100",
+    WORKERS_DEPLOYMENT_ID: "production-deployment-001",
+    WORKERS_BUILD_ID: "production-build-001",
     WORKERS_CALCULATION_PDF_ATTEMPTS: "5",
     WORKERS_CALCULATION_PDF_BACKOFF_MS: "1000",
     WORKERS_CALCULATION_PDF_JITTER: "0.5",

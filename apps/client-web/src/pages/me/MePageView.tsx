@@ -5,8 +5,10 @@ import type {
   ClientCabinetOverviewResponse
 } from "@elevenhouse/contracts";
 import type { FormEvent } from "react";
-import type { BirthPlaceSearchCopy, BirthTimeOccurrenceCopy } from "../../common/i18n/clientCopy";
+import type { SupportedLocale } from "@elevenhouse/i18n";
+import type { BirthPlaceSearchCopy, BirthTimeOccurrenceCopy, ClientPurchaseFlowCopy } from "../../common/i18n/clientCopy";
 import { BirthPlaceAutocomplete } from "../../features/client-profile/components/BirthPlaceAutocomplete";
+import { ClientPurchaseFlow } from "../../features/client-commerce/components/ClientPurchaseFlow";
 import {
   applyBirthPlaceCandidate,
   updateBirthDate,
@@ -37,6 +39,7 @@ export type MePageViewProps = {
     ) => Promise<readonly ClientBirthPlaceCandidate[]>;
   };
   readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
+  readonly clientLocale: SupportedLocale;
   readonly form: BirthProfileFormState;
   readonly overview: ClientCabinetOverviewResponse | null;
   readonly status: ClientCabinetStatus;
@@ -44,6 +47,7 @@ export type MePageViewProps = {
   readonly onRetry: () => void;
   readonly onSectionChange: (section: ClientCabinetSection) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly purchaseFlowCopy: ClientPurchaseFlowCopy;
 };
 
 const navItems: ReadonlyArray<{
@@ -63,13 +67,15 @@ export function MePageView({
   activeSection,
   birthPlaceSearch,
   birthTimeOccurrenceCopy,
+  clientLocale,
   form,
   overview,
   status,
   onFormChange,
   onRetry,
   onSectionChange,
-  onSubmit
+  onSubmit,
+  purchaseFlowCopy
 }: MePageViewProps) {
   const isLoading = status === "loading";
   const activeTitle = navItems.find((item) => item.id === activeSection)?.label ?? "Главная";
@@ -187,7 +193,12 @@ export function MePageView({
             <HomeSection overview={safeOverview} onSectionChange={onSectionChange} />
           ) : null}
           {activeSection === "booking" ? (
-            <BookingEntrySection overview={safeOverview} onSectionChange={onSectionChange} />
+            <BookingEntrySection
+              clientLocale={clientLocale}
+              overview={safeOverview}
+              onSectionChange={onSectionChange}
+              purchaseFlowCopy={purchaseFlowCopy}
+            />
           ) : null}
           {activeSection === "sessions" ? (
             <EmptySection title="Пока нет предстоящих консультаций." />
@@ -200,7 +211,7 @@ export function MePageView({
               birthPlaceSearch={birthPlaceSearch}
               birthTimeOccurrenceCopy={birthTimeOccurrenceCopy}
               form={form}
-              profiles={safeOverview.birthProfiles}
+              birthData={safeOverview.birthData}
               status={status}
               onFormChange={onFormChange}
               onSubmit={onSubmit}
@@ -264,12 +275,12 @@ function HomeSection({
             Открыть
           </button>
         </div>
-        {overview.birthProfiles.length === 0 ? (
+        {overview.birthData === null ? (
           <p className={styles.emptyInline}>
-            Добавьте основной профиль, чтобы использовать его в заказах и расчётах.
+            Добавьте данные рождения, чтобы использовать их в заказах и расчётах.
           </p>
         ) : (
-          <BirthProfileList profiles={overview.birthProfiles} compact />
+          <BirthProfileSummary profile={overview.birthData} compact />
         )}
       </section>
 
@@ -307,11 +318,15 @@ function HomeSection({
 }
 
 function BookingEntrySection({
+  clientLocale,
   overview,
-  onSectionChange
+  onSectionChange,
+  purchaseFlowCopy
 }: {
+  readonly clientLocale: SupportedLocale;
   readonly overview: ClientCabinetOverviewResponse;
   readonly onSectionChange: (section: ClientCabinetSection) => void;
+  readonly purchaseFlowCopy: ClientPurchaseFlowCopy;
 }) {
   if (overview.astrologers.length === 0) {
     return (
@@ -327,32 +342,8 @@ function BookingEntrySection({
 
   return (
     <div className={styles.bookingGrid}>
-      <section className={styles.heroCard}>
-        <span className={styles.eyebrow}>Запись</span>
-        <h2>Выберите связанного астролога</h2>
-        <p>Онлайн-запись появится после публикации консультаций и расписания этим астрологом.</p>
-      </section>
-
       <section className={styles.sectionCard}>
-        <div className={styles.sectionHeader}>
-          <h2>Доступные астрологи</h2>
-          <span className={styles.counter}>{overview.astrologers.length}</span>
-        </div>
-        <ul className={styles.bookingList}>
-          {overview.astrologers.map((astrologer) => (
-            <li key={astrologer.astrologerUserId}>
-              <span className={styles.avatar}>{getInitials(astrologer.publicName)}</span>
-              <span className={styles.bookingPerson}>
-                <strong>{astrologer.publicName}</strong>
-                <small>@{astrologer.publicHandle}</small>
-              </span>
-              <span className={styles.bookingStatus}>Расписание пока не опубликовано</span>
-              <button className={styles.secondaryButton} type="button" disabled>
-                Выбрать время
-              </button>
-            </li>
-          ))}
-        </ul>
+          <ClientPurchaseFlow astrologers={overview.astrologers} copy={purchaseFlowCopy} locale={clientLocale} />
       </section>
 
       <section className={styles.sectionCard}>
@@ -369,12 +360,12 @@ function BookingEntrySection({
             Открыть
           </button>
         </div>
-        {overview.birthProfiles.length === 0 ? (
+        {overview.birthData === null ? (
           <p className={styles.emptyInline}>
-            Добавьте основной профиль, чтобы астролог мог использовать его для консультации.
+            Добавьте данные рождения, чтобы астролог мог использовать их для консультации.
           </p>
         ) : (
-          <BirthProfileList profiles={overview.birthProfiles} compact />
+          <BirthProfileSummary profile={overview.birthData} compact />
         )}
       </section>
     </div>
@@ -385,7 +376,7 @@ function DataSection({
   birthPlaceSearch,
   birthTimeOccurrenceCopy,
   form,
-  profiles,
+  birthData,
   status,
   onFormChange,
   onSubmit
@@ -393,7 +384,7 @@ function DataSection({
   readonly birthPlaceSearch: MePageViewProps["birthPlaceSearch"];
   readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
   readonly form: BirthProfileFormState;
-  readonly profiles: readonly ClientBirthDataResponse[];
+  readonly birthData: ClientBirthDataResponse | null;
   readonly status: ClientCabinetStatus;
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -403,22 +394,21 @@ function DataSection({
       <section className={styles.sectionCard}>
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Мои карты</span>
+            <span className={styles.eyebrow}>Мои данные</span>
             <h2>Данные рождения</h2>
           </div>
-          <span className={styles.counter}>{profiles.length}</span>
         </div>
-        {profiles.length === 0 ? (
-          <p className={styles.emptyInline}>Сохранённых профилей рождения пока нет.</p>
+        {birthData === null ? (
+          <p className={styles.emptyInline}>Данные рождения пока не сохранены.</p>
         ) : (
-          <BirthProfileList profiles={profiles} />
+          <BirthProfileSummary profile={birthData} />
         )}
       </section>
 
       <form className={styles.sectionCard} onSubmit={onSubmit}>
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Основной профиль</span>
+            <span className={styles.eyebrow}>Профиль рождения</span>
             <h2>Редактирование</h2>
           </div>
         </div>
@@ -505,7 +495,7 @@ function DataSection({
           />
         </div>
         <button className={styles.primaryButton} type="submit" disabled={status === "saving"}>
-          {status === "saving" ? "Сохраняем..." : "Сохранить основной профиль"}
+          {status === "saving" ? "Сохраняем..." : "Сохранить данные"}
         </button>
         {status === "saved" ? <p className={styles.successText}>Сохранено</p> : null}
         {status === "error" ? (
@@ -516,31 +506,28 @@ function DataSection({
   );
 }
 
-function BirthProfileList({
-  profiles,
+function BirthProfileSummary({
+  profile,
   compact = false
 }: {
-  readonly profiles: readonly ClientBirthDataResponse[];
+  readonly profile: ClientBirthDataResponse;
   readonly compact?: boolean;
 }) {
   return (
     <ul className={compact ? styles.birthListCompact : styles.birthList}>
-      {profiles.map((profile) => (
-        <li key={profile.id}>
-          <span className={styles.birthIcon}>
-            <Icon iconName="orbit" size={18} />
-          </span>
-          <span>
-            <strong>{profile.label ?? "Профиль"}</strong>
-            <small>
-              {formatBirthDate(profile.birthDate)}
-              {profile.birthTime ? ` · ${profile.birthTime}` : " · время неизвестно"}
-              {profile.birthPlaceText ? ` · ${profile.birthPlaceText}` : ""}
-            </small>
-          </span>
-          {profile.isPrimary ? <em>Основной профиль</em> : null}
-        </li>
-      ))}
+      <li>
+        <span className={styles.birthIcon}>
+          <Icon iconName="orbit" size={18} />
+        </span>
+        <span>
+          <strong>{profile.label ?? "Данные рождения"}</strong>
+          <small>
+            {formatBirthDate(profile.birthDate)}
+            {profile.birthTime ? ` · ${profile.birthTime}` : " · время неизвестно"}
+            {profile.birthPlaceText ? ` · ${profile.birthPlaceText}` : ""}
+          </small>
+        </span>
+      </li>
     </ul>
   );
 }
@@ -614,7 +601,7 @@ function getInitials(name: string) {
 
 const emptyOverview: ClientCabinetOverviewResponse = {
   astrologers: [],
-  birthProfiles: [],
+  birthData: null,
   summary: {
     directLinkOnly: true,
     upcomingBookingCount: 0,

@@ -1,43 +1,26 @@
 import { HttpException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
-  FinanceIdempotencyConflictError,
-  FinanceIdempotencyFailedError,
-  FinanceIdempotencyInProgressError,
-  PaymentCheckoutOrderAccessDeniedError,
   PaymentCheckoutOrderNotFoundError,
-  PaymentCheckoutOrderNotPayableError,
-  PaymentCheckoutPersistenceError,
-  createPaymentCheckout,
-  type FinanceOrderStore,
-  type PaymentProviderPort,
-  type PaymentStore
+  type FinanceOrderStore
 } from "@elevenhouse/domain";
 import {
-  checkoutResponseSchema,
   createCheckoutRequestSchema,
-  type CheckoutResponse
+  type CheckoutPreparationResponse
 } from "@elevenhouse/contracts";
-import { SystemClock } from "../../common/system-clock.js";
+import { ClientCheckoutPreparationService } from "./client-checkout-preparation.service";
 import {
-  ArcPayCheckoutConfigurationError,
-  ArcPayCheckoutProviderError
-} from "./arc-pay-checkout-provider";
-import { PAYMENTS_ORDER_STORE, PAYMENTS_PAYMENT_STORE, PAYMENTS_PROVIDER } from "./payments.tokens";
+  PAYMENTS_CHECKOUT_PREPARATION_SERVICE,
+  PAYMENTS_ORDER_STORE
+} from "./payments.tokens";
 
 @Injectable()
 export class PaymentsService {
   constructor(
     @Inject(PAYMENTS_ORDER_STORE)
     private readonly orderStore: Pick<FinanceOrderStore, "findById">,
-    @Inject(PAYMENTS_PAYMENT_STORE)
-    private readonly paymentStore: Pick<
-      PaymentStore,
-      "executeCreateCheckout" | "markAttemptCheckoutOpened"
-    >,
-    @Inject(PAYMENTS_PROVIDER) private readonly provider: PaymentProviderPort,
-    @Inject(SystemClock)
-    private readonly clock: SystemClock,
+    @Inject(PAYMENTS_CHECKOUT_PREPARATION_SERVICE)
+    private readonly checkoutPreparation: ClientCheckoutPreparationService | null,
     @Inject(ConfigService)
     private readonly configService: ConfigService
   ) {}
@@ -45,8 +28,8 @@ export class PaymentsService {
   async createCheckout(
     clientUserId: string,
     body: unknown,
-    idempotencyKey: string
-  ): Promise<CheckoutResponse> {
+    _idempotencyKey: string
+  ): Promise<CheckoutPreparationResponse> {
     return mapPaymentErrors(async () => {
       const request = createCheckoutRequestSchema.safeParse(body);
       if (!request.success) {
@@ -59,21 +42,19 @@ export class PaymentsService {
           "Payment return URLs must use an allowed origin"
         );
       }
+      const order = await this.orderStore.findById(request.data.orderId);
+      if (!order || order.clientUserId !== clientUserId) {
+        throw new PaymentCheckoutOrderNotFoundError();
+      }
 
-      const checkout = await createPaymentCheckout({
-        orderStore: this.orderStore,
-        paymentStore: this.paymentStore,
-        provider: this.provider,
+      if (!this.checkoutPreparation) throw new LegacySynchronousCheckoutDisabledError();
+      return this.checkoutPreparation.accept({
+        order,
         clientUserId,
         request: request.data,
-        idempotencyKey,
-        now: this.clock.now()
+        idempotencyKey: _idempotencyKey
       });
-      return checkoutResponseSchema.parse({
-        ...checkout,
-        provider: this.provider.provider,
-        environment: this.provider.environment
-      });
+
     });
   }
 }
@@ -93,30 +74,21 @@ async function mapPaymentErrors<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (error instanceof HttpException) throw error;
-    if (
-      error instanceof PaymentCheckoutOrderNotFoundError ||
-      error instanceof PaymentCheckoutOrderAccessDeniedError
-    ) {
+    if (error instanceof PaymentCheckoutOrderNotFoundError) {
       throw paymentHttpError(404, "payment_checkout_order_not_found", "Order was not found");
     }
-    if (
-      error instanceof PaymentCheckoutOrderNotPayableError ||
-      error instanceof FinanceIdempotencyConflictError ||
-      error instanceof FinanceIdempotencyInProgressError ||
-      error instanceof FinanceIdempotencyFailedError
-    ) {
-      throw paymentHttpError(409, error.code, error.message);
-    }
-    if (error instanceof ArcPayCheckoutConfigurationError) {
-      throw paymentHttpError(503, error.code, "Payment checkout is temporarily unavailable");
-    }
-    if (
-      error instanceof ArcPayCheckoutProviderError ||
-      error instanceof PaymentCheckoutPersistenceError
-    ) {
-      throw paymentHttpError(502, error.code, "Payment checkout could not be opened");
+    if (error instanceof LegacySynchronousCheckoutDisabledError) {
+      throw paymentHttpError(503, error.code, "Payment checkout is preparing through the secure payment service");
     }
     throw error;
+  }
+}
+
+class LegacySynchronousCheckoutDisabledError extends Error {
+  readonly code = "payment_checkout_worker_preparation_required";
+
+  constructor() {
+    super("Legacy synchronous payment checkout is disabled");
   }
 }
 

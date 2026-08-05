@@ -30,7 +30,8 @@ import {
   flowRuntimeCommandOutcomes,
   flowRuntimeCommands,
   flowRuntimeEvents,
-  flowVersions
+  flowVersions,
+  flowWorkItems
 } from "../../schema/flows";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
 
@@ -63,7 +64,7 @@ const transactionTimestamp = sql`transaction_timestamp()`;
 const replayUntil = sql`transaction_timestamp() + interval '24 hours'`;
 const cancellationLockTimeout = "1000ms";
 const cancellationStatementTimeout = "5000ms";
-const cancelableRunStatuses = ["pending", "running", "failed_retryable"] as const;
+const cancelableRunStatuses = ["pending", "running", "waiting", "failed_retryable"] as const;
 const terminalRunStatuses = [
   "completed",
   "skipped",
@@ -101,6 +102,7 @@ async function executePersistedCancellation(
           ownerUserId: command.ownerUserId,
           routeTemplate: command.routeTemplate,
           resourceId: command.resourceId,
+          flowRunId: command.flowRunId,
           commandScope: command.scope,
           idempotencyKey: command.idempotencyKey,
           requestHash: command.requestHash,
@@ -200,6 +202,7 @@ async function cancelLockedRun(
 
   const run = await lockRunAfterToken(transaction, command, token);
   if (!run) throw new FlowRuntimeCommandIntegrityError();
+  const activeWorkItem = await lockActiveWorkItemAfterRun(transaction, command);
 
   if (run.status === "canceled" && token.state === "canceled") {
     if (!(await hasDurableCancellationEvent(transaction, command, run.traceSequence))) {
@@ -221,6 +224,7 @@ async function cancelLockedRun(
   if (
     !isCancelableRuntime(run, token) ||
     !hasValidCancellationRuntimeState(token, canceledAt) ||
+    !hasCoherentCancellationWorkItem(token, activeWorkItem) ||
     pinnedNodeKind === null ||
     !flowRunResponseSchema.safeParse(toRawRunResponse(run)).success
   ) {
@@ -259,6 +263,33 @@ async function cancelLockedRun(
     )
     .returning({ canceledAt: flowExecutionTokens.terminalAt });
   if (!canceledToken?.canceledAt) throw new FlowRuntimeCommandIntegrityError();
+
+  if (activeWorkItem) {
+    const [canceledWorkItem] = await transaction
+      .update(flowWorkItems)
+      .set({
+        status: "canceled",
+        snoozedUntil: null,
+        canceledAt: canceledToken.canceledAt,
+        revision: activeWorkItem.revision + 1,
+        lastCommandId: commandId,
+        lastRunEventId: null,
+        updatedAt: canceledToken.canceledAt
+      })
+      .where(
+        and(
+          eq(flowWorkItems.id, activeWorkItem.id),
+          eq(flowWorkItems.ownerUserId, command.ownerUserId),
+          eq(flowWorkItems.flowRunId, command.resourceId),
+          eq(flowWorkItems.tokenId, token.id),
+          eq(flowWorkItems.nodeActivationSequence, token.nodeActivationSequence),
+          eq(flowWorkItems.revision, activeWorkItem.revision),
+          eq(flowWorkItems.status, activeWorkItem.status)
+        )
+      )
+      .returning({ id: flowWorkItems.id });
+    if (!canceledWorkItem) throw new FlowRuntimeCommandIntegrityError();
+  }
 
   const attemptId =
     token.state === "claimed"
@@ -357,6 +388,25 @@ async function lockRunAfterToken(
   return run ?? null;
 }
 
+async function lockActiveWorkItemAfterRun(
+  transaction: FlowTransaction,
+  command: FlowRunCancellationCommand
+): Promise<typeof flowWorkItems.$inferSelect | null> {
+  const [workItem] = await transaction
+    .select()
+    .from(flowWorkItems)
+    .where(
+      and(
+        eq(flowWorkItems.ownerUserId, command.ownerUserId),
+        eq(flowWorkItems.flowRunId, command.resourceId),
+        inArray(flowWorkItems.status, ["pending", "in_progress", "snoozed"])
+      )
+    )
+    .limit(1)
+    .for("update", { of: flowWorkItems });
+  return workItem ?? null;
+}
+
 async function persistCanceledAttempt(
   transaction: FlowTransaction,
   token: FlowExecutionTokenRow,
@@ -441,7 +491,25 @@ async function hasDurableCancellationEvent(
 function isCancelableRuntime(run: LockedRun, token: FlowExecutionTokenRow): boolean {
   return (
     cancelableRunStatuses.includes(run.status as (typeof cancelableRunStatuses)[number]) &&
-    (token.state === "runnable" || token.state === "claimed" || token.state === "retry_scheduled")
+    (token.state === "runnable" ||
+      token.state === "claimed" ||
+      token.state === "retry_scheduled" ||
+      token.state === "waiting_work_item")
+  );
+}
+
+function hasCoherentCancellationWorkItem(
+  token: FlowExecutionTokenRow,
+  workItem: typeof flowWorkItems.$inferSelect | null
+): boolean {
+  if (token.state !== "waiting_work_item") return workItem === null;
+  return (
+    workItem !== null &&
+    workItem.tokenId === token.id &&
+    workItem.flowRunId === token.flowRunId &&
+    workItem.flowVersionId === token.flowVersionId &&
+    workItem.nodeId === token.nodeId &&
+    workItem.nodeActivationSequence === token.nodeActivationSequence
   );
 }
 
@@ -485,7 +553,9 @@ async function replayPersistedCancellation(
 ): Promise<FlowRunCancellationCommandResult> {
   const [row] = await database
     .select({
+      commandId: flowRuntimeCommands.id,
       commandScope: flowRuntimeCommands.commandScope,
+      flowRunId: flowRuntimeCommands.flowRunId,
       requestHash: flowRuntimeCommands.requestHash,
       state: flowRuntimeCommands.state,
       replayExpired: sql<boolean>`${flowRuntimeCommands.replayUntil} <= transaction_timestamp()`,
@@ -511,6 +581,20 @@ async function replayPersistedCancellation(
   if (row.state === "succeeded" && row.responseStatus === 200) {
     const body = cancelFlowRunResponseSchema.safeParse(row.responseBody);
     if (body.success) {
+      if (
+        row.flowRunId === null ||
+        body.data.run.id !== command.resourceId ||
+        body.data.run.id !== row.flowRunId ||
+        body.data.run.ownerUserId !== command.ownerUserId ||
+        body.data.run.status !== "canceled" ||
+        !(await hasExactCancellationEvent(database, {
+          commandId: row.commandId,
+          ownerUserId: command.ownerUserId,
+          flowRunId: row.flowRunId
+        }))
+      ) {
+        throw new FlowRuntimeCommandIntegrityError();
+      }
       return {
         kind: "replayed",
         outcome: { kind: "succeeded", response: { statusCode: 200, body: body.data } }
@@ -527,6 +611,41 @@ async function replayPersistedCancellation(
     }
   }
   throw new FlowRuntimeCommandIntegrityError();
+}
+
+async function hasExactCancellationEvent(
+  database: ElevenHouseDatabase,
+  expected: {
+    readonly commandId: string;
+    readonly ownerUserId: string;
+    readonly flowRunId: string;
+  }
+): Promise<boolean> {
+  const events = await database
+    .select({
+      ownerUserId: flowRunEvents.ownerUserId,
+      flowRunId: flowRunEvents.flowRunId,
+      eventType: flowRunEvents.eventType,
+      summary: flowRunEvents.summary
+    })
+    .from(flowRunEvents)
+    .where(eq(flowRunEvents.commandId, expected.commandId))
+    .limit(2);
+  if (events.length !== 1) return false;
+
+  const event = events[0]!;
+  try {
+    const trace = parseFlowRuntimeTraceSummary(event.summary);
+    return (
+      event.ownerUserId === expected.ownerUserId &&
+      event.flowRunId === expected.flowRunId &&
+      event.eventType === "run_canceled" &&
+      trace.reasonCode === "FLOW_RUN_CANCELED_BY_OWNER" &&
+      trace.resultCode === "FLOW_RUN_CANCELED"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function commandIdentityPredicate(command: FlowRunCancellationCommand) {

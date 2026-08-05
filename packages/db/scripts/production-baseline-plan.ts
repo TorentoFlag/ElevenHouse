@@ -1,10 +1,24 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
 import {
-  flowDefinitionIntegritySql,
+  flowEnrollmentTraceConstraintIntegritySql,
   flowExecutionHistoryIntegritySql,
   flowRunEventCommandIntegritySql,
   flowRuntimeCommandIntegritySql
 } from "./augment-flows-baseline";
-import { flowCapabilityManifestSchemaPredicate } from "../src/schema/flows/flow-capability-manifest-constraint";
+import {
+  flowWorkItemCoreIntegritySql,
+  flowWorkItemEventIntegritySql
+} from "../src/schema/flows/flow-work-items.schema";
+import {
+  flowRunEventCommandIntegrityV1Sql,
+  flowRuntimeCommandIntegrityV1Sql
+} from "./flow-runtime-command-integrity-v1";
+import {
+  bookingClientDataRequirementsConstraintName,
+  bookingClientDataRequirementsSnapshotPredicateSql
+} from "../src/schema/scheduling/booking-client-data-requirements-constraint";
 
 export type MigrationIdentity = {
   readonly hash: string;
@@ -16,281 +30,29 @@ export type MigrationLedgerRow = {
   readonly created_at: string;
 };
 
-export type BaselineHistoryKind =
-  | "current"
-  | "previous_atomic_advance"
-  | "previous_flow_safety"
-  | "previous_cancellation_kernel"
-  | "previous_runtime_kernel"
-  | "previous_flow_definition_control"
-  | "previous_current"
-  | "legacy_calculations"
-  | "unknown";
+export const currentBaseline = readCurrentBaselineIdentity();
 
-export const currentBaseline = {
-  hash: "c8c7a9321f324b0b87f1dabc0caf3ab7858f8951fc86a2b766e0d1742002d0ee",
-  createdAt: "1785788910481"
-} as const satisfies MigrationIdentity;
-
-export const previousAtomicAdvanceBaseline = {
-  hash: "bf9787c8efeb873169dabb94ca99af08cdd073675494c03744659142ed73a319",
-  createdAt: "1785783440777"
-} as const satisfies MigrationIdentity;
-
-export const previousFlowSafetyBaseline = {
-  hash: "5831a6c30c9c33aa93058f1f119dd4697253b73d7b2743f7e20ec8d7f014ccc9",
-  createdAt: "1785768455149"
-} as const satisfies MigrationIdentity;
-
-export const previousCancellationKernelBaseline = {
-  hash: "2e4f69f3926545055e0d9f2c3812b2c19a79f571b2533f3ff8aa00b23796fa49",
-  createdAt: "1785761073015"
-} as const satisfies MigrationIdentity;
-
-export const previousRuntimeKernelBaseline = {
-  hash: "bf151129ed85e6bd009a7bc40087938906e6d1497413458b12f66d62e258dff7",
-  createdAt: "1785747356544"
-} as const satisfies MigrationIdentity;
-
-export const previousFlowDefinitionControlBaseline = {
-  hash: "357b63b1fc968f7d20a5dca13006535d80b73db8b6dadf1a426a97312c26fa94",
-  createdAt: "1785708843533"
-} as const satisfies MigrationIdentity;
-
-export const previousBaseline = {
-  hash: "ed87993e6e473fbeee9cbeb7db2166df31161f401b9725e8bb2ad3240628bf39",
-  createdAt: "1785010323027"
-} as const satisfies MigrationIdentity;
-
-const misrecordedFlowRuntimeBaseline = {
-  hash: "8b8e765327792e8946a232199cd3627a68ed14b2419fb62581f8c66482a6a917",
-  createdAt: "1785010323027"
-} as const satisfies MigrationIdentity;
-
-const preFlowRuntimeBaseline = {
-  hash: "a38ad40eeb3418dedda1cb62b1a30be0f9c249dd137f73539b8ef89c9d13d112",
-  createdAt: "1785010323027"
-} as const satisfies MigrationIdentity;
-
-const natalChartEngineBaseline = {
-  hash: "ab1e22a3e02a0c428dfa01e90e48b5f037e66509ecf51fa5674e5e3ab2889b57",
-  createdAt: "1784275401007"
-} as const satisfies MigrationIdentity;
-
-const telegramMtprotoBaseline = {
-  hash: "9502df7bc0155994014951df839fd556213d11e3c370cb5244d65a37a43d704e",
-  createdAt: "1785010323027"
-} as const satisfies MigrationIdentity;
-
-const approvedPriorBaselines = [
-  natalChartEngineBaseline,
-  telegramMtprotoBaseline
-] as const satisfies readonly MigrationIdentity[];
-
-export const approvedLegacyMigrations = [
-  {
-    hash: "9a042354672db97fda448a68804c61952d81d2c39e4b67b8581de04984c3fff8",
-    createdAt: "1782996784018"
-  },
-  {
-    hash: "9cfb3eebacfd55d703748c65b7a6210c8037cb881f66c3d7bf110d1489357baa",
-    createdAt: "1783327724152"
-  },
-  {
-    hash: "c52a5a3cc5c9acd8e50b32643661dbe8f922844711ad08a8e30b22d72eb09829",
-    createdAt: "1783335783810"
-  },
-  {
-    hash: "3d071b976aeeb1b5a4954aef46eadce7209a5ecef66a81e1680c3f3986694bd7",
-    createdAt: "1783969326835"
-  },
-  {
-    hash: "911332efe5ba14b352244a8176412cf637dccdb25141aa1792dcad35c63831de",
-    createdAt: "1784111509389"
+function readCurrentBaselineIdentity(): MigrationIdentity {
+  const migration = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql");
+  const journal = JSON.parse(
+    readFileSync("packages/db/drizzle/meta/_journal.json", "utf8")
+  ) as { readonly entries?: readonly { readonly when?: number }[] };
+  const createdAt = journal.entries?.[0]?.when;
+  if (!Number.isSafeInteger(createdAt)) {
+    throw new Error("Current Drizzle baseline journal entry is missing");
   }
-] as const satisfies readonly MigrationIdentity[];
 
-const approvedBeforeFlowDefinitionControlHistories = [
-  [misrecordedFlowRuntimeBaseline],
-  [telegramMtprotoBaseline, misrecordedFlowRuntimeBaseline],
-  [preFlowRuntimeBaseline],
-  [telegramMtprotoBaseline, preFlowRuntimeBaseline],
-  [...approvedLegacyMigrations, natalChartEngineBaseline],
-  [...approvedLegacyMigrations, natalChartEngineBaseline, misrecordedFlowRuntimeBaseline],
-  [...approvedLegacyMigrations, misrecordedFlowRuntimeBaseline],
-  [...approvedLegacyMigrations, preFlowRuntimeBaseline],
-  [...approvedLegacyMigrations, telegramMtprotoBaseline, preFlowRuntimeBaseline],
-  [...approvedLegacyMigrations, ...approvedPriorBaselines, preFlowRuntimeBaseline]
-] as const satisfies readonly (readonly MigrationIdentity[])[];
-
-const approvedPreviousCurrentHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousBaseline],
-  [telegramMtprotoBaseline, previousBaseline],
-  [...approvedLegacyMigrations, previousBaseline],
-  ...approvedBeforeFlowDefinitionControlHistories,
-  ...approvedBeforeFlowDefinitionControlHistories.map((history) => [...history, previousBaseline])
-];
-
-const approvedPreviousFlowDefinitionControlHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousFlowDefinitionControlBaseline],
-  [...approvedLegacyMigrations, previousFlowDefinitionControlBaseline],
-  ...approvedPreviousCurrentHistories.map((history) => [
-    ...history,
-    previousFlowDefinitionControlBaseline
-  ])
-];
-
-const approvedPreviousRuntimeKernelHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousRuntimeKernelBaseline],
-  [...approvedLegacyMigrations, previousRuntimeKernelBaseline],
-  ...approvedPreviousCurrentHistories.map((history) => [...history, previousRuntimeKernelBaseline]),
-  ...approvedPreviousFlowDefinitionControlHistories.map((history) => [
-    ...history,
-    previousRuntimeKernelBaseline
-  ])
-];
-
-const approvedPreviousCancellationKernelHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousCancellationKernelBaseline],
-  [...approvedLegacyMigrations, previousCancellationKernelBaseline],
-  ...approvedPreviousCurrentHistories.map((history) => [
-    ...history,
-    previousCancellationKernelBaseline
-  ]),
-  ...approvedPreviousFlowDefinitionControlHistories.map((history) => [
-    ...history,
-    previousCancellationKernelBaseline
-  ]),
-  ...approvedPreviousRuntimeKernelHistories.map((history) => [
-    ...history,
-    previousCancellationKernelBaseline
-  ])
-];
-
-const approvedPreviousFlowSafetyHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousFlowSafetyBaseline],
-  [...approvedLegacyMigrations, previousFlowSafetyBaseline],
-  ...approvedPreviousCurrentHistories.map((history) => [...history, previousFlowSafetyBaseline]),
-  ...approvedPreviousFlowDefinitionControlHistories.map((history) => [
-    ...history,
-    previousFlowSafetyBaseline
-  ]),
-  ...approvedPreviousRuntimeKernelHistories.map((history) => [
-    ...history,
-    previousFlowSafetyBaseline
-  ]),
-  ...approvedPreviousCancellationKernelHistories.map((history) => [
-    ...history,
-    previousFlowSafetyBaseline
-  ])
-];
-
-const approvedPreviousAtomicAdvanceHistories: readonly (readonly MigrationIdentity[])[] = [
-  [previousAtomicAdvanceBaseline],
-  [...approvedLegacyMigrations, previousAtomicAdvanceBaseline],
-  ...approvedPreviousCurrentHistories.map((history) => [...history, previousAtomicAdvanceBaseline]),
-  ...approvedPreviousFlowDefinitionControlHistories.map((history) => [
-    ...history,
-    previousAtomicAdvanceBaseline
-  ]),
-  ...approvedPreviousRuntimeKernelHistories.map((history) => [
-    ...history,
-    previousAtomicAdvanceBaseline
-  ]),
-  ...approvedPreviousCancellationKernelHistories.map((history) => [
-    ...history,
-    previousAtomicAdvanceBaseline
-  ]),
-  ...approvedPreviousFlowSafetyHistories.map((history) => [
-    ...history,
-    previousAtomicAdvanceBaseline
-  ])
-];
-
-export function classifyBaselineHistory(
-  migrations: readonly MigrationLedgerRow[]
-): BaselineHistoryKind {
-  if (
-    matchesMigrationHistory(migrations, [currentBaseline]) ||
-    matchesMigrationHistory(migrations, [...approvedLegacyMigrations, currentBaseline]) ||
-    approvedPreviousCurrentHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    ) ||
-    approvedPreviousFlowDefinitionControlHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    ) ||
-    approvedPreviousRuntimeKernelHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    ) ||
-    approvedPreviousCancellationKernelHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    ) ||
-    approvedPreviousFlowSafetyHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    ) ||
-    approvedPreviousAtomicAdvanceHistories.some((history) =>
-      matchesMigrationHistory(migrations, [...history, currentBaseline])
-    )
-  ) {
-    return "current";
-  }
-  if (
-    approvedPreviousAtomicAdvanceHistories.some((history) =>
-      matchesMigrationHistory(migrations, history)
-    )
-  ) {
-    return "previous_atomic_advance";
-  }
-  if (
-    approvedPreviousFlowSafetyHistories.some((history) =>
-      matchesMigrationHistory(migrations, history)
-    )
-  ) {
-    return "previous_flow_safety";
-  }
-  if (
-    approvedPreviousCancellationKernelHistories.some((history) =>
-      matchesMigrationHistory(migrations, history)
-    )
-  ) {
-    return "previous_cancellation_kernel";
-  }
-  if (
-    approvedPreviousRuntimeKernelHistories.some((history) =>
-      matchesMigrationHistory(migrations, history)
-    )
-  ) {
-    return "previous_runtime_kernel";
-  }
-  if (
-    approvedPreviousFlowDefinitionControlHistories.some((history) =>
-      matchesMigrationHistory(migrations, history)
-    )
-  ) {
-    return "previous_flow_definition_control";
-  }
-  if (
-    approvedPreviousCurrentHistories.some((history) => matchesMigrationHistory(migrations, history))
-  ) {
-    return "previous_current";
-  }
-  if (matchesMigrationHistory(migrations, approvedLegacyMigrations)) {
-    return "legacy_calculations";
-  }
-  return "unknown";
+  return {
+    hash: createHash("sha256").update(migration).digest("hex"),
+    createdAt: String(createdAt)
+  };
 }
 
-function matchesMigrationHistory(
-  migrations: readonly MigrationLedgerRow[],
-  expected: readonly MigrationIdentity[]
-): boolean {
+export function isCurrentBaselineHistory(migrations: readonly MigrationLedgerRow[]): boolean {
   return (
-    migrations.length === expected.length &&
-    migrations.every(
-      (migration, index) =>
-        migration.hash === expected[index]?.hash &&
-        migration.created_at === expected[index]?.createdAt
-    )
+    migrations.length === 1 &&
+    migrations[0]?.hash === currentBaseline.hash &&
+    migrations[0]?.created_at === currentBaseline.createdAt
   );
 }
 
@@ -483,8 +245,10 @@ export const schedulingBaselineDdl = `
     currency_snapshot text NOT NULL,
     time_zone_snapshot text NOT NULL,
     policy_snapshot jsonb NOT NULL,
+    client_data_requirements_snapshot jsonb NOT NULL,
     created_at timestamptz DEFAULT now() NOT NULL,
     updated_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT bookings_id_owner_unique UNIQUE (id, owner_user_id),
     CONSTRAINT bookings_reservation_unique UNIQUE (reservation_id),
     CONSTRAINT bookings_state_check CHECK (state IN ('hold', 'pending_payment', 'confirmed', 'completed', 'cancelled', 'no_show', 'expired')),
     CONSTRAINT bookings_source_check CHECK (source IN ('manual', 'client_paid')),
@@ -500,6 +264,8 @@ export const schedulingBaselineDdl = `
     CONSTRAINT bookings_currency_check CHECK (currency_snapshot IN ('RUB')),
     CONSTRAINT bookings_time_zone_length_check CHECK (length(trim(time_zone_snapshot)) BETWEEN 1 AND 100),
     CONSTRAINT bookings_policy_snapshot_check CHECK (jsonb_typeof(policy_snapshot) = 'object'),
+    CONSTRAINT ${bookingClientDataRequirementsConstraintName}
+      CHECK (${bookingClientDataRequirementsSnapshotPredicateSql()}),
     CONSTRAINT bookings_reservation_owner_fk FOREIGN KEY (reservation_id, owner_user_id)
       REFERENCES schedule_reservations(id, owner_user_id) ON DELETE RESTRICT,
     CONSTRAINT bookings_product_owner_fk FOREIGN KEY (product_id, owner_user_id)
@@ -534,356 +300,6 @@ export const schedulingBaselineDdl = `
   CREATE INDEX IF NOT EXISTS idempotency_commands_expiry_idx ON idempotency_commands (expires_at);
   CREATE INDEX IF NOT EXISTS idempotency_commands_actor_created_idx
     ON idempotency_commands (actor_user_id, created_at);
-`;
-
-export { flowCapabilityManifestSchemaPredicate };
-
-export const flowCapabilityManifestSafetyBaselineDdl = `
-  ALTER TABLE flow_versions
-    ADD CONSTRAINT flow_versions_capability_manifest_schema_check
-      CHECK (${flowCapabilityManifestSchemaPredicate}) NOT VALID;
-  ALTER TABLE flow_versions
-    VALIDATE CONSTRAINT flow_versions_capability_manifest_schema_check;
-`;
-
-export const flowDefinitionControlBaselineDdl = `
-  CREATE TABLE IF NOT EXISTS flows (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    owner_user_id uuid NOT NULL,
-    name text NOT NULL,
-    origin jsonb,
-    status text DEFAULT 'draft' NOT NULL,
-    definition_state text DEFAULT 'draft' NOT NULL,
-    approval_mode text DEFAULT 'manual_approve' NOT NULL,
-    revision integer DEFAULT 1 NOT NULL,
-    draft_base_version_id uuid,
-    draft_graph jsonb NOT NULL,
-    draft_presentation jsonb,
-    published_version_id uuid,
-    created_at timestamptz DEFAULT now() NOT NULL,
-    updated_at timestamptz DEFAULT now() NOT NULL,
-    published_at timestamptz,
-    CONSTRAINT flows_id_owner_unique UNIQUE (id, owner_user_id),
-    CONSTRAINT flows_name_length_check CHECK (length(trim(name)) BETWEEN 1 AND 180),
-    CONSTRAINT flows_status_check CHECK (status IN ('draft', 'published', 'active', 'paused', 'archived')),
-    CONSTRAINT flows_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-    CONSTRAINT flows_draft_graph_object_check CHECK (jsonb_typeof(draft_graph) = 'object'),
-    CONSTRAINT flows_owner_user_id_users_id_fk
-      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS flow_versions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    flow_id uuid NOT NULL,
-    owner_user_id uuid NOT NULL,
-    version integer NOT NULL,
-    source_revision integer,
-    approval_mode text NOT NULL,
-    graph_schema_version text,
-    graph jsonb NOT NULL,
-    presentation jsonb,
-    capability_manifest jsonb,
-    published_at timestamptz NOT NULL,
-    CONSTRAINT flow_versions_id_owner_unique UNIQUE (id, owner_user_id),
-    CONSTRAINT flow_versions_flow_id_id_owner_unique UNIQUE (flow_id, id, owner_user_id),
-    CONSTRAINT flow_versions_positive_version_check CHECK (version > 0),
-    CONSTRAINT flow_versions_approval_mode_check CHECK (approval_mode IN ('draft_only', 'manual_approve', 'auto_internal', 'auto_send')),
-    CONSTRAINT flow_versions_graph_object_check CHECK (jsonb_typeof(graph) = 'object'),
-    CONSTRAINT flow_versions_owner_user_id_users_id_fk
-      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT flow_versions_flow_owner_fk
-      FOREIGN KEY (flow_id, owner_user_id) REFERENCES flows(id, owner_user_id) ON DELETE CASCADE
-  );
-
-  ALTER TABLE flows
-    ADD COLUMN IF NOT EXISTS origin jsonb,
-    ADD COLUMN IF NOT EXISTS definition_state text,
-    ADD COLUMN IF NOT EXISTS revision integer,
-    ADD COLUMN IF NOT EXISTS draft_base_version_id uuid,
-    ADD COLUMN IF NOT EXISTS draft_presentation jsonb;
-
-  ALTER TABLE flow_versions
-    ADD COLUMN IF NOT EXISTS source_revision integer,
-    ADD COLUMN IF NOT EXISTS graph_schema_version text,
-    ADD COLUMN IF NOT EXISTS presentation jsonb,
-    ADD COLUMN IF NOT EXISTS capability_manifest jsonb;
-
-  DO $$
-  BEGIN
-    IF EXISTS (
-      SELECT 1 FROM flows
-       WHERE draft_graph ? 'schemaVersion'
-         AND draft_graph->>'schemaVersion' <> 'flow-graph.v1'
-    ) OR EXISTS (
-      SELECT 1 FROM flow_versions
-       WHERE graph ? 'schemaVersion'
-         AND graph->>'schemaVersion' <> 'flow-graph.v1'
-    ) THEN
-      RAISE EXCEPTION 'Refusing to relabel a non-V1 Flows graph during baseline reconciliation';
-    END IF;
-  END
-  $$;
-
-  UPDATE flows
-     SET draft_graph = jsonb_set(draft_graph, '{schemaVersion}', '"flow-graph.v1"'::jsonb, true)
-   WHERE NOT (draft_graph ? 'schemaVersion');
-  UPDATE flow_versions
-     SET graph = jsonb_set(graph, '{schemaVersion}', '"flow-graph.v1"'::jsonb, true)
-   WHERE NOT (graph ? 'schemaVersion');
-
-  UPDATE flows
-     SET definition_state = CASE
-       WHEN status = 'archived' THEN 'archived'
-       WHEN published_version_id IS NULL THEN 'draft'
-       ELSE 'versioned'
-     END
-   WHERE definition_state IS NULL;
-  UPDATE flows SET revision = 1 WHERE revision IS NULL;
-
-  ALTER TABLE flows
-    ALTER COLUMN definition_state SET DEFAULT 'draft',
-    ALTER COLUMN definition_state SET NOT NULL,
-    ALTER COLUMN revision SET DEFAULT 1,
-    ALTER COLUMN revision SET NOT NULL;
-
-  ALTER TABLE flows
-    ADD CONSTRAINT flows_definition_state_check
-      CHECK (definition_state IN ('draft', 'versioned', 'archived')),
-    ADD CONSTRAINT flows_revision_check CHECK (revision > 0),
-    ADD CONSTRAINT flows_definition_lifecycle_check CHECK (
-      (
-        definition_state = 'draft'
-        AND (
-          (
-            published_version_id IS NULL
-            AND published_at IS NULL
-            AND draft_base_version_id IS NULL
-          )
-          OR (
-            published_version_id IS NOT NULL
-            AND published_at IS NOT NULL
-            AND draft_base_version_id = published_version_id
-          )
-        )
-      )
-      OR (
-        definition_state = 'versioned'
-        AND published_version_id IS NOT NULL
-        AND published_at IS NOT NULL
-        AND draft_base_version_id IS NULL
-      )
-      OR (
-        definition_state = 'archived'
-        AND (
-          (
-            published_version_id IS NULL
-            AND published_at IS NULL
-            AND draft_base_version_id IS NULL
-          )
-          OR (
-            published_version_id IS NOT NULL
-            AND published_at IS NOT NULL
-            AND (
-              draft_base_version_id IS NULL
-              OR draft_base_version_id = published_version_id
-            )
-          )
-        )
-      )
-    ),
-    ADD CONSTRAINT flows_graph_origin_check CHECK (
-      (
-        draft_graph->>'schemaVersion' = 'flow-graph.v1'
-        AND origin IS NULL
-        AND draft_presentation IS NULL
-      )
-      OR (
-        draft_graph->>'schemaVersion' = 'flow-graph.v2'
-        AND jsonb_typeof(origin) = 'object'
-        AND origin->>'schemaVersion' = 'flow-definition-origin.v1'
-        AND origin->>'type' IN ('blank', 'template', 'migration')
-      )
-    ),
-    ADD CONSTRAINT flows_draft_presentation_object_check
-      CHECK (draft_presentation IS NULL OR jsonb_typeof(draft_presentation) = 'object');
-
-  ALTER TABLE flow_versions
-    ADD CONSTRAINT flow_versions_flow_id_id_owner_published_unique
-      UNIQUE (flow_id, id, owner_user_id, published_at),
-    ADD CONSTRAINT flow_versions_source_revision_check
-      CHECK (source_revision IS NULL OR source_revision > 0),
-    ADD CONSTRAINT flow_versions_presentation_object_check
-      CHECK (presentation IS NULL OR jsonb_typeof(presentation) = 'object'),
-    ADD CONSTRAINT flow_versions_v2_metadata_check CHECK (
-      (
-        source_revision IS NULL
-        AND graph_schema_version IS NULL
-        AND capability_manifest IS NULL
-      )
-      OR (
-        source_revision > 0
-        AND graph_schema_version = 'flow-graph.v2'
-        AND graph->>'schemaVersion' = 'flow-graph.v2'
-        AND jsonb_typeof(capability_manifest) = 'object'
-      )
-    ),
-    ADD CONSTRAINT flow_versions_capability_manifest_schema_check CHECK (
-      ${flowCapabilityManifestSchemaPredicate}
-    );
-
-  ALTER TABLE flows DROP CONSTRAINT IF EXISTS flows_published_version_owner_fk;
-  ALTER TABLE flows
-    ADD CONSTRAINT flows_published_version_owner_fk
-      FOREIGN KEY (id, published_version_id, owner_user_id, published_at)
-      REFERENCES flow_versions(flow_id, id, owner_user_id, published_at) ON DELETE RESTRICT,
-    ADD CONSTRAINT flows_draft_base_version_owner_fk
-      FOREIGN KEY (id, draft_base_version_id, owner_user_id)
-      REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE RESTRICT;
-
-  CREATE INDEX IF NOT EXISTS flows_owner_status_updated_idx
-    ON flows (owner_user_id, status, updated_at);
-  CREATE INDEX IF NOT EXISTS flows_owner_definition_state_updated_idx
-    ON flows (owner_user_id, definition_state, updated_at, id);
-  CREATE INDEX IF NOT EXISTS flows_owner_name_idx ON flows (owner_user_id, name);
-  CREATE INDEX IF NOT EXISTS flow_versions_owner_published_idx
-    ON flow_versions (owner_user_id, published_at);
-  CREATE UNIQUE INDEX IF NOT EXISTS flow_versions_flow_version_unique
-    ON flow_versions (flow_id, version);
-  CREATE UNIQUE INDEX flow_versions_flow_source_revision_unique
-    ON flow_versions (flow_id, source_revision) WHERE source_revision IS NOT NULL;
-
-  CREATE TABLE flow_definition_commands (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    api_surface text NOT NULL,
-    actor_user_id uuid NOT NULL,
-    owner_user_id uuid NOT NULL,
-    route_template text NOT NULL,
-    resource_id uuid NOT NULL,
-    command_scope text NOT NULL,
-    idempotency_key text NOT NULL,
-    request_hash text NOT NULL,
-    state text DEFAULT 'processing' NOT NULL,
-    completed_at timestamptz,
-    replay_until timestamptz NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL,
-    updated_at timestamptz DEFAULT now() NOT NULL,
-    CONSTRAINT flow_definition_commands_id_resource_owner_unique
-      UNIQUE (id, resource_id, owner_user_id),
-    CONSTRAINT flow_definition_commands_scope_check CHECK (
-      api_surface = 'astrologer-api'
-      AND command_scope IN (
-        'flows.definition.create.v2',
-        'flows.definition.update-draft.v2',
-        'flows.definition.publish.v2',
-        'flows.definition.create-next-draft.v2',
-        'flows.definition.migrate.v2'
-      )
-      AND (
-        (
-          route_template = '/flows'
-          AND command_scope = 'flows.definition.create.v2'
-          AND resource_id = owner_user_id
-        )
-        OR (route_template = '/flows/:flowId/draft' AND command_scope = 'flows.definition.update-draft.v2')
-        OR (route_template = '/flows/:flowId/publish' AND command_scope = 'flows.definition.publish.v2')
-        OR (route_template = '/flows/:flowId/next-draft' AND command_scope = 'flows.definition.create-next-draft.v2')
-        OR (route_template = '/flows/:flowId/migrations/v2' AND command_scope = 'flows.definition.migrate.v2')
-      )
-    ),
-    CONSTRAINT flow_definition_commands_key_check CHECK (
-      length(idempotency_key) BETWEEN 8 AND 128
-      AND idempotency_key ~ '^[A-Za-z0-9._:-]+$'
-    ),
-    CONSTRAINT flow_definition_commands_request_hash_check
-      CHECK (request_hash ~ '^sha256:[a-f0-9]{64}$'),
-    CONSTRAINT flow_definition_commands_state_check
-      CHECK (state IN ('processing', 'succeeded', 'failed')),
-    CONSTRAINT flow_definition_commands_terminal_state_check CHECK (
-      (state = 'processing' AND completed_at IS NULL)
-      OR (state IN ('succeeded', 'failed') AND completed_at IS NOT NULL)
-    ),
-    CONSTRAINT flow_definition_commands_replay_window_check
-      CHECK (replay_until = created_at + interval '24 hours'),
-    CONSTRAINT flow_definition_commands_completion_check
-      CHECK (completed_at IS NULL OR completed_at >= created_at),
-    CONSTRAINT flow_definition_commands_actor_user_id_users_id_fk
-      FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT flow_definition_commands_owner_user_id_users_id_fk
-      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE flow_definition_command_outcomes (
-    command_id uuid PRIMARY KEY NOT NULL,
-    response_status integer NOT NULL,
-    response_body jsonb NOT NULL,
-    created_at timestamptz DEFAULT now() NOT NULL,
-    CONSTRAINT flow_definition_command_outcomes_response_check CHECK (
-      (
-        response_status IN (200, 201)
-        OR response_status BETWEEN 400 AND 499
-      )
-      AND jsonb_typeof(response_body) = 'object'
-    ),
-    CONSTRAINT flow_definition_command_outcomes_command_fk
-      FOREIGN KEY (command_id) REFERENCES flow_definition_commands(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE flow_definition_migrations (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    flow_id uuid NOT NULL,
-    owner_user_id uuid NOT NULL,
-    command_id uuid NOT NULL,
-    source_graph_schema_version text NOT NULL,
-    target_graph_schema_version text NOT NULL,
-    source_version_id uuid,
-    source_revision integer NOT NULL,
-    source_graph_hash text NOT NULL,
-    target_revision integer NOT NULL,
-    migrated_at timestamptz NOT NULL,
-    CONSTRAINT flow_definition_migrations_schema_versions_check CHECK (
-      source_graph_schema_version = 'flow-graph.v1'
-      AND target_graph_schema_version = 'flow-graph.v2'
-    ),
-    CONSTRAINT flow_definition_migrations_revision_check CHECK (
-      source_revision > 0
-      AND target_revision = source_revision + 1
-    ),
-    CONSTRAINT flow_definition_migrations_graph_hash_check
-      CHECK (source_graph_hash ~ '^sha256:[a-f0-9]{64}$'),
-    CONSTRAINT flow_definition_migrations_flow_owner_fk
-      FOREIGN KEY (flow_id, owner_user_id)
-      REFERENCES flows(id, owner_user_id) ON DELETE CASCADE,
-    CONSTRAINT flow_definition_migrations_source_version_owner_fk
-      FOREIGN KEY (flow_id, source_version_id, owner_user_id)
-      REFERENCES flow_versions(flow_id, id, owner_user_id) ON DELETE CASCADE,
-    CONSTRAINT flow_definition_migrations_command_resource_owner_fk
-      FOREIGN KEY (command_id, flow_id, owner_user_id)
-      REFERENCES flow_definition_commands(id, resource_id, owner_user_id) ON DELETE CASCADE
-  );
-
-  CREATE UNIQUE INDEX flow_definition_commands_scope_key_unique
-    ON flow_definition_commands (
-      api_surface,
-      actor_user_id,
-      owner_user_id,
-      route_template,
-      resource_id,
-      idempotency_key
-    );
-  CREATE INDEX flow_definition_commands_replay_until_idx
-    ON flow_definition_commands (replay_until);
-  CREATE INDEX flow_definition_commands_owner_resource_created_idx
-    ON flow_definition_commands (owner_user_id, resource_id, created_at);
-  CREATE INDEX flow_definition_command_outcomes_created_idx
-    ON flow_definition_command_outcomes (created_at);
-  CREATE UNIQUE INDEX flow_definition_migrations_command_unique
-    ON flow_definition_migrations (command_id);
-  CREATE UNIQUE INDEX flow_definition_migrations_flow_target_revision_unique
-    ON flow_definition_migrations (flow_id, target_revision);
-  CREATE INDEX flow_definition_migrations_owner_migrated_idx
-    ON flow_definition_migrations (owner_user_id, migrated_at);
-
-  ${flowDefinitionIntegritySql}
 `;
 
 export const flowRuntimeFoundationBaselineDdl = `
@@ -1554,8 +970,240 @@ export const flowRunCancellationBaselineDdl = `
       )
     );
 
+  ${flowRuntimeCommandIntegrityV1Sql}
+  ${flowRunEventCommandIntegrityV1Sql}
+`;
+
+export const flowWorkItemSafetyBaselineDdl = `
+  ALTER TABLE flow_runtime_commands ADD COLUMN flow_run_id uuid;
+
+  DROP TRIGGER "flow_runtime_commands_immutable_identity" ON flow_runtime_commands;
+  DROP TRIGGER "flow_runtime_command_outcome_consistency" ON flow_runtime_commands;
+  DROP TRIGGER "flow_runtime_outcome_command_consistency" ON flow_runtime_command_outcomes;
+  DROP TRIGGER "flow_runtime_command_outcomes_retention" ON flow_runtime_command_outcomes;
+
+  UPDATE flow_runtime_commands
+     SET flow_run_id = resource_id
+   WHERE command_scope = 'flows.runtime.cancel.v1';
+
+  ALTER TABLE flow_runtime_commands
+    DROP CONSTRAINT flow_runtime_commands_scope_check,
+    ADD CONSTRAINT flow_runtime_commands_id_run_owner_unique
+      UNIQUE (id, flow_run_id, owner_user_id),
+    ADD CONSTRAINT flow_runtime_commands_scope_check CHECK (
+      api_surface = 'astrologer-api'
+      AND route_template IN (
+        '/flow-runs/:runId/cancel',
+        '/flow-work-items/:workItemId/start',
+        '/flow-work-items/:workItemId/snooze',
+        '/flow-work-items/:workItemId/complete'
+      )
+      AND command_scope IN (
+        'flows.runtime.cancel.v1',
+        'flows.work-items.start.v1',
+        'flows.work-items.snooze.v1',
+        'flows.work-items.complete.v1'
+      )
+      AND (
+        (route_template = '/flow-runs/:runId/cancel'
+          AND command_scope = 'flows.runtime.cancel.v1'
+          AND flow_run_id = resource_id)
+        OR (route_template = '/flow-work-items/:workItemId/start'
+          AND command_scope = 'flows.work-items.start.v1')
+        OR (route_template = '/flow-work-items/:workItemId/snooze'
+          AND command_scope = 'flows.work-items.snooze.v1')
+        OR (route_template = '/flow-work-items/:workItemId/complete'
+          AND command_scope = 'flows.work-items.complete.v1')
+      )
+    ) NOT VALID;
+  ALTER TABLE flow_runtime_commands
+    VALIDATE CONSTRAINT flow_runtime_commands_scope_check;
+
   ${flowRuntimeCommandIntegritySql}
-  ${flowRunEventCommandIntegritySql}
+
+  ALTER TABLE flow_run_events
+    ADD CONSTRAINT flow_run_events_id_run_owner_unique
+      UNIQUE (id, flow_run_id, owner_user_id);
+
+  CREATE TABLE flow_work_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    owner_user_id uuid NOT NULL,
+    flow_run_id uuid NOT NULL,
+    flow_version_id uuid NOT NULL,
+    token_id uuid NOT NULL,
+    node_activation_sequence bigint NOT NULL,
+    node_id text NOT NULL,
+    completion_handle text NOT NULL,
+    status text DEFAULT 'pending' NOT NULL,
+    task_kind text NOT NULL,
+    title text NOT NULL,
+    instructions text,
+    assignee_user_id uuid NOT NULL,
+    priority text DEFAULT 'normal' NOT NULL,
+    due_at timestamptz,
+    available_at timestamptz DEFAULT now() NOT NULL,
+    snoozed_until timestamptz,
+    revision integer DEFAULT 1 NOT NULL,
+    result_summary text,
+    last_command_id uuid,
+    last_run_event_id uuid,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    updated_at timestamptz DEFAULT now() NOT NULL,
+    started_at timestamptz,
+    completed_at timestamptz,
+    completed_by_user_id uuid,
+    expired_at timestamptz,
+    canceled_at timestamptz,
+    CONSTRAINT flow_work_items_status_check CHECK (
+      status IN ('pending', 'in_progress', 'snoozed', 'completed', 'expired', 'canceled')
+    ),
+    CONSTRAINT flow_work_items_task_kind_check CHECK (
+      task_kind IN ('consultation_preparation')
+    ),
+    CONSTRAINT flow_work_items_priority_check CHECK (
+      priority IN ('low', 'normal', 'high', 'urgent')
+    ),
+    CONSTRAINT flow_work_items_node_check CHECK (
+      node_activation_sequence > 0
+      AND length(trim(node_id)) BETWEEN 1 AND 160
+      AND node_id ~ '^[a-z0-9][a-z0-9_-]*$'
+      AND completion_handle = 'success'
+    ),
+    CONSTRAINT flow_work_items_assignment_check CHECK (assignee_user_id = owner_user_id),
+    CONSTRAINT flow_work_items_revision_check CHECK (revision > 0),
+    CONSTRAINT flow_work_items_provenance_revision_check CHECK (
+      (revision = 1 AND status = 'pending'
+        AND last_command_id IS NULL AND last_run_event_id IS NULL)
+      OR (revision > 1
+        AND (last_command_id IS NULL) <> (last_run_event_id IS NULL))
+    ),
+    CONSTRAINT flow_work_items_content_check CHECK (
+      length(trim(title)) BETWEEN 1 AND 180
+      AND (instructions IS NULL OR length(trim(instructions)) BETWEEN 1 AND 4000)
+      AND (result_summary IS NULL OR length(trim(result_summary)) BETWEEN 1 AND 1000)
+      AND (status = 'completed' OR result_summary IS NULL)
+    ),
+    CONSTRAINT flow_work_items_lifecycle_check CHECK (
+      (status = 'pending'
+        AND snoozed_until IS NULL AND completed_at IS NULL
+        AND completed_by_user_id IS NULL AND expired_at IS NULL AND canceled_at IS NULL)
+      OR (status = 'in_progress'
+        AND started_at IS NOT NULL AND snoozed_until IS NULL AND completed_at IS NULL
+        AND completed_by_user_id IS NULL AND expired_at IS NULL AND canceled_at IS NULL)
+      OR (status = 'snoozed'
+        AND snoozed_until IS NOT NULL AND available_at = snoozed_until
+        AND completed_at IS NULL AND completed_by_user_id IS NULL
+        AND expired_at IS NULL AND canceled_at IS NULL)
+      OR (status = 'completed'
+        AND started_at IS NOT NULL AND completed_at IS NOT NULL
+        AND completed_by_user_id IS NOT NULL AND snoozed_until IS NULL
+        AND expired_at IS NULL AND canceled_at IS NULL)
+      OR (status = 'expired'
+        AND expired_at IS NOT NULL AND snoozed_until IS NULL
+        AND completed_at IS NULL AND completed_by_user_id IS NULL AND canceled_at IS NULL)
+      OR (status = 'canceled'
+        AND canceled_at IS NOT NULL AND snoozed_until IS NULL
+        AND completed_at IS NULL AND completed_by_user_id IS NULL AND expired_at IS NULL)
+    ),
+    CONSTRAINT flow_work_items_time_order_check CHECK (
+      updated_at >= created_at
+      AND available_at >= created_at
+      AND (started_at IS NULL OR started_at >= created_at)
+      AND (snoozed_until IS NULL OR snoozed_until >= updated_at)
+      AND (completed_at IS NULL OR completed_at >= started_at)
+      AND (expired_at IS NULL OR expired_at >= created_at)
+      AND (canceled_at IS NULL OR canceled_at >= created_at)
+    ),
+    CONSTRAINT flow_work_items_owner_user_id_users_id_fk
+      FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT flow_work_items_assignee_user_id_users_id_fk
+      FOREIGN KEY (assignee_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT flow_work_items_completed_by_user_id_users_id_fk
+      FOREIGN KEY (completed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT flow_work_items_run_version_owner_fk
+      FOREIGN KEY (flow_run_id, flow_version_id, owner_user_id)
+      REFERENCES flow_runs(id, flow_version_id, owner_user_id) ON DELETE CASCADE,
+    CONSTRAINT flow_work_items_token_run_owner_fk
+      FOREIGN KEY (token_id, flow_run_id, owner_user_id)
+      REFERENCES flow_execution_tokens(id, flow_run_id, owner_user_id) ON DELETE CASCADE,
+    CONSTRAINT flow_work_items_last_command_run_owner_fk
+      FOREIGN KEY (last_command_id, flow_run_id, owner_user_id)
+      REFERENCES flow_runtime_commands(id, flow_run_id, owner_user_id) ON DELETE RESTRICT,
+    CONSTRAINT flow_work_items_last_run_event_run_owner_fk
+      FOREIGN KEY (last_run_event_id, flow_run_id, owner_user_id)
+      REFERENCES flow_run_events(id, flow_run_id, owner_user_id) ON DELETE RESTRICT,
+    CONSTRAINT flow_work_items_id_run_owner_unique
+      UNIQUE (id, flow_run_id, owner_user_id)
+  );
+
+  CREATE UNIQUE INDEX flow_work_items_token_activation_unique
+    ON flow_work_items (token_id, node_activation_sequence);
+  CREATE INDEX flow_work_items_owner_status_available_idx
+    ON flow_work_items (owner_user_id, status, available_at, created_at, id);
+  CREATE INDEX flow_work_items_run_created_idx
+    ON flow_work_items (flow_run_id, created_at, id);
+
+  ${flowWorkItemCoreIntegritySql}
+`;
+
+export const flowWorkItemWakeSafetyBaselineDdl = `
+  DROP TRIGGER "flow_work_items_transition_guard" ON flow_work_items;
+  DROP TRIGGER "flow_work_items_truncate_guard" ON flow_work_items;
+  DROP TRIGGER "flow_work_items_command_consistency" ON flow_work_items;
+  DROP TRIGGER "flow_runtime_commands_work_item_consistency" ON flow_runtime_commands;
+
+  ALTER TABLE flow_run_events
+    ADD CONSTRAINT flow_run_events_id_run_owner_unique
+      UNIQUE (id, flow_run_id, owner_user_id);
+
+  ALTER TABLE flow_work_items
+    DROP CONSTRAINT flow_work_items_command_revision_check,
+    ADD COLUMN last_run_event_id uuid,
+    ADD CONSTRAINT flow_work_items_last_run_event_run_owner_fk
+      FOREIGN KEY (last_run_event_id, flow_run_id, owner_user_id)
+      REFERENCES flow_run_events(id, flow_run_id, owner_user_id)
+      ON DELETE RESTRICT NOT VALID,
+    ADD CONSTRAINT flow_work_items_id_run_owner_unique
+      UNIQUE (id, flow_run_id, owner_user_id),
+    ADD CONSTRAINT flow_work_items_provenance_revision_check CHECK (
+      (revision = 1 AND status = 'pending'
+        AND last_command_id IS NULL AND last_run_event_id IS NULL)
+      OR (revision > 1
+        AND (last_command_id IS NULL) <> (last_run_event_id IS NULL))
+    ) NOT VALID;
+
+  ALTER TABLE flow_work_items
+    VALIDATE CONSTRAINT flow_work_items_last_run_event_run_owner_fk;
+  ALTER TABLE flow_work_items
+    VALIDATE CONSTRAINT flow_work_items_provenance_revision_check;
+
+  ${flowWorkItemCoreIntegritySql}
+`;
+
+export const flowWorkItemBookingDeadlineSafetyBaselineDdl = `
+  DROP TRIGGER "flow_work_items_transition_guard" ON flow_work_items;
+  DROP TRIGGER "flow_work_items_truncate_guard" ON flow_work_items;
+  DROP TRIGGER "flow_work_items_command_consistency" ON flow_work_items;
+  DROP TRIGGER "flow_runtime_commands_work_item_consistency" ON flow_runtime_commands;
+
+  ALTER TABLE flow_work_items
+    ADD COLUMN due_policy_kind text NOT NULL,
+    ADD COLUMN due_lead_time_minutes integer,
+    ADD COLUMN due_booking_lifecycle_revision integer,
+    ADD CONSTRAINT flow_work_items_due_policy_check CHECK (
+      (due_policy_kind = 'none'
+        AND due_lead_time_minutes IS NULL
+        AND due_booking_lifecycle_revision IS NULL
+        AND due_at IS NULL)
+      OR (due_policy_kind = 'before_booking_start'
+        AND due_lead_time_minutes BETWEEN 0 AND 525600
+        AND due_booking_lifecycle_revision > 0
+        AND due_at IS NOT NULL)
+    ) NOT VALID;
+  ALTER TABLE flow_work_items
+    VALIDATE CONSTRAINT flow_work_items_due_policy_check;
+
+  ${flowWorkItemCoreIntegritySql}
 `;
 
 export const flowOutboxSafetyBaselineDdl = `
@@ -2439,4 +2087,86 @@ export const flowExecutionManifestV2SafetyBaselineDdl = `
     VALIDATE CONSTRAINT flow_run_events_summary_schema_check;
 `;
 
-export const flowExecutionSafetyBaselineDdl = `${flowExecutionRetrySafetyBaselineDdl}\n${flowExecutionAtomicAdvanceBaselineDdl}`;
+export const flowExecutionClaimAuthorityEvidenceBaselineDdl = `
+ALTER TABLE flow_execution_tokens
+  ADD COLUMN claim_control_policy_revision integer,
+  ADD COLUMN claim_policy_digest varchar(71),
+  ADD COLUMN claim_worker_session_id uuid,
+  ADD COLUMN claim_worker_registration_digest varchar(71);
+
+ALTER TABLE flow_execution_attempts
+  ADD COLUMN control_policy_revision integer,
+  ADD COLUMN policy_digest varchar(71),
+  ADD COLUMN worker_session_id uuid,
+  ADD COLUMN worker_registration_digest varchar(71);
+
+ALTER TABLE flow_execution_tokens
+  ADD CONSTRAINT flow_execution_tokens_claim_policy_fk
+  FOREIGN KEY (claim_control_policy_revision)
+  REFERENCES flow_runtime_rollout_policy_versions(revision)
+  ON DELETE RESTRICT;
+
+ALTER TABLE flow_execution_attempts
+  ADD CONSTRAINT flow_execution_attempts_claim_policy_fk
+  FOREIGN KEY (control_policy_revision)
+  REFERENCES flow_runtime_rollout_policy_versions(revision)
+  ON DELETE RESTRICT;
+
+ALTER TABLE flow_execution_tokens
+  ADD CONSTRAINT flow_execution_tokens_claim_authority_check CHECK (
+    (
+      claim_control_policy_revision IS NULL
+      AND claim_policy_digest IS NULL
+      AND claim_worker_session_id IS NULL
+      AND claim_worker_registration_digest IS NULL
+    ) OR (
+      claim_control_policy_revision > 0
+      AND claim_policy_digest ~ '^sha256:[a-f0-9]{64}$'
+      AND claim_worker_session_id IS NOT NULL
+      AND claim_worker_registration_digest ~ '^sha256:[a-f0-9]{64}$'
+      AND (state <> 'claimed' OR lease_owner = claim_worker_session_id::text)
+    )
+  ) NOT VALID;
+
+ALTER TABLE flow_execution_attempts
+  ADD CONSTRAINT flow_execution_attempts_claim_authority_check CHECK (
+    (
+      control_policy_revision IS NULL
+      AND policy_digest IS NULL
+      AND worker_session_id IS NULL
+      AND worker_registration_digest IS NULL
+    ) OR (
+      control_policy_revision > 0
+      AND policy_digest ~ '^sha256:[a-f0-9]{64}$'
+      AND worker_session_id IS NOT NULL
+      AND worker_registration_digest ~ '^sha256:[a-f0-9]{64}$'
+      AND lease_owner = worker_session_id::text
+    )
+  ) NOT VALID;
+
+ALTER TABLE flow_execution_tokens
+  VALIDATE CONSTRAINT flow_execution_tokens_claim_authority_check;
+ALTER TABLE flow_execution_attempts
+  VALIDATE CONSTRAINT flow_execution_attempts_claim_authority_check;
+`;
+
+export const flowExecutionEnrollmentTraceSafetyBaselineDdl = `
+DROP TRIGGER "flow_run_event_command_consistency" ON flow_run_events;
+ALTER TABLE flow_run_events
+  DROP CONSTRAINT flow_run_events_command_run_owner_fk;
+CREATE UNIQUE INDEX flow_run_events_command_unique
+  ON flow_run_events (command_id) WHERE command_id IS NOT NULL;
+ALTER TABLE flow_run_events
+  ADD CONSTRAINT flow_run_events_command_run_owner_fk
+  FOREIGN KEY (command_id, flow_run_id, owner_user_id)
+  REFERENCES flow_runtime_commands(id, flow_run_id, owner_user_id)
+  ON DELETE CASCADE;
+${flowRunEventCommandIntegritySql}
+${flowEnrollmentTraceConstraintIntegritySql}
+${flowWorkItemEventIntegritySql}`;
+
+export const flowExecutionWorkItemWakeSafetyBaselineDdl = `
+${flowEnrollmentTraceConstraintIntegritySql}
+${flowWorkItemEventIntegritySql}`;
+
+export const flowExecutionSafetyBaselineDdl = `${flowExecutionRetrySafetyBaselineDdl}\n${flowExecutionAtomicAdvanceBaselineDdl}\n${flowExecutionClaimAuthorityEvidenceBaselineDdl}\n${flowExecutionEnrollmentTraceSafetyBaselineDdl}`;

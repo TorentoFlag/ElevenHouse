@@ -246,6 +246,36 @@ describe("flow outbox safety baseline PostgreSQL integration", () => {
     );
   });
 
+  it("accepts a validated owner-scoped finance payload constraint", async () => {
+    await applyTransition();
+    await databaseClient.query(`
+      ALTER TABLE outbox_events
+        ADD CONSTRAINT outbox_events_finance_fixture_payload_check
+        CHECK (
+          event_type <> 'finance.fixture.requested'
+          OR payload = jsonb_build_object('fixtureId', aggregate_id::text)
+        )
+    `);
+
+    await expect(assertFlowOutboxSafety(databaseClient)).resolves.toBeUndefined();
+  });
+
+  it("rejects an extension-named constraint that can affect Flow events", async () => {
+    await applyTransition();
+    await databaseClient.query(`
+      ALTER TABLE outbox_events
+        ADD CONSTRAINT outbox_events_finance_cross_module_payload_check
+        CHECK (
+          event_type <> 'flows.runtime_event.dispatch_requested'
+          OR payload = '{}'::jsonb
+        )
+    `);
+
+    await expect(assertFlowOutboxSafety(databaseClient)).rejects.toThrow(
+      /Flow outbox safety catalog drifted/
+    );
+  });
+
   it.each([
     ["unlogged durability", "ALTER TABLE outbox_events SET UNLOGGED"],
     ["row-level security", "ALTER TABLE outbox_events ENABLE ROW LEVEL SECURITY"],

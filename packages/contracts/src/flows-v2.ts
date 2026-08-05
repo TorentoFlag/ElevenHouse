@@ -2,13 +2,13 @@ import { z } from "@elevenhouse/validation";
 
 import {
   flowApprovalModeSchema,
-  flowGraphSchema,
   flowRuntimeAvailabilitySchema,
   flowStatusSchema,
   flowStatusValues,
-  flowTemplateCategorySchema,
-  type FlowGraph
+  flowTemplateCategorySchema
 } from "./flows";
+import { chartSettingsSchema } from "./charts";
+import type { ChartInterpretationMode } from "./calculations";
 
 const uuidSchema = z.string().uuid();
 const stableIdSchema = z
@@ -19,7 +19,7 @@ const stableIdSchema = z
   .regex(/^[a-z0-9][a-z0-9_-]*$/);
 const displayTitleSchema = z.string().trim().min(1).max(180);
 const descriptionSchema = z.string().trim().min(1).max(1_000);
-const instructionsSchema = z.string().trim().min(1).max(4_000);
+export const flowWorkItemInstructionsV2Schema = z.string().trim().min(1).max(4_000);
 const instantSchema = z.string().datetime({ offset: true });
 const versionOneSchema = z.literal(1);
 const positiveRevisionSchema = z.number().int().positive();
@@ -42,6 +42,7 @@ export const flowNodeKindV2Values = [
   "booking_confirmed",
   "manual_client",
   "birth_data_available",
+  "natal_chart_request",
   "astrologer_work_item",
   "astrologer_approval",
   "completed",
@@ -57,6 +58,7 @@ export type FlowTriggerNodeKindV2 = z.infer<typeof flowTriggerNodeKindV2Schema>;
 
 export const flowExecutableNodeKindV2Values = [
   "birth_data_available",
+  "natal_chart_request",
   "astrologer_work_item",
   "astrologer_approval",
   "completed",
@@ -132,9 +134,58 @@ export const flowBirthDataAvailableNodeV2Schema = z
   .strict();
 export type FlowBirthDataAvailableNodeV2 = z.infer<typeof flowBirthDataAvailableNodeV2Schema>;
 
+export const flowNatalChartRequestNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("natal_chart_request"),
+    config: z
+      .object({
+        interpretationMode: z.enum(["adult_natal", "child"] satisfies readonly ChartInterpretationMode[]),
+        settings: chartSettingsSchema
+      })
+      .strict()
+  })
+  .strict();
+export type FlowNatalChartRequestNodeV2 = z.infer<typeof flowNatalChartRequestNodeV2Schema>;
+
+export const flowAstrologerWorkItemTaskKindV2Values = [
+  "consultation_preparation",
+  "birth_data_collection"
+] as const;
+export const flowAstrologerWorkItemTaskKindV2Schema = z.enum(flowAstrologerWorkItemTaskKindV2Values);
+export type FlowAstrologerWorkItemTaskKindV2 = z.infer<
+  typeof flowAstrologerWorkItemTaskKindV2Schema
+>;
+
 export const flowWorkItemPriorityV2Values = ["low", "normal", "high", "urgent"] as const;
 export const flowWorkItemPriorityV2Schema = z.enum(flowWorkItemPriorityV2Values);
 export type FlowWorkItemPriorityV2 = z.infer<typeof flowWorkItemPriorityV2Schema>;
+
+export const flowWorkItemDuePolicyV2Schema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }).strict(),
+  z
+    .object({
+      kind: z.literal("before_booking_start"),
+      leadTimeMinutes: z.number().int().min(0).max(525_600)
+    })
+    .strict()
+]);
+export type FlowWorkItemDuePolicyV2 = z.infer<typeof flowWorkItemDuePolicyV2Schema>;
+
+export const flowWorkItemResultSummaryRequirementV2Values = ["optional", "required"] as const;
+export const flowWorkItemResultSummaryRequirementV2Schema = z.enum(
+  flowWorkItemResultSummaryRequirementV2Values
+);
+export type FlowWorkItemResultSummaryRequirementV2 = z.infer<
+  typeof flowWorkItemResultSummaryRequirementV2Schema
+>;
+
+export const flowWorkItemCompletionRequirementsV2Schema = z
+  .object({ resultSummary: flowWorkItemResultSummaryRequirementV2Schema })
+  .strict();
+export type FlowWorkItemCompletionRequirementsV2 = z.infer<
+  typeof flowWorkItemCompletionRequirementsV2Schema
+>;
 
 export const flowAstrologerWorkItemNodeV2Schema = z
   .object({
@@ -142,10 +193,12 @@ export const flowAstrologerWorkItemNodeV2Schema = z
     kind: z.literal("astrologer_work_item"),
     config: z
       .object({
-        taskKind: z.literal("consultation_preparation"),
+        taskKind: flowAstrologerWorkItemTaskKindV2Schema,
         taskTitle: displayTitleSchema,
-        instructions: instructionsSchema.optional(),
-        priority: flowWorkItemPriorityV2Schema
+        instructions: flowWorkItemInstructionsV2Schema.optional(),
+        priority: flowWorkItemPriorityV2Schema,
+        duePolicy: flowWorkItemDuePolicyV2Schema.optional(),
+        completionRequirements: flowWorkItemCompletionRequirementsV2Schema.optional()
       })
       .strict()
   })
@@ -214,6 +267,7 @@ export const flowNodeV2Schema = z.discriminatedUnion("kind", [
   flowBookingConfirmedNodeV2Schema,
   flowManualClientNodeV2Schema,
   flowBirthDataAvailableNodeV2Schema,
+  flowNatalChartRequestNodeV2Schema,
   flowAstrologerWorkItemNodeV2Schema,
   flowAstrologerApprovalNodeV2Schema,
   flowCompletedNodeV2Schema,
@@ -243,8 +297,8 @@ export const flowGraphV2Schema = z
   .strict();
 export type FlowGraphV2 = z.infer<typeof flowGraphV2Schema>;
 
-export const flowGraphReadSchema = z.union([flowGraphSchema, flowGraphV2Schema]);
-export type FlowGraphRead = FlowGraph | FlowGraphV2;
+export const flowGraphReadSchema = flowGraphV2Schema;
+export type FlowGraphRead = FlowGraphV2;
 
 export const flowGraphV2CompileIssueCodeValues = [
   "duplicate_node_id",
@@ -262,7 +316,8 @@ export const flowGraphV2CompileIssueCodeValues = [
   "terminal_has_outgoing_edge",
   "cycle_detected",
   "unreachable_node",
-  "unterminated_path"
+  "unterminated_path",
+  "work_item_due_policy_requires_booking_trigger"
 ] as const;
 export const flowGraphV2CompileIssueCodeSchema = z.enum(flowGraphV2CompileIssueCodeValues);
 export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssueCodeSchema>;
@@ -270,7 +325,8 @@ export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssue
 export const flowCapabilityRequirementValues = [
   "bookings.events.booking_confirmed",
   "clients.birth_data.read.service_preparation",
-  "products.read"
+  "products.read",
+  "charts.calculate.natal.booking_context"
 ] as const;
 export const flowCapabilityRequirementSchema = z.enum(flowCapabilityRequirementValues);
 export type FlowCapabilityRequirement = z.infer<typeof flowCapabilityRequirementSchema>;
@@ -305,36 +361,6 @@ export const flowTriggerMatcherRequirementSchema = z
   .strict();
 export type FlowTriggerMatcherRequirement = z.infer<typeof flowTriggerMatcherRequirementSchema>;
 
-export const flowCapabilityManifestV1Schema = z
-  .object({
-    schemaVersion: z.literal("flow-capability-manifest.v1"),
-    executionSemanticsVersion: z.literal("flow-interpreter.v1"),
-    nodeExecutors: z.array(flowNodeExecutorRequirementSchema).max(FLOW_GRAPH_V2_MAX_NODES),
-    requiredCapabilities: z.array(flowCapabilityRequirementSchema).max(50)
-  })
-  .strict()
-  .superRefine((manifest, context) => {
-    const executorKeys = manifest.nodeExecutors.map(
-      (executor) =>
-        `${executor.kind}:${executor.configSchemaVersion}:${executor.executorContractVersion}`
-    );
-    if (new Set(executorKeys).size !== executorKeys.length) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["nodeExecutors"],
-        message: "Flow capability manifest executors must be unique"
-      });
-    }
-    if (new Set(manifest.requiredCapabilities).size !== manifest.requiredCapabilities.length) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["requiredCapabilities"],
-        message: "Flow capability manifest requirements must be unique"
-      });
-    }
-  });
-export type FlowCapabilityManifestV1 = z.infer<typeof flowCapabilityManifestV1Schema>;
-
 export const flowCapabilityManifestV2Schema = z
   .object({
     schemaVersion: z.literal("flow-capability-manifest.v2"),
@@ -368,15 +394,11 @@ export const flowCapabilityManifestV2Schema = z
   });
 export type FlowCapabilityManifestV2 = z.infer<typeof flowCapabilityManifestV2Schema>;
 
-export const flowCapabilityManifestSchema = z.union([
-  flowCapabilityManifestV1Schema,
-  flowCapabilityManifestV2Schema
-]);
-export type FlowCapabilityManifest = z.infer<typeof flowCapabilityManifestSchema>;
+export const flowCapabilityManifestSchema = flowCapabilityManifestV2Schema;
+export type FlowCapabilityManifest = FlowCapabilityManifestV2;
 
 export const flowDefinitionValidationIssueCodeValues = [
-  ...flowGraphV2CompileIssueCodeValues,
-  "migration_required"
+  ...flowGraphV2CompileIssueCodeValues
 ] as const;
 export const flowDefinitionValidationIssueCodeSchema = z.enum(
   flowDefinitionValidationIssueCodeValues
@@ -398,7 +420,6 @@ export type FlowDefinitionValidationIssue = z.infer<typeof flowDefinitionValidat
 
 export const flowActivationBlockerCodeValues = [
   "FLOW_GRAPH_NOT_PUBLISHABLE",
-  "FLOW_GRAPH_MIGRATION_REQUIRED",
   "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
   "FLOW_CAPABILITY_UNAVAILABLE",
   "FLOW_RESOURCE_UNAVAILABLE"
@@ -414,25 +435,13 @@ export const validateFlowDefinitionRequestSchema = z
 export type ValidateFlowDefinitionRequest = z.infer<typeof validateFlowDefinitionRequestSchema>;
 
 const flowDefinitionValidationResponseCommonShape = {
-  graphSchemaVersion: z.enum(["flow-graph.v1", "flow-graph.v2"]),
+  graphSchemaVersion: z.literal("flow-graph.v2"),
   publishable: z.boolean(),
   activatable: z.boolean(),
   issues: z.array(flowDefinitionValidationIssueSchema).max(2_000),
   activationBlockers: z.array(flowActivationBlockerCodeSchema).max(10),
   normalizedGraph: flowGraphV2Schema.nullable()
 } as const;
-
-export const validateFlowDefinitionResponseV1Schema = z
-  .object({
-    schemaVersion: z.literal("flow-definition-validation.v1"),
-    ...flowDefinitionValidationResponseCommonShape,
-    capabilityManifest: flowCapabilityManifestV1Schema.nullable()
-  })
-  .strict()
-  .superRefine(refineFlowDefinitionValidationResponse);
-export type ValidateFlowDefinitionResponseV1 = z.infer<
-  typeof validateFlowDefinitionResponseV1Schema
->;
 
 export const validateFlowDefinitionResponseV2Schema = z
   .object({
@@ -446,19 +455,12 @@ export type ValidateFlowDefinitionResponseV2 = z.infer<
   typeof validateFlowDefinitionResponseV2Schema
 >;
 
-export const validateFlowDefinitionCompatibleResponseSchema = z.union([
-  validateFlowDefinitionResponseV1Schema,
-  validateFlowDefinitionResponseV2Schema
-]);
-export type ValidateFlowDefinitionCompatibleResponse = z.infer<
-  typeof validateFlowDefinitionCompatibleResponseSchema
->;
-export const validateFlowDefinitionResponseSchema = validateFlowDefinitionResponseV1Schema;
-export type ValidateFlowDefinitionResponse = ValidateFlowDefinitionResponseV1;
+export const validateFlowDefinitionResponseSchema = validateFlowDefinitionResponseV2Schema;
+export type ValidateFlowDefinitionResponse = ValidateFlowDefinitionResponseV2;
 
 function refineFlowDefinitionValidationResponse(
   result: {
-    readonly graphSchemaVersion: "flow-graph.v1" | "flow-graph.v2";
+    readonly graphSchemaVersion: "flow-graph.v2";
     readonly publishable: boolean;
     readonly activatable: boolean;
     readonly issues: readonly FlowDefinitionValidationIssue[];
@@ -507,49 +509,13 @@ function refineFlowDefinitionValidationResponse(
     });
   }
 
-  const issueCodes = new Set(result.issues.map((issue) => issue.code));
   const blockerCodes = new Set(result.activationBlockers);
-  const isLegacyGraph = result.graphSchemaVersion === "flow-graph.v1";
-  const hasMigrationIssue = issueCodes.has("migration_required");
-  const hasMigrationBlocker = blockerCodes.has("FLOW_GRAPH_MIGRATION_REQUIRED");
   const hasNotPublishableBlocker = blockerCodes.has("FLOW_GRAPH_NOT_PUBLISHABLE");
-
-  if (hasMigrationIssue !== isLegacyGraph) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["issues"],
-      message: "Migration issues must agree with the graph schema version"
-    });
-  }
-  if (hasMigrationBlocker !== isLegacyGraph) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["activationBlockers"],
-      message: "Migration blockers must agree with the graph schema version"
-    });
-  }
-  if (
-    hasNotPublishableBlocker !==
-    (result.graphSchemaVersion === "flow-graph.v2" && !result.publishable)
-  ) {
+  if (hasNotPublishableBlocker !== !result.publishable) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["activationBlockers"],
       message: "Graph publishability blockers must agree with V2 compilation"
-    });
-  }
-  if (isLegacyGraph && result.issues.some((issue) => issue.code !== "migration_required")) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["issues"],
-      message: "Legacy graph validation cannot report V2 compiler issues"
-    });
-  }
-  if (isLegacyGraph && hasNormalizedGraph) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["normalizedGraph"],
-      message: "Legacy v1 validation cannot return a compiled v2 graph"
     });
   }
 }
@@ -617,14 +583,6 @@ export const flowDefinitionOriginV1Schema = z.discriminatedUnion("type", [
       templateVersion: positiveRevisionSchema
     })
     .strict(),
-  z
-    .object({
-      schemaVersion: z.literal("flow-definition-origin.v1"),
-      type: z.literal("migration"),
-      sourceGraphSchemaVersion: z.literal("flow-graph.v1"),
-      sourceVersionId: uuidSchema.nullable()
-    })
-    .strict()
 ]);
 export type FlowDefinitionOriginV1 = z.infer<typeof flowDefinitionOriginV1Schema>;
 
@@ -722,67 +680,30 @@ const flowDefinitionReadCommonShape = {
   publishedAt: instantSchema.nullable()
 } as const;
 
-const legacyFlowDefinitionSummaryV2Schema = z
-  .object({
-    schemaVersion: z.literal("flow-definition-summary.v2"),
-    ...flowDefinitionReadCommonShape,
-    graphSchemaVersion: z.literal("flow-graph.v1"),
-    origin: z.null(),
-    migrationRequired: z.literal(true)
-  })
-  .strict();
-
-const currentFlowDefinitionSummaryV2Schema = z
+export const flowDefinitionSummaryV2Schema = z
   .object({
     schemaVersion: z.literal("flow-definition-summary.v2"),
     ...flowDefinitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
-    origin: flowDefinitionOriginV1Schema,
-    migrationRequired: z.literal(false)
+    origin: flowDefinitionOriginV1Schema
   })
-  .strict();
-
-export const flowDefinitionSummaryV2Schema = z
-  .discriminatedUnion("graphSchemaVersion", [
-    legacyFlowDefinitionSummaryV2Schema,
-    currentFlowDefinitionSummaryV2Schema
-  ])
+  .strict()
   .superRefine(refineFlowDefinitionReadLifecycle);
 export type FlowDefinitionSummaryV2 = z.infer<typeof flowDefinitionSummaryV2Schema>;
 
-const legacyFlowDefinitionDetailV2Schema = z
-  .object({
-    schemaVersion: z.literal("flow-definition-detail.v2"),
-    ...flowDefinitionReadCommonShape,
-    graphSchemaVersion: z.literal("flow-graph.v1"),
-    origin: z.null(),
-    migrationRequired: z.literal(true),
-    draftGraph: flowGraphSchema,
-    draftPresentation: z.null()
-  })
-  .strict();
-
-const currentFlowDefinitionDetailV2Schema = z
+export const flowDefinitionDetailV2Schema = z
   .object({
     schemaVersion: z.literal("flow-definition-detail.v2"),
     ...flowDefinitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
     origin: flowDefinitionOriginV1Schema,
-    migrationRequired: z.literal(false),
     draftGraph: flowGraphV2Schema,
     draftPresentation: flowPresentationV1Schema.nullable()
   })
-  .strict();
-
-export const flowDefinitionDetailV2Schema = z
-  .discriminatedUnion("graphSchemaVersion", [
-    legacyFlowDefinitionDetailV2Schema,
-    currentFlowDefinitionDetailV2Schema
-  ])
+  .strict()
   .superRefine((definition, context) => {
     refineFlowDefinitionReadLifecycle(definition, context);
     if (
-      definition.graphSchemaVersion === "flow-graph.v2" &&
       definition.draftPresentation &&
       !presentationMatchesGraph(definition.draftGraph, definition.draftPresentation)
     ) {
@@ -989,69 +910,6 @@ export type CreateFlowDefinitionV2RequestInput = z.input<
 >;
 export type CreateFlowDefinitionV2Request = z.infer<typeof createFlowDefinitionV2RequestSchema>;
 
-export const migrateFlowDefinitionV2RequestSchema = z
-  .object({
-    schemaVersion: z.literal("flow-definition-migrate.v2"),
-    expectedRevision: positiveRevisionSchema,
-    targetGraphSchemaVersion: z.literal("flow-graph.v2")
-  })
-  .strict();
-export type MigrateFlowDefinitionV2Request = z.infer<typeof migrateFlowDefinitionV2RequestSchema>;
-
-export const flowDefinitionMigrationIssueSchema = z
-  .object({
-    code: z.enum(["unsupported_node", "unsupported_edge", "invalid_legacy_graph"]),
-    path: z.string().trim().min(1).max(500),
-    message: z.string().trim().min(1).max(1_000)
-  })
-  .strict();
-export type FlowDefinitionMigrationIssue = z.infer<typeof flowDefinitionMigrationIssueSchema>;
-
-export const flowDefinitionMigrationEvidenceV1Schema = z
-  .object({
-    schemaVersion: z.literal("flow-definition-migration.v1"),
-    sourceGraphSchemaVersion: z.literal("flow-graph.v1"),
-    targetGraphSchemaVersion: z.literal("flow-graph.v2"),
-    sourceVersionId: uuidSchema.nullable(),
-    sourceRevision: positiveRevisionSchema,
-    sourceGraphHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    migratedAt: instantSchema
-  })
-  .strict();
-export type FlowDefinitionMigrationEvidenceV1 = z.infer<
-  typeof flowDefinitionMigrationEvidenceV1Schema
->;
-
-export const migrateFlowDefinitionV2ResponseSchema = z
-  .object({
-    flow: flowDefinitionV2Schema,
-    migration: flowDefinitionMigrationEvidenceV1Schema
-  })
-  .strict()
-  .superRefine((response, context) => {
-    const sourceVersionMatches =
-      response.migration.sourceVersionId === null
-        ? response.flow.draftBaseVersionId === null &&
-          response.flow.latestPublishedVersionId === null
-        : response.flow.draftBaseVersionId === response.migration.sourceVersionId &&
-          response.flow.latestPublishedVersionId === response.migration.sourceVersionId;
-    if (
-      response.flow.state !== "draft" ||
-      response.flow.revision !== response.migration.sourceRevision + 1 ||
-      response.flow.origin.type !== "migration" ||
-      response.flow.origin.sourceVersionId !== response.migration.sourceVersionId ||
-      !sourceVersionMatches ||
-      response.flow.updatedAt !== response.migration.migratedAt
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["migration"],
-        message: "Migration evidence must match the migrated V2 draft"
-      });
-    }
-  });
-export type MigrateFlowDefinitionV2Response = z.infer<typeof migrateFlowDefinitionV2ResponseSchema>;
-
 export const updateFlowDefinitionDraftV2RequestSchema = z
   .object({
     expectedRevision: positiveRevisionSchema,
@@ -1143,14 +1001,6 @@ export const flowDefinitionCommandRejectionSchema = z.discriminatedUnion("code",
       currentBaseVersionId: uuidSchema
     })
     .strict(),
-  z.object({ code: z.literal("FLOW_GRAPH_MIGRATION_REQUIRED") }).strict(),
-  z.object({ code: z.literal("FLOW_GRAPH_ALREADY_V2") }).strict(),
-  z
-    .object({
-      code: z.literal("FLOW_DEFINITION_MIGRATION_NOT_ALLOWED"),
-      state: flowDefinitionStateSchema
-    })
-    .strict(),
   z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_INVALID") }).strict(),
   z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_REUSED") }).strict(),
   z.object({ code: z.literal("FLOW_IDEMPOTENCY_KEY_EXPIRED") }).strict(),
@@ -1174,12 +1024,6 @@ export const flowDefinitionCommandRejectionSchema = z.discriminatedUnion("code",
       code: z.literal("FLOW_TEMPLATE_PARAMETERS_INVALID"),
       templateKey: stableIdSchema,
       parameterPaths: z.array(stableIdSchema).min(1).max(50)
-    })
-    .strict(),
-  z
-    .object({
-      code: z.literal("FLOW_GRAPH_MIGRATION_BLOCKED"),
-      issues: z.array(flowDefinitionMigrationIssueSchema).min(1).max(2_000).readonly()
     })
     .strict(),
   z.object({ code: z.literal("FLOW_DRAFT_MUTATION_INVALID") }).strict(),
@@ -1206,7 +1050,6 @@ export const flowDefinitionCommandRejectionResponseSchema = z
             response.body.code === "FLOW_TEMPLATE_NOT_FOUND"
           ? 404
           : response.body.code === "FLOW_GRAPH_NOT_PUBLISHABLE" ||
-              response.body.code === "FLOW_GRAPH_MIGRATION_BLOCKED" ||
               response.body.code === "FLOW_TEMPLATE_PARAMETERS_INVALID"
             ? 422
             : 409;
@@ -1234,16 +1077,6 @@ const flowPublishedVersionCommonShape = {
   publishedAt: instantSchema
 } as const;
 
-export const flowPublishedVersionV2Schema = z
-  .object({
-    schemaVersion: z.literal("flow-published-version.v2"),
-    ...flowPublishedVersionCommonShape,
-    capabilityManifest: flowCapabilityManifestV1Schema
-  })
-  .strict()
-  .superRefine(refineFlowPublishedVersion);
-export type FlowPublishedVersionV2 = z.infer<typeof flowPublishedVersionV2Schema>;
-
 export const flowPublishedVersionV3Schema = z
   .object({
     schemaVersion: z.literal("flow-published-version.v3"),
@@ -1254,20 +1087,8 @@ export const flowPublishedVersionV3Schema = z
   .superRefine(refineFlowPublishedVersion);
 export type FlowPublishedVersionV3 = z.infer<typeof flowPublishedVersionV3Schema>;
 
-export const flowPublishedVersionCompatibleSchema = z.union([
-  flowPublishedVersionV2Schema,
-  flowPublishedVersionV3Schema
-]);
-export type FlowPublishedVersionCompatible = z.infer<typeof flowPublishedVersionCompatibleSchema>;
-
-export const publishFlowDefinitionV2ResponseSchema = z
-  .object({
-    flow: flowDefinitionV2Schema,
-    version: flowPublishedVersionV2Schema
-  })
-  .strict()
-  .superRefine(refinePublishFlowDefinitionResponse);
-export type PublishFlowDefinitionV2Response = z.infer<typeof publishFlowDefinitionV2ResponseSchema>;
+export const flowPublishedVersionCompatibleSchema = flowPublishedVersionV3Schema;
+export type FlowPublishedVersionCompatible = FlowPublishedVersionV3;
 
 export const publishFlowDefinitionV3ResponseSchema = z
   .object({
@@ -1278,13 +1099,8 @@ export const publishFlowDefinitionV3ResponseSchema = z
   .superRefine(refinePublishFlowDefinitionResponse);
 export type PublishFlowDefinitionV3Response = z.infer<typeof publishFlowDefinitionV3ResponseSchema>;
 
-export const publishFlowDefinitionCompatibleResponseSchema = z.union([
-  publishFlowDefinitionV2ResponseSchema,
-  publishFlowDefinitionV3ResponseSchema
-]);
-export type PublishFlowDefinitionCompatibleResponse = z.infer<
-  typeof publishFlowDefinitionCompatibleResponseSchema
->;
+export const publishFlowDefinitionCompatibleResponseSchema = publishFlowDefinitionV3ResponseSchema;
+export type PublishFlowDefinitionCompatibleResponse = PublishFlowDefinitionV3Response;
 
 function refineFlowPublishedVersion(
   version: {

@@ -1,25 +1,31 @@
 import type { AdminFinancePolicyAuditSink } from "./finance-policies.audit";
 import type {
+  FinanceAuthorizationCanonicalPayload,
+  FinanceSensitiveActionKind
+} from "@elevenhouse/contracts";
+import type {
   FinanceIdempotentCommand,
   FinanceIdempotentCommandResult,
   AdminPaymentReversalCaseStore,
   FinanceOrderStore,
   FinancePolicyStore,
-  LedgerStore,
-  PayoutStore,
   ReconciliationStore
 } from "@elevenhouse/domain";
+import type { FinanceTransactionAuthorizationProof } from "@elevenhouse/domain";
+import type {
+  OnlineWalletPayoutReleaseUnitOfWork,
+  OnlineWalletPayoutReviewUnitOfWork,
+  OnlineWalletPayoutRequestReader
+} from "@elevenhouse/domain/finance-core";
 
 export type AdminFinancePolicyUnitOfWorkContext = {
   readonly store: FinancePolicyStore;
   readonly orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
-  readonly payoutStore: Pick<
-    PayoutStore,
-    "findRequestById" | "listRequests" | "updateRequestStatus"
-  >;
-  readonly ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
   readonly reversalCaseStore: AdminPaymentReversalCaseStore;
   readonly reconciliationStore: Pick<ReconciliationStore, "listOpenExceptions" | "resolveException">;
+  readonly onlineWalletPayoutRequestReader: OnlineWalletPayoutRequestReader;
+  readonly onlineWalletPayoutRelease: OnlineWalletPayoutReleaseUnitOfWork;
+  readonly onlineWalletPayoutReview: OnlineWalletPayoutReviewUnitOfWork;
   readonly auditSink: AdminFinancePolicyAuditSink;
 };
 
@@ -37,4 +43,24 @@ export type AdminFinancePolicyUnitOfWork = {
       result: Record<string, unknown>
     ) => Promise<T | null>;
   }) => Promise<FinanceIdempotentCommandResult<T>>;
+  /**
+   * Executes a protected finance transition in the exact transaction that
+   * consumes its one-time WebAuthn authorization grant.
+   */
+  readonly executeAuthorized: <T>(input: {
+    readonly authorization: {
+      readonly actorUserId: string;
+      readonly sessionId: string;
+      readonly actionKind: FinanceSensitiveActionKind;
+      readonly aggregateId: string;
+      readonly expectedVersion: number;
+      readonly payload: FinanceAuthorizationCanonicalPayload;
+      readonly authorizationId: string;
+      readonly occurredAt: string;
+    };
+    readonly operation: (
+      context: AdminFinancePolicyUnitOfWorkContext,
+      proof: FinanceTransactionAuthorizationProof
+    ) => Promise<T>;
+  }) => Promise<T>;
 };

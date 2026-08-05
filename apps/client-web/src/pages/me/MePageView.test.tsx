@@ -33,6 +33,8 @@ describe("MePageView", () => {
         activeSection="home"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
         form={defaultForm}
         overview={{
           astrologers: [
@@ -45,7 +47,7 @@ describe("MePageView", () => {
               lastLinkedAt: "2026-07-06T10:00:00.000Z"
             }
           ],
-          birthProfiles: [birthProfile()],
+          birthData: birthProfile(),
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -75,23 +77,18 @@ describe("MePageView", () => {
     expect(markup).not.toContain("Рекомендации");
   });
 
-  it("renders birth profile management with the saved profile list", () => {
+  it("renders one birth profile for editing", () => {
     const markup = renderToStaticMarkup(
       <MePageView
         activeSection="data"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
         form={defaultForm}
         overview={{
           astrologers: [],
-          birthProfiles: [
-            birthProfile({ label: "Я", isPrimary: true }),
-            birthProfile({
-              id: "66666666-6666-4666-8666-666666666666",
-              label: "Партнёр",
-              isPrimary: false
-            })
-          ],
+          birthData: birthProfile({ label: "Я" }),
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -109,9 +106,8 @@ describe("MePageView", () => {
     );
 
     expect(markup).toContain("Данные рождения");
-    expect(markup).toContain("Основной профиль");
-    expect(markup).toContain("Партнёр");
-    expect(markup).toContain("Сохранить основной профиль");
+    expect(markup).toContain("Профиль рождения");
+    expect(markup).toContain("Сохранить данные");
     expect(markup).toContain('name="birthDate"');
     expect(markup).toContain('name="birthTime"');
     expect(markup).toContain('name="birthTimeDstOccurrence"');
@@ -132,6 +128,8 @@ describe("MePageView", () => {
         activeSection="booking"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
         form={defaultForm}
         overview={{
           astrologers: [
@@ -144,7 +142,7 @@ describe("MePageView", () => {
               lastLinkedAt: "2026-07-06T10:00:00.000Z"
             }
           ],
-          birthProfiles: [birthProfile()],
+          birthData: birthProfile(),
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -161,15 +159,15 @@ describe("MePageView", () => {
       />
     );
 
-    expect(markup).toContain("Выберите связанного астролога");
+    expect(markup).toContain("Выберите услугу связанного астролога");
     expect(markup).toContain("Алиса Вега");
-    expect(markup).toContain("Расписание пока не опубликовано");
+    expect(markup).toContain("показываем только услуги астрологов, с которыми у вас уже есть связь");
     expect(markup).toContain("Данные для записи");
     expect(markup).toMatch(
       /<button class="[^"]*primaryButton[^"]*" type="button"><svg[\s\S]* Записаться<\/button>/
     );
     expect(markup).not.toContain("Найти астролога");
-    expect(markup).not.toContain("Каталог");
+    expect(markup).not.toContain("Каталог астрологов");
     expect(markup).not.toContain("Рекомендации");
   });
 
@@ -179,10 +177,12 @@ describe("MePageView", () => {
         activeSection="booking"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
         form={defaultForm}
         overview={{
           astrologers: [],
-          birthProfiles: [],
+          birthData: null,
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -212,6 +212,8 @@ describe("MePageView", () => {
         activeSection="data"
         birthPlaceSearch={defaultBirthPlaceSearch}
         birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
         form={{
           ...defaultForm,
           birthPlaceText: "произвольный текст",
@@ -219,7 +221,7 @@ describe("MePageView", () => {
         }}
         overview={{
           astrologers: [],
-          birthProfiles: [],
+          birthData: null,
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -240,7 +242,7 @@ describe("MePageView", () => {
   });
 });
 
-function birthProfile(overrides: Partial<{ id: string; label: string; isPrimary: boolean }> = {}) {
+function birthProfile(overrides: Partial<{ id: string; label: string }> = {}) {
   return {
     id: overrides.id ?? "55555555-5555-4555-8555-555555555555",
     clientUserId,
@@ -257,7 +259,9 @@ function birthProfile(overrides: Partial<{ id: string; label: string; isPrimary:
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "client_profile" as const,
-    isPrimary: overrides.isPrimary ?? true,
+    revision: 1,
+    lastEditedByUserId: clientUserId,
+    lastEditedByRole: "client" as const,
     createdAt: "2026-07-06T10:00:00.000Z",
     updatedAt: "2026-07-06T10:00:00.000Z"
   };

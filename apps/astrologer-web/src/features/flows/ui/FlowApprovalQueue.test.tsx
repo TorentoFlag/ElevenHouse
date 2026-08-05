@@ -29,14 +29,7 @@ const definitionOnlyRuntime = {
   mode: "definition_only",
   executionAvailable: false,
   reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
-} satisfies FlowRuntimeAvailability;
-
-const mixedCanaryRuntime = {
-  mode: "canary",
-  executionAvailable: true,
-  reasonCode: null,
-  historySemantics: "mixed"
+  historySemantics: "durable_execution"
 } satisfies FlowRuntimeAvailability;
 
 const durableRuntime = {
@@ -57,7 +50,7 @@ describe("FlowApprovalQueue", () => {
     expect(screen.queryByText("Уже утверждено")).toBeNull();
   });
 
-  it("keeps legacy approval decisions read-only without invoking callbacks", () => {
+  it("keeps approval decisions read-only while execution is unavailable", () => {
     const onDecision = vi.fn();
     render(
       <FlowApprovalQueue
@@ -69,7 +62,7 @@ describe("FlowApprovalQueue", () => {
 
     expect(
       screen.getByText(
-        "Архивные подтверждения доступны только для просмотра; решения по ним не выполняются."
+        "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать."
       )
     ).toBeTruthy();
 
@@ -84,25 +77,6 @@ describe("FlowApprovalQueue", () => {
     fireEvent.click(rejectButton);
     fireEvent.click(snoozeButton);
 
-    expect(onDecision).not.toHaveBeenCalled();
-  });
-
-  it("keeps mixed canary approvals read-only until rows have durable provenance", () => {
-    const onDecision = vi.fn();
-    render(
-      <FlowApprovalQueue
-        approvals={[pendingApproval]}
-        runtimeAvailability={mixedCanaryRuntime}
-        onDecision={onDecision}
-      />
-    );
-
-    expect(
-      screen.getByText("Подтверждения из переходной истории доступны только для просмотра.")
-    ).toBeTruthy();
-    const approveButton = screen.getByRole("button", { name: "Утвердить" });
-    expect(approveButton).toHaveProperty("disabled", true);
-    fireEvent.click(approveButton);
     expect(onDecision).not.toHaveBeenCalled();
   });
 

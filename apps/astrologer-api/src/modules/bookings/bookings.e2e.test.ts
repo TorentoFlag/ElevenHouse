@@ -5,9 +5,15 @@ import { hashSessionToken } from "@elevenhouse/auth";
 import {
   availableBookingSlotsResponseSchema,
   bookingResponseSchema,
+  cancelBookingResponseSchema,
+  completeBookingResponseSchema,
+  rescheduleBookingResponseSchema,
   manualBookingResponseSchema
 } from "@elevenhouse/contracts";
 import {
+  BookingCancellationRequiresRefundAuthorityError,
+  BookingLifecycleRevisionConflictError,
+  BookingNotFoundError,
   IdempotencyKeyReuseError,
   SlotNoLongerAvailableError,
   type AuthSessionAuthenticationStore,
@@ -18,8 +24,10 @@ import {
   type BookingClientReader,
   type BookingCommandStore,
   type BookingProductReader,
+  type BookingLifecycleEvent,
   type PasswordlessAuthUnitOfWork,
-  type PasswordlessCustomerAccountRegistrationSessionUnitOfWork
+  type PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
+  createBookingLifecycleEvent
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailabilityModule } from "../availability/availability.module";
@@ -125,8 +133,8 @@ describe("booking HTTP routes", () => {
       .useValue(commandStore)
       .overrideProvider(BOOKING_CLIENT_READER)
       .useValue({
-        hasActiveRelationship: vi.fn(async ({ clientUserId: candidate }) =>
-          candidate === clientUserId
+        hasActiveRelationship: vi.fn(
+          async ({ clientUserId: candidate }) => candidate === clientUserId
         )
       } satisfies BookingClientReader)
       .overrideProvider(BOOKING_PRODUCT_READER)
@@ -214,18 +222,161 @@ describe("booking HTTP routes", () => {
 
   it("returns a safe owner-scoped booking detail", async () => {
     const found = await send("GET", `/bookings/${bookingId}`, undefined, auth());
-    const hidden = await send(
-      "GET",
-      `/bookings/${bookingId}`,
-      undefined,
-      auth(secondSessionToken)
-    );
+    const hidden = await send("GET", `/bookings/${bookingId}`, undefined, auth(secondSessionToken));
     const malformed = await send("GET", "/bookings/not-a-uuid", undefined, auth());
     expect(found.status).toBe(200);
     bookingResponseSchema.parse(found.body);
     expect(found.body.booking).not.toHaveProperty("ownerUserId");
     expect(hidden.status).toBe(404);
     expect(malformed.status).toBe(400);
+  });
+
+  it("cancels an owner booking idempotently and does not leak it across owners", async () => {
+    const path = `/bookings/${bookingId}/cancel`;
+    const body = {
+      expectedLifecycleRevision: 1,
+      reasonCode: "astrologer_unavailable"
+    };
+    const idempotencyKey = "booking-cancel:request-1";
+    const missingCsrf = await send("POST", path, body, {
+      ...auth(),
+      "idempotency-key": idempotencyKey
+    });
+    const missingIdempotency = await send("POST", path, body, csrfAuth());
+    const created = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": idempotencyKey
+    });
+    const replayed = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": idempotencyKey
+    });
+    const changed = await send(
+      "POST",
+      path,
+      { ...body, reasonCode: "other" },
+      { ...csrfAuth(), "idempotency-key": idempotencyKey }
+    );
+    const hidden = await send("POST", path, body, {
+      ...csrfAuth(secondSessionToken),
+      "idempotency-key": "booking-cancel:other-owner"
+    });
+
+    expect(missingCsrf.status).toBe(403);
+    expect(missingIdempotency.status).toBe(400);
+    expect(created.status).toBe(200);
+    cancelBookingResponseSchema.parse(created.body);
+    expect(created.body).toMatchObject({
+      booking: { id: bookingId, state: "cancelled", lifecycleRevision: 2 },
+      lifecycleEvent: { kind: "cancelled", revision: 2 },
+      replayed: false
+    });
+    expect(replayed.body).toMatchObject({ replayed: true });
+    expect(changed).toMatchObject({
+      status: 409,
+      body: { code: "idempotency_key_reused_with_different_request" }
+    });
+    expect(hidden).toMatchObject({ status: 404, body: { code: "booking_not_found" } });
+  });
+
+  it("returns typed conflicts for stale revisions and paid cancellation", async () => {
+    vi.mocked(commandStore.executeOwnerCancellation)
+      .mockRejectedValueOnce(new BookingLifecycleRevisionConflictError(1, 2))
+      .mockRejectedValueOnce(new BookingCancellationRequiresRefundAuthorityError());
+    const path = `/bookings/${bookingId}/cancel`;
+    const body = { expectedLifecycleRevision: 1, reasonCode: "client_request" };
+    const stale = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": "booking-cancel:stale"
+    });
+    const paid = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": "booking-cancel:paid"
+    });
+
+    expect(stale).toMatchObject({
+      status: 409,
+      body: {
+        code: "booking_lifecycle_revision_conflict",
+        expectedLifecycleRevision: 1,
+        currentLifecycleRevision: 2
+      }
+    });
+    expect(paid).toMatchObject({
+      status: 409,
+      body: { code: "booking_cancellation_requires_refund_authority" }
+    });
+  });
+
+  it("accepts an owner-authenticated paid completion command", async () => {
+    const path = `/bookings/${bookingId}/complete`;
+    const body = { expectedLifecycleRevision: 1 };
+    const response = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": "booking-complete:request-1"
+    });
+
+    expect(response.status).toBe(200);
+    completeBookingResponseSchema.parse(response.body);
+    expect(response.body).toMatchObject({
+      booking: { id: bookingId, state: "completed", lifecycleRevision: 2 },
+      lifecycleEvent: { kind: "completed", revision: 2 },
+      replayed: false
+    });
+  });
+
+  it("accepts an owner reschedule with CSRF, idempotency and owner isolation", async () => {
+    const path = `/bookings/${bookingId}/reschedule`;
+    const body = {
+      expectedLifecycleRevision: 1,
+      projectedStartAt: "2026-07-21T07:00:00.000Z"
+    };
+    const idempotencyKey = "booking-reschedule:request-1";
+    const missingCsrf = await send("POST", path, body, {
+      ...auth(),
+      "idempotency-key": idempotencyKey
+    });
+    const missingIdempotency = await send("POST", path, body, csrfAuth());
+    const created = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": idempotencyKey
+    });
+    const replayed = await send("POST", path, body, {
+      ...csrfAuth(),
+      "idempotency-key": idempotencyKey
+    });
+    const changed = await send(
+      "POST",
+      path,
+      { ...body, projectedStartAt: "2026-07-22T07:00:00.000Z" },
+      { ...csrfAuth(), "idempotency-key": idempotencyKey }
+    );
+    const hidden = await send("POST", path, body, {
+      ...csrfAuth(secondSessionToken),
+      "idempotency-key": "booking-reschedule:other-owner"
+    });
+
+    expect(missingCsrf.status).toBe(403);
+    expect(missingIdempotency.status).toBe(400);
+    expect(created.status).toBe(200);
+    rescheduleBookingResponseSchema.parse(created.body);
+    expect(created.body).toMatchObject({
+      booking: {
+        id: bookingId,
+        reservationId: "66666666-6666-4666-8666-666666666666",
+        state: "confirmed",
+        lifecycleRevision: 2,
+        startAt: body.projectedStartAt
+      },
+      lifecycleEvent: { kind: "rescheduled", revision: 2, reasonCode: null },
+      replayed: false
+    });
+    expect(replayed.body).toMatchObject({ replayed: true });
+    expect(changed).toMatchObject({
+      status: 409,
+      body: { code: "idempotency_key_reused_with_different_request" }
+    });
+    expect(hidden).toMatchObject({ status: 404, body: { code: "booking_not_found" } });
   });
 
   it("returns authenticated, owner-scoped available slots without CSRF", async () => {
@@ -263,7 +414,10 @@ describe("booking HTTP routes", () => {
   ) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
-      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...headers },
+      headers: {
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers
+      },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     });
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
@@ -347,6 +501,8 @@ function createProductReader(): BookingProductReader {
         participantMode: "solo",
         durationMinutes: 60,
         deliveryFormats: ["video", "audio"],
+        requiredClientData: ["chart1"],
+        methods: ["natal"],
         priceMinor: 490000,
         currency: "RUB"
       } as const;
@@ -355,8 +511,26 @@ function createProductReader(): BookingProductReader {
 }
 
 function createCommandStore(): BookingCommandStore {
-  const booking = createBooking();
+  let booking = createBooking();
   let saved: { key: string; hash: string } | null = null;
+  let cancellation: {
+    readonly key: string;
+    readonly hash: string;
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
+  } | null = null;
+  let reschedule: {
+    readonly key: string;
+    readonly hash: string;
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
+  } | null = null;
+  let completion: {
+    readonly key: string;
+    readonly hash: string;
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
+  } | null = null;
   return {
     executeManualBooking: vi.fn(async (command, createClaim) => {
       if (command.key === "booking-overlap:request-1") throw new SlotNoLongerAvailableError();
@@ -370,6 +544,148 @@ function createCommandStore(): BookingCommandStore {
       return { kind: "created" as const, booking };
     }),
     executePaidHold: vi.fn(),
+    executeOwnerCancellation: vi.fn(async (command, input) => {
+      if (command.actorUserId !== ownerUserId || input.bookingId !== bookingId) {
+        throw new BookingNotFoundError();
+      }
+      const previousCancellation = cancellation;
+      if (previousCancellation !== null && previousCancellation.key === command.key) {
+        if (previousCancellation.hash !== command.requestHash) {
+          throw new IdempotencyKeyReuseError();
+        }
+        return {
+          kind: "replayed" as const,
+          booking: previousCancellation.booking,
+          lifecycleEvent: previousCancellation.lifecycleEvent
+        };
+      }
+      if (booking.lifecycleRevision !== input.expectedLifecycleRevision) {
+        throw new BookingLifecycleRevisionConflictError(
+          input.expectedLifecycleRevision,
+          booking.lifecycleRevision
+        );
+      }
+      const lifecycleEvent = createBookingLifecycleEvent({
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        bookingId: booking.id,
+        ownerUserId: booking.ownerUserId,
+        revision: booking.lifecycleRevision + 1,
+        kind: "cancelled",
+        actor: { kind: "astrologer", userId: command.actorUserId },
+        reasonCode: input.reasonCode,
+        before: { startAt: booking.startAt, endAt: booking.endAt, timeZone: booking.timeZone },
+        after: null,
+        occurredAt: command.now
+      });
+      booking = {
+        ...booking,
+        state: "cancelled",
+        lifecycleRevision: lifecycleEvent.revision,
+        updatedAt: command.now
+      };
+      cancellation = {
+        key: command.key,
+        hash: command.requestHash,
+        booking,
+        lifecycleEvent
+      };
+      return { kind: "created" as const, booking, lifecycleEvent };
+    }),
+    executeOwnerReschedule: vi.fn(async (command, input) => {
+      if (command.actorUserId !== ownerUserId || input.bookingId !== bookingId) {
+        throw new BookingNotFoundError();
+      }
+      const previousReschedule = reschedule;
+      if (previousReschedule !== null && previousReschedule.key === command.key) {
+        if (previousReschedule.hash !== command.requestHash) {
+          throw new IdempotencyKeyReuseError();
+        }
+        return {
+          kind: "replayed" as const,
+          booking: previousReschedule.booking,
+          lifecycleEvent: previousReschedule.lifecycleEvent
+        };
+      }
+      if (booking.lifecycleRevision !== input.expectedLifecycleRevision) {
+        throw new BookingLifecycleRevisionConflictError(
+          input.expectedLifecycleRevision,
+          booking.lifecycleRevision
+        );
+      }
+      const before = {
+        startAt: booking.startAt,
+        endAt: booking.endAt,
+        timeZone: booking.timeZone
+      };
+      const nextStart = new Date(input.projectedStartAt);
+      const nextEnd = new Date(nextStart.getTime() + booking.durationMinutes * 60 * 1_000);
+      const lifecycleEvent = createBookingLifecycleEvent({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        bookingId: booking.id,
+        ownerUserId: booking.ownerUserId,
+        revision: booking.lifecycleRevision + 1,
+        kind: "rescheduled",
+        actor: { kind: "astrologer", userId: command.actorUserId },
+        reasonCode: null,
+        before,
+        after: {
+          startAt: nextStart.toISOString(),
+          endAt: nextEnd.toISOString(),
+          timeZone: booking.timeZone
+        },
+        occurredAt: command.now
+      });
+      booking = {
+        ...booking,
+        lifecycleRevision: lifecycleEvent.revision,
+        startAt: nextStart.toISOString(),
+        endAt: nextEnd.toISOString(),
+        updatedAt: command.now
+      };
+      reschedule = {
+        key: command.key,
+        hash: command.requestHash,
+        booking,
+        lifecycleEvent
+      };
+      return { kind: "created" as const, booking, lifecycleEvent };
+    }),
+    executeOwnerCompletion: vi.fn(async (command, input) => {
+      if (command.actorUserId !== ownerUserId || input.bookingId !== bookingId) {
+        throw new BookingNotFoundError();
+      }
+      if (completion && completion.key === command.key) {
+        if (completion.hash !== command.requestHash) throw new IdempotencyKeyReuseError();
+        return { kind: "replayed" as const, booking: completion.booking, lifecycleEvent: completion.lifecycleEvent };
+      }
+      if (booking.lifecycleRevision !== input.expectedLifecycleRevision) {
+        throw new BookingLifecycleRevisionConflictError(
+          input.expectedLifecycleRevision,
+          booking.lifecycleRevision
+        );
+      }
+      const lifecycleEvent = createBookingLifecycleEvent({
+        id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        bookingId: booking.id,
+        ownerUserId: booking.ownerUserId,
+        revision: booking.lifecycleRevision + 1,
+        kind: "completed",
+        actor: { kind: "astrologer", userId: command.actorUserId },
+        reasonCode: null,
+        before: { startAt: booking.startAt, endAt: booking.endAt, timeZone: booking.timeZone },
+        after: null,
+        occurredAt: command.now
+      });
+      booking = {
+        ...booking,
+        source: "client_paid",
+        state: "completed",
+        lifecycleRevision: lifecycleEvent.revision,
+        updatedAt: command.now
+      };
+      completion = { key: command.key, hash: command.requestHash, booking, lifecycleEvent };
+      return { kind: "created" as const, booking, lifecycleEvent };
+    }),
     confirmPaidBooking: vi.fn(async () => null),
     releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async ({ ownerUserId: candidateOwner, bookingId: candidate }) =>
@@ -387,6 +703,7 @@ function createBooking(): Booking {
     productId,
     source: "manual",
     state: "confirmed",
+    lifecycleRevision: 1,
     holdExpiresAt: null,
     startAt: "2026-07-20T07:00:00.000Z",
     endAt: "2026-07-20T08:00:00.000Z",
@@ -397,6 +714,13 @@ function createBooking(): Booking {
     currency: "RUB",
     timeZone: "Europe/Moscow",
     policySnapshot: { bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minimumNoticeMinutes: 0 },
+    clientDataRequirementsSnapshot: {
+      schemaVersion: "booking-client-data-requirements.v1",
+      executionMode: "live",
+      participantMode: "solo",
+      requiredClientData: ["chart1"],
+      methods: ["natal"]
+    },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };
@@ -412,15 +736,33 @@ function createAuthStore(): AuthSessionAuthenticationStore {
       const userId = token === sessionToken ? ownerUserId : secondOwnerUserId;
       return {
         session: {
-          id: token === sessionToken ? "77777777-7777-4777-8777-777777777777" : "88888888-8888-4888-8888-888888888888",
+          id:
+            token === sessionToken
+              ? "77777777-7777-4777-8777-777777777777"
+              : "88888888-8888-4888-8888-888888888888",
           userId,
           tokenHash: candidateHash,
           status: "active" as const,
           createdAt: now.toISOString(),
           expiresAt: "2026-07-19T00:00:00.000Z"
         },
-        user: { id: userId, status: "active" as const, createdAt: now.toISOString(), updatedAt: now.toISOString() },
-        roleAssignments: [{ id: token === sessionToken ? "99999999-9999-4999-8999-999999999998" : "99999999-9999-4999-8999-999999999997", userId, role: "astrologer" as const, assignedAt: now.toISOString() }]
+        user: {
+          id: userId,
+          status: "active" as const,
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString()
+        },
+        roleAssignments: [
+          {
+            id:
+              token === sessionToken
+                ? "99999999-9999-4999-8999-999999999998"
+                : "99999999-9999-4999-8999-999999999997",
+            userId,
+            role: "astrologer" as const,
+            assignedAt: now.toISOString()
+          }
+        ]
       };
     })
   };

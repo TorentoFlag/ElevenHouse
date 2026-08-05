@@ -1,56 +1,67 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ConfigModule } from "@nestjs/config";
 import {
+  createDrizzleFlowActivationReviewStore,
   createDrizzleFlowDefinitionControlStore,
   createDrizzleFlowDefinitionQueryStore,
+  createDrizzleFlowDefinitionReadV3Store,
+  createDrizzleFlowEnrollmentControlStore,
+  createDrizzleFlowEnrollmentQueryStore,
   createDrizzleFlowRunCancellationStore,
   createDrizzleFlowRuntimeStore,
-  createDrizzleFlowStore
+  createDrizzleFlowWorkItemStore
 } from "@elevenhouse/db";
-import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { FlowApprovalsController } from "./flow-approvals.controller";
+import { FlowActivationReviewController } from "./flow-activation-review.controller";
+import { FlowActivationReviewService } from "./flow-activation-review.service";
+import { FlowEnrollmentController } from "./flow-enrollment.controller";
+import { FlowEnrollmentService } from "./flow-enrollment.service";
 import { FlowRunsController } from "./flow-runs.controller";
+import { FlowWorkItemsController } from "./flow-work-items.controller";
+import { FlowWorkItemsService } from "./flow-work-items.service";
 import { FlowTemplatesController, FlowsController } from "./flows.controller";
 import { FlowsService } from "./flows.service";
 import {
+  FLOW_ACTIVATION_REVIEW_STORE,
   FLOW_DEFINITION_CONTROL_STORE,
   FLOW_DEFINITION_QUERY_STORE,
-  FLOW_PUBLICATION_ROLLOUT_POLICY,
+  FLOW_DEFINITION_READ_V3_STORE,
+  FLOW_ENROLLMENT_CONTROL_STORE,
+  FLOW_ENROLLMENT_QUERY_STORE,
   FLOW_RUN_CANCELLATION_STORE,
   FLOW_RUNTIME_STORE,
-  FLOW_STORE
+  FLOW_WORK_ITEM_STORE
 } from "./flows.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [
+    ConfigModule,
+    ClockModule,
+    DatabaseModule,
+    IdentityModule,
+    PlatformEntitlementsModule,
+    SecurityModule
+  ],
   controllers: [
     FlowTemplatesController,
     FlowsController,
+    FlowActivationReviewController,
+    FlowEnrollmentController,
     FlowRunsController,
-    FlowApprovalsController
+    FlowApprovalsController,
+    FlowWorkItemsController
   ],
   providers: [
     FlowsService,
-    {
-      provide: FLOW_PUBLICATION_ROLLOUT_POLICY,
-      useFactory: (configService: ConfigService) => {
-        const config =
-          configService.getOrThrow<AstrologerApiRuntimeConfig["flows"]>("astrologerApi.flows");
-        return { phase: config.publicationRolloutPhase };
-      },
-      inject: [ConfigService]
-    },
-    {
-      provide: FLOW_STORE,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleFlowStore(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    },
+    FlowActivationReviewService,
+    FlowEnrollmentService,
+    FlowWorkItemsService,
     {
       provide: FLOW_DEFINITION_CONTROL_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -64,15 +75,45 @@ import {
       inject: [PostgresRuntimeService]
     },
     {
+      provide: FLOW_DEFINITION_READ_V3_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFlowDefinitionReadV3Store(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
       provide: FLOW_RUNTIME_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleFlowRuntimeStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {
+      provide: FLOW_ENROLLMENT_CONTROL_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFlowEnrollmentControlStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: FLOW_ENROLLMENT_QUERY_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFlowEnrollmentQueryStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: FLOW_ACTIVATION_REVIEW_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFlowActivationReviewStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
       provide: FLOW_RUN_CANCELLATION_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleFlowRunCancellationStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: FLOW_WORK_ITEM_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFlowWorkItemStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     }
   ],

@@ -1,9 +1,10 @@
-import type { FlowDefinitionTemplateDescriptorV2 } from "@elevenhouse/contracts";
+import type { FlowDefinitionTemplateDescriptorV2, ProductResponse } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
-import { useEffect, useId, useRef, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 export type FlowCreateDialogProps = {
   readonly templates: readonly FlowDefinitionTemplateDescriptorV2[];
+  readonly products?: readonly ProductResponse[];
   readonly locale: "ru" | "en";
   readonly open: boolean;
   readonly pending: boolean;
@@ -11,7 +12,10 @@ export type FlowCreateDialogProps = {
   readonly error?: Error | null;
   readonly requestedTemplateKey?: string | null;
   readonly onClose: () => void;
-  readonly onCreateTemplate: (template: FlowDefinitionTemplateDescriptorV2) => void;
+  readonly onCreateTemplate: (
+    template: FlowDefinitionTemplateDescriptorV2,
+    parameters: Record<string, string[]>
+  ) => void;
   readonly onCreateBlank: () => void;
   readonly onRetry?: () => void;
   readonly classNames?: Readonly<Record<string, string>>;
@@ -36,7 +40,9 @@ const copyByLocale = {
     requestedMissing:
       "Запрошенный интеграцией сценарий отсутствует в текущем каталоге и не может быть создан.",
     loading: "Загружаем каталог сценариев.",
-    retry: "Повторить загрузку"
+    retry: "Повторить загрузку",
+    selectProducts: "Выберите услуги для этого сценария",
+    noEligibleProducts: "Нет активных услуг с натальной картой и данными chart1."
   },
   en: {
     title: "New flow",
@@ -55,12 +61,15 @@ const copyByLocale = {
     requestedMissing:
       "The integration-requested flow is not present in the current catalog and cannot be created.",
     loading: "Loading the flow catalog.",
-    retry: "Retry loading"
+    retry: "Retry loading",
+    selectProducts: "Select services for this flow",
+    noEligibleProducts: "No active services require a natal chart with chart1 data."
   }
 } as const;
 
 export function FlowCreateDialog({
   templates,
+  products = [],
   locale,
   open,
   pending,
@@ -75,6 +84,7 @@ export function FlowCreateDialog({
 }: FlowCreateDialogProps) {
   const id = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<readonly string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -115,6 +125,12 @@ export function FlowCreateDialog({
           : copy.requestedMissing
         : null;
   const className = (key: string) => classNames?.[key] ?? "";
+  const eligibleProducts = products.filter(
+    (product) =>
+      product.methods.includes("natal") &&
+      product.requiredClientData.includes("chart1") &&
+      !product.requiredClientData.includes("chart2")
+  );
 
   return (
     <div
@@ -179,6 +195,12 @@ export function FlowCreateDialog({
           <ul className={className("createDialogList")}>
             {templates.map((template, index) => {
               const available = template.availability === "available";
+              const requiresProducts = template.parameters.some(
+                (parameter) => parameter.kind === "product_ids" && parameter.required
+              );
+              const selected = selectedProductIds.filter((id) =>
+                eligibleProducts.some((product) => product.id === id)
+              );
               const recommended = available && template.key === requestedTemplateKey;
               const descriptionId = `${id}-template-${index}-description`;
               const metaId = `${id}-template-${index}-meta`;
@@ -193,10 +215,20 @@ export function FlowCreateDialog({
                   <button
                     className={className("createDialogTemplate")}
                     type="button"
-                    disabled={!available || pending || loading}
+                    disabled={
+                      !available ||
+                      pending ||
+                      loading ||
+                      (requiresProducts && (eligibleProducts.length === 0 || selected.length === 0))
+                    }
                     aria-describedby={`${descriptionId} ${metaId}`}
                     data-recommended={recommended ? "true" : undefined}
-                    onClick={() => onCreateTemplate(template)}
+                    onClick={() =>
+                      onCreateTemplate(
+                        template,
+                        requiresProducts ? { product_ids: [...selected] } : {}
+                      )
+                    }
                   >
                     <span className={className("createDialogTemplateIcon")} aria-hidden="true">
                       <Icon iconName="flow" width={19} height={19} />
@@ -209,6 +241,30 @@ export function FlowCreateDialog({
                       </span>
                     </span>
                   </button>
+                  {requiresProducts ? (
+                    eligibleProducts.length === 0 ? (
+                      <p className={className("createDialogProductHint")}>{copy.noEligibleProducts}</p>
+                    ) : (
+                      <label className={className("createDialogProductSelect")}>
+                        <span>{copy.selectProducts}</span>
+                        <select
+                          multiple
+                          value={selected}
+                          onChange={(event) =>
+                            setSelectedProductIds(
+                              Array.from(event.currentTarget.selectedOptions, (option) => option.value)
+                            )
+                          }
+                        >
+                          {eligibleProducts.map((product) => (
+                            <option key={product.id} value={product.id}>
+                              {product.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )
+                  ) : null}
                 </li>
               );
             })}

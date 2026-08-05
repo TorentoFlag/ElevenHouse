@@ -12,11 +12,13 @@ import {
 } from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
+import { RequirePlatformTariffCapabilities } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
 import { MatrixReportService } from "./matrix-report.service";
 
 @Controller("matrix")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class MatrixReportController {
   constructor(private readonly reportService: MatrixReportService) {}
 
@@ -38,6 +40,11 @@ export class MatrixReportController {
 
   @Post("calculations/:calculationId/report/ai-draft")
   @HttpCode(HttpStatus.OK)
+  @RequirePlatformTariffCapabilities({
+    surfaceId: "ai.matrix.draft",
+    capabilities: ["ai", "matrix"],
+    operation: "generation"
+  })
   @RequireCsrf()
   generateAiDraft(
     @Param("calculationId") calculationId: string,

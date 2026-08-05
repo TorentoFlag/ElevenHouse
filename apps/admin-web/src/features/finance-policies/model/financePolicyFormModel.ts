@@ -22,7 +22,6 @@ export type FinancePolicyFormState = {
   readonly holdDurationHours: number;
   readonly reserveBps: number;
   readonly reserveReleaseDelayDays: number;
-  readonly platformFeeBps: number;
   readonly providerSettlementRequired: boolean;
 };
 
@@ -34,7 +33,6 @@ export type AstrologerRiskProfileFormState = {
   readonly holdDurationHoursOverride: number;
   readonly reserveBpsOverride: number;
   readonly reserveReleaseDelayDaysOverride: number;
-  readonly platformFeeBpsOverride: number | null;
   readonly providerSettlementRequiredOverride: boolean;
 };
 
@@ -44,7 +42,6 @@ export function policyToForm(policy: FinancePolicyResponse | null): FinancePolic
     holdDurationHours: policy?.holdDurationHours ?? 48,
     reserveBps: policy?.reserveBps ?? 0,
     reserveReleaseDelayDays: policy?.reserveReleaseDelayDays ?? 0,
-    platformFeeBps: policy?.platformFeeBps ?? 1000,
     providerSettlementRequired: policy?.providerSettlementRequired ?? true
   };
 }
@@ -55,7 +52,6 @@ export function policyFormToRequest(form: FinancePolicyFormState): UpdateFinance
     holdDurationHours: form.holdDurationHours,
     reserveBps: form.reserveBps,
     reserveReleaseDelayDays: form.reserveReleaseDelayDays,
-    platformFeeBps: form.platformFeeBps,
     providerSettlementRequired: form.providerSettlementRequired
   };
 }
@@ -69,7 +65,6 @@ export function createInitialRiskProfileForm(): AstrologerRiskProfileFormState {
     holdDurationHoursOverride: 168,
     reserveBpsOverride: 1500,
     reserveReleaseDelayDaysOverride: 30,
-    platformFeeBpsOverride: null,
     providerSettlementRequiredOverride: true
   };
 }
@@ -84,7 +79,6 @@ export function riskProfileFormToRequest(
     holdDurationHoursOverride: form.holdDurationHoursOverride,
     reserveBpsOverride: form.reserveBpsOverride,
     reserveReleaseDelayDaysOverride: form.reserveReleaseDelayDaysOverride,
-    platformFeeBpsOverride: form.platformFeeBpsOverride,
     providerSettlementRequiredOverride: form.providerSettlementRequiredOverride
   };
 }

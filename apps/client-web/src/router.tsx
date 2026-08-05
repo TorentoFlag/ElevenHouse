@@ -6,34 +6,35 @@ import { HomePage } from "./pages/home/HomePage";
 import { MePage } from "./pages/me/MePage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
 import { PublicAstrologerPage } from "./pages/public-astrologer/PublicAstrologerPage";
+import { clientRouteContract } from "./router.contract";
 
 export const router = createBrowserRouter([
   {
     element: <ClientAppLayout />,
     children: [
       {
-        path: "/",
+        path: clientRouteContract.home,
         element: <HomePage />
       },
       {
-        path: "/auth",
+        path: clientRouteContract.auth,
         element: <AuthPage />
       },
       {
-        path: "/a/:handle",
+        path: clientRouteContract.publicAstrologer,
         element: <PublicAstrologerPage />
       },
       {
         element: <RequireCurrentAccount />,
         children: [
           {
-            path: "/me",
+            path: clientRouteContract.authenticatedProfile,
             element: <MePage />
           }
         ]
       },
       {
-        path: "*",
+        path: clientRouteContract.notFound,
         element: <NotFoundPage />
       }
     ]

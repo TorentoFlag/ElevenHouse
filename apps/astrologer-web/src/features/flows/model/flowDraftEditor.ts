@@ -135,6 +135,7 @@ export function moveFlowNodePresentation(
 export function getRequiredSourceHandles(node: FlowNodeV2): readonly FlowSourceHandleV2[] {
   if (node.kind === "booking_confirmed" || node.kind === "manual_client") return ["next"];
   if (node.kind === "birth_data_available") return ["true", "false"];
+  if (node.kind === "natal_chart_request") return ["next"];
   if (node.kind === "astrologer_work_item") return ["success"];
   if (node.kind === "astrologer_approval") {
     return node.config.expiresAfterMinutes
@@ -253,6 +254,22 @@ function createPaletteNode(
   if (kind === "birth_data_available") {
     return { ...base, kind, config: { purpose: "service_preparation" } };
   }
+  if (kind === "natal_chart_request") {
+    return {
+      ...base,
+      kind,
+      config: {
+        interpretationMode: "adult_natal",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }
+    };
+  }
   if (kind === "astrologer_work_item") {
     return {
       ...base,
@@ -285,6 +302,7 @@ function createPaletteNode(
 
 const paletteText = {
   birth_data_available: { ru: "Данные рождения заполнены?", en: "Birth data available?" },
+  natal_chart_request: { ru: "Рассчитать натальную карту", en: "Calculate natal chart" },
   astrologer_work_item: { ru: "Задача астрологу", en: "Astrologer task" },
   astrologer_approval: { ru: "Решение астролога", en: "Astrologer approval" },
   completed: { ru: "Завершено", en: "Completed" },
@@ -294,6 +312,7 @@ const paletteText = {
 
 const nodeIdBase = {
   birth_data_available: "birth-data-available",
+  natal_chart_request: "natal-chart-request",
   astrologer_work_item: "astrologer-work-item",
   astrologer_approval: "astrologer-approval",
   completed: "completed",

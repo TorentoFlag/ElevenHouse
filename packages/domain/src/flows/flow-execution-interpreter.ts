@@ -2,16 +2,27 @@ import {
   flowCapabilityManifestSchema,
   flowExecutableNodeKindV2Schema,
   flowGraphV2Schema,
+  flowRunSnapshotV2Schema,
+  flowAstrologerWorkItemTaskKindV2Schema,
   flowSourceHandleV2Schema,
+  flowWorkItemCompletionRequirementsV2Schema,
+  flowWorkItemDuePolicyV2Schema,
+  flowWorkItemInstructionsV2Schema,
+  flowWorkItemPriorityV2Schema,
+  type ChartSettings,
+  type ChartInterpretationMode,
   type FlowCapabilityManifest,
   type FlowExecutableNodeKindV2,
   type FlowExecutableNodeV2,
   type FlowGraphV2,
   type FlowNodeV2,
-  type FlowSourceHandleV2
+  type FlowSourceHandleV2,
+  type FlowWorkItemCompletionRequirementsV2,
+  type FlowWorkItemDuePolicyV2
 } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
 import { verifyFlowCapabilityManifestForGraph } from "./flow-capability-manifest-integrity";
+import type { FlowBookingExecutionLifecycleContext } from "./flow-booking-execution-context";
 
 export type FlowNodeExecutorKey = `${FlowExecutableNodeKindV2}:${number}:${number}`;
 
@@ -27,6 +38,9 @@ export type FlowExecutionClaim = {
   readonly executorContractVersion: number;
   readonly graph: unknown;
   readonly capabilityManifest: unknown;
+  readonly enrollmentSnapshot: unknown;
+  readonly effectiveRunSnapshot: unknown;
+  readonly bookingLifecycleContext: FlowBookingExecutionLifecycleContext | null;
   readonly leaseOwner: string;
   readonly nodeActivationSequence: bigint;
   readonly attemptNumber: bigint;
@@ -143,6 +157,177 @@ export const flowAdvancedTraceSummarySchema = z
   })
   .strict();
 
+export const flowWorkItemCompletedTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("advanced"),
+    nodeKind: z.literal("astrologer_work_item"),
+    reasonCode: z.literal("FLOW_WORK_ITEM_COMPLETED"),
+    resultCode: z.literal("FLOW_TOKEN_ADVANCED"),
+    sourceHandle: z.literal("success"),
+    selectedEdgeId: flowRuntimeStableIdSchema,
+    targetNodeId: flowRuntimeStableIdSchema,
+    targetNodeKind: flowExecutableNodeKindV2Schema
+  })
+  .strict();
+
+export const flowWorkItemWaitingTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("waiting"),
+    nodeKind: z.literal("astrologer_work_item"),
+    reasonCode: z.literal("FLOW_WORK_ITEM_CREATED"),
+    resultCode: z.literal("FLOW_WAITING_WORK_ITEM")
+  })
+  .strict();
+
+export const flowWorkItemAvailableTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("available"),
+    nodeKind: z.literal("astrologer_work_item"),
+    reasonCode: z.literal("FLOW_WORK_ITEM_SNOOZE_ELAPSED"),
+    resultCode: z.literal("FLOW_WORK_ITEM_AVAILABLE"),
+    workItemId: z.string().uuid(),
+    fromRevision: z.number().int().positive(),
+    toRevision: z.number().int().positive(),
+    scheduledFor: z.string().datetime({ offset: true })
+  })
+  .strict()
+  .superRefine((trace, context) => {
+    if (trace.toRevision !== trace.fromRevision + 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["toRevision"],
+        message: "Work-item wake trace must advance exactly one revision"
+      });
+    }
+  });
+
+const flowRescheduledWorkItemStatusSchema = z.enum(["pending", "in_progress", "snoozed"]);
+const flowRescheduledSnoozeAdjustmentSchema = z.enum(["unchanged", "shortened", "woken"]);
+
+export const flowBookingRescheduledTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("rescheduled"),
+    nodeKind: flowExecutableNodeKindV2Schema,
+    reasonCode: z.literal("FLOW_BOOKING_RESCHEDULED"),
+    resultCode: z.literal("FLOW_BOOKING_SCHEDULE_UPDATED"),
+    bookingId: z.string().uuid(),
+    bookingLifecycleRevision: z.number().int().positive(),
+    previousStartAt: z.string().datetime({ offset: true }),
+    previousEndAt: z.string().datetime({ offset: true }),
+    previousTimeZone: z.string().trim().min(1).max(120),
+    currentStartAt: z.string().datetime({ offset: true }),
+    currentEndAt: z.string().datetime({ offset: true }),
+    currentTimeZone: z.string().trim().min(1).max(120),
+    workItemId: z.string().uuid().nullable(),
+    fromRevision: z.number().int().positive().nullable(),
+    toRevision: z.number().int().positive().nullable(),
+    previousWorkItemStatus: flowRescheduledWorkItemStatusSchema.nullable(),
+    currentWorkItemStatus: flowRescheduledWorkItemStatusSchema.nullable(),
+    previousDueAt: z.string().datetime({ offset: true }).nullable(),
+    currentDueAt: z.string().datetime({ offset: true }).nullable(),
+    previousSnoozedUntil: z.string().datetime({ offset: true }).nullable(),
+    currentSnoozedUntil: z.string().datetime({ offset: true }).nullable(),
+    snoozeAdjustment: flowRescheduledSnoozeAdjustmentSchema.nullable()
+  })
+  .strict()
+  .superRefine((trace, context) => {
+    if (
+      Date.parse(trace.previousEndAt) <= Date.parse(trace.previousStartAt) ||
+      Date.parse(trace.currentEndAt) <= Date.parse(trace.currentStartAt)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["currentEndAt"],
+        message: "Booking reschedule trace requires valid schedule ranges"
+      });
+    }
+    if (
+      trace.previousStartAt === trace.currentStartAt &&
+      trace.previousEndAt === trace.currentEndAt &&
+      trace.previousTimeZone === trace.currentTimeZone
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["currentStartAt"],
+        message: "Booking reschedule trace requires a changed schedule"
+      });
+    }
+
+    const workItemMetadata = [
+      trace.fromRevision,
+      trace.toRevision,
+      trace.previousWorkItemStatus,
+      trace.currentWorkItemStatus,
+      trace.previousDueAt,
+      trace.currentDueAt,
+      trace.snoozeAdjustment
+    ];
+    if (trace.workItemId === null) {
+      if (
+        workItemMetadata.some((value) => value !== null) ||
+        trace.previousSnoozedUntil !== null ||
+        trace.currentSnoozedUntil !== null
+      ) {
+        addInvalidRescheduleWorkItemIssue(context);
+      }
+      return;
+    }
+    if (workItemMetadata.some((value) => value === null)) {
+      addInvalidRescheduleWorkItemIssue(context);
+      return;
+    }
+
+    if (trace.toRevision !== trace.fromRevision! + 1) {
+      addInvalidRescheduleWorkItemIssue(context, "toRevision");
+    }
+    const previousSnoozeMatchesStatus =
+      trace.previousWorkItemStatus === "snoozed"
+        ? trace.previousSnoozedUntil !== null
+        : trace.previousSnoozedUntil === null;
+    const currentSnoozeMatchesStatus =
+      trace.currentWorkItemStatus === "snoozed"
+        ? trace.currentSnoozedUntil !== null
+        : trace.currentSnoozedUntil === null;
+    if (!previousSnoozeMatchesStatus || !currentSnoozeMatchesStatus) {
+      addInvalidRescheduleWorkItemIssue(context);
+      return;
+    }
+
+    if (
+      trace.snoozeAdjustment === "unchanged" &&
+      (trace.previousWorkItemStatus !== trace.currentWorkItemStatus ||
+        trace.previousSnoozedUntil !== trace.currentSnoozedUntil ||
+        (trace.currentWorkItemStatus === "snoozed" &&
+          Date.parse(trace.currentDueAt!) < Date.parse(trace.currentSnoozedUntil!)))
+    ) {
+      addInvalidRescheduleWorkItemIssue(context, "snoozeAdjustment");
+    }
+    if (
+      trace.snoozeAdjustment === "shortened" &&
+      (trace.previousWorkItemStatus !== "snoozed" ||
+        trace.currentWorkItemStatus !== "snoozed" ||
+        trace.previousSnoozedUntil === null ||
+        trace.currentSnoozedUntil === null ||
+        trace.currentSnoozedUntil !== trace.currentDueAt ||
+        Date.parse(trace.currentSnoozedUntil) >= Date.parse(trace.previousSnoozedUntil))
+    ) {
+      addInvalidRescheduleWorkItemIssue(context, "snoozeAdjustment");
+    }
+    if (
+      trace.snoozeAdjustment === "woken" &&
+      (trace.previousWorkItemStatus !== "snoozed" ||
+        trace.currentWorkItemStatus !== "pending" ||
+        trace.previousSnoozedUntil === null ||
+        trace.currentSnoozedUntil !== null)
+    ) {
+      addInvalidRescheduleWorkItemIssue(context, "snoozeAdjustment");
+    }
+  });
+
 export const flowLeaseExpiredTraceSummarySchema = z
   .object({
     schemaVersion: z.literal("flow-runtime-trace.v1"),
@@ -158,7 +343,7 @@ export const flowCanceledTraceSummarySchema = z
     schemaVersion: z.literal("flow-runtime-trace.v1"),
     outcome: z.literal("canceled"),
     nodeKind: flowExecutableNodeKindV2Schema,
-    reasonCode: z.literal("FLOW_RUN_CANCELED_BY_OWNER"),
+    reasonCode: z.enum(["FLOW_RUN_CANCELED_BY_OWNER", "FLOW_BOOKING_CANCELED"]),
     resultCode: z.literal("FLOW_RUN_CANCELED")
   })
   .strict();
@@ -197,6 +382,10 @@ export const flowFailedTraceSummarySchema = z
 
 export const flowRuntimeTraceSummarySchema = z.union([
   flowAdvancedTraceSummarySchema,
+  flowWorkItemCompletedTraceSummarySchema,
+  flowWorkItemWaitingTraceSummarySchema,
+  flowWorkItemAvailableTraceSummarySchema,
+  flowBookingRescheduledTraceSummarySchema,
   flowTerminalTraceSummarySchema,
   flowLeaseExpiredTraceSummarySchema,
   flowCanceledTraceSummarySchema,
@@ -206,6 +395,17 @@ export const flowRuntimeTraceSummarySchema = z.union([
 
 export type FlowRuntimeTraceSummary = z.infer<typeof flowRuntimeTraceSummarySchema>;
 export type FlowTerminalTraceSummary = z.infer<typeof flowTerminalTraceSummarySchema>;
+
+function addInvalidRescheduleWorkItemIssue(
+  context: z.RefinementCtx,
+  path = "workItemId"
+): void {
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: [path],
+    message: "Booking reschedule trace has inconsistent work-item provenance"
+  });
+}
 
 const flowExecutionTerminalDecisionSchema = z
   .object({
@@ -238,21 +438,47 @@ const flowExecutionAdvanceDecisionSchema = z
   })
   .strict();
 
+const flowExecutionWorkItemWaitDecisionSchema = z
+  .object({
+    kind: z.literal("wait_work_item"),
+    sourceNodeId: flowRuntimeStableIdSchema,
+    completionHandle: z.literal("success"),
+    resultCode: z.literal("FLOW_WAITING_WORK_ITEM"),
+    workItem: z
+      .object({
+        taskKind: flowAstrologerWorkItemTaskKindV2Schema,
+        title: z.string().trim().min(1).max(180),
+        instructions: flowWorkItemInstructionsV2Schema.nullable(),
+        priority: flowWorkItemPriorityV2Schema,
+        duePolicy: flowWorkItemDuePolicyV2Schema,
+        completionRequirements: flowWorkItemCompletionRequirementsV2Schema,
+        dueAt: z.string().datetime({ offset: true }).nullable()
+      })
+      .strict(),
+    trace: flowWorkItemWaitingTraceSummarySchema
+  })
+  .strict();
+
 const flowExecutionDecisionSchema = z.discriminatedUnion("kind", [
   flowExecutionAdvanceDecisionSchema,
+  flowExecutionWorkItemWaitDecisionSchema,
   flowExecutionTerminalDecisionSchema
 ]);
 
 export type FlowExecutionDecision = z.infer<typeof flowExecutionDecisionSchema>;
 export type FlowNodeExecutorDecision =
   | z.infer<typeof flowExecutionAdvanceSelectionSchema>
+  | z.infer<typeof flowExecutionWorkItemWaitDecisionSchema>
   | z.infer<typeof flowExecutionTerminalDecisionSchema>;
 
 export type FlowNodeExecutor = {
   readonly kind: FlowExecutableNodeKindV2;
   readonly configSchemaVersion: number;
   readonly executorContractVersion: number;
-  readonly evaluate: (node: FlowExecutableNodeV2) => Promise<FlowNodeExecutorDecision>;
+  readonly evaluate: (
+    node: FlowExecutableNodeV2,
+    context: { readonly ownerUserId: string; readonly effectiveRunSnapshot: unknown }
+  ) => Promise<FlowNodeExecutorDecision>;
 };
 
 export type FlowNodeExecutorRegistry = {
@@ -273,7 +499,8 @@ export class FlowExecutionIntegrityError extends Error {
       | "FLOW_PINNED_CAPABILITY_MANIFEST_INVALID"
       | "FLOW_TOKEN_NODE_NOT_FOUND"
       | "FLOW_TOKEN_NODE_METADATA_MISMATCH"
-      | "FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH",
+      | "FLOW_TOKEN_EXECUTOR_MANIFEST_MISMATCH"
+      | "FLOW_TOKEN_RUNTIME_STATE_INVALID",
     message: string
   ) {
     super(message);
@@ -362,8 +589,107 @@ export function createFlowNodeExecutorRegistry(
   };
 }
 
-export function createBuiltInFlowNodeExecutorRegistry(): FlowNodeExecutorRegistry {
-  return createFlowNodeExecutorRegistry([completedNodeExecutor]);
+export function createBuiltInFlowNodeExecutorRegistry(input: {
+  readonly birthDataReadinessReader?: FlowBirthDataReadinessReader;
+  readonly natalChartRequester?: FlowNatalChartRequester;
+} = {}): FlowNodeExecutorRegistry {
+  return createFlowNodeExecutorRegistry([
+    astrologerWorkItemNodeExecutor,
+    completedNodeExecutor,
+    ...(input.birthDataReadinessReader
+      ? [createFlowBirthDataReadinessNodeExecutor(input.birthDataReadinessReader)]
+      : []),
+    ...(input.natalChartRequester
+      ? [createFlowNatalChartRequestNodeExecutor(input.natalChartRequester)]
+      : [])
+  ]);
+}
+
+export type FlowBirthDataReadinessReader = {
+  readonly read: (input: {
+    readonly bookingId: string;
+    readonly clientUserId: string;
+  }) => Promise<{ readonly ready: boolean }>;
+};
+
+export type FlowNatalChartRequester = {
+  readonly request: (input: {
+    readonly ownerUserId: string;
+    readonly bookingId: string;
+    readonly clientUserId: string;
+    readonly interpretationMode: ChartInterpretationMode;
+    readonly settings: ChartSettings;
+  }) => Promise<{ readonly kind: "active_job"; readonly jobId: string } | {
+    readonly kind: "existing_result";
+    readonly calculationId: string;
+  }>;
+};
+
+export function createFlowBirthDataReadinessNodeExecutor(
+  reader: FlowBirthDataReadinessReader
+): FlowNodeExecutor {
+  return {
+    kind: "birth_data_available",
+    configSchemaVersion: 1,
+    executorContractVersion: 1,
+    evaluate: async (node, context) => {
+      if (node.kind !== "birth_data_available") {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+          "Birth-data readiness executor received a different node kind"
+        );
+      }
+      const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
+      if (!snapshot.success) {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+          "Birth-data readiness requires a pinned booking run snapshot"
+        );
+      }
+      const readiness = await reader.read({
+        bookingId: snapshot.data.subject.bookingId,
+        clientUserId: snapshot.data.subject.clientUserId
+      });
+      return {
+        kind: "advance",
+        sourceNodeId: node.id,
+        sourceHandle: readiness.ready ? "true" : "false"
+      };
+    }
+  };
+}
+
+export function createFlowNatalChartRequestNodeExecutor(
+  requester: FlowNatalChartRequester
+): FlowNodeExecutor {
+  return {
+    kind: "natal_chart_request",
+    configSchemaVersion: 1,
+    executorContractVersion: 1,
+    evaluate: async (node, context) => {
+      if (node.kind !== "natal_chart_request") {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+          "Natal-chart executor received a different node kind"
+        );
+      }
+      const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
+      if (!snapshot.success) {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+          "Natal-chart request requires a pinned booking run snapshot"
+        );
+      }
+      await requester.request({
+        ownerUserId: context.ownerUserId,
+        bookingId: snapshot.data.subject.bookingId,
+        clientUserId: snapshot.data.subject.clientUserId,
+        interpretationMode: node.config.interpretationMode,
+        settings: node.config.settings
+      });
+      return { kind: "advance", sourceNodeId: node.id, sourceHandle: "next" };
+    }
+  };
 }
 
 export async function interpretFlowExecutionClaim(input: {
@@ -373,9 +699,16 @@ export async function interpretFlowExecutionClaim(input: {
   const node = resolvePinnedFlowExecutionNode(input.claim);
 
   const executor = input.registry.require(node);
-  const executorDecision = await executor.evaluate(node);
+  const executorDecision = await executor.evaluate(node, {
+    ownerUserId: input.claim.ownerUserId,
+    effectiveRunSnapshot: input.claim.effectiveRunSnapshot
+  });
   if (executorDecision.kind !== "advance") {
-    return validateFlowExecutionDecision(node, executorDecision);
+    return validateFlowExecutionDecision(
+      node,
+      executorDecision,
+      input.claim.effectiveRunSnapshot
+    );
   }
 
   const selection = parseFlowExecutionAdvanceSelection(node, executorDecision);
@@ -383,24 +716,28 @@ export async function interpretFlowExecutionClaim(input: {
     definition: input.claim,
     sourceHandle: selection.sourceHandle
   });
-  return validateFlowExecutionDecision(node, {
-    ...selection,
-    selectedEdgeId: target.edgeId,
-    targetNodeId: target.node.id,
-    targetNodeKind: target.node.kind,
-    resultCode: "FLOW_TOKEN_ADVANCED",
-    trace: {
-      schemaVersion: "flow-runtime-trace.v1",
-      outcome: "advanced",
-      nodeKind: node.kind,
-      reasonCode: "FLOW_EDGE_SELECTED",
-      resultCode: "FLOW_TOKEN_ADVANCED",
-      sourceHandle: selection.sourceHandle,
+  return validateFlowExecutionDecision(
+    node,
+    {
+      ...selection,
       selectedEdgeId: target.edgeId,
       targetNodeId: target.node.id,
-      targetNodeKind: target.node.kind
-    }
-  });
+      targetNodeKind: target.node.kind,
+      resultCode: "FLOW_TOKEN_ADVANCED",
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "advanced",
+        nodeKind: node.kind,
+        reasonCode: "FLOW_EDGE_SELECTED",
+        resultCode: "FLOW_TOKEN_ADVANCED",
+        sourceHandle: selection.sourceHandle,
+        selectedEdgeId: target.edgeId,
+        targetNodeId: target.node.id,
+        targetNodeKind: target.node.kind
+      }
+    },
+    input.claim.effectiveRunSnapshot
+  );
 }
 
 export function resolvePinnedFlowExecutionNode(
@@ -538,7 +875,8 @@ function parseFlowExecutionAdvanceSelection(
 
 function validateFlowExecutionDecision(
   node: FlowExecutableNodeV2,
-  value: unknown
+  value: unknown,
+  runSnapshot: unknown
 ): FlowExecutionDecision {
   const decision = parseFlowExecutionDecision(value);
   if (decision.sourceNodeId !== node.id || decision.trace.nodeKind !== node.kind) {
@@ -550,7 +888,100 @@ function validateFlowExecutionDecision(
   ) {
     throw new FlowRuntimeTraceValidationError();
   }
+  if (
+    decision.kind === "wait_work_item" &&
+    (node.kind !== "astrologer_work_item" ||
+      !workItemDecisionMatchesNode(decision.workItem, node, runSnapshot))
+  ) {
+    throw new FlowRuntimeTraceValidationError();
+  }
   return decision;
+}
+
+const astrologerWorkItemNodeExecutor: FlowNodeExecutor = {
+  kind: "astrologer_work_item",
+  configSchemaVersion: 1,
+  executorContractVersion: 1,
+  evaluate: async (node, context) => {
+    if (node.kind !== "astrologer_work_item") {
+      throw new FlowExecutionIntegrityError(
+        "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+        "Astrologer work-item executor received a different node kind"
+      );
+    }
+
+    const policy = resolveFlowWorkItemNodePolicy(node);
+    return {
+      kind: "wait_work_item",
+      sourceNodeId: node.id,
+      completionHandle: "success",
+      resultCode: "FLOW_WAITING_WORK_ITEM",
+      workItem: {
+        taskKind: node.config.taskKind,
+        title: node.config.taskTitle,
+        instructions: node.config.instructions ?? null,
+        priority: node.config.priority,
+        ...policy,
+        dueAt: resolveFlowWorkItemDueAt(policy.duePolicy, context.effectiveRunSnapshot)
+      },
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "waiting",
+        nodeKind: node.kind,
+        reasonCode: "FLOW_WORK_ITEM_CREATED",
+        resultCode: "FLOW_WAITING_WORK_ITEM"
+      }
+    };
+  }
+};
+
+export function resolveFlowWorkItemNodePolicy(
+  node: Extract<FlowExecutableNodeV2, { readonly kind: "astrologer_work_item" }>
+): {
+  readonly duePolicy: FlowWorkItemDuePolicyV2;
+  readonly completionRequirements: FlowWorkItemCompletionRequirementsV2;
+} {
+  return {
+    duePolicy: node.config.duePolicy ?? { kind: "none" },
+    completionRequirements: node.config.completionRequirements ?? { resultSummary: "optional" }
+  };
+}
+
+export function resolveFlowWorkItemDueAt(
+  duePolicy: FlowWorkItemDuePolicyV2,
+  runSnapshot: unknown
+): string | null {
+  if (duePolicy.kind === "none") return null;
+  const snapshot = flowRunSnapshotV2Schema.safeParse(runSnapshot);
+  if (!snapshot.success) {
+    throw new FlowExecutionIntegrityError(
+      "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+      "A booking-relative work-item deadline requires a pinned booking snapshot"
+    );
+  }
+  return new Date(
+    Date.parse(snapshot.data.subject.startAt) - duePolicy.leadTimeMinutes * 60_000
+  ).toISOString();
+}
+
+function workItemDecisionMatchesNode(
+  workItem: Extract<FlowExecutionDecision, { readonly kind: "wait_work_item" }>["workItem"],
+  node: Extract<FlowExecutableNodeV2, { readonly kind: "astrologer_work_item" }>,
+  runSnapshot: unknown
+): boolean {
+  const policy = resolveFlowWorkItemNodePolicy(node);
+  return (
+    workItem.taskKind === node.config.taskKind &&
+    workItem.title === node.config.taskTitle &&
+    workItem.instructions === (node.config.instructions ?? null) &&
+    workItem.priority === node.config.priority &&
+    workItem.completionRequirements.resultSummary === policy.completionRequirements.resultSummary &&
+    workItem.dueAt === resolveFlowWorkItemDueAt(policy.duePolicy, runSnapshot) &&
+    workItem.duePolicy.kind === policy.duePolicy.kind &&
+    (workItem.duePolicy.kind === "none" ||
+      (policy.duePolicy.kind === "before_booking_start" &&
+        workItem.duePolicy.leadTimeMinutes === policy.duePolicy.leadTimeMinutes))
+  );
 }
 
 const completedNodeExecutor: FlowNodeExecutor = {

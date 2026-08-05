@@ -7,7 +7,6 @@ import {
   flowDefinitionCommandOutcomes,
   flowDefinitionCommands,
   flowDefinitionCommandScopeValues,
-  flowDefinitionMigrations,
   flowDefinitionRouteTemplateValues,
   flowDeliveryAttempts,
   flowExecutionAttempts,
@@ -19,12 +18,14 @@ import {
   flowRuntimeCommandScopeValues,
   flowRuntimeCommandStateValues,
   flowRuntimeCommandRouteTemplateValues,
+  flowRunEventTypeValues,
   flowRuntimeEvents,
   flowStepRuns,
   flowSuppressions,
   flowVersions,
   flows
 } from "../index";
+import { flowRunIntegritySql, flowRuntimeEventIntegritySql } from "./flow-runtime.schema";
 
 const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
 
@@ -87,22 +88,6 @@ describe("Flows persistence schema", () => {
     expect(Object.keys(getTableColumns(flowDefinitionCommandOutcomes))).toEqual(
       expect.arrayContaining(["commandId", "responseStatus", "responseBody", "createdAt"])
     );
-
-    expect(getTableName(flowDefinitionMigrations)).toBe("flow_definition_migrations");
-    expect(Object.keys(getTableColumns(flowDefinitionMigrations))).toEqual(
-      expect.arrayContaining([
-        "flowId",
-        "ownerUserId",
-        "commandId",
-        "sourceGraphSchemaVersion",
-        "targetGraphSchemaVersion",
-        "sourceVersionId",
-        "sourceRevision",
-        "sourceGraphHash",
-        "targetRevision",
-        "migratedAt"
-      ])
-    );
   });
 
   it("defines owner indexes, immutable version uniqueness and value checks", () => {
@@ -110,7 +95,6 @@ describe("Flows persistence schema", () => {
     const versionConfig = getTableConfig(flowVersions);
     const commandConfig = getTableConfig(flowDefinitionCommands);
     const outcomeConfig = getTableConfig(flowDefinitionCommandOutcomes);
-    const migrationConfig = getTableConfig(flowDefinitionMigrations);
 
     expect(flowConfig.indexes.map((index) => index.config.name)).toEqual(
       expect.arrayContaining([
@@ -135,12 +119,6 @@ describe("Flows persistence schema", () => {
     );
     expect(outcomeConfig.indexes.map((index) => index.config.name)).toContain(
       "flow_definition_command_outcomes_created_idx"
-    );
-    expect(migrationConfig.indexes.map((index) => index.config.name)).toEqual(
-      expect.arrayContaining([
-        "flow_definition_migrations_flow_target_revision_unique",
-        "flow_definition_migrations_owner_migrated_idx"
-      ])
     );
     expect(flowConfig.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
@@ -170,7 +148,6 @@ describe("Flows persistence schema", () => {
     );
     expect(versionManifestCheck).toBeDefined();
     const versionManifestSql = new PgDialect().sqlToQuery(versionManifestCheck!.value).sql;
-    expect(versionManifestSql).toContain("flow-capability-manifest.v1");
     expect(versionManifestSql).toContain("flow-capability-manifest.v2");
     expect(versionManifestSql).toContain("executionSemanticsVersion");
     expect(versionManifestSql).toContain("triggerMatcher");
@@ -190,13 +167,6 @@ describe("Flows persistence schema", () => {
     );
     expect(outcomeConfig.checks.map((check) => check.name)).toContain(
       "flow_definition_command_outcomes_response_check"
-    );
-    expect(migrationConfig.checks.map((check) => check.name)).toEqual(
-      expect.arrayContaining([
-        "flow_definition_migrations_schema_versions_check",
-        "flow_definition_migrations_revision_check",
-        "flow_definition_migrations_graph_hash_check"
-      ])
     );
     expect(flowConfig.foreignKeys.map((key) => key.getName())).toEqual(
       expect.arrayContaining([
@@ -222,27 +192,18 @@ describe("Flows persistence schema", () => {
     expect(outcomeConfig.foreignKeys.map((key) => key.getName())).toContain(
       "flow_definition_command_outcomes_command_fk"
     );
-    expect(migrationConfig.foreignKeys.map((key) => key.getName())).toEqual(
-      expect.arrayContaining([
-        "flow_definition_migrations_flow_owner_fk",
-        "flow_definition_migrations_source_version_owner_fk",
-        "flow_definition_migrations_command_resource_owner_fk"
-      ])
-    );
 
     expect(flowDefinitionCommandScopeValues).toEqual([
       "flows.definition.create.v2",
       "flows.definition.update-draft.v2",
       "flows.definition.publish.v2",
-      "flows.definition.create-next-draft.v2",
-      "flows.definition.migrate.v2"
+      "flows.definition.create-next-draft.v2"
     ]);
     expect(flowDefinitionRouteTemplateValues).toEqual([
       "/flows",
       "/flows/:flowId/draft",
       "/flows/:flowId/publish",
-      "/flows/:flowId/next-draft",
-      "/flows/:flowId/migrations/v2"
+      "/flows/:flowId/next-draft"
     ]);
   });
 
@@ -266,17 +227,59 @@ describe("Flows persistence schema", () => {
     }
 
     expect(Object.keys(getTableColumns(flowDeliveryAttempts))).toContain("idempotencyKey");
+    expect(Object.keys(getTableColumns(flowRuntimeEvents))).toEqual(
+      expect.arrayContaining([
+        "eventKind",
+        "occurrenceKey",
+        "payloadSchemaVersion",
+        "payloadDigest",
+        "classification",
+        "redactionVersion",
+        "retentionPolicyId",
+        "ingestionOutcome",
+        "processedAt"
+      ])
+    );
+    expect(Object.keys(getTableColumns(flowRuns))).toEqual(
+      expect.arrayContaining([
+        "activationEpochId",
+        "triggerNodeId",
+        "occurrenceKey",
+        "enrollmentPolicyKey",
+        "enrollmentPolicyRevision",
+        "executionAuthorityBasis",
+        "executionAuthorityRefId"
+      ])
+    );
     expect(getTableConfig(flowRuntimeEvents).indexes.map((index) => index.config.name)).toContain(
       "flow_runtime_events_owner_dedupe_unique"
     );
+    expect(getTableConfig(flowRuntimeEvents).indexes.map((index) => index.config.name)).toContain(
+      "flow_runtime_events_source_identity_unique"
+    );
     expect(getTableConfig(flowRuns).indexes.map((index) => index.config.name)).toContain(
       "flow_runs_owner_flow_event_unique"
+    );
+    expect(getTableConfig(flowRuns).indexes.map((index) => index.config.name)).toContain(
+      "flow_runs_owner_stable_enrollment_unique"
     );
     expect(getTableConfig(flowSuppressions).indexes.map((index) => index.config.name)).toContain(
       "flow_suppressions_owner_flow_event_reason_unique"
     );
     expect(getTableConfig(flowRuns).foreignKeys.map((key) => key.getName())).toContain(
       "flow_runs_flow_version_owner_fk"
+    );
+    expect(getTableConfig(flowRuns).foreignKeys.map((key) => key.getName())).toContain(
+      "flow_runs_activation_epoch_fk"
+    );
+    expect(getTableConfig(flowRuntimeEvents).checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "flow_runtime_events_normalized_shape_check",
+        "flow_runtime_events_payload_digest_check"
+      ])
+    );
+    expect(getTableConfig(flowRuns).checks.map((check) => check.name)).toContain(
+      "flow_runs_enrollment_shape_check"
     );
     expect(getTableConfig(flowStepRuns).foreignKeys.map((key) => key.getName())).toContain(
       "flow_step_runs_run_owner_fk"
@@ -286,7 +289,20 @@ describe("Flows persistence schema", () => {
     );
   });
 
-  it("defines a separate durable runtime command ledger for exact cancel replay", () => {
+  it("retains runtime ingestion evidence as append-only data for the owner lifetime", () => {
+    expect(flowRuntimeEventIntegritySql).toContain(
+      'CREATE TRIGGER "flow_runtime_events_immutable"'
+    );
+    expect(flowRuntimeEventIntegritySql).toContain(
+      'CREATE TRIGGER "flow_runtime_events_truncate_guard"'
+    );
+    expect(flowRuntimeEventIntegritySql).toContain("IF TG_OP = 'UPDATE'");
+    expect(flowRuntimeEventIntegritySql).toContain(
+      "EXISTS (SELECT 1 FROM users WHERE id = OLD.owner_user_id)"
+    );
+  });
+
+  it("defines a durable runtime command ledger for run and human-work replay", () => {
     expect(getTableName(flowRuntimeCommands)).toBe("flow_runtime_commands");
     expect(getTableName(flowRuntimeCommandOutcomes)).toBe("flow_runtime_command_outcomes");
     expect(Object.keys(getTableColumns(flowRuntimeCommands))).toEqual(
@@ -296,6 +312,7 @@ describe("Flows persistence schema", () => {
         "ownerUserId",
         "routeTemplate",
         "resourceId",
+        "flowRunId",
         "commandScope",
         "idempotencyKey",
         "requestHash",
@@ -333,8 +350,21 @@ describe("Flows persistence schema", () => {
     expect(outcomeConfig.foreignKeys.map((key) => key.getName())).toContain(
       "flow_runtime_command_outcomes_command_fk"
     );
-    expect(flowRuntimeCommandScopeValues).toEqual(["flows.runtime.cancel.v1"]);
-    expect(flowRuntimeCommandRouteTemplateValues).toEqual(["/flow-runs/:runId/cancel"]);
+    expect(commandConfig.uniqueConstraints.map((constraint) => constraint.name)).toContain(
+      "flow_runtime_commands_id_run_owner_unique"
+    );
+    expect(flowRuntimeCommandScopeValues).toEqual([
+      "flows.runtime.cancel.v1",
+      "flows.work-items.start.v1",
+      "flows.work-items.snooze.v1",
+      "flows.work-items.complete.v1"
+    ]);
+    expect(flowRuntimeCommandRouteTemplateValues).toEqual([
+      "/flow-runs/:runId/cancel",
+      "/flow-work-items/:workItemId/start",
+      "/flow-work-items/:workItemId/snooze",
+      "/flow-work-items/:workItemId/complete"
+    ]);
     expect(flowRuntimeCommandStateValues).toEqual(["processing", "succeeded", "failed"]);
   });
 
@@ -357,6 +387,10 @@ describe("Flows persistence schema", () => {
         "claimedAt",
         "leaseOwner",
         "leaseExpiresAt",
+        "claimControlPolicyRevision",
+        "claimPolicyDigest",
+        "claimWorkerSessionId",
+        "claimWorkerRegistrationDigest",
         "nodeActivationSequence",
         "attemptCounter",
         "fencingToken",
@@ -381,6 +415,10 @@ describe("Flows persistence schema", () => {
         "attemptNumber",
         "fencingToken",
         "leaseOwner",
+        "controlPolicyRevision",
+        "policyDigest",
+        "workerSessionId",
+        "workerRegistrationDigest",
         "outcome",
         "traceSummary",
         "startedAt",
@@ -417,9 +455,15 @@ describe("Flows persistence schema", () => {
     expect(getTableConfig(flowRunEvents).indexes.map((index) => index.config.name)).toEqual(
       expect.arrayContaining([
         "flow_run_events_run_sequence_unique",
-        "flow_run_events_attempt_unique"
+        "flow_run_events_attempt_unique",
+        "flow_run_events_command_unique"
       ])
     );
+    expect(
+      getTableConfig(flowRunEvents).uniqueConstraints.map((constraint) => constraint.name)
+    ).toContain("flow_run_events_id_run_owner_unique");
+    expect(flowRunEventTypeValues).toContain("work_item_available");
+    expect(flowRunEventTypeValues).toContain("booking_rescheduled");
     expect(getTableColumns(flowExecutionAttempts).resultCode.notNull).toBe(true);
     expect(getTableColumns(flowExecutionTokens).retryPolicyKey.default).toBe(
       "flow-execution-retry.v1"
@@ -432,6 +476,7 @@ describe("Flows persistence schema", () => {
         "flow_execution_tokens_node_kind_check",
         "flow_execution_tokens_executor_key_check",
         "flow_execution_tokens_lease_state_check",
+        "flow_execution_tokens_claim_authority_check",
         "flow_execution_tokens_node_activation_sequence_check",
         "flow_execution_tokens_attempt_counter_check",
         "flow_execution_tokens_fencing_token_check",
@@ -447,6 +492,7 @@ describe("Flows persistence schema", () => {
         "flow_execution_attempts_outcome_check",
         "flow_execution_attempts_node_activation_sequence_check",
         "flow_execution_attempts_number_check",
+        "flow_execution_attempts_claim_authority_check",
         "flow_execution_attempts_trace_summary_object_check"
       ])
     );
@@ -457,12 +503,31 @@ describe("Flows persistence schema", () => {
         "flow_run_events_summary_object_check"
       ])
     );
+    const runEventSummaryCheck = getTableConfig(flowRunEvents).checks.find(
+      (check) => check.name === "flow_run_events_summary_schema_check"
+    );
+    expect(runEventSummaryCheck).toBeDefined();
+    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
+      "FLOW_WORK_ITEM_COMPLETED"
+    );
+    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
+      "FLOW_WORK_ITEM_SNOOZE_ELAPSED"
+    );
+    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
+      "FLOW_BOOKING_RESCHEDULED"
+    );
 
     expect(getTableConfig(flowExecutionTokens).foreignKeys.map((key) => key.getName())).toContain(
       "flow_execution_tokens_run_version_owner_fk"
     );
+    expect(getTableConfig(flowExecutionTokens).foreignKeys.map((key) => key.getName())).toContain(
+      "flow_execution_tokens_claim_policy_fk"
+    );
     expect(getTableConfig(flowExecutionAttempts).foreignKeys.map((key) => key.getName())).toContain(
       "flow_execution_attempts_token_run_owner_fk"
+    );
+    expect(getTableConfig(flowExecutionAttempts).foreignKeys.map((key) => key.getName())).toContain(
+      "flow_execution_attempts_claim_policy_fk"
     );
     expect(getTableConfig(flowRunEvents).foreignKeys.map((key) => key.getName())).toEqual(
       expect.arrayContaining([
@@ -545,14 +610,12 @@ describe("Flows persistence schema", () => {
     expect(migration).toContain('CREATE TABLE "flow_versions"');
     expect(migration).toContain('CREATE TABLE "flow_definition_commands"');
     expect(migration).toContain('CREATE TABLE "flow_definition_command_outcomes"');
-    expect(migration).toContain('CREATE TABLE "flow_definition_migrations"');
     expect(migration).toContain("flows_status_check");
     expect(migration).toContain("flow_versions_flow_version_unique");
     expect(migration).toContain("flow_versions_flow_source_revision_unique");
     expect(migration).toContain("flow_definition_commands_scope_key_unique");
     expect(migration).toContain("flow_definition_commands_terminal_state_check");
     expect(migration).toContain("flow_definition_command_outcomes_response_check");
-    expect(migration).toContain("flow_definition_migrations_revision_check");
     expect(migration).toContain("flows_graph_origin_check");
     expect(migration).toContain("flow_versions_flow_id_id_owner_published_unique");
 
@@ -602,6 +665,9 @@ describe("Flows persistence schema", () => {
       '"flow_execution_tokens"."state" not in (\'runnable\', \'retry_scheduled\')\n          or "flow_execution_tokens"."attempt_counter" < "flow_execution_tokens"."max_attempts"'
     );
     expect(migration).not.toContain('"flow_execution_tokens"."retry_policy_key" = $1');
+    expect(migration).toContain(
+      "'FLOW_RUN_CANCELED_BY_OWNER', 'FLOW_BOOKING_CANCELED'"
+    );
 
     for (const constraint of [
       "flows_id_owner_unique",
@@ -646,7 +712,6 @@ describe("Flows persistence schema", () => {
     expect(migration).toContain(
       'CREATE CONSTRAINT TRIGGER "flow_definition_command_outcome_consistency"'
     );
-    expect(migration).toContain('CREATE TRIGGER "flow_definition_migrations_immutable"');
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "flow_execution_tokens_run_unique" ON "flow_execution_tokens"'
     );
@@ -666,8 +731,17 @@ describe("Flows persistence schema", () => {
     expect(migration).toContain('CREATE TRIGGER "flow_execution_attempts_truncate_guard"');
     expect(migration).toContain('CREATE TRIGGER "flow_run_events_immutable"');
     expect(migration).toContain('CREATE TRIGGER "flow_run_events_truncate_guard"');
+    expect(migration).toContain('CREATE TRIGGER "flow_runs_enrollment_immutable"');
     expect(migration).toContain('CREATE CONSTRAINT TRIGGER "flow_run_event_command_consistency"');
     expect(migration).toContain("cancellation event requires a succeeded runtime command");
     expect(migration).toContain('"result_code" text NOT NULL');
+  });
+
+  it("protects the immutable Flow enrollment snapshot and identity in PostgreSQL", () => {
+    expect(flowRunIntegritySql).toContain("OLD.snapshot");
+    expect(flowRunIntegritySql).toContain("OLD.runtime_event_id");
+    expect(flowRunIntegritySql).toContain("OLD.activation_epoch_id");
+    expect(flowRunIntegritySql).toContain("NEW.trace_sequence < OLD.trace_sequence");
+    expect(flowRunIntegritySql).toContain('CREATE TRIGGER "flow_runs_enrollment_immutable"');
   });
 });

@@ -339,6 +339,47 @@ describe("astro calendar contracts", () => {
     ).toBe(false);
   });
 
+  it("rejects generation ranges and client birth dates outside packaged ephemeris data", () => {
+    expect(
+      astroCalendarRangeQuerySchema.safeParse({
+        start: "2400-01-01",
+        end: "2400-01-30",
+        timeZone: "Europe/Moscow",
+        clientIds: [],
+        eventTypes: []
+      }).success
+    ).toBe(false);
+    expect(
+      astroCalendarGenerationRequestSchema.safeParse({
+        start: "2026-07-01",
+        end: "2026-07-30",
+        timeZone: "Europe/Moscow",
+        clientIds: [clientId],
+        eventTypes: ["client.birthday"],
+        clients: [
+          {
+            clientId,
+            displayName: "Мария Иванова",
+            initials: "МИ",
+            birthDate: "1799-12-31",
+            birthTime: "14:30",
+            birthTimePrecision: "exact",
+            birthTimezone: "Europe/Moscow",
+            birthLatitude: 55.7558,
+            birthLongitude: 37.6173
+          }
+        ],
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects unsupported future event types", () => {
     expect(
       astroCalendarRangeQuerySchema.safeParse({

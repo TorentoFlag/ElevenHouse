@@ -1,8 +1,9 @@
 import {
+  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
   validateFlowDefinitionRequestSchema,
-  validateFlowDefinitionResponseSchema,
+  validateFlowDefinitionResponseV2Schema,
   type FlowGraphRead,
-  type ValidateFlowDefinitionResponse
+  type ValidateFlowDefinitionResponseV2
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -13,11 +14,14 @@ export type ValidateFlowDefinitionInput = {
 
 export async function validateFlowDefinition(
   input: ValidateFlowDefinitionInput
-): Promise<ValidateFlowDefinitionResponse> {
+): Promise<ValidateFlowDefinitionResponseV2> {
   const body = validateFlowDefinitionRequestSchema.parse({ graph: input.graph });
-  return validateFlowDefinitionResponseSchema.parse(
+  return validateFlowDefinitionResponseV2Schema.parse(
     await application.http.post(`/flows/${input.flowId}/validate`, body, {
-      csrf: true
+      csrf: true,
+      headers: {
+        accept: FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE
+      }
     })
   );
 }

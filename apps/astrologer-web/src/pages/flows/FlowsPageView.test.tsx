@@ -1,20 +1,17 @@
 import type {
-  FlowDefinitionDetailV2,
-  FlowDefinitionSummaryV2,
-  FlowDefinitionTemplateDescriptorV2,
-  FlowRuntimeAvailability
+  FlowDefinitionSummaryV3,
+  FlowDefinitionTemplateDescriptorV2
 } from "@elevenhouse/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FlowsPageView } from "./FlowsPageView";
 
-const flow: FlowDefinitionSummaryV2 = {
-  schemaVersion: "flow-definition-summary.v2",
+const flow: FlowDefinitionSummaryV3 = {
+  schemaVersion: "flow-definition-summary.v3",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Подготовка консультации",
   state: "draft",
-  runtimeStatus: "draft",
   approvalMode: "manual_approve",
   revision: 3,
   draftBaseVersionId: null,
@@ -25,13 +22,27 @@ const flow: FlowDefinitionSummaryV2 = {
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-  migrationRequired: false
+  enrollment: {
+    schemaVersion: "flow-enrollment-read-authority.v1",
+    authority: "enrollment_v1",
+    control: {
+      schemaVersion: "flow-enrollment-control.v1",
+      flowId: "11111111-1111-4111-8111-111111111111",
+      state: "inactive",
+      definitionRevision: 3,
+      enrollmentRevision: 0,
+      activeVersionId: null,
+      activeActivationEpochId: null,
+      activeSince: null,
+      lastPausedAt: null
+    }
+  }
 };
 
 const availableTemplate: FlowDefinitionTemplateDescriptorV2 = {
   schemaVersion: "flow-definition-template.v2",
   key: "manual-consultation-preparation",
-  version: 1,
+  version: 2,
   name: "Подготовка консультации вручную",
   description: "Создать внутреннюю задачу подготовки и завершить ее вручную.",
   category: "service_delivery",
@@ -40,47 +51,6 @@ const availableTemplate: FlowDefinitionTemplateDescriptorV2 = {
   parameters: [],
   requiredCapabilities: [],
   blockerCode: null
-};
-
-const definitionOnlyRuntime: FlowRuntimeAvailability = {
-  mode: "definition_only",
-  executionAvailable: false,
-  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
-};
-
-const legacyDetail: FlowDefinitionDetailV2 = {
-  schemaVersion: "flow-definition-detail.v2",
-  id: flow.id,
-  ownerUserId: flow.ownerUserId,
-  name: "Legacy-сценарий",
-  state: "draft",
-  runtimeStatus: "draft",
-  approvalMode: "manual_approve",
-  revision: 4,
-  draftBaseVersionId: null,
-  latestPublishedVersionId: null,
-  latestPublishedVersion: null,
-  createdAt: flow.createdAt,
-  updatedAt: flow.updatedAt,
-  publishedAt: null,
-  graphSchemaVersion: "flow-graph.v1",
-  origin: null,
-  migrationRequired: true,
-  draftGraph: {
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "lead-created",
-        category: "trigger",
-        kind: "lead_created",
-        title: "Новый лид",
-        config: { segment: "returning-client" }
-      }
-    ],
-    edges: []
-  },
-  draftPresentation: null
 };
 
 describe("FlowsPageView", () => {
@@ -101,25 +71,42 @@ describe("FlowsPageView", () => {
     expect(markup).not.toContain("Выручка");
   });
 
-  it("keeps activation fail-closed when execution is unavailable", () => {
+  it("places the server-backed work queue before the definition gallery", () => {
+    const markup = render({
+      flows: [flow],
+      workItemQueue: <div data-testid="work-item-queue">Очередь задач</div>
+    });
+
+    expect(markup.indexOf("Очередь задач")).toBeLessThan(markup.indexOf("Подготовка консультации"));
+  });
+
+  it("keeps the independent work queue visible when the definition catalog fails", () => {
+    const markup = render({
+      isError: true,
+      workItemQueue: <div>Очередь задач</div>
+    });
+
+    expect(markup).toContain("Очередь задач");
+    expect(markup).toContain("Не удалось загрузить воронки");
+  });
+
+  it("routes published inactive definitions through explicit activation review", () => {
     const markup = render({
       flows: [
         {
           ...flow,
           state: "versioned",
-          runtimeStatus: "published",
           latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
           latestPublishedVersion: 1,
           publishedAt: "2026-07-28T09:00:00.000Z"
         }
       ],
-      runtimeAvailability: definitionOnlyRuntime,
-      onAutomationToggle: () => undefined
+      onAutomationAction: () => undefined
     });
 
-    expect(markup).toContain('aria-label="Исполнение этой версии воронки недоступно"');
+    expect(markup).toContain('aria-label="Проверить и включить автоматизацию"');
     expect(markup).toContain('role="switch"');
-    expect(markup).toContain('disabled=""');
+    expect(markup).not.toContain("Исполнение этой версии воронки недоступно");
   });
 
   it("renders the server template catalog only while the create dialog is open", () => {
@@ -153,40 +140,6 @@ describe("FlowsPageView", () => {
     expect(failed).toContain("Повторить загрузку");
   });
 
-  it("renders legacy V1 as read-only migration instead of opening the editor", () => {
-    const markup = render({
-      selectedFlowId: legacyDetail.id,
-      selectedFlow: legacyDetail,
-      onMigrate: () => undefined
-    });
-
-    expect(markup).toContain("Эту схему нужно мигрировать в V2");
-    expect(markup).toContain("Узлы V1");
-    expect(markup).toContain("Новый лид");
-    expect(markup).toContain("lead_created");
-    expect(markup).toContain("returning-client");
-    expect(markup).toContain("Скачать JSON");
-    expect(markup).toContain("Мигрировать в V2");
-    expect(markup).not.toContain("Опубликовать");
-  });
-
-  it("shows exact migration blocker evidence without hiding the legacy graph", () => {
-    const markup = render({
-      selectedFlowId: legacyDetail.id,
-      selectedFlow: legacyDetail,
-      migrationIssues: [
-        {
-          code: "unsupported_node",
-          path: "nodes.lead-created",
-          message: "Legacy lead_created has no lossless V2 mapping."
-        }
-      ]
-    });
-
-    expect(markup).toContain("unsupported_node");
-    expect(markup).toContain("nodes.lead-created");
-    expect(markup).toContain("Новый лид");
-  });
 });
 
 function render(overrides: Partial<Parameters<typeof FlowsPageView>[0]> = {}) {

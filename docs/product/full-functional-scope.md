@@ -33,7 +33,8 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 - Booking lifecycle: hold, confirmation, reschedule, cancel, no-show.
 - Orders и payments.
 - Wallet, ledger, commissions, payouts, refunds, disputes.
-- Client profile, saved birth data, consent-aware sharing.
+- Client profile and one saved birth profile with CAS/audit history; access for
+  a linked astrologer is enforced by server-side relationship policy.
 - Sessions, recordings, files, generated materials.
 - Messaging или unified inbox там, где это входит в продуктовый scope.
 - Reviews, ratings, moderation.

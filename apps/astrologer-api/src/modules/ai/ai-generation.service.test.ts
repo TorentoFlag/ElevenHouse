@@ -47,10 +47,8 @@ const prompt = definePrompt({
   }
 });
 
-const consentRecordId = "22222222-2222-4222-8222-222222222222";
-const consentClientUserId = "33333333-3333-4333-8333-333333333333";
-const consentAstrologerUserId = "44444444-4444-4444-8444-444444444444";
-const consentSafetyIdentifier = createAiSafetyIdentifier(consentAstrologerUserId);
+const astrologerUserId = "44444444-4444-4444-8444-444444444444";
+const safetyIdentifier = createAiSafetyIdentifier(astrologerUserId);
 
 function createConfigService(enabled: boolean, maxOutputTokens = 900): ConfigService {
   return new ConfigService({
@@ -133,84 +131,12 @@ describe("AiGenerationService", () => {
     expect(provider.generateStructured).not.toHaveBeenCalled();
   });
 
-  it("rejects consent evidence outside the authenticated owner before cost or quota", async () => {
-    const provider = { generateStructured: vi.fn() };
-    const rateLimiter = {
-      consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
-    };
-    const usageRecorder = createUsageRecorder();
-    const service = new AiGenerationService(
-      provider,
-      rateLimiter,
-      usageRecorder,
-      createConfigService(true)
-    );
-
-    await expect(
-      service.generate({
-        prompt,
-        input: { title: "Sun in Aries" },
-        ownerUserId: "55555555-5555-4555-8555-555555555555",
-        feature: "chart.interpretationDraft",
-        consentAuthorizations: [
-          {
-            consentRecordId,
-            clientUserId: consentClientUserId,
-            astrologerUserId: consentAstrologerUserId
-          }
-        ]
-      })
-    ).rejects.toMatchObject({
-      status: HttpStatus.SERVICE_UNAVAILABLE,
-      response: { code: "AI_USAGE_EVIDENCE_UNAVAILABLE" }
-    });
-    expect(rateLimiter.consume).not.toHaveBeenCalled();
-    expect(usageRecorder.start).not.toHaveBeenCalled();
-    expect(provider.generateStructured).not.toHaveBeenCalled();
-  });
-
-  it("rejects consent-bound generation without legal authority and source evidence before cost or quota", async () => {
-    const provider = { generateStructured: vi.fn() };
-    const rateLimiter = {
-      consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
-    };
-    const usageRecorder = createUsageRecorder();
-    const service = new AiGenerationService(
-      provider,
-      rateLimiter,
-      usageRecorder,
-      createConfigService(true)
-    );
-
-    await expect(
-      service.generate({
-        prompt,
-        input: { title: "Sun in Aries" },
-        ownerUserId: consentAstrologerUserId,
-        feature: "chart.interpretationDraft",
-        consentAuthorizations: [
-          {
-            consentRecordId,
-            clientUserId: consentClientUserId,
-            astrologerUserId: consentAstrologerUserId
-          }
-        ]
-      })
-    ).rejects.toMatchObject({
-      status: HttpStatus.SERVICE_UNAVAILABLE,
-      response: { code: "AI_USAGE_EVIDENCE_UNAVAILABLE" }
-    });
-    expect(rateLimiter.consume).not.toHaveBeenCalled();
-    expect(usageRecorder.start).not.toHaveBeenCalled();
-    expect(provider.generateStructured).not.toHaveBeenCalled();
-  });
-
   it.each([
     "matrix.reportDraft",
     "numerology.interpretationDraft",
     "humanDesign.interpretationDraft",
     "unknown.clientFeature"
-  ])("fails closed for client-derived feature %s without an approved purpose policy", async (feature) => {
+  ])("fails closed for unavailable client-derived feature %s", async (feature) => {
     const provider = { generateStructured: vi.fn() };
     const rateLimiter = {
       consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
@@ -227,7 +153,7 @@ describe("AiGenerationService", () => {
       service.generate({
         prompt,
         input: { title: "Client-derived context" },
-        ownerUserId: consentAstrologerUserId,
+        ownerUserId: astrologerUserId,
         feature
       })
     ).rejects.toMatchObject({
@@ -256,7 +182,7 @@ describe("AiGenerationService", () => {
       service.generate({
         prompt,
         input: { title: "Calculated chart" },
-        ownerUserId: consentAstrologerUserId,
+        ownerUserId: astrologerUserId,
         feature: "chart.interpretationDraft"
       })
     ).rejects.toMatchObject({
@@ -268,7 +194,7 @@ describe("AiGenerationService", () => {
     expect(provider.generateStructured).not.toHaveBeenCalled();
   });
 
-  it("generates a chart draft without client consent when its calculation evidence is present", async () => {
+  it("generates a chart draft when calculation evidence is present", async () => {
     const usageRecorder = createUsageRecorder();
     const generateStructured = vi.fn(async () => ({
       output: { content: "Generated" },
@@ -290,16 +216,12 @@ describe("AiGenerationService", () => {
       service.generate({
         prompt,
         input: { title: "Calculated chart" },
-        ownerUserId: consentAstrologerUserId,
+        ownerUserId: astrologerUserId,
         feature: "chart.interpretationDraft",
-        consentAuthorizations: [],
-        usageEvidence: {
-          processingAuthorityVersion: "openai-processing-authority.v1",
-          resourceEvidence: {
-            resourceType: "chart_calculation",
-            resourceId: "88888888-8888-4888-8888-888888888888",
-            sourceChecksum: `sha256:${"b".repeat(64)}`
-          }
+        resourceEvidence: {
+          resourceType: "chart_calculation",
+          resourceId: "88888888-8888-4888-8888-888888888888",
+          sourceChecksum: `sha256:${"b".repeat(64)}`
         }
       })
     ).resolves.toMatchObject({ output: { content: "Generated" } });
@@ -307,8 +229,6 @@ describe("AiGenerationService", () => {
     expect(generateStructured).toHaveBeenCalledOnce();
     expect(usageRecorder.start).toHaveBeenCalledWith(
       expect.objectContaining({
-        consentAuthorizations: [],
-        processingAuthorityVersion: "openai-processing-authority.v1",
         resourceEvidence: {
           resourceType: "chart_calculation",
           resourceId: "88888888-8888-4888-8888-888888888888",
@@ -341,22 +261,12 @@ describe("AiGenerationService", () => {
       service.generate({
         prompt,
         input: { title: "Sun in Aries" },
-        ownerUserId: consentAstrologerUserId,
+        ownerUserId: astrologerUserId,
         feature: "chart.interpretationDraft",
-        consentAuthorizations: [
-          {
-            consentRecordId,
-            clientUserId: consentClientUserId,
-            astrologerUserId: consentAstrologerUserId
-          }
-        ],
-        usageEvidence: {
-          processingAuthorityVersion: "openai-processing-authority.v1",
-          resourceEvidence: {
-            resourceType: "chart_calculation",
-            resourceId: "88888888-8888-4888-8888-888888888888",
-            sourceChecksum: `sha256:${"b".repeat(64)}`
-          }
+        resourceEvidence: {
+          resourceType: "chart_calculation",
+          resourceId: "88888888-8888-4888-8888-888888888888",
+          sourceChecksum: `sha256:${"b".repeat(64)}`
         }
       })
     ).resolves.toMatchObject({
@@ -368,14 +278,14 @@ describe("AiGenerationService", () => {
       expect.objectContaining({
         prompt: { messages: [{ role: "user", content: "Sun in Aries" }] },
         reasoningEffort: "low",
-        safetyIdentifier: consentSafetyIdentifier,
+        safetyIdentifier,
         structuredOutputName: "dictionary_entry_draft_v1",
         structuredOutputJsonSchema,
         metadata: expect.objectContaining({
           feature: "chart.interpretationDraft",
           promptId: "dictionary.entryDraft",
           promptVersion: 1,
-          ownerUserId: consentSafetyIdentifier,
+          ownerUserId: safetyIdentifier,
           provider: "openai"
         })
       })
@@ -386,15 +296,7 @@ describe("AiGenerationService", () => {
         promptId: "dictionary.entryDraft",
         promptVersion: 1,
         provider: "openai",
-        ownerSafetyId: consentSafetyIdentifier,
-        consentAuthorizations: [
-          {
-            consentRecordId,
-            clientUserId: consentClientUserId,
-            astrologerUserId: consentAstrologerUserId
-          }
-        ],
-        processingAuthorityVersion: "openai-processing-authority.v1",
+        ownerSafetyId: safetyIdentifier,
         resourceEvidence: {
           resourceType: "chart_calculation",
           resourceId: "88888888-8888-4888-8888-888888888888",
@@ -405,7 +307,6 @@ describe("AiGenerationService", () => {
     expect(generateStructured).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.not.objectContaining({
-          processingAuthorityVersion: expect.anything(),
           resourceId: expect.anything(),
           sourceChecksum: expect.anything()
         })

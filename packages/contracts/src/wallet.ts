@@ -51,9 +51,9 @@ export const ledgerOperationTypeValues = [
 export const ledgerOperationTypeSchema = z.enum(ledgerOperationTypeValues);
 export type LedgerOperationType = z.infer<typeof ledgerOperationTypeSchema>;
 
-export const financeOperationKindValues = ["sale", "payout", "refund", "adjustment"] as const;
-export const financeOperationKindSchema = z.enum(financeOperationKindValues);
-export type FinanceOperationKind = z.infer<typeof financeOperationKindSchema>;
+export const financeLedgerOperationKindValues = ["sale", "payout", "refund", "adjustment"] as const;
+export const financeLedgerOperationKindSchema = z.enum(financeLedgerOperationKindValues);
+export type FinanceLedgerOperationKind = z.infer<typeof financeLedgerOperationKindSchema>;
 
 export const financeOperationDirectionValues = ["inflow", "outflow", "neutral"] as const;
 export const financeOperationDirectionSchema = z.enum(financeOperationDirectionValues);
@@ -141,7 +141,7 @@ export const ledgerOperationSchema = z
   .object({
     id: uuidSchema,
     operationType: ledgerOperationTypeSchema,
-    kind: financeOperationKindSchema,
+    kind: financeLedgerOperationKindSchema,
     direction: financeOperationDirectionSchema,
     amount: moneySchema,
     signedAmountMinor: z.number().int().safe(),

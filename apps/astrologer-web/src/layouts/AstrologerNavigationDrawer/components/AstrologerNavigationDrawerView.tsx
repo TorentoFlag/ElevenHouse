@@ -10,12 +10,15 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 
 type AstrologerNavigationDrawerViewProps = {
   copy: AppShellNavigationCopy;
+  /** Products is hidden until the server confirms that its read surface is available. */
+  canReadProducts?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
 };
 
 export function AstrologerNavigationDrawerView({
   copy,
+  canReadProducts = true,
   collapsed,
   onCollapsedChange
 }: AstrologerNavigationDrawerViewProps) {
@@ -31,7 +34,9 @@ export function AstrologerNavigationDrawerView({
       expandLabel={copy.expandLabel}
       collapsed={collapsed}
       onCollapsedChange={onCollapsedChange}
-      items={copy.items.map(toNavigationDrawerItem)}
+      items={copy.items
+        .filter((item) => item.id !== "products" || canReadProducts)
+        .map(toNavigationDrawerItem)}
       footer={<AstrologerNavigationDrawerFooter copy={copy} />}
       renderLink={renderNavigationLink}
     />

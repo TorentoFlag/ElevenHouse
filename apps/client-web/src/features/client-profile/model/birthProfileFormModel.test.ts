@@ -17,7 +17,7 @@ describe("birthProfileFormModel", () => {
       label: "Мой основной профиль"
     };
 
-    expect(buildBirthProfileRequest(form)).toEqual({
+    expect(buildBirthProfileRequest(form, 4)).toEqual({
       ok: true,
       request: {
         label: "Мой основной профиль",
@@ -32,7 +32,7 @@ describe("birthProfileFormModel", () => {
         birthTimeDstOccurrence: "second",
         birthLatitude: 55.7558,
         birthLongitude: 37.6173,
-        isPrimary: true
+        expectedRevision: 4
       }
     });
   });
@@ -48,7 +48,7 @@ describe("birthProfileFormModel", () => {
       birthLongitude: 37.6173,
       birthTimeDstOccurrence: "second"
     });
-    expect(buildBirthProfileRequest(edited)).toEqual({
+    expect(buildBirthProfileRequest(edited, 4)).toEqual({
       ok: false,
       reason: "birth-place-selection-required"
     });
@@ -71,7 +71,7 @@ describe("birthProfileFormModel", () => {
       birthLongitude: 12.4829,
       birthTimeDstOccurrence: null
     });
-    expect(buildBirthProfileRequest(selected)).toMatchObject({
+    expect(buildBirthProfileRequest(selected, 4)).toMatchObject({
       ok: true,
       request: {
         birthPlaceText: "Rome, Italy",
@@ -115,7 +115,7 @@ describe("birthProfileFormModel", () => {
 
     const selected = updateBirthTimeDstOccurrence(original, "first");
 
-    expect(buildBirthProfileRequest(selected)).toMatchObject({
+    expect(buildBirthProfileRequest(selected, 4)).toMatchObject({
       ok: true,
       request: { birthTimeDstOccurrence: "first" }
     });
@@ -123,7 +123,7 @@ describe("birthProfileFormModel", () => {
   });
 
   it("allows a genuinely empty optional place without fabricating location metadata", () => {
-    expect(buildBirthProfileRequest(createBirthProfileForm(null))).toMatchObject({
+    expect(buildBirthProfileRequest(createBirthProfileForm(null), null)).toMatchObject({
       ok: true,
       request: {
         birthPlaceText: null,
@@ -155,7 +155,9 @@ function savedProfile(): ClientBirthDataResponse {
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "client_profile",
-    isPrimary: true,
+    revision: 4,
+    lastEditedByUserId: "11111111-1111-4111-8111-111111111111",
+    lastEditedByRole: "client",
     createdAt: "2026-07-06T10:00:00.000Z",
     updatedAt: "2026-07-06T10:00:00.000Z"
   };

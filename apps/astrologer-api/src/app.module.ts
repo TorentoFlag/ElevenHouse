@@ -22,7 +22,7 @@ import { MediaModule } from "./modules/media/media.module";
 import { MatrixModule } from "./modules/matrix/matrix.module";
 import { MessagingModule } from "./modules/messaging/messaging.module";
 import { NumerologyModule } from "./modules/numerology/numerology.module";
-import { PlatformBillingModule } from "./modules/platform-billing/platform-billing.module";
+import { AstrologerTariffsModule } from "./modules/platform-tariffs/platform-tariffs.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
 import { VerificationModule } from "./modules/verification/verification.module";
@@ -46,7 +46,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     FinanceModule,
     FlowsModule,
     MediaModule,
-    PlatformBillingModule,
+    AstrologerTariffsModule,
     ProductsModule,
     AvailabilityModule,
     AstroCalendarModule,

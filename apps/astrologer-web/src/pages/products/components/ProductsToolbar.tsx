@@ -16,6 +16,7 @@ export type ProductsToolbarProps = {
   readonly statusFilters: Record<ProductStatusFilter, string>;
   readonly onStatusChange: (status: ProductStatusFilter) => void;
   readonly onCreate: () => void;
+  readonly canCreate?: boolean;
 };
 
 const statusFilterOrder: ProductStatusFilter[] = ["all", "active", "draft", "archived"];
@@ -29,7 +30,8 @@ export function ProductsToolbar({
   selectedStatus,
   statusFilters,
   onStatusChange,
-  onCreate
+  onCreate,
+  canCreate = true
 }: ProductsToolbarProps) {
   return (
     <header className={styles.toolbar}>
@@ -57,15 +59,17 @@ export function ProductsToolbar({
 
       <span className={styles.toolbarSpacer} aria-hidden="true" />
 
-      <Button
-        className={styles.createButton}
-        type="button"
-        variant="brand"
-        size="big"
-        title={createLabel}
-        startIcon={<Icon iconName="plus" width={15} height={15} aria-hidden="true" />}
-        onClick={onCreate}
-      />
+      {canCreate ? (
+        <Button
+          className={styles.createButton}
+          type="button"
+          variant="brand"
+          size="big"
+          title={createLabel}
+          startIcon={<Icon iconName="plus" width={15} height={15} aria-hidden="true" />}
+          onClick={onCreate}
+        />
+      ) : null}
     </header>
   );
 }

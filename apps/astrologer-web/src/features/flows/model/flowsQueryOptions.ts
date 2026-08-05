@@ -1,30 +1,34 @@
 import type {
+  ActivateFlowVersionResponse,
   DecideFlowApprovalRequest,
   FlowDefinitionV2,
-  FlowResponse,
   ListFlowApprovalsQuery,
-  ListFlowDefinitionsV2QueryInput,
+  ListFlowDefinitionsV3QueryInput,
   ListFlowRunsQuery,
+  ListFlowWorkItemsQuery,
   ManualFlowRunResponse,
-  PublishFlowDefinitionV2Response
+  PauseFlowEnrollmentResponse,
+  PublishFlowDefinitionV3Response
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
-import { activateFlow } from "../api/activateFlow";
+import { activateFlow, type ActivateFlowInput } from "../api/activateFlow";
 import { createFlow, type CreateFlowInput } from "../api/createFlow";
 import { createNextFlowDraft, type CreateNextFlowDraftInput } from "../api/createNextFlowDraft";
 import { createManualFlowRun, type CreateManualFlowRunInput } from "../api/createManualFlowRun";
+import { completeFlowWorkItem, type CompleteFlowWorkItemInput } from "../api/completeFlowWorkItem";
 import { decideFlowApproval, type DecideFlowApprovalInput } from "../api/decideFlowApproval";
 import { getFlowDefinition } from "../api/getFlowDefinition";
+import { getFlowActivationReview } from "../api/getFlowActivationReview";
+import { getFlowEnrollment } from "../api/getFlowEnrollment";
 import { listFlowApprovals } from "../api/listFlowApprovals";
 import { listFlowRuns } from "../api/listFlowRuns";
 import { listFlowTemplates } from "../api/listFlowTemplates";
+import { listFlowWorkItems } from "../api/listFlowWorkItems";
 import { listFlows } from "../api/listFlows";
-import {
-  migrateFlowDefinition,
-  type MigrateFlowDefinitionInput
-} from "../api/migrateFlowDefinition";
-import { pauseFlow } from "../api/pauseFlow";
+import { pauseFlowEnrollment, type PauseFlowEnrollmentInput } from "../api/pauseFlowEnrollment";
 import { publishFlow, type PublishFlowInput } from "../api/publishFlow";
+import { snoozeFlowWorkItem, type SnoozeFlowWorkItemInput } from "../api/snoozeFlowWorkItem";
+import { startFlowWorkItem, type StartFlowWorkItemInput } from "../api/startFlowWorkItem";
 import { simulateFlowRun, type SimulateFlowRunInput } from "../api/simulateFlowRun";
 import { updateFlowDraft, type UpdateFlowDraftInput } from "../api/updateFlowDraft";
 import {
@@ -34,18 +38,48 @@ import {
 
 export const flowsQueryKeys = {
   all: () => ["flows"] as const,
-  list: (query: ListFlowDefinitionsV2QueryInput) => ["flows", "list", query] as const,
+  list: (query: ListFlowDefinitionsV3QueryInput) => ["flows", "list", query] as const,
   detail: (flowId: string | null) => ["flows", "detail", flowId] as const,
+  activationReview: (flowId: string | null, versionId: string | null) =>
+    ["flows", "activation-review", flowId, versionId] as const,
+  enrollment: (flowId: string | null) => ["flows", "enrollment", flowId] as const,
   templates: (locale: "ru" | "en") => ["flows", "templates", locale] as const,
   runs: (flowId: string, query: ListFlowRunsQuery) => ["flows", "runs", flowId, query] as const,
-  approvals: (query: ListFlowApprovalsQuery) => ["flows", "approvals", query] as const
+  approvals: (query: ListFlowApprovalsQuery) => ["flows", "approvals", query] as const,
+  workItems: (query: ListFlowWorkItemsQuery) => ["flows", "work-items", query] as const
 };
 
-export function flowListQueryOptions(query: ListFlowDefinitionsV2QueryInput) {
+export function flowListQueryOptions(query: ListFlowDefinitionsV3QueryInput) {
   return {
     queryKey: flowsQueryKeys.list(query),
     queryFn: () => listFlows(query),
     placeholderData: keepPreviousData
+  };
+}
+
+export function flowActivationReviewQueryOptions(flowId: string | null, versionId: string | null) {
+  return {
+    queryKey: flowsQueryKeys.activationReview(flowId, versionId),
+    queryFn: () => {
+      if (!flowId || !versionId) throw new Error("FLOW_ACTIVATION_REVIEW_TARGET_REQUIRED");
+      return getFlowActivationReview({ flowId, versionId });
+    },
+    enabled: flowId !== null && versionId !== null,
+    staleTime: 0,
+    retry: false
+  };
+}
+
+export function flowEnrollmentQueryOptions(flowId: string | null) {
+  return {
+    queryKey: flowsQueryKeys.enrollment(flowId),
+    queryFn: () => {
+      if (!flowId) throw new Error("FLOW_ENROLLMENT_ID_REQUIRED");
+      return getFlowEnrollment(flowId);
+    },
+    enabled: flowId !== null,
+    staleTime: 0,
+    retry: false
   };
 }
 
@@ -82,6 +116,15 @@ export function flowApprovalsQueryOptions(query: ListFlowApprovalsQuery) {
   };
 }
 
+export function flowWorkItemsQueryOptions(query: ListFlowWorkItemsQuery) {
+  return {
+    queryKey: flowsQueryKeys.workItems(query),
+    queryFn: () => listFlowWorkItems(query),
+    staleTime: 0,
+    retry: false
+  };
+}
+
 export function createFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (input: CreateFlowInput) => createFlow(input),
@@ -114,26 +157,21 @@ export function createNextFlowDraftMutationOptions(
   };
 }
 
-export function migrateFlowDefinitionMutationOptions(
+export function activateFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
+  return {
+    mutationFn: (input: ActivateFlowInput) => activateFlow(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function pauseFlowEnrollmentMutationOptions(
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) {
   return {
-    mutationFn: (input: MigrateFlowDefinitionInput) => migrateFlowDefinition(input),
-    onSuccess: () => invalidateFlows(queryClient)
-  };
-}
-
-export function activateFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
-  return {
-    mutationFn: (flowId: string) => activateFlow(flowId),
-    onSuccess: () => invalidateFlows(queryClient)
-  };
-}
-
-export function pauseFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
-  return {
-    mutationFn: (flowId: string) => pauseFlow(flowId),
-    onSuccess: () => invalidateFlows(queryClient)
+    mutationFn: (input: PauseFlowEnrollmentInput) => pauseFlowEnrollment(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
   };
 }
 
@@ -167,13 +205,44 @@ export function decideFlowApprovalMutationOptions(
   };
 }
 
+export function startFlowWorkItemMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: StartFlowWorkItemInput) => startFlowWorkItem(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function snoozeFlowWorkItemMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: SnoozeFlowWorkItemInput) => snoozeFlowWorkItem(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function completeFlowWorkItemMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: CompleteFlowWorkItemInput) => completeFlowWorkItem(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
 function invalidateFlows(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return queryClient.invalidateQueries({ queryKey: flowsQueryKeys.all() });
 }
 
 export type FlowMutationResult =
-  | FlowResponse
+  | ActivateFlowVersionResponse
+  | PauseFlowEnrollmentResponse
   | FlowDefinitionV2
-  | PublishFlowDefinitionV2Response
+  | PublishFlowDefinitionV3Response
   | ManualFlowRunResponse
   | { readonly approval: { readonly status: DecideFlowApprovalRequest["decision"] } };

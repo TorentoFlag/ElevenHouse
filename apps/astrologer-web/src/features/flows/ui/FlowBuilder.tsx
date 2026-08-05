@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   updateFlowDefinitionDraftV2RequestSchema,
-  type FlowDefinitionDetailV2,
+  type FlowDefinitionDetailV3,
   type FlowDefinitionValidationIssue,
   type FlowGraphV2,
   type FlowPresentationV1
@@ -22,7 +22,7 @@ import { FlowBuilderInspector } from "./FlowBuilderInspector";
 import { FlowNodePalette } from "./FlowNodePalette";
 
 export type CurrentFlowDefinitionDetail = Extract<
-  FlowDefinitionDetailV2,
+  FlowDefinitionDetailV3,
   { graphSchemaVersion: "flow-graph.v2" }
 >;
 

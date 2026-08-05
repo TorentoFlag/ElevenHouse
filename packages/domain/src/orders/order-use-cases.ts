@@ -1,6 +1,12 @@
+/* eslint-disable no-control-regex -- Domain validation intentionally rejects ASCII control characters. */
 import { createHash, randomUUID } from "node:crypto";
 import { allocateBps, type Money } from "../money";
 import type { FinancePolicyStore } from "../finance-policies";
+import {
+  resolveActiveTariffCommission,
+  resolvePlatformTariffCapability,
+  type PlatformTariffEntitlementStore
+} from "../platform-billing";
 import type { Product, ProductStore } from "../products";
 import type { FinanceOrder, FinanceOrderStore } from "./order-store";
 
@@ -19,6 +25,7 @@ export type CreateOrderUseCaseInput = {
   readonly relationshipReader: ClientAstrologerRelationshipReader;
   readonly productStore: Pick<ProductStore, "findByOwnerAndId">;
   readonly financePolicyStore: Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
+  readonly tariffAuthorityStore: PlatformTariffEntitlementStore;
   readonly clientUserId: string;
   readonly request: CreateOrderRequestInput;
   readonly idempotencyKey: string;
@@ -61,12 +68,38 @@ export class OrderFinancePolicyUnavailableError extends Error {
   }
 }
 
+export class OrderTariffCommissionUnavailableError extends Error {
+  readonly code = "order_tariff_commission_unavailable";
+
+  constructor() {
+    super("Astrologer does not have an active tariff commission authority");
+    this.name = "OrderTariffCommissionUnavailableError";
+  }
+}
+
+export class OrderProductFiscalLabelInvalidError extends Error {
+  readonly code = "order_product_fiscal_label_invalid";
+
+  constructor() {
+    super("Product title cannot be represented safely in the fiscal order snapshot");
+  }
+}
+
 export class OrderBookingHoldNotClaimableError extends Error {
   readonly code = "order_booking_hold_not_claimable";
 
   constructor() {
     super("Booking hold is not available for order creation");
     this.name = "OrderBookingHoldNotClaimableError";
+  }
+}
+
+export class OrderBookingHoldRequiredError extends Error {
+  readonly code = "order_booking_hold_required";
+
+  constructor() {
+    super("A live product requires an active paid booking hold before checkout");
+    this.name = "OrderBookingHoldRequiredError";
   }
 }
 
@@ -87,24 +120,47 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
     async () => {
       await requireActiveRelationship(input);
       const product = await requireActiveProduct(input);
+      if (product.executionMode === "live" && !input.request.bookingId) {
+        throw new OrderBookingHoldRequiredError();
+      }
+      const entitlement = await resolvePlatformTariffCapability({
+        store: input.tariffAuthorityStore,
+        ownerUserId: product.ownerUserId,
+        capability: "products",
+        operation: "mutation",
+        now: nowIso
+      });
+      if (entitlement !== "allow") {
+        // The public buyer sees the same unavailable-product result as for a stale or draft product.
+        throw new OrderProductNotAvailableError();
+      }
       const policy = await input.financePolicyStore.findEffectivePolicyForAstrologer(
-        input.request.astrologerUserId
+        product.ownerUserId
       );
       if (!policy) {
         throw new OrderFinancePolicyUnavailableError();
+      }
+      const tariffCommission = await resolveActiveTariffCommission({
+        ownerUserId: product.ownerUserId,
+        now: nowIso,
+        store: input.tariffAuthorityStore
+      });
+      if (!tariffCommission) {
+        throw new OrderTariffCommissionUnavailableError();
       }
 
       const grossAmount = money(product.priceMinor, product.currency);
       const { feeMinor, remainderMinor } = allocateBps({
         amountMinor: grossAmount.amountMinor,
-        bps: policy.platformFeeBps
+        bps: tariffCommission.commissionBps
       });
 
       return {
         id: (input.idGenerator ?? randomUUID)(),
         clientUserId: input.clientUserId,
-        astrologerUserId: input.request.astrologerUserId,
+        astrologerUserId: product.ownerUserId,
         productId: input.request.productId,
+        productTitleSnapshot: fiscalProductTitle(product.title),
         directLinkIntentId: input.request.directLinkIntentId,
         bookingId: input.request.bookingId ?? null,
         status: "pending_payment",
@@ -116,7 +172,10 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
         financePolicyHoldDurationHours: policy.holdDurationHours,
         financePolicyReserveBps: policy.reserveBps,
         financePolicyReserveReleaseDelayDays: policy.reserveReleaseDelayDays,
-        financePolicyPlatformFeeBps: policy.platformFeeBps,
+        tariffSeriesId: tariffCommission.tariffSeriesId,
+        tariffVersion: tariffCommission.tariffVersion,
+        tariffVersionDigest: tariffCommission.tariffVersionDigest,
+        tariffCommissionBps: tariffCommission.commissionBps,
         financePolicyProviderSettlementRequired: policy.providerSettlementRequired,
         now: nowIso
       };
@@ -157,6 +216,14 @@ function money(amountMinor: number, currency: string): Money {
     throw new OrderProductNotAvailableError();
   }
   return { amountMinor, currency };
+}
+
+function fiscalProductTitle(value: string): string {
+  const title = value.trim();
+  if (!title || title.length > 128 || /[\u0000-\u001f\u007f]/.test(title)) {
+    throw new OrderProductFiscalLabelInvalidError();
+  }
+  return title;
 }
 
 function hashCreateOrderRequest(

@@ -19,9 +19,231 @@ import {
   parseFlowRuntimeTraceSummary,
   type FlowExecutionClaim
 } from "./flow-execution-interpreter";
-import { compileFlowGraphV2, projectFlowCapabilityManifestV1 } from "./flow-graph-v2-compiler";
+import { compileFlowGraphV2 } from "./flow-graph-v2-compiler";
 
 describe("flow execution interpreter", () => {
+  it("creates a typed astrologer work-item wait from the pinned node config", async () => {
+    const graph = workItemGraph();
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph,
+          nodeId: "prepare-consultation",
+          nodeKind: "astrologer_work_item"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).resolves.toEqual({
+      kind: "wait_work_item",
+      sourceNodeId: "prepare-consultation",
+      completionHandle: "success",
+      resultCode: "FLOW_WAITING_WORK_ITEM",
+      workItem: {
+        taskKind: "consultation_preparation",
+        title: "Подготовить консультацию",
+        instructions: "Проверьте карту и вопросы клиента",
+        priority: "high",
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+        completionRequirements: { resultSummary: "required" },
+        dueAt: "2026-08-09T10:00:00.000Z"
+      },
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "waiting",
+        nodeKind: "astrologer_work_item",
+        reasonCode: "FLOW_WORK_ITEM_CREATED",
+        resultCode: "FLOW_WAITING_WORK_ITEM"
+      }
+    });
+  });
+
+  it("fails closed when a booking-relative deadline has no pinned booking snapshot", async () => {
+    const graph = workItemGraph();
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph,
+          nodeId: "prepare-consultation",
+          nodeKind: "astrologer_work_item",
+          effectiveRunSnapshot: {}
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<FlowExecutionIntegrityError>>({
+        name: "FlowExecutionIntegrityError",
+        code: "FLOW_TOKEN_RUNTIME_STATE_INVALID"
+      })
+    );
+  });
+
+  it("executes the full work-item instruction length accepted by the published graph contract", async () => {
+    const instructions = "x".repeat(4_000);
+    const graph = workItemGraph(instructions);
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph,
+          nodeId: "prepare-consultation",
+          nodeKind: "astrologer_work_item"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).resolves.toMatchObject({
+      kind: "wait_work_item",
+      workItem: { instructions }
+    });
+  });
+
+  it("accepts a strict command-backed work-item completion trace", () => {
+    expect(
+      parseFlowRuntimeTraceSummary({
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "advanced",
+        nodeKind: "astrologer_work_item",
+        reasonCode: "FLOW_WORK_ITEM_COMPLETED",
+        resultCode: "FLOW_TOKEN_ADVANCED",
+        sourceHandle: "success",
+        selectedEdgeId: "work-item-completed",
+        targetNodeId: "completed",
+        targetNodeKind: "completed"
+      })
+    ).toEqual({
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "advanced",
+      nodeKind: "astrologer_work_item",
+      reasonCode: "FLOW_WORK_ITEM_COMPLETED",
+      resultCode: "FLOW_TOKEN_ADVANCED",
+      sourceHandle: "success",
+      selectedEdgeId: "work-item-completed",
+      targetNodeId: "completed",
+      targetNodeKind: "completed"
+    });
+  });
+
+  it("accepts only the redacted service trace for an elapsed work-item snooze", () => {
+    const trace = {
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "available",
+      nodeKind: "astrologer_work_item",
+      reasonCode: "FLOW_WORK_ITEM_SNOOZE_ELAPSED",
+      resultCode: "FLOW_WORK_ITEM_AVAILABLE",
+      workItemId: "10000000-0000-4000-8000-000000000003",
+      fromRevision: 2,
+      toRevision: 3,
+      scheduledFor: "2026-08-05T10:00:00.000Z"
+    } as const;
+
+    expect(parseFlowRuntimeTraceSummary(trace)).toEqual(trace);
+    expect(() =>
+      parseFlowRuntimeTraceSummary({
+        ...trace,
+        actorUserId: "10000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow("FLOW_RUNTIME_TRACE_INVALID");
+  });
+
+  it("accepts a strict Booking reschedule trace with one adjusted work item", () => {
+    const trace = {
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "rescheduled",
+      nodeKind: "astrologer_work_item",
+      reasonCode: "FLOW_BOOKING_RESCHEDULED",
+      resultCode: "FLOW_BOOKING_SCHEDULE_UPDATED",
+      bookingId: "77777777-7777-4777-8777-777777777777",
+      bookingLifecycleRevision: 2,
+      previousStartAt: "2026-08-10T10:00:00.000Z",
+      previousEndAt: "2026-08-10T11:00:00.000Z",
+      previousTimeZone: "Europe/Moscow",
+      currentStartAt: "2026-08-09T14:00:00.000Z",
+      currentEndAt: "2026-08-09T15:00:00.000Z",
+      currentTimeZone: "Europe/Moscow",
+      workItemId: "10000000-0000-4000-8000-000000000003",
+      fromRevision: 2,
+      toRevision: 3,
+      previousWorkItemStatus: "snoozed",
+      currentWorkItemStatus: "snoozed",
+      previousDueAt: "2026-08-09T10:00:00.000Z",
+      currentDueAt: "2026-08-08T14:00:00.000Z",
+      previousSnoozedUntil: "2026-08-09T10:00:00.000Z",
+      currentSnoozedUntil: "2026-08-08T14:00:00.000Z",
+      snoozeAdjustment: "shortened"
+    } as const;
+
+    expect(parseFlowRuntimeTraceSummary(trace)).toEqual(trace);
+  });
+
+  it("accepts a Booking reschedule trace without an active schedule-bound work item", () => {
+    const trace = {
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "rescheduled",
+      nodeKind: "completed",
+      reasonCode: "FLOW_BOOKING_RESCHEDULED",
+      resultCode: "FLOW_BOOKING_SCHEDULE_UPDATED",
+      bookingId: "77777777-7777-4777-8777-777777777777",
+      bookingLifecycleRevision: 2,
+      previousStartAt: "2026-08-10T10:00:00.000Z",
+      previousEndAt: "2026-08-10T11:00:00.000Z",
+      previousTimeZone: "Europe/Moscow",
+      currentStartAt: "2026-08-12T12:00:00.000Z",
+      currentEndAt: "2026-08-12T13:00:00.000Z",
+      currentTimeZone: "Europe/Moscow",
+      workItemId: null,
+      fromRevision: null,
+      toRevision: null,
+      previousWorkItemStatus: null,
+      currentWorkItemStatus: null,
+      previousDueAt: null,
+      currentDueAt: null,
+      previousSnoozedUntil: null,
+      currentSnoozedUntil: null,
+      snoozeAdjustment: null
+    } as const;
+
+    expect(parseFlowRuntimeTraceSummary(trace)).toEqual(trace);
+  });
+
+  it("rejects partial or revision-skipping Booking reschedule provenance", () => {
+    const trace = {
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "rescheduled",
+      nodeKind: "astrologer_work_item",
+      reasonCode: "FLOW_BOOKING_RESCHEDULED",
+      resultCode: "FLOW_BOOKING_SCHEDULE_UPDATED",
+      bookingId: "77777777-7777-4777-8777-777777777777",
+      bookingLifecycleRevision: 2,
+      previousStartAt: "2026-08-10T10:00:00.000Z",
+      previousEndAt: "2026-08-10T11:00:00.000Z",
+      previousTimeZone: "Europe/Moscow",
+      currentStartAt: "2026-08-12T12:00:00.000Z",
+      currentEndAt: "2026-08-12T13:00:00.000Z",
+      currentTimeZone: "Europe/Moscow",
+      workItemId: "10000000-0000-4000-8000-000000000003",
+      fromRevision: 2,
+      toRevision: 4,
+      previousWorkItemStatus: "pending",
+      currentWorkItemStatus: "pending",
+      previousDueAt: "2026-08-09T10:00:00.000Z",
+      currentDueAt: "2026-08-11T12:00:00.000Z",
+      previousSnoozedUntil: null,
+      currentSnoozedUntil: null,
+      snoozeAdjustment: "unchanged"
+    } as const;
+
+    expect(() => parseFlowRuntimeTraceSummary(trace)).toThrow("FLOW_RUNTIME_TRACE_INVALID");
+    expect(() =>
+      parseFlowRuntimeTraceSummary({
+        ...trace,
+        workItemId: null,
+        fromRevision: null,
+        toRevision: null
+      })
+    ).toThrow("FLOW_RUNTIME_TRACE_INVALID");
+  });
+
   it("returns an explicit completed decision for the capability-free terminal executor", async () => {
     const node = completedNode();
     const graph = terminalGraph(node);
@@ -235,7 +457,8 @@ describe("flow execution interpreter", () => {
         claim: claim({
           graph,
           nodeId: "birth-data",
-          nodeKind: "birth_data_available"
+          nodeKind: "birth_data_available",
+          capabilityManifest: capabilityManifestFor(validGraph)
         }),
         registry: advancingRegistry("true")
       })
@@ -256,7 +479,12 @@ describe("flow execution interpreter", () => {
 
     await expect(
       interpretFlowExecutionClaim({
-        claim: claim({ graph, nodeId: "birth-data", nodeKind: "birth_data_available" }),
+        claim: claim({
+          graph,
+          nodeId: "birth-data",
+          nodeKind: "birth_data_available",
+          capabilityManifest: capabilityManifestFor(validGraph)
+        }),
         registry: advancingRegistry("true")
       })
     ).rejects.toEqual(
@@ -332,7 +560,12 @@ describe("flow execution interpreter", () => {
 
     await expect(
       interpretFlowExecutionClaim({
-        claim: claim({ graph, nodeId: "birth-data", nodeKind: "birth_data_available" }),
+        claim: claim({
+          graph,
+          nodeId: "birth-data",
+          nodeKind: "birth_data_available",
+          capabilityManifest: capabilityManifestFor(birthDataConditionGraph())
+        }),
         registry: advancingRegistry("true")
       })
     ).rejects.toEqual(
@@ -396,6 +629,25 @@ describe("flow execution interpreter", () => {
         executorKey: "birth_data_available:1:1"
       })
     );
+  });
+
+  it("registers booking birth-data readiness only with an injected authoritative reader", async () => {
+    const reader = { read: async () => ({ ready: true }) };
+
+    const decision = await interpretFlowExecutionClaim({
+      claim: claim({
+        graph: birthDataConditionGraph(),
+        nodeId: "birth-data",
+        nodeKind: "birth_data_available"
+      }),
+      registry: createBuiltInFlowNodeExecutorRegistry({ birthDataReadinessReader: reader })
+    });
+
+    expect(decision).toMatchObject({
+      kind: "advance",
+      sourceHandle: "true",
+      targetNodeId: "completed"
+    });
   });
 
   it("fails closed before persistence when an executor returns a malformed decision", async () => {
@@ -575,10 +827,16 @@ describe("flow execution interpreter", () => {
     );
   });
 
-  it("publishes only exact versioned keys for the built-in pure executors", () => {
-    const registry = createBuiltInFlowNodeExecutorRegistry();
+  it("publishes only exact versioned keys for supplied built-in executors", () => {
+    const registry = createBuiltInFlowNodeExecutorRegistry({
+      birthDataReadinessReader: { read: async () => ({ ready: false }) }
+    });
 
-    expect(registry.executorKeys).toEqual(["completed:1:1"]);
+    expect(registry.executorKeys).toEqual([
+      "astrologer_work_item:1:1",
+      "birth_data_available:1:1",
+      "completed:1:1"
+    ]);
     expect(
       formatFlowNodeExecutorKey({
         kind: "completed",
@@ -602,6 +860,24 @@ describe("flow execution interpreter", () => {
       outcome: "canceled",
       nodeKind: "completed",
       reasonCode: "FLOW_RUN_CANCELED_BY_OWNER",
+      resultCode: "FLOW_RUN_CANCELED"
+    });
+  });
+
+  it("accepts a distinct redacted Booking-lifecycle cancellation trace", () => {
+    expect(
+      parseFlowRuntimeTraceSummary({
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "canceled",
+        nodeKind: "astrologer_work_item",
+        reasonCode: "FLOW_BOOKING_CANCELED",
+        resultCode: "FLOW_RUN_CANCELED"
+      })
+    ).toEqual({
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "canceled",
+      nodeKind: "astrologer_work_item",
+      reasonCode: "FLOW_BOOKING_CANCELED",
       resultCode: "FLOW_RUN_CANCELED"
     });
   });
@@ -708,20 +984,35 @@ function claim(input: {
   readonly nodeId: string;
   readonly nodeKind: FlowNodeKindV2;
   readonly capabilityManifest?: unknown;
+  readonly enrollmentSnapshot?: unknown;
+  readonly effectiveRunSnapshot?: unknown;
 }): FlowExecutionClaim {
-  const compilation = compileFlowGraphV2(input.graph);
-  const defaultCapabilityManifest = compilation.capabilityManifest
-    ? projectFlowCapabilityManifestV1(compilation.capabilityManifest)
-    : {
-        schemaVersion: "flow-capability-manifest.v1" as const,
-        executionSemanticsVersion: "flow-interpreter.v1" as const,
-        nodeExecutors: input.graph.nodes.map((node) => ({
-          kind: node.kind,
-          configSchemaVersion: node.configSchemaVersion,
-          executorContractVersion: node.executorContractVersion
-        })),
-        requiredCapabilities: []
-      };
+  const defaultCapabilityManifest = input.capabilityManifest ?? capabilityManifestFor(input.graph);
+  const enrollmentSnapshot = input.enrollmentSnapshot ?? {
+    schemaVersion: "flow-run-snapshot.v2",
+    enrollment: {
+      activationEpochId: "66666666-6666-4666-8666-666666666666",
+      triggerNodeId: "booking",
+      occurrenceKey: "77777777-7777-4777-8777-777777777777",
+      policyKey: "once_per_occurrence",
+      policyRevision: 1,
+      rolloutPolicyRevision: 1,
+      eventOccurredAt: "2026-08-01T10:00:00.000Z",
+      enrolledAt: "2026-08-01T10:00:01.000Z"
+    },
+    subject: {
+      type: "booking",
+      bookingId: "88888888-8888-4888-8888-888888888888",
+      clientUserId: "99999999-9999-4999-8999-999999999999",
+      productId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      startAt: "2026-08-10T10:00:00.000Z",
+      endAt: "2026-08-10T11:00:00.000Z"
+    },
+    executionAuthority: {
+      basis: "current_entitlement",
+      referenceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    }
+  };
   const persistedClaim = {
     tokenId: "11111111-1111-4111-8111-111111111111",
     ownerUserId: "22222222-2222-4222-8222-222222222222",
@@ -734,6 +1025,9 @@ function claim(input: {
     executorContractVersion: 1,
     graph: input.graph,
     capabilityManifest: input.capabilityManifest ?? defaultCapabilityManifest,
+    enrollmentSnapshot,
+    effectiveRunSnapshot: input.effectiveRunSnapshot ?? enrollmentSnapshot,
+    bookingLifecycleContext: null,
     leaseOwner: "flows-worker-1",
     nodeActivationSequence: 1n,
     attemptNumber: 1n,
@@ -742,6 +1036,12 @@ function claim(input: {
     leaseExpiresAt: "2026-08-03T11:00:30.000Z"
   };
   return persistedClaim as unknown as FlowExecutionClaim;
+}
+
+function capabilityManifestFor(graph: FlowGraphV2): unknown {
+  const compilation = compileFlowGraphV2(graph);
+  if (!compilation.capabilityManifest) throw new Error("Expected V2 capability manifest");
+  return compilation.capabilityManifest;
 }
 
 function terminalGraph(node: ReturnType<typeof completedNode>): FlowGraphV2 {
@@ -778,6 +1078,52 @@ function completedNode() {
     executorContractVersion: 1 as const,
     config: { goalKey: "consultation_prepared" }
   };
+}
+
+function workItemGraph(instructions = "Проверьте карту и вопросы клиента"): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "booking",
+        kind: "booking_confirmed",
+        displayTitle: "Запись подтверждена",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
+      },
+      {
+        id: "prepare-consultation",
+        kind: "astrologer_work_item",
+        displayTitle: "Подготовить консультацию",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          taskKind: "consultation_preparation",
+          taskTitle: "Подготовить консультацию",
+          instructions,
+          priority: "high",
+          duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+          completionRequirements: { resultSummary: "required" }
+        }
+      },
+      completedNode()
+    ],
+    edges: [
+      {
+        id: "booking-work-item",
+        sourceNodeId: "booking",
+        targetNodeId: "prepare-consultation",
+        sourceHandle: "next"
+      },
+      {
+        id: "work-item-completed",
+        sourceNodeId: "prepare-consultation",
+        targetNodeId: "completed",
+        sourceHandle: "success"
+      }
+    ]
+  });
 }
 
 function birthDataConditionGraph(): FlowGraphV2 {

@@ -11,8 +11,7 @@ const defaultPasswordlessRateLimits = {
 };
 const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
-  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey,
-  PUBLIC_API_GEOAPIFY_API_KEY: "test-geoapify-key"
+  AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
 };
 const defaultCsrfConfig = {
   csrfSecret: "elevenhouse-dev-public-api-csrf-secret-change-before-production",
@@ -24,7 +23,7 @@ const defaultCsrfConfig = {
     enabled: true,
     provider: "geoapify",
     baseUrl: "https://api.geoapify.com",
-    apiKey: "test-geoapify-key",
+    apiKey: null,
     timeoutMs: 5000,
     cacheSuccessTtlSeconds: 2592000,
     cacheEmptyTtlSeconds: 1800,
@@ -36,13 +35,7 @@ const defaultCsrfConfig = {
       globalPerDay: { limit: 2500, windowSeconds: 86400 }
     }
   },
-  arcPay: {
-    apiBaseUrl: "https://api.arcpay.space",
-    secret: null,
-    environment: "sandbox",
-    captureMode: null,
-    paymentMethods: []
-  }
+  financeCheckout: null
 };
 const defaultTrustedStaticCode = {
   channel: "phone",
@@ -51,6 +44,36 @@ const defaultTrustedStaticCode = {
 };
 
 describe("createPublicApiRuntimeConfig", () => {
+  it("keeps checkout preparation disabled until private storage and retention are explicitly configured", () => {
+    expect(createPublicApiRuntimeConfig(requiredSecurityConfig).financeCheckout).toBeNull();
+    expect(() => createPublicApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: "true"
+    })).toThrow("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires private artifact storage");
+  });
+
+  it("requires encrypted private artifact storage when checkout preparation is enabled", () => {
+    expect(createPublicApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: "true",
+      PUBLIC_API_FINANCE_CHECKOUT_ENVIRONMENT: "sandbox",
+      PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]',
+      PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT: "https://s3.example.test",
+      PUBLIC_API_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
+      PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance-private",
+      PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "access-key",
+      PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "secret-key",
+      PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
+      PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN: "arn:aws:kms:eu-central-1:123456789012:key/4b456f46-bf3c-4764-9c1b-381e8c69a545",
+      PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
+      PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: "1"
+    }).financeCheckout).toMatchObject({
+      environment: "sandbox",
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" }
+    });
+  });
+
   it("uses the default public API port when env is not set", () => {
     expect(createPublicApiRuntimeConfig(requiredSecurityConfig)).toEqual({
       port: 3001,
@@ -223,27 +246,65 @@ describe("createPublicApiRuntimeConfig", () => {
     });
   });
 
-  it("parses Geoapify configuration and fails closed without a key", () => {
+  it("parses the public Geoapify and Redis protection settings", () => {
     expect(
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
+        PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "true",
         PUBLIC_API_GEOAPIFY_BASE_URL: "https://geoapify.internal/",
+        PUBLIC_API_GEOAPIFY_API_KEY: "public-geoapify-key",
         PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "4000",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_SUCCESS_TTL_SECONDS: "86400",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_CACHE_EMPTY_TTL_SECONDS: "600",
         PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: "5000",
-        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: "8"
-      }).birthPlaceSearch
+        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_REDIS_KEY_PREFIX:
+          "elevenhouse:test:public-birth-place",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_USER_PER_MINUTE: "8",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_MINUTE: "40",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_RATE_LIMIT_GLOBAL_PER_DAY: "900"
+      })
     ).toMatchObject({
-      enabled: true,
-      baseUrl: "https://geoapify.internal",
-      timeoutMs: 4000,
-      lockTtlMs: 5000,
-      rateLimits: { userPerMinute: { limit: 8, windowSeconds: 60 } }
+      birthPlaceSearch: {
+        enabled: true,
+        provider: "geoapify",
+        baseUrl: "https://geoapify.internal",
+        apiKey: "public-geoapify-key",
+        timeoutMs: 4000,
+        cacheSuccessTtlSeconds: 86400,
+        cacheEmptyTtlSeconds: 600,
+        lockTtlMs: 5000,
+        rateLimitRedisKeyPrefix: "elevenhouse:test:public-birth-place",
+        rateLimits: {
+          userPerMinute: { limit: 8, windowSeconds: 60 },
+          globalPerMinute: { limit: 40, windowSeconds: 60 },
+          globalPerDay: { limit: 900, windowSeconds: 86400 }
+        }
+      }
     });
+  });
+
+  it("rejects a birth-place lock that can expire before the provider timeout", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
-        AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
+        ...requiredSecurityConfig,
+        PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS: "5000",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS: "5000"
       })
-    ).toThrow("PUBLIC_API_GEOAPIFY_API_KEY is required when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true");
+    ).toThrow(
+      "PUBLIC_API_BIRTH_PLACE_SEARCH_LOCK_TTL_MS must exceed PUBLIC_API_BIRTH_PLACE_SEARCH_TIMEOUT_MS"
+    );
+  });
+
+  it("rejects plaintext Geoapify transport while birth-place search is enabled", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        PUBLIC_API_GEOAPIFY_BASE_URL: "http://geoapify.internal",
+        PUBLIC_API_GEOAPIFY_API_KEY: "public-geoapify-key"
+      })
+    ).toThrow(
+      "PUBLIC_API_GEOAPIFY_BASE_URL must use HTTPS when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true"
+    );
   });
 
   it("requires an explicit passwordless code secret in production", () => {
@@ -264,9 +325,6 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
         PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
-        ARC_PAY_SECRET: "arc-pay-secret",
-        ARC_PAY_CAPTURE_MODE: "one_stage",
-        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
       })
     ).toThrow("PUBLIC_API_SESSION_COOKIE_SECURE=true is required in production");
   });
@@ -303,9 +361,8 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
         PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
-        ARC_PAY_SECRET: "arc-pay-secret",
-        ARC_PAY_CAPTURE_MODE: "one_stage",
-        ARC_PAY_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]'
+        PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "true",
+        PUBLIC_API_GEOAPIFY_API_KEY: "public-geoapify-key"
       })
     ).toMatchObject({
       sessionCookieSecure: true,
@@ -316,7 +373,33 @@ describe("createPublicApiRuntimeConfig", () => {
     });
   });
 
-  it("requires configured credentials and discovered payment methods in production", () => {
+  it("requires enabled Geoapify credentials in production", () => {
+    const production = {
+      ...requiredSecurityConfig,
+      NODE_ENV: "production",
+      PUBLIC_API_SESSION_COOKIE_SECURE: "true",
+      PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
+      PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
+      PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com",
+    };
+
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...production,
+        PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "false"
+      })
+    ).toThrow("PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true is required in production");
+    expect(() =>
+      createPublicApiRuntimeConfig({
+        ...production,
+        PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "true"
+      })
+    ).toThrow(
+      "PUBLIC_API_GEOAPIFY_API_KEY is required when PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED=true"
+    );
+  });
+
+  it("rejects a non-official Geoapify origin in production", () => {
     expect(() =>
       createPublicApiRuntimeConfig({
         ...requiredSecurityConfig,
@@ -324,24 +407,14 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_SESSION_COOKIE_SECURE: "true",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
-        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.com"
+        PUBLIC_API_ALLOWED_ORIGINS: "https://app.elevenhouse.ai",
+        PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "true",
+        PUBLIC_API_GEOAPIFY_BASE_URL: "https://geoapify-compatible.attacker",
+        PUBLIC_API_GEOAPIFY_API_KEY: "public-geoapify-key"
       })
-    ).toThrow("ARC_PAY_SECRET, ARC_PAY_CAPTURE_MODE and ARC_PAY_PAYMENT_METHODS are required");
-  });
-
-  it("rejects Arc Pay values outside the documented checkout enums", () => {
-    expect(() =>
-      createPublicApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ARC_PAY_CAPTURE_MODE: "automatic"
-      })
-    ).toThrow();
-    expect(() =>
-      createPublicApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ARC_PAY_PAYMENT_METHODS: '[{"method":"card","paymentMode":"redirect"}]'
-      })
-    ).toThrow();
+    ).toThrow(
+      "PUBLIC_API_GEOAPIFY_BASE_URL must equal https://api.geoapify.com in production when birth-place search is enabled"
+    );
   });
 
   it("requires an explicit auth code delivery encryption key", () => {

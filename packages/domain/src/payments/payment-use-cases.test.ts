@@ -119,9 +119,7 @@ describe("releaseTerminalPaymentProviderWebhook", () => {
     });
 
     await expect(
-      releaseTerminalPaymentProviderWebhook(
-        terminalWebhook(harness, { type: "payment.failed" })
-      )
+      releaseTerminalPaymentProviderWebhook(terminalWebhook(harness, { type: "payment.failed" }))
     ).resolves.toEqual({ kind: "replayed", event: existingEvent });
 
     expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
@@ -200,6 +198,7 @@ function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
     clientUserId,
     astrologerUserId: "44444444-4444-4444-8444-444444444444",
     productId: "55555555-5555-4555-855555555555",
+    productTitleSnapshot: "Natal reading",
     directLinkIntentId: null,
     bookingId: null,
     status: "pending_payment",
@@ -211,7 +210,10 @@ function order(overrides: Partial<FinanceOrder> = {}): FinanceOrder {
     financePolicyHoldDurationHours: 48,
     financePolicyReserveBps: 0,
     financePolicyReserveReleaseDelayDays: 0,
-    financePolicyPlatformFeeBps: 1_000,
+    tariffSeriesId: "pro",
+    tariffVersion: 1,
+    tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    tariffCommissionBps: 1_000,
     financePolicyProviderSettlementRequired: true,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -353,6 +355,14 @@ function booking(overrides: Partial<Booking> = {}): Booking {
     },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-    ...overrides
+    ...overrides,
+    lifecycleRevision: overrides.lifecycleRevision ?? 0,
+    clientDataRequirementsSnapshot: overrides.clientDataRequirementsSnapshot ?? {
+      schemaVersion: "booking-client-data-requirements.v1",
+      executionMode: "live",
+      participantMode: "solo",
+      requiredClientData: ["chart1"],
+      methods: ["natal"]
+    }
   };
 }

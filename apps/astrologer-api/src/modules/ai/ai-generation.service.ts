@@ -3,12 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import type { AiGenerationPort, AiGenerationResult, AiPromptDefinition } from "@elevenhouse/ai";
 import type {
-  AiUsageConsentAuthorization,
   AiUsageResourceEvidence,
-  AiUsageSafeErrorCode,
-  NormalizedAiUsageAuthorizationEvidence
+  AiUsageSafeErrorCode
 } from "@elevenhouse/domain";
-import { normalizeAiUsageAuthorizationEvidence } from "@elevenhouse/domain";
+import { normalizeAiUsageResourceEvidence } from "@elevenhouse/domain";
 import { AI_GENERATION_PROVIDER, AI_RATE_LIMITER, AI_USAGE_RECORDER } from "./ai.tokens";
 import { getAiFeaturePolicy } from "./ai-feature-policy";
 import type { AiRateLimiterPort } from "./ai-rate-limiter";
@@ -48,11 +46,7 @@ export class AiGenerationService {
     readonly input: TInput;
     readonly ownerUserId: string;
     readonly feature: string;
-    readonly consentAuthorizations?: readonly AiUsageConsentAuthorization[];
-    readonly usageEvidence?: {
-      readonly processingAuthorityVersion: string;
-      readonly resourceEvidence: AiUsageResourceEvidence;
-    };
+    readonly resourceEvidence?: AiUsageResourceEvidence;
   }): Promise<AiGenerationResult<TOutput>> {
     const aiConfig = this.configService.getOrThrow<AiGenerationRuntimeConfig>("astrologerApi.ai");
 
@@ -64,34 +58,18 @@ export class AiGenerationService {
     if (!featurePolicy || featurePolicy.availability !== "enabled") {
       throw createAiFeaturePolicyHttpException();
     }
-    const hasConsentAuthorizations = (input.consentAuthorizations?.length ?? 0) > 0;
-    const hasUsageEvidence = input.usageEvidence !== undefined;
+    const hasUsageEvidence = input.resourceEvidence !== undefined;
     if (
-      (featurePolicy.consentEvidence === "required" && !hasConsentAuthorizations) ||
-      (featurePolicy.consentEvidence === "forbidden" && hasConsentAuthorizations) ||
       (featurePolicy.usageEvidence === "required" && !hasUsageEvidence) ||
       (featurePolicy.usageEvidence === "forbidden" && hasUsageEvidence)
     ) {
       throw createAiUsageEvidenceHttpException();
     }
 
-    let usageAuthorizationEvidence: NormalizedAiUsageAuthorizationEvidence;
+    let resourceEvidence: AiUsageResourceEvidence | null;
     try {
-      usageAuthorizationEvidence = normalizeAiUsageAuthorizationEvidence({
-        consentAuthorizations: input.consentAuthorizations ?? [],
-        processingAuthorityVersion: input.usageEvidence?.processingAuthorityVersion ?? null,
-        resourceEvidence: input.usageEvidence?.resourceEvidence ?? null
-      });
+      resourceEvidence = normalizeAiUsageResourceEvidence(input.resourceEvidence ?? null);
     } catch {
-      throw createAiUsageEvidenceHttpException();
-    }
-    const { consentAuthorizations, processingAuthorityVersion, resourceEvidence } =
-      usageAuthorizationEvidence;
-    if (
-      consentAuthorizations.some(
-        ({ astrologerUserId }) => astrologerUserId !== input.ownerUserId.trim().toLowerCase()
-      )
-    ) {
       throw createAiUsageEvidenceHttpException();
     }
 
@@ -119,8 +97,6 @@ export class AiGenerationService {
       promptId: input.prompt.id,
       promptVersion: input.prompt.version,
       safetyIdentifier,
-      consentAuthorizations,
-      processingAuthorityVersion,
       resourceEvidence,
       startedAt
     });
@@ -170,8 +146,6 @@ export class AiGenerationService {
     readonly promptId: string;
     readonly promptVersion: number;
     readonly safetyIdentifier: string;
-    readonly consentAuthorizations: readonly AiUsageConsentAuthorization[];
-    readonly processingAuthorityVersion: string | null;
     readonly resourceEvidence: AiUsageResourceEvidence | null;
     readonly startedAt: Date;
   }): Promise<string> {
@@ -182,8 +156,6 @@ export class AiGenerationService {
       promptVersion: input.promptVersion,
       provider: "openai" as const,
       ownerSafetyId: input.safetyIdentifier,
-      consentAuthorizations: input.consentAuthorizations,
-      processingAuthorityVersion: input.processingAuthorityVersion,
       resourceEvidence: input.resourceEvidence,
       startedAt: input.startedAt
     };

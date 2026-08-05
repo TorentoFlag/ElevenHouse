@@ -79,6 +79,7 @@ function toResponse(booking: Booking) {
     productId: booking.productId,
     source: booking.source,
     state: booking.state,
+    lifecycleRevision: booking.lifecycleRevision,
     holdExpiresAt: booking.holdExpiresAt,
     startAt: booking.startAt,
     endAt: booking.endAt,

@@ -15,6 +15,15 @@ const stableIdSchema = z.string().trim().min(1).max(220);
 const optionalTextSchema = z.string().trim().min(1).max(1_000).nullable();
 const nonNegativeCountSchema = z.number().int().min(0).max(1_000_000);
 const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const astroCalendarEphemerisDateSchema = isoCalendarDateSchema.superRefine((value, context) => {
+  const year = Number(value.slice(0, 4));
+  if (year < 1800 || year > 2399) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "CHART_EPHEMERIS_DATE_UNSUPPORTED"
+    });
+  }
+});
 
 export const astroCalendarScopeValues = ["all", "global", "client"] as const;
 export const astroCalendarScopeSchema = z.enum(astroCalendarScopeValues);
@@ -101,8 +110,8 @@ const queryEventTypeArraySchema = z.preprocess(
 
 export const astroCalendarRangeQuerySchema = z
   .object({
-    start: isoCalendarDateSchema,
-    end: isoCalendarDateSchema,
+    start: astroCalendarEphemerisDateSchema,
+    end: astroCalendarEphemerisDateSchema,
     timeZone: ianaTimeZoneSchema,
     scope: astroCalendarScopeSchema.optional().default("all"),
     clientIds: queryUuidArraySchema,
@@ -118,7 +127,7 @@ export const astroCalendarClientInputSnapshotSchema = z
     clientId: uuidSchema,
     displayName: z.string().trim().min(1).max(160),
     initials: z.string().trim().min(1).max(8),
-    birthDate: isoCalendarDateSchema,
+    birthDate: astroCalendarEphemerisDateSchema,
     birthTime: clockTimeSchema.nullable(),
     birthTimePrecision: z.enum(["exact", "approximate", "unknown"]),
     birthTimezone: ianaTimeZoneSchema,
@@ -156,7 +165,7 @@ export const astroCalendarChartLinkSchema = z
   .object({
     mode: z.enum(["transit", "solar_return"]),
     clientId: uuidSchema,
-    date: isoCalendarDateSchema
+    date: astroCalendarEphemerisDateSchema
   })
   .strict();
 export type AstroCalendarChartLink = z.infer<typeof astroCalendarChartLinkSchema>;
@@ -283,8 +292,8 @@ export const astroCalendarRangeResponseSchema = z
     timeZone: ianaTimeZoneSchema,
     range: z
       .object({
-        start: isoCalendarDateSchema,
-        end: isoCalendarDateSchema
+        start: astroCalendarEphemerisDateSchema,
+        end: astroCalendarEphemerisDateSchema
       })
       .strict()
       .superRefine(addAstroCalendarDateRangeIssues),

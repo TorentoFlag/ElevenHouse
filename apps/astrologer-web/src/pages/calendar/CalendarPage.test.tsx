@@ -11,6 +11,7 @@ vi.mock("@elevenhouse/i18n", () => ({
 }));
 
 vi.mock("react-router", () => ({
+  useLocation: () => ({ search: "" }),
   useNavigate: () => navigate
 }));
 

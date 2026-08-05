@@ -16,62 +16,45 @@ import {
   createNextFlowDraftV2RequestSchema,
   decideFlowApprovalRequestSchema,
   decideFlowApprovalResponseSchema,
-  flowDefinitionDetailV2Schema,
+  flowDefinitionDetailV3Schema,
   flowDefinitionV2Schema,
-  flowResponseSchema,
   getFlowRunResponseSchema,
   listFlowApprovalsQuerySchema,
   listFlowApprovalsResponseSchema,
   listFlowDefinitionTemplatesV2QuerySchema,
   listFlowDefinitionTemplatesV2ResponseSchema,
-  listFlowDefinitionsV2QuerySchema,
-  listFlowDefinitionsV2ResponseSchema,
+  listFlowDefinitionsV3QuerySchema,
+  listFlowDefinitionsV3ResponseSchema,
   listFlowRunsQuerySchema,
   listFlowRunsResponseSchema,
-  manualFlowRunResponseSchema,
-  migrateFlowDefinitionV2RequestSchema,
-  migrateFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionCompatibleResponseSchema,
-  simulateFlowRunRequestSchema,
-  simulateFlowRunResponseSchema,
+  publishFlowDefinitionV3ResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
   validateFlowDefinitionResponseV2Schema,
   type CancelFlowRunResponse,
   type DecideFlowApprovalResponse,
-  type FlowDefinitionDetailV2,
+  type FlowDefinitionDetailV3,
   type FlowDefinitionV2,
-  type FlowResponse,
   type GetFlowRunResponse,
   type ListFlowApprovalsResponse,
   type ListFlowDefinitionTemplatesV2Response,
-  type ListFlowDefinitionsV2Response,
+  type ListFlowDefinitionsV3Response,
   type ListFlowRunsResponse,
-  type ManualFlowRunResponse,
-  type MigrateFlowDefinitionV2Response,
-  type PublishFlowDefinitionCompatibleResponse,
-  type SimulateFlowRunResponse,
-  type ValidateFlowDefinitionCompatibleResponse
+  type PublishFlowDefinitionV3Response,
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import {
-  activateFlow,
   cancelDurableFlowRun,
   createFlowDefinitionV2,
   createNextFlowDraftV2,
-  dispatchFlowRuntimeEvent,
-  createManualFlowRun,
   decideFlowApproval as decideFlowApprovalUseCase,
   FLOW_RUNTIME_AVAILABILITY,
   FlowDefinitionDraftMutationInvalidError,
-  FlowDefinitionGraphAlreadyV2Error,
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
   FlowDefinitionIdempotencyKeyInvalidError,
   FlowDefinitionIntegrityError,
-  FlowDefinitionMigrationBlockedError,
-  FlowDefinitionMigrationNotAllowedError,
-  FlowDefinitionMigrationRequiredError,
   FlowDefinitionNextDraftBaseConflictError,
   FlowDefinitionNextDraftUnavailableError,
   FlowDefinitionNotEditableError,
@@ -87,69 +70,42 @@ import {
   FlowRuntimeIdempotencyConflictError,
   FlowRuntimeIdempotencyExpiredError,
   FlowRuntimeIdempotencyKeyInvalidError,
-  FlowStatusTransitionError,
   getFlowDefinitionTemplateCatalogV2,
-  getFlowDefinitionV2 as getFlowDefinitionV2UseCase,
-  getFlow,
+  getFlowDefinitionV3 as getFlowDefinitionV3UseCase,
   listFlowApprovals,
-  listFlowDefinitionsV2 as listFlowDefinitionsV2UseCase,
+  listFlowDefinitionsV3 as listFlowDefinitionsV3UseCase,
   listFlowRuns,
-  migrateFlowDefinitionV2,
-  pauseFlow,
   publishFlowDefinitionV2,
-  projectFlowDefinitionValidationV1,
-  simulateFlowRun,
   updateFlowDefinitionDraftV2,
   validateFlowDefinition as validateFlowDefinitionUseCase,
-  type DispatchFlowRuntimeEventInput,
-  type DispatchFlowRuntimeEventResult,
   type FlowDefinitionControlStore,
-  type FlowDefinitionQueryStore,
+  type FlowDefinitionReadV3Store,
   type FlowRunCancellationRejectionResponse,
   type FlowRunCancellationStore,
-  type FlowRuntimeStore,
-  type FlowStore
+  type FlowRuntimeStore
 } from "@elevenhouse/domain";
-import type {
-  FlowPublicationResponseVersion,
-  FlowValidationResponseVersion
-} from "./flow-response-negotiation";
-import {
-  selectFlowPublicationVersions,
-  selectFlowValidationResponseVersion,
-  type FlowPublicationRolloutPolicy
-} from "./flow-publication-rollout";
 import { z, type ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import {
   FLOW_DEFINITION_CONTROL_STORE,
-  FLOW_DEFINITION_QUERY_STORE,
-  FLOW_PUBLICATION_ROLLOUT_POLICY,
+  FLOW_DEFINITION_READ_V3_STORE,
   FLOW_RUN_CANCELLATION_STORE,
-  FLOW_RUNTIME_STORE,
-  FLOW_STORE
+  FLOW_RUNTIME_STORE
 } from "./flows.tokens";
 
 const flowIdParamSchema = z.string().uuid();
-type DispatchRuntimeEventServiceInput = Omit<
-  DispatchFlowRuntimeEventInput,
-  "flowStore" | "runtimeStore" | "gates" | "now"
->;
 
 @Injectable()
 export class FlowsService {
   constructor(
-    @Inject(FLOW_STORE) private readonly store: FlowStore,
     @Inject(FLOW_DEFINITION_CONTROL_STORE)
     private readonly definitionStore: FlowDefinitionControlStore,
-    @Inject(FLOW_DEFINITION_QUERY_STORE)
-    private readonly definitionQueryStore: FlowDefinitionQueryStore,
+    @Inject(FLOW_DEFINITION_READ_V3_STORE)
+    private readonly definitionReadV3Store: FlowDefinitionReadV3Store,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
     @Inject(FLOW_RUN_CANCELLATION_STORE)
     private readonly cancellationStore: FlowRunCancellationStore,
-    @Inject(FLOW_PUBLICATION_ROLLOUT_POLICY)
-    private readonly publicationRolloutPolicy: FlowPublicationRolloutPolicy,
     private readonly clock: SystemClock
   ) {}
 
@@ -163,21 +119,19 @@ export class FlowsService {
   async listFlows(
     query: unknown,
     request: AstrologerSessionRequest
-  ): Promise<ListFlowDefinitionsV2Response> {
+  ): Promise<ListFlowDefinitionsV3Response> {
     const ownerUserId = requireOwnerUserId(request);
-    const parsedQuery = parseContract(listFlowDefinitionsV2QuerySchema, query ?? {});
+    const parsedQuery = parseContract(listFlowDefinitionsV3QuerySchema, query ?? {});
     return mapFlowDefinitionErrors(async () => {
-      const result = await listFlowDefinitionsV2UseCase({
-        store: this.definitionQueryStore,
+      const result = await listFlowDefinitionsV3UseCase({
+        store: this.definitionReadV3Store,
         ownerUserId,
         query: parsedQuery
       });
-
-      return listFlowDefinitionsV2ResponseSchema.parse({
-        schemaVersion: "flow-definition-list.v2",
+      return listFlowDefinitionsV3ResponseSchema.parse({
+        schemaVersion: "flow-definition-list.v3",
         flows: result.flows,
-        total: result.total,
-        runtime: FLOW_RUNTIME_AVAILABILITY
+        total: result.total
       });
     });
   }
@@ -205,32 +159,30 @@ export class FlowsService {
   async getFlow(
     flowId: string,
     request: AstrologerSessionRequest
-  ): Promise<FlowDefinitionDetailV2> {
+  ): Promise<FlowDefinitionDetailV3> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     return mapFlowDefinitionErrors(async () => {
-      const flow = await getFlowDefinitionV2UseCase({
-        store: this.definitionQueryStore,
+      const flow = await getFlowDefinitionV3UseCase({
+        store: this.definitionReadV3Store,
         ownerUserId,
         flowId: parsedFlowId
       });
       if (!flow) throw flowDefinitionNotFound();
-
-      return flowDefinitionDetailV2Schema.parse(flow);
+      return flowDefinitionDetailV3Schema.parse(flow);
     });
   }
 
   async validateFlowDefinition(
     flowId: string,
     body: unknown,
-    request: AstrologerSessionRequest,
-    responseVersion: FlowValidationResponseVersion = "legacy_v1"
-  ): Promise<ValidateFlowDefinitionCompatibleResponse> {
+    request: AstrologerSessionRequest
+  ): Promise<ValidateFlowDefinitionResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const flow = await mapFlowDefinitionErrors(() =>
-      getFlowDefinitionV2UseCase({
-        store: this.definitionQueryStore,
+      getFlowDefinitionV3UseCase({
+        store: this.definitionReadV3Store,
         ownerUserId,
         flowId: parsedFlowId
       })
@@ -241,13 +193,9 @@ export class FlowsService {
     const activationBlockers = FLOW_RUNTIME_AVAILABILITY.executionAvailable
       ? []
       : [FLOW_RUNTIME_AVAILABILITY.reasonCode];
-    const current = validateFlowDefinitionResponseV2Schema.parse(
+    return validateFlowDefinitionResponseV2Schema.parse(
       validateFlowDefinitionUseCase({ graph: parsedBody.graph, activationBlockers })
     );
-    return selectFlowValidationResponseVersion(this.publicationRolloutPolicy, responseVersion) ===
-      "current_v2"
-      ? current
-      : projectFlowDefinitionValidationV1(current);
   }
 
   async updateFlowDraft(
@@ -278,16 +226,11 @@ export class FlowsService {
     flowId: string,
     body: unknown,
     idempotencyKey: string | undefined,
-    request: AstrologerSessionRequest,
-    responseVersion: FlowPublicationResponseVersion = "legacy_v2"
-  ): Promise<PublishFlowDefinitionCompatibleResponse> {
+    request: AstrologerSessionRequest
+  ): Promise<PublishFlowDefinitionV3Response> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const command = parseContract(publishFlowDefinitionV2RequestSchema, body);
-    const publicationVersions = selectFlowPublicationVersions(
-      this.publicationRolloutPolicy,
-      responseVersion
-    );
     return mapFlowDefinitionErrors(async () => {
       const result = await publishFlowDefinitionV2({
         store: this.definitionStore,
@@ -296,11 +239,10 @@ export class FlowsService {
         flowId: parsedFlowId,
         request: command,
         idempotencyKey: idempotencyKey ?? "",
-        now: this.clock.now().toISOString(),
-        ...publicationVersions
+        now: this.clock.now().toISOString()
       });
       if (!result) throw flowDefinitionNotFound();
-      return publishFlowDefinitionCompatibleResponseSchema.parse(result);
+      return publishFlowDefinitionV3ResponseSchema.parse(result);
     });
   }
 
@@ -328,136 +270,6 @@ export class FlowsService {
     });
   }
 
-  async migrateFlowDefinition(
-    flowId: string,
-    body: unknown,
-    idempotencyKey: string | undefined,
-    request: AstrologerSessionRequest
-  ): Promise<MigrateFlowDefinitionV2Response> {
-    const ownerUserId = requireOwnerUserId(request);
-    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const command = parseContract(migrateFlowDefinitionV2RequestSchema, body);
-    return mapFlowDefinitionErrors(async () => {
-      const result = await migrateFlowDefinitionV2({
-        store: this.definitionStore,
-        actorUserId: ownerUserId,
-        ownerUserId,
-        flowId: parsedFlowId,
-        request: command,
-        idempotencyKey: idempotencyKey ?? "",
-        now: this.clock.now().toISOString()
-      });
-      if (!result) throw flowDefinitionNotFound();
-      return migrateFlowDefinitionV2ResponseSchema.parse(result);
-    });
-  }
-
-  async activateFlow(flowId: string, request: AstrologerSessionRequest): Promise<FlowResponse> {
-    const ownerUserId = requireOwnerUserId(request);
-    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-
-    try {
-      const flow = await activateFlow({
-        store: this.store,
-        ownerUserId,
-        flowId: parsedFlowId,
-        now: this.clock.now().toISOString()
-      });
-      if (!flow) throw flowNotFound();
-      return flowResponseSchema.parse(flow);
-    } catch (error) {
-      if (error instanceof FlowStatusTransitionError) {
-        throw flowStatusTransitionBadRequest(error);
-      }
-      if (error instanceof FlowRuntimeExecutionUnavailableError) {
-        throw flowRuntimeExecutionUnavailableConflict(error);
-      }
-      throw error;
-    }
-  }
-
-  async pauseFlow(flowId: string, request: AstrologerSessionRequest): Promise<FlowResponse> {
-    const ownerUserId = requireOwnerUserId(request);
-    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-
-    try {
-      const flow = await pauseFlow({
-        store: this.store,
-        ownerUserId,
-        flowId: parsedFlowId,
-        now: this.clock.now().toISOString()
-      });
-      if (!flow) throw flowNotFound();
-      return flowResponseSchema.parse(flow);
-    } catch (error) {
-      if (error instanceof FlowStatusTransitionError) {
-        throw flowStatusTransitionBadRequest(error);
-      }
-      throw error;
-    }
-  }
-
-  async simulateFlow(
-    flowId: string,
-    body: unknown,
-    request: AstrologerSessionRequest
-  ): Promise<SimulateFlowRunResponse> {
-    const ownerUserId = requireOwnerUserId(request);
-    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
-    await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
-    const result = await mapRuntimeExecutionUnavailable(() =>
-      simulateFlowRun({
-        flowStore: this.store,
-        runtimeStore: this.runtimeStore,
-        ownerUserId,
-        flowId: parsedFlowId,
-        request: parsedBody
-      })
-    );
-    if (!result) throw flowNotFound();
-
-    return simulateFlowRunResponseSchema.parse(result);
-  }
-
-  async createManualRun(
-    flowId: string,
-    body: unknown,
-    request: AstrologerSessionRequest
-  ): Promise<ManualFlowRunResponse> {
-    const ownerUserId = requireOwnerUserId(request);
-    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const parsedBody = parseContract(simulateFlowRunRequestSchema, body);
-    await requirePublishedRuntimeVersion(this.store, ownerUserId, parsedFlowId);
-    const result = await mapRuntimeExecutionUnavailable(() =>
-      createManualFlowRun({
-        flowStore: this.store,
-        runtimeStore: this.runtimeStore,
-        ownerUserId,
-        flowId: parsedFlowId,
-        dedupeKey: `manual:${parsedBody.subjectType}:${parsedBody.subjectId}:${parsedFlowId}:${parsedBody.occurredAt}`,
-        request: parsedBody,
-        now: this.clock.now().toISOString()
-      })
-    );
-    if (!result) throw flowNotFound();
-
-    return manualFlowRunResponseSchema.parse(result);
-  }
-
-  async dispatchRuntimeEvent(
-    input: DispatchRuntimeEventServiceInput
-  ): Promise<DispatchFlowRuntimeEventResult> {
-    return mapRuntimeExecutionUnavailable(() =>
-      dispatchFlowRuntimeEvent({
-        flowStore: this.store,
-        runtimeStore: this.runtimeStore,
-        ...input,
-        now: this.clock.now().toISOString()
-      })
-    );
-  }
-
   async listFlowRuns(
     flowId: string,
     query: unknown,
@@ -465,7 +277,11 @@ export class FlowsService {
   ): Promise<ListFlowRunsResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    await requireFlowOwnedByCurrentAstrologer(this.store, ownerUserId, parsedFlowId);
+    const definition = await this.definitionReadV3Store.getByOwner({
+      ownerUserId,
+      flowId: parsedFlowId
+    });
+    if (!definition) throw flowDefinitionNotFound();
     const parsedQuery = parseContract(listFlowRunsQuerySchema, query ?? {});
     const result = await listFlowRuns({
       runtimeStore: this.runtimeStore,
@@ -557,27 +373,6 @@ export class FlowsService {
   }
 }
 
-async function requireFlowOwnedByCurrentAstrologer(
-  store: FlowStore,
-  ownerUserId: string,
-  flowId: string
-): Promise<void> {
-  const flow = await getFlow({ store, ownerUserId, flowId });
-  if (!flow) throw flowNotFound();
-}
-
-async function requirePublishedRuntimeVersion(
-  store: FlowStore,
-  ownerUserId: string,
-  flowId: string
-): Promise<void> {
-  const flow = await getFlow({ store, ownerUserId, flowId });
-  if (!flow) throw flowNotFound();
-  if (!flow.publishedVersionId) {
-    throw flowRuntimeVersionRequired();
-  }
-}
-
 function requireOwnerUserId(request: AstrologerSessionRequest): string {
   const ownerUserId = request.currentAstrologerAccount?.account.id;
   if (!ownerUserId) {
@@ -646,14 +441,9 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
     if (
       error instanceof FlowDefinitionIdempotencyConflictError ||
       error instanceof FlowDefinitionIdempotencyExpiredError ||
-      error instanceof FlowDefinitionMigrationRequiredError ||
-      error instanceof FlowDefinitionDraftMutationInvalidError ||
-      error instanceof FlowDefinitionGraphAlreadyV2Error
+      error instanceof FlowDefinitionDraftMutationInvalidError
     ) {
       throw new ConflictException({ code: error.code });
-    }
-    if (error instanceof FlowDefinitionMigrationNotAllowedError) {
-      throw new ConflictException({ code: error.code, state: error.state });
     }
     if (error instanceof FlowDefinitionTemplateVersionConflictError) {
       throw new ConflictException({
@@ -677,9 +467,6 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
         parameterPaths: error.parameterPaths
       });
     }
-    if (error instanceof FlowDefinitionMigrationBlockedError) {
-      throw new UnprocessableEntityException({ code: error.code, issues: error.issues });
-    }
     if (error instanceof FlowDefinitionPublishValidationError) {
       throw new UnprocessableEntityException({ code: error.code, issues: error.issues });
     }
@@ -690,21 +477,13 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained until obsolete V1 runtime command callers are removed.
 function flowRuntimeVersionRequired(): BadRequestException {
   return new BadRequestException({
     statusCode: 400,
     error: "FLOW_RUNTIME_VERSION_REQUIRED",
     code: "FLOW_RUNTIME_VERSION_REQUIRED",
     message: "Publish the flow before running runtime commands"
-  });
-}
-
-function flowStatusTransitionBadRequest(error: FlowStatusTransitionError): BadRequestException {
-  return new BadRequestException({
-    statusCode: 400,
-    error: error.code,
-    code: error.code,
-    message: error.message
   });
 }
 

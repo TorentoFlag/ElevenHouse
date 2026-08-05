@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useI18n } from "@elevenhouse/i18n";
 import type { ProductResponse, ProductStatusFilter } from "@elevenhouse/contracts";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
@@ -10,6 +11,7 @@ import { useDuplicateProductMutation } from "../../features/products/model/useDu
 import { useMoveProductToDraftMutation } from "../../features/products/model/useMoveProductToDraftMutation";
 import { useProductListQuery } from "../../features/products/model/useProductListQuery";
 import { useProductSummaryQuery } from "../../features/products/model/useProductSummaryQuery";
+import { useAstrologerTariffEntitlementsQuery } from "../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery";
 import { usePublishProductMutation } from "../../features/products/model/usePublishProductMutation";
 import { ProductsCreateFlow } from "./components/ProductsCreateFlow";
 import { useProductCreateFlow } from "./hooks/useProductCreateFlow";
@@ -19,6 +21,7 @@ const productsPageSize = 50;
 
 export function ProductsPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
+  const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<ProductStatusFilter>("all");
   const [modalTarget, setModalTarget] = useState<HTMLElement | null>(null);
   const productsQuery = useProductListQuery({
@@ -27,6 +30,7 @@ export function ProductsPage() {
     offset: 0
   });
   const summaryQuery = useProductSummaryQuery();
+  const entitlementsQuery = useAstrologerTariffEntitlementsQuery();
   const productCopy = productCopyByLocale[locale];
   const createFlow = useProductCreateFlow(locale, dictionary.products.saveErrorLabel);
   const publishMutation = usePublishProductMutation();
@@ -41,7 +45,11 @@ export function ProductsPage() {
     archived: 0
   };
   const isLoading = productsQuery.isLoading || summaryQuery.isLoading;
-  const isError = productsQuery.isError || summaryQuery.isError;
+  const isTariffLocked =
+    entitlementsQuery.data?.products.read !== "allow" &&
+    entitlementsQuery.data?.products.read !== "read_only";
+  const canManageProducts = entitlementsQuery.data?.products.mutation === "allow";
+  const isError = !isTariffLocked && (productsQuery.isError || summaryQuery.isError);
   const isProductActionPending =
     duplicateMutation.isPending ||
     publishMutation.isPending ||
@@ -72,9 +80,12 @@ export function ProductsPage() {
         selectedStatus={selectedStatus}
         isLoading={isLoading}
         isError={isError}
+        isTariffLocked={isTariffLocked}
+        canManageProducts={canManageProducts}
         isProductActionPending={isProductActionPending}
         onStatusChange={setSelectedStatus}
         onCreate={createFlow.openTypeSelection}
+        onManageTariff={() => navigate("/settings")}
         onEditProduct={createFlow.editProduct}
         onDuplicateProduct={(product) => {
           duplicateMutation.mutate({
@@ -86,13 +97,15 @@ export function ProductsPage() {
         }}
         onProductStatusChange={handleProductStatusChange}
       />
-      <ProductsCreateFlow
-        copy={dictionary.products}
-        productCopy={productCopy}
-        locale={locale}
-        flow={createFlow}
-        modalTarget={modalTarget}
-      />
+      {!isTariffLocked ? (
+        <ProductsCreateFlow
+          copy={dictionary.products}
+          productCopy={productCopy}
+          locale={locale}
+          flow={createFlow}
+          modalTarget={modalTarget}
+        />
+      ) : null}
     </>
   );
 }

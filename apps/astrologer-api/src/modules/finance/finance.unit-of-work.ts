@@ -2,9 +2,13 @@ import type {
   FinanceIdempotentCommand,
   FinanceIdempotentCommandResult,
   LedgerStore,
-  PlatformBillingStore,
+  PlatformTariffAuthorityStore,
   PayoutStore
 } from "@elevenhouse/domain";
+import type {
+  OnlineWalletPayoutRequestReader,
+  OnlineWalletPayoutRequestUnitOfWork
+} from "@elevenhouse/domain/finance-core";
 
 export type AstrologerFinanceUnitOfWorkContext = {
   readonly payoutStore: PayoutStore;
@@ -12,7 +16,12 @@ export type AstrologerFinanceUnitOfWorkContext = {
     LedgerStore,
     "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
   >;
-  readonly platformBillingStore: PlatformBillingStore;
+  readonly tariffStore: Pick<
+    PlatformTariffAuthorityStore,
+    "findActiveOrPendingSubscription" | "findTariffVersion"
+  >;
+  readonly onlineWalletPayoutRequests: OnlineWalletPayoutRequestUnitOfWork;
+  readonly onlineWalletPayoutRequestReader: OnlineWalletPayoutRequestReader;
 };
 
 export type AstrologerFinanceUnitOfWork = {
@@ -33,5 +42,4 @@ export type AstrologerFinanceUnitOfWork = {
 
 export type AstrologerFinanceOptions = {
   readonly minimumPayoutAmountMinor: number;
-  readonly platformBillingProviderConfigured: boolean;
 };

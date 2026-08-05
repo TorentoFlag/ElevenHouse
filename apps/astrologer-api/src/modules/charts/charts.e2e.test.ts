@@ -30,6 +30,8 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiGenerationService } from "../ai/ai-generation.service";
+import { createAiUsageRecorderStub } from "../ai/testing/ai-usage-recorder.stub";
+import { AI_USAGE_RECORDER } from "../ai/ai.tokens";
 import { ASTROLOGER_PROFILE_STORE } from "../astrologer-profile/astrologer-profile.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { CALCULATION_STORE } from "../calculations/calculations.tokens";
@@ -50,6 +52,8 @@ import {
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
+import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
+import { createActivePlatformTariffEntitlementStore } from "../platform-entitlements/testing/active-platform-tariff-entitlement-store";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import {
@@ -157,14 +161,15 @@ describe("charts HTTP routes", () => {
       .overrideProvider(CHART_JOB_STORE)
       .useValue(createJobStore())
       .overrideProvider(CHART_AI_CONFIG)
-      .useValue({
-        enabled: true,
-        processingAuthorityVersion: "verified-test-authority.v1"
-      })
+      .useValue({ enabled: true })
       .overrideProvider(CHART_AI_DRAFT_COMMAND_STORE)
       .useValue(createAiDraftCommandStore(() => currentCalculation))
       .overrideProvider(AiGenerationService)
       .useValue({ generate: aiGenerate })
+      .overrideProvider(AI_USAGE_RECORDER)
+      .useValue(createAiUsageRecorderStub())
+      .overrideProvider(PLATFORM_TARIFF_ENTITLEMENT_STORE)
+      .useValue(createActivePlatformTariffEntitlementStore({ ownerUserId, features: ["ai", "natal"] }))
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -281,11 +286,11 @@ describe("charts HTTP routes", () => {
     });
   });
 
-  it("generates a chart AI draft over HTTP without client consent", async () => {
+  it("generates a chart AI draft over HTTP", async () => {
     const response = await postJson(
       `/charts/calculations/${calculationId}/ai-draft`,
       { expectedResultChecksum: checksum },
-      aiDraftHeaders("chart-ai:test-missing-consent")
+      aiDraftHeaders("chart-ai:test-draft")
     );
 
     expect(response).toMatchObject({
@@ -295,7 +300,7 @@ describe("charts HTTP routes", () => {
         interpretations: [expect.objectContaining({ status: "draft" })]
       }
     });
-    expect(aiGenerate).toHaveBeenCalledWith(expect.objectContaining({ consentAuthorizations: [] }));
+    expect(aiGenerate).toHaveBeenCalledOnce();
   });
 
   it.each(["child", "legacy_unclassified"] as const)(
@@ -344,14 +349,10 @@ describe("charts HTTP routes", () => {
     });
     expect(aiGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
-        consentAuthorizations: [],
-        usageEvidence: {
-          processingAuthorityVersion: "verified-test-authority.v1",
-          resourceEvidence: {
-            resourceType: "chart_calculation",
-            resourceId: calculationId,
-            sourceChecksum: checksum
-          }
+        resourceEvidence: {
+          resourceType: "chart_calculation",
+          resourceId: calculationId,
+          sourceChecksum: checksum
         }
       })
     );
@@ -762,10 +763,7 @@ function createClientStore(): ClientStore {
     markJoinIntentClaimed: vi.fn(async () => null),
     ensureRelationship: vi.fn(async () => raise()),
     upsertClientProfile: vi.fn(async () => undefined),
-    upsertClientBirthData: vi.fn(async () => raise()),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(async () => raise()),
-    updateClientBirthDataProfile: vi.fn(async () => raise()),
+    writeClientBirthProfile: vi.fn(async () => raise()),
     listAstrologerClients: vi.fn(async () => ({ clients: [], total: 0 })),
     getAstrologerClient: vi.fn(
       async (): Promise<AstrologerClientListItem> => ({
@@ -790,7 +788,9 @@ function createClientStore(): ClientStore {
           birthLatitude: 41.9028,
           birthLongitude: 12.4964,
           source: "manual",
-          isPrimary: true,
+          revision: 1,
+          lastEditedByUserId: ownerUserId,
+          lastEditedByRole: "astrologer",
           createdAt: now.toISOString(),
           updatedAt: now.toISOString()
         } satisfies ClientBirthData

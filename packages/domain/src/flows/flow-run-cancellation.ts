@@ -13,6 +13,7 @@ export type FlowRunCancellationCommand = {
   readonly ownerUserId: string;
   readonly routeTemplate: "/flow-runs/:runId/cancel";
   readonly resourceId: string;
+  readonly flowRunId: string;
   readonly scope: "flows.runtime.cancel.v1";
   readonly idempotencyKey: string;
   readonly requestHash: `sha256:${string}`;
@@ -130,6 +131,7 @@ export async function cancelDurableFlowRun(input: {
     ownerUserId,
     routeTemplate: "/flow-runs/:runId/cancel",
     resourceId,
+    flowRunId: resourceId,
     scope: "flows.runtime.cancel.v1",
     idempotencyKey,
     requestHash: sha256CanonicalJson({

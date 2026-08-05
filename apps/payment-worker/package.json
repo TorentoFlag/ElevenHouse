@@ -10,6 +10,8 @@
   "dependencies": {
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
+    "@elevenhouse/finance-infrastructure": "workspace:*",
+    "@humanwhocodes/momoa": "3.3.10",
     "@elevenhouse/validation": "workspace:*",
     "@elevenhouse/observability": "workspace:*"
   },

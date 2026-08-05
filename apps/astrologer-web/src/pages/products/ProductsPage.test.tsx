@@ -30,7 +30,9 @@ const mocks = vi.hoisted(() => ({
   usePublishProductMutation: vi.fn(),
   useMoveProductToDraftMutation: vi.fn(),
   useArchiveProductMutation: vi.fn(),
-  useDuplicateProductMutation: vi.fn()
+  useDuplicateProductMutation: vi.fn(),
+  useAstrologerTariffEntitlementsQuery: vi.fn(),
+  navigate: vi.fn()
 }));
 
 vi.mock("react", async () => {
@@ -86,6 +88,10 @@ vi.mock("@elevenhouse/i18n", () => ({
   useI18n: mocks.useI18n
 }));
 
+vi.mock("react-router", () => ({
+  useNavigate: () => mocks.navigate
+}));
+
 vi.mock("../../common/hooks/useDocumentTitle", () => ({
   useDocumentTitle: mocks.useDocumentTitle
 }));
@@ -128,6 +134,10 @@ vi.mock("../../features/products/model/useArchiveProductMutation", () => ({
 
 vi.mock("../../features/products/model/useDuplicateProductMutation", () => ({
   useDuplicateProductMutation: mocks.useDuplicateProductMutation
+}));
+
+vi.mock("../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery", () => ({
+  useAstrologerTariffEntitlementsQuery: mocks.useAstrologerTariffEntitlementsQuery
 }));
 
 vi.mock("./ProductsPageView", () => ({
@@ -378,6 +388,9 @@ describe("ProductsPage", () => {
       isLoading: false,
       isError: false
     });
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
+      data: { products: { read: "allow", mutation: "allow" } }
+    });
   });
 
   it("loads all products by default and passes product data to the view", () => {
@@ -445,6 +458,30 @@ describe("ProductsPage", () => {
 
     renderPage();
     expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isError).toBe(true);
+  });
+
+  it("turns the server entitlement projection into a tariff-management route gate", () => {
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValueOnce({
+      data: { products: { read: "deny", mutation: "deny" } }
+    });
+
+    renderPage();
+    const props = getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView);
+    expect(props.isTariffLocked).toBe(true);
+    props.onManageTariff();
+    expect(mocks.navigate).toHaveBeenCalledWith("/settings");
+  });
+
+  it("keeps historical products readable but removes mutation controls", () => {
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValueOnce({
+      data: { products: { read: "read_only", mutation: "read_only" } }
+    });
+
+    renderPage();
+
+    const props = getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView);
+    expect(props.isTariffLocked).toBe(false);
+    expect(props.canManageProducts).toBe(false);
   });
 
   it.each([

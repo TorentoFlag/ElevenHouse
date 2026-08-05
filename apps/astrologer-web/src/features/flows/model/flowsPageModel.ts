@@ -1,22 +1,25 @@
 import {
   flowDefinitionCommandRejectionSchema,
   type CreateFlowDefinitionV2Request,
-  type FlowDefinitionMigrationIssue,
   type FlowDefinitionValidationIssue,
   type FlowDefinitionTemplateDescriptorV2
 } from "@elevenhouse/contracts";
+import { z } from "@elevenhouse/validation";
 import { HttpError } from "../../../common/http/HttpError";
+
+const flowDefinitionSelectionSchema = z.object({ flowId: z.string().uuid() }).strict();
 
 export type FlowsPageLocale = "ru" | "en";
 export type FlowDefinitionRevisionConflict = {
   readonly expectedRevision: number;
   readonly currentRevision: number;
 };
-export type FlowDefinitionCommandScope = "create" | "update" | "publish" | "next-draft" | "migrate";
+export type FlowDefinitionCommandScope = "create" | "update" | "publish" | "next-draft";
 
 export function buildCreateFlowDefinitionRequest(input: {
   readonly locale: FlowsPageLocale;
   readonly template: FlowDefinitionTemplateDescriptorV2 | null;
+  readonly parameters?: Record<string, string[]>;
 }): CreateFlowDefinitionV2Request {
   if (!input.template) {
     return {
@@ -37,7 +40,7 @@ export function buildCreateFlowDefinitionRequest(input: {
       type: "template",
       templateKey: input.template.key,
       templateVersion: input.template.version,
-      parameters: {}
+      parameters: input.parameters ?? {}
     }
   };
 }
@@ -104,6 +107,19 @@ export function parseAstroCalendarFlowHandoff(search: string): AstroCalendarFlow
   };
 }
 
+export type FlowDefinitionSelection = z.infer<typeof flowDefinitionSelectionSchema>;
+
+export function buildFlowDefinitionPath(flowId: string): string {
+  const selection = flowDefinitionSelectionSchema.parse({ flowId });
+  return `/flows?${new URLSearchParams(selection).toString()}`;
+}
+
+export function parseFlowDefinitionSelection(search: string): FlowDefinitionSelection | null {
+  const params = new URLSearchParams(search);
+  const parsed = flowDefinitionSelectionSchema.safeParse({ flowId: params.get("flowId") });
+  return parsed.success ? parsed.data : null;
+}
+
 export function describeFlowDefinitionError(error: unknown, locale: FlowsPageLocale): Error {
   if (!(error instanceof HttpError)) {
     return error instanceof Error
@@ -136,13 +152,6 @@ export function describeFlowDefinitionError(error: unknown, locale: FlowsPageLoc
         : `The flow cannot be published: ${count} blocking ${count === 1 ? "issue" : "issues"}.`
     );
   }
-  if (body.code === "FLOW_GRAPH_MIGRATION_BLOCKED") {
-    return new Error(
-      locale === "ru"
-        ? `Автоматическая миграция остановлена: несовместимых элементов ${body.issues.length}.`
-        : `Migration is blocked by ${body.issues.length} incompatible elements.`
-    );
-  }
   if (body.code === "FLOW_DRAFT_NOT_EDITABLE") {
     return new Error(
       locale === "ru"
@@ -155,13 +164,6 @@ export function describeFlowDefinitionError(error: unknown, locale: FlowsPageLoc
       locale === "ru"
         ? "Выбранный сценарий пока недоступен для создания."
         : "The selected template is not available for creation yet."
-    );
-  }
-  if (body.code === "FLOW_GRAPH_MIGRATION_REQUIRED") {
-    return new Error(
-      locale === "ru"
-        ? "Сначала выполните явную миграцию legacy-графа."
-        : "Migrate the legacy graph explicitly first."
     );
   }
   if (body.code === "FLOW_IDEMPOTENCY_KEY_INVALID") {
@@ -206,15 +208,6 @@ export function getFlowDefinitionValidationIssues(
   if (!(error instanceof HttpError)) return [];
   const rejection = flowDefinitionCommandRejectionSchema.safeParse(error.body);
   if (!rejection.success || rejection.data.code !== "FLOW_GRAPH_NOT_PUBLISHABLE") return [];
-  return rejection.data.issues;
-}
-
-export function getFlowDefinitionMigrationIssues(
-  error: unknown
-): readonly FlowDefinitionMigrationIssue[] {
-  if (!(error instanceof HttpError)) return [];
-  const rejection = flowDefinitionCommandRejectionSchema.safeParse(error.body);
-  if (!rejection.success || rejection.data.code !== "FLOW_GRAPH_MIGRATION_BLOCKED") return [];
   return rejection.data.issues;
 }
 

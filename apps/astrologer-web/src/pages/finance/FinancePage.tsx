@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
   AstrologerFinanceOverviewResponse,
+  AstrologerFinanceCurrentTariff,
   CreateManualBankTransferPayoutMethod,
   CreatePayoutRequest,
   LedgerOperation,
@@ -19,10 +20,10 @@ import styles from "./FinancePage.module.css";
 
 type PayoutMethodForm = {
   readonly displayName: string;
+  readonly destinationKind: "bank_card" | "bank_account";
   readonly recipientName: string;
   readonly bankName: string;
-  readonly accountNumberLast4: string;
-  readonly bik: string;
+  readonly destinationValue: string;
 };
 
 type OperationFilter = "all" | LedgerOperation["kind"];
@@ -51,10 +52,10 @@ export function FinancePage() {
   const payoutPanelRef = useRef<HTMLElement | null>(null);
   const [methodForm, setMethodForm] = useState<PayoutMethodForm>({
     displayName: "",
+    destinationKind: "bank_account",
     recipientName: "",
     bankName: "",
-    accountNumberLast4: "",
-    bik: ""
+    destinationValue: ""
   });
   const [payoutAmount, setPayoutAmount] = useState("");
   const [operationFilter, setOperationFilter] = useState<OperationFilter>("all");
@@ -72,7 +73,11 @@ export function FinancePage() {
     !isPayoutAmountAboveAvailable &&
     !isPayoutAmountBelowMinimum &&
     !payoutRequestMutation.isPending;
-  const isMethodFormComplete = Object.values(methodForm).every((value) => value.trim().length > 0);
+  const isMethodFormComplete =
+    methodForm.displayName.trim().length > 0 &&
+    methodForm.recipientName.trim().length > 0 &&
+    methodForm.bankName.trim().length > 0 &&
+    methodForm.destinationValue.trim().length >= 8;
   const operationPages = operationsQuery.data?.pages ?? [];
   const operations = operationPages.flatMap((page) => page.operations);
   const canDownloadReport = Boolean(overview) || operations.length > 0;
@@ -85,10 +90,10 @@ export function FinancePage() {
 
     const body: CreateManualBankTransferPayoutMethod = {
       displayName: methodForm.displayName.trim(),
+      destinationKind: methodForm.destinationKind,
       recipientName: methodForm.recipientName.trim(),
       bankName: methodForm.bankName.trim(),
-      accountNumberLast4: methodForm.accountNumberLast4.trim(),
-      details: { bik: methodForm.bik.trim() },
+      destinationValue: methodForm.destinationValue.trim(),
       idempotencyKey: createIdempotencyKey("payout-method")
     };
     payoutMethodMutation.mutate(body);
@@ -481,27 +486,30 @@ function PayoutMethodFormView({
           onChange={(event) => onChange({ ...form, bankName: event.target.value })}
         />
       </FinanceField>
-      <FinanceField label="Последние 4 цифры">
-        <input
-          id="finance-payout-method-account-last4"
-          name="accountNumberLast4"
-          inputMode="numeric"
-          maxLength={4}
-          value={form.accountNumberLast4}
-          placeholder="4417"
+      <FinanceField label="Тип реквизитов">
+        <select
+          id="finance-payout-method-destination-kind"
+          name="destinationKind"
+          value={form.destinationKind}
           onChange={(event) =>
-            onChange({ ...form, accountNumberLast4: event.target.value.replace(/\D/g, "") })
+            onChange({ ...form, destinationKind: event.target.value as PayoutMethodForm["destinationKind"] })
           }
-        />
+        >
+          <option value="bank_account">Банковский счёт</option>
+          <option value="bank_card">Банковская карта</option>
+        </select>
       </FinanceField>
-      <FinanceField label="БИК">
+      <FinanceField label={form.destinationKind === "bank_card" ? "Номер карты" : "Номер счёта"}>
         <input
-          id="finance-payout-method-bik"
-          name="bik"
+          id="finance-payout-method-destination-value"
+          name="destinationValue"
           inputMode="numeric"
-          value={form.bik}
-          placeholder="044525974"
-          onChange={(event) => onChange({ ...form, bik: event.target.value.replace(/\D/g, "") })}
+          maxLength={128}
+          value={form.destinationValue}
+          placeholder={form.destinationKind === "bank_card" ? "2200 0000 0000 4417" : "4081 7810 0999 1000 4417"}
+          onChange={(event) =>
+            onChange({ ...form, destinationValue: event.target.value.replace(/\s/g, "") })
+          }
         />
       </FinanceField>
       <button className={styles.secondaryButton} type="submit" disabled={!isComplete || isPending}>
@@ -767,24 +775,24 @@ function PlanPanel({
   readonly overview: AstrologerFinanceOverviewResponse | null;
   readonly locale: "ru" | "en";
 }) {
-  const plan = overview?.currentPlan ?? null;
+  const tariff = overview?.currentTariff ?? null;
 
   return (
     <section className={`${styles.panel} ${styles.planPanel}`} aria-label="Тариф">
       <div className={styles.planCardHeader}>
-        <h2>{plan ? `Тариф ${plan.name}` : "Тариф"}</h2>
-        <span>{plan ? "активен" : "не выбран"}</span>
+        <h2>{tariff ? `Тариф ${tariff.name}` : "Тариф"}</h2>
+        <span>{tariff ? tariffStateLabel(tariff.state, locale) : "не выбран"}</span>
       </div>
       <div className={styles.planFeeRow}>
         <span>Комиссия платформы</span>
-        <strong>{plan ? formatFeeBps(plan.platformFeeBps) : "-"}</strong>
+        <strong>{tariff ? formatFeeBps(tariff.commissionBps) : "-"}</strong>
       </div>
       <p className={styles.panelHint}>
         Тариф определяет комиссию, которая вычитается из продаж перед зачислением нетто на баланс.
       </p>
       <small className={styles.planPrice}>
-        {plan
-          ? `${formatMoneyMinor(plan.monthlyPrice.amountMinor, plan.monthlyPrice.currency, locale)}/мес`
+        {tariff
+          ? `${formatMoneyMinor(tariff.price.amountMinor, tariff.price.currency, locale)}${tariffBillingCycleSuffix(tariff.billingCycle, locale)}`
           : "план появится после настройки тарифа"}
       </small>
     </section>
@@ -882,10 +890,53 @@ function formatOptionalSignedMoneyMinor(
 }
 
 function formatFinanceToolbarMeta(overview: AstrologerFinanceOverviewResponse | null): string {
-  const plan = overview?.currentPlan?.name;
-  const fee = overview?.currentPlan ? formatFeeBps(overview.currentPlan.platformFeeBps) : null;
-  if (plan && fee) return `Тариф ${plan} · комиссия ${fee}`;
+  const tariff = overview?.currentTariff;
+  if (!tariff) return "Тариф не выбран";
+  if (tariff.state === "active") {
+    return `Тариф ${tariff.name} · комиссия ${formatFeeBps(tariff.commissionBps)}`;
+  }
+  if (tariff.state === "past_due") {
+    return `Тариф ${tariff.name} · нужна оплата`;
+  }
+  if (tariff.state === "incomplete_setup") {
+    return `Тариф ${tariff.name} · настройка оплаты`;
+  }
+  if (tariff.state === "awaiting_initial_payment") {
+    return `Тариф ${tariff.name} · ожидает оплаты`;
+  }
   return "Тариф не выбран";
+}
+
+function tariffStateLabel(
+  state: AstrologerFinanceCurrentTariff["state"],
+  locale: "ru" | "en"
+): string {
+  const labels = locale === "ru"
+    ? {
+        incomplete_setup: "настройка оплаты",
+        awaiting_initial_payment: "ожидает оплаты",
+        active: "активен",
+        past_due: "нужна оплата",
+        cancelled: "отменён",
+        expired: "истёк"
+      }
+    : {
+        incomplete_setup: "payment setup",
+        awaiting_initial_payment: "payment pending",
+        active: "active",
+        past_due: "payment due",
+        cancelled: "cancelled",
+        expired: "expired"
+      };
+  return labels[state];
+}
+
+function tariffBillingCycleSuffix(
+  billingCycle: "month" | "year",
+  locale: "ru" | "en"
+): string {
+  if (locale === "ru") return billingCycle === "month" ? "/мес" : "/год";
+  return billingCycle === "month" ? "/mo" : "/yr";
 }
 
 function formatOperationCountLabel(count: number): string {
@@ -992,8 +1043,6 @@ function payoutRequestStatusLabel(status: PayoutRequestResponse["status"]): stri
       return "Одобрено";
     case "processing_manual":
       return "В ручной выплате";
-    case "processing_provider":
-      return "У провайдера";
     case "paid":
       return "Выплачено";
     case "failed":
@@ -1020,13 +1069,6 @@ function payoutRequestDetailLines(request: PayoutRequestResponse): readonly stri
       break;
     case "processing_manual":
       lines.push("Администратор готовит ручной перевод");
-      break;
-    case "processing_provider":
-      lines.push(
-        request.providerPayoutId
-          ? `Передано провайдеру · ${request.providerPayoutId}`
-          : "Передано провайдеру выплат"
-      );
       break;
     case "paid":
       lines.push(
@@ -1061,7 +1103,6 @@ function payoutRequestTone(
     case "under_review":
     case "approved":
     case "processing_manual":
-    case "processing_provider":
       return "warning";
     case "paid":
       return "positive";
@@ -1187,8 +1228,8 @@ function buildFinanceReportCsv({
     ],
     [
       "Тариф",
-      overview?.currentPlan ? overview.currentPlan.name : "не определен",
-      overview?.currentPlan ? formatFeeBps(overview.currentPlan.platformFeeBps) : "-"
+      overview?.currentTariff ? overview.currentTariff.name : "не определен",
+      overview?.currentTariff ? formatFeeBps(overview.currentTariff.commissionBps) : "-"
     ],
     [],
     ["Дата", "Операция", "Брутто", "Комиссия", "Нетто", "Источник", "Статус"]

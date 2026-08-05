@@ -15,6 +15,7 @@ import {
   adminPayoutRequestResponseSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  createPayoutStatusAuthorizationPayload,
   financePaymentProviderSchema,
   paymentProviderEnvironmentSchema,
   reconciliationRecordResponseSchema,
@@ -41,33 +42,33 @@ import {
   type FinancePolicyResponse,
   type OrderResponse,
   type PayoutRequestResponse,
-  type PayoutRequestStatus,
   type ReconciliationRecordResponse
 } from "@elevenhouse/contracts";
 import {
-  approvePayoutStatusUpdate,
   applyEffectiveFinancePolicyToOrder,
   assignAstrologerRiskProfile,
   ensureDefaultFinancePolicy,
   FinanceIdempotencyConflictError,
   FinanceIdempotencyFailedError,
   FinanceIdempotencyInProgressError,
+  FinanceAuthorizationRejectedError,
+  type FinanceTransactionAuthorizationProof,
   type FinanceIdempotentCommand,
   FinancePolicyEffectivePolicyUnavailableError,
   FinancePolicyOrderNotApplicableError,
   FinancePolicyOrderNotFoundError,
   type AdminPaymentReversalCaseRecord,
-  chargebackBlockedPayoutFailureReason,
-  PayoutRequestNotFoundError,
-  type PayoutRequestRecord,
-  PayoutStatusEvidenceError,
-  PayoutStatusTransitionError,
   ReconciliationRecordNotFoundError,
   resolveProviderReconciliationException,
   type ReconciliationRecord,
   updateFinancePolicy
 } from "@elevenhouse/domain";
+import type {
+  OnlineWalletPayoutRequestProjection,
+  OnlineWalletPayoutTransitionAuthority
+} from "@elevenhouse/domain/finance-core";
 import { SystemClock } from "../../common/system-clock.js";
+import type { AdminAuthenticatedAccount } from "../identity/session/identity-current-session.service";
 import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
 import type {
   AdminFinancePolicyUnitOfWork,
@@ -199,7 +200,7 @@ export class FinancePoliciesService {
         });
         return applied.after;
       });
-      return orderResponseSchema.parse(result);
+      return orderResponseSchema.parse(toAdminOrderResponse(result));
     } catch (error) {
       if (error instanceof FinancePolicyOrderNotFoundError) {
         throw new NotFoundException(error.code);
@@ -216,15 +217,15 @@ export class FinancePoliciesService {
 
   async listPayoutRequests(status?: string): Promise<AdminPayoutQueueResponse> {
     const statusFilter = parsePayoutQueueStatusFilter(status);
-    const requests = await this.unitOfWork.execute(({ payoutStore }) =>
-      payoutStore.listRequests({
+    const requests = await this.unitOfWork.execute(({ onlineWalletPayoutRequestReader }) =>
+      onlineWalletPayoutRequestReader.listPayoutRequests({
         statuses: payoutStatusesForFilter(statusFilter),
         limit: 50
       })
     );
     return adminPayoutQueueResponseSchema.parse({
-      summary: createPayoutQueueSummary(requests),
-      requests: requests.map(toAdminPayoutRequestResponse)
+      summary: createOnlinePayoutQueueSummary(requests),
+      requests: requests.map(toAdminOnlinePayoutRequestResponse)
     });
   }
 
@@ -364,70 +365,140 @@ export class FinancePoliciesService {
   }
 
   async updatePayoutRequestStatus(
-    adminUserId: string,
+    adminAccount: AdminAuthenticatedAccount,
     payoutRequestId: string,
     body: unknown
   ): Promise<PayoutRequestResponse> {
     const update = parseBody(adminPayoutStatusUpdateSchema, body);
-    const now = this.clock.now();
-    const nowIso = now.toISOString();
+    const nowIso = this.clock.now().toISOString();
     try {
-      const request = isTerminalPayoutStatus(update.status)
-        ? (
-            await this.unitOfWork.executeIdempotent({
-              command: createTerminalPayoutStatusCommand({
-                adminUserId,
-                payoutRequestId,
-                update,
-                now
-              }),
-              create: async (context) => {
-                const updated = await updatePayoutStatusInContext({
-                  ...context,
-                  adminUserId,
-                  payoutRequestId,
-                  update,
-                  now: nowIso
-                });
-                return { result: { payoutRequestId: updated.id }, value: updated };
-              },
-              replay: async ({ payoutStore }, result) => {
-                const replayPayoutRequestId = result.payoutRequestId;
-                if (typeof replayPayoutRequestId !== "string") return null;
-                return payoutStore.findRequestById(replayPayoutRequestId);
-              }
-            })
-          ).value
-        : await this.unitOfWork.execute((context) =>
-            updatePayoutStatusInContext({
-              ...context,
-              adminUserId,
-              payoutRequestId,
-              update,
-              now: nowIso
-            })
-          );
-      return toPayoutRequestResponse(request);
+      return await this.updateOnlineWalletPayoutStatus({
+        adminUserId: adminAccount.id,
+        adminSessionId: adminAccount.sessionId,
+        payoutRequestId,
+        update,
+        now: nowIso
+      });
     } catch (error) {
-      if (error instanceof PayoutRequestNotFoundError) {
-        throw new NotFoundException(error.code);
-      }
-      if (error instanceof PayoutStatusTransitionError) {
-        throw new ConflictException(error.code);
-      }
-      if (error instanceof PayoutStatusEvidenceError) {
-        throw new BadRequestException(error.code);
-      }
       if (
-        error instanceof FinanceIdempotencyConflictError ||
-        error instanceof FinanceIdempotencyInProgressError ||
-        error instanceof FinanceIdempotencyFailedError
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error.code === "online_wallet_payout_review_persistence_error" ||
+          error.code === "online_wallet_payout_release_persistence_error")
       ) {
-        throw new ConflictException(error.code);
+        throw new ConflictException(String(error.code));
+      }
+      if (error instanceof FinanceAuthorizationRejectedError) {
+        throw new ConflictException("finance_authorization_rejected");
       }
       throw error;
     }
   }
+
+  private async updateOnlineWalletPayoutStatus(input: {
+    readonly adminUserId: string;
+    readonly adminSessionId: string;
+    readonly payoutRequestId: string;
+    readonly update: AdminPayoutStatusUpdate;
+    readonly now: string;
+  }): Promise<PayoutRequestResponse> {
+    const requestedStatus = input.update.status;
+    if (requestedStatus === "paid") {
+      throw new ConflictException("online_payout_paid_requires_bank_settlement_command");
+    }
+    const transition = async (
+      context: AdminFinancePolicyUnitOfWorkContext,
+      authority: OnlineWalletPayoutTransitionAuthority
+    ) => {
+      if (
+        requestedStatus === "under_review" ||
+        requestedStatus === "approved" ||
+        requestedStatus === "processing_manual"
+      ) {
+        await context.onlineWalletPayoutReview.transitionOnlineWalletPayout({
+          payoutRequestId: input.payoutRequestId,
+          expectedPayoutVersion: String(input.update.expectedVersion),
+          nextStatus: requestedStatus,
+          actorUserId: input.adminUserId,
+          adminNote: input.update.adminNote ?? null,
+          authority,
+          occurredAt: input.now
+        });
+      } else {
+        await context.onlineWalletPayoutRelease.releaseOnlineWalletPayout({
+          payoutRequestId: input.payoutRequestId,
+          expectedPayoutVersion: String(input.update.expectedVersion),
+          nextStatus: requestedStatus,
+          failureReason:
+            requestedStatus === "rejected" || requestedStatus === "failed"
+              ? input.update.failureReason
+              : null,
+          adminNote: input.update.adminNote ?? null,
+          actorUserId: input.adminUserId,
+          authority,
+          occurredAt: input.now
+        });
+      }
+      const updated = await context.onlineWalletPayoutRequestReader.findPayoutRequestById(
+        input.payoutRequestId
+      );
+      if (!updated) throw new ConflictException("online_payout_projection_missing");
+      await context.auditSink.record({
+        actorUserId: input.adminUserId,
+        action: "payout_request.status_updated",
+        targetId: updated.payoutRequestId,
+        occurredAt: input.now,
+        metadata: {
+          ledgerAuthority: "finance_online_wallet_v2",
+          status: updated.status,
+          amountMinor: updated.amountMinor,
+          currency: updated.currency,
+          version: updated.version
+        }
+      });
+      return updated;
+    };
+    const defaultAuthority = () => onlinePayoutTransitionAuthority({
+        adminUserId: input.adminUserId,
+        payoutRequestId: input.payoutRequestId,
+        update: input.update
+      });
+    const projection: OnlineWalletPayoutRequestProjection =
+      requestedStatus === "approved" || requestedStatus === "processing_manual"
+        ? await this.unitOfWork.executeAuthorized({
+            authorization: {
+              actorUserId: input.adminUserId,
+              sessionId: input.adminSessionId,
+              actionKind:
+                requestedStatus === "approved" ? "payout_approve" : "payout_start_processing",
+              aggregateId: input.payoutRequestId,
+              expectedVersion: input.update.expectedVersion,
+              payload: createPayoutStatusAuthorizationPayload(input.update),
+              authorizationId: input.update.authorizationId,
+              occurredAt: input.now
+            },
+            operation: (context, proof) =>
+              transition(context, onlinePayoutFinanceAuthorizationAuthority(proof))
+          })
+        : await this.unitOfWork.execute((context) => transition(context, defaultAuthority()));
+    return toOnlinePayoutRequestResponse(projection);
+  }
+}
+
+function toAdminOrderResponse(order: Awaited<ReturnType<typeof applyEffectiveFinancePolicyToOrder>>["after"]) {
+  const {
+    tariffSeriesId: _tariffSeriesId,
+    tariffVersion: _tariffVersion,
+    tariffVersionDigest: _tariffVersionDigest,
+    tariffCommissionBps: _tariffCommissionBps,
+    ...response
+  } = order;
+  void _tariffSeriesId;
+  void _tariffVersion;
+  void _tariffVersionDigest;
+  void _tariffCommissionBps;
+  return response;
 }
 
 function parseReversalCaseTypes(
@@ -456,7 +527,7 @@ function parseOptionalQuery<T>(
 
 function payoutStatusesForFilter(
   filter: AdminPayoutQueueStatusFilter
-): readonly PayoutRequestStatus[] | undefined {
+): readonly OnlineWalletPayoutRequestProjection["status"][] | undefined {
   switch (filter) {
     case "open":
       return [
@@ -464,13 +535,12 @@ function payoutStatusesForFilter(
         "under_review",
         "approved",
         "processing_manual",
-        "processing_provider",
         "failed"
       ];
     case "ready":
       return ["requested", "under_review", "approved"];
     case "processing":
-      return ["processing_manual", "processing_provider"];
+      return ["processing_manual"];
     case "failed":
       return ["failed"];
     case "terminal":
@@ -480,39 +550,73 @@ function payoutStatusesForFilter(
   }
 }
 
-async function updatePayoutStatusInContext(
-  input: AdminFinancePolicyUnitOfWorkContext & {
-    readonly adminUserId: string;
-    readonly payoutRequestId: string;
-    readonly update: AdminPayoutStatusUpdate;
-    readonly now: string;
+function toOnlinePayoutRequestResponse(
+  request: OnlineWalletPayoutRequestProjection
+): PayoutRequestResponse {
+  const status = request.status;
+  if (status === "paid") {
+    throw new ConflictException("online_payout_paid_evidence_missing");
   }
-): Promise<PayoutRequestRecord> {
-  const updated = await approvePayoutStatusUpdate({
-    store: {
-      ...input.payoutStore,
-      ...input.ledgerStore
+  const transitionOccurredAt = request.latestTransitionOccurredAt;
+  return payoutRequestResponseSchema.parse({
+    id: request.payoutRequestId,
+    astrologerUserId: request.astrologerUserId,
+    status,
+    amount: { amountMinor: Number(request.amountMinor), currency: request.currency },
+    method: "manual_bank_transfer",
+    requestedAt: request.requestedAt,
+    reviewedAt: status === "requested" ? null : transitionOccurredAt,
+    completedAt:
+      status === "cancelled" || status === "rejected" || status === "failed"
+        ? transitionOccurredAt
+        : null,
+    adminUserId: request.version === "1" ? null : request.latestTransitionActorUserId,
+    adminNote: request.latestTransitionAdminNote,
+    failureReason: request.latestTransitionFailureReason,
+    externalReference: null,
+    transferredAt: null,
+    version: numberFromRevision(request.version)
+  });
+}
+
+function toAdminOnlinePayoutRequestResponse(
+  request: OnlineWalletPayoutRequestProjection
+): AdminPayoutRequestResponse {
+  return adminPayoutRequestResponseSchema.parse({
+    ...toOnlinePayoutRequestResponse(request),
+    blockedByChargeback: false
+  });
+}
+
+function createOnlinePayoutQueueSummary(
+  requests: readonly OnlineWalletPayoutRequestProjection[]
+): AdminPayoutQueueResponse["summary"] {
+  const responseRequests = requests.map(toOnlinePayoutRequestResponse);
+  const readyStatuses = new Set(["requested", "under_review", "approved"]);
+  const processingStatuses = new Set(["processing_manual"]);
+  return {
+    requestedCount: responseRequests.filter((request) => request.status === "requested").length,
+    underReviewCount: responseRequests.filter((request) => request.status === "under_review").length,
+    processingCount: responseRequests.filter((request) => processingStatuses.has(request.status)).length,
+    chargebackBlockedCount: 0,
+    readyToPayAmount: {
+      amountMinor: sumByStatus(responseRequests, readyStatuses),
+      currency: "RUB" as const
     },
-    payoutRequestId: input.payoutRequestId,
-    adminUserId: input.adminUserId,
-    update: toDomainPayoutStatusUpdate(input.update),
-    now: input.now
-  });
-  await input.auditSink.record({
-    actorUserId: input.adminUserId,
-    action: "payout_request.status_updated",
-    targetId: updated.id,
-    occurredAt: input.now,
-    metadata: {
-      status: updated.status,
-      amountMinor: updated.amount.amountMinor,
-      currency: updated.amount.currency,
-      method: updated.method,
-      externalReference: updated.externalReference,
-      providerPayoutId: updated.providerPayoutId
-    }
-  });
-  return updated;
+    processingAmount: {
+      amountMinor: sumByStatus(responseRequests, processingStatuses),
+      currency: "RUB" as const
+    },
+    chargebackBlockedAmount: { amountMinor: 0, currency: "RUB" as const }
+  };
+}
+
+function numberFromRevision(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new ConflictException("online_payout_revision_invalid");
+  }
+  return parsed;
 }
 
 async function reviewPaymentReversalCaseInContext(
@@ -561,10 +665,6 @@ function parseBody<T>(schema: { parse: (value: unknown) => T }, value: unknown):
   }
 }
 
-function toDomainPayoutStatusUpdate(update: AdminPayoutStatusUpdate) {
-  return update;
-}
-
 function createReconciliationExceptionQueueSummary(
   exceptions: readonly ReconciliationRecord[]
 ): AdminReconciliationExceptionQueueResponse["summary"] {
@@ -578,24 +678,6 @@ function toReconciliationRecordResponse(
   record: ReconciliationRecord
 ): ReconciliationRecordResponse {
   return reconciliationRecordResponseSchema.parse(record);
-}
-
-function createTerminalPayoutStatusCommand(input: {
-  readonly adminUserId: string;
-  readonly payoutRequestId: string;
-  readonly update: AdminPayoutStatusUpdate;
-  readonly now: Date;
-}): FinanceIdempotentCommand {
-  return {
-    scope: "admin.finance.payout-status.terminal",
-    idempotencyKey: `${input.payoutRequestId}:terminal`,
-    actorUserId: input.adminUserId,
-    requestHash: `sha256:${createHash("sha256")
-      .update(stableStringify({ payoutRequestId: input.payoutRequestId, update: input.update }))
-      .digest("hex")}`,
-    now: input.now.toISOString(),
-    expiresAt: new Date(input.now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
-  };
 }
 
 function createPaymentReversalReviewCommand(input: {
@@ -639,12 +721,6 @@ class PaymentReversalReviewReplayMissingError extends Error {
   }
 }
 
-function isTerminalPayoutStatus(status: AdminPayoutStatusUpdate["status"]): boolean {
-  return (
-    status === "paid" || status === "failed" || status === "rejected" || status === "cancelled"
-  );
-}
-
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   if (value && typeof value === "object") {
@@ -656,29 +732,28 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function toPayoutRequestResponse(request: PayoutRequestRecord): PayoutRequestResponse {
-  return payoutRequestResponseSchema.parse({
-    id: request.id,
-    astrologerUserId: request.astrologerUserId,
-    status: request.status,
-    amount: request.amount,
-    method: request.method,
-    requestedAt: request.requestedAt,
-    reviewedAt: request.reviewedAt,
-    completedAt: request.completedAt,
-    adminUserId: request.adminUserId,
-    adminNote: request.adminNote,
-    failureReason: request.failureReason,
-    externalReference: request.externalReference,
-    transferredAt: request.transferredAt,
-    providerPayoutId: request.providerPayoutId
+function onlinePayoutTransitionAuthority(input: {
+  readonly adminUserId: string;
+  readonly payoutRequestId: string;
+  readonly update: AdminPayoutStatusUpdate;
+}) {
+  const digest = `sha256:${createHash("sha256")
+    .update(stableStringify(input))
+    .digest("hex")}` as const;
+  return Object.freeze({
+    authorityId: `admin-online-payout:${input.payoutRequestId}:${input.update.status}:${input.update.expectedVersion}:${input.adminUserId}`,
+    authorityVersion: "1",
+    authorityDigest: digest
   });
 }
 
-function toAdminPayoutRequestResponse(request: PayoutRequestRecord): AdminPayoutRequestResponse {
-  return adminPayoutRequestResponseSchema.parse({
-    ...toPayoutRequestResponse(request),
-    blockedByChargeback: isChargebackBlockedPayoutRequest(request)
+function onlinePayoutFinanceAuthorizationAuthority(
+  proof: FinanceTransactionAuthorizationProof
+): OnlineWalletPayoutTransitionAuthority {
+  return Object.freeze({
+    authorityId: proof.authorizationId,
+    authorityVersion: String(proof.expectedVersion),
+    authorityDigest: proof.payloadHash
   });
 }
 
@@ -726,39 +801,8 @@ function createPaymentReversalQueueSummary(
   };
 }
 
-function createPayoutQueueSummary(requests: readonly PayoutRequestRecord[]) {
-  const readyStatuses = new Set(["requested", "under_review", "approved"]);
-  const processingStatuses = new Set(["processing_manual", "processing_provider"]);
-  const chargebackBlockedRequests = requests.filter(isChargebackBlockedPayoutRequest);
-  return {
-    requestedCount: requests.filter((request) => request.status === "requested").length,
-    underReviewCount: requests.filter((request) => request.status === "under_review").length,
-    processingCount: requests.filter((request) => processingStatuses.has(request.status)).length,
-    chargebackBlockedCount: chargebackBlockedRequests.length,
-    readyToPayAmount: {
-      amountMinor: sumByStatus(requests, readyStatuses),
-      currency: "RUB" as const
-    },
-    processingAmount: {
-      amountMinor: sumByStatus(requests, processingStatuses),
-      currency: "RUB" as const
-    },
-    chargebackBlockedAmount: {
-      amountMinor: chargebackBlockedRequests.reduce(
-        (sum, request) => sum + request.amount.amountMinor,
-        0
-      ),
-      currency: "RUB" as const
-    }
-  };
-}
-
-function isChargebackBlockedPayoutRequest(request: PayoutRequestRecord): boolean {
-  return request.failureReason === chargebackBlockedPayoutFailureReason;
-}
-
-function sumByStatus(
-  requests: readonly PayoutRequestRecord[],
+function sumByStatus<T extends Readonly<{ status: string; amount: Readonly<{ amountMinor: number }> }>>(
+  requests: readonly T[],
   statuses: ReadonlySet<string>
 ): number {
   return requests.reduce(

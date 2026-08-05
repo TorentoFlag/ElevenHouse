@@ -3,8 +3,11 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   Headers,
   Inject,
+  NotFoundException,
+  Param,
   Post,
   Req,
   UnauthorizedException,
@@ -37,6 +40,16 @@ export class OrdersController {
       body,
       requireIdempotencyKey(idempotencyKey)
     );
+  }
+
+  @Get(":orderId")
+  async getOrder(
+    @Req() request: PublicSessionRequest,
+    @Param("orderId") orderId: string
+  ): Promise<OrderResponse> {
+    const order = await this.ordersService.getOrder(requireClientUserId(request), orderId);
+    if (!order) throw new NotFoundException("Order was not found");
+    return order;
   }
 }
 

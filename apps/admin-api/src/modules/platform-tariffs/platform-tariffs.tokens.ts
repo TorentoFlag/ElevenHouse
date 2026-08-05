@@ -1,0 +1,2 @@
+export const ADMIN_TARIFF_UNIT_OF_WORK = Symbol("ADMIN_TARIFF_UNIT_OF_WORK");
+export const ADMIN_TARIFF_CLOCK = Symbol("ADMIN_TARIFF_CLOCK");

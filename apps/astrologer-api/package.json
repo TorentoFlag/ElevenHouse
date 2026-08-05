@@ -18,6 +18,7 @@
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
+    "@elevenhouse/finance-infrastructure": "workspace:*",
     "@elevenhouse/numerology-presentation": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/validation": "workspace:*",

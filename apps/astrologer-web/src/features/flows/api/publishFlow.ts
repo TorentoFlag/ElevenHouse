@@ -1,8 +1,9 @@
 import {
+  FLOW_PUBLICATION_V3_MEDIA_TYPE,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionV2ResponseSchema,
+  publishFlowDefinitionV3ResponseSchema,
   type PublishFlowDefinitionV2Request,
-  type PublishFlowDefinitionV2Response
+  type PublishFlowDefinitionV3Response
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -14,13 +15,16 @@ export type PublishFlowInput = {
 
 export async function publishFlow(
   input: PublishFlowInput
-): Promise<PublishFlowDefinitionV2Response> {
+): Promise<PublishFlowDefinitionV3Response> {
   const body = publishFlowDefinitionV2RequestSchema.parse(input.body);
 
-  return publishFlowDefinitionV2ResponseSchema.parse(
+  return publishFlowDefinitionV3ResponseSchema.parse(
     await application.http.post(`/flows/${input.flowId}/publish`, body, {
       csrf: true,
-      headers: { "idempotency-key": input.idempotencyKey }
+      headers: {
+        accept: FLOW_PUBLICATION_V3_MEDIA_TYPE,
+        "idempotency-key": input.idempotencyKey
+      }
     })
   );
 }

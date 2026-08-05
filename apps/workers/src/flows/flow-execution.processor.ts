@@ -1,11 +1,10 @@
 import {
   classifyFlowExecutionFailure,
   interpretFlowExecutionClaim,
-  type FlowExecutionStore,
   type FlowExecutionClaim,
   type FlowExecutionDecision,
   type FlowExecutionFailureReasonCode,
-  type FlowExecutionOwnerScope,
+  type FlowExecutionWorkerStore,
   type FlowNodeExecutorRegistry
 } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
@@ -51,11 +50,8 @@ export type ProcessNextFlowExecutionResult =
     };
 
 export async function processNextFlowExecution(input: {
-  readonly store: FlowExecutionStore;
+  readonly store: FlowExecutionWorkerStore;
   readonly registry: FlowNodeExecutorRegistry;
-  readonly leaseOwner: string;
-  readonly leaseDurationMs: number;
-  readonly ownerScope: FlowExecutionOwnerScope;
   readonly logger?: Logger;
 }): Promise<ProcessNextFlowExecutionResult> {
   if (input.registry.executorKeys.length === 0) {
@@ -63,10 +59,7 @@ export async function processNextFlowExecution(input: {
   }
 
   const claimResult = await input.store.claimNext({
-    leaseOwner: input.leaseOwner,
-    leaseDurationMs: input.leaseDurationMs,
-    executorKeys: input.registry.executorKeys,
-    ownerScope: input.ownerScope
+    executorKeys: input.registry.executorKeys
   });
   if (!claimResult) return { status: "idle" };
   if (claimResult.status === "quarantined") {
@@ -117,7 +110,7 @@ export async function processNextFlowExecution(input: {
 }
 
 async function finalizeExecutionFailure(input: {
-  readonly store: FlowExecutionStore;
+  readonly store: FlowExecutionWorkerStore;
   readonly logger?: Logger;
   readonly claim: FlowExecutionClaim;
   readonly error: unknown;

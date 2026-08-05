@@ -4,7 +4,6 @@ import type {
   AstrologerClientList,
   AstrologerClientListItem,
   ClientAstrologerRelationship,
-  ClientBirthData,
   ClientJoinIntent,
   ClientStore,
   ClientStoreGetAstrologerClientInput,
@@ -97,14 +96,18 @@ describe("ClientsService", () => {
           birthLatitude: 41.9028,
           birthLongitude: 12.4964,
           source: "manual",
-          isPrimary: true
+          revision: 2,
+          lastEditedByUserId: astrologerUserId,
+          lastEditedByRole: "astrologer"
         }
       }
     });
 
     expect(store.getAstrologerClient).toHaveBeenCalledWith({ astrologerUserId, clientUserId });
-    expect(store.upsertClientBirthData).toHaveBeenCalledWith({
+    expect(store.writeClientBirthProfile).toHaveBeenCalledWith({
       clientUserId,
+      actor: { userId: astrologerUserId, role: "astrologer" },
+      expectedRevision: 1,
       data: {
         label: "Основные данные",
         birthDate: "1990-07-15",
@@ -118,8 +121,7 @@ describe("ClientsService", () => {
         birthTimeDstOccurrence: null,
         birthLatitude: 41.9028,
         birthLongitude: 12.4964,
-        source: "manual",
-        isPrimary: true
+        source: "manual"
       },
       now
     });
@@ -133,7 +135,17 @@ describe("ClientsService", () => {
       service.updateBirthData(unrelatedClientUserId, birthDataInput(), createAuthenticatedRequest())
     ).rejects.toThrow(NotFoundException);
 
-    expect(store.upsertClientBirthData).not.toHaveBeenCalled();
+    expect(store.writeClientBirthProfile).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a stale relationship when the atomic write policy rejects it", async () => {
+    const store = createStore();
+    vi.spyOn(store, "writeClientBirthProfile").mockResolvedValueOnce({ kind: "not_related" });
+    const service = createService(store);
+
+    await expect(
+      service.updateBirthData(clientUserId, birthDataInput(), createAuthenticatedRequest())
+    ).rejects.toThrow(NotFoundException);
   });
 
   it("rejects invalid input and missing sessions", async () => {
@@ -286,7 +298,9 @@ function createStore(): ClientStore {
       birthLatitude: 55.7558,
       birthLongitude: 37.6173,
       source: "client_profile",
-      isPrimary: true,
+      revision: 1,
+      lastEditedByUserId: clientUserId,
+      lastEditedByRole: "client",
       createdAt: now,
       updatedAt: now
     }
@@ -303,22 +317,21 @@ function createStore(): ClientStore {
         raise("Unexpected ensure relationship call")
     ),
     upsertClientProfile: vi.fn(async (): Promise<void> => {}),
-    upsertClientBirthData: vi.fn(async (input): Promise<ClientBirthData> => {
+    writeClientBirthProfile: vi.fn(async (input) => {
       return {
+        kind: "written" as const,
+        profile: {
         id: "66666666-6666-4666-8666-666666666666",
         clientUserId: input.clientUserId,
         ...input.data,
+        revision: input.expectedRevision === null ? 1 : input.expectedRevision + 1,
+        lastEditedByUserId: input.actor.userId,
+        lastEditedByRole: input.actor.role,
         createdAt: now,
         updatedAt: input.now
+        }
       };
     }),
-    listClientBirthDataProfiles: vi.fn(async () => []),
-    createClientBirthDataProfile: vi.fn(
-      async (): Promise<ClientBirthData> => raise("Unexpected create birth profile call")
-    ),
-    updateClientBirthDataProfile: vi.fn(
-      async (): Promise<ClientBirthData | null> => raise("Unexpected update birth profile call")
-    ),
     listAstrologerClients: vi.fn(
       async (input: ClientStoreListAstrologerClientsInput): Promise<AstrologerClientList> => {
         const clients =
@@ -341,6 +354,7 @@ function createStore(): ClientStore {
 
 function birthDataInput(): Record<string, unknown> {
   return {
+    expectedRevision: 1,
     label: "Основные данные",
     birthDate: "1990-07-15",
     birthTime: "10:30",

@@ -9,6 +9,7 @@ const runtimeConfigSchema = z.object({
   PAYMENT_WORKER_ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
   PAYMENT_WORKER_ARC_PAY_API_SECRET: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_ARC_PAY_WEBHOOK_SIGNING_KEY_VERSION_ID: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
   PAYMENT_WORKER_ARC_PAY_TIMESTAMP_TOLERANCE_SECONDS: z.coerce
     .number()
@@ -16,19 +17,17 @@ const runtimeConfigSchema = z.object({
     .positive()
     .max(3600)
     .default(300),
-  PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS: z.coerce.number().int().min(0).default(60_000),
-  PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE: z.coerce
+  PAYMENT_WORKER_ONLINE_WALLET_HOLD_RELEASE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(60_000),
+  PAYMENT_WORKER_ONLINE_WALLET_HOLD_RELEASE_BATCH_SIZE: z.coerce
     .number()
     .int()
     .positive()
     .max(1_000)
     .default(100),
-  PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(31_536_000)
-    .default(2_592_000),
   PAYMENT_WORKER_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(0).default(900_000),
   PAYMENT_WORKER_RECONCILIATION_LOOKBACK_HOURS: z.coerce
     .number()
@@ -42,7 +41,67 @@ const runtimeConfigSchema = z.object({
     .positive()
     .max(100)
     .default(100),
-  PAYMENT_WORKER_RECONCILIATION_CURRENCY: z.enum(["RUB"]).default("RUB")
+  PAYMENT_WORKER_RECONCILIATION_CURRENCY: z.enum(["RUB"]).default("RUB"),
+  PAYMENT_WORKER_CANONICAL_CAPTURE_LEASE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(300)
+    .default(90),
+  PAYMENT_WORKER_CANONICAL_CAPTURE_MAXIMUM_ATTEMPTS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(8),
+  PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_BASE_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(300_000)
+    .default(5_000),
+  PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_MAXIMUM_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(3_600_000)
+    .default(300_000),
+  PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED: z.enum(["true", "false"]).default("false"),
+  PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(3_600_000)
+    .default(5_000),
+  PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100)
+    .default(25),
+  PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_LOCK_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(3_600_000)
+    .default(60_000),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
+  PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).optional(),
+  PAYMENT_WORKER_ASTROLOGER_BILLING_RETURN_ORIGIN: z.string().url().optional()
 });
 
 export type PaymentWorkerRuntimeConfig = {
@@ -57,10 +116,9 @@ export type PaymentWorkerRuntimeConfig = {
     readonly environment: "sandbox" | "live";
     readonly timestampToleranceSeconds: number;
   };
-  readonly holdRelease: {
+  readonly onlineWalletHoldRelease: {
     readonly intervalMs: number;
     readonly batchSize: number;
-    readonly commandTtlMs: number;
   };
   readonly reconciliation: {
     readonly intervalMs: number;
@@ -68,6 +126,31 @@ export type PaymentWorkerRuntimeConfig = {
     readonly pageLimit: number;
     readonly currency: "RUB";
   };
+  readonly canonicalClientOrderCapture: {
+    readonly leaseDurationSeconds: number;
+    readonly maximumAttempts: number;
+    readonly retryBaseDelayMilliseconds: number;
+    readonly retryMaximumDelayMilliseconds: number;
+  };
+  readonly financeProviderDispatch: Readonly<{
+    intervalMs: number;
+    batchSize: number;
+    publishingLockTimeoutMs: number;
+    artifactStorage: Readonly<{
+      endpoint: string;
+      region: string;
+      bucket: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      forcePathStyle: boolean;
+      kmsKeyArn: string;
+    }>;
+    responseArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    webhookArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    webhookSigningKeyVersionId: string;
+    astrologerBillingReturnOrigin: string;
+  }> | null;
 };
 
 export function createPaymentWorkerRuntimeConfig(
@@ -85,6 +168,15 @@ export function createPaymentWorkerRuntimeConfig(
   if (new URL(config.PAYMENT_WORKER_ARC_PAY_API_BASE_URL).protocol !== "https:") {
     throw new Error("PAYMENT_WORKER_ARC_PAY_API_BASE_URL must use HTTPS");
   }
+  if (
+    config.PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_MAXIMUM_DELAY_MS <
+    config.PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_BASE_DELAY_MS
+  ) {
+    throw new Error(
+      "PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_MAXIMUM_DELAY_MS must not be below the base delay"
+    );
+  }
+  const financeProviderDispatch = resolveFinanceProviderDispatch(config);
 
   return {
     healthHost: config.PAYMENT_WORKER_HEALTH_HOST,
@@ -98,16 +190,104 @@ export function createPaymentWorkerRuntimeConfig(
       environment: config.PAYMENT_WORKER_ARC_PAY_ENVIRONMENT,
       timestampToleranceSeconds: config.PAYMENT_WORKER_ARC_PAY_TIMESTAMP_TOLERANCE_SECONDS
     },
-    holdRelease: {
-      intervalMs: config.PAYMENT_WORKER_HOLD_RELEASE_INTERVAL_MS,
-      batchSize: config.PAYMENT_WORKER_HOLD_RELEASE_BATCH_SIZE,
-      commandTtlMs: config.PAYMENT_WORKER_HOLD_RELEASE_COMMAND_TTL_SECONDS * 1000
+    onlineWalletHoldRelease: {
+      intervalMs: config.PAYMENT_WORKER_ONLINE_WALLET_HOLD_RELEASE_INTERVAL_MS,
+      batchSize: config.PAYMENT_WORKER_ONLINE_WALLET_HOLD_RELEASE_BATCH_SIZE
     },
     reconciliation: {
       intervalMs: config.PAYMENT_WORKER_RECONCILIATION_INTERVAL_MS,
       lookbackMs: config.PAYMENT_WORKER_RECONCILIATION_LOOKBACK_HOURS * 60 * 60 * 1000,
       pageLimit: config.PAYMENT_WORKER_RECONCILIATION_PAGE_LIMIT,
       currency: config.PAYMENT_WORKER_RECONCILIATION_CURRENCY
-    }
+    },
+    canonicalClientOrderCapture: Object.freeze({
+      leaseDurationSeconds: config.PAYMENT_WORKER_CANONICAL_CAPTURE_LEASE_SECONDS,
+      maximumAttempts: config.PAYMENT_WORKER_CANONICAL_CAPTURE_MAXIMUM_ATTEMPTS,
+      retryBaseDelayMilliseconds: config.PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_BASE_DELAY_MS,
+      retryMaximumDelayMilliseconds:
+        config.PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_MAXIMUM_DELAY_MS
+    }),
+    financeProviderDispatch
   };
+}
+
+function resolveFinanceProviderDispatch(
+  config: z.infer<typeof runtimeConfigSchema>
+): PaymentWorkerRuntimeConfig["financeProviderDispatch"] {
+  if (config.PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED === "false") return null;
+  if (!config.PAYMENT_WORKER_ARC_PAY_API_SECRET) {
+    throw new Error(
+      "PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED requires ArcPay API credentials"
+    );
+  }
+  if (!config.PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET) {
+    throw new Error(
+      "PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED requires an ArcPay webhook signing secret"
+    );
+  }
+  const webhookSigningKeyVersionId = required(config.PAYMENT_WORKER_ARC_PAY_WEBHOOK_SIGNING_KEY_VERSION_ID);
+  const endpoint = required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ENDPOINT);
+  if (new URL(endpoint).protocol !== "https:") {
+    throw new Error("PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
+  }
+  const kmsKeyArn = required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN);
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error(
+      "PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN"
+    );
+  }
+  const forcePathStyle = config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error(
+      "PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when provider dispatch is enabled"
+    );
+  }
+  return Object.freeze({
+    intervalMs: config.PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_INTERVAL_MS,
+    batchSize: config.PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_BATCH_SIZE,
+    publishingLockTimeoutMs: config.PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_LOCK_TIMEOUT_MS,
+    artifactStorage: Object.freeze({
+      endpoint,
+      region: required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_REGION),
+      bucket: required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_BUCKET),
+      accessKeyId: required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
+      secretAccessKey: required(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
+      forcePathStyle: forcePathStyle === "true",
+      kmsKeyArn
+    }),
+    responseArtifactRetention: Object.freeze({
+      policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_ID),
+      policyVersion: required(
+        config.PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_VERSION
+      )
+    }),
+    requestArtifactRetention: Object.freeze({
+      policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID),
+      policyVersion: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION)
+    }),
+    webhookArtifactRetention: Object.freeze({
+      policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_ID),
+      policyVersion: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_VERSION)
+    }),
+    webhookSigningKeyVersionId,
+    astrologerBillingReturnOrigin: requiredHttpsOrigin(config.PAYMENT_WORKER_ASTROLOGER_BILLING_RETURN_ORIGIN)
+  });
+}
+
+function required(value: string | undefined): string {
+  if (!value) {
+    throw new Error(
+      "PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED requires private artifact storage and retention policy configuration"
+    );
+  }
+  return value;
+}
+
+function requiredHttpsOrigin(value: string | undefined): string {
+  const raw = required(value);
+  const url = new URL(raw);
+  if (url.protocol !== "https:" || url.origin !== raw) {
+    throw new Error("PAYMENT_WORKER_ASTROLOGER_BILLING_RETURN_ORIGIN must be an HTTPS origin");
+  }
+  return url.origin;
 }

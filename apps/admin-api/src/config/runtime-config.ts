@@ -16,7 +16,28 @@ const adminApiRuntimeConfigSchema = z.object({
   ADMIN_API_CSRF_COOKIE_NAME: z.string().trim().min(1).default("elevenhouse_admin_csrf"),
   ADMIN_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ADMIN_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
-  ADMIN_API_ALLOWED_ORIGINS: z.string().trim().optional()
+  ADMIN_API_ALLOWED_ORIGINS: z.string().trim().optional(),
+  ADMIN_API_FINANCE_WEBAUTHN_RP_ID: z.string().trim().min(1).max(253).optional(),
+  ADMIN_API_FINANCE_WEBAUTHN_ORIGIN: z.string().url().optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED: z.enum(["true", "false"]).default("false"),
+  ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
+  ADMIN_API_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
+  ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
+  ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
+  ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_CASH_POOL_ID: z.string().trim().min(1).max(160).optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_STATEMENT_SOURCE_FINGERPRINT: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_ID: z.string().trim().min(1).max(160).optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .optional(),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES: z.coerce.number().int().min(1).max(25 * 1024 * 1024).default(10 * 1024 * 1024)
 });
 
 export type AdminApiRuntimeConfig = {
@@ -29,6 +50,22 @@ export type AdminApiRuntimeConfig = {
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
   readonly allowedOrigins: readonly string[];
+  readonly financeWebAuthn: Readonly<{ rpId: string; origin: string }> | null;
+  readonly financePayoutEvidence: Readonly<{
+    artifactStorage: Readonly<{
+      endpoint: string;
+      region: string;
+      bucket: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      forcePathStyle: boolean;
+      kmsKeyArn: string;
+    }>;
+    bankCashPoolId: string;
+    statementSourceFingerprint: `sha256:${string}`;
+    retentionPolicy: Readonly<{ policyId: string; policyVersion: string }>;
+    maxBytes: number;
+  }> | null;
 };
 
 export function createAdminApiRuntimeConfig(
@@ -43,6 +80,8 @@ export function createAdminApiRuntimeConfig(
   if (config.NODE_ENV === "production" && !config.ADMIN_API_CSRF_SECRET) {
     throw new Error("ADMIN_API_CSRF_SECRET is required in production");
   }
+  const financePayoutEvidence = resolveFinancePayoutEvidence(config);
+  const financeWebAuthn = resolveFinanceWebAuthn(config);
 
   return {
     port: config.ADMIN_API_PORT,
@@ -55,8 +94,92 @@ export function createAdminApiRuntimeConfig(
     csrfCookieName: config.ADMIN_API_CSRF_COOKIE_NAME,
     csrfHeaderName: config.ADMIN_API_CSRF_HEADER_NAME,
     csrfTokenTtlSeconds: config.ADMIN_API_CSRF_TOKEN_TTL_SECONDS,
-    allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5175"]
+    allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5175"],
+    financeWebAuthn,
+    financePayoutEvidence
   };
+}
+
+function resolveFinanceWebAuthn(
+  config: z.infer<typeof adminApiRuntimeConfigSchema>
+): AdminApiRuntimeConfig["financeWebAuthn"] {
+  const rpId = config.ADMIN_API_FINANCE_WEBAUTHN_RP_ID;
+  const originValue = config.ADMIN_API_FINANCE_WEBAUTHN_ORIGIN;
+  if (!rpId && !originValue) {
+    if (config.NODE_ENV === "production") {
+      throw new Error(
+        "ADMIN_API_FINANCE_WEBAUTHN_RP_ID and ADMIN_API_FINANCE_WEBAUTHN_ORIGIN are required in production"
+      );
+    }
+    return null;
+  }
+  if (!rpId || !originValue) {
+    throw new Error(
+      "ADMIN_API_FINANCE_WEBAUTHN_RP_ID and ADMIN_API_FINANCE_WEBAUTHN_ORIGIN must be configured together"
+    );
+  }
+  const origin = new URL(originValue);
+  if (origin.origin !== originValue || (origin.protocol !== "https:" && origin.protocol !== "http:")) {
+    throw new Error("ADMIN_API_FINANCE_WEBAUTHN_ORIGIN must be an exact HTTP(S) origin");
+  }
+  if (config.NODE_ENV === "production" && origin.protocol !== "https:") {
+    throw new Error("ADMIN_API_FINANCE_WEBAUTHN_ORIGIN must use HTTPS in production");
+  }
+  if (origin.hostname !== rpId && !origin.hostname.endsWith(`.${rpId}`)) {
+    throw new Error("ADMIN_API_FINANCE_WEBAUTHN_RP_ID must match the WebAuthn origin host");
+  }
+  return Object.freeze({ rpId, origin: origin.origin });
+}
+
+function resolveFinancePayoutEvidence(
+  config: z.infer<typeof adminApiRuntimeConfigSchema>
+): AdminApiRuntimeConfig["financePayoutEvidence"] {
+  if (config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED === "false") return null;
+  const endpoint = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT);
+  if (new URL(endpoint).protocol !== "https:") {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
+  }
+  const forcePathStyle = config.ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when payout evidence is enabled");
+  }
+  const kmsKeyArn = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
+  }
+  return Object.freeze({
+    artifactStorage: Object.freeze({
+      endpoint,
+      region: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_REGION),
+      bucket: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET),
+      accessKeyId: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
+      secretAccessKey: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
+      forcePathStyle: forcePathStyle === "true",
+      kmsKeyArn
+    }),
+    bankCashPoolId: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_CASH_POOL_ID),
+    statementSourceFingerprint: requiredPayoutEvidenceConfig(
+      config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_STATEMENT_SOURCE_FINGERPRINT
+    ) as `sha256:${string}`,
+    retentionPolicy: Object.freeze({
+      policyId: requiredPayoutEvidenceConfig(
+        config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_ID
+      ),
+      policyVersion: requiredPayoutEvidenceConfig(
+        config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_VERSION
+      )
+    }),
+    maxBytes: config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES
+  });
+}
+
+function requiredPayoutEvidenceConfig(value: string | undefined): string {
+  if (!value) {
+    throw new Error(
+      "ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED requires private artifact storage, cash-pool identity and retention policy configuration"
+    );
+  }
+  return value;
 }
 
 function parseAllowedOrigins(value: string | undefined): readonly string[] {

@@ -128,6 +128,19 @@ function NodeConfigFields({
       </label>
     );
   }
+  if (node.kind === "natal_chart_request") {
+    return (
+      <p className={className}>
+        {node.config.interpretationMode === "adult_natal"
+          ? locale === "ru"
+            ? "Натальная карта взрослого"
+            : "Adult natal chart"
+          : locale === "ru"
+            ? "Натальная карта ребёнка"
+            : "Child natal chart"}
+      </p>
+    );
+  }
   if (node.kind === "astrologer_work_item") {
     return (
       <>
@@ -298,6 +311,7 @@ const nodeInitial = {
   booking_confirmed: "B",
   manual_client: "M",
   birth_data_available: "?",
+  natal_chart_request: "N",
   astrologer_work_item: "T",
   astrologer_approval: "A",
   completed: "✓",

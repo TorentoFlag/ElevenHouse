@@ -1,28 +1,9 @@
 import { parseBase64Aes256GcmKey } from "@elevenhouse/auth";
-import { chartAiConsentPolicyVersion, chartAiConsentProcessorCode } from "@elevenhouse/contracts";
 import { z } from "@elevenhouse/validation";
-import { flowPublicationRolloutPhaseValues } from "../modules/flows/flow-publication-rollout";
 
-const officialOpenAiApiBaseUrl = "https://api.openai.com/v1";
 const officialGeoapifyBaseUrl = "https://api.geoapify.com";
+const officialOpenAiApiBaseUrl = "https://api.openai.com/v1";
 const productionChartEngineBaseUrl = "http://chart-engine:8012";
-type ChartAiRuntimeEnvironment = "development" | "test" | "production";
-const chartAiProcessingAuthorityRegistry = Object.freeze({
-  "verified-test-authority.v1": Object.freeze({
-    environments: Object.freeze(["development", "test"] as readonly ChartAiRuntimeEnvironment[]),
-    provider: "openai" as const,
-    processorCode: chartAiConsentProcessorCode,
-    consentPolicyVersion: chartAiConsentPolicyVersion,
-    providerBaseUrl: officialOpenAiApiBaseUrl
-  }),
-  "openai-production-authority.v1": Object.freeze({
-    environments: Object.freeze(["production"] as readonly ChartAiRuntimeEnvironment[]),
-    provider: "openai" as const,
-    processorCode: chartAiConsentProcessorCode,
-    consentPolicyVersion: chartAiConsentPolicyVersion,
-    providerBaseUrl: officialOpenAiApiBaseUrl
-  })
-});
 
 const localAstrologerSessionCookieName = "elevenhouse_astrologer_session";
 const secureAstrologerSessionCookieName = "__Host-elevenhouse_astrologer_session";
@@ -51,9 +32,6 @@ const optionalTelegramBotUsernameSchema = z.preprocess(
 const astrologerApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   ASTROLOGER_API_PORT: z.coerce.number().int().positive().default(3002),
-  ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: z
-    .enum(flowPublicationRolloutPhaseValues)
-    .default("legacy_v1"),
   ASTROLOGER_API_TRUST_PROXY: z
     .enum(["true", "false"])
     .default("false")
@@ -200,6 +178,19 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+  ASTROLOGER_BILLING_ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
+  ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: z.string().trim().url().optional(),
+  ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: z.string().trim().min(1).max(512).optional(),
+  ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID: z.string().trim().min(1).max(160).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().trim().url().optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
+  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).optional(),
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -275,19 +266,14 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: optionalTrimmedNonEmptyStringSchema.refine(
-    (value) => value === undefined || value.length <= 160,
-    "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION must be at most 160 characters"
-  )
 });
 
 export type AstrologerApiRuntimeConfig = {
   readonly port: number;
   readonly trustProxy: boolean;
   readonly redisUrl: string;
-  readonly flows: {
-    readonly publicationRolloutPhase: (typeof flowPublicationRolloutPhaseValues)[number];
-  };
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Flow runtime has no API config after V1 rollout removal.
+  readonly flows: {};
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
@@ -392,6 +378,21 @@ export type AstrologerApiRuntimeConfig = {
   };
   readonly billing: {
     readonly arcPayConfigured: boolean;
+    readonly arcPayEnvironment: "sandbox" | "live";
+    readonly arcPayBrowserTokenization: Readonly<{ apiBaseUrl: string; publishableKey: string }> | null;
+    /** KMS-backed shared finance storage; card tokens are sealed here before a DB reference is written. */
+    readonly financeArtifactStorage: Readonly<{
+      endpoint: string;
+      region: string;
+      bucket: string;
+      accessKeyId: string;
+      secretAccessKey: string;
+      forcePathStyle: boolean;
+      kmsKeyArn: string;
+      requestRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    }> | null;
+    /** Legal authority is intentionally absent until an operator configures a published series. */
+    readonly savedCardDisclosureSeriesId: string | null;
   };
   readonly ai: {
     readonly enabled: boolean;
@@ -420,7 +421,6 @@ export type AstrologerApiRuntimeConfig = {
   };
   readonly chartAi: {
     readonly enabled: boolean;
-    readonly processingAuthorityVersion: string | null;
   };
 };
 
@@ -500,6 +500,8 @@ export function createAstrologerApiRuntimeConfig(
     config.ASTROLOGER_MEDIA_STORAGE_PUBLIC_BASE_URL ??
       `${mediaStorageEndpoint}/${config.ASTROLOGER_MEDIA_STORAGE_BUCKET}`
   );
+  const arcPayBrowserTokenization = resolveArcPayBrowserTokenization(config);
+  const financeArtifactStorage = resolveBillingFinanceArtifactStorage(config);
 
   if (config.NODE_ENV === "production" && allowedOrigins.length === 0) {
     throw new Error("ASTROLOGER_API_ALLOWED_ORIGINS is required in production");
@@ -529,10 +531,6 @@ export function createAstrologerApiRuntimeConfig(
 
   if (config.ASTROLOGER_CHART_AI_ENABLED && !config.ASTROLOGER_AI_ENABLED) {
     throw new Error("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
-  }
-
-  if (config.ASTROLOGER_CHART_AI_ENABLED) {
-    assertChartAiProcessingAuthority(config);
   }
 
   if (
@@ -585,7 +583,6 @@ export function createAstrologerApiRuntimeConfig(
     trustProxy: config.ASTROLOGER_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
     flows: {
-      publicationRolloutPhase: config.ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE
     },
     sessionTtlSeconds: config.ASTROLOGER_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.ASTROLOGER_API_SESSION_COOKIE_SECURE,
@@ -680,7 +677,11 @@ export function createAstrologerApiRuntimeConfig(
       downloadTtlSeconds: config.ASTROLOGER_MEDIA_DOWNLOAD_TTL_SECONDS
     },
     billing: {
-      arcPayConfigured: config.ASTROLOGER_BILLING_ARC_PAY_ENABLED
+      arcPayConfigured: config.ASTROLOGER_BILLING_ARC_PAY_ENABLED,
+      arcPayEnvironment: config.ASTROLOGER_BILLING_ARC_PAY_ENVIRONMENT,
+      arcPayBrowserTokenization,
+      financeArtifactStorage,
+      savedCardDisclosureSeriesId: config.ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID ?? null
     },
     ai: {
       enabled: config.ASTROLOGER_AI_ENABLED,
@@ -708,10 +709,70 @@ export function createAstrologerApiRuntimeConfig(
       }
     },
     chartAi: {
-      enabled: config.ASTROLOGER_CHART_AI_ENABLED,
-      processingAuthorityVersion: config.ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION ?? null
+      enabled: config.ASTROLOGER_CHART_AI_ENABLED
     }
   };
+}
+
+function resolveArcPayBrowserTokenization(
+  config: z.infer<typeof astrologerApiRuntimeConfigSchema>
+): AstrologerApiRuntimeConfig["billing"]["arcPayBrowserTokenization"] {
+  if (!config.ASTROLOGER_BILLING_ARC_PAY_ENABLED) return null;
+  const apiBaseUrl = config.ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL;
+  const publishableKey = config.ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY;
+  if (!apiBaseUrl || !publishableKey) {
+    throw new Error(
+      "ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL and ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY are required when ArcPay billing is enabled"
+    );
+  }
+  const normalizedApiBaseUrl = stripTrailingSlashes(apiBaseUrl);
+  const url = new URL(normalizedApiBaseUrl);
+  if (url.protocol !== "https:" || url.username || url.password || url.origin !== normalizedApiBaseUrl) {
+    throw new Error("ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL must be an HTTPS origin");
+  }
+  return Object.freeze({ apiBaseUrl: normalizedApiBaseUrl, publishableKey });
+}
+
+function resolveBillingFinanceArtifactStorage(
+  config: z.infer<typeof astrologerApiRuntimeConfigSchema>
+): AstrologerApiRuntimeConfig["billing"]["financeArtifactStorage"] {
+  if (!config.ASTROLOGER_BILLING_ARC_PAY_ENABLED) return null;
+  const required = (value: string | undefined, name: string): string => {
+    if (!value) throw new Error(`${name} is required when ArcPay billing is enabled`);
+    return value;
+  };
+  const endpoint = required(
+    config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT,
+    "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT"
+  );
+  const endpointUrl = new URL(endpoint);
+  if (endpointUrl.protocol !== "https:" || endpointUrl.username || endpointUrl.password) {
+    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS without credentials");
+  }
+  const kmsKeyArn = required(
+    config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN,
+    "ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN"
+  );
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
+  }
+  const forcePathStyle = config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when ArcPay billing is enabled");
+  }
+  return Object.freeze({
+    endpoint: stripTrailingSlashes(endpoint),
+    region: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION"),
+    bucket: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET"),
+    accessKeyId: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID"),
+    secretAccessKey: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY"),
+    forcePathStyle: forcePathStyle === "true",
+    kmsKeyArn,
+    requestRetention: Object.freeze({
+      policyId: required(config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID, "ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID"),
+      policyVersion: required(config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION, "ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION")
+    })
+  });
 }
 
 function parseAllowedOrigins(value: string | undefined): readonly string[] {
@@ -719,40 +780,6 @@ function parseAllowedOrigins(value: string | undefined): readonly string[] {
     .split(",")
     .map((origin) => origin.trim().replace(/\/+$/, ""))
     .filter(Boolean);
-}
-
-function assertChartAiProcessingAuthority(
-  config: typeof astrologerApiRuntimeConfigSchema._output
-): void {
-  const authorityVersion = config.ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION;
-  if (!authorityVersion) {
-    const environmentQualifier = config.NODE_ENV === "production" ? " in production" : "";
-    throw new Error(
-      `ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required${environmentQualifier} when ASTROLOGER_CHART_AI_ENABLED=true`
-    );
-  }
-
-  const authority =
-    chartAiProcessingAuthorityRegistry[
-      authorityVersion as keyof typeof chartAiProcessingAuthorityRegistry
-    ];
-  if (!authority || !authority.environments.includes(config.NODE_ENV)) {
-    throw new Error(
-      `ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION=${authorityVersion} is not registered for ${config.NODE_ENV} chart AI`
-    );
-  }
-  if (
-    authority.provider !== config.ASTROLOGER_AI_PROVIDER ||
-    authority.processorCode !== chartAiConsentProcessorCode ||
-    authority.consentPolicyVersion !== chartAiConsentPolicyVersion
-  ) {
-    throw new Error("Chart AI processing authority does not match the active consent policy");
-  }
-  if (stripTrailingSlashes(config.ASTROLOGER_OPENAI_BASE_URL) !== authority.providerBaseUrl) {
-    throw new Error(
-      "ASTROLOGER_OPENAI_BASE_URL must match the processor endpoint registered for chart AI authority"
-    );
-  }
 }
 
 function stripTrailingSlashes(value: string): string {

@@ -19,7 +19,13 @@ import { CsrfGuard } from "../security/csrf/csrf.guard";
 import { IdempotencyGuard } from "../security/idempotency/idempotency.guard";
 import { PaymentsController } from "./payments.controller";
 import { PaymentsService } from "./payments.service";
-import { PAYMENTS_ORDER_STORE, PAYMENTS_PAYMENT_STORE, PAYMENTS_PROVIDER } from "./payments.tokens";
+import {
+  PAYMENTS_CHECKOUT_ACTION_SERVICE,
+  PAYMENTS_CHECKOUT_PREPARATION_SERVICE,
+  PAYMENTS_ORDER_STORE,
+  PAYMENTS_PAYMENT_STORE,
+  PAYMENTS_PROVIDER
+} from "./payments.tokens";
 
 const now = new Date("2026-07-24T12:00:00.000Z");
 const sessionCookieName = "elevenhouse_public_session";
@@ -63,6 +69,8 @@ describe("payments checkout public HTTP flow", () => {
         { provide: ConfigService, useValue: configService() },
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: authStore() },
         { provide: PAYMENTS_ORDER_STORE, useValue: orderStore },
+        { provide: PAYMENTS_CHECKOUT_ACTION_SERVICE, useValue: null },
+        { provide: PAYMENTS_CHECKOUT_PREPARATION_SERVICE, useValue: null },
         { provide: PAYMENTS_PAYMENT_STORE, useValue: paymentStore() },
         { provide: PAYMENTS_PROVIDER, useValue: provider }
       ]
@@ -89,29 +97,34 @@ describe("payments checkout public HTTP flow", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
-  it("opens a hosted checkout once and replays it without returning provider secrets", async () => {
+  it("does not execute the legacy synchronous hosted checkout path", async () => {
     const headers = {
       origin: "http://localhost:3000",
       [csrfHeaderName]: csrfToken,
       "idempotency-key": "checkout:e2e-1"
     };
 
-    const first = await postCheckout(authenticatedCookies(), headers);
-    const replay = await postCheckout(authenticatedCookies(), headers);
+    const response = await postCheckout(authenticatedCookies(), headers);
 
-    expect(first).toMatchObject({
-      status: 201,
-      body: {
-        paymentAttemptId,
-        provider: "arc_pay",
-        environment: "sandbox",
-        providerCheckoutId: "arc-checkout-1",
-        checkoutUrl: "https://checkout.arcpay.space/session/arc-checkout-1"
-      }
+    expect(response).toMatchObject({
+      status: 503,
+      body: { code: "payment_checkout_worker_preparation_required" }
     });
-    expect(replay.body).toEqual(first.body);
-    expect(provider.openCheckout).toHaveBeenCalledTimes(1);
-    expect(first.body).not.toHaveProperty("secret");
+    expect(provider.openCheckout).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a hosted checkout action until the worker-owned preparation contour is configured", async () => {
+    const response = await fetch(
+      `${baseUrl}/payments/checkout-preparations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/action`,
+      { headers: { cookie: authenticatedCookies() }, redirect: "manual" }
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      code: "payment_checkout_action_preparation_required"
+    });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+    expect(provider.openCheckout).not.toHaveBeenCalled();
   });
 
   it("does not allow a client to open checkout for another client's order", async () => {
@@ -155,6 +168,7 @@ async function postCheckout(
     headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...headers },
     body: JSON.stringify({
       orderId,
+      buyerContact: { kind: "email", value: "client@example.test" },
       successUrl: "https://client.elevenhouse.test/payments/success",
       failureUrl: "https://client.elevenhouse.test/payments/failure",
       cancelUrl: "https://client.elevenhouse.test/payments/cancel",
@@ -206,6 +220,7 @@ function order(): FinanceOrder {
     clientUserId,
     astrologerUserId: "44444444-4444-4444-8444-444444444444",
     productId: "55555555-5555-4555-8555-555555555555",
+    productTitleSnapshot: "Natal reading",
     directLinkIntentId: null,
     bookingId: null,
     status: "pending_payment",
@@ -217,7 +232,10 @@ function order(): FinanceOrder {
     financePolicyHoldDurationHours: 48,
     financePolicyReserveBps: 0,
     financePolicyReserveReleaseDelayDays: 0,
-    financePolicyPlatformFeeBps: 1_000,
+    tariffSeriesId: "pro",
+    tariffVersion: 1,
+    tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    tariffCommissionBps: 1_000,
     financePolicyProviderSettlementRequired: true,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()

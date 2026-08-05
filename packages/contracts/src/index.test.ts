@@ -7,7 +7,7 @@ import {
   dictionaryEntriesResponseSchema,
   healthResponseSchema,
   humanDesignPreviewRequestSchema,
-  flowGraphSchema,
+  flowGraphV2Schema,
   createProductRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
@@ -50,6 +50,6 @@ describe("contracts public barrel", () => {
   });
 
   it("exports flow contracts", () => {
-    expect(flowGraphSchema.parse).toBeTypeOf("function");
+    expect(flowGraphV2Schema.parse).toBeTypeOf("function");
   });
 });

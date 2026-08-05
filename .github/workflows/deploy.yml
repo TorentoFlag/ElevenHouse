@@ -9,6 +9,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      prelaunch_reset:
+        description: "Recreate the disposable production PostgreSQL database before applying this release baseline"
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: production-deploy
@@ -207,9 +213,15 @@ jobs:
             IMAGE_TAG="${IMAGE_TAG}" \
             GHCR_USERNAME="${PRODUCTION_GHCR_USERNAME}" \
             GHCR_TOKEN="${PRODUCTION_GHCR_READ_TOKEN}" \
+            PRELAUNCH_RESET="${{ github.event_name == 'workflow_dispatch' && inputs.prelaunch_reset || 'false' }}" \
+            PRELAUNCH_RESET_RELEASE="${IMAGE_TAG}" \
             'bash -s' <<'REMOTE'
           set -euo pipefail
+          set -E
           cd /opt/elevenhouse
+          database_writers_quiesced=false
+          deploy_phase=preflight
+          trap 'if [[ "${database_writers_quiesced}" == true ]]; then printf "PRODUCTION_DEPLOY_FAILED phase=%s automatic_old_release_restart=disabled\n" "${deploy_phase}" >&2; fi' ERR
           chmod +x backup-postgres.sh restore-postgres.sh cleanup-docker-retention.sh materialize-chart-service-envs.sh
           test -f env/.env.production
           test "$(stat -c '%a' env/.env.production)" = "600"
@@ -243,17 +255,62 @@ jobs:
             node apps/workers/dist/validate-startup-config.js </dev/null
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
             node apps/chart-worker/dist/validate-startup-config.js </dev/null
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next up -d --no-recreate --wait --wait-timeout 120 postgres
+          if [[ "${PRELAUNCH_RESET}" != "true" ]]; then
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T db-baseline-preflight </dev/null
+          fi
           mv -- compose/compose.production.yml.next compose/compose.production.yml
           mv -- env/.env.deploy.next env/.env.deploy
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --no-recreate --wait --wait-timeout 120 postgres
+          DATABASE_WRITER_SERVICES=(
+            public-api
+            astrologer-api
+            admin-api
+            workers
+            payment-worker
+            chart-worker
+            notification-worker
+          )
+          deploy_phase=quiesce_database_writers
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml stop --timeout 150 "${DATABASE_WRITER_SERVICES[@]}"
+          running_database_writers="$(docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps --status running --services "${DATABASE_WRITER_SERVICES[@]}")"
+          if [[ -n "${running_database_writers}" ]]; then
+            printf 'PRODUCTION_DATABASE_WRITERS_STILL_RUNNING services=%s\n' "${running_database_writers}" >&2
+            exit 1
+          fi
+          database_writers_quiesced=true
+          active_database_sessions="$(
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml exec -T postgres \
+              sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+          SELECT count(*)
+            FROM pg_stat_activity
+           WHERE datname = current_database()
+             AND backend_type = 'client backend'
+             AND pid <> pg_backend_pid();
+          SQL
+          )"
+          if [[ "${active_database_sessions}" != "0" ]]; then
+            printf 'PRODUCTION_DATABASE_NOT_QUIESCED active_client_sessions=%s\n' "${active_database_sessions}" >&2
+            exit 1
+          fi
+          deploy_phase=backup
           ./backup-postgres.sh
+          if [[ "${PRELAUNCH_RESET}" == "true" ]]; then
+            deploy_phase=prelaunch_reset
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T \
+              -e PRELAUNCH_RESET_EXPECTED_DATABASE_HOST=postgres \
+              -e PRELAUNCH_RESET_EXPECTED_DATABASE_NAME=elevenhouse \
+              -e PRELAUNCH_RESET_RELEASE="${PRELAUNCH_RESET_RELEASE}" \
+              db-migrator pnpm --filter @elevenhouse/db db:reset-production-prelaunch -- \
+              --confirm-prelaunch-reset="${PRELAUNCH_RESET_RELEASE}:postgres:5432/elevenhouse" </dev/null
+          fi
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 120 postgres redis minio
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up --force-recreate --exit-code-from minio-init minio-init
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-reconciler </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-migrator </dev/null
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-reconciler </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
+          deploy_phase=service_start
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+          database_writers_quiesced=false
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml exec -T \
             -e CHART_SMOKE_ALLOW_PRODUCTION=true \
             -e CHART_SMOKE_EXPECTED_DATABASE_HOST=postgres \
@@ -266,6 +323,7 @@ jobs:
             -e CHART_SMOKE_CLEANUP_SETTLE_TIMEOUT_MS=150000 \
             astrologer-api node apps/astrologer-api/scripts/chart-engine-smoke.mjs
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
+          trap - ERR
           REMOTE
 
       - name: Smoke check

@@ -4,23 +4,39 @@ import { readFileSync } from "node:fs";
 import { flowGraphV2Schema, type FlowGraphV2 } from "@elevenhouse/contracts";
 import {
   compileFlowGraphV2,
+  cancelDurableFlowRun,
+  completeFlowWorkItem,
+  createBookingLifecycleEvent,
   createBuiltInFlowNodeExecutorRegistry,
   createFlowNodeExecutorRegistry,
   interpretFlowExecutionClaim,
+  listOwnerFlowWorkItems,
+  normalizeBookingConfirmedFlowLifecycleEvent,
+  FlowRuntimeCommandIntegrityError,
+  snoozeFlowWorkItem,
+  startFlowWorkItem,
   type FlowExecutionClaim,
-  type FlowExecutionDecision
+  type FlowExecutionDecision,
+  type FlowNormalizedBookingConfirmedEventV1
 } from "@elevenhouse/domain";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reconcileFlowExecutionSafety } from "../../../scripts/flow-execution-safety-reconciliation";
+import { reconcileAuditActorSubjects } from "../../../scripts/audit-actor-subject-reconciliation";
+import { reconcileFlowRuntimeControlAuthority } from "../../../scripts/flow-runtime-control-reconciliation";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { createDrizzleFlowExecutionStore } from "./drizzle-flow-execution-store";
+import { createDrizzleFlowBookingLifecycleStore } from "./drizzle-flow-booking-lifecycle-store";
+import { createDrizzleFlowRunCancellationStore } from "./drizzle-flow-run-cancellation-store";
+import { createDrizzleFlowWorkItemWakeStore } from "./drizzle-flow-work-item-wake-store";
+import { createDrizzleFlowWorkItemStore } from "./drizzle-flow-work-item-store";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
+const integrationBaselinePath =
+  process.env.FLOW_INTEGRATION_BASELINE_PATH ?? "packages/db/drizzle/0000_sticky_rictor.sql";
 const databaseName = `elevenhouse_flow_execution_${randomUUID().replaceAll("-", "")}`;
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
@@ -118,6 +134,106 @@ const advancingGraph = flowGraphV2Schema.parse({
   ]
 });
 
+const workItemGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "manual",
+      kind: "manual_client",
+      displayTitle: "Клиент выбран вручную",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {}
+    },
+    {
+      id: "prepare-consultation",
+      kind: "astrologer_work_item",
+      displayTitle: "Подготовка консультации",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: "Подготовить консультацию",
+        instructions: "Проверьте карту и вопросы клиента",
+        priority: "high"
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    }
+  ],
+  edges: [
+    {
+      id: "manual-prepare",
+      sourceNodeId: "manual",
+      targetNodeId: "prepare-consultation",
+      sourceHandle: "next"
+    },
+    {
+      id: "prepare-completed",
+      sourceNodeId: "prepare-consultation",
+      targetNodeId: "completed",
+      sourceHandle: "success"
+    }
+  ]
+});
+
+const bookingWorkItemGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { productIds: ["10000000-0000-4000-8000-000000000001"] }
+    },
+    {
+      id: "prepare-consultation",
+      kind: "astrologer_work_item",
+      displayTitle: "Подготовка консультации",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        taskKind: "consultation_preparation",
+        taskTitle: "Подготовить консультацию",
+        instructions: "Проверьте карту и вопросы клиента",
+        priority: "high",
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+        completionRequirements: { resultSummary: "required" }
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    }
+  ],
+  edges: [
+    {
+      id: "booking-prepare",
+      sourceNodeId: "booking",
+      targetNodeId: "prepare-consultation",
+      sourceHandle: "next"
+    },
+    {
+      id: "prepare-completed",
+      sourceNodeId: "prepare-consultation",
+      targetNodeId: "completed",
+      sourceHandle: "success"
+    }
+  ]
+});
+
 function requireCapabilityManifest(input: FlowGraphV2) {
   const compiled = compileFlowGraphV2(input);
   if (!compiled.capabilityManifest) raise("Expected publishable integration graph");
@@ -126,6 +242,8 @@ function requireCapabilityManifest(input: FlowGraphV2) {
 
 const capabilityManifest = requireCapabilityManifest(graph);
 const advancingCapabilityManifest = requireCapabilityManifest(advancingGraph);
+const workItemCapabilityManifest = requireCapabilityManifest(workItemGraph);
+const bookingWorkItemCapabilityManifest = requireCapabilityManifest(bookingWorkItemGraph);
 
 function createBirthDataRegistry() {
   return createFlowNodeExecutorRegistry([
@@ -152,12 +270,13 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readFileSync(integrationBaselinePath, "utf8"));
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     try {
       await reconciliationClient.query("BEGIN");
-      await reconcileFlowExecutionSafety(reconciliationClient);
+      await reconcileAuditActorSubjects(reconciliationClient);
+      await reconcileFlowRuntimeControlAuthority(reconciliationClient);
       await reconciliationClient.query("COMMIT");
     } catch (error) {
       await reconciliationClient.query("ROLLBACK");
@@ -177,8 +296,48 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
   }, 30_000);
 
   beforeEach(async () => {
-    await runtime.pool.query("delete from users");
+    await clearBookingLifecycleFixtures();
+    await runtime.pool.query(
+      "ALTER TABLE flow_versions VALIDATE CONSTRAINT flow_versions_capability_manifest_schema_check"
+    );
   });
+
+  async function clearBookingLifecycleFixtures(): Promise<void> {
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "ALTER TABLE flow_booking_lifecycle_heads DISABLE TRIGGER flow_booking_lifecycle_heads_transition_guard"
+      );
+      await client.query(
+        "ALTER TABLE flow_booking_lifecycle_receipts DISABLE TRIGGER flow_booking_lifecycle_receipts_immutable"
+      );
+      await client.query(
+        "ALTER TABLE booking_lifecycle_events DISABLE TRIGGER booking_lifecycle_events_immutable"
+      );
+      await client.query("delete from flow_booking_lifecycle_heads");
+      await client.query("delete from flow_booking_lifecycle_receipts");
+      await client.query("delete from flow_runs");
+      await client.query("delete from booking_lifecycle_events");
+      await client.query("delete from bookings");
+      await client.query("delete from users");
+      await client.query(
+        "ALTER TABLE booking_lifecycle_events ENABLE TRIGGER booking_lifecycle_events_immutable"
+      );
+      await client.query(
+        "ALTER TABLE flow_booking_lifecycle_receipts ENABLE TRIGGER flow_booking_lifecycle_receipts_immutable"
+      );
+      await client.query(
+        "ALTER TABLE flow_booking_lifecycle_heads ENABLE TRIGGER flow_booking_lifecycle_heads_transition_guard"
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   it("never rounds a later PostgreSQL transition instant behind an earlier microsecond write", async () => {
     const sample = await runtime.pool.query<{
@@ -461,6 +620,1063 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     expect(persisted.events[0]?.attempt_id).toBe(persisted.attempts[0]?.id);
   });
 
+  it("atomically creates one human work item and suspends the claimed token", async () => {
+    const fixture = await createWorkItemFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-work-item",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+
+    expect(decision).toMatchObject({
+      kind: "wait_work_item",
+      sourceNodeId: "prepare-consultation",
+      completionHandle: "success",
+      resultCode: "FLOW_WAITING_WORK_ITEM"
+    });
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied",
+      traceSequence: 1n
+    });
+
+    const [persisted, workItems] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_work_items where flow_run_id = $1", [fixture.runId])
+    ]);
+    expect(persisted.run).toMatchObject({
+      status: "waiting",
+      current_node_id: "prepare-consultation",
+      trace_sequence: "1",
+      completed_at: null
+    });
+    expect(persisted.token).toMatchObject({
+      id: fixture.tokenId,
+      node_id: "prepare-consultation",
+      state: "waiting_work_item",
+      node_activation_sequence: "1",
+      attempt_counter: "1",
+      fencing_token: "1",
+      claimed_at: null,
+      lease_owner: null,
+      lease_expires_at: null
+    });
+    expect(persisted.attempts).toMatchObject([
+      {
+        node_id: "prepare-consultation",
+        node_activation_sequence: "1",
+        attempt_number: "1",
+        outcome: "waiting",
+        result_code: "FLOW_WAITING_WORK_ITEM",
+        trace_summary: decision.trace
+      }
+    ]);
+    expect(persisted.events).toMatchObject([
+      {
+        sequence: "1",
+        event_type: "token_waiting",
+        node_id: "prepare-consultation",
+        summary: decision.trace
+      }
+    ]);
+    expect(workItems.rows).toMatchObject([
+      {
+        owner_user_id: fixture.ownerUserId,
+        flow_run_id: fixture.runId,
+        flow_version_id: fixture.flowVersionId,
+        token_id: fixture.tokenId,
+        node_activation_sequence: "1",
+        node_id: "prepare-consultation",
+        completion_handle: "success",
+        status: "pending",
+        task_kind: "consultation_preparation",
+        title: "Подготовить консультацию",
+        instructions: "Проверьте карту и вопросы клиента",
+        assignee_user_id: fixture.ownerUserId,
+        priority: "high",
+        revision: 1
+      }
+    ]);
+    expect(persisted.events[0]?.attempt_id).toBe(persisted.attempts[0]?.id);
+
+    await expect(store.finalize({ claim, decision })).resolves.toEqual({ status: "stale" });
+    await expect(
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_work_items where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: "1" }] });
+  });
+
+  it("pins a booking-relative deadline in the human work item", async () => {
+    const fixture = await createBookingWorkItemFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-booking-work-item",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+
+    expect(claim).toMatchObject({
+      enrollmentSnapshot: {
+        subject: { bookingId: fixture.bookingId, startAt: fixture.startAt }
+      },
+      effectiveRunSnapshot: {
+        subject: { bookingId: fixture.bookingId, startAt: fixture.startAt }
+      },
+      bookingLifecycleContext: {
+        bookingId: fixture.bookingId,
+        appliedRevision: 1,
+        schedule: { startAt: fixture.startAt, timeZone: "Europe/Moscow" }
+      }
+    });
+    expect(decision).toMatchObject({
+      kind: "wait_work_item",
+      workItem: {
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+        completionRequirements: { resultSummary: "required" },
+        dueAt: fixture.expectedDueAt
+      }
+    });
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied"
+    });
+
+    await expect(
+      runtime.pool.query(
+        `select due_policy_kind, due_lead_time_minutes,
+                due_booking_lifecycle_revision, due_at
+           from flow_work_items
+          where flow_run_id = $1`,
+        [fixture.runId]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          due_policy_kind: "before_booking_start",
+          due_lead_time_minutes: 1_440,
+          due_booking_lifecycle_revision: 1,
+          due_at: new Date(fixture.expectedDueAt)
+        }
+      ]
+    });
+  });
+
+  it("defers a claim until accepted Booking reschedule projection is current", async () => {
+    const fixture = await createBookingWorkItemFixture();
+    const nextStartAt = "2026-08-12T12:00:00.000Z";
+    const expectedDueAt = "2026-08-11T12:00:00.000Z";
+    const lifecycleEvent = await rescheduleBookingProjectionSubject(fixture, nextStartAt);
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+
+    await expect(
+      store.claimNext({
+        leaseOwner: "flows-worker-booking-projection-lag",
+        leaseDurationMs: 30_000,
+        executorKeys: ["astrologer_work_item:1:1"],
+        ownerScope: { kind: "all" }
+      })
+    ).resolves.toBeNull();
+    await expect(selectExecution(fixture.runId)).resolves.toMatchObject({
+      token: { state: "runnable", attempt_counter: "0" },
+      attempts: [],
+      events: []
+    });
+
+    await expect(
+      createDrizzleFlowBookingLifecycleStore(runtime.database, {
+        instanceId: randomUUID(),
+        sessionId: randomUUID()
+      }).processBookingLifecycleEvent({
+        lifecycleEventId: lifecycleEvent.id,
+        latenessHorizonMs: 7 * 24 * 60 * 60 * 1_000,
+        futureSkewToleranceMs: 5 * 60 * 1_000
+      })
+    ).resolves.toMatchObject({
+      outcome: "rescheduled",
+      appliedRevision: 2,
+      affectedRunCount: 1,
+      affectedWorkItemCount: 0
+    });
+
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-booking-projection-current",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    expect(claim).toMatchObject({
+      enrollmentSnapshot: { subject: { startAt: fixture.startAt } },
+      effectiveRunSnapshot: { subject: { startAt: nextStartAt } },
+      bookingLifecycleContext: { bookingId: fixture.bookingId, appliedRevision: 2 }
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    expect(decision).toMatchObject({ workItem: { dueAt: expectedDueAt } });
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({ status: "applied" });
+    await expect(
+      runtime.pool.query(
+        `select due_booking_lifecycle_revision, due_at
+           from flow_work_items
+          where flow_run_id = $1`,
+        [fixture.runId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ due_booking_lifecycle_revision: 2, due_at: new Date(expectedDueAt) }]
+    });
+  });
+
+  it("rolls back the human work item with the token transition when its event insert fails", async () => {
+    const fixture = await createWorkItemFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-work-item-rollback",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+
+    await installFlowEventInsertFailure();
+    try {
+      const failure = await store.finalize({ claim, decision }).catch((error: unknown) => error);
+      expect(errorChain(failure)).toContain("forced flow run event insert failure");
+    } finally {
+      await removeFlowEventInsertFailure();
+    }
+
+    const [afterFailure, workItemCount] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_work_items where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ]);
+    expect(afterFailure.run).toMatchObject({ status: "running", trace_sequence: "0" });
+    expect(afterFailure.token).toMatchObject({
+      state: "claimed",
+      lease_owner: "flows-worker-work-item-rollback",
+      attempt_counter: "1",
+      fencing_token: "1"
+    });
+    expect(afterFailure.attempts).toEqual([]);
+    expect(afterFailure.events).toEqual([]);
+    expect(workItemCount.rows).toEqual([{ count: "0" }]);
+
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({ status: "applied" });
+    await expect(
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_work_items where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: "1" }] });
+  });
+
+  it("does not create a human work item for an expired stale finalize", async () => {
+    const fixture = await createWorkItemFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-work-item-expired",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expireClaimedToken(fixture.tokenId);
+
+    await expect(store.finalize({ claim, decision })).resolves.toEqual({ status: "stale" });
+
+    const [afterStaleFinalize, workItemCount] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_work_items where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ]);
+    expect(afterStaleFinalize.run).toMatchObject({ status: "running", trace_sequence: "0" });
+    expect(afterStaleFinalize.token).toMatchObject({
+      state: "claimed",
+      lease_owner: "flows-worker-work-item-expired",
+      attempt_counter: "1",
+      fencing_token: "1"
+    });
+    expect(afterStaleFinalize.attempts).toEqual([]);
+    expect(afterStaleFinalize.events).toEqual([]);
+    expect(workItemCount.rows).toEqual([{ count: "0" }]);
+  });
+
+  it("lists work items only inside the authenticated owner scope", async () => {
+    const owned = await createWaitingWorkItemFixture();
+    const foreign = await createWaitingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+
+    await expect(
+      listOwnerFlowWorkItems({
+        store,
+        ownerUserId: owned.ownerUserId,
+        query: { status: "active", limit: 50, offset: 0 }
+      })
+    ).resolves.toMatchObject({
+      total: 1,
+      asOf: expect.any(String),
+      items: [
+        {
+          workItem: { id: owned.workItemId, flowRunId: owned.runId, status: "pending" },
+          context: {
+            status: "integrity_error",
+            code: "FLOW_WORK_ITEM_CONTEXT_INTEGRITY_ERROR"
+          }
+        }
+      ]
+    });
+    await expect(
+      startFlowWorkItem({
+        store,
+        actorUserId: owned.ownerUserId,
+        ownerUserId: owned.ownerUserId,
+        workItemId: foreign.workItemId,
+        idempotencyKey: "foreign-work-item-start-1",
+        request: { expectedRevision: 1 }
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "rejected",
+        response: { statusCode: 404, body: { code: "FLOW_WORK_ITEM_NOT_FOUND" } }
+      }
+    });
+  });
+
+  it("builds a deterministic active queue without future snoozed work", async () => {
+    const pending = await createWaitingWorkItemFixture();
+    const inProgress = await createWaitingWorkItemFixture(pending.ownerUserId);
+    const dueSnooze = await createWaitingWorkItemFixture(pending.ownerUserId);
+    const futureSnooze = await createWaitingWorkItemFixture(pending.ownerUserId);
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+
+    await startWaitingWorkItem(inProgress, "active-queue-start-1");
+    await snoozeFlowWorkItem({
+      store,
+      actorUserId: pending.ownerUserId,
+      ownerUserId: pending.ownerUserId,
+      workItemId: dueSnooze.workItemId,
+      idempotencyKey: "active-queue-due-snooze-1",
+      request: {
+        expectedRevision: 1,
+        snoozedUntil: new Date(Date.now() + 100).toISOString()
+      }
+    });
+    await snoozeFlowWorkItem({
+      store,
+      actorUserId: pending.ownerUserId,
+      ownerUserId: pending.ownerUserId,
+      workItemId: futureSnooze.workItemId,
+      idempotencyKey: "active-queue-future-snooze-1",
+      request: {
+        expectedRevision: 1,
+        snoozedUntil: new Date(Date.now() + 86_400_000).toISOString()
+      }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const active = await listOwnerFlowWorkItems({
+      store,
+      ownerUserId: pending.ownerUserId,
+      query: { status: "active", limit: 50, offset: 0 }
+    });
+    expect(active.items.map(({ workItem }) => workItem.id)).toEqual([
+      inProgress.workItemId,
+      pending.workItemId,
+      dueSnooze.workItemId
+    ]);
+    expect(active.total).toBe(3);
+    expect(active.items.some(({ workItem }) => workItem.id === futureSnooze.workItemId)).toBe(
+      false
+    );
+
+    await expect(
+      listOwnerFlowWorkItems({
+        store,
+        ownerUserId: pending.ownerUserId,
+        query: { status: "active", limit: 1, offset: 10 }
+      })
+    ).resolves.toMatchObject({ items: [], total: 3, asOf: expect.any(String) });
+  });
+
+  it("wakes an elapsed snooze exactly once while its run and token stay waiting", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const commandStore = createDrizzleFlowWorkItemStore(runtime.database);
+    const wakeStore = createDrizzleFlowWorkItemWakeStore(runtime.database);
+    const scheduledFor = new Date(Date.now() + 100).toISOString();
+    await snoozeFlowWorkItem({
+      store: commandStore,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "wake-elapsed-snooze-1",
+      request: { expectedRevision: 1, snoozedUntil: scheduledFor }
+    });
+    await runtime.pool.query("select pg_sleep(0.2)");
+
+    const outcomes = await Promise.all([
+      wakeStore.wakeDue({ limit: 10 }),
+      wakeStore.wakeDue({ limit: 10 })
+    ]);
+    expect(outcomes.reduce((total, outcome) => total + outcome.wokenCount, 0)).toBe(1);
+    expect(outcomes.every((outcome) => outcome.asOf.endsWith("Z"))).toBe(true);
+
+    const [execution, workItem] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_work_items where id = $1", [fixture.workItemId])
+    ]);
+    expect(execution.run).toMatchObject({ status: "waiting", trace_sequence: "2" });
+    expect(execution.token).toMatchObject({
+      state: "waiting_work_item",
+      node_id: "prepare-consultation",
+      node_activation_sequence: "1"
+    });
+    expect(execution.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting" },
+      {
+        sequence: "2",
+        event_type: "work_item_available",
+        attempt_id: null,
+        command_id: null,
+        summary: {
+          outcome: "available",
+          reasonCode: "FLOW_WORK_ITEM_SNOOZE_ELAPSED",
+          workItemId: fixture.workItemId,
+          fromRevision: 2,
+          toRevision: 3,
+          scheduledFor
+        }
+      }
+    ]);
+    expect(workItem.rows).toMatchObject([
+      {
+        status: "pending",
+        revision: 3,
+        snoozed_until: null,
+        last_command_id: null,
+        last_run_event_id: execution.events[1]?.id
+      }
+    ]);
+  });
+
+  it("fails closed without a wake event when the waiting runtime is incoherent", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const commandStore = createDrizzleFlowWorkItemStore(runtime.database);
+    const scheduledFor = new Date(Date.now() + 100).toISOString();
+    await snoozeFlowWorkItem({
+      store: commandStore,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "wake-incoherent-snooze-1",
+      request: { expectedRevision: 1, snoozedUntil: scheduledFor }
+    });
+    await runtime.pool.query(
+      "update flow_execution_tokens set state = 'waiting_signal' where id = $1",
+      [fixture.tokenId]
+    );
+    await runtime.pool.query("select pg_sleep(0.2)");
+
+    await expect(
+      createDrizzleFlowWorkItemWakeStore(runtime.database).wakeDue({ limit: 10 })
+    ).resolves.toMatchObject({
+      wokenCount: 0,
+      integrityFailureCount: 1
+    });
+    const [workItem, eventCount] = await Promise.all([
+      runtime.pool.query("select * from flow_work_items where id = $1", [fixture.workItemId]),
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_run_events where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ]);
+    expect(workItem.rows).toMatchObject([{ status: "snoozed", revision: 2 }]);
+    expect(eventCount.rows).toEqual([{ count: "1" }]);
+  });
+
+  it("starts, replays and snoozes a work item with optimistic revision authority", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+
+    const startInput = {
+      store,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "start-work-item-command-1",
+      request: { expectedRevision: 1 }
+    } as const;
+    await expect(startFlowWorkItem(startInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: { body: { workItem: { status: "in_progress", revision: 2 } } }
+      }
+    });
+    await expect(startFlowWorkItem(startInput)).resolves.toMatchObject({
+      kind: "replayed",
+      outcome: {
+        kind: "succeeded",
+        response: { body: { workItem: { status: "in_progress", revision: 2 } } }
+      }
+    });
+
+    const snoozedUntil = new Date(Date.now() + 86_400_000).toISOString();
+    await expect(
+      snoozeFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "snooze-work-item-command-1",
+        request: { expectedRevision: 2, snoozedUntil }
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: {
+          body: { workItem: { status: "snoozed", revision: 3, snoozedUntil } }
+        }
+      }
+    });
+    await expect(
+      startFlowWorkItem({
+        ...startInput,
+        idempotencyKey: "start-work-item-command-2",
+        request: { expectedRevision: 2 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: { code: "FLOW_WORK_ITEM_REVISION_CONFLICT", currentRevision: 3 }
+        }
+      }
+    });
+  });
+
+  it("refuses to complete human work before the astrologer starts it", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+
+    await expect(
+      completeFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "complete-pending-work-item-1",
+        request: { expectedRevision: 1 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: { code: "FLOW_WORK_ITEM_TRANSITION_NOT_ALLOWED", status: "pending" }
+        }
+      }
+    });
+
+    const execution = await selectExecution(fixture.runId);
+    expect(execution.run).toMatchObject({ status: "waiting", trace_sequence: "1" });
+    expect(execution.token).toMatchObject({
+      state: "waiting_work_item",
+      node_id: "prepare-consultation"
+    });
+  });
+
+  it("persists and replays a required-summary rejection without advancing the pinned token", async () => {
+    const fixture = await createWaitingBookingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+    await expect(
+      listOwnerFlowWorkItems({
+        store,
+        ownerUserId: fixture.ownerUserId,
+        query: { status: "active", limit: 50, offset: 0 }
+      })
+    ).resolves.toMatchObject({
+      total: 1,
+      items: [
+        {
+          workItem: { id: fixture.workItemId },
+          context: {
+            status: "available",
+            completionRequirements: { resultSummary: "required" }
+          }
+        }
+      ]
+    });
+    await startWaitingWorkItem(fixture, "start-required-summary-work-item-1");
+    const rejectedInput = {
+      store,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "complete-required-summary-work-item-1",
+      request: {
+        expectedRevision: 2,
+        expectedBookingLifecycleRevision: fixture.bookingLifecycleRevision
+      }
+    } as const;
+
+    await expect(completeFlowWorkItem(rejectedInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: { code: "FLOW_WORK_ITEM_RESULT_SUMMARY_REQUIRED" }
+        }
+      }
+    });
+    await expect(completeFlowWorkItem(rejectedInput)).resolves.toMatchObject({
+      kind: "replayed",
+      outcome: {
+        kind: "rejected",
+        response: { body: { code: "FLOW_WORK_ITEM_RESULT_SUMMARY_REQUIRED" } }
+      }
+    });
+
+    const [waitingExecution, waitingWorkItem] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_work_items where id = $1", [fixture.workItemId])
+    ]);
+    expect(waitingExecution.run).toMatchObject({ status: "waiting", trace_sequence: "1" });
+    expect(waitingExecution.token).toMatchObject({
+      state: "waiting_work_item",
+      node_id: "prepare-consultation",
+      node_activation_sequence: "1"
+    });
+    expect(waitingWorkItem.rows).toMatchObject([{ status: "in_progress", revision: 2 }]);
+
+    await expect(
+      completeFlowWorkItem({
+        ...rejectedInput,
+        idempotencyKey: "complete-required-summary-work-item-2",
+        request: {
+          expectedRevision: 2,
+          expectedBookingLifecycleRevision: fixture.bookingLifecycleRevision,
+          resultSummary: "Карта и вопросы проверены"
+        }
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: {
+          body: {
+            workItem: {
+              status: "completed",
+              revision: 3,
+              resultSummary: "Карта и вопросы проверены"
+            }
+          }
+        }
+      }
+    });
+    await expect(selectExecution(fixture.runId)).resolves.toMatchObject({
+      run: { status: "running", current_node_id: "completed", trace_sequence: "2" },
+      token: { state: "runnable", node_id: "completed", node_activation_sequence: "2" }
+    });
+  });
+
+  it("hides mixed Booking revisions and fences work-item commands until reschedule projection is current", async () => {
+    const fixture = await createWaitingBookingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+    const lifecycleEvent = await rescheduleBookingProjectionSubject(
+      fixture,
+      "2026-08-12T12:00:00.000Z"
+    );
+
+    await expect(
+      listOwnerFlowWorkItems({
+        store,
+        ownerUserId: fixture.ownerUserId,
+        query: { status: "active", limit: 50, offset: 0 }
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          workItem: { id: fixture.workItemId, revision: 1, dueAt: fixture.expectedDueAt },
+          context: {
+            status: "context_pending",
+            code: "FLOW_WORK_ITEM_BOOKING_CONTEXT_PENDING",
+            bookingId: fixture.bookingId,
+            appliedRevision: 1,
+            aggregateRevision: 2
+          }
+        }
+      ]
+    });
+    await expect(
+      startFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "start-booking-work-item-projection-pending-1",
+        request: { expectedRevision: 1, expectedBookingLifecycleRevision: 1 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: {
+            code: "FLOW_WORK_ITEM_BOOKING_CONTEXT_PENDING",
+            bookingId: fixture.bookingId,
+            appliedRevision: 1,
+            aggregateRevision: 2
+          }
+        }
+      }
+    });
+
+    await createDrizzleFlowBookingLifecycleStore(runtime.database, {
+      instanceId: randomUUID(),
+      sessionId: randomUUID()
+    }).processBookingLifecycleEvent({
+      lifecycleEventId: lifecycleEvent.id,
+      latenessHorizonMs: 7 * 24 * 60 * 60 * 1_000,
+      futureSkewToleranceMs: 5 * 60 * 1_000
+    });
+
+    await expect(
+      listOwnerFlowWorkItems({
+        store,
+        ownerUserId: fixture.ownerUserId,
+        query: { status: "active", limit: 50, offset: 0 }
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          workItem: {
+            id: fixture.workItemId,
+            revision: 2,
+            dueAt: "2026-08-11T12:00:00.000Z"
+          },
+          context: {
+            status: "available",
+            booking: {
+              id: fixture.bookingId,
+              lifecycleRevision: 2,
+              currentStartAt: "2026-08-12T12:00:00.000Z"
+            }
+          }
+        }
+      ]
+    });
+    await expect(
+      startFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "start-booking-work-item-missing-context-1",
+        request: { expectedRevision: 2 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: {
+            code: "FLOW_WORK_ITEM_BOOKING_CONTEXT_CHANGED",
+            currentBookingLifecycleRevision: 2
+          }
+        }
+      }
+    });
+    await expect(
+      startFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "start-booking-work-item-stale-context-1",
+        request: { expectedRevision: 1, expectedBookingLifecycleRevision: 1 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: {
+            code: "FLOW_WORK_ITEM_BOOKING_CONTEXT_CHANGED",
+            currentBookingLifecycleRevision: 2
+          }
+        }
+      }
+    });
+    await expect(
+      startFlowWorkItem({
+        store,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        workItemId: fixture.workItemId,
+        idempotencyKey: "start-booking-work-item-current-context-1",
+        request: { expectedRevision: 2, expectedBookingLifecycleRevision: 2 }
+      })
+    ).resolves.toMatchObject({
+      outcome: {
+        kind: "succeeded",
+        response: { body: { workItem: { status: "in_progress", revision: 3 } } }
+      }
+    });
+  });
+
+  it("completes human work and resumes the same pinned token exactly once", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const workItemStore = createDrizzleFlowWorkItemStore(runtime.database);
+    await startWaitingWorkItem(fixture, "start-work-item-before-completion-1");
+    const completionInput = {
+      store: workItemStore,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "complete-work-item-command-1",
+      request: { expectedRevision: 2, resultSummary: "Подготовка завершена" }
+    } as const;
+
+    await expect(completeFlowWorkItem(completionInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: {
+          body: {
+            workItem: {
+              id: fixture.workItemId,
+              status: "completed",
+              revision: 3,
+              resultSummary: "Подготовка завершена",
+              completedByUserId: fixture.ownerUserId
+            }
+          }
+        }
+      }
+    });
+    await expect(completeFlowWorkItem(completionInput)).resolves.toMatchObject({
+      kind: "replayed",
+      outcome: { kind: "succeeded", response: { body: { workItem: { revision: 3 } } } }
+    });
+
+    const resumed = await selectExecution(fixture.runId);
+    expect(resumed.run).toMatchObject({
+      status: "running",
+      current_node_id: "completed",
+      trace_sequence: "2"
+    });
+    expect(resumed.token).toMatchObject({
+      id: fixture.tokenId,
+      state: "runnable",
+      node_id: "completed",
+      node_kind: "completed",
+      node_activation_sequence: "2",
+      attempt_counter: "0"
+    });
+    expect(resumed.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting" },
+      {
+        sequence: "2",
+        event_type: "token_advanced",
+        attempt_id: null,
+        summary: {
+          outcome: "advanced",
+          nodeKind: "astrologer_work_item",
+          reasonCode: "FLOW_WORK_ITEM_COMPLETED",
+          sourceHandle: "success",
+          targetNodeId: "completed",
+          targetNodeKind: "completed"
+        }
+      }
+    ]);
+    expect(resumed.events[1]?.command_id).toBeTruthy();
+
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const terminalClaim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-after-human-completion",
+      leaseDurationMs: 30_000,
+      executorKeys: ["completed:1:1"]
+    });
+    const terminalDecision = await interpretFlowExecutionClaim({
+      claim: terminalClaim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(
+      executionStore.finalize({ claim: terminalClaim, decision: terminalDecision })
+    ).resolves.toMatchObject({ status: "applied", traceSequence: 3n });
+  });
+
+  it("rolls back work completion, command and token resume when its trace event fails", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const store = createDrizzleFlowWorkItemStore(runtime.database);
+    await startWaitingWorkItem(fixture, "start-work-item-before-rollback-1");
+    const completionInput = {
+      store,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "complete-work-item-rollback-1",
+      request: { expectedRevision: 2 }
+    } as const;
+
+    await installFlowEventInsertFailure();
+    try {
+      const failure = await completeFlowWorkItem(completionInput).catch((error: unknown) => error);
+      expect(errorChain(failure)).toContain("forced flow run event insert failure");
+    } finally {
+      await removeFlowEventInsertFailure();
+    }
+
+    const [afterFailure, workItem, commandCount] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_work_items where id = $1", [fixture.workItemId]),
+      runtime.pool.query<{ count: string }>(
+        "select count(*)::text as count from flow_runtime_commands where idempotency_key = $1",
+        [completionInput.idempotencyKey]
+      )
+    ]);
+    expect(afterFailure.run).toMatchObject({
+      status: "waiting",
+      current_node_id: "prepare-consultation",
+      trace_sequence: "1"
+    });
+    expect(afterFailure.token).toMatchObject({
+      state: "waiting_work_item",
+      node_id: "prepare-consultation",
+      node_activation_sequence: "1"
+    });
+    expect(afterFailure.events).toHaveLength(1);
+    expect(workItem.rows).toMatchObject([{ status: "in_progress", revision: 2 }]);
+    expect(commandCount.rows).toEqual([{ count: "0" }]);
+
+    await expect(completeFlowWorkItem(completionInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: { kind: "succeeded" }
+    });
+  });
+
+  it("fails closed when a replayed work completion has lost its durable event", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    await startWaitingWorkItem(fixture, "start-work-item-before-missing-event-1");
+    const completionInput = {
+      store: createDrizzleFlowWorkItemStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey: "complete-work-item-missing-event-1",
+      request: { expectedRevision: 2 }
+    } as const;
+
+    await expect(completeFlowWorkItem(completionInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: { kind: "succeeded" }
+    });
+    const commandId = await removeCommandEvent(completionInput.idempotencyKey);
+
+    await runtime.pool.query(
+      "ALTER TABLE flow_runtime_commands DISABLE TRIGGER flow_runtime_commands_immutable_identity"
+    );
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("UPDATE flow_runtime_commands SET updated_at = updated_at WHERE id = $1", [
+        commandId
+      ]);
+      await expect(client.query("COMMIT")).rejects.toMatchObject({
+        constraint: "flow_runtime_command_event_consistency"
+      });
+    } finally {
+      await client.query("ROLLBACK").catch(() => undefined);
+      client.release();
+      await runtime.pool.query(
+        "ALTER TABLE flow_runtime_commands ENABLE TRIGGER flow_runtime_commands_immutable_identity"
+      );
+    }
+
+    await expect(completeFlowWorkItem(completionInput)).rejects.toBeInstanceOf(
+      FlowRuntimeCommandIntegrityError
+    );
+  });
+
+  it("cancels the active human work item with its owning run command", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+
+    await expect(
+      cancelDurableFlowRun({
+        store: createDrizzleFlowRunCancellationStore(runtime.database),
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        runId: fixture.runId,
+        idempotencyKey: "cancel-run-with-work-item-1",
+        request: {}
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: { body: { run: { id: fixture.runId, status: "canceled" } } }
+      }
+    });
+
+    const [execution, workItem] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_work_items where id = $1", [fixture.workItemId])
+    ]);
+    expect(execution.token).toMatchObject({ state: "canceled" });
+    expect(execution.run).toMatchObject({ status: "canceled", trace_sequence: "2" });
+    expect(execution.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting" },
+      { sequence: "2", event_type: "run_canceled" }
+    ]);
+    expect(workItem.rows).toMatchObject([
+      { status: "canceled", revision: 2, canceled_at: expect.any(Date) }
+    ]);
+    expect(workItem.rows[0]?.last_command_id).toBe(execution.events[1]?.command_id);
+  });
+
+  it("fails closed when a replayed cancellation has lost its durable event", async () => {
+    const fixture = await createWaitingWorkItemFixture();
+    const cancellationInput = {
+      store: createDrizzleFlowRunCancellationStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      runId: fixture.runId,
+      idempotencyKey: "cancel-run-missing-event-1",
+      request: {}
+    } as const;
+
+    await expect(cancelDurableFlowRun(cancellationInput)).resolves.toMatchObject({
+      kind: "created",
+      outcome: { kind: "succeeded" }
+    });
+    await removeCommandEvent(cancellationInput.idempotencyKey);
+
+    await expect(cancelDurableFlowRun(cancellationInput)).rejects.toBeInstanceOf(
+      FlowRuntimeCommandIntegrityError
+    );
+  });
+
   it("resets node-local attempts while preserving the run-wide fence on the next activation", async () => {
     const fixture = await createAdvancingFixture();
     const store = createDrizzleFlowExecutionStore(runtime.database);
@@ -706,6 +1922,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
 
   it("quarantines a token pinned to unsupported interpreter semantics", async () => {
     const fixture = await createTerminalFixture({
+      allowInvalidDefinitionShape: true,
       capabilityManifest: {
         ...capabilityManifest,
         executionSemanticsVersion: "flow-interpreter.v2"
@@ -742,6 +1959,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
 
   it("uses a post-lock clock when quarantining poison work", async () => {
     const fixture = await createTerminalFixture({
+      allowInvalidDefinitionShape: true,
       capabilityManifest: {
         ...capabilityManifest,
         executionSemanticsVersion: "flow-interpreter.v2"
@@ -814,6 +2032,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
 
   it("quarantines a token whose pinned graph node metadata disagrees", async () => {
     const fixture = await createTerminalFixture({
+      allowInvalidDefinitionShape: true,
       graph: {
         ...graph,
         nodes: graph.nodes.map((node) =>
@@ -2171,7 +3390,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     await expect(
       runtime.pool.query("delete from flow_run_events where id = $1", [eventId])
     ).rejects.toThrow("flow run events can only be deleted with their run");
-    await expect(runtime.pool.query("truncate flow_run_events")).rejects.toThrow(
+    await expect(runtime.pool.query("truncate flow_run_events cascade")).rejects.toThrow(
       "flow run events are immutable"
     );
     await expect(runtime.pool.query("truncate flow_execution_attempts cascade")).rejects.toThrow(
@@ -2289,7 +3508,15 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     const fixture = await createAdvancingFixture();
     const firstAttemptId = "a0000000-0000-4000-8000-000000000002";
     const secondAttemptId = "a0000000-0000-4000-8000-000000000001";
-    const occurredAt = "2026-08-03T20:00:00.000Z";
+    const currentClock = await runtime.pool.query<{ current_at: Date }>(
+      `select greatest(run.updated_at, token.updated_at) + interval '1 millisecond' as current_at
+         from flow_runs run
+         join flow_execution_tokens token on token.flow_run_id = run.id
+        where run.id = $1`,
+      [fixture.runId]
+    );
+    const occurredAt =
+      currentClock.rows[0]?.current_at.toISOString() ?? raise("Expected current runtime clock");
     const advancedTrace = {
       schemaVersion: "flow-runtime-trace.v1",
       outcome: "advanced",
@@ -2390,9 +3617,21 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
 
   async function createTerminalFixture(
     input: {
+      readonly allowInvalidDefinitionShape?: boolean;
       readonly availableAt?: string;
       readonly capabilityManifest?: unknown;
+      readonly createRunSnapshot?: (context: {
+        readonly flowVersionId: string;
+        readonly sourceEventId: string;
+        readonly subjectId: string;
+        readonly occurredAt: string;
+      }) => unknown;
       readonly graph?: unknown;
+      readonly normalizedRuntimeEvent?: FlowNormalizedBookingConfirmedEventV1;
+      readonly ownerUserId?: string;
+      readonly runtimeEventSource?: "booking" | "manual";
+      readonly runtimeEventSubjectId?: string;
+      readonly runtimeEventSubjectType?: "booking" | "client";
       readonly initialNode?: {
         readonly id: string;
         readonly kind: FlowExecutionClaim["nodeKind"];
@@ -2401,7 +3640,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       };
     } = {}
   ) {
-    const ownerUserId = await createUser();
+    const ownerUserId = input.ownerUserId ?? (await createUser());
     const client = await runtime.pool.connect();
     const fixtureGraph = input.graph ?? graph;
     const initialNode = input.initialNode ?? {
@@ -2410,6 +3649,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       configSchemaVersion: 1,
       executorContractVersion: 1
     };
+    let capabilityManifestConstraint: string | null = null;
 
     try {
       await client.query("begin");
@@ -2435,6 +3675,9 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         ]
       );
       const flowId = flow.rows[0]?.id ?? raise("Expected flow id");
+      capabilityManifestConstraint = input.allowInvalidDefinitionShape
+        ? await suspendFlowVersionCapabilityManifestConstraint(client)
+        : null;
       const version = await client.query<{ id: string }>(
         `insert into flow_versions
           (flow_id, owner_user_id, version, source_revision, approval_mode,
@@ -2469,13 +3712,39 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
           where id = $1`,
         [flowId, flowVersionId]
       );
+      const normalizedRuntimeEvent = input.normalizedRuntimeEvent;
+      const sourceEventId = normalizedRuntimeEvent?.sourceEventId ?? `fixture:${randomUUID()}`;
+      const subjectId =
+        normalizedRuntimeEvent?.subjectId ?? input.runtimeEventSubjectId ?? randomUUID();
+      const occurredAt = normalizedRuntimeEvent?.occurredAtUtc ?? new Date().toISOString();
       const runtimeEvent = await client.query<{ id: string }>(
         `insert into flow_runtime_events
-          (owner_user_id, source, source_event_id, dedupe_key, subject_type,
-           subject_id, occurred_at, payload)
-         values ($1, 'manual', $2, $2, 'client', $3, transaction_timestamp(), '{}')
+          (owner_user_id, source, source_event_id, dedupe_key, event_kind,
+           subject_type, subject_id, occurrence_key, occurred_at,
+           payload_schema_version, payload_digest, payload, classification,
+           redaction_version, retention_policy_id, ingestion_outcome, processed_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+           $10, $11, $12, $13, $14, $15, $16, $17)
          returning id`,
-        [ownerUserId, `fixture:${randomUUID()}`, randomUUID()]
+        [
+          ownerUserId,
+          normalizedRuntimeEvent?.source ?? input.runtimeEventSource ?? "manual",
+          sourceEventId,
+          normalizedRuntimeEvent?.dedupeKey ?? sourceEventId,
+          normalizedRuntimeEvent?.eventKind ?? null,
+          normalizedRuntimeEvent?.subjectType ?? input.runtimeEventSubjectType ?? "client",
+          subjectId,
+          normalizedRuntimeEvent?.occurrenceKey ?? null,
+          occurredAt,
+          normalizedRuntimeEvent?.payloadSchemaVersion ?? null,
+          normalizedRuntimeEvent?.canonicalPayloadHash ?? null,
+          normalizedRuntimeEvent?.allowlistedPayload ?? {},
+          normalizedRuntimeEvent?.classification ?? null,
+          normalizedRuntimeEvent?.redactionVersion ?? null,
+          normalizedRuntimeEvent?.retentionPolicyId ?? null,
+          normalizedRuntimeEvent ? "enrolled" : null,
+          normalizedRuntimeEvent ? occurredAt : null
+        ]
       );
       const runtimeEventId = runtimeEvent.rows[0]?.id ?? raise("Expected runtime event id");
       const run = await client.query<{ id: string }>(
@@ -2490,9 +3759,30 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
           flowId,
           flowVersionId,
           runtimeEventId,
-          {
+          input.createRunSnapshot?.({ flowVersionId, sourceEventId, subjectId, occurredAt }) ?? {
             schemaVersion: "flow-run-snapshot.v2",
-            executionSemanticsVersion: "flow-interpreter.v1"
+            enrollment: {
+              activationEpochId: randomUUID(),
+              triggerNodeId: "manual",
+              occurrenceKey: randomUUID(),
+              policyKey: "once_per_occurrence",
+              policyRevision: 1,
+              rolloutPolicyRevision: 1,
+              eventOccurredAt: occurredAt,
+              enrolledAt: occurredAt
+            },
+            subject: {
+              type: "booking",
+              bookingId: randomUUID(),
+              clientUserId: randomUUID(),
+              productId: randomUUID(),
+              startAt: occurredAt,
+              endAt: occurredAt
+            },
+            executionAuthority: {
+              basis: "current_entitlement",
+              referenceId: randomUUID()
+            }
           },
           initialNode.id
         ]
@@ -2526,9 +3816,15 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       );
       const tokenId = token.rows[0]?.id ?? raise("Expected token id");
       await client.query("commit");
-      return { ownerUserId, flowId, flowVersionId, runId, tokenId };
+      if (capabilityManifestConstraint) {
+        await restoreFlowVersionCapabilityManifestConstraint(client, capabilityManifestConstraint);
+      }
+      return { ownerUserId, flowId, flowVersionId, runId, tokenId, runtimeEventId };
     } catch (error) {
       await client.query("rollback");
+      if (capabilityManifestConstraint) {
+        await restoreFlowVersionCapabilityManifestConstraint(client, capabilityManifestConstraint);
+      }
       throw error;
     } finally {
       client.release();
@@ -2548,11 +3844,474 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     });
   }
 
+  async function createWorkItemFixture(ownerUserId?: string) {
+    return createTerminalFixture({
+      ownerUserId,
+      graph: workItemGraph,
+      initialNode: {
+        id: "prepare-consultation",
+        kind: "astrologer_work_item",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: workItemCapabilityManifest
+    });
+  }
+
+  async function createBookingWorkItemFixture(ownerUserId?: string) {
+    const resolvedOwnerUserId = ownerUserId ?? (await createUser());
+    const bookingId = randomUUID();
+    const clientUserId = await createUser();
+    const startAt = "2026-08-10T10:00:00.000Z";
+    const expectedDueAt = "2026-08-09T10:00:00.000Z";
+    const projectionSubject = await createBookingProjectionSubject({
+      ownerUserId: resolvedOwnerUserId,
+      clientUserId,
+      bookingId,
+      startAt,
+      endAt: "2026-08-10T11:00:00.000Z"
+    });
+    const fixture = await createTerminalFixture({
+      ownerUserId: resolvedOwnerUserId,
+      graph: bookingWorkItemGraph,
+      initialNode: {
+        id: "prepare-consultation",
+        kind: "astrologer_work_item",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: bookingWorkItemCapabilityManifest,
+      normalizedRuntimeEvent: projectionSubject.normalizedRuntimeEvent,
+      runtimeEventSource: "booking",
+      runtimeEventSubjectType: "booking",
+      runtimeEventSubjectId: bookingId,
+      createRunSnapshot: ({ subjectId, occurredAt }) => ({
+        schemaVersion: "flow-run-snapshot.v2",
+        enrollment: {
+          activationEpochId: randomUUID(),
+          triggerNodeId: "booking",
+          occurrenceKey: bookingId,
+          policyKey: "once_per_occurrence",
+          policyRevision: 1,
+          rolloutPolicyRevision: 1,
+          eventOccurredAt: occurredAt,
+          enrolledAt: occurredAt
+        },
+        subject: {
+          type: "booking",
+          bookingId: subjectId,
+          clientUserId,
+          productId: "10000000-0000-4000-8000-000000000001",
+          startAt,
+          endAt: "2026-08-10T11:00:00.000Z"
+        },
+        executionAuthority: {
+          basis: "current_entitlement",
+          referenceId: randomUUID()
+        }
+      })
+    });
+    await persistFixtureBookingLifecycleHead({
+      lifecycleEvent: projectionSubject.lifecycleEvent,
+      runtimeEventId: fixture.runtimeEventId
+    });
+    return {
+      ...fixture,
+      bookingId,
+      clientUserId,
+      startAt,
+      endAt: "2026-08-10T11:00:00.000Z",
+      expectedDueAt,
+      bookingLifecycleRevision: 1
+    };
+  }
+
+  async function createBookingProjectionSubject(input: {
+    readonly ownerUserId: string;
+    readonly clientUserId: string;
+    readonly bookingId: string;
+    readonly startAt: string;
+    readonly endAt: string;
+  }) {
+    const lifecycleEvent = createBookingLifecycleEvent({
+      id: randomUUID(),
+      bookingId: input.bookingId,
+      ownerUserId: input.ownerUserId,
+      revision: 1,
+      kind: "confirmed",
+      actor: { kind: "system", userId: null },
+      reasonCode: null,
+      before: null,
+      after: {
+        startAt: input.startAt,
+        endAt: input.endAt,
+        timeZone: "Europe/Moscow"
+      },
+      occurredAt: new Date().toISOString()
+    });
+    const normalizedRuntimeEvent = normalizeBookingConfirmedFlowLifecycleEvent({
+      lifecycleEvent,
+      subject: {
+        id: input.bookingId,
+        ownerUserId: input.ownerUserId,
+        clientUserId: input.clientUserId,
+        productId: "10000000-0000-4000-8000-000000000001",
+        state: "confirmed",
+        source: "manual",
+        startAt: input.startAt,
+        endAt: input.endAt,
+        timeZone: "Europe/Moscow"
+      }
+    });
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        `insert into products
+          (id, owner_user_id, type, status, title, price_minor, currency,
+           execution_mode, payment_model, duration_minutes, participant_mode)
+         values ($1, $2, 'single', 'active', 'Натальная консультация', 10000, 'RUB',
+           'live', 'once', 60, 'solo')`,
+        ["10000000-0000-4000-8000-000000000001", input.ownerUserId]
+      );
+      const schedule = await client.query<{ id: string }>(
+        `insert into availability_schedules
+          (owner_user_id, name, time_zone, is_default, version, start_interval_minutes,
+           buffer_before_minutes, buffer_after_minutes, minimum_notice_minutes,
+           booking_horizon_days)
+         values ($1, 'Default', 'Europe/Moscow', true, 1, 30, 0, 0, 0, 60)
+         returning id`,
+        [input.ownerUserId]
+      );
+      const scheduleId = schedule.rows[0]?.id ?? raise("Expected booking schedule id");
+      const reservation = await client.query<{ id: string }>(
+        `insert into schedule_reservations
+          (owner_user_id, schedule_id, kind, lifecycle, service_start_at, service_end_at,
+           occupied_start_at, occupied_end_at, source_aggregate_id)
+         values ($1, $2, 'booking', 'active', $3, $4, $3, $4, $5)
+         returning id`,
+        [input.ownerUserId, scheduleId, input.startAt, input.endAt, input.bookingId]
+      );
+      const reservationId = reservation.rows[0]?.id ?? raise("Expected booking reservation id");
+      await client.query(
+        `insert into bookings
+          (id, owner_user_id, client_user_id, product_id, reservation_id, source, state,
+           lifecycle_revision,
+           service_start_at, service_end_at, product_title_snapshot,
+           duration_minutes_snapshot, delivery_format_snapshot, price_minor_snapshot,
+           currency_snapshot, time_zone_snapshot, policy_snapshot, client_data_requirements_snapshot)
+         values ($1, $2, $3, $4, $5, 'manual', 'confirmed', 1, $6, $7,
+           'Натальная консультация', 60, 'video', 10000, 'RUB', 'Europe/Moscow', '{}', $8::jsonb)`,
+        [
+          input.bookingId,
+          input.ownerUserId,
+          input.clientUserId,
+          "10000000-0000-4000-8000-000000000001",
+          reservationId,
+          input.startAt,
+          input.endAt,
+          JSON.stringify({
+            schemaVersion: "booking-client-data-requirements.v1",
+            executionMode: "live",
+            participantMode: "solo",
+            requiredClientData: ["chart1"],
+            methods: ["natal"]
+          })
+        ]
+      );
+      await client.query(
+        `insert into booking_lifecycle_events
+          (id, booking_id, owner_user_id, revision, event_kind, actor_kind,
+           actor_user_id, reason_code, before_start_at, before_end_at, before_time_zone,
+           after_start_at, after_end_at, after_time_zone, canonical_digest, occurred_at,
+           created_at)
+         values ($1, $2, $3, 1, 'confirmed', 'system', null, null, null, null, null,
+           $4, $5, $6, $7, $8, $8)`,
+        [
+          lifecycleEvent.id,
+          lifecycleEvent.bookingId,
+          lifecycleEvent.ownerUserId,
+          lifecycleEvent.after?.startAt,
+          lifecycleEvent.after?.endAt,
+          lifecycleEvent.after?.timeZone,
+          lifecycleEvent.canonicalDigest,
+          lifecycleEvent.occurredAt
+        ]
+      );
+      await client.query(
+        "insert into client_profiles (user_id, display_name_snapshot) values ($1, 'Мария')",
+        [input.clientUserId]
+      );
+      await client.query("commit");
+      return { lifecycleEvent, normalizedRuntimeEvent };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function persistFixtureBookingLifecycleHead(input: {
+    readonly lifecycleEvent: ReturnType<typeof createBookingLifecycleEvent>;
+    readonly runtimeEventId: string;
+  }): Promise<void> {
+    const event = input.lifecycleEvent;
+    if (!event.after) raise("Expected confirmed Booking lifecycle schedule");
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        `insert into flow_booking_lifecycle_receipts
+          (lifecycle_event_id, booking_id, owner_user_id, revision, event_kind,
+           canonical_digest, outcome, flow_runtime_event_id, affected_run_count,
+           affected_work_item_count, preserved_completed_work_item_count, processed_at)
+         values ($1, $2, $3, 1, 'confirmed', $4, 'enrolled', $5, 1, 0, 0,
+           transaction_timestamp())`,
+        [event.id, event.bookingId, event.ownerUserId, event.canonicalDigest, input.runtimeEventId]
+      );
+      await client.query(
+        `insert into flow_booking_lifecycle_heads
+          (booking_id, owner_user_id, applied_revision, state, current_start_at,
+           current_end_at, current_time_zone, last_lifecycle_event_id,
+           last_canonical_digest, created_at, updated_at)
+         values ($1, $2, 1, 'confirmed', $3, $4, $5, $6, $7,
+           transaction_timestamp(), transaction_timestamp())`,
+        [
+          event.bookingId,
+          event.ownerUserId,
+          event.after.startAt,
+          event.after.endAt,
+          event.after.timeZone,
+          event.id,
+          event.canonicalDigest
+        ]
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function rescheduleBookingProjectionSubject(
+    fixture: Awaited<ReturnType<typeof createBookingWorkItemFixture>>,
+    nextStartAt: string
+  ) {
+    const nextEndAt = new Date(Date.parse(nextStartAt) + 60 * 60 * 1_000).toISOString();
+    const lifecycleEvent = createBookingLifecycleEvent({
+      id: randomUUID(),
+      bookingId: fixture.bookingId,
+      ownerUserId: fixture.ownerUserId,
+      revision: 2,
+      kind: "rescheduled",
+      actor: { kind: "astrologer", userId: fixture.ownerUserId },
+      reasonCode: null,
+      before: {
+        startAt: fixture.startAt,
+        endAt: fixture.endAt,
+        timeZone: "Europe/Moscow"
+      },
+      after: { startAt: nextStartAt, endAt: nextEndAt, timeZone: "Europe/Moscow" },
+      occurredAt: new Date().toISOString()
+    });
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("begin");
+      const reservation = await client.query(
+        `update schedule_reservations reservation
+            set service_start_at = $2, service_end_at = $3,
+                occupied_start_at = $2, occupied_end_at = $3,
+                updated_at = transaction_timestamp()
+           from bookings booking
+          where booking.id = $1
+            and booking.owner_user_id = $4
+            and reservation.id = booking.reservation_id
+            and reservation.owner_user_id = booking.owner_user_id
+            and reservation.lifecycle = 'active'
+         returning reservation.id`,
+        [fixture.bookingId, nextStartAt, nextEndAt, fixture.ownerUserId]
+      );
+      if (reservation.rowCount !== 1) raise("Expected one active Booking reservation");
+      const booking = await client.query(
+        `update bookings
+            set service_start_at = $2, service_end_at = $3,
+                lifecycle_revision = 2, updated_at = transaction_timestamp()
+          where id = $1 and owner_user_id = $4 and lifecycle_revision = 1
+         returning id`,
+        [fixture.bookingId, nextStartAt, nextEndAt, fixture.ownerUserId]
+      );
+      if (booking.rowCount !== 1) raise("Expected Booking lifecycle revision one");
+      await client.query(
+        `insert into booking_lifecycle_events
+          (id, booking_id, owner_user_id, revision, event_kind, actor_kind,
+           actor_user_id, reason_code, before_start_at, before_end_at, before_time_zone,
+           after_start_at, after_end_at, after_time_zone, canonical_digest, occurred_at,
+           created_at)
+         values ($1, $2, $3, 2, 'rescheduled', 'astrologer', $3, null, $4, $5, $6,
+           $7, $8, $9, $10, $11, $11)`,
+        [
+          lifecycleEvent.id,
+          lifecycleEvent.bookingId,
+          lifecycleEvent.ownerUserId,
+          lifecycleEvent.before?.startAt,
+          lifecycleEvent.before?.endAt,
+          lifecycleEvent.before?.timeZone,
+          lifecycleEvent.after?.startAt,
+          lifecycleEvent.after?.endAt,
+          lifecycleEvent.after?.timeZone,
+          lifecycleEvent.canonicalDigest,
+          lifecycleEvent.occurredAt
+        ]
+      );
+      await client.query("commit");
+      return lifecycleEvent;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async function createWaitingWorkItemFixture(ownerUserId?: string) {
+    const fixture = await createWorkItemFixture(ownerUserId);
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: `flows-worker-create-work-item-${fixture.tokenId}`,
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await store.finalize({ claim, decision });
+    const result = await runtime.pool.query<{ id: string }>(
+      "select id from flow_work_items where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const workItemId = result.rows[0]?.id ?? raise("Expected waiting work item id");
+    return { ...fixture, workItemId };
+  }
+
+  async function createWaitingBookingWorkItemFixture(ownerUserId?: string) {
+    const fixture = await createBookingWorkItemFixture(ownerUserId);
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: `flows-worker-create-booking-work-item-${fixture.tokenId}`,
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await store.finalize({ claim, decision });
+    const result = await runtime.pool.query<{ id: string }>(
+      "select id from flow_work_items where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const workItemId = result.rows[0]?.id ?? raise("Expected waiting booking work item id");
+    return { ...fixture, workItemId };
+  }
+
+  async function startWaitingWorkItem(
+    fixture: {
+      readonly ownerUserId: string;
+      readonly workItemId: string;
+      readonly bookingLifecycleRevision?: number;
+    },
+    idempotencyKey: string
+  ): Promise<void> {
+    const result = await startFlowWorkItem({
+      store: createDrizzleFlowWorkItemStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      workItemId: fixture.workItemId,
+      idempotencyKey,
+      request: {
+        expectedRevision: 1,
+        ...(fixture.bookingLifecycleRevision === undefined
+          ? {}
+          : { expectedBookingLifecycleRevision: fixture.bookingLifecycleRevision })
+      }
+    });
+    if (
+      result.outcome.kind !== "succeeded" ||
+      result.outcome.response.body.workItem.status !== "in_progress"
+    ) {
+      raise("Expected waiting work item to start");
+    }
+  }
+
+  async function suspendFlowVersionCapabilityManifestConstraint(
+    client: import("pg").PoolClient
+  ): Promise<string> {
+    const result = await client.query<{ definition: string }>(
+      `SELECT pg_get_constraintdef(oid) AS definition
+         FROM pg_constraint
+        WHERE conrelid = 'flow_versions'::regclass
+          AND conname = 'flow_versions_capability_manifest_schema_check'`
+    );
+    const definition = result.rows[0]?.definition;
+    if (!definition) raise("Expected flow version capability-manifest constraint");
+    await client.query(
+      "ALTER TABLE flow_versions DROP CONSTRAINT flow_versions_capability_manifest_schema_check"
+    );
+    return definition;
+  }
+
+  async function restoreFlowVersionCapabilityManifestConstraint(
+    client: import("pg").PoolClient,
+    definition: string
+  ): Promise<void> {
+    const result = await client.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM pg_constraint
+          WHERE conrelid = 'flow_versions'::regclass
+            AND conname = 'flow_versions_capability_manifest_schema_check'
+       ) AS exists`
+    );
+    if (result.rows[0]?.exists) return;
+    await client.query(
+      `ALTER TABLE flow_versions
+         ADD CONSTRAINT flow_versions_capability_manifest_schema_check
+         ${definition} NOT VALID`
+    );
+  }
+
   async function createUser(): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       "insert into users (status) values ('active') returning id"
     );
     return result.rows[0]?.id ?? raise("Expected user id");
+  }
+
+  async function removeCommandEvent(idempotencyKey: string): Promise<string> {
+    const command = await runtime.pool.query<{ id: string }>(
+      "SELECT id FROM flow_runtime_commands WHERE idempotency_key = $1",
+      [idempotencyKey]
+    );
+    const commandId = command.rows[0]?.id ?? raise("Expected runtime command id");
+    await runtime.pool.query(
+      "ALTER TABLE flow_run_events DISABLE TRIGGER flow_run_events_immutable"
+    );
+    try {
+      const deleted = await runtime.pool.query(
+        "DELETE FROM flow_run_events WHERE command_id = $1 RETURNING id",
+        [commandId]
+      );
+      if (deleted.rowCount !== 1) raise("Expected one command event");
+    } finally {
+      await runtime.pool.query(
+        "ALTER TABLE flow_run_events ENABLE TRIGGER flow_run_events_immutable"
+      );
+    }
+    return commandId;
   }
 
   async function selectExecution(runId: string) {

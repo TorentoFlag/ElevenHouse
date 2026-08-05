@@ -5,6 +5,20 @@ export class BirthDataValidationError extends Error {
   }
 }
 
+export class ClientBirthDataRevisionConflictError extends Error {
+  constructor(message = "Client birth data was changed by another actor") {
+    super(message);
+    this.name = "ClientBirthDataRevisionConflictError";
+  }
+}
+
+export class ClientBirthDataRelationshipDeniedError extends Error {
+  constructor(message = "Astrologer does not have an active client relationship") {
+    super(message);
+    this.name = "ClientBirthDataRelationshipDeniedError";
+  }
+}
+
 export class ClientAstrologerRelationshipRoleError extends Error {
   constructor(message = "Client and astrologer account roles are required") {
     super(message);

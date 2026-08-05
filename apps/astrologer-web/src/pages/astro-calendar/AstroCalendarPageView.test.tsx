@@ -154,13 +154,15 @@ describe("AstroCalendarPageView", () => {
     expect(markup).toContain("Марина Краснова");
     expect(markup).toContain("Написать");
     expect(markup).toContain("Автоматизировать");
+    expect(markup).toContain("/flows?source=astro_calendar");
+    expect(markup).toContain("eventId=client-transit-1");
+    expect(markup).toContain("suggestedTemplateKey=sleeping-client-reactivation");
     expect(markup).toContain("Мягкое касание по транзиту без автоматической отправки");
     expect(markup).toContain("id=\"astro-calendar-search\"");
     expect(markup).toContain("name=\"astro-calendar-search\"");
     expect(markup).toContain("aria-label=\"Поиск по астрокалендарю\"");
     expect(markup).toContain("Период кульминации");
-    expect(markup).toContain("Автоматизации появятся после отдельного production-контура");
-    expect(markup).toContain("disabled");
+    expect(markup).not.toContain("Отправлено клиенту");
     expect(css).toContain("height: calc(100dvh - var(--astrologer-app-header-height, 68px))");
     expect(css).toMatch(/\.timeline\s*\{[^}]*height:\s*44px/s);
     expect(css).toMatch(/\.layout\s*\{[^}]*grid-template-columns:\s*minmax\(0, 920px\)/s);

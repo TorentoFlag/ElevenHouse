@@ -24,6 +24,53 @@ React 19, Vite 8, TanStack Query, React Flow, Vitest and real browser evidence.
 
 ---
 
+## Superseding Birth-Data Decision (2026-08-05)
+
+This section supersedes every earlier reference in this plan to multi-profile
+birth data, per-booking grants, revocation, consent waits, external chart-AI
+consent, or processing-authority versions.
+
+- A client owns exactly one birth profile. It is not selectable, switchable or
+  scoped to an individual booking.
+- Privacy-policy publication and registration legal acceptance are explicitly
+  out of scope for this delivery. This module records no consent, grant,
+  revocation or legal-acceptance state.
+- A client may create or correct the profile. An astrologer may do the same
+  only through an active explicit client--astrologer relationship. Every write
+  records source, actor, immutable history and an expected revision; the
+  database enforces CAS.
+- Flow runtime evaluates confirmed-booking eligibility and the required chart
+  readiness of that one profile. Missing data creates a durable client action
+  request or astrologer work item, then re-evaluates readiness after a profile
+  update. It never waits for consent.
+- Chart calculation uses the single profile only in a relationship-scoped
+  client/booking/service context. The relationship grants access for work; it
+  does not create a separate profile permission.
+- AI usage keeps only its technical immutable provider/resource audit record.
+  No client consent record, junction table, grant ledger or hidden authority
+  version participates in chart generation.
+
+**Removal gate:** the old source contour is removed before new runtime work.
+The generated pre-launch baseline must be regenerated from the combined shared
+schema and must not retain the removed consent tables or columns. No automatic
+destructive migration is permitted for an already deployed database.
+
+## V1 Full-Removal Decision (2026-08-05)
+
+There are no real users, deployed historical flow definitions or historical
+birth-data records to preserve. Therefore this delivery must not retain a V1
+compatibility contour, read adapter, migration command, migration table,
+negotiated response variant, legacy-pause route, UI migration panel or
+baseline-reconciliation branch. The database baseline and every Flow API,
+contract, domain use case, worker and web model accept V2 only.
+
+The V2-only data contract is deliberate: `flow-graph.v1`,
+`flow-run-snapshot.v1`, V1 capability manifests and migration-origin metadata
+are invalid input. A missing profile follows the ordinary V2 work-item path;
+it never reintroduces a consent, grant or legacy wait state.
+
+---
+
 ## Purpose / Big Picture
 
 An astrologer opens `/flows`, creates a template-backed flow, edits a typed
@@ -375,19 +422,110 @@ does not reduce the Definition of Done in the design spec.
       Independent QA passed 48/48 targeted scenarios and accepted both original
       blockers; the broader Flow unit contour passes 31 files / 275 tests and
       eight real PostgreSQL suites pass 140/140.
-- [ ] 2026-08-04 13:44 MSK: activation/enrollment control is now under
-      implementation as a separate authority rather than an extension of legacy
-      `flows.status`. RED-to-green contracts and domain transition tests pass 2
-      files / 21 tests with contracts build plus contracts/domain typechecks.
-      The command shape pins definition revision, enrollment revision and active
-      version; pause pins enrollment revision, active version and exact epoch so
-      a new draft cannot disable an operational pause. Readiness is absent from
-      the strict public request and enters the private state machine only through
-      a one-shot store callback. A created success cannot bypass that callback,
-      while exact replay cannot invoke it. Independent QA accepted the original
-      stale-readiness finding with no Blocker/High. PostgreSQL lock-time
-      readiness, epoch/command persistence, exact persisted replay and API
-      composition remain open, and runtime remains `definition_only`.
+- [x] 2026-08-04 20:08 MSK: activation/enrollment command authority is complete
+      as a separate lifecycle from legacy `flows.status`. PostgreSQL serializes
+      definition, enrollment, actor-subject, entitlement/quota and transactional
+      runtime readiness; commands pin every CAS input, persist exact 24-hour
+      replay plus durable tombstones, and create/close immutable activation
+      epochs without accepting caller-provided readiness. The owner-scoped
+      no-store enrollment read returns the exact active epoch or a deterministic
+      inactive revision-zero projection. HTTP exposes strict idempotent
+      `/activate` and `/pause-enrollment`; the historical `/pause` remains only
+      as a same-lock legacy drain and refuses active enrollment authority. Fresh
+      evidence passes 8 contract/domain/API files / 79 tests, 2 real PostgreSQL
+      files / 26 tests, 10/10 independent capability-operation contracts and the
+      exact Flow surface audit. Focused ESLint, Prettier and diff checks pass;
+      contracts/domain builds pass. DB build is blocked only by three concurrent
+      Finance diagnostics, and the global controller audit only by a concurrent
+      Clients/Geoapify route. Negotiated V3 list/detail reads, activation review
+      and frontend cutover remain open; runtime stays `definition_only`.
+- [ ] 2026-08-04 21:03 MSK: negotiated V3 list/detail reads and the backend
+      activation-review contour are implemented. Exact vendor media types now
+      expose enrollment authority and isolate `legacy_active`; V2 remains the
+      default representation. Activation review is a strict owner-scoped,
+      no-store, read-only snapshot with complete activation CAS and explicit
+      blockers, wired through contracts, domain, Drizzle, API and capability
+      audit. Focused contract/domain/API tests and the 126-operation capability
+      contract pass. Final PostgreSQL acceptance is pending only because the
+      concurrent tariff schema added recurring-frequency columns after the
+      local baseline was applied; the test reaches PostgreSQL and fails on the
+      missing local column before Flow review executes. Frontend V3/CAS cutover
+      remains the next implementation slice.
+- [ ] 2026-08-05 04:58 MSK: the first durable human-work slice now reaches the
+      production `/flows` source contour. Contracts, domain commands, PostgreSQL
+      persistence, interpreter and worker wake lane distinguish a `FlowWorkItem`
+      from approval and wait on `astrologer_work_item`; completion atomically
+      resumes the pinned token and appends command-linked trace. Owner-scoped
+      list/start/snooze/complete HTTP composition is paired with strict frontend
+      adapters, stable command retry identity, revision-conflict refetch gates,
+      profile-timezone presentation and DST-safe snooze controls. The queue is
+      mounted independently of definition-list failure and automatic query retry
+      is disabled so semantic `4xx` responses do not create duplicate noise.
+      The Dashboard now projects the same authoritative queue with a bounded
+      five-item read and no longer labels legacy approval previews as tasks.
+      Fresh safe evidence passes 20 files / 183 tests, astrologer-web typecheck,
+      production build and scoped lint; exact-file formatting is clean. The real
+      Chrome session proves desktop and effective 500px responsive error states,
+      no horizontal overflow and exactly one work-item request on both `/flows`
+      and `/dashboard`. The running API is an older build that rejects V3 list
+      and lacks work-item routes, so successful command/reload browser evidence
+      and the final capability/DB aggregate gate remain this slice's open
+      acceptance boundary; no process was restarted without authority.
+- [ ] 2026-08-05 06:14 MSK: Booking lifecycle propagation is the active
+      Milestone 3 slice after independent product, architecture and QA reviews.
+      The confirmed-booking happy path is directionally correct, but release is
+      blocked because Booking has no revisioned cancel/reschedule authority,
+      the outbox cannot identify repeated reschedules, manual run cancellation
+      has authenticated-owner provenance only, and work-item deadlines remain
+      pinned to the original booking snapshot. The implementation sequence is
+      now Booking-owned monotonic lifecycle revision plus immutable events,
+      provider-neutral transactional outbox, system-provenance cancellation of
+      non-terminal runs/work items, then accepted-reschedule subject state and
+      provenance-backed deadline adjustment. A reschedule request changes no
+      booking or Flow state before acceptance; completed work is never reopened
+      or rewritten. Paid-booking cancellation remains fail-closed until Finance
+      supplies exact refund authority. Research accessed 2026-08-05 confirms
+      separate cancel/reschedule events, cancellation of old scheduled actions,
+      activation-time task due dates and separate refund execution in Cal.com,
+      Camunda and Stripe official documentation.
+- [ ] 2026-08-05 08:02 MSK: the Booking-owned lifecycle foundation is now
+      implemented through domain, strict contracts, PostgreSQL and the
+      astrologer API. Manual confirmation, paid confirmation and owner
+      cancellation advance `lifecycleRevision`, append one canonical immutable
+      lifecycle event and enqueue an ids-only provider-neutral outbox intent in
+      the same transaction. Owner cancellation is CSRF/idempotency protected,
+      revision checked, owner isolated and fail-closed for paid bookings without
+      refund authority. A clean local baseline reset/seed passed; focused domain,
+      contract, API and seven real PostgreSQL scenarios passed. The reset removed
+      the previously registered local auth account, and the already running API
+      and worker still serve an older build, so browser success evidence remains
+      open without process-lifecycle authority.
+- [ ] 2026-08-05 08:02 MSK: Flow-side lifecycle consumption is now specified as
+      a separate ordered projection, not an extension of authenticated runtime
+      commands. A per-booking Flow lifecycle head plus immutable per-event receipt
+      will serialize application by revision and preserve the original outcome.
+      The consumer reads the canonical Booking lifecycle event by UUID, verifies
+      its digest and transition chain, and uses system-event provenance for run
+      and work-item cancellation. The historical enrollment snapshot stays
+      immutable; accepted reschedule will update a separate mutable subject-state
+      projection and active deadlines under the same event provenance.
+- [x] 2026-08-05 09:27 MSK: the reschedule execution and operator-safety slice is
+      implemented through the Booking aggregate, ordered Flow projection,
+      execution claims/finalization, work-item queue and all three operator
+      commands. The immutable enrollment snapshot remains audit evidence; an
+      effective execution context overlays only a confirmed, contiguous Flow
+      lifecycle head. Active schedule-bound obligations carry a structured
+      deadline basis and are recalculated from the pinned node policy; completed
+      work remains untouched. Queue reads and commands share one freshness gate:
+      projection lag returns typed `context_pending`/`409`, inconsistent evidence
+      fails closed, and a Booking command must match both work-item revision and
+      lifecycle revision. The shared request contract keeps lifecycle revision
+      optional only because non-Booking work items are valid; the PostgreSQL
+      adapter rejects omission for a Booking-linked target. Fresh evidence passes
+      8 contract, 7 domain, 11 projection, 44 API and 25 frontend assertions plus
+      the focused real-PostgreSQL mixed-revision scenario; contracts/domain builds
+      and API/web/DB typechecks pass. Full lifecycle integration, baseline gates
+      and network-backed browser acceptance remain the next aggregate boundary.
 - [x] 2026-08-04 14:58 MSK: worker lifecycle composition now runs bounded
       global expired-lease recovery in both `definition_only` and canary modes,
       while new claims remain tied to a runtime-owned, strict non-empty owner
@@ -406,6 +544,26 @@ does not reduce the Definition of Done in the design spec.
       `drizzle-provider-operation-intent-creation-uow.ts`. `docs:check:test`
       passes 8/8; broad `docs:check` remains blocked by the concurrent
       `finance-infrastructure`, `platform-tariffs` and `fiscal-profiles` entries.
+- [x] 2026-08-04 18:13 MSK: runtime-control v2 now owns every production claim.
+      One PostgreSQL transaction locks current policy, validates the exact live
+      worker session/readiness revision, intersects deployment ceiling, owner
+      subjects, kill switches and pinned requirements, then claims with the
+      policy-owned lease duration. Worker startup registers only `executor`,
+      heartbeats without overlap, closes claims on readiness loss, persists
+      drain before shutdown and runs bounded command/registration retention.
+      Actor-subject resolution and command creation are one atomic transaction.
+      Every controlled token and immutable attempt retain the exact policy
+      revision/digest and worker session/registration digest that authorized the
+      claim. Additive reconciliation upgrades the approved execution predecessor
+      without rewriting existing rows and independently attests catalog
+      `3b3b6db...`. Fresh evidence passes 8 worker files / 40 tests, the full
+      execution store 50/50, execution migration 16/16, runtime-control commands
+      9/9 and controlled claim 1/1 on real PostgreSQL. Domain and DB builds plus
+      workers typecheck pass. Repository DB typecheck remains blocked only by
+      concurrent Finance tests; the shared regenerated baseline is temporarily
+      non-executable and its hash metadata is unsynchronized, so default-baseline
+      acceptance is pending while predecessor acceptance is proven. Runtime
+      remains `definition_only`, and no enrollment role is advertised.
 - [x] 2026-08-03 20:24 MSK: current retry research (accessed 2026-08-03) confirms
       the chosen product boundary across AWS Step Functions, Google Cloud
       Workflows and Azure Functions: retryability is explicit, attempts are
@@ -434,7 +592,7 @@ does not reduce the Definition of Done in the design spec.
       evidence remain open before the milestone checkbox can close.
 - [x] Milestone 0: fail current unsupported runtime closed.
 - [ ] Milestone 1: ship graph v2 definition control plane.
-- [ ] Milestone 2: ship durable token runtime and recovery foundation.
+- [x] Milestone 2: ship durable token runtime and recovery foundation.
 - [ ] Milestone 3: ship booking enrollment and human work semantics.
 - [ ] Milestone 4: ship studio/operations design parity and real simulation.
 - [ ] Milestone 5: ship client data, waits and canonical chart integration.
@@ -548,6 +706,30 @@ blocked.
   Canary scope is therefore claim authority only. Recovery is global maintenance
   authority, runs in `definition_only`, invalidates the old fence and leaves a
   scheduled retry dormant behind the claim gate.
+- 2026-08-05: the canonical booking-confirmed transport currently carries only
+  `bookingId`, while enrollment later reads the mutable Booking row. Cancellation
+  before relay becomes `subject_ineligible`, but a future reschedule would mix
+  the confirmation event time with new schedule data. Revisioned immutable
+  lifecycle-event snapshots are required before reschedule can be truthful.
+- 2026-08-05: outbox identity is currently unique by `(eventType, aggregateId)`.
+  That is sufficient for one confirmation and one terminal cancellation, but it
+  cannot represent two accepted reschedules of the same booking. Lifecycle
+  event UUID plus aggregate revision must become transport identity; booking ID
+  remains the subject identity.
+- 2026-08-05: manual run cancellation already serializes token, run and active
+  work-item state correctly, but its durable authority is an authenticated
+  astrologer API command. A Booking consumer cannot reuse it with a fabricated
+  actor. System lifecycle events need distinct immutable provenance while
+  sharing the same token-first transition kernel.
+- 2026-08-05: the queue joins mutable booking time to an immutable work-item
+  `dueAt`. Without an applied booking revision and mutable subject state, a
+  reschedule would show a new session time beside an old deadline and allow a
+  stale completion command. This is a release blocker, not a display defect.
+- 2026-08-05: checking lifecycle freshness only while projecting the queue is
+  insufficient because a command can race a reschedule after the read. Read and
+  command paths therefore use the same projection function; the command repeats
+  it while lifecycle, run and work-item authority is locked and persists the
+  typed rejection as the idempotent command outcome.
 - The shared worktree contains unrelated Clients/BirthPlace, AstroCalendar,
   package/lockfile and design-QA work. Those changes are valid and must not be
   reverted or mixed into Flows commits.
@@ -599,6 +781,61 @@ changes later steps.
 - **2026-08-02, safety:** work items and approvals are separate write models;
   external send is disabled until action-time consent/capability checks,
   delivery reconciliation and kill switches pass.
+- **2026-08-05, human-work product boundary:** a `FlowWorkItem` is an obligation
+  for the astrologer to perform work and can resume a run only through its own
+  lifecycle. A `FlowApproval` authorizes exactly one immutable candidate/action
+  revision and cannot stand in for a manual task. Existing legacy approvals stay
+  read-only until candidate identity, revision, checksum and expiry are durable.
+  Work-item list/start/snooze/complete are historical obligations of an accepted
+  run, so tariff expiry must not strand them behind a direct capability guard;
+  owner scope and persisted-run provenance remain mandatory.
+- **2026-08-05, Booking lifecycle authority:** Booking owns a monotonic
+  `lifecycleRevision` and immutable `confirmed`, `rescheduled` and `cancelled`
+  lifecycle events with event UUID, before/after UTC schedule, actor/provenance
+  and canonical digest. Aggregate mutation, reservation mutation, lifecycle
+  event and provider-neutral outbox intent commit in one transaction. Flows
+  consumes ordered events; it never writes Booking state or treats a Flow-owned
+  command as the source of booking truth.
+- **2026-08-05, cancellation semantics:** a booking-cancelled event cancels every
+  non-terminal run and active `pending`, `in_progress` or `snoozed` work item for
+  that booking through system-event provenance. Already completed work remains
+  immutable; any later non-terminal continuation is stopped. Cancel-first makes
+  stale completion fail, while complete-first preserves the completed item and
+  allows cancellation to stop only subsequent work. Paid cancellation is
+  rejected until an owning Finance refund authority is present and auditable.
+- **2026-08-05, reschedule semantics:** proposing a new slot creates a request
+  and changes no booking, reservation, run, work item or deadline. Acceptance
+  preserves booking, occurrence, run and work-item identity, advances booking
+  revision, updates a mutable Flow subject-state projection and recalculates an
+  active work item's deadline from the pinned policy. Completed steps are not
+  replayed or reopened. For snoozed work, the effective wake instant is the
+  earlier of the user-selected snooze and the recalculated due instant, so a
+  reschedule cannot hide newly urgent work. Client, product or commercial-term
+  changes require cancellation plus a new booking rather than reschedule.
+- **2026-08-05, lifecycle delivery ordering:** exact event replay is a no-op with
+  the original outcome, conflicting identity is quarantined, a revision gap is
+  deferred and alerted, and an older revision cannot regress subject state or
+  revive canceled work. Queue reads and work-item commands use the same
+  freshness projection and compare current, applied and expected revisions so
+  stale operational state is typed and cannot complete silently. The public
+  command field is optional for non-Booking work items, but omission or mismatch
+  on a Booking-linked target is a `FLOW_WORK_ITEM_BOOKING_CONTEXT_CHANGED`
+  conflict; aggregate-ahead projection lag is a distinct
+  `FLOW_WORK_ITEM_BOOKING_CONTEXT_PENDING` conflict.
+- **2026-08-05, Flow lifecycle projection:** Flows persists one revision head per
+  Booking and one immutable receipt per Booking lifecycle event. Receipt identity
+  is lifecycle-event UUID plus its canonical digest; `(bookingId, revision)` is
+  unique. Consumers serialize on the Booking projection, apply only the next
+  contiguous revision, defer a gap, quarantine digest/identity/chain conflicts
+  and return the stored outcome for exact replay. Booking cancellation provenance
+  is the lifecycle event itself; it is never represented by a fabricated API
+  actor or `flowRuntimeCommand`.
+- **2026-08-05, immutable enrollment versus mutable subject state:**
+  `flowRuns.snapshot` remains the enrollment-time audit record. Current Booking
+  schedule and applied lifecycle revision live in a separate Flow-owned subject
+  projection used by execution and queue commands. Reschedule can therefore
+  recompute an active deadline without rewriting enrollment evidence or replaying
+  completed nodes.
 - **2026-08-03, lease authority:** lease validity is evaluated from a fresh
   PostgreSQL wall-clock instant after acquiring the token row lock. Rationale:
   `transaction_timestamp()` is fixed at transaction start and can authorize a
@@ -630,11 +867,27 @@ changes later steps.
   an exported planner can authorize activation. Exact replay does not repeat
   preparation. `definition_only` can never produce a ready decision.
 - **2026-08-04, worker rollout:** environment configuration is a deployment
-  ceiling, not enrollment authority. The worker owns the exact canary allowlist
-  passed to `claimNext`; recovery deliberately ignores that scope. Production
-  canary startup remains rejected until a versioned persisted rollout policy,
-  fresh worker-readiness leases, kill switches and automation quota authority
-  can be evaluated transactionally.
+  ceiling, not enrollment or claim authority. Effective claim permission is the
+  intersection of persisted policy, deployment ceiling, exact registration,
+  live readiness lease, active subject mappings, kill switches and pinned
+  requirements, evaluated in the token-lock transaction. Lease duration comes
+  only from persisted policy. Recovery deliberately remains global so a policy
+  change cannot strand an old claim. The current process registers only
+  `executor`; production stays `definition_only` until activation/enrollment and
+  quota authority are complete.
+- **2026-08-04, claim audit identity:** every controlled claim pins policy
+  revision/digest and worker session/registration digest. Token state retains
+  the latest claim evidence and immutable attempts preserve each historical
+  claim, including lease-expiry recovery after policy changes. Actor-subject
+  mapping and runtime-control command creation commit atomically; raw user IDs
+  remain only in erasable identity mappings.
+- **2026-08-04, legacy activation drain:** historical `flows.status=active`
+  cannot be assigned a fabricated activation epoch. `POST /flows/:flowId/pause`
+  therefore remains temporarily as an owner-scoped safety drain that locks the
+  same definition row as activation and refuses any active enrollment control.
+  New enrollment pauses use only `/pause-enrollment`; the legacy route is not an
+  alias and can be retired only after production inventory proves no legacy
+  active definitions remain.
 - **2026-08-02, UI:** desktop supports graph structure editing; mobile supports
   monitoring, approvals/work and typed node configuration, but not structural
   graph editing in v2.

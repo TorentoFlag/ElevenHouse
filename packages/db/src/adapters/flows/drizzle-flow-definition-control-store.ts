@@ -2,20 +2,16 @@ import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   flowDefinitionCommandRejectionResponseSchema,
+  flowDefinitionOriginV1Schema,
   flowDefinitionV2Schema,
-  flowCapabilityManifestV1Schema,
   flowCapabilityManifestV2Schema,
-  flowPublishedVersionV2Schema,
+  flowGraphV2Schema,
   flowPublishedVersionV3Schema,
-  migrateFlowDefinitionV2ResponseSchema,
-  publishFlowDefinitionV2ResponseSchema,
   publishFlowDefinitionV3ResponseSchema,
   type FlowApprovalMode,
   type FlowDefinitionCommandRejectionResponse,
-  type FlowDefinitionOriginV1,
   type FlowDefinitionState,
   type FlowDefinitionV2,
-  type FlowGraphRead,
   type FlowPresentationV1
 } from "@elevenhouse/contracts";
 import {
@@ -35,11 +31,11 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowDefinitionCommandOutcomes,
   flowDefinitionCommands,
-  flowDefinitionMigrations,
   flowVersions,
   flows
 } from "../../schema/flows";
 import { insertReturningOne } from "../../shared";
+import { provisionFlowEnrollmentReadAuthority } from "./drizzle-flow-enrollment-authority-provisioning";
 
 type FlowTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
 type FlowRow = typeof flows.$inferSelect;
@@ -90,6 +86,7 @@ export function createDrizzleFlowDefinitionControlStore(
               .returning(),
           "flows"
         );
+        await provisionFlowEnrollmentReadAuthority(transaction, input.command.ownerUserId);
         const definition = parseV2Definition({ row, latestVersion: null });
         return succeededOutcome(definition, 201);
       }),
@@ -133,12 +130,6 @@ export function createDrizzleFlowDefinitionControlStore(
         const capabilityManifest = flowCapabilityManifestV2Schema.parse(
           prepared.value.capabilityManifest
         );
-        const legacyCapabilityManifest = flowCapabilityManifestV1Schema.parse(
-          prepared.value.legacyCapabilityManifest
-        );
-        const persistedCapabilityManifest =
-          input.persistenceVersion === "current_v2" ? capabilityManifest : legacyCapabilityManifest;
-
         const versionNumber = (locked.latestVersion?.version ?? 0) + 1;
         const publishedAt = new Date(input.command.now);
         const versionRow = await insertReturningOne(
@@ -154,7 +145,7 @@ export function createDrizzleFlowDefinitionControlStore(
                 graphSchemaVersion: "flow-graph.v2",
                 graph: prepared.value.graph,
                 presentation: prepared.value.presentation,
-                capabilityManifest: persistedCapabilityManifest,
+                capabilityManifest,
                 publishedAt
               })
               .returning(),
@@ -189,23 +180,13 @@ export function createDrizzleFlowDefinitionControlStore(
           presentation: versionRow.presentation,
           publishedAt: versionRow.publishedAt.toISOString()
         };
-        const version =
-          input.responseVersion === "current_v3"
-            ? flowPublishedVersionV3Schema.parse({
-                schemaVersion: "flow-published-version.v3",
-                ...versionInput,
-                capabilityManifest: versionRow.capabilityManifest
-              })
-            : flowPublishedVersionV2Schema.parse({
-                schemaVersion: "flow-published-version.v2",
-                ...versionInput,
-                capabilityManifest: legacyCapabilityManifest
-              });
+        const version = flowPublishedVersionV3Schema.parse({
+          schemaVersion: "flow-published-version.v3",
+          ...versionInput,
+          capabilityManifest: versionRow.capabilityManifest
+        });
         const flow = parseV2Definition({ row: updated, latestVersion: versionRow });
-        const response =
-          version.schemaVersion === "flow-published-version.v3"
-            ? publishFlowDefinitionV3ResponseSchema.parse({ flow, version })
-            : publishFlowDefinitionV2ResponseSchema.parse({ flow, version });
+        const response = publishFlowDefinitionV3ResponseSchema.parse({ flow, version });
         input.assertCreatedResponse(response);
         return succeededOutcome(response, 200);
       }),
@@ -242,55 +223,6 @@ export function createDrizzleFlowDefinitionControlStore(
           200
         );
       }),
-
-    executeMigration: (input) =>
-      executePersistedCommand(database, input.command, async (transaction, commandId) => {
-        const locked = await lockOwnedFlow(transaction, input.command);
-        if (!locked) return notFoundOutcome();
-        const current = toControlRecord(locked);
-        const prepared = input.prepare(
-          current,
-          locked.latestVersion ? toPublishedVersionRecord(locked.latestVersion) : null
-        );
-        if (prepared.kind === "rejected") return rejectedOutcome(prepared.response);
-
-        const migratedAt = new Date(prepared.value.migration.migratedAt);
-        const [updated] = await transaction
-          .update(flows)
-          .set({
-            name: prepared.value.flow.name,
-            origin: prepared.value.flow.origin,
-            definitionState: prepared.value.flow.state,
-            approvalMode: prepared.value.flow.approvalMode,
-            revision: prepared.value.flow.revision,
-            draftBaseVersionId: prepared.value.flow.draftBaseVersionId,
-            draftGraph: prepared.value.flow.draftGraph,
-            draftPresentation: prepared.value.flow.draftPresentation,
-            updatedAt: migratedAt
-          })
-          .where(flowRevisionPredicate(input.command, current))
-          .returning();
-        if (!updated) throw new FlowDefinitionIntegrityError();
-
-        await transaction.insert(flowDefinitionMigrations).values({
-          flowId: current.id,
-          ownerUserId: current.ownerUserId,
-          commandId,
-          sourceGraphSchemaVersion: prepared.value.migration.sourceGraphSchemaVersion,
-          targetGraphSchemaVersion: prepared.value.migration.targetGraphSchemaVersion,
-          sourceVersionId: prepared.value.migration.sourceVersionId,
-          sourceRevision: prepared.value.migration.sourceRevision,
-          sourceGraphHash: prepared.value.migration.sourceGraphHash,
-          targetRevision: prepared.value.flow.revision,
-          migratedAt
-        });
-
-        const response = migrateFlowDefinitionV2ResponseSchema.parse({
-          flow: parseV2Definition({ row: updated, latestVersion: locked.latestVersion }),
-          migration: prepared.value.migration
-        });
-        return succeededOutcome(response, 200);
-      })
   };
 }
 
@@ -484,12 +416,12 @@ function toControlRecord(locked: LockedFlow): FlowDefinitionControlRecord {
     id: row.id,
     ownerUserId: row.ownerUserId,
     name: row.name,
-    origin: row.origin as FlowDefinitionOriginV1 | null,
+    origin: flowDefinitionOriginV1Schema.parse(row.origin),
     state: row.definitionState as FlowDefinitionState,
     approvalMode: row.approvalMode as FlowApprovalMode,
     revision: row.revision,
     draftBaseVersionId: row.draftBaseVersionId,
-    draftGraph: row.draftGraph as FlowGraphRead,
+    draftGraph: flowGraphV2Schema.parse(row.draftGraph),
     draftPresentation: row.draftPresentation as FlowPresentationV1 | null,
     latestPublishedVersionId: row.publishedVersionId,
     latestPublishedVersion: latestVersion?.version ?? null,

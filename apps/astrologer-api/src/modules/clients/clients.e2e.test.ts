@@ -343,7 +343,9 @@ function createClientStore(): ClientStore {
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "client_profile",
-    isPrimary: true,
+    revision: 1,
+    lastEditedByUserId: clientUserId,
+    lastEditedByRole: "client",
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
   };
@@ -373,34 +375,18 @@ function createClientStore(): ClientStore {
         raise("Unexpected ensure relationship call")
     ),
     upsertClientProfile: vi.fn(async (): Promise<void> => {}),
-    upsertClientBirthData: vi.fn(async (input): Promise<ClientBirthData> => {
+    writeClientBirthProfile: vi.fn(async (input) => {
       birthData = {
         id: "66666666-6666-4666-8666-666666666666",
         clientUserId: input.clientUserId,
         ...input.data,
+        revision: input.expectedRevision === null ? 1 : input.expectedRevision + 1,
+        lastEditedByUserId: input.actor.userId,
+        lastEditedByRole: input.actor.role,
         createdAt: now.toISOString(),
         updatedAt: input.now
       };
-      return birthData;
-    }),
-    listClientBirthDataProfiles: vi.fn(async () => [birthData]),
-    createClientBirthDataProfile: vi.fn(async (input): Promise<ClientBirthData> => {
-      birthData = {
-        id: "77777777-7777-4777-8777-777777777777",
-        clientUserId: input.clientUserId,
-        ...input.data,
-        createdAt: now.toISOString(),
-        updatedAt: input.now
-      };
-      return birthData;
-    }),
-    updateClientBirthDataProfile: vi.fn(async (input): Promise<ClientBirthData | null> => {
-      birthData = {
-        ...birthData,
-        ...input.data,
-        updatedAt: input.now
-      };
-      return birthData;
+      return { kind: "written" as const, profile: birthData };
     }),
     listAstrologerClients: vi.fn(async (input): Promise<AstrologerClientList> => {
       const clients =
@@ -419,6 +405,7 @@ function createClientStore(): ClientStore {
 
 function validBirthDataBody(): Record<string, unknown> {
   return clientBirthDataUpsertRequestSchema.parse({
+    expectedRevision: 1,
     label: "Основные данные",
     birthDate: "1990-07-15",
     birthTime: "10:30",

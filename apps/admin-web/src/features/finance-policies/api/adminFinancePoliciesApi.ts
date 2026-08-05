@@ -20,11 +20,13 @@ import {
 } from "@elevenhouse/contracts/payments";
 import {
   adminPayoutQueueResponseSchema,
+  payoutBankEvidenceUploadResponseSchema,
   adminPayoutStatusUpdateSchema,
   type AdminPayoutQueueStatusFilter,
   payoutRequestResponseSchema,
   type AdminPayoutQueueResponse,
   type AdminPayoutStatusUpdate,
+  type PayoutBankEvidenceUploadResponse,
   type PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
 import {
@@ -68,6 +70,7 @@ export type AdminFinancePoliciesApi = {
     payoutRequestId: string,
     request: AdminPayoutStatusUpdate
   ) => Promise<PayoutRequestResponse>;
+  readonly uploadPayoutBankEvidence: (file: File) => Promise<PayoutBankEvidenceUploadResponse>;
 };
 
 export type CreateAdminFinancePoliciesApiInput = {
@@ -176,6 +179,21 @@ export function createAdminFinancePoliciesApi(
           }
         )
       );
+    },
+    uploadPayoutBankEvidence: async (file) => {
+      const response = await fetcher(`${baseUrl}/admin/finance/payout-evidence`, {
+        method: "POST",
+        body: file,
+        credentials: "include",
+        headers: {
+          "content-type": file.type,
+          "idempotency-key": `payout-evidence:${crypto.randomUUID()}`,
+          ...csrfHeaders("POST", csrfTokenReader)
+        }
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new AdminFinancePoliciesApiError(response.status, body);
+      return payoutBankEvidenceUploadResponseSchema.parse(body);
     }
   };
 }

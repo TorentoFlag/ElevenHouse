@@ -47,7 +47,9 @@ const client = {
     birthLatitude: 41.9028,
     birthLongitude: 12.4964,
     source: "manual",
-    isPrimary: true,
+    revision: 1,
+    lastEditedByUserId: "22222222-2222-4222-8222-222222222222",
+    lastEditedByRole: "client",
     createdAt: "2026-07-20T12:00:00.000Z",
     updatedAt: "2026-07-20T12:00:00.000Z"
   }
@@ -2105,6 +2107,7 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: /сохранить данные рождения/i }));
 
     expect(onSaveBirthData).toHaveBeenCalledWith({
+      expectedRevision: 1,
       label: "Основные данные",
       birthDate: "1990-07-15",
       birthTime: "10:30",
@@ -2116,8 +2119,7 @@ describe("ChartEnginePage", () => {
       birthTimezone: "Europe/Rome",
       birthTimeDstOccurrence: null,
       birthLatitude: 41.9028,
-      birthLongitude: 12.4964,
-      isPrimary: true
+      birthLongitude: 12.4964
     });
   });
 

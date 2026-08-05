@@ -1,7 +1,7 @@
 import type {
   FlowExecutionClaim,
   FlowExecutionClaimNextResult,
-  FlowExecutionStore,
+  FlowExecutionWorkerStore,
   FlowNodeExecutor,
   FlowNodeExecutorRegistry
 } from "@elevenhouse/domain";
@@ -23,13 +23,7 @@ describe("processNextFlowExecution", () => {
     });
 
     expect(store.claimNext).toHaveBeenCalledWith({
-      leaseOwner: "flows-worker-1",
-      leaseDurationMs: 30_000,
-      executorKeys: ["completed:1:1"],
-      ownerScope: {
-        kind: "allowlist",
-        ownerUserIds: ["00000000-0000-4000-8000-000000000099"]
-      }
+      executorKeys: ["completed:1:1"]
     });
     expect(evaluate).not.toHaveBeenCalled();
     expect(store.finalize).not.toHaveBeenCalled();
@@ -175,16 +169,10 @@ describe("processNextFlowExecution", () => {
   });
 });
 
-function processorInput(store: FlowExecutionStore, registry: FlowNodeExecutorRegistry) {
+function processorInput(store: FlowExecutionWorkerStore, registry: FlowNodeExecutorRegistry) {
   return {
     store,
-    registry,
-    leaseOwner: "flows-worker-1",
-    leaseDurationMs: 30_000,
-    ownerScope: {
-      kind: "allowlist" as const,
-      ownerUserIds: ["00000000-0000-4000-8000-000000000099"]
-    }
+    registry
   };
 }
 
@@ -205,7 +193,7 @@ function createStore(input: {
   readonly finalizeError?: Error;
   readonly failureDisposition?: "retry_scheduled" | "failed_terminal" | "quarantined";
   readonly claimResult?: FlowExecutionClaimNextResult;
-}): FlowExecutionStore {
+}): FlowExecutionWorkerStore {
   const finalizeFailure = vi.fn(async () =>
     input.failureDisposition
       ? {
@@ -240,8 +228,7 @@ function createStore(input: {
       retryScheduledCount: 0,
       failedTerminalCount: 0,
       quarantinedCount: 0
-    })),
-    getRunDetail: vi.fn(async () => null)
+    }))
   };
 }
 
@@ -297,6 +284,31 @@ function completedClaim(): FlowExecutionClaim {
       nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
       requiredCapabilities: []
     },
+    enrollmentSnapshot: {
+      schemaVersion: "flow-run-snapshot.v1",
+      flowVersionId: "92000000-0000-4000-8000-000000000005",
+      sourceEventId: "manual:processor-test",
+      subjectType: "manual",
+      subjectId: "processor-test",
+      occurredAt: "2026-08-03T10:59:00.000Z",
+      timeZone: "UTC",
+      consent: {},
+      channels: {},
+      payload: {}
+    },
+    effectiveRunSnapshot: {
+      schemaVersion: "flow-run-snapshot.v1",
+      flowVersionId: "92000000-0000-4000-8000-000000000005",
+      sourceEventId: "manual:processor-test",
+      subjectType: "manual",
+      subjectId: "processor-test",
+      occurredAt: "2026-08-03T10:59:00.000Z",
+      timeZone: "UTC",
+      consent: {},
+      channels: {},
+      payload: {}
+    },
+    bookingLifecycleContext: null,
     leaseOwner: "flows-worker-1",
     nodeActivationSequence: 1n,
     attemptNumber: 2n,

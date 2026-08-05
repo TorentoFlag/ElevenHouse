@@ -527,6 +527,7 @@
 
 .futureButton {
   color: rgb(186 178 218 / 0.72);
+  text-decoration: none;
 }
 
 .eventActionRow {

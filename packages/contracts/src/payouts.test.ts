@@ -4,13 +4,34 @@ import {
   adminPayoutQueueStatusFilterSchema,
   adminPayoutQueueResponseSchema,
   adminPayoutStatusUpdateSchema,
+  createPayoutStatusAuthorizationPayload,
   createManualBankTransferPayoutMethodSchema,
   createPayoutRequestSchema,
+  payoutBankEvidenceUploadResponseSchema,
   payoutRequestResponseSchema,
   payoutRequestStatusSchema
 } from "./payouts";
 
 describe("payout contracts", () => {
+  it("exposes only a trusted immutable bank-evidence identity after upload", () => {
+    expect(
+      payoutBankEvidenceUploadResponseSchema.parse({
+        artifactId: "payout-bank-evidence:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        byteLength: 1024,
+        contentType: "application/pdf"
+      })
+    ).toMatchObject({ byteLength: 1024, contentType: "application/pdf" });
+    expect(() =>
+      payoutBankEvidenceUploadResponseSchema.parse({
+        artifactId: "proof-1",
+        sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        byteLength: 1024,
+        contentType: "text/html"
+      })
+    ).toThrow();
+  });
+
   it("captures manual payout request and admin status evidence", () => {
     const payout = {
       id: "11111111-1111-4111-8111-111111111111",
@@ -26,7 +47,7 @@ describe("payout contracts", () => {
       failureReason: null,
       externalReference: null,
       transferredAt: null,
-      providerPayoutId: null
+      version: 1
     } as const;
 
     expect(payoutRequestResponseSchema.parse(payout)).toEqual(payout);
@@ -47,7 +68,7 @@ describe("payout contracts", () => {
       failureReason: null,
       externalReference: "bank-transfer-1001",
       transferredAt: "2026-07-24T10:20:00.000Z",
-      providerPayoutId: null
+      version: 2
     } as const;
 
     expect(payoutRequestResponseSchema.parse(paidPayout)).toEqual(paidPayout);
@@ -68,23 +89,82 @@ describe("payout contracts", () => {
   it("rejects unknown payout states", () => {
     expect(payoutRequestStatusSchema.parse("paid")).toBe("paid");
     expect(payoutRequestStatusSchema.parse("processing_manual")).toBe("processing_manual");
-    expect(payoutRequestStatusSchema.parse("processing_provider")).toBe("processing_provider");
+    expect(() => payoutRequestStatusSchema.parse("processing_provider")).toThrow();
     expect(() => payoutRequestStatusSchema.parse("sent_to_arc_pay")).toThrow();
   });
 
   it("requires manual transfer evidence before an admin can mark payout paid", () => {
     const paidUpdate = {
       status: "paid",
+      expectedVersion: 1,
+      authorizationId: "44444444-4444-4444-8444-444444444444",
       externalReference: "bank-transfer-1001",
       transferredAt: "2026-07-24T10:00:00.000Z",
+      proofArtifact: {
+        artifactId: "manual-payout-proof:11111111-1111-4111-8111-111111111111",
+        sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        byteLength: 1_024
+      },
       adminNote: "Paid manually from bank cabinet"
     } as const;
 
     expect(adminPayoutStatusUpdateSchema.parse(paidUpdate)).toEqual(paidUpdate);
+    expect(() => {
+      const { proofArtifact, ...withoutProofArtifact } = paidUpdate;
+      expect(proofArtifact).toBeDefined();
+      return adminPayoutStatusUpdateSchema.parse(withoutProofArtifact);
+    }).toThrow();
     expect(() => adminPayoutStatusUpdateSchema.parse({ status: "paid" })).toThrow();
     expect(() =>
       adminPayoutStatusUpdateSchema.parse({ status: "failed", adminNote: "No reference" })
     ).toThrow();
+  });
+
+  it("requires a one-time finance authorization for payout approval, bank handoff, and paid confirmation", () => {
+    const authorizationId = "44444444-4444-4444-8444-444444444444";
+
+    expect(
+      adminPayoutStatusUpdateSchema.parse({
+        status: "approved",
+        expectedVersion: 2,
+        authorizationId,
+        adminNote: "Payout recipient and amount checked"
+      })
+    ).toMatchObject({ authorizationId });
+    expect(
+      adminPayoutStatusUpdateSchema.parse({
+        status: "processing_manual",
+        expectedVersion: 3,
+        authorizationId,
+        adminNote: "Transfer entered into bank cabinet"
+      })
+    ).toMatchObject({ authorizationId });
+    expect(() =>
+      adminPayoutStatusUpdateSchema.parse({
+        status: "approved",
+        expectedVersion: 2
+      })
+    ).toThrow();
+    expect(() =>
+      adminPayoutStatusUpdateSchema.parse({
+        status: "processing_manual",
+        expectedVersion: 3,
+        authorizationId: "not-a-uuid"
+      })
+    ).toThrow();
+  });
+
+  it("binds the authorization ceremony to the exact mutable payout status fields", () => {
+    expect(
+      createPayoutStatusAuthorizationPayload({
+        status: "approved",
+        expectedVersion: 2,
+        adminNote: "Payout recipient and amount checked"
+      })
+    ).toEqual({
+      status: "approved",
+      adminNote: "Payout recipient and amount checked"
+    });
   });
 
   it("exposes admin payout queue summary without provider balance semantics", () => {
@@ -113,7 +193,7 @@ describe("payout contracts", () => {
           failureReason: null,
           externalReference: null,
           transferredAt: null,
-          providerPayoutId: null,
+          version: 1,
           blockedByChargeback: false
         }
       ]
@@ -167,14 +247,16 @@ describe("payout contracts", () => {
         recurringRevenueAmount: null,
         recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
       },
-      currentPlan: {
-        planId: "pro",
-        code: "pro",
+      currentTariff: {
+        tariffSeriesId: "pro",
+        tariffVersion: 2,
         name: "Pro",
-        monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
-        platformFeeBps: 400,
+        price: { amountMinor: 199_000, currency: "RUB" },
+        commissionBps: 400,
         billingCycle: "month",
-        source: "subscription"
+        state: "active",
+        startsAt: "2026-07-26T10:00:00.000Z",
+        endsAt: "2026-08-26T10:00:00.000Z"
       }
     } as const;
 
@@ -193,11 +275,12 @@ describe("payout contracts", () => {
     expect(
       createManualBankTransferPayoutMethodSchema.parse({
         displayName: "Основной счет",
+        destinationKind: "bank_account",
         recipientName: "Alisa Vega",
         bankName: "T-Bank",
-        accountNumberLast4: "4417",
+        destinationValue: "40817810099910004417",
         idempotencyKey: "payout-method-1"
       })
-    ).toMatchObject({ accountNumberLast4: "4417" });
+    ).toMatchObject({ destinationKind: "bank_account" });
   });
 });

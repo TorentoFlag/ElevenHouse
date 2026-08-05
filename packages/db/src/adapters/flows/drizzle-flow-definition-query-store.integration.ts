@@ -1,39 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import {
-  flowGraphSchema,
-  flowGraphV2Schema,
-  type FlowGraphRead,
-  type FlowPresentationV1
-} from "@elevenhouse/contracts";
-import { FlowDefinitionIntegrityError } from "@elevenhouse/domain";
-import { Client } from "pg";
+import { flowGraphV2Schema, type FlowGraphRead, type FlowPresentationV1 } from "@elevenhouse/contracts";
+import { compileFlowGraphV2, FlowDefinitionIntegrityError } from "@elevenhouse/domain";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Client, Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { assertDevelopmentDatabaseUrl } from "../../connection";
-import { createPostgresRuntime, type PostgresRuntime } from "../../runtime";
+import type { ElevenHouseDatabase } from "../../runtime";
 import { createDrizzleFlowDefinitionQueryStore } from "./drizzle-flow-definition-query-store";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
 const databaseName = `elevenhouse_flow_query_${randomUUID().replaceAll("-", "")}`;
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
-let runtime: PostgresRuntime;
-
-const legacyGraph = flowGraphSchema.parse({
-  schemaVersion: "flow-graph.v1",
-  nodes: [
-    {
-      id: "manual",
-      category: "trigger",
-      kind: "manual",
-      title: "Ручной запуск",
-      config: {}
-    }
-  ],
-  edges: []
-});
+let runtime: {
+  readonly pool: Pool;
+  readonly database: ElevenHouseDatabase;
+  readonly close: () => Promise<void>;
+};
 
 const currentGraph = flowGraphV2Schema.parse({
   schemaVersion: "flow-graph.v2",
@@ -74,11 +60,19 @@ const presentation: FlowPresentationV1 = {
   viewport: { x: 0, y: 0, zoom: 1 }
 };
 
+const capabilityManifest =
+  compileFlowGraphV2(currentGraph).capabilityManifest ?? raise("Expected V2 capability manifest");
+
 describe("flow definition query store Drizzle/PostgreSQL integration", () => {
   beforeAll(async () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${databaseName}"`);
-    runtime = createPostgresRuntime({ DATABASE_URL: isolatedDatabaseUrl });
+    const pool = new Pool({ connectionString: isolatedDatabaseUrl });
+    runtime = {
+      pool,
+      database: drizzle(pool) as unknown as ElevenHouseDatabase,
+      close: () => pool.end()
+    };
     await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
   }, 30_000);
 
@@ -91,15 +85,9 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
     }
   }, 30_000);
 
-  it("lists lightweight mixed V1/V2 summaries with independent lifecycle filters", async () => {
+  it("lists V2 summaries with independent lifecycle filters", async () => {
     const ownerUserId = await createUser();
     const foreignOwnerUserId = await createUser();
-    const legacyFlowId = await createFlow({
-      ownerUserId,
-      name: "Legacy",
-      graph: legacyGraph,
-      updatedAt: "2026-08-03T08:00:00.000Z"
-    });
     const draftFlowId = await createFlow({
       ownerUserId,
       name: "Current draft",
@@ -119,11 +107,10 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
       ownerUserId,
       query: { state: "all", runtimeStatus: "all", limit: 50, offset: 0 }
     });
-    expect(page.total).toBe(3);
+    expect(page.total).toBe(2);
     expect(page.flows.map((flow) => flow.id)).toEqual([
       published.flowId,
-      draftFlowId,
-      legacyFlowId
+      draftFlowId
     ]);
     expect(page.flows).toMatchObject([
       {
@@ -132,21 +119,13 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
         runtimeStatus: "published",
         latestPublishedVersionId: published.versionId,
         latestPublishedVersion: 1,
-        graphSchemaVersion: "flow-graph.v2",
-        migrationRequired: false
+        graphSchemaVersion: "flow-graph.v2"
       },
       {
         id: draftFlowId,
         state: "draft",
         runtimeStatus: "draft",
-        graphSchemaVersion: "flow-graph.v2",
-        migrationRequired: false
-      },
-      {
-        id: legacyFlowId,
-        graphSchemaVersion: "flow-graph.v1",
-        origin: null,
-        migrationRequired: true
+        graphSchemaVersion: "flow-graph.v2"
       }
     ]);
     expect(page.flows.every((flow) => !("draftGraph" in flow))).toBe(true);
@@ -162,12 +141,6 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
   it("returns full owner-scoped detail without leaking foreign existence", async () => {
     const ownerUserId = await createUser();
     const foreignOwnerUserId = await createUser();
-    const legacyFlowId = await createFlow({
-      ownerUserId,
-      name: "Legacy detail",
-      graph: legacyGraph,
-      updatedAt: "2026-08-03T08:00:00.000Z"
-    });
     const currentFlowId = await createFlow({
       ownerUserId,
       name: "Current detail",
@@ -176,19 +149,11 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
     });
     const store = createDrizzleFlowDefinitionQueryStore(runtime.database);
 
-    await expect(store.getByOwner({ ownerUserId, flowId: legacyFlowId })).resolves.toMatchObject({
-      graphSchemaVersion: "flow-graph.v1",
-      draftGraph: legacyGraph,
-      draftPresentation: null,
-      origin: null,
-      migrationRequired: true
-    });
     await expect(store.getByOwner({ ownerUserId, flowId: currentFlowId })).resolves.toMatchObject({
       graphSchemaVersion: "flow-graph.v2",
       draftGraph: currentGraph,
       draftPresentation: presentation,
-      origin: { type: "blank" },
-      migrationRequired: false
+      origin: { type: "blank" }
     });
     await expect(
       store.getByOwner({ ownerUserId: foreignOwnerUserId, flowId: currentFlowId })
@@ -239,11 +204,9 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
       [
         input.ownerUserId,
         input.name,
-        input.graph.schemaVersion === "flow-graph.v2"
-          ? { schemaVersion: "flow-definition-origin.v1", type: "blank" }
-          : null,
+        { schemaVersion: "flow-definition-origin.v1", type: "blank" },
         input.graph,
-        input.graph.schemaVersion === "flow-graph.v2" ? presentation : null,
+        presentation,
         input.updatedAt
       ]
     );
@@ -273,15 +236,7 @@ describe("flow definition query store Drizzle/PostgreSQL integration", () => {
           ownerUserId,
           currentGraph,
           presentation,
-          {
-            schemaVersion: "flow-capability-manifest.v1",
-            executionSemanticsVersion: "flow-interpreter.v1",
-            nodeExecutors: [
-              { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-              { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
-            ],
-            requiredCapabilities: []
-          },
+          capabilityManifest,
           "2026-08-03T10:00:00.000Z"
         ]
       );

@@ -1,28 +1,28 @@
 import {
+  FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE,
+  FLOW_DEFINITION_LIST_V3_MEDIA_TYPE,
+  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
+  FLOW_PUBLICATION_V3_MEDIA_TYPE,
   type CreateFlowDefinitionV2Request,
-  type FlowDefinitionDetailV2,
-  type FlowDefinitionSummaryV2,
+  type FlowDefinitionDetailV3,
+  type FlowDefinitionSummaryV3,
   type FlowDefinitionTemplateDescriptorV2,
   type FlowDefinitionV2,
   flowGraphV2Schema,
-  type CreateFlowRequest,
-  type FlowResponse,
   type FlowRunResponse,
   type FlowRuntimeAvailability,
   type FlowApproval,
   type FlowGraphV2,
   type ListFlowApprovalsResponse,
   type ListFlowDefinitionTemplatesV2Response,
-  type ListFlowDefinitionsV2Response,
+  type ListFlowDefinitionsV3Response,
   type ListFlowRunsResponse,
   type ManualFlowRunResponse,
-  type MigrateFlowDefinitionV2Response,
-  type PublishFlowDefinitionV2Response,
-  type ValidateFlowDefinitionResponse
+  type PublishFlowDefinitionV3Response,
+  type ValidateFlowDefinitionResponseV2
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
-import { activateFlow } from "./activateFlow";
 import { createFlow } from "./createFlow";
 import { createManualFlowRun } from "./createManualFlowRun";
 import { decideFlowApproval } from "./decideFlowApproval";
@@ -32,8 +32,6 @@ import { listFlowApprovals } from "./listFlowApprovals";
 import { listFlowRuns } from "./listFlowRuns";
 import { listFlowTemplates } from "./listFlowTemplates";
 import { listFlows } from "./listFlows";
-import { migrateFlowDefinition } from "./migrateFlowDefinition";
-import { pauseFlow } from "./pauseFlow";
 import { publishFlow } from "./publishFlow";
 import { simulateFlowRun } from "./simulateFlowRun";
 import { updateFlowDraft } from "./updateFlowDraft";
@@ -46,30 +44,8 @@ const definitionOnlyRuntime = {
   mode: "definition_only",
   executionAvailable: false,
   reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
-  historySemantics: "legacy_preview"
+  historySemantics: "durable_execution"
 } satisfies FlowRuntimeAvailability;
-
-const graph = {
-  schemaVersion: "flow-graph.v1",
-  nodes: [
-    {
-      id: "lead-created",
-      category: "trigger",
-      kind: "lead_created",
-      title: "Новый лид",
-      config: {}
-    },
-    {
-      id: "draft-reply",
-      category: "ai",
-      kind: "reply_draft",
-      approvalMode: "manual_approve",
-      title: "Черновик ответа",
-      config: {}
-    }
-  ],
-  edges: [{ id: "edge-1", fromNodeId: "lead-created", toNodeId: "draft-reply" }]
-} satisfies CreateFlowRequest["graph"];
 
 const graphV2: FlowGraphV2 = {
   schemaVersion: "flow-graph.v2",
@@ -102,12 +78,11 @@ const graphV2: FlowGraphV2 = {
 };
 
 const definitionSummary = {
-  schemaVersion: "flow-definition-summary.v2",
+  schemaVersion: "flow-definition-summary.v3",
   id: flowId,
   ownerUserId,
   name: "Подготовка консультации",
   state: "draft",
-  runtimeStatus: "draft",
   approvalMode: "manual_approve",
   revision: 1,
   draftBaseVersionId: null,
@@ -118,8 +93,22 @@ const definitionSummary = {
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
-  migrationRequired: false
-} satisfies FlowDefinitionSummaryV2;
+  enrollment: {
+    schemaVersion: "flow-enrollment-read-authority.v1",
+    authority: "enrollment_v1",
+    control: {
+      schemaVersion: "flow-enrollment-control.v1",
+      flowId,
+      state: "inactive",
+      definitionRevision: 1,
+      enrollmentRevision: 0,
+      activeVersionId: null,
+      activeActivationEpochId: null,
+      activeSince: null,
+      lastPausedAt: null
+    }
+  }
+} satisfies FlowDefinitionSummaryV3;
 
 const definition = {
   schemaVersion: "flow-definition.v2",
@@ -142,24 +131,10 @@ const definition = {
 
 const definitionDetail = {
   ...definitionSummary,
-  schemaVersion: "flow-definition-detail.v2",
+  schemaVersion: "flow-definition-detail.v3",
   draftGraph: graphV2,
   draftPresentation: null
-} satisfies FlowDefinitionDetailV2;
-
-const flowResponse = {
-  id: flowId,
-  ownerUserId,
-  name: "Лид-магнит",
-  status: "draft",
-  approvalMode: "manual_approve",
-  draftGraph: graph,
-  publishedVersionId: null,
-  publishedVersion: null,
-  createdAt: "2026-07-28T08:00:00.000Z",
-  updatedAt: "2026-07-28T08:00:00.000Z",
-  publishedAt: null
-} satisfies FlowResponse;
+} satisfies FlowDefinitionDetailV3;
 
 const template = {
   schemaVersion: "flow-definition-template.v2",
@@ -183,16 +158,29 @@ const run = {
   sourceEventId: "manual:test",
   status: "approval_required",
   snapshot: {
-    schemaVersion: "flow-run-snapshot.v1",
-    flowVersionId: "33333333-3333-4333-8333-333333333333",
-    sourceEventId: "manual:test",
-    subjectType: "manual",
-    subjectId: flowId,
-    occurredAt: "2026-07-28T08:00:00.000Z",
-    timeZone: "Europe/Moscow",
-    consent: {},
-    channels: {},
-    payload: {}
+    schemaVersion: "flow-run-snapshot.v2",
+    enrollment: {
+      activationEpochId: "55555555-5555-4555-8555-555555555555",
+      triggerNodeId: "manual",
+      occurrenceKey: "66666666-6666-4666-8666-666666666666",
+      policyKey: "once_per_occurrence",
+      policyRevision: 1,
+      rolloutPolicyRevision: 1,
+      eventOccurredAt: "2026-07-28T08:00:00.000Z",
+      enrolledAt: "2026-07-28T08:00:00.000Z"
+    },
+    subject: {
+      type: "booking",
+      bookingId: "66666666-6666-4666-8666-666666666666",
+      clientUserId: "77777777-7777-4777-8777-777777777777",
+      productId: "88888888-8888-4888-8888-888888888888",
+      startAt: "2026-07-29T08:00:00.000Z",
+      endAt: "2026-07-29T09:00:00.000Z"
+    },
+    executionAuthority: {
+      basis: "current_entitlement",
+      referenceId: "99999999-9999-4999-8999-999999999999"
+    }
   },
   currentNodeId: "draft-reply",
   createdAt: "2026-07-28T08:00:00.000Z",
@@ -231,35 +219,41 @@ describe("flows API", () => {
     expect(get).toHaveBeenCalledWith("/flow-templates?locale=ru");
   });
 
-  it("loads lightweight V2 definitions and a selected detail through shared contracts", async () => {
+  it("loads lightweight V3 definitions and a selected detail through negotiated contracts", async () => {
     const response = {
-      schemaVersion: "flow-definition-list.v2",
+      schemaVersion: "flow-definition-list.v3",
       flows: [definitionSummary],
-      total: 1,
-      runtime: definitionOnlyRuntime
-    } satisfies ListFlowDefinitionsV2Response;
+      total: 1
+    } satisfies ListFlowDefinitionsV3Response;
     const get = vi
       .spyOn(application.http, "get")
       .mockResolvedValueOnce(response)
       .mockResolvedValueOnce(definitionDetail);
 
     await expect(
-      listFlows({ state: "draft", runtimeStatus: "all", limit: 20, offset: 40 })
+      listFlows({ state: "draft", enrollmentState: "all", limit: 20, offset: 40 })
     ).resolves.toEqual(response);
     await expect(getFlowDefinition(flowId)).resolves.toEqual(definitionDetail);
 
     expect(get).toHaveBeenNthCalledWith(
       1,
-      "/flows?state=draft&runtimeStatus=all&limit=20&offset=40"
+      "/flows?state=draft&enrollmentState=all&limit=20&offset=40",
+      {
+        cache: "no-store",
+        headers: { accept: FLOW_DEFINITION_LIST_V3_MEDIA_TYPE }
+      }
     );
-    expect(get).toHaveBeenNthCalledWith(2, `/flows/${flowId}`);
+    expect(get).toHaveBeenNthCalledWith(2, `/flows/${flowId}`, {
+      cache: "no-store",
+      headers: { accept: FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE }
+    });
   });
 
   it("rejects flow API responses that do not match shared contracts", async () => {
     vi.spyOn(application.http, "get").mockResolvedValue({ flows: [{ id: "not-a-uuid" }] });
 
     await expect(
-      listFlows({ state: "all", runtimeStatus: "all", limit: 50, offset: 0 })
+      listFlows({ state: "all", enrollmentState: "all", limit: 50, offset: 0 })
     ).rejects.toThrow();
   });
 
@@ -288,7 +282,7 @@ describe("flows API", () => {
     const publishResponse = {
       flow: publishedFlow,
       version: {
-        schemaVersion: "flow-published-version.v2",
+        schemaVersion: "flow-published-version.v3",
         id: "33333333-3333-4333-8333-333333333333",
         flowId,
         version: 1,
@@ -298,17 +292,22 @@ describe("flows API", () => {
         graph: graphV2,
         presentation: null,
         capabilityManifest: {
-          schemaVersion: "flow-capability-manifest.v1",
+          schemaVersion: "flow-capability-manifest.v2",
           executionSemanticsVersion: "flow-interpreter.v1",
+          triggerMatcher: {
+            kind: "manual_client",
+            configSchemaVersion: 1,
+            matcherContractVersion: 1,
+            eventSchemaVersion: 1
+          },
           nodeExecutors: [
-            { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-            { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
+            { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }
           ],
           requiredCapabilities: []
         },
         publishedAt: "2026-07-28T08:10:00.000Z"
       }
-    } satisfies PublishFlowDefinitionV2Response;
+    } satisfies PublishFlowDefinitionV3Response;
     const nextDraft = {
       ...publishedFlow,
       state: "draft",
@@ -382,7 +381,10 @@ describe("flows API", () => {
       { expectedRevision: 1 },
       {
         csrf: true,
-        headers: { "idempotency-key": "flow-publish-1" }
+        headers: {
+          accept: FLOW_PUBLICATION_V3_MEDIA_TYPE,
+          "idempotency-key": "flow-publish-1"
+        }
       }
     );
     expect(post).toHaveBeenNthCalledWith(
@@ -396,60 +398,9 @@ describe("flows API", () => {
     );
   });
 
-  it("migrates a legacy definition explicitly and validates migration evidence", async () => {
-    const migrated = {
-      flow: {
-        ...definition,
-        revision: 2,
-        origin: {
-          schemaVersion: "flow-definition-origin.v1",
-          type: "migration",
-          sourceGraphSchemaVersion: "flow-graph.v1",
-          sourceVersionId: null
-        },
-        updatedAt: "2026-07-28T08:12:00.000Z"
-      },
-      migration: {
-        schemaVersion: "flow-definition-migration.v1",
-        sourceGraphSchemaVersion: "flow-graph.v1",
-        targetGraphSchemaVersion: "flow-graph.v2",
-        sourceVersionId: null,
-        sourceRevision: 1,
-        sourceGraphHash: `sha256:${"a".repeat(64)}`,
-        migratedAt: "2026-07-28T08:12:00.000Z"
-      }
-    } satisfies MigrateFlowDefinitionV2Response;
-    const post = vi.spyOn(application.http, "post").mockResolvedValue(migrated);
-
-    await expect(
-      migrateFlowDefinition({
-        flowId,
-        body: {
-          schemaVersion: "flow-definition-migrate.v2",
-          expectedRevision: 1,
-          targetGraphSchemaVersion: "flow-graph.v2"
-        },
-        idempotencyKey: "flow-migrate-1"
-      })
-    ).resolves.toEqual(migrated);
-
-    expect(post).toHaveBeenCalledWith(
-      `/flows/${flowId}/migrations/v2`,
-      {
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 1,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      },
-      {
-        csrf: true,
-        headers: { "idempotency-key": "flow-migrate-1" }
-      }
-    );
-  });
-
   it("validates a v2 definition through the shared fail-closed contract", async () => {
     const response = {
-      schemaVersion: "flow-definition-validation.v1",
+      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -460,15 +411,18 @@ describe("flows API", () => {
         nodes: [...graphV2.nodes].reverse()
       }),
       capabilityManifest: {
-        schemaVersion: "flow-capability-manifest.v1",
+        schemaVersion: "flow-capability-manifest.v2",
         executionSemanticsVersion: "flow-interpreter.v1",
-        nodeExecutors: [
-          { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-          { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
-        ],
+        triggerMatcher: {
+          kind: "manual_client",
+          configSchemaVersion: 1,
+          matcherContractVersion: 1,
+          eventSchemaVersion: 1
+        },
+        nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
         requiredCapabilities: []
       }
-    } satisfies ValidateFlowDefinitionResponse;
+    } satisfies ValidateFlowDefinitionResponseV2;
     const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
 
     await expect(validateFlowDefinition({ flowId, graph: graphV2 })).resolves.toEqual(response);
@@ -476,33 +430,13 @@ describe("flows API", () => {
     expect(post).toHaveBeenCalledWith(
       `/flows/${flowId}/validate`,
       { graph: graphV2 },
-      { csrf: true }
+      {
+        csrf: true,
+        headers: {
+          accept: FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE
+        }
+      }
     );
-  });
-
-  it("activates and pauses flow automation through CSRF-protected endpoints", async () => {
-    const activeFlow = {
-      ...flowResponse,
-      status: "active",
-      publishedVersionId: "33333333-3333-4333-8333-333333333333",
-      publishedVersion: 1,
-      publishedAt: "2026-07-28T08:10:00.000Z"
-    } satisfies FlowResponse;
-    const pausedFlow = { ...activeFlow, status: "paused" } satisfies FlowResponse;
-    const post = vi
-      .spyOn(application.http, "post")
-      .mockResolvedValueOnce(activeFlow)
-      .mockResolvedValueOnce(pausedFlow);
-
-    await expect(activateFlow(flowId)).resolves.toEqual(activeFlow);
-    await expect(pauseFlow(flowId)).resolves.toEqual(pausedFlow);
-
-    expect(post).toHaveBeenNthCalledWith(1, `/flows/${flowId}/activate`, undefined, {
-      csrf: true
-    });
-    expect(post).toHaveBeenNthCalledWith(2, `/flows/${flowId}/pause`, undefined, {
-      csrf: true
-    });
   });
 
   it("runs simulation and manual run commands through CSRF-protected endpoints", async () => {

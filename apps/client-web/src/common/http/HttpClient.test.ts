@@ -104,6 +104,35 @@ describe("HttpClient", () => {
     });
   });
 
+  it("sends a bounded idempotency key with protected finance commands", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ id: "order-1" }));
+    const http = new HttpClient({
+      basePath: "/api",
+      csrf: {
+        cookieName: "elevenhouse_public_csrf",
+        headerName: "x-csrf-token",
+        readCookie: () => "signed-token"
+      },
+      fetcher
+    });
+
+    await http.post("/orders", { productId: "product-1" }, {
+      csrf: true,
+      idempotencyKey: "client-checkout:order:create:1"
+    });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/orders", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": "signed-token",
+        "idempotency-key": "client-checkout:order:create:1"
+      },
+      body: JSON.stringify({ productId: "product-1" })
+    });
+  });
+
   it("does not add a CSRF header to unprotected requests", async () => {
     const fetcher = vi.fn(async () => jsonResponse({ ok: true }));
     const http = new HttpClient({

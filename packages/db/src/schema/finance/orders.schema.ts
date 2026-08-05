@@ -3,13 +3,15 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
-  uuid
+  uuid,
+  varchar
 } from "drizzle-orm/pg-core";
 import { clientJoinIntents } from "../clients/client-join-intents.schema";
 import { users } from "../identity/accounts.schema";
@@ -23,6 +25,7 @@ import {
   riskTierValues
 } from "./finance-values";
 import { financePolicies } from "./policies.schema";
+import { platformTariffVersions } from "../platform-billing/tariff-authority.schema";
 
 export const orders = pgTable(
   "orders",
@@ -37,6 +40,7 @@ export const orders = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "restrict" }),
+    productTitleSnapshot: text("product_title_snapshot").notNull(),
     directLinkIntentId: uuid("direct_link_intent_id").references(() => clientJoinIntents.id, {
       onDelete: "set null"
     }),
@@ -61,9 +65,12 @@ export const orders = pgTable(
     financePolicyReserveReleaseDelayDays: integer("finance_policy_reserve_release_delay_days")
       .notNull()
       .default(0),
-    financePolicyPlatformFeeBps: integer("finance_policy_platform_fee_bps")
+    tariffSeriesId: varchar("tariff_series_id", { length: 160 }).notNull(),
+    tariffVersion: integer("tariff_version").notNull(),
+    tariffVersionDigest: varchar("tariff_version_digest", { length: 71 }).notNull(),
+    tariffCommissionBps: integer("tariff_commission_bps")
       .notNull()
-      .default(1000),
+      .default(0),
     financePolicyProviderSettlementRequired: boolean(
       "finance_policy_provider_settlement_required"
     )
@@ -73,9 +80,24 @@ export const orders = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
+    foreignKey({
+      columns: [table.tariffSeriesId, table.tariffVersion, table.tariffVersionDigest],
+      foreignColumns: [
+        platformTariffVersions.tariffSeriesId,
+        platformTariffVersions.version,
+        platformTariffVersions.canonicalDigest
+      ],
+      name: "orders_tariff_version_snapshot_fk"
+    }).onDelete("restrict"),
     check(
       "orders_status_check",
       sql`${table.status} in ${sql.raw(formatFinanceSqlValues(orderStatusValues))}`
+    ),
+    check(
+      "orders_product_title_snapshot_check",
+      sql`length(trim(${table.productTitleSnapshot})) between 1 and 128
+        and ${table.productTitleSnapshot} = trim(${table.productTitleSnapshot})
+        and ${table.productTitleSnapshot} !~ '[[:cntrl:]]'`
     ),
     check(
       "orders_money_currency_check",
@@ -106,8 +128,10 @@ export const orders = pgTable(
       sql`${table.financePolicyReserveReleaseDelayDays} between 0 and 540`
     ),
     check(
-      "orders_finance_policy_platform_fee_check",
-      sql`${table.financePolicyPlatformFeeBps} between 0 and 10000`
+      "orders_tariff_commission_check",
+      sql`${table.tariffCommissionBps} between 0 and 10000
+        and ${table.tariffVersion} >= 1
+        and ${table.tariffVersionDigest} ~ '^sha256:[a-f0-9]{64}$'`
     ),
     index("orders_client_created_idx").on(table.clientUserId, table.createdAt, table.id),
     index("orders_astrologer_created_idx").on(table.astrologerUserId, table.createdAt, table.id),

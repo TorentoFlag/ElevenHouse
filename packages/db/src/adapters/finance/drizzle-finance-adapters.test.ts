@@ -177,7 +177,12 @@ describe("finance adapter guardrails", () => {
       assertPayoutStatusEvidence({
         status: "paid",
         externalReference: "manual-transfer-42",
-        transferredAt: now
+        transferredAt: now,
+        proofArtifact: {
+          artifactId: "bank-transfer-proof-42",
+          sha256Digest: `sha256:${"a".repeat(64)}`,
+          byteLength: 1_024
+        }
       })
     ).not.toThrow();
   });

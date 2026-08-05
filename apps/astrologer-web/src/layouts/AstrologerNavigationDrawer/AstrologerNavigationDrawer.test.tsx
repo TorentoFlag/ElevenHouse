@@ -132,6 +132,15 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.onCollapsedChange).toBe(onCollapsedChange);
   });
 
+  it("does not present products navigation as available when the server projection denies it", () => {
+    const element = AstrologerNavigationDrawerView({
+      copy: astrologerCopyByLocale.ru.appShell.navigation,
+      canReadProducts: false
+    });
+
+    expect(element.props.items.map((item: { id: string }) => item.id)).not.toContain("products");
+  });
+
   it("renders drawer links through React Router NavLink", () => {
     const element = AstrologerNavigationDrawerView({
       copy: astrologerCopyByLocale.ru.appShell.navigation

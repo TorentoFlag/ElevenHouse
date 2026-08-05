@@ -3,7 +3,10 @@ import {
   FinanceIdempotencyConflictError,
   OrderClientRelationshipRequiredError,
   OrderFinancePolicyUnavailableError,
+  OrderBookingHoldRequiredError,
+  OrderProductFiscalLabelInvalidError,
   OrderProductNotAvailableError,
+  createPlatformTariffDraft,
   createOrder,
   type ClientAstrologerRelationshipReader,
   type CreateFinanceOrderRecordInput,
@@ -23,6 +26,28 @@ const policyId = "55555555-5555-4555-8555-555555555555";
 const orderId = "66666666-6666-4666-8666-666666666666";
 const bookingId = "99999999-9999-4999-8999-999999999999";
 const now = new Date("2026-07-24T10:00:00.000Z");
+const tariffAuthorityVersion = {
+  ...createPlatformTariffDraft({
+  tariffSeriesId: "pro",
+  version: 1,
+  name: "Pro",
+  tagline: "For active practice",
+  monthlyPriceMinor: 2_500,
+  yearlyPriceMinor: 25_000,
+  monthlyRecurringFrequencyDays: 31,
+  yearlyRecurringFrequencyDays: 365,
+  clientSaleCommissionBps: 800,
+  seatsLimit: 1,
+  bookingsLimit: null,
+  aiRequestsLimit: null,
+  automationLimit: null,
+  isPopular: false,
+  displayOrder: 0,
+    features: ["products"]
+  }),
+  lifecycle: "published" as const
+};
+const tariffDigest = tariffAuthorityVersion.canonicalDigest;
 
 describe("createOrder", () => {
   it("creates a pending payment order from an active client relationship and active product", async () => {
@@ -43,16 +68,20 @@ describe("createOrder", () => {
       clientUserId,
       astrologerUserId,
       productId,
+      productTitleSnapshot: "Natal reading",
       directLinkIntentId,
       grossAmount: { amountMinor: 500_00, currency: "RUB" },
-      platformFee: { amountMinor: 50_00, currency: "RUB" },
-      astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
+      platformFee: { amountMinor: 40_00, currency: "RUB" },
+      astrologerNetAmount: { amountMinor: 460_00, currency: "RUB" },
       financePolicySnapshotId: policyId,
       financePolicyRiskTier: "standard",
       financePolicyHoldDurationHours: 48,
       financePolicyReserveBps: 0,
       financePolicyReserveReleaseDelayDays: 0,
-      financePolicyPlatformFeeBps: 1_000,
+      tariffSeriesId: "pro",
+      tariffVersion: 1,
+      tariffVersionDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      tariffCommissionBps: 800,
       financePolicyProviderSettlementRequired: true
     });
 
@@ -70,13 +99,13 @@ describe("createOrder", () => {
       id: orderId,
       status: "pending_payment",
       grossAmount: { amountMinor: 500_00, currency: "RUB" },
-      platformFee: { amountMinor: 50_00, currency: "RUB" },
-      astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
+      platformFee: { amountMinor: 40_00, currency: "RUB" },
+      astrologerNetAmount: { amountMinor: 460_00, currency: "RUB" },
       financePolicyRiskTier: "standard",
       financePolicyHoldDurationHours: 48,
       financePolicyReserveBps: 0,
       financePolicyReserveReleaseDelayDays: 0,
-      financePolicyPlatformFeeBps: 1_000,
+      tariffCommissionBps: 800,
       financePolicyProviderSettlementRequired: true
     });
   });
@@ -89,7 +118,6 @@ describe("createOrder", () => {
         holdDurationHours: 168,
         reserveBps: 2_000,
         reserveReleaseDelayDays: 90,
-        platformFeeBps: 1_500,
         providerSettlementRequired: false
       }
     });
@@ -109,10 +137,10 @@ describe("createOrder", () => {
       financePolicyHoldDurationHours: 168,
       financePolicyReserveBps: 2_000,
       financePolicyReserveReleaseDelayDays: 90,
-      financePolicyPlatformFeeBps: 1_500,
       financePolicyProviderSettlementRequired: false,
-      platformFee: { amountMinor: 75_00, currency: "RUB" },
-      astrologerNetAmount: { amountMinor: 425_00, currency: "RUB" }
+      tariffCommissionBps: 800,
+      platformFee: { amountMinor: 40_00, currency: "RUB" },
+      astrologerNetAmount: { amountMinor: 460_00, currency: "RUB" }
     });
   });
 
@@ -139,7 +167,7 @@ describe("createOrder", () => {
   });
 
   it("carries a paid booking hold into the created order for later payment confirmation", async () => {
-    const harness = createHarness();
+    const harness = createHarness({ product: { ...activeProduct, executionMode: "live" } });
 
     await expect(
       createOrder({
@@ -162,6 +190,22 @@ describe("createOrder", () => {
       astrologerUserId,
       productId
     });
+  });
+
+  it("requires a paid booking hold before a live product can enter payment", async () => {
+    const harness = createHarness({ product: { ...activeProduct, executionMode: "live" } });
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, directLinkIntentId },
+        idempotencyKey: "order-create:client:live-without-hold-1",
+        now
+      })
+    ).rejects.toBeInstanceOf(OrderBookingHoldRequiredError);
+
+    expect(harness.orderStore.createdInputs).toHaveLength(0);
   });
 
   it("rejects clients without an active relationship to the astrologer", async () => {
@@ -244,6 +288,55 @@ describe("createOrder", () => {
     ).rejects.toBeInstanceOf(OrderFinancePolicyUnavailableError);
   });
 
+  it("does not reveal an orderable product when its persisted owner has no active tariff authority", async () => {
+    const harness = createHarness({ hasTariffCommission: false });
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, directLinkIntentId },
+        idempotencyKey: "order-create:client:no-tariff-1",
+        now
+      })
+    ).rejects.toBeInstanceOf(OrderProductNotAvailableError);
+  });
+
+  it("does not reveal or sell an active product when its persisted owner lacks products entitlement", async () => {
+    const harness = createHarness();
+    harness.tariffAuthorityStore.findTariffVersion.mockResolvedValue({
+      ...tariffAuthorityVersion,
+      features: []
+    });
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, directLinkIntentId },
+        idempotencyKey: "order-create:client:products-entitlement-1",
+        now
+      })
+    ).rejects.toBeInstanceOf(OrderProductNotAvailableError);
+
+    expect(harness.orderStore.createdInputs).toHaveLength(0);
+  });
+
+  it("snapshots a fiscal-safe product title and rejects labels that cannot be issued on a receipt", async () => {
+    const harness = createHarness({ product: { ...activeProduct, title: "x".repeat(129) } });
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, directLinkIntentId },
+        idempotencyKey: "order-create:client:bad-fiscal-label-1",
+        now
+      })
+    ).rejects.toBeInstanceOf(OrderProductFiscalLabelInvalidError);
+    expect(harness.orderStore.createdInputs).toHaveLength(0);
+  });
+
   it("replays an existing order and surfaces idempotency conflicts from the store", async () => {
     const replay = createHarness({ replay: true });
     await expect(
@@ -273,7 +366,7 @@ describe("createOrder", () => {
 const activeProduct = {
   id: productId,
   ownerUserId: astrologerUserId,
-  type: "single",
+  type: "async",
   status: "active",
   title: "Natal reading",
   subtitle: null,
@@ -281,7 +374,7 @@ const activeProduct = {
   currency: "RUB",
   coverMediaId: null,
   introVideoUrl: null,
-  executionMode: "live",
+  executionMode: "async",
   paymentModel: "once",
   durationMinutes: 60,
   durationLabel: null,
@@ -306,6 +399,7 @@ function createHarness(options: {
   readonly hasRelationship?: boolean;
   readonly product?: Product | null;
   readonly hasPolicy?: boolean;
+  readonly hasTariffCommission?: boolean;
   readonly effectivePolicy?: EffectiveFinancePolicy;
   readonly replay?: boolean;
   readonly conflict?: boolean;
@@ -323,6 +417,22 @@ function createHarness(options: {
       options.hasPolicy === false ? null : (options.effectivePolicy ?? effectivePolicy())
     )
   } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
+  const tariffAuthorityStore = {
+    findCurrentSubscription: vi.fn(async () => options.hasTariffCommission === false ? null : ({
+      subscriptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      ownerUserId: astrologerUserId,
+      tariffSeriesId: "pro",
+      tariffVersion: 1,
+      tariffVersionDigest: tariffDigest,
+      commissionBpsSnapshot: 800,
+      version: 1,
+      state: "active" as const,
+      startsAt: "2026-07-01T00:00:00.000Z",
+      endsAt: "2026-08-01T00:00:00.000Z"
+    })),
+    findTariffVersion: vi.fn(async () => tariffAuthorityVersion),
+    findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
+  };
   const orderStore = createOrderStore({ replay: options.replay, conflict: options.conflict });
 
   return {
@@ -330,10 +440,12 @@ function createHarness(options: {
       relationshipReader,
       productStore,
       financePolicyStore,
+      tariffAuthorityStore,
       orderStore
     },
     orderStore,
-    productStore
+    productStore,
+    tariffAuthorityStore
   };
 }
 
@@ -376,7 +488,6 @@ function effectivePolicy(): EffectiveFinancePolicy {
     holdDurationHours: 48,
     reserveBps: 0,
     reserveReleaseDelayDays: 0,
-    platformFeeBps: 1_000,
     providerSettlementRequired: true
   };
 }
@@ -389,6 +500,7 @@ function createOrderRecordInput(
     clientUserId,
     astrologerUserId,
     productId,
+    productTitleSnapshot: "Индивидуальная консультация",
     directLinkIntentId,
     bookingId: null,
     status: "pending_payment",
@@ -400,7 +512,10 @@ function createOrderRecordInput(
     financePolicyHoldDurationHours: 48,
     financePolicyReserveBps: 0,
     financePolicyReserveReleaseDelayDays: 0,
-    financePolicyPlatformFeeBps: 1_000,
+    tariffSeriesId: "pro",
+    tariffVersion: 1,
+    tariffVersionDigest: tariffDigest,
+    tariffCommissionBps: 800,
     financePolicyProviderSettlementRequired: true,
     now: now.toISOString(),
     ...overrides
@@ -413,6 +528,7 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     clientUserId: input.clientUserId,
     astrologerUserId: input.astrologerUserId,
     productId: input.productId,
+    productTitleSnapshot: input.productTitleSnapshot,
     directLinkIntentId: input.directLinkIntentId,
     bookingId: input.bookingId ?? null,
     status: input.status ?? "pending_payment",
@@ -424,7 +540,10 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
     financePolicyReserveBps: input.financePolicyReserveBps,
     financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
-    financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+    tariffSeriesId: input.tariffSeriesId,
+    tariffVersion: input.tariffVersion,
+    tariffVersionDigest: input.tariffVersionDigest,
+    tariffCommissionBps: input.tariffCommissionBps,
     financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
     createdAt: input.now,
     updatedAt: input.now

@@ -9,7 +9,7 @@ import {
   type FinanceIdempotentCommand,
   type FinancePeriodSummary,
   type FinanceOperationDirection,
-  type FinanceOperationKind,
+  type FinanceLedgerOperationKind,
   type HoldReleaseStore,
   type LedgerAccountRef,
   type LedgerAccountType,
@@ -755,7 +755,7 @@ function toLedgerOperation(row: LedgerOperationListRow): LedgerOperation {
 
 function kindForLedgerOperation(
   operationType: LedgerOperation["operationType"]
-): FinanceOperationKind {
+): FinanceLedgerOperationKind {
   switch (operationType) {
     case "sale_captured":
     case "funds_released":

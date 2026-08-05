@@ -46,6 +46,7 @@ const booking: Booking = {
   productId,
   source: "manual",
   state: "confirmed",
+  lifecycleRevision: 1,
   holdExpiresAt: null,
   startAt: "2026-07-20T07:00:00.000Z",
   endAt: "2026-07-20T08:00:00.000Z",
@@ -59,6 +60,13 @@ const booking: Booking = {
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 0,
     minimumNoticeMinutes: 0
+  },
+  clientDataRequirementsSnapshot: {
+    schemaVersion: "booking-client-data-requirements.v1",
+    executionMode: "live",
+    participantMode: "solo",
+    requiredClientData: ["chart1"],
+    methods: ["natal"]
   },
   createdAt: "2026-07-17T09:00:00.000Z",
   updatedAt: "2026-07-17T09:00:00.000Z"
@@ -192,6 +200,8 @@ function createService(
           participantMode: "solo" as const,
           durationMinutes: 60,
           deliveryFormats: ["video" as const],
+          requiredClientData: ["chart1" as const],
+          methods: ["natal" as const],
           priceMinor: booking.priceMinor,
           currency: "RUB" as const
         }))
@@ -204,6 +214,15 @@ function createCommandStore(overrides: Partial<BookingCommandStore> = {}): Booki
   return {
     executeManualBooking: vi.fn(async () => ({ kind: "created" as const, booking })),
     executePaidHold: vi.fn(),
+    executeOwnerCancellation: vi.fn(async () => {
+      throw new Error("Cancellation is outside this fixture");
+    }),
+    executeOwnerReschedule: vi.fn(async () => {
+      throw new Error("Reschedule is outside this fixture");
+    }),
+    executeOwnerCompletion: vi.fn(async () => {
+      throw new Error("Completion is outside this fixture");
+    }),
     confirmPaidBooking: vi.fn(async () => null),
     releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async () => booking),

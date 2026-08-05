@@ -6,6 +6,7 @@ import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { MediaController } from "./media.controller";
 import { MediaService } from "./media.service";
@@ -19,7 +20,7 @@ import {
 } from "./media.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, PlatformEntitlementsModule, SecurityModule],
   controllers: [MediaController],
   providers: [
     MediaService,

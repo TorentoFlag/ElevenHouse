@@ -26,7 +26,9 @@ const ids = {
   flow: "00000000-0000-4000-8000-000000000003",
   version: "00000000-0000-4000-8000-000000000004",
   otherVersion: "00000000-0000-4000-8000-000000000005",
-  epoch: "00000000-0000-4000-8000-000000000006"
+  epoch: "00000000-0000-4000-8000-000000000006",
+  actorSubject: "00000000-0000-4000-8000-000000000017",
+  ownerSubject: "00000000-0000-4000-8000-000000000018"
 } as const;
 
 const inactiveAuthority: FlowEnrollmentAuthoritySnapshot = {
@@ -34,6 +36,7 @@ const inactiveAuthority: FlowEnrollmentAuthoritySnapshot = {
   ownerUserId: ids.owner,
   definitionState: "versioned",
   definitionRevision: 4,
+  legacyRuntimeStatus: "published",
   enrollmentState: "inactive",
   enrollmentRevision: 0,
   activeVersionId: null,
@@ -54,6 +57,7 @@ describe("Flow enrollment control state machine", () => {
   it("receives activation readiness only through the store preparation context", async () => {
     const store: FlowEnrollmentControlStore = {
       executeActivate: async (input) => {
+        bindCommand(input);
         expect(input.request).not.toHaveProperty("readiness");
         expect(typeof input.prepare).toBe("function");
         expect(
@@ -110,7 +114,10 @@ describe("Flow enrollment control state machine", () => {
           activeVersionId: ids.otherVersion,
           activeActivationEpochId: ids.epoch
         },
-        readiness: transactionalReadiness({ enrollmentRevision: 2 }),
+        readiness: transactionalReadiness({
+          enrollmentRevision: 2,
+          expectedActiveVersionId: ids.otherVersion
+        }),
         request: activationRequest({
           expectedEnrollmentRevision: 2,
           expectedActiveVersionId: ids.otherVersion
@@ -151,12 +158,20 @@ describe("Flow enrollment control state machine", () => {
     });
   });
 
-  it("rejects archived, legacy-manifest, already-active and readiness-blocked activation", async () => {
+  it("rejects archived, legacy-active, legacy-manifest, already-active and readiness-blocked activation", async () => {
     expect(
       await prepareActivation({
         current: { ...inactiveAuthority, definitionState: "archived" }
       })
     ).toMatchObject({ kind: "rejected", response: { body: { code: "FLOW_DEFINITION_ARCHIVED" } } });
+    expect(
+      await prepareActivation({
+        current: { ...inactiveAuthority, legacyRuntimeStatus: "active" }
+      })
+    ).toMatchObject({
+      kind: "rejected",
+      response: { body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" } }
+    });
     expect(
       await prepareActivation({
         target: { ...currentTarget(), manifestSchemaVersion: "flow-capability-manifest.v1" }
@@ -201,6 +216,26 @@ describe("Flow enrollment control state machine", () => {
       kind: "rejected",
       response: { body: { code: "FLOW_ACTIVATION_BLOCKED" } }
     });
+  });
+
+  it("fails closed when legacy and enrollment authorities are both active", async () => {
+    await expect(
+      prepareActivation({
+        current: {
+          ...inactiveAuthority,
+          legacyRuntimeStatus: "active",
+          enrollmentState: "active",
+          enrollmentRevision: 1,
+          activeVersionId: ids.version,
+          activeActivationEpochId: ids.epoch
+        },
+        readiness: transactionalReadiness({ enrollmentRevision: 1 }),
+        request: activationRequest({
+          expectedEnrollmentRevision: 1,
+          expectedActiveVersionId: ids.version
+        })
+      })
+    ).rejects.toMatchObject({ code: "FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR" });
   });
 
   it("pauses only the exact active epoch and leaves definition revision out of the control CAS", async () => {
@@ -290,7 +325,7 @@ describe("Flow enrollment control state machine", () => {
     const captured: Array<Record<string, unknown>> = [];
     const store: FlowEnrollmentControlStore = {
       executeActivate: async (input) => {
-        captured.push(input.command);
+        captured.push(bindCommand(input));
         return {
           kind: "created",
           outcome: {
@@ -380,11 +415,14 @@ describe("Flow enrollment control state machine", () => {
       apiSurface: "astrologer-api",
       routeTemplate: "/flows/:flowId/activate",
       scope: "flows.enrollment.activate.v1",
-      actorUserId: ids.actor,
-      ownerUserId: ids.owner,
+      actorSubjectId: ids.actorSubject,
+      ownerSubjectId: ids.ownerSubject,
       resourceId: ids.flow,
       idempotencyKey: "flow-activate:1"
     });
+    expect(captured[0]).toMatchObject({ actorSubjectId: ids.actorSubject });
+    expect(captured[0]).not.toHaveProperty("actorUserId");
+    expect(captured[0]).not.toHaveProperty("ownerUserId");
     expect(captured[0]?.requestHash).toBe(captured[1]?.requestHash);
     for (const changedIdentity of captured.slice(2)) {
       expect(changedIdentity.requestHash).not.toBe(captured[0]?.requestHash);
@@ -427,8 +465,10 @@ describe("Flow enrollment control state machine", () => {
     ).rejects.toMatchObject({ code: "FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR" });
 
     const malformedStore: FlowEnrollmentControlStore = {
-      executeActivate: async () =>
-        ({ kind: "replayed", outcome: { kind: "succeeded", response: {} } }) as never,
+      executeActivate: async (input) => {
+        bindCommand(input);
+        return { kind: "replayed", outcome: { kind: "succeeded", response: {} } } as never;
+      },
       executePause: async () => {
         throw new Error("not used");
       }
@@ -472,6 +512,7 @@ describe("Flow enrollment control state machine", () => {
   it("keeps exact replay read-only and makes preparation one-shot", async () => {
     const replayWithPreparation: FlowEnrollmentControlStore = {
       executeActivate: async (input) => {
+        bindCommand(input);
         input.prepare({
           current: inactiveAuthority,
           target: currentTarget(),
@@ -502,6 +543,7 @@ describe("Flow enrollment control state machine", () => {
 
     const doublePreparation: FlowEnrollmentControlStore = {
       executeActivate: async (input) => {
+        bindCommand(input);
         const context = {
           current: inactiveAuthority,
           target: currentTarget(),
@@ -529,13 +571,16 @@ describe("Flow enrollment control state machine", () => {
 
   it("keeps missing and foreign-owner command responses indistinguishable", async () => {
     const store: FlowEnrollmentControlStore = {
-      executeActivate: async () => ({
-        kind: "created",
-        outcome: {
-          kind: "rejected",
-          response: { statusCode: 404, body: { code: "FLOW_DEFINITION_NOT_FOUND" } }
-        }
-      }),
+      executeActivate: async (input) => {
+        bindCommand(input);
+        return {
+          kind: "created",
+          outcome: {
+            kind: "rejected",
+            response: { statusCode: 404, body: { code: "FLOW_DEFINITION_NOT_FOUND" } }
+          }
+        };
+      },
       executePause: async () => {
         throw new Error("not used");
       }
@@ -612,6 +657,7 @@ function transactionalReadiness(
     versionId: ids.version,
     definitionRevision: 4,
     enrollmentRevision: 0,
+    expectedActiveVersionId: null,
     runtimeMode: "canary",
     rolloutPolicyRevision: 3,
     checkedAt: "2026-08-04T10:00:00.000Z",
@@ -654,6 +700,7 @@ async function prepareActivation(
   const request = options.request ?? activationRequest();
   const store: FlowEnrollmentControlStore = {
     executeActivate: async (input) => {
+      bindCommand(input);
       prepared = input.prepare({
         current: options.current ?? inactiveAuthority,
         target: options.target ?? currentTarget(),
@@ -694,6 +741,7 @@ async function preparePause(options: {
       throw new Error("not used");
     },
     executePause: async (input) => {
+      bindCommand(input);
       prepared = input.prepare({ current: options.current });
       return {
         kind: "created",
@@ -744,10 +792,10 @@ function activationResponse(
       effectiveTo: null,
       manifestDigest: `sha256:${"a".repeat(64)}`,
       rolloutPolicyRevision: 3,
-      activatedByActorUserId: ids.actor,
+      activatedByActorSubjectId: ids.actorSubject,
       activateCommandId: "00000000-0000-4000-8000-000000000007",
       closeReason: null,
-      closedByActorUserId: null,
+      closedByActorSubjectId: null,
       closeCommandId: null
     }
   };
@@ -780,10 +828,10 @@ function pauseResponse(
       effectiveTo: pausedAt,
       manifestDigest: `sha256:${"a".repeat(64)}`,
       rolloutPolicyRevision: 3,
-      activatedByActorUserId: ids.actor,
+      activatedByActorSubjectId: ids.actorSubject,
       activateCommandId: "00000000-0000-4000-8000-000000000007",
       closeReason: "pause_enrollment",
-      closedByActorUserId: ids.actor,
+      closedByActorSubjectId: ids.actorSubject,
       closeCommandId: "00000000-0000-4000-8000-000000000008"
     }
   };
@@ -794,10 +842,13 @@ function activationStore(
   kind: "created" | "replayed"
 ): FlowEnrollmentControlStore {
   return {
-    executeActivate: async () => ({
-      kind,
-      outcome: { kind: "succeeded", response: { statusCode: 200, body: response } }
-    }),
+    executeActivate: async (input) => {
+      bindCommand(input);
+      return {
+        kind,
+        outcome: { kind: "succeeded", response: { statusCode: 200, body: response } }
+      };
+    },
     executePause: async () => {
       throw new Error("not used");
     }
@@ -812,9 +863,30 @@ function pauseStore(
     executeActivate: async () => {
       throw new Error("not used");
     },
-    executePause: async () => ({
-      kind,
-      outcome: { kind: "succeeded", response: { statusCode: 200, body: response } }
-    })
+    executePause: async (input) => {
+      bindCommand(input);
+      return {
+        kind,
+        outcome: { kind: "succeeded", response: { statusCode: 200, body: response } }
+      };
+    }
   };
+}
+
+function bindCommand(
+  input: Pick<
+    Parameters<FlowEnrollmentControlStore["executeActivate"]>[0],
+    "commandRequest" | "createCommand"
+  >
+) {
+  return input.createCommand({
+    actorSubjectId: subjectForUser(input.commandRequest.actorUserId),
+    ownerSubjectId: subjectForUser(input.commandRequest.ownerUserId)
+  });
+}
+
+function subjectForUser(userId: string): string {
+  if (userId === ids.actor) return ids.actorSubject;
+  if (userId === ids.owner) return ids.ownerSubject;
+  throw new Error(`Unknown test user ${userId}`);
 }

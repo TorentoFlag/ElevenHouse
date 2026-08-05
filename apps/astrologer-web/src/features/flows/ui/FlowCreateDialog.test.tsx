@@ -114,7 +114,7 @@ describe("FlowCreateDialog", () => {
 
     expect(button).toHaveProperty("disabled", false);
     fireEvent.click(button);
-    expect(onCreateTemplate).toHaveBeenCalledWith(availableTemplate);
+    expect(onCreateTemplate).toHaveBeenCalledWith(availableTemplate, {});
   });
 
   it("keeps unavailable and legacy templates visible, disabled and honestly explained", () => {

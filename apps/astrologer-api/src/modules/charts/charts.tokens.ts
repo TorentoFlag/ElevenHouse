@@ -5,5 +5,4 @@ export const CHART_AI_DRAFT_COMMAND_STORE = Symbol("CHART_AI_DRAFT_COMMAND_STORE
 
 export type ChartAiConfig = {
   readonly enabled: boolean;
-  readonly processingAuthorityVersion: string | null;
 };

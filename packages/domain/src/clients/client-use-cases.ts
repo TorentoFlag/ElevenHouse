@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { inspectChartCivilTime } from "../charts/chart-civil-time";
 import { normalizeRequiredString } from "../shared";
-import { BirthDataValidationError, ClientJoinIntentError } from "./client-errors";
+import {
+  BirthDataValidationError,
+  ClientBirthDataRelationshipDeniedError,
+  ClientBirthDataRevisionConflictError,
+  ClientJoinIntentError
+} from "./client-errors";
 import type { ClientJoinIntentClaimStore, ClientStore } from "./client-store";
 import type {
   AstrologerClientList,
@@ -21,7 +26,6 @@ const birthTimePattern = /^\d{2}:\d{2}$/;
 const countryCodePattern = /^[A-Z]{2}$/;
 const birthDataSources: readonly ClientBirthDataSource[] = [
   "client_profile",
-  "booking",
   "import",
   "manual"
 ];
@@ -67,8 +71,7 @@ export function normalizeClientBirthDataInput(
       180,
       "Birth longitude is invalid"
     ),
-    source: normalizeBirthDataSource(input.source),
-    isPrimary: input.isPrimary === true
+    source: normalizeBirthDataSource(input.source)
   };
 }
 
@@ -198,54 +201,34 @@ export async function claimClientJoinIntent(input: {
   return relationship;
 }
 
-export async function upsertClientBirthData(input: {
-  readonly store: ClientStore;
+export async function writeClientBirthProfile(input: {
+  readonly store: Pick<ClientStore, "writeClientBirthProfile">;
   readonly clientUserId: string;
+  readonly actor: {
+    readonly userId: string;
+    readonly role: "client" | "astrologer";
+  };
+  readonly expectedRevision: number | null;
   readonly data: ClientBirthDataInput;
   readonly now: Date;
 }): Promise<ClientBirthData> {
-  return input.store.upsertClientBirthData({
+  const result = await input.store.writeClientBirthProfile({
     clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
-    data: normalizeClientBirthDataInput({ ...input.data, isPrimary: true }),
-    now: input.now.toISOString()
-  });
-}
-
-export function listClientBirthDataProfiles(input: {
-  readonly store: ClientStore;
-  readonly clientUserId: string;
-}): Promise<readonly ClientBirthData[]> {
-  return input.store.listClientBirthDataProfiles(
-    normalizeRequiredString(input.clientUserId, "Client user id is required")
-  );
-}
-
-export async function createClientBirthDataProfile(input: {
-  readonly store: ClientStore;
-  readonly clientUserId: string;
-  readonly data: ClientBirthDataInput;
-  readonly now: Date;
-}): Promise<ClientBirthData> {
-  return input.store.createClientBirthDataProfile({
-    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
+    actor: {
+      userId: normalizeRequiredString(input.actor.userId, "Birth-data editor user id is required"),
+      role: input.actor.role
+    },
+    expectedRevision: normalizeExpectedBirthDataRevision(input.expectedRevision),
     data: normalizeClientBirthDataInput(input.data),
     now: input.now.toISOString()
   });
-}
-
-export async function updateClientBirthDataProfile(input: {
-  readonly store: ClientStore;
-  readonly clientUserId: string;
-  readonly birthDataId: string;
-  readonly data: ClientBirthDataInput;
-  readonly now: Date;
-}): Promise<ClientBirthData | null> {
-  return input.store.updateClientBirthDataProfile({
-    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
-    birthDataId: normalizeRequiredString(input.birthDataId, "Birth profile id is required"),
-    data: normalizeClientBirthDataInput(input.data),
-    now: input.now.toISOString()
-  });
+  if (result.kind === "conflict") {
+    throw new ClientBirthDataRevisionConflictError();
+  }
+  if (result.kind === "not_related") {
+    throw new ClientBirthDataRelationshipDeniedError();
+  }
+  return result.profile;
 }
 
 export function listAstrologerClients(input: {
@@ -278,6 +261,14 @@ export function getAstrologerClient(input: {
     ),
     clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required")
   });
+}
+
+function normalizeExpectedBirthDataRevision(value: number | null): number | null {
+  if (value === null) return null;
+  if (!Number.isInteger(value) || value < 1) {
+    throw new BirthDataValidationError("Birth-data revision is invalid");
+  }
+  return value;
 }
 
 function normalizeBirthDate(value: string | null | undefined): string | null {

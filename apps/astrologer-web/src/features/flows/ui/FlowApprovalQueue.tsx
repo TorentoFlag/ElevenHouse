@@ -6,8 +6,7 @@ import type {
 import {
   buildFlowRuntimePresentation,
   canProjectLiveFlowRuntime,
-  flowApprovalDecisionUnavailableMessageRu,
-  flowApprovalMixedHistoryMessageRu
+  flowRuntimeExecutionUnavailableMessageRu
 } from "../model/flowRuntimePresentation";
 
 export type FlowApprovalQueueProps = {
@@ -41,11 +40,7 @@ export function FlowApprovalQueue({
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
   const runtime = buildFlowRuntimePresentation(runtimeAvailability);
   const canDecide = canProjectLiveFlowRuntime(runtimeAvailability);
-  const decisionUnavailableReason = runtime.historyIsLegacyPreview
-    ? flowApprovalDecisionUnavailableMessageRu
-    : runtimeAvailability?.historySemantics === "mixed"
-      ? flowApprovalMixedHistoryMessageRu
-      : runtime.unavailableReason;
+  const decisionUnavailableReason = runtime.unavailableReason ?? flowRuntimeExecutionUnavailableMessageRu;
 
   return (
     <section className={className("approvalQueue")} aria-label="Подтверждения воронок">

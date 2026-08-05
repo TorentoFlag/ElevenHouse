@@ -1,16 +1,9 @@
-import type { FlowExecutionOwnerScope } from "@elevenhouse/domain";
+import type { FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
 
-type FlowExecutionRollout =
+type FlowExecutionDeploymentCeiling =
   | { readonly mode: "definition_only" }
-  | {
-      readonly mode: "canary";
-      readonly ownerScope: Extract<FlowExecutionOwnerScope, { readonly kind: "allowlist" }>;
-    };
-type FlowExecutionCanaryOwnerScope = Extract<
-  FlowExecutionOwnerScope,
-  { readonly kind: "allowlist" }
->;
+  | { readonly mode: "canary" };
 
 type FlowExecutionTickResult = { readonly status: string };
 type FlowExecutionRunSummary =
@@ -18,55 +11,63 @@ type FlowExecutionRunSummary =
   | { readonly status: "idle"; readonly processedCount: 0 }
   | { readonly status: "processed"; readonly processedCount: number };
 type FlowRecoveryRunSummary = { readonly status: "disabled" } | FlowExecutionTickResult;
+type FlowWorkItemWakeRunSummary = { readonly status: "disabled" } | FlowWorkItemWakeSweepResult;
 type FlowExecutionLifecycle = "idle" | "running" | "stopping" | "stopped";
 
 const FLOW_EXECUTION_POLL_DEADLINE_EXCEEDED = "FLOW_EXECUTION_POLL_DEADLINE_EXCEEDED";
 const FLOW_EXECUTION_RECOVERY_DEADLINE_EXCEEDED = "FLOW_EXECUTION_RECOVERY_DEADLINE_EXCEEDED";
+const FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED = "FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED";
 const FLOW_EXECUTION_DRAIN_DEADLINE_EXCEEDED = "FLOW_EXECUTION_DRAIN_DEADLINE_EXCEEDED";
 
 export function createFlowExecutionRuntime(input: {
-  readonly rollout: FlowExecutionRollout;
+  readonly deploymentCeiling: FlowExecutionDeploymentCeiling;
   readonly pollIntervalMs: number;
   readonly pollBatchSize: number;
   readonly recoveryIntervalMs: number;
+  readonly workItemWakeIntervalMs: number;
   readonly operationTimeoutMs: number;
   readonly drainTimeoutMs: number;
   readonly errorBackoffMaxMs: number;
   readonly errorJitter: number;
-  readonly processNext: (
-    ownerScope: FlowExecutionCanaryOwnerScope
-  ) => Promise<FlowExecutionTickResult>;
+  readonly processNext: () => Promise<FlowExecutionTickResult>;
   readonly recoverExpired: () => Promise<FlowExecutionTickResult>;
+  readonly wakeDueWorkItems: () => Promise<FlowWorkItemWakeSweepResult>;
   readonly logger: Pick<Logger, "info" | "warn" | "error">;
 }) {
+  if (
+    input.deploymentCeiling.mode !== "definition_only" &&
+    input.deploymentCeiling.mode !== "canary"
+  ) {
+    throw new Error("FLOW_EXECUTION_DEPLOYMENT_CEILING_INVALID");
+  }
   let accepting = true;
   let lifecycle: FlowExecutionLifecycle = "idle";
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+  let workItemWakeTimer: ReturnType<typeof setTimeout> | undefined;
   let executionInFlight: Promise<FlowExecutionRunSummary> | null = null;
   let recoveryInFlight: Promise<FlowRecoveryRunSummary> | null = null;
+  let workItemWakeInFlight: Promise<FlowWorkItemWakeSweepResult> | null = null;
   let executionDeadlineLogged = false;
   let recoveryDeadlineLogged = false;
+  let workItemWakeDeadlineLogged = false;
   let executionLastSucceededAt: number | null = null;
   let recoveryLastSucceededAt: number | null = null;
+  let workItemWakeLastSucceededAt: number | null = null;
   let executionLastFailedAt: number | null = null;
   let recoveryLastFailedAt: number | null = null;
+  let workItemWakeLastFailedAt: number | null = null;
   let executionLastErrorCode: string | null = null;
   let recoveryLastErrorCode: string | null = null;
+  let workItemWakeLastErrorCode: string | null = null;
   let executionScheduleFailures = 0;
   let recoveryScheduleFailures = 0;
+  let workItemWakeScheduleFailures = 0;
 
-  const canaryOwnerScope =
-    input.rollout.mode === "canary" ? normalizeCanaryOwnerScope(input.rollout.ownerScope) : null;
-  const claimingEnabled = canaryOwnerScope !== null;
+  const claimingEnabled = input.deploymentCeiling.mode === "canary";
 
   const startExecutionOperation = (): Promise<FlowExecutionRunSummary> => {
-    if (!canaryOwnerScope) throw new Error("FLOW_EXECUTION_CANARY_SCOPE_INVALID");
-    const operation = drainExecutionBatch(
-      () => input.processNext(canaryOwnerScope),
-      input.pollBatchSize,
-      () => accepting
-    );
+    const operation = drainExecutionBatch(input.processNext, input.pollBatchSize, () => accepting);
     executionDeadlineLogged = false;
     const tracked = operation.then(
       (result) => {
@@ -151,11 +152,60 @@ export function createFlowExecutionRuntime(input: {
     });
   };
 
+  const startWorkItemWakeOperation = (): Promise<FlowWorkItemWakeSweepResult> => {
+    const operation = input.wakeDueWorkItems();
+    workItemWakeDeadlineLogged = false;
+    const tracked = operation.then(
+      (result) => {
+        if (workItemWakeInFlight === tracked) workItemWakeInFlight = null;
+        const completedAt = Date.now();
+        workItemWakeLastSucceededAt = completedAt;
+        if (result.integrityFailureCount > 0) {
+          workItemWakeLastFailedAt = completedAt;
+          workItemWakeLastErrorCode = "flow_work_item_wake_integrity_failure";
+        } else {
+          workItemWakeLastFailedAt = null;
+          workItemWakeLastErrorCode = null;
+        }
+        return result;
+      },
+      (error: unknown) => {
+        if (workItemWakeInFlight === tracked) workItemWakeInFlight = null;
+        workItemWakeLastFailedAt = Date.now();
+        workItemWakeLastErrorCode = "flow_work_item_wake_failed";
+        input.logger.error("flow work item wake failed", {
+          errorCode: "flow_work_item_wake_failed"
+        });
+        throw error;
+      }
+    );
+    workItemWakeInFlight = tracked;
+    void tracked.catch(() => undefined);
+    return tracked;
+  };
+
+  const runWorkItemWakeOnce = (): Promise<FlowWorkItemWakeRunSummary> => {
+    if (!accepting) return Promise.resolve({ status: "disabled" });
+    const operation = workItemWakeInFlight ?? startWorkItemWakeOperation();
+    return observeDeadline(operation, input.operationTimeoutMs, () => {
+      if (!workItemWakeDeadlineLogged) {
+        workItemWakeDeadlineLogged = true;
+        workItemWakeLastFailedAt = Date.now();
+        workItemWakeLastErrorCode = "flow_work_item_wake_deadline_exceeded";
+        input.logger.error("flow work item wake failed", {
+          errorCode: "flow_work_item_wake_deadline_exceeded"
+        });
+      }
+      return new Error(FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED);
+    });
+  };
+
   const runInitial = async () => {
     if (!accepting) return { status: "disabled" } as const;
     const recovery = await runRecoveryOnce();
+    const workItemWake = await runWorkItemWakeOnce();
     const execution = await runExecutionOnce();
-    return { status: "completed", recovery, execution } as const;
+    return { status: "completed", recovery, workItemWake, execution } as const;
   };
 
   const scheduleExecution = (delayMs: number): void => {
@@ -204,11 +254,34 @@ export function createFlowExecutionRuntime(input: {
     recoveryTimer.unref();
   };
 
+  const scheduleWorkItemWake = (delayMs: number): void => {
+    workItemWakeTimer = setTimeout(async () => {
+      workItemWakeTimer = undefined;
+      try {
+        await runWorkItemWakeOnce();
+        workItemWakeScheduleFailures = 0;
+      } catch {
+        workItemWakeScheduleFailures += 1;
+      }
+      if (accepting && lifecycle === "running") {
+        scheduleWorkItemWake(
+          nextScheduleDelay(
+            input.workItemWakeIntervalMs,
+            workItemWakeScheduleFailures,
+            input.errorBackoffMaxMs,
+            input.errorJitter
+          )
+        );
+      }
+    }, delayMs);
+    workItemWakeTimer.unref();
+  };
+
   const getOperationalReadiness = () => {
     if (lifecycle !== "running") {
       return {
         status: "unready" as const,
-        mode: input.rollout.mode,
+        mode: input.deploymentCeiling.mode,
         lifecycle,
         errorCode: "flow_execution_runtime_not_running" as const
       };
@@ -226,9 +299,26 @@ export function createFlowExecutionRuntime(input: {
     if (recoveryError) {
       return {
         status: "unready" as const,
-        mode: input.rollout.mode,
+        mode: input.deploymentCeiling.mode,
         lifecycle,
         errorCode: recoveryError
+      };
+    }
+    const workItemWakeError = laneReadinessError({
+      now,
+      intervalMs: input.workItemWakeIntervalMs,
+      operationTimeoutMs: input.operationTimeoutMs,
+      lastSucceededAt: workItemWakeLastSucceededAt,
+      lastFailedAt: workItemWakeLastFailedAt,
+      lastErrorCode: workItemWakeLastErrorCode,
+      prefix: "flow_work_item_wake"
+    });
+    if (workItemWakeError) {
+      return {
+        status: "unready" as const,
+        mode: input.deploymentCeiling.mode,
+        lifecycle,
+        errorCode: workItemWakeError
       };
     }
     if (claimingEnabled) {
@@ -244,7 +334,7 @@ export function createFlowExecutionRuntime(input: {
       if (executionError) {
         return {
           status: "unready" as const,
-          mode: input.rollout.mode,
+          mode: input.deploymentCeiling.mode,
           lifecycle,
           errorCode: executionError
         };
@@ -252,7 +342,7 @@ export function createFlowExecutionRuntime(input: {
     }
     return {
       status: "ready" as const,
-      mode: input.rollout.mode,
+      mode: input.deploymentCeiling.mode,
       lifecycle,
       errorCode: null
     };
@@ -262,6 +352,7 @@ export function createFlowExecutionRuntime(input: {
     runInitial,
     runExecutionOnce,
     runRecoveryOnce,
+    runWorkItemWakeOnce,
     start: () => {
       if (lifecycle !== "idle" || !accepting) return;
       lifecycle = "running";
@@ -269,6 +360,7 @@ export function createFlowExecutionRuntime(input: {
         scheduleExecution(input.pollIntervalMs);
       }
       scheduleRecovery(input.recoveryIntervalMs);
+      scheduleWorkItemWake(input.workItemWakeIntervalMs);
     },
     stop: async () => {
       if (lifecycle === "stopped") return;
@@ -276,12 +368,14 @@ export function createFlowExecutionRuntime(input: {
       accepting = false;
       if (pollTimer) clearTimeout(pollTimer);
       if (recoveryTimer) clearTimeout(recoveryTimer);
+      if (workItemWakeTimer) clearTimeout(workItemWakeTimer);
       pollTimer = undefined;
       recoveryTimer = undefined;
-      const operations = [executionInFlight, recoveryInFlight].filter(
-        (operation): operation is Promise<FlowExecutionRunSummary | FlowRecoveryRunSummary> =>
-          operation !== null
-      );
+      workItemWakeTimer = undefined;
+      const operations: Promise<unknown>[] = [];
+      if (executionInFlight) operations.push(executionInFlight);
+      if (recoveryInFlight) operations.push(recoveryInFlight);
+      if (workItemWakeInFlight) operations.push(workItemWakeInFlight);
       try {
         await drainWithinDeadline(operations, input.drainTimeoutMs);
       } catch {
@@ -292,7 +386,7 @@ export function createFlowExecutionRuntime(input: {
       }
       lifecycle = "stopped";
     },
-    getState: () => ({ lifecycle, mode: input.rollout.mode }),
+    getState: () => ({ lifecycle, mode: input.deploymentCeiling.mode }),
     getOperationalReadiness
   };
 }
@@ -351,33 +445,6 @@ function drainWithinDeadline(
   });
 }
 
-function normalizeCanaryOwnerScope(input: unknown): FlowExecutionCanaryOwnerScope {
-  if (!input || typeof input !== "object") {
-    throw new Error("FLOW_EXECUTION_CANARY_SCOPE_INVALID");
-  }
-  const candidate = input as { readonly kind?: unknown; readonly ownerUserIds?: unknown };
-  if (
-    candidate.kind !== "allowlist" ||
-    !Array.isArray(candidate.ownerUserIds) ||
-    candidate.ownerUserIds.length < 1 ||
-    candidate.ownerUserIds.length > 100 ||
-    candidate.ownerUserIds.some(
-      (ownerUserId) =>
-        typeof ownerUserId !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-          ownerUserId
-        )
-    )
-  ) {
-    throw new Error("FLOW_EXECUTION_CANARY_SCOPE_INVALID");
-  }
-  const ownerUserIds = candidate.ownerUserIds.map((ownerUserId) => ownerUserId.toLowerCase());
-  if (new Set(ownerUserIds).size !== ownerUserIds.length) {
-    throw new Error("FLOW_EXECUTION_CANARY_SCOPE_INVALID");
-  }
-  return { kind: "allowlist", ownerUserIds: [...ownerUserIds].sort() };
-}
-
 function nextScheduleDelay(
   intervalMs: number,
   consecutiveFailures: number,
@@ -398,7 +465,7 @@ function laneReadinessError(input: {
   readonly lastSucceededAt: number | null;
   readonly lastFailedAt: number | null;
   readonly lastErrorCode: string | null;
-  readonly prefix: "flow_execution_poll" | "flow_execution_recovery";
+  readonly prefix: "flow_execution_poll" | "flow_execution_recovery" | "flow_work_item_wake";
 }): string | null {
   if (input.lastSucceededAt === null) return `${input.prefix}_not_initialized`;
   if (input.lastFailedAt !== null && input.lastFailedAt >= input.lastSucceededAt) {

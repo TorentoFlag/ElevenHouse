@@ -1,0 +1,66 @@
+.root,
+.stateBand {
+  border-bottom: 1px solid var(--flows-line);
+  padding: 18px 24px;
+  background: rgb(13 12 32 / 0.58);
+}
+
+.stateBand {
+  display: flex;
+  min-height: 68px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 12px;
+  color: var(--flows-muted);
+  font-size: 13px;
+}
+
+.stateIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--flows-gold-soft);
+  color: var(--flows-gold);
+}
+
+.stateBand[data-state="error"] .stateIcon {
+  background: rgb(244 122 122 / 0.12);
+  color: var(--eh-color-coral);
+}
+
+.stateCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.stateCopy strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+}
+
+.stateAction {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 680px) {
+  .root,
+  .stateBand {
+    padding: 14px 16px;
+  }
+
+  .stateBand {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .stateAction {
+    width: 100%;
+  }
+}

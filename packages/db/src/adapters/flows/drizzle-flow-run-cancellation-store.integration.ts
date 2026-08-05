@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { flowGraphSchema, flowGraphV2Schema, type FlowRunSnapshot } from "@elevenhouse/contracts";
+import { flowGraphV2Schema, type FlowRunSnapshot } from "@elevenhouse/contracts";
 import {
   cancelDurableFlowRun,
   compileFlowGraphV2,
@@ -17,7 +17,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { reconcileFlowExecutionSafety } from "../../../scripts/flow-execution-safety-reconciliation";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { createDrizzleFlowExecutionStore } from "./drizzle-flow-execution-store";
@@ -71,20 +70,6 @@ function requireCapabilityManifest(input: typeof graph) {
 
 const capabilityManifest = requireCapabilityManifest(graph);
 
-const legacyGraph = flowGraphSchema.parse({
-  schemaVersion: "flow-graph.v1",
-  nodes: [
-    {
-      id: "manual",
-      title: "Ручной запуск",
-      category: "trigger",
-      kind: "manual",
-      config: {}
-    }
-  ],
-  edges: []
-});
-
 type CancellationFixture = {
   readonly ownerUserId: string;
   readonly flowId: string;
@@ -109,7 +94,6 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     await reconciliationClient.connect();
     try {
       await reconciliationClient.query("BEGIN");
-      await reconcileFlowExecutionSafety(reconciliationClient);
       await reconciliationClient.query("COMMIT");
     } catch (error) {
       await reconciliationClient.query("ROLLBACK");
@@ -930,8 +914,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     expect(persistedForeign.events).toEqual([]);
   });
 
-  it("fails closed for a legacy run and for a future external-wait token", async () => {
-    const legacy = await createFixture({ legacy: true, includeToken: false });
+  it("fails closed for a future external-wait token", async () => {
     const waiting = await createFixture();
     const waitingTokenId = waiting.tokenId ?? raise("Expected waiting token");
     await runtime.pool.query(
@@ -943,19 +926,15 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     ]);
     const store = createDrizzleFlowRunCancellationStore(runtime.database);
 
-    const legacyResult = await cancelFixture(store, legacy, "cancel-legacy-run-1");
     const waitingResult = await cancelFixture(store, waiting, "cancel-waiting-external-1");
 
-    for (const result of [legacyResult, waitingResult]) {
-      expect(result).toMatchObject({
-        kind: "created",
-        outcome: {
-          kind: "rejected",
-          response: { statusCode: 409, body: { code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" } }
-        }
-      });
-    }
-    expect((await selectCancellation(legacy.runId)).events).toEqual([]);
+    expect(waitingResult).toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "rejected",
+        response: { statusCode: 409, body: { code: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE" } }
+      }
+    });
     expect((await selectCancellation(waiting.runId)).token).toMatchObject({
       state: "waiting_external",
       fencing_token: "0"
@@ -1064,14 +1043,12 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
   });
 
   async function createFixture(
-    input: { readonly legacy?: boolean; readonly includeToken?: boolean } = {}
+    input: { readonly includeToken?: boolean } = {}
   ): Promise<CancellationFixture> {
     const client = await runtime.pool.connect();
     const sourceEventId = `manual:${randomUUID()}`;
-    const fixtureGraph = input.legacy ? legacyGraph : graph;
-    const presentation = input.legacy
-      ? null
-      : {
+    const fixtureGraph = graph;
+    const presentation = {
           schemaVersion: "flow-presentation.v1",
           nodes: [
             { nodeId: "manual", position: { x: 120, y: 120 } },
@@ -1095,7 +1072,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
          returning id`,
         [
           ownerUserId,
-          input.legacy ? null : { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+          { schemaVersion: "flow-definition-origin.v1", type: "blank" },
           fixtureGraph,
           presentation
         ]
@@ -1111,11 +1088,11 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
         [
           flowId,
           ownerUserId,
-          input.legacy ? null : 1,
-          input.legacy ? null : "flow-graph.v2",
+          1,
+          "flow-graph.v2",
           fixtureGraph,
           presentation,
-          input.legacy ? null : capabilityManifest
+          capabilityManifest
         ]
       );
       const flowVersionId = version.rows[0]?.id ?? raise("Expected flow version id");
@@ -1140,16 +1117,29 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       );
       const runtimeEventId = runtimeEvent.rows[0]?.id ?? raise("Expected runtime event id");
       const snapshot: FlowRunSnapshot = {
-        schemaVersion: "flow-run-snapshot.v1",
-        flowVersionId,
-        sourceEventId,
-        subjectType: "client",
-        subjectId: randomUUID(),
-        occurredAt: "2026-08-03T12:00:00.000Z",
-        timeZone: "Europe/Moscow",
-        consent: {},
-        channels: {},
-        payload: {}
+        schemaVersion: "flow-run-snapshot.v2",
+        enrollment: {
+          activationEpochId: randomUUID(),
+          triggerNodeId: "manual",
+          occurrenceKey: randomUUID(),
+          policyKey: "once_per_occurrence",
+          policyRevision: 1,
+          rolloutPolicyRevision: 1,
+          eventOccurredAt: "2026-08-03T12:00:00.000Z",
+          enrolledAt: "2026-08-03T12:00:00.000Z"
+        },
+        subject: {
+          type: "booking",
+          bookingId: randomUUID(),
+          clientUserId: randomUUID(),
+          productId: randomUUID(),
+          startAt: "2026-08-03T12:00:00.000Z",
+          endAt: "2026-08-03T13:00:00.000Z"
+        },
+        executionAuthority: {
+          basis: "current_entitlement",
+          referenceId: randomUUID()
+        }
       };
       const run = await client.query<{ id: string }>(
         `insert into flow_runs
@@ -1161,7 +1151,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
         [ownerUserId, flowId, flowVersionId, runtimeEventId, snapshot]
       );
       const runId = run.rows[0]?.id ?? raise("Expected run id");
-      const includeToken = input.includeToken ?? !input.legacy;
+      const includeToken = input.includeToken ?? true;
       const tokenId = includeToken
         ? ((
             await client.query<{ id: string }>(
@@ -1279,6 +1269,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     };
     return {
       ...command,
+      flowRunId: fixture.runId,
       requestHash: sha256CanonicalJson({
         schemaVersion: "flow-runtime-command.v1",
         ...command,
@@ -1291,10 +1282,10 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
     await runtime.pool.query(
       `with inserted as (
          insert into flow_runtime_commands
-           (api_surface, actor_user_id, owner_user_id, route_template, resource_id,
+           (api_surface, actor_user_id, owner_user_id, route_template, resource_id, flow_run_id,
             command_scope, idempotency_key, request_hash, state, completed_at,
             replay_until, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, 'failed',
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'failed',
            transaction_timestamp() - interval '25 hours',
            transaction_timestamp() - interval '1 hour',
            transaction_timestamp() - interval '25 hours',
@@ -1311,6 +1302,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
         command.ownerUserId,
         command.routeTemplate,
         command.resourceId,
+        command.flowRunId,
         command.scope,
         command.idempotencyKey,
         command.requestHash
@@ -1335,10 +1327,10 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       await client.query("begin");
       const inserted = await client.query<{ id: string }>(
         `insert into flow_runtime_commands
-          (api_surface, actor_user_id, owner_user_id, route_template, resource_id,
+          (api_surface, actor_user_id, owner_user_id, route_template, resource_id, flow_run_id,
            command_scope, idempotency_key, request_hash, state, completed_at,
            replay_until, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, 'failed',
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'failed',
            transaction_timestamp(), transaction_timestamp() + interval '24 hours',
            transaction_timestamp(), transaction_timestamp())
          returning id`,
@@ -1348,6 +1340,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
           command.ownerUserId,
           command.routeTemplate,
           command.resourceId,
+          command.flowRunId,
           command.scope,
           command.idempotencyKey,
           command.requestHash

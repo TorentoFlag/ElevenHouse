@@ -15,7 +15,6 @@ describe("finance policy form model", () => {
       holdDurationHours: 48,
       reserveBps: 0,
       reserveReleaseDelayDays: 0,
-      platformFeeBps: 1000,
       providerSettlementRequired: true
     });
   });
@@ -27,7 +26,6 @@ describe("finance policy form model", () => {
         holdDurationHours: 168,
         reserveBps: 1500,
         reserveReleaseDelayDays: 30,
-        platformFeeBps: 1200,
         providerSettlementRequired: true
       })
     ).toEqual({
@@ -35,7 +33,6 @@ describe("finance policy form model", () => {
       holdDurationHours: 168,
       reserveBps: 1500,
       reserveReleaseDelayDays: 30,
-      platformFeeBps: 1200,
       providerSettlementRequired: true
     });
   });

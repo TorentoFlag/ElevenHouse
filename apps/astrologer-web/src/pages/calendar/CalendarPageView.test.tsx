@@ -373,6 +373,7 @@ const bookingFixture = {
   productId: "45f17dc4-3160-48bd-9743-081dc32d64b9",
   source: "manual" as const,
   state: "confirmed" as const,
+  lifecycleRevision: 1,
   holdExpiresAt: null,
   startAt: "2026-07-17T08:00:00.000Z",
   endAt: "2026-07-17T09:00:00.000Z",

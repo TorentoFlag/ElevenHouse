@@ -22,4 +22,20 @@ describe("flow validation presentation", () => {
     ]);
     expect(buildFlowValidationIssuePresentation([issue], "en")[0]?.message).toBe(issue.message);
   });
+
+  it("explains why booking-relative work-item deadlines require a booking trigger", () => {
+    const duePolicyIssue = {
+      code: "work_item_due_policy_requires_booking_trigger",
+      severity: "error",
+      blocking: true,
+      path: "nodes.prepare-consultation.config.duePolicy",
+      message: "Booking-relative work-item due policies require a booking trigger."
+    } satisfies FlowDefinitionValidationIssue;
+
+    expect(buildFlowValidationIssuePresentation([duePolicyIssue], "ru")[0]).toMatchObject({
+      nodeId: "prepare-consultation",
+      message:
+        "Срок относительно записи доступен только в воронке, которая начинается с подтверждения записи."
+    });
+  });
 });

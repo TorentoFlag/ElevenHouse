@@ -377,6 +377,19 @@ export type BookingLifecycleState = z.infer<typeof bookingLifecycleStateSchema>;
 export const bookingSourceSchema = z.enum(["manual", "client_paid"]);
 export type BookingSource = z.infer<typeof bookingSourceSchema>;
 
+export const bookingCancellationReasonCodeValues = [
+  "astrologer_unavailable",
+  "client_request",
+  "mutual_agreement",
+  "other"
+] as const;
+export const bookingCancellationReasonCodeSchema = z.enum(
+  bookingCancellationReasonCodeValues
+);
+export type BookingCancellationReasonCode = z.infer<
+  typeof bookingCancellationReasonCodeSchema
+>;
+
 const bookingBaseSchema = z
   .object({
     id: uuidSchema,
@@ -385,6 +398,7 @@ const bookingBaseSchema = z
     productId: uuidSchema,
     source: bookingSourceSchema,
     state: bookingLifecycleStateSchema,
+    lifecycleRevision: z.number().int().min(0),
     holdExpiresAt: instantSchema.nullable(),
     startAt: instantSchema,
     endAt: instantSchema,
@@ -451,6 +465,134 @@ export const manualBookingResponseSchema = z
   })
   .strict();
 export type ManualBookingResponse = z.infer<typeof manualBookingResponseSchema>;
+
+export const cancelBookingRequestSchema = z
+  .object({
+    expectedLifecycleRevision: z.number().int().positive(),
+    reasonCode: bookingCancellationReasonCodeSchema
+  })
+  .strict();
+export type CancelBookingRequest = z.infer<typeof cancelBookingRequestSchema>;
+
+const bookingCancellationEventSummarySchema = z
+  .object({
+    id: uuidSchema,
+    revision: z.number().int().positive(),
+    kind: z.literal("cancelled"),
+    reasonCode: bookingCancellationReasonCodeSchema,
+    occurredAt: instantSchema
+  })
+  .strict();
+
+export const cancelBookingResponseSchema = z
+  .object({
+    booking: bookingBaseSchema,
+    lifecycleEvent: bookingCancellationEventSummarySchema,
+    replayed: z.boolean()
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (response.booking.source !== "manual" || response.booking.state !== "cancelled") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booking", "state"],
+        message: "Owner cancellation response requires a cancelled manual booking"
+      });
+    }
+    if (response.booking.lifecycleRevision !== response.lifecycleEvent.revision) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lifecycleEvent", "revision"],
+        message: "Cancellation event revision must match the booking revision"
+      });
+    }
+  });
+export type CancelBookingResponse = z.infer<typeof cancelBookingResponseSchema>;
+
+export const completeBookingRequestSchema = z
+  .object({
+    expectedLifecycleRevision: z.number().int().positive()
+  })
+  .strict();
+export type CompleteBookingRequest = z.infer<typeof completeBookingRequestSchema>;
+
+const bookingCompletionEventSummarySchema = z
+  .object({
+    id: uuidSchema,
+    revision: z.number().int().positive(),
+    kind: z.literal("completed"),
+    reasonCode: z.null(),
+    occurredAt: instantSchema
+  })
+  .strict();
+
+export const completeBookingResponseSchema = z
+  .object({
+    booking: bookingBaseSchema,
+    lifecycleEvent: bookingCompletionEventSummarySchema,
+    replayed: z.boolean()
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (response.booking.source !== "client_paid" || response.booking.state !== "completed") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booking", "state"],
+        message: "Completion response requires a completed paid booking"
+      });
+    }
+    if (response.booking.lifecycleRevision !== response.lifecycleEvent.revision) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lifecycleEvent", "revision"],
+        message: "Completion event revision must match the booking revision"
+      });
+    }
+  });
+export type CompleteBookingResponse = z.infer<typeof completeBookingResponseSchema>;
+
+export const rescheduleBookingRequestSchema = z
+  .object({
+    expectedLifecycleRevision: z.number().int().positive(),
+    projectedStartAt: instantSchema
+  })
+  .strict();
+export type RescheduleBookingRequest = z.infer<typeof rescheduleBookingRequestSchema>;
+
+const bookingRescheduleEventSummarySchema = z
+  .object({
+    id: uuidSchema,
+    revision: z.number().int().positive(),
+    kind: z.literal("rescheduled"),
+    reasonCode: z.null(),
+    occurredAt: instantSchema
+  })
+  .strict();
+
+export const rescheduleBookingResponseSchema = z
+  .object({
+    booking: bookingBaseSchema,
+    lifecycleEvent: bookingRescheduleEventSummarySchema,
+    replayed: z.boolean()
+  })
+  .strict()
+  .superRefine((response, context) => {
+    if (response.booking.state !== "confirmed") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booking", "state"],
+        message: "Accepted reschedule response requires a confirmed booking"
+      });
+    }
+    if (response.booking.lifecycleRevision !== response.lifecycleEvent.revision) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lifecycleEvent", "revision"],
+        message: "Reschedule event revision must match the booking revision"
+      });
+    }
+  });
+export type RescheduleBookingResponse = z.infer<typeof rescheduleBookingResponseSchema>;
 
 export const bookingResponseSchema = z
   .object({

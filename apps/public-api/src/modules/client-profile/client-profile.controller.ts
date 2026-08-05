@@ -4,9 +4,6 @@ import {
   ForbiddenException,
   Get,
   Inject,
-  NotFoundException,
-  Param,
-  Post,
   Put,
   Query,
   Req,
@@ -14,7 +11,6 @@ import {
   UseGuards
 } from "@nestjs/common";
 import type {
-  ClientBirthDataListResponse,
   ClientBirthDataResponse,
   ClientBirthDataUpsertRequest,
   ClientCabinetOverviewResponse,
@@ -52,11 +48,6 @@ export class ClientProfileController {
     return this.clientProfileService.getBirthData(requireClientUserId(request));
   }
 
-  @Get("birth-profiles")
-  listBirthProfiles(@Req() request: PublicSessionRequest): Promise<ClientBirthDataListResponse> {
-    return this.clientProfileService.listBirthProfiles(requireClientUserId(request));
-  }
-
   @Get("birth-places")
   searchBirthPlaces(@Req() request: PublicSessionRequest, @Query() query: unknown) {
     return this.clientBirthPlaceSearchService.search(requireClientUserId(request), query);
@@ -71,32 +62,6 @@ export class ClientProfileController {
     return this.clientProfileService.upsertBirthData(requireClientUserId(request), body);
   }
 
-  @Post("birth-profiles")
-  @RequireCsrf()
-  createBirthProfile(
-    @Req() request: PublicSessionRequest,
-    @Body() body: ClientBirthDataUpsertRequest
-  ): Promise<ClientBirthDataResponse> {
-    return this.clientProfileService.createBirthProfile(requireClientUserId(request), body);
-  }
-
-  @Put("birth-profiles/:birthDataId")
-  @RequireCsrf()
-  async updateBirthProfile(
-    @Req() request: PublicSessionRequest,
-    @Param("birthDataId") birthDataId: string,
-    @Body() body: ClientBirthDataUpsertRequest
-  ): Promise<ClientBirthDataResponse> {
-    const response = await this.clientProfileService.updateBirthProfile(
-      requireClientUserId(request),
-      birthDataId,
-      body
-    );
-    if (!response) {
-      throw new NotFoundException("Birth profile was not found");
-    }
-    return response;
-  }
 }
 
 function requireClientUserId(request: PublicSessionRequest): string {

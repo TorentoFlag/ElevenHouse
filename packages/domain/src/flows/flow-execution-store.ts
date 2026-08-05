@@ -60,7 +60,15 @@ export type FlowExecutionRecoveryResult = {
 
 export type FlowExecutionOwnerScope =
   | { readonly kind: "all" }
-  | { readonly kind: "allowlist"; readonly ownerUserIds: readonly string[] };
+  | { readonly kind: "allowlist"; readonly ownerUserIds: readonly string[] }
+  | { readonly kind: "denylist"; readonly ownerUserIds: readonly string[] };
+
+export type FlowExecutionClaimAuthorityEvidence = {
+  readonly controlPolicyRevision: number;
+  readonly policyDigest: `sha256:${string}`;
+  readonly workerSessionId: string;
+  readonly workerRegistrationDigest: `sha256:${string}`;
+};
 
 export type FlowExecutionTokenDetail = {
   readonly id: string;
@@ -76,6 +84,7 @@ export type FlowExecutionTokenDetail = {
   readonly availableAt: string;
   readonly leaseOwner: string | null;
   readonly leaseExpiresAt: string | null;
+  readonly claimAuthority: FlowExecutionClaimAuthorityEvidence | null;
   readonly terminalAt: string | null;
   readonly quarantinedAt: string | null;
 };
@@ -88,6 +97,7 @@ export type FlowExecutionAttemptDetail = {
   readonly attemptNumber: bigint;
   readonly fencingToken: bigint;
   readonly leaseOwner: string;
+  readonly claimAuthority: FlowExecutionClaimAuthorityEvidence | null;
   readonly outcome: string;
   readonly resultCode: string;
   readonly traceSummary: Readonly<Record<string, unknown>>;
@@ -141,4 +151,13 @@ export type FlowExecutionStore = {
     readonly ownerUserId: string;
     readonly runId: string;
   }) => Promise<FlowExecutionRunDetail | null>;
+};
+
+export type FlowExecutionWorkerStore = {
+  readonly claimNext: (input: {
+    readonly executorKeys: readonly FlowNodeExecutorKey[];
+  }) => ReturnType<FlowExecutionStore["claimNext"]>;
+  readonly finalize: FlowExecutionStore["finalize"];
+  readonly finalizeFailure: FlowExecutionStore["finalizeFailure"];
+  readonly recoverExpired: FlowExecutionStore["recoverExpired"];
 };

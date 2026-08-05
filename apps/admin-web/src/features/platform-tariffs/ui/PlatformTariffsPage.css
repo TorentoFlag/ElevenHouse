@@ -1,0 +1,31 @@
+.adminTariffsShell { min-height: 100vh; background: #0d0c20; color: #f4f2fb; padding: 32px; }
+.adminTariffsHeader { display: flex; justify-content: space-between; align-items: end; gap: 24px; max-width: 1280px; margin: 0 auto; padding-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.adminTariffsHeader p, .adminTariffDialog header p { margin: 0 0 6px; color: #b79cfb; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.adminTariffsHeader h1, .adminTariffCard h2, .adminTariffDialog h2 { margin: 0; }
+.adminTariffsHeader h1 { font-size: 28px; line-height: 1.1; }
+.adminTariffsHeader span { display:block; margin-top:8px; color:#a7a2c8; font-size:13px; }
+.adminTariffsHeaderActions { display:flex; align-items:center; gap:12px; }.adminTariffsHeaderActions a { color:#dcd4ff; font-size:13px; font-weight:700; text-decoration:none; }.adminTariffsHeaderActions a:focus-visible { outline:2px solid #b79cfb; outline-offset:4px; border-radius:4px; }
+.adminTariffsNotice, .adminTariffsGrid, .adminTariffsState { max-width: 1280px; margin-left: auto; margin-right: auto; }
+.adminTariffsNotice { display:flex; align-items:center; gap:12px; padding:16px 0; color:#a7a2c8; font-size:13px; }
+.adminTariffsNotice p { margin:0; flex:1; }
+.adminTariffsSuccess, .adminTariffsError { border-radius:9px; padding:8px 10px; font-size:12px; }
+.adminTariffsSuccess { color:#b6f1dd; background:rgba(78,200,160,.15); }
+.adminTariffsError { color:#ffd3d3; background:rgba(244,122,122,.16); }
+.adminTariffsGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.adminTariffsState { color:#a7a2c8; padding:24px 0; }
+.adminTariffCard { overflow:hidden; border-color:rgba(255,255,255,.12); background:#1c1935; color:#f4f2fb; }
+.adminTariffLifecycle { padding:5px 16px; color:#13111d; background:#b79cfb; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+.adminTariffLifecycle--published { background:#4ec8a0; }.adminTariffLifecycle--retired { background:#7e789e; }
+.adminTariffCardBody { display:flex; min-height:270px; flex-direction:column; padding:18px; }
+.adminTariffCardHead { display:flex; justify-content:space-between; gap:12px; }.adminTariffCardHead h2 { font-size:18px; }.adminTariffCardHead p { margin:4px 0 12px; color:#a7a2c8; font-size:12px; }.adminTariffCardHead > span { color:#a7a2c8; font-size:12px; }
+.adminTariffCardBody > strong { font-size:24px; }.adminTariffCardBody > strong small { margin-left:4px; color:#a7a2c8; font-size:12px; font-weight:500; }
+.adminTariffCard dl { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:15px 0 12px; }.adminTariffCard dl div { min-width:0; }.adminTariffCard dt { color:#a7a2c8; font-size:11px; }.adminTariffCard dd { margin:3px 0 0; font-size:13px; font-weight:700; }
+.adminTariffFeatures { display:flex; flex-wrap:wrap; gap:5px; }.adminTariffFeatures span { border:1px solid rgba(183,156,251,.25); border-radius:999px; background:rgba(183,156,251,.11); padding:3px 6px; color:#dcd4ff; font-size:10px; }
+.adminTariffActions { display:flex; gap:8px; margin-top:auto; padding-top:16px; }.adminTariffActions .ehButton { flex:1; justify-content:center; }
+.adminTariffDialogBackdrop { position:fixed; inset:0; z-index:20; display:grid; place-items:center; overflow:auto; background:rgba(6,5,14,.76); padding:24px; }
+.adminTariffDialog { width:min(960px,100%); border:1px solid rgba(255,255,255,.16); border-radius:16px; background:#17142f; color:#f4f2fb; box-shadow:0 28px 80px rgba(0,0,0,.45); padding:22px; }
+.adminTariffDialog header, .adminTariffDialog footer { display:flex; align-items:center; justify-content:space-between; gap:12px; }.adminTariffDialog h2 { font-size:20px; }.adminTariffClose { width:34px; height:34px; border:0; border-radius:9px; background:#24203f; color:#f4f2fb; cursor:pointer; font-size:26px; line-height:1; }
+.adminTariffFormGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:20px 0; }.adminTariffField { display:grid; gap:6px; color:#d5d0eb; font-size:12px; font-weight:650; }.adminTariffField input { box-sizing:border-box; width:100%; border:1px solid rgba(255,255,255,.15); border-radius:9px; outline:0; background:#0f0e23; color:#f4f2fb; padding:10px; }.adminTariffField input:focus-visible { border-color:#b79cfb; box-shadow:0 0 0 3px rgba(183,156,251,.2); }
+.adminTariffPopular { display:flex; align-items:center; gap:8px; color:#e6e1fa; font-size:13px; }.adminTariffFeatureFieldset { margin:20px 0; border:1px solid rgba(255,255,255,.12); border-radius:12px; }.adminTariffFeatureFieldset legend { padding:0 7px; color:#f4f2fb; font-size:13px; font-weight:700; }.adminTariffFeatureFieldset p { margin:0 12px 12px; color:#a7a2c8; font-size:12px; }.adminTariffFeatureFieldset > div { display:flex; flex-wrap:wrap; gap:7px; padding:0 12px 12px; }.adminTariffFeatureFieldset label { display:flex; align-items:center; gap:5px; border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:5px 8px; color:#dcd4ff; font-size:11px; }
+.adminTariffDialog footer { justify-content:flex-end; }.adminTariffDialog footer .ehButton { min-width:160px; justify-content:center; }
+@media (max-width: 680px) { .adminTariffsShell { padding:20px; }.adminTariffsHeader { align-items:start; flex-direction:column; }.adminTariffsNotice { align-items:start; flex-direction:column; }.adminTariffFormGrid { grid-template-columns:1fr; }.adminTariffDialogBackdrop { padding:10px; }.adminTariffDialog { padding:16px; } }

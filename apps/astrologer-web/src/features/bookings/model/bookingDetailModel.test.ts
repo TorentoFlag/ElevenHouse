@@ -21,6 +21,7 @@ const booking: ManualBooking = {
   productId: "45f17dc4-3160-48bd-9743-081dc32d64b9",
   source: "manual",
   state: "confirmed",
+  lifecycleRevision: 1,
   holdExpiresAt: null,
   startAt: entry.startAt,
   endAt: entry.endAt,

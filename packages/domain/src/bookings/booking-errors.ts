@@ -16,6 +16,63 @@ export class BookingNotFoundError extends Error {
   }
 }
 
+export class BookingLifecycleRevisionConflictError extends Error {
+  readonly code = "booking_lifecycle_revision_conflict";
+
+  constructor(
+    readonly expectedRevision: number,
+    readonly currentRevision: number
+  ) {
+    super("Booking lifecycle revision is stale");
+    this.name = "BookingLifecycleRevisionConflictError";
+  }
+}
+
+export class BookingCancellationNotAllowedError extends Error {
+  readonly code = "booking_cancellation_not_allowed";
+
+  constructor(readonly state: string) {
+    super("Booking cannot be cancelled from its current state");
+    this.name = "BookingCancellationNotAllowedError";
+  }
+}
+
+export class BookingCancellationRequiresRefundAuthorityError extends Error {
+  readonly code = "booking_cancellation_requires_refund_authority";
+
+  constructor() {
+    super("Paid booking cancellation requires an authoritative refund decision");
+    this.name = "BookingCancellationRequiresRefundAuthorityError";
+  }
+}
+
+export class BookingRescheduleNotAllowedError extends Error {
+  readonly code = "booking_reschedule_not_allowed";
+
+  constructor(readonly state: string) {
+    super("Booking cannot be rescheduled from its current state");
+    this.name = "BookingRescheduleNotAllowedError";
+  }
+}
+
+export class BookingCompletionNotAllowedError extends Error {
+  readonly code = "booking_completion_not_allowed";
+
+  constructor(readonly state: string) {
+    super("Booking cannot be completed from its current state");
+    this.name = "BookingCompletionNotAllowedError";
+  }
+}
+
+export class BookingCompletionTooEarlyError extends Error {
+  readonly code = "booking_completion_too_early";
+
+  constructor() {
+    super("Booking cannot be completed before its service end");
+    this.name = "BookingCompletionTooEarlyError";
+  }
+}
+
 export class ClientRelationshipNotActiveError extends Error {
   readonly code = "client_relationship_not_active";
 

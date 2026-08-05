@@ -27,6 +27,21 @@ const birthDataNode = node({
   displayTitle: "Данные рождения доступны",
   config: { purpose: "service_preparation" }
 });
+const natalChartNode = node({
+  id: "natal-chart",
+  kind: "natal_chart_request",
+  displayTitle: "Рассчитать натальную карту",
+  config: {
+    interpretationMode: "adult_natal",
+    settings: {
+      zodiac: "tropical",
+      houseSystem: "placidus",
+      nodeType: "true",
+      aspectPreset: "major",
+      orbMultiplier: 1
+    }
+  }
+});
 const workItemNode = node({
   id: "work-item",
   kind: "astrologer_work_item",
@@ -185,6 +200,74 @@ describe("flow graph v2 compiler", () => {
       "clients.birth_data.read.service_preparation",
       "products.read"
     ]);
+    expect(
+      result.normalizedGraph?.nodes.find((candidate) => candidate.kind === "astrologer_work_item")
+    ).toMatchObject({
+      config: {
+        duePolicy: { kind: "none" },
+        completionRequirements: { resultSummary: "optional" }
+      }
+    });
+  });
+
+  it("allows only a human-gated birth-data recheck loop before a natal calculation", () => {
+    const birthDataCollection = node({
+      id: "request-birth-data",
+      kind: "astrologer_work_item",
+      displayTitle: "Запросить данные рождения",
+      config: {
+        taskKind: "birth_data_collection",
+        taskTitle: "Запросить данные рождения",
+        priority: "high"
+      }
+    });
+    const graph = graphV2(
+      [bookingNode, birthDataNode, birthDataCollection, natalChartNode, completedNode],
+      [
+        edge("booking-to-data", "booking", "birth-data", "next"),
+        edge("data-ready", "birth-data", "natal-chart", "true"),
+        edge("data-missing", "birth-data", "request-birth-data", "false"),
+        edge("request-recheck", "request-birth-data", "birth-data", "success"),
+        edge("chart-completed", "natal-chart", "completed", "next")
+      ]
+    );
+
+    expect(compileFlowGraphV2(graph)).toMatchObject({
+      publishable: true,
+      issues: [],
+      capabilityManifest: {
+        requiredCapabilities: [
+          "bookings.events.booking_confirmed",
+          "charts.calculate.natal.booking_context",
+          "clients.birth_data.read.service_preparation",
+          "products.read"
+        ],
+        nodeExecutors: expect.arrayContaining([
+          expect.objectContaining({ kind: "natal_chart_request" })
+        ])
+      }
+    });
+  });
+
+  it("rejects a booking-relative work-item deadline behind a manual trigger", () => {
+    const bookingRelativeWorkItem = node({
+      ...workItemNode,
+      config: {
+        ...workItemNode.config,
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 }
+      }
+    });
+    const graph = graphV2(
+      [manualNode, bookingRelativeWorkItem, completedNode],
+      [
+        edge("manual-to-work", "manual", "work-item", "next"),
+        edge("work-to-completed", "work-item", "completed", "success")
+      ]
+    );
+
+    expect(issueCodes(compileFlowGraphV2(graph))).toContain(
+      "work_item_due_policy_requires_booking_trigger"
+    );
   });
 
   it("requires approval timeout exactly when bounded expiry is configured", () => {
@@ -456,9 +539,15 @@ function graphV2(nodes: FlowNodeV2[], edges: FlowGraphV2["edges"]): FlowGraphV2 
   return flowGraphV2Schema.parse({ schemaVersion: "flow-graph.v2", nodes, edges });
 }
 
-function node<T extends Omit<FlowNodeV2, "configSchemaVersion" | "executorContractVersion">>(
+type FlowNodeWithoutExecutorVersions = FlowNodeV2 extends infer Node
+  ? Node extends FlowNodeV2
+    ? Omit<Node, "configSchemaVersion" | "executorContractVersion">
+    : never
+  : never;
+
+function node<T extends FlowNodeWithoutExecutorVersions>(
   input: T
-): T & Pick<FlowNodeV2, "configSchemaVersion" | "executorContractVersion"> {
+): T & { readonly configSchemaVersion: 1; readonly executorContractVersion: 1 } {
   return {
     ...input,
     configSchemaVersion: 1,

@@ -27,8 +27,6 @@ export class DrizzleAiUsageRecorder implements AiUsageRecorderPort {
       promptVersion: record.promptVersion,
       provider: record.provider,
       ownerSafetyId: record.ownerSafetyId,
-      consentAuthorizations: record.consentAuthorizations,
-      processingAuthorityVersion: record.processingAuthorityVersion,
       resourceEvidence: record.resourceEvidence,
       now: record.startedAt
     });

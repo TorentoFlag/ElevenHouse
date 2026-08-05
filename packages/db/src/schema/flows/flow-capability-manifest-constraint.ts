@@ -1,19 +1,10 @@
 import {
   FLOW_GRAPH_V2_MAX_EDGES,
   FLOW_GRAPH_V2_MAX_NODES,
-  flowActionKindValues,
-  flowAiKindValues,
-  flowApprovalModeValues,
   flowCapabilityRequirementValues,
-  flowConditionKindValues,
-  flowDelayKindValues,
   flowExecutableNodeKindV2Values,
-  flowHandoffKindValues,
-  flowNodeCategoryValues,
   flowNodeKindV2Values,
   flowSourceHandleV2Values,
-  flowTerminalKindValues,
-  flowTriggerKindValues
 } from "@elevenhouse/contracts";
 
 const capabilityManifestColumn = "capability_manifest";
@@ -21,48 +12,6 @@ const nodeExecutors = `${capabilityManifestColumn}->'nodeExecutors'`;
 const requiredCapabilities = `${capabilityManifestColumn}->'requiredCapabilities'`;
 const graphNodes = "graph->'nodes'";
 const graphEdges = "graph->'edges'";
-
-const flowNodeKindV1Values = [
-  ...flowTriggerKindValues,
-  ...flowActionKindValues,
-  ...flowAiKindValues,
-  ...flowConditionKindValues,
-  ...flowDelayKindValues,
-  ...flowHandoffKindValues,
-  ...flowTerminalKindValues
-] as const;
-
-const graphV1Predicate = graphEnvelopePredicate(
-  "flow-graph.v1",
-  graphNodeArrayPredicate({
-    requiredFields: ["id", "title", "category", "kind"],
-    stringFields: ["id", "title", "category", "kind"],
-    optionalStringFields: ["approvalMode"],
-    optionalNullableStringFields: ["description"],
-    optionalObjectFields: ["config", "position"],
-    allowedFields: [
-      "id",
-      "title",
-      "description",
-      "config",
-      "position",
-      "category",
-      "kind",
-      "approvalMode"
-    ],
-    enumFields: {
-      category: flowNodeCategoryValues,
-      kind: flowNodeKindV1Values,
-      approvalMode: flowApprovalModeValues
-    }
-  }),
-  graphEdgeArrayPredicate({
-    requiredFields: ["id", "fromNodeId", "toNodeId"],
-    stringFields: ["id", "fromNodeId", "toNodeId"],
-    optionalStringFields: ["label", "branchKey"],
-    allowedFields: ["id", "fromNodeId", "toNodeId", "label", "branchKey"]
-  })
-);
 
 const graphV2Predicate = graphEnvelopePredicate(
   "flow-graph.v2",
@@ -96,7 +45,6 @@ const graphV2Predicate = graphEnvelopePredicate(
   })
 );
 
-const v1ExecutorArrayPredicate = executorArrayPredicate(flowNodeKindV2Values);
 const v2ExecutorArrayPredicate = executorArrayPredicate(flowExecutableNodeKindV2Values);
 const capabilityArrayPredicate = enumArrayPredicate(
   requiredCapabilities,
@@ -105,37 +53,11 @@ const capabilityArrayPredicate = enumArrayPredicate(
 );
 
 export const flowCapabilityManifestSchemaPredicate = `(
-  (
-    source_revision IS NULL
-    AND graph_schema_version IS NULL
-    AND ${graphV1Predicate}
-    AND presentation IS NULL
-    AND capability_manifest IS NULL
-  ) OR (
-    source_revision IS NOT NULL
-    AND (
-      source_revision > 0
-      AND graph_schema_version = 'flow-graph.v2'
-      AND ${graphV2Predicate}
-      AND jsonb_typeof(capability_manifest) = 'object'
-      AND (
-        (
-          capability_manifest->>'schemaVersion' = 'flow-capability-manifest.v1'
-          AND capability_manifest ?& ARRAY[
-            'schemaVersion', 'executionSemanticsVersion', 'nodeExecutors',
-            'requiredCapabilities'
-          ]::text[]
-          AND capability_manifest - ARRAY[
-            'schemaVersion', 'executionSemanticsVersion', 'nodeExecutors',
-            'requiredCapabilities'
-          ]::text[] = '{}'::jsonb
-          AND jsonb_typeof(capability_manifest->'schemaVersion') = 'string'
-          AND jsonb_typeof(capability_manifest->'executionSemanticsVersion') = 'string'
-          AND capability_manifest->>'executionSemanticsVersion' = 'flow-interpreter.v1'
-          AND ${v1ExecutorArrayPredicate}
-          AND ${capabilityArrayPredicate}
-        ) OR (
-          capability_manifest->>'schemaVersion' = 'flow-capability-manifest.v2'
+  source_revision > 0
+  AND graph_schema_version = 'flow-graph.v2'
+  AND ${graphV2Predicate}
+  AND jsonb_typeof(capability_manifest) = 'object'
+  AND capability_manifest->>'schemaVersion' = 'flow-capability-manifest.v2'
           AND capability_manifest ?& ARRAY[
             'schemaVersion', 'executionSemanticsVersion', 'triggerMatcher', 'nodeExecutors',
             'requiredCapabilities'
@@ -171,10 +93,7 @@ export const flowCapabilityManifestSchemaPredicate = `(
             capability_manifest->'triggerMatcher'->'eventSchemaVersion'
           ) = 'number'
           AND capability_manifest->'triggerMatcher'->>'eventSchemaVersion' = '1'
-        )
-      )
-    ) IS TRUE
-  )
+
 ) IS TRUE`;
 
 function executorArrayPredicate(allowedKinds: readonly string[]): string {
@@ -239,7 +158,7 @@ type JsonArrayObjectPredicateOptions = {
 };
 
 function graphEnvelopePredicate(
-  schemaVersion: "flow-graph.v1" | "flow-graph.v2",
+  schemaVersion: "flow-graph.v2",
   nodeArrayPredicate: string,
   edgeArrayPredicate: string
 ): string {

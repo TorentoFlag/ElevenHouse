@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import type { BookingProduct } from "@elevenhouse/domain";
 import { createDrizzleClientStore } from "@elevenhouse/db/clients";
 import { createDrizzleProductStore } from "@elevenhouse/db/products";
 import { createDrizzleBookingCommandStore } from "@elevenhouse/db/scheduling";
@@ -70,9 +71,11 @@ import {
                   participantMode: product.participantMode,
                   durationMinutes: product.durationMinutes,
                   deliveryFormats: product.deliveryFormats,
+                  requiredClientData: product.requiredClientData,
+                  methods: product.methods,
                   priceMinor: product.priceMinor,
                   currency: product.currency
-                }
+                } satisfies BookingProduct
               : null;
           }
         };

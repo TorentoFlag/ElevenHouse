@@ -1,16 +1,19 @@
-import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV3 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowGalleryProps = {
-  readonly flows: readonly FlowDefinitionSummaryV2[];
+  readonly flows: readonly FlowDefinitionSummaryV3[];
   readonly locale: "ru" | "en";
-  readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onCreateFlow?: () => void;
   readonly isCreating?: boolean;
+  readonly emptyMessage?: string;
   readonly onOpenFlow?: (flowId: string) => void;
-  readonly onAutomationToggle?: (flowId: string, activate: boolean) => void;
+  readonly onAutomationAction?: (
+    flowId: string,
+    action: "review_activation" | "pause_enrollment"
+  ) => void;
   readonly isTogglingAutomation?: boolean;
   readonly classNames?: FlowGalleryClassNames;
 };
@@ -20,17 +23,17 @@ export type FlowGalleryClassNames = Readonly<Record<string, string>>;
 export function FlowGallery({
   flows,
   locale,
-  runtimeAvailability = null,
   onCreateFlow,
   isCreating = false,
+  emptyMessage,
   onOpenFlow,
-  onAutomationToggle,
+  onAutomationAction,
   isTogglingAutomation = false,
   classNames
 }: FlowGalleryProps) {
   const cards = flows.map((flow) => ({
     card: buildFlowGalleryCard(flow, locale),
-    automation: buildFlowAutomationControl(flow, runtimeAvailability, locale)
+    automation: buildFlowAutomationControl(flow, locale)
   }));
   const className = (name: keyof FlowGalleryClassNames) => classNames?.[name] ?? "";
   const copy = galleryCopy[locale];
@@ -58,6 +61,11 @@ export function FlowGallery({
       </header>
 
       <div className={className("galleryGrid")} aria-label={copy.title}>
+        {cards.length === 0 && emptyMessage ? (
+          <p className={className("emptyState")} role="status">
+            {emptyMessage}
+          </p>
+        ) : null}
         {cards.map(({ card, automation }) => (
           <article key={card.id} className={className("flowCard")}>
             <button
@@ -69,9 +77,6 @@ export function FlowGallery({
             >
               <span className={className("graphNode")}>{card.graphSchemaLabel}</span>
               <span className={className("graphNode")}>{card.originLabel}</span>
-              {card.migrationRequired ? (
-                <span className={className("graphNode")}>{copy.migrationRequired}</span>
-              ) : null}
             </button>
             <div className={className("cardBody")}>
               <div className={className("cardHeading")}>
@@ -79,7 +84,7 @@ export function FlowGallery({
               </div>
               <div className={className("chipRow")}>
                 <span className={className("statusChip")}>
-                  {automation.statusLabel ?? card.runtimeStatusLabel}
+                  {automation.statusLabel ?? card.automationStatusLabel}
                 </span>
                 <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
               </div>
@@ -94,7 +99,7 @@ export function FlowGallery({
                 <Metric
                   classNames={classNames}
                   label={copy.runtime}
-                  value={automation.statusLabel ?? card.runtimeStatusLabel}
+                  value={automation.statusLabel ?? card.automationStatusLabel}
                 />
                 <Metric classNames={classNames} label={copy.revision} value={card.revisionLabel} />
                 <Metric
@@ -105,8 +110,12 @@ export function FlowGallery({
               </dl>
               <AutomationToggle
                 automation={automation}
-                disabled={!onAutomationToggle || !automation.canToggle || isTogglingAutomation}
-                onToggle={() => onAutomationToggle?.(card.id, automation.nextActive)}
+                disabled={!onAutomationAction || !automation.canToggle || isTogglingAutomation}
+                onToggle={() => {
+                  if (automation.nextAction !== "none") {
+                    onAutomationAction?.(card.id, automation.nextAction);
+                  }
+                }}
                 className={className("automationToggle")}
               />
             </footer>
@@ -181,7 +190,6 @@ const galleryCopy = {
     create: "Новая воронка",
     open: "Открыть схему",
     createHint: "С нуля или из доступного сценария",
-    migrationRequired: "Требуется миграция",
     definition: "Состояние",
     runtime: "Исполнение",
     revision: "Редакция",
@@ -192,7 +200,6 @@ const galleryCopy = {
     create: "New flow",
     open: "Open flow",
     createHint: "Start blank or use an available template",
-    migrationRequired: "Migration required",
     definition: "Definition",
     runtime: "Runtime",
     revision: "Revision",

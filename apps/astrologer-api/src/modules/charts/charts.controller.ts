@@ -2,11 +2,13 @@ import { Body, Controller, Get, Headers, Param, Post, Req, UseGuards } from "@ne
 import { chartAiDraftCommandScope } from "@elevenhouse/domain";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
+import { RequirePlatformTariffCapabilities } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { ChartsService } from "./charts.service";
 
 @Controller("charts")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class ChartsController {
   constructor(private readonly service: ChartsService) {}
 
@@ -82,6 +84,11 @@ export class ChartsController {
   }
 
   @Post("calculations/:calculationId/ai-draft")
+  @RequirePlatformTariffCapabilities({
+    surfaceId: "ai.chart.draft",
+    capabilities: ["ai", "natal"],
+    operation: "generation"
+  })
   @RequireCsrf()
   @RequireIdempotency({ scope: chartAiDraftCommandScope })
   createAiDraft(

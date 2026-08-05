@@ -1,8 +1,15 @@
-import { flowDefinitionDetailV2Schema, type FlowDefinitionDetailV2 } from "@elevenhouse/contracts";
+import {
+  FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE,
+  flowDefinitionDetailV3Schema,
+  type FlowDefinitionDetailV3
+} from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
-export async function getFlowDefinition(flowId: string): Promise<FlowDefinitionDetailV2> {
-  return flowDefinitionDetailV2Schema.parse(
-    await application.http.get(`/flows/${encodeURIComponent(flowId)}`)
+export async function getFlowDefinition(flowId: string): Promise<FlowDefinitionDetailV3> {
+  return flowDefinitionDetailV3Schema.parse(
+    await application.http.get(`/flows/${encodeURIComponent(flowId)}`, {
+      cache: "no-store",
+      headers: { accept: FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE }
+    })
   );
 }

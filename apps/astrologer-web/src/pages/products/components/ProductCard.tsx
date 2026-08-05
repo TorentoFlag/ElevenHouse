@@ -24,6 +24,7 @@ export type ProductCardProps = {
   readonly locale: ProductLocale;
   readonly actions: ProductCardActions;
   readonly isActionPending: boolean;
+  readonly canManageProducts?: boolean;
 };
 
 export type ProductCardActions = ProductCardActionLabels & {
@@ -37,7 +38,8 @@ export function ProductCard({
   productCopy,
   locale,
   actions,
-  isActionPending
+  isActionPending,
+  canManageProducts = true
 }: ProductCardProps) {
   const summary = createProductCardSummary(product, productCopy, locale);
 
@@ -86,23 +88,27 @@ export function ProductCard({
           ) : null}
         </span>
         <span className={styles.productFooterSpacer} />
-        <ActionMenu
-          className={styles.productSecondaryActionsMenu}
-          label={<Icon iconName="dots" width={15} height={15} aria-hidden="true" />}
-          triggerAriaLabel={actions.menuLabel}
-          showChevron={false}
-          items={createProductSecondaryActionMenuItems(product, actions, isActionPending)}
-          align="end"
-        />
-        <button
-          className={styles.productEditButton}
-          type="button"
-          data-product-card-edit={product.id}
-          disabled={false}
-          onClick={() => actions.onEdit(product)}
-        >
-          {actions.editLabel}
-        </button>
+        {canManageProducts ? (
+          <>
+            <ActionMenu
+              className={styles.productSecondaryActionsMenu}
+              label={<Icon iconName="dots" width={15} height={15} aria-hidden="true" />}
+              triggerAriaLabel={actions.menuLabel}
+              showChevron={false}
+              items={createProductSecondaryActionMenuItems(product, actions, isActionPending)}
+              align="end"
+            />
+            <button
+              className={styles.productEditButton}
+              type="button"
+              data-product-card-edit={product.id}
+              disabled={false}
+              onClick={() => actions.onEdit(product)}
+            >
+              {actions.editLabel}
+            </button>
+          </>
+        ) : null}
       </div>
     </Card>
   );

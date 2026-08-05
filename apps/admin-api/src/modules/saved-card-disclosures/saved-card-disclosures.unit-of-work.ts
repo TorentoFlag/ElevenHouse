@@ -1,0 +1,4 @@
+import type { SavedCardDisclosureAuthorityStore } from "@elevenhouse/domain/finance-core";
+import type { AuditLogStore, FinanceIdempotentCommand, FinanceIdempotentCommandResult } from "@elevenhouse/domain";
+export type AdminSavedCardDisclosureUnitOfWorkContext = Readonly<{ store: SavedCardDisclosureAuthorityStore; auditLogStore: AuditLogStore }>;
+export type AdminSavedCardDisclosureUnitOfWork = Readonly<{ execute: <T>(operation: (context: AdminSavedCardDisclosureUnitOfWorkContext) => Promise<T>) => Promise<T>; executeIdempotent: <T>(input: { command: FinanceIdempotentCommand; create: (context: AdminSavedCardDisclosureUnitOfWorkContext) => Promise<{ result: Record<string, unknown>; value: T }>; replay: (context: AdminSavedCardDisclosureUnitOfWorkContext, result: Record<string, unknown>) => Promise<T | null> }) => Promise<FinanceIdempotentCommandResult<T>> }>;

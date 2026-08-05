@@ -11,10 +11,9 @@ import { clientCopyByLocale } from "../../common/i18n/clientCopy";
 import { MePage } from "./MePage";
 
 const api = vi.hoisted(() => ({
-  createClientBirthProfile: vi.fn(),
   getClientCabinetOverview: vi.fn(),
   searchClientBirthPlaces: vi.fn(),
-  updateClientBirthProfile: vi.fn()
+  upsertClientBirthData: vi.fn()
 }));
 
 vi.mock("../../features/client-profile/api/clientProfileApi", () => api);
@@ -33,27 +32,26 @@ describe("MePage birth profile submission", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Место рождения" }), {
       target: { value: "Москва вручную" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить основной профиль" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить данные" }));
 
     expect(await screen.findByText("Выберите место рождения из найденных вариантов.")).toBeTruthy();
-    expect(api.updateClientBirthProfile).not.toHaveBeenCalled();
-    expect(api.createClientBirthProfile).not.toHaveBeenCalled();
+    expect(api.upsertClientBirthData).not.toHaveBeenCalled();
   });
 
   it("preserves authoritative calculation fields when an unrelated label changes", async () => {
     const savedProfile = profile({ label: "Натальная карта" });
     api.getClientCabinetOverview.mockResolvedValue(overview());
-    api.updateClientBirthProfile.mockResolvedValue(savedProfile);
+    api.upsertClientBirthData.mockResolvedValue(savedProfile);
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Мои данные" }));
     fireEvent.change(screen.getByLabelText("Название"), {
       target: { value: "Натальная карта" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить основной профиль" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить данные" }));
 
-    await waitFor(() => expect(api.updateClientBirthProfile).toHaveBeenCalledTimes(1));
-    expect(api.updateClientBirthProfile).toHaveBeenCalledWith("profile-1", {
+    await waitFor(() => expect(api.upsertClientBirthData).toHaveBeenCalledTimes(1));
+    expect(api.upsertClientBirthData).toHaveBeenCalledWith({
       birthCity: "Москва",
       birthCountryCode: "RU",
       birthDate: "1990-03-14",
@@ -65,7 +63,7 @@ describe("MePage birth profile submission", () => {
       birthTimeDstOccurrence: "first",
       birthTimePrecision: "approximate",
       birthTimezone: "Europe/Moscow",
-      isPrimary: true,
+      expectedRevision: 4,
       label: "Натальная карта"
     });
     expect(await screen.findByText("Сохранено")).toBeTruthy();
@@ -101,7 +99,7 @@ function overview(
 ): ClientCabinetOverviewResponse {
   return {
     astrologers: [],
-    birthProfiles: [profile()],
+    birthData: profile(),
     summary: {
       activeSubscriptionCount: 0,
       availableMaterialCount: 0,
@@ -130,7 +128,9 @@ function profile(overrides: Partial<ClientBirthDataResponse> = {}): ClientBirthD
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "client_profile",
-    isPrimary: true,
+    revision: 4,
+    lastEditedByUserId: "11111111-1111-4111-8111-111111111111",
+    lastEditedByRole: "client",
     createdAt: "2026-07-06T10:00:00.000Z",
     updatedAt: "2026-07-06T10:00:00.000Z",
     ...overrides

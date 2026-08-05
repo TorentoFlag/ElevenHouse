@@ -4,7 +4,8 @@ import {
   MediaStorageObjectMissingError,
   type MediaAsset,
   type MediaAssetStore,
-  type ObjectStoragePort
+  type ObjectStoragePort,
+  type PlatformTariffEntitlementStore
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { SystemClock } from "../clock/system-clock.service";
@@ -133,7 +134,54 @@ describe("MediaService", () => {
 });
 
 function createService(store: MediaAssetStore, storage: ObjectStoragePort): MediaService {
-  return new MediaService(store, storage, createPublicUrlResolver(), createClock(), () => mediaId);
+  return new MediaService(
+    store,
+    storage,
+    createPublicUrlResolver(),
+    createClock(),
+    () => mediaId,
+    entitlementStore()
+  );
+}
+
+function entitlementStore(): PlatformTariffEntitlementStore {
+  const tariff = {
+    tariffSeriesId: "pro",
+    version: 1,
+    draftRevision: 1,
+    lifecycle: "published" as const,
+    name: "Pro",
+    tagline: "",
+    monthlyPriceMinor: 1,
+    yearlyPriceMinor: 1,
+    monthlyRecurringFrequencyDays: 30,
+    yearlyRecurringFrequencyDays: 365,
+    clientSaleCommissionBps: 800,
+    seatsLimit: null,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 0,
+    features: ["products"] as const,
+    canonicalDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const
+  };
+  return {
+    findCurrentSubscription: vi.fn(async () => ({
+      subscriptionId: "11111111-1111-4111-8111-111111111111",
+      ownerUserId,
+      tariffSeriesId: tariff.tariffSeriesId,
+      tariffVersion: tariff.version,
+      tariffVersionDigest: tariff.canonicalDigest,
+      commissionBpsSnapshot: tariff.clientSaleCommissionBps,
+      version: 1,
+      state: "active" as const,
+      startsAt: "2026-07-01T00:00:00.000Z",
+      endsAt: "2026-08-01T00:00:00.000Z"
+    })),
+    findTariffVersion: vi.fn(async () => tariff),
+    findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
+  };
 }
 
 function createClock(): SystemClock {

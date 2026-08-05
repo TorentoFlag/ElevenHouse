@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -7,8 +8,10 @@ import {
 } from "@nestjs/common";
 import {
   getAstrologerClient,
+  ClientBirthDataRelationshipDeniedError,
   listAstrologerClients,
-  upsertClientBirthData,
+  ClientBirthDataRevisionConflictError,
+  writeClientBirthProfile,
   type ClientStore
 } from "@elevenhouse/domain";
 import {
@@ -124,12 +127,28 @@ export class ClientsService {
       throw new NotFoundException("Client was not found");
     }
 
-    const birthData = await upsertClientBirthData({
-      store: this.store,
-      clientUserId: params.clientUserId,
-      data: { ...data, source: "manual" },
-      now: this.clock.now()
-    });
+    let birthData;
+    try {
+      birthData = await writeClientBirthProfile({
+        store: this.store,
+        clientUserId: params.clientUserId,
+        actor: { userId: astrologerUserId, role: "astrologer" },
+        expectedRevision: data.expectedRevision,
+        data: { ...data, source: "manual" },
+        now: this.clock.now()
+      });
+    } catch (error) {
+      if (error instanceof ClientBirthDataRevisionConflictError) {
+        throw new ConflictException({
+          code: "CLIENT_BIRTH_DATA_REVISION_CONFLICT",
+          message: "Birth data was changed by another actor. Refresh and try again."
+        });
+      }
+      if (error instanceof ClientBirthDataRelationshipDeniedError) {
+        throw new NotFoundException("Client was not found");
+      }
+      throw error;
+    }
 
     return astrologerClientResponseSchema.parse({
       client: {

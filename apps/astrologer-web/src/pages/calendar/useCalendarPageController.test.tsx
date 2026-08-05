@@ -7,6 +7,24 @@ import {
 } from "./useCalendarPageController";
 
 describe("calendar page controller state", () => {
+  it("opens an authoritative booking handoff on its local calendar date", () => {
+    expect(
+      createInitialCalendarPageState({
+        today: "2026-08-04",
+        timeZone: "Europe/Moscow",
+        bookingHandoff: {
+          bookingId: "77777777-7777-4777-8777-777777777777",
+          startAt: "2026-08-05T22:30:00.000Z"
+        }
+      })
+    ).toMatchObject({
+      view: "week",
+      anchorDate: "2026-08-06",
+      selectedEntryId: "77777777-7777-4777-8777-777777777777",
+      dialog: "booking_detail"
+    });
+  });
+
   it("owns view, range, selection, availability and dialog state outside JSX", () => {
     let state = createInitialCalendarPageState({ today: "2026-05-29" });
     state = calendarPageStateReducer(state, { type: "set_view", view: "month" });

@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex -- Webhook validation intentionally rejects ASCII control characters. */
 import type { PaymentProviderEventType, PaymentWebhookMoneyFacts } from "@elevenhouse/domain";
 
 const supportedEventTypes = new Set<PaymentProviderEventType>([
@@ -27,6 +28,18 @@ export type ArcPayWebhookEvent = {
   readonly moneyFacts: PaymentWebhookMoneyFacts;
 };
 
+/**
+ * Transport facts are intentionally narrower than a business event. A verified but unknown
+ * provider event must be persisted and quarantined, not discarded before the durable inbox.
+ */
+export type ArcPayWebhookTransportEnvelope = Readonly<{
+  providerWebhookId: string;
+  providerEventType: string;
+  merchantTenantId: string;
+  environment: "sandbox" | "live";
+  occurredAt: string;
+}>;
+
 export class ArcPayWebhookPayloadError extends Error {
   constructor() {
     super("Arc Pay webhook payload does not match the supported OpenAPI envelope");
@@ -38,33 +51,55 @@ export function parseArcPayWebhook(input: {
   readonly webhookId: string;
   readonly rawBody: string;
 }): ArcPayWebhookEvent {
-  let source: unknown;
-  try {
-    source = JSON.parse(input.rawBody);
-  } catch {
-    throw new ArcPayWebhookPayloadError();
-  }
-  const payload = record(source);
-  const eventId = uuid(payload.event_id);
-  if (eventId !== input.webhookId) throw new ArcPayWebhookPayloadError();
-  const type = string(payload.event_type) as PaymentProviderEventType;
+  const payload = parsePayload(input.rawBody);
+  const transport = parseTransportPayload(input.webhookId, payload);
+  const type = transport.providerEventType as PaymentProviderEventType;
   if (!supportedEventTypes.has(type)) throw new ArcPayWebhookPayloadError();
-  const environment = environmentValue(payload.environment);
-  if (payload.livemode !== (environment === "live")) throw new ArcPayWebhookPayloadError();
-  const occurredAt = isoDateTime(payload.created_at);
-  uuid(payload.tenant_id);
   const data = record(payload.data);
   const providerPaymentId = uuid(data.payment_id);
 
   return {
-    providerWebhookId: eventId,
+    providerWebhookId: transport.providerWebhookId,
     providerPaymentId,
     type,
-    environment,
-    occurredAt,
+    environment: transport.environment,
+    occurredAt: transport.occurredAt,
     payload,
     moneyFacts: parseMoneyFacts(type, data)
   };
+}
+
+export function parseArcPayWebhookTransportEnvelope(input: {
+  readonly webhookId: string;
+  readonly rawBody: string;
+}): ArcPayWebhookTransportEnvelope {
+  return parseTransportPayload(input.webhookId, parsePayload(input.rawBody));
+}
+
+function parsePayload(rawBody: string): Record<string, unknown> {
+  try {
+    return record(JSON.parse(rawBody));
+  } catch {
+    throw new ArcPayWebhookPayloadError();
+  }
+}
+
+function parseTransportPayload(
+  webhookId: string,
+  payload: Record<string, unknown>
+): ArcPayWebhookTransportEnvelope {
+  const eventId = uuid(payload.event_id);
+  if (eventId !== webhookId) throw new ArcPayWebhookPayloadError();
+  const environment = environmentValue(payload.environment);
+  if (payload.livemode !== (environment === "live")) throw new ArcPayWebhookPayloadError();
+  const merchantTenantId = uuid(payload.tenant_id);
+  return Object.freeze({
+    providerWebhookId: eventId,
+    providerEventType: providerEventType(payload.event_type),
+    merchantTenantId,
+    environment,
+    occurredAt: isoDateTime(payload.created_at)
+  });
 }
 
 function parseMoneyFacts(
@@ -130,6 +165,14 @@ function record(value: unknown): Record<string, unknown> {
 function string(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0) throw new ArcPayWebhookPayloadError();
   return value;
+}
+
+function providerEventType(value: unknown): string {
+  const parsed = string(value);
+  if (parsed.length > 160 || /[\u0000-\u001f\u007f]/.test(parsed)) {
+    throw new ArcPayWebhookPayloadError();
+  }
+  return parsed;
 }
 
 function uuid(value: unknown): string {

@@ -15,6 +15,13 @@ type OutboxSafetyCatalogFingerprint = {
   readonly invalidIndexes: number;
 };
 
+type OutboxConstraintCatalogRow = {
+  readonly object_name: string;
+  readonly constraint_type: string;
+  readonly definition: string;
+  readonly validated: boolean;
+};
+
 export type FlowOutboxSafetyReconciliationResult = "already_current" | "reconciled";
 
 const predecessorOutboxSafetyCatalog = {
@@ -38,6 +45,17 @@ const currentOutboxSafetyCatalog = {
   unvalidatedConstraints: 0,
   invalidIndexes: 0
 } as const satisfies OutboxSafetyCatalogFingerprint;
+
+const sharedOutboxConstraintExtensions = [
+  {
+    constraintNamePrefix: "outbox_events_finance_",
+    eventTypePrefix: "finance."
+  },
+  {
+    constraintNamePrefix: "outbox_events_booking_lifecycle_",
+    eventTypePrefix: "bookings."
+  }
+] as const;
 
 export async function reconcileFlowOutboxSafety(
   client: Client
@@ -127,12 +145,7 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
      WHERE table_schema = 'public'
        AND table_name = 'outbox_events'
   `);
-  const constraints = await client.query<{
-    object_name: string;
-    constraint_type: string;
-    definition: string;
-    validated: boolean;
-  }>(`
+  const constraints = await client.query<OutboxConstraintCatalogRow>(`
     SELECT
       constraint_record.conname AS object_name,
       constraint_record.contype AS constraint_type,
@@ -188,6 +201,9 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
       AND NOT trigger_record.tgisinternal
   `);
 
+  const attestedConstraints = constraints.rows.filter(
+    (row) => !isApprovedSharedOutboxConstraintExtension(row)
+  );
   const payload = {
     relations: relations.rows
       .map(
@@ -203,7 +219,7 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
           )}`
       )
       .sort(),
-    constraints: constraints.rows
+    constraints: attestedConstraints
       .map(
         (row) =>
           `${row.object_name}|${row.constraint_type}|${normalizeCatalogDefinition(
@@ -237,6 +253,20 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
     unvalidatedConstraints: constraints.rows.filter((row) => !row.validated).length,
     invalidIndexes: indexes.rows.filter((row) => !row.valid || !row.ready).length
   };
+}
+
+function isApprovedSharedOutboxConstraintExtension(row: OutboxConstraintCatalogRow): boolean {
+  if (row.constraint_type !== "c" || !row.validated) return false;
+  const owner = sharedOutboxConstraintExtensions.find((candidate) =>
+    row.object_name.startsWith(candidate.constraintNamePrefix)
+  );
+  if (!owner) return false;
+
+  const normalizedDefinition = normalizeCatalogDefinition(row.definition);
+  const guardedEventType = normalizedDefinition.match(
+    /^CHECK \(\(\(event_type <> '([^']+)'::text\) OR \(.+\)\)\)$/
+  )?.[1];
+  return guardedEventType?.startsWith(owner.eventTypePrefix) ?? false;
 }
 
 function matchesOutboxSafetyCatalog(

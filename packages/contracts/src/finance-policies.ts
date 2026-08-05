@@ -19,7 +19,6 @@ export const financePolicySnapshotSchema = z
     holdDurationHours: holdDurationHoursSchema,
     reserveBps: basisPointsSchema,
     reserveReleaseDelayDays: reserveReleaseDelayDaysSchema,
-    platformFeeBps: basisPointsSchema,
     providerSettlementRequired: z.boolean(),
     snapshottedAt: isoDateTimeSchema
   })
@@ -48,7 +47,6 @@ export const updateFinancePolicyRequestSchema = z
     holdDurationHours: holdDurationHoursSchema,
     reserveBps: basisPointsSchema,
     reserveReleaseDelayDays: reserveReleaseDelayDaysSchema,
-    platformFeeBps: basisPointsSchema,
     providerSettlementRequired: z.boolean()
   })
   .strict();
@@ -64,7 +62,6 @@ export const updateAstrologerRiskProfileRequestSchema = z
     holdDurationHoursOverride: nullableOverrideNumber(holdDurationHoursSchema),
     reserveBpsOverride: nullableOverrideNumber(basisPointsSchema),
     reserveReleaseDelayDaysOverride: nullableOverrideNumber(reserveReleaseDelayDaysSchema),
-    platformFeeBpsOverride: nullableOverrideNumber(basisPointsSchema),
     providerSettlementRequiredOverride: z.boolean().nullable()
   })
   .strict()

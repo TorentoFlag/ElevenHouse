@@ -1,5 +1,6 @@
 export * from "./product-analytics-reader";
 export * from "./product-errors";
+export * from "./paid-product-fulfillment-registry";
 export * from "./product-store";
 export * from "./product-template-store";
 export * from "./product-template-types";

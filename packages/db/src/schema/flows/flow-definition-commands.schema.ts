@@ -69,7 +69,6 @@ export const flowDefinitionCommands = pgTable(
           or (${table.routeTemplate} = '/flows/:flowId/draft' and ${table.commandScope} = 'flows.definition.update-draft.v2')
           or (${table.routeTemplate} = '/flows/:flowId/publish' and ${table.commandScope} = 'flows.definition.publish.v2')
           or (${table.routeTemplate} = '/flows/:flowId/next-draft' and ${table.commandScope} = 'flows.definition.create-next-draft.v2')
-          or (${table.routeTemplate} = '/flows/:flowId/migrations/v2' and ${table.commandScope} = 'flows.definition.migrate.v2')
         )`
     ),
     check(

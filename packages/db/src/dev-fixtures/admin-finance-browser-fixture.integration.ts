@@ -1,10 +1,12 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { assertDevelopmentDatabaseUrl } from "../connection";
 import { createDrizzleLedgerStore } from "../adapters/finance/drizzle-ledger-store";
+import { createFinanceArtifactRegistry } from "../adapters/finance/finance-artifact-registry";
 import { createPostgresRuntime, type PostgresRuntime } from "../runtime";
+import { financeArtifactRetentionPolicies } from "../schema/finance/finance-artifacts.schema";
 import { seedAdminFinanceBrowserFixture } from "./admin-finance-browser-fixture";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
@@ -19,6 +21,14 @@ describe("admin finance browser fixture", () => {
     await adminClient.query(`CREATE DATABASE "${databaseName}"`);
     runtime = createPostgresRuntime({ DATABASE_URL: isolatedDatabaseUrl });
     await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.database.insert(financeArtifactRetentionPolicies).values({
+      policyId: "manual-payout-proof",
+      policyVersion: "1",
+      artifactClass: "bank_transfer_evidence",
+      retainForSeconds: "315360000",
+      authorityRef: "test-manual-payout-proof-policy",
+      effectiveAt: new Date("2020-01-01T00:00:00.000Z")
+    });
   }, 30_000);
 
   afterAll(async () => {
@@ -40,6 +50,12 @@ describe("admin finance browser fixture", () => {
     expect(first.astrologerSessionCookie).toBe(
       `elevenhouse_astrologer_session=${first.astrologerSessionToken}`
     );
+    expect(first.astrologerCsrfCookieName).toBe("elevenhouse_astrologer_csrf");
+    expect(first.astrologerCsrfHeaderName).toBe("x-csrf-token");
+    expect(first.astrologerCsrfToken).toMatch(/^v1\.\d+\.elevenhouse-dev-admin-finance-csrf\./);
+    expect(first.astrologerCsrfCookie).toBe(
+      `elevenhouse_astrologer_csrf=${first.astrologerCsrfToken}`
+    );
     expect(first.csrfCookieName).toBe("elevenhouse_admin_csrf");
     expect(first.csrfHeaderName).toBe("x-csrf-token");
     expect(first.csrfToken).toMatch(/^v1\.\d+\.elevenhouse-dev-admin-finance-csrf\./);
@@ -47,6 +63,7 @@ describe("admin finance browser fixture", () => {
     expect(first.browserConsoleHelper).toContain(first.sessionCookie);
     expect(first.browserConsoleHelper).toContain(first.csrfCookie);
     expect(first.astrologerBrowserConsoleHelper).toContain(first.astrologerSessionCookie);
+    expect(first.astrologerBrowserConsoleHelper).toContain(first.astrologerCsrfCookie);
 
     const session = await runtime.pool.query<{
       readonly status: string;
@@ -90,6 +107,38 @@ describe("admin finance browser fixture", () => {
       "select count(*)::text from finance_policies where is_active = true and risk_tier = 'manual_review'"
     );
     expect(policies.rows[0]?.count).toBe("1");
+
+    const commissionSnapshots = await runtime.pool.query<{
+      readonly order_count: string;
+      readonly tariff_series_id: string;
+      readonly tariff_version: number;
+      readonly tariff_commission_bps: number;
+      readonly published_commission_bps: number;
+    }>(
+      `select count(*)::text as order_count,
+              orders.tariff_series_id,
+              orders.tariff_version,
+              orders.tariff_commission_bps,
+              tariffs.client_sale_commission_bps as published_commission_bps
+       from orders
+       inner join platform_tariff_versions tariffs
+         on tariffs.tariff_series_id = orders.tariff_series_id
+        and tariffs.version = orders.tariff_version
+        and tariffs.canonical_digest = orders.tariff_version_digest
+       where orders.astrologer_user_id = $1
+       group by orders.tariff_series_id, orders.tariff_version,
+                orders.tariff_commission_bps, tariffs.client_sale_commission_bps`,
+      [first.astrologerUserId]
+    );
+    expect(commissionSnapshots.rows).toEqual([
+      {
+        order_count: "4",
+        tariff_series_id: "dev-finance-pro",
+        tariff_version: 1,
+        tariff_commission_bps: 800,
+        published_commission_bps: 800
+      }
+    ]);
 
     const ledgerStore = createDrizzleLedgerStore(runtime.database);
     await expect(
@@ -273,6 +322,39 @@ async function insertCompletedPayoutMutation(
   }
 
   const mutationLedgerTransactionId = randomUUID();
+  const proofArtifactId = `admin-finance-fixture-reseed-proof:${randomUUID()}`;
+  const proofDigest = `sha256:${createHash("sha256").update(proofArtifactId).digest("hex")}` as const;
+  const proofByteLength = 1_024;
+  const proof = await createFinanceArtifactRegistry(runtime.database).registerSealedArtifact({
+    artifact: {
+      artifactId: proofArtifactId,
+      sha256Digest: proofDigest,
+      byteLength: proofByteLength,
+      bankCashPoolId: "manual-payout-bank-cash-pool",
+      statementSourceFingerprint:
+        "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    artifactClass: "bank_transfer_evidence",
+    binding: {
+      kind: "bank_cash_pool",
+      bankCashPoolId: "manual-payout-bank-cash-pool",
+      currency: "RUB"
+    },
+    contentType: "application/pdf",
+    privateObject: {
+      privateObjectKey: `private/manual-payout-proofs/${proofArtifactId}`,
+      privateObjectVersion: "immutable-version-1",
+      envelopeKeyVersion: "kms-finance-v1",
+      sha256Digest: proofDigest,
+      byteLength: proofByteLength,
+      contentType: "application/pdf"
+    },
+    retentionPolicyId: "manual-payout-proof",
+    retentionPolicyVersion: "1"
+  });
+  if (!("bankCashPoolId" in proof)) {
+    throw new Error("Expected bank-bound payout proof artifact");
+  }
   await runtime.pool.query(
     `insert into ledger_transactions
        (id, operation_type, payout_request_id, occurred_at, posted_at, metadata)
@@ -317,9 +399,17 @@ async function insertCompletedPayoutMutation(
      set status = 'paid',
          external_reference = 'bank-transfer-reseed-test',
          transferred_at = '2026-07-28T10:30:00.000Z',
+         paid_proof_artifact_id = $2,
+         paid_proof_artifact_digest = $3,
+         paid_proof_artifact_byte_length = $4,
          completed_at = '2026-07-28T10:30:00.000Z',
          updated_at = '2026-07-28T10:30:00.000Z'
      where id = $1`,
-    [fixture.processingPayoutRequestId]
+    [
+      fixture.processingPayoutRequestId,
+      proof.artifactId,
+      proof.sha256Digest,
+      proof.byteLength
+    ]
   );
 }

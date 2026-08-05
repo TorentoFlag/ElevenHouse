@@ -200,23 +200,27 @@ function isCustomerPlatformRole(value: string): value is CustomerPlatformRole {
 }
 
 function isAuthIdentityUniqueViolation(error: unknown): boolean {
-  if (!isPostgresError(error)) {
-    return false;
-  }
-
-  return error.code === "23505" && authIdentityUniqueConstraints.has(error.constraint);
+  const postgres = findPostgresError(error);
+  return postgres !== null && postgres.code === "23505" && authIdentityUniqueConstraints.has(postgres.constraint);
 }
 
-function isPostgresError(error: unknown): error is {
+function findPostgresError(error: unknown): {
   readonly code: string;
   readonly constraint: string;
-} {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    "constraint" in error &&
-    typeof error.code === "string" &&
-    typeof error.constraint === "string"
-  );
+} | null {
+  let current: unknown = error;
+  const visited = new Set<object>();
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    if (
+      "code" in current &&
+      "constraint" in current &&
+      typeof current.code === "string" &&
+      typeof current.constraint === "string"
+    ) {
+      return { code: current.code, constraint: current.constraint };
+    }
+    current = "cause" in current ? current.cause : null;
+  }
+  return null;
 }

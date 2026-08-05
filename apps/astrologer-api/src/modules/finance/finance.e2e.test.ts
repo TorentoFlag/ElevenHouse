@@ -10,7 +10,6 @@ import {
 } from "@elevenhouse/contracts";
 import {
   FinanceIdempotencyConflictError,
-  platformPlanSeedData,
   type AuthSessionAuthenticationStore,
   type AuthSessionRevocationUnitOfWork,
   type CreateLedgerTransactionInput,
@@ -19,13 +18,19 @@ import {
   type LedgerStore,
   type PasswordlessAuthUnitOfWork,
   type PasswordlessCustomerAccountRegistrationSessionUnitOfWork,
-  type PlatformBillingStore,
-  type PlatformSubscription,
+  type PlatformTariffAuthorityStore,
+  type PlatformTariffSubscriptionRecord,
+  type PlatformTariffVersion,
   type PayoutMethodRecord,
   type PayoutRequestRecord,
   type PayoutStore,
   type WalletBalance
 } from "@elevenhouse/domain";
+import type {
+  FinancePayoutDestinationVaultPort,
+  OnlineWalletPayoutRequestReader,
+  OnlineWalletPayoutRequestUnitOfWork
+} from "@elevenhouse/domain/finance-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../clock/system-clock.service";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -45,7 +50,11 @@ import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordle
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { FinanceModule } from "./finance.module";
-import { ASTROLOGER_FINANCE_OPTIONS, ASTROLOGER_FINANCE_UNIT_OF_WORK } from "./finance.tokens";
+import {
+  ASTROLOGER_FINANCE_OPTIONS,
+  ASTROLOGER_FINANCE_UNIT_OF_WORK,
+  ASTROLOGER_PAYOUT_DESTINATION_VAULT
+} from "./finance.tokens";
 import type { AstrologerFinanceUnitOfWork } from "./finance.unit-of-work";
 
 const now = new Date("2026-07-26T10:00:00.000Z");
@@ -73,13 +82,23 @@ describe("astrologer finance HTTP routes", () => {
     LedgerStore,
     "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
   >;
-  let platformBillingStore: PlatformBillingStore;
+  let tariffStore: Pick<
+    PlatformTariffAuthorityStore,
+    "findActiveOrPendingSubscription" | "findTariffVersion"
+  >;
+  let onlineWalletPayoutRequests: OnlineWalletPayoutRequestUnitOfWork;
 
   beforeEach(async () => {
     payoutStore = createPayoutStore();
     ledgerStore = createLedgerStore();
-    platformBillingStore = createPlatformBillingStore();
-    const unitOfWork = createFinanceUnitOfWork(payoutStore, ledgerStore, platformBillingStore);
+    tariffStore = createTariffStore();
+    onlineWalletPayoutRequests = createOnlineWalletPayoutRequests();
+    const unitOfWork = createFinanceUnitOfWork(
+      payoutStore,
+      ledgerStore,
+      tariffStore,
+      onlineWalletPayoutRequests
+    );
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
     };
@@ -131,9 +150,10 @@ describe("astrologer finance HTTP routes", () => {
       .useValue(unitOfWork)
       .overrideProvider(ASTROLOGER_FINANCE_OPTIONS)
       .useValue({
-        minimumPayoutAmountMinor: 1_000_00,
-        platformBillingProviderConfigured: true
+        minimumPayoutAmountMinor: 1_000_00
       })
+      .overrideProvider(ASTROLOGER_PAYOUT_DESTINATION_VAULT)
+      .useValue(createPayoutDestinationVault())
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -165,6 +185,14 @@ describe("astrologer finance HTTP routes", () => {
         available: { amountMinor: 15_000_00, currency: "RUB" }
       },
       defaultPayoutMethod: null,
+      recentPayoutRequests: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          status: "requested",
+          amount: { amountMinor: 5_000_00, currency: "RUB" },
+          version: 1
+        }
+      ],
       canRequestPayout: false,
       payoutRequestUnavailableReason: "payout_method_required",
       periodSummary: {
@@ -181,14 +209,16 @@ describe("astrologer finance HTTP routes", () => {
         recurringRevenueAmount: null,
         recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
       },
-      currentPlan: {
-        planId: "pro",
-        code: "pro",
+      currentTariff: {
+        tariffSeriesId: "pro",
+        tariffVersion: 2,
         name: "Pro",
-        monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
-        platformFeeBps: 400,
+        price: { amountMinor: 199_000, currency: "RUB" },
+        commissionBps: 400,
         billingCycle: "month",
-        source: "subscription"
+        state: "active",
+        startsAt: "2026-07-26T10:00:00.000Z",
+        endsAt: "2026-08-26T10:00:00.000Z"
       }
     });
   });
@@ -227,7 +257,7 @@ describe("astrologer finance HTTP routes", () => {
     });
   });
 
-  it("creates manual payout method and idempotent payout request with CSRF protection", async () => {
+  it("creates a manual payout request through the v2 wallet writer with CSRF protection", async () => {
     await expect(
       postJson(baseUrl, "/finance/payout-requests", validPayoutRequestBody(), {
         cookie: sessionCookieHeader(),
@@ -249,6 +279,16 @@ describe("astrologer finance HTTP routes", () => {
       displayName: "Основной счет",
       isDefault: true
     });
+    const createMethod = payoutStore.createMethod as unknown as { mock: { calls: unknown[][] } };
+    const persistedMethodInput = createMethod.mock.calls[0]?.[0];
+    expect(persistedMethodInput).toMatchObject({
+      destination: {
+        kind: "sealed_payout_destination_snapshot",
+        destinationKind: "bank_account",
+        redactedDisplay: "Счёт •••• 4417"
+      }
+    });
+    expect(JSON.stringify(persistedMethodInput)).not.toContain("40817810099910004417");
 
     const payout = await postJson(
       baseUrl,
@@ -278,13 +318,20 @@ describe("astrologer finance HTTP routes", () => {
         status: "requested"
       }
     });
-    expect(ledgerStore.createTransaction).toHaveBeenCalledTimes(1);
-    expect(ledgerStore.createTransaction).toHaveBeenCalledWith(
+    expect(onlineWalletPayoutRequests.createOnlineWalletPayoutRequest).toHaveBeenCalledTimes(1);
+    expect(onlineWalletPayoutRequests.createOnlineWalletPayoutRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        operationType: "payout_reserved",
-        payoutRequestId: payout.body.id
+        astrologerUserId,
+        walletId: "66666666-6666-4666-8666-666666666666",
+        amountMinor: "500000",
+        currency: "RUB",
+        destination: expect.objectContaining({
+          payoutMethodId: method.body.id,
+          destinationKind: "bank_account"
+        })
       })
     );
+    expect(ledgerStore.createTransaction).not.toHaveBeenCalled();
   });
 
   it("rejects payout requests below the configured minimum amount", async () => {
@@ -409,14 +456,28 @@ function createFinanceUnitOfWork(
     LedgerStore,
     "createTransaction" | "findWalletBalance" | "summarizePeriod" | "listOperations"
   >,
-  platformBillingStore: PlatformBillingStore
+  tariffStore: Pick<
+    PlatformTariffAuthorityStore,
+    "findActiveOrPendingSubscription" | "findTariffVersion"
+  >,
+  onlineWalletPayoutRequests: OnlineWalletPayoutRequestUnitOfWork
 ): AstrologerFinanceUnitOfWork {
   const completedFinanceCommands = new Map<string, Record<string, unknown>>();
   const financeCommandHashes = new Map<string, string>();
 
   return {
     execute: vi.fn(async (operation) =>
-      operation({ payoutStore, ledgerStore, platformBillingStore })
+      operation({
+        payoutStore,
+        ledgerStore,
+        tariffStore,
+        onlineWalletPayoutRequests,
+        onlineWalletPayoutRequestReader: createOnlineWalletPayoutRequestReader()
+      } as Parameters<AstrologerFinanceUnitOfWork["execute"]>[0] extends (
+        context: infer Context
+      ) => Promise<unknown>
+        ? Context
+        : never)
     ),
     executeIdempotent: async (input) => {
       const key = `${input.command.scope}:${input.command.idempotencyKey}`;
@@ -428,7 +489,17 @@ function createFinanceUnitOfWork(
         const result = completedFinanceCommands.get(key);
         if (!result) throw new Error("Expected completed finance command result");
         const value = await input.replay(
-          { payoutStore, ledgerStore, platformBillingStore },
+          {
+            payoutStore,
+            ledgerStore,
+            tariffStore,
+            onlineWalletPayoutRequests,
+            onlineWalletPayoutRequestReader: createOnlineWalletPayoutRequestReader()
+          } as Parameters<AstrologerFinanceUnitOfWork["execute"]>[0] extends (
+            context: infer Context
+          ) => Promise<unknown>
+            ? Context
+            : never,
           result
         );
         if (!value) throw new Error("Expected finance command replay value");
@@ -436,10 +507,73 @@ function createFinanceUnitOfWork(
       }
 
       financeCommandHashes.set(key, input.command.requestHash);
-      const created = await input.create({ payoutStore, ledgerStore, platformBillingStore });
+      const created = await input.create(
+        {
+          payoutStore,
+          ledgerStore,
+          tariffStore,
+          onlineWalletPayoutRequests,
+          onlineWalletPayoutRequestReader: createOnlineWalletPayoutRequestReader()
+        } as Parameters<AstrologerFinanceUnitOfWork["execute"]>[0] extends (
+          context: infer Context
+        ) => Promise<unknown>
+          ? Context
+          : never
+      );
       completedFinanceCommands.set(key, created.result);
       return { kind: "created" as const, value: created.value };
     }
+  };
+}
+
+function createOnlineWalletPayoutRequests(): OnlineWalletPayoutRequestUnitOfWork {
+  return {
+    createOnlineWalletPayoutRequest: vi.fn(async (command) => ({
+      kind: "online_wallet_payout_request_commit_receipt" as const,
+      effect: "applied_once" as const,
+      payoutRequestId: command.payoutRequestId,
+      walletId: command.walletId,
+      walletRevision: "3",
+      payoutVersion: "1",
+      mutationId: "77777777-7777-4777-8777-777777777777",
+      journalTransactionId: "online-wallet-payout-request:finance-request-1"
+    }))
+  };
+}
+
+function createOnlineWalletPayoutRequestReader(): OnlineWalletPayoutRequestReader {
+  const projection = ({
+    payoutRequestId,
+    astrologerUserId
+  }: {
+    payoutRequestId: string;
+    astrologerUserId: string;
+  }) => ({
+    payoutRequestId,
+    walletId: "66666666-6666-4666-8666-666666666666",
+    astrologerUserId,
+    amountMinor: "500000",
+    currency: "RUB" as const,
+    status: "requested" as const,
+    version: "1",
+    requestedAt: now.toISOString(),
+    latestTransitionActorUserId: astrologerUserId,
+    latestTransitionOccurredAt: now.toISOString(),
+    latestTransitionFailureReason: null,
+    latestTransitionAdminNote: null
+  });
+
+  return {
+    findWalletId: vi.fn(async () => "66666666-6666-4666-8666-666666666666"),
+    findPayoutRequest: vi.fn(async (input) => projection(input)),
+    findPayoutRequestById: vi.fn(async () => null),
+    listPayoutRequests: vi.fn(async () => []),
+    listPayoutRequestsForAstrologer: vi.fn(async (input) => [
+      projection({
+        payoutRequestId: "55555555-5555-4555-8555-555555555555",
+        astrologerUserId: input.astrologerUserId
+      })
+    ])
   };
 }
 
@@ -449,21 +583,19 @@ function createPayoutStore(): PayoutStore {
 
   return {
     createMethod: vi.fn(async (input) => {
-      defaultMethod = {
-        id: "33333333-3333-4333-8333-333333333333",
+      const method: PayoutMethodRecord = {
+        id: input.id ?? "33333333-3333-4333-8333-333333333333",
         astrologerUserId: input.astrologerUserId,
         method: input.method,
         currency: input.currency,
         displayName: input.displayName,
-        manualBankTransferDetails: input.manualBankTransferDetails,
-        provider: input.provider,
-        environment: input.environment,
-        providerPayoutAccountId: input.providerPayoutAccountId,
+        destination: input.destination,
         isDefault: input.isDefault,
         createdAt: input.now,
         updatedAt: input.now
       };
-      return defaultMethod;
+      defaultMethod = method;
+      return method;
     }),
     findDefaultMethod: vi.fn(async (userId) =>
       defaultMethod?.astrologerUserId === userId ? defaultMethod : null
@@ -565,34 +697,58 @@ function createLedgerStore(): Pick<
   };
 }
 
-function createPlatformBillingStore(): PlatformBillingStore {
+function createTariffStore(): Pick<
+  PlatformTariffAuthorityStore,
+  "findActiveOrPendingSubscription" | "findTariffVersion"
+> {
+  const digest = `sha256:${"a".repeat(64)}` as `sha256:${string}`;
+  const tariff: PlatformTariffVersion = {
+    tariffSeriesId: "pro",
+    version: 2,
+    draftRevision: 1,
+    lifecycle: "published",
+    name: "Pro",
+    tagline: "For active practices",
+    monthlyPriceMinor: 199_000,
+    yearlyPriceMinor: 1_990_000,
+    monthlyRecurringFrequencyDays: 30,
+    yearlyRecurringFrequencyDays: 365,
+    clientSaleCommissionBps: 400,
+    seatsLimit: null,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 0,
+    features: [],
+    canonicalDigest: digest
+  };
+  const subscription: PlatformTariffSubscriptionRecord = {
+    subscriptionId: "12121212-1212-4121-8121-121212121212",
+    ownerUserId: astrologerUserId,
+    tariffSeriesId: tariff.tariffSeriesId,
+    tariffVersion: tariff.version,
+    tariffVersionDigest: digest,
+    commissionBpsSnapshot: tariff.clientSaleCommissionBps,
+    version: 3,
+    billingCycle: "month",
+    state: "active",
+    startsAt: "2026-07-26T10:00:00.000Z",
+    endsAt: "2026-08-26T10:00:00.000Z"
+  };
   return {
-    listActivePlans: vi.fn(async () => [...platformPlanSeedData]),
-    findCurrentSubscription: vi.fn(
-      async (): Promise<PlatformSubscription | null> => ({
-        id: "12121212-1212-4121-8121-121212121212",
-        ownerUserId: astrologerUserId,
-        planId: "pro",
-        status: "active",
-        billingCycle: "month",
-        currentPeriodEndsAt: "2026-08-26T10:00:00.000Z",
-        cancelAtPeriodEnd: false,
-        createdAt: "2026-07-01T10:00:00.000Z",
-        updatedAt: "2026-07-01T10:00:00.000Z"
-      })
-    ),
-    findDefaultPaymentMethod: vi.fn(async () => null),
-    listRecentInvoices: vi.fn(async () => [])
+    findActiveOrPendingSubscription: vi.fn(async () => subscription),
+    findTariffVersion: vi.fn(async () => tariff)
   };
 }
 
 function validPayoutMethodBody(): Record<string, unknown> {
   return {
     displayName: "Основной счет",
+    destinationKind: "bank_account",
     recipientName: "Alisa Vega",
     bankName: "T-Bank",
-    accountNumberLast4: "4417",
-    details: { bik: "044525974" },
+    destinationValue: "40817810099910004417",
     idempotencyKey: "finance-method-1"
   };
 }
@@ -616,11 +772,11 @@ function payoutRequest(input: {
     id: input.id,
     astrologerUserId: input.astrologerUserId,
     payoutMethodId: input.payoutMethodId,
+    payoutMethodVersion: 1,
+    destination: sealedDestination(input.payoutMethodId),
     status: "requested",
     amount: { amountMinor: input.amountMinor, currency: "RUB" },
     method: "manual_bank_transfer",
-    provider: null,
-    environment: null,
     requestedAt: input.now,
     reviewedAt: null,
     completedAt: null,
@@ -629,10 +785,40 @@ function payoutRequest(input: {
     failureReason: null,
     externalReference: null,
     transferredAt: null,
-    providerPayoutId: null,
+    paidProofArtifact: null,
+    version: 1,
     metadata: { source: "astrologer_finance" },
     createdAt: input.now,
     updatedAt: input.now
+  };
+}
+
+function sealedDestination(payoutMethodId: string) {
+  return {
+    kind: "sealed_payout_destination_snapshot" as const,
+    payoutMethodId,
+    payoutMethodVersion: 1,
+    destinationKind: "bank_account" as const,
+    beneficiaryFingerprint:
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
+    redactedDisplay: "Счёт •••• 4417",
+    sealedDestinationRef: "kms://test/payout-destination"
+  };
+}
+
+function createPayoutDestinationVault(): FinancePayoutDestinationVaultPort {
+  return {
+    sealPayoutDestination: async (input) => ({
+      kind: "sealed_payout_destination_snapshot",
+      payoutMethodId: input.payoutMethodId,
+      payoutMethodVersion: input.payoutMethodVersion,
+      destinationKind: input.destinationKind,
+      beneficiaryFingerprint:
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      redactedDisplay: `${input.destinationKind === "bank_card" ? "Карта" : "Счёт"} •••• ${input.destinationValue.slice(-4)}`,
+      sealedDestinationRef: "kms://test/payout-destination"
+    }),
+    resolvePayoutDestination: async () => raise("Unexpected payout destination resolve")
   };
 }
 

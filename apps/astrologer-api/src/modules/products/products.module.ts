@@ -9,6 +9,7 @@ import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { MediaModule } from "../media/media.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { NullProductAnalyticsReader } from "./null-product-analytics-reader";
 import { ProductsController } from "./products.controller";
@@ -16,7 +17,15 @@ import { ProductsService } from "./products.service";
 import { PRODUCT_ANALYTICS_READER, PRODUCT_STORE, PRODUCT_TEMPLATE_STORE } from "./products.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, SecurityModule, MediaModule],
+  imports: [
+    ConfigModule,
+    ClockModule,
+    DatabaseModule,
+    IdentityModule,
+    SecurityModule,
+    MediaModule,
+    PlatformEntitlementsModule
+  ],
   controllers: [ProductsController],
   providers: [
     ProductsService,

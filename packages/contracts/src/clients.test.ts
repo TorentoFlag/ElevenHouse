@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   astrologerClientResponseSchema,
   astrologerClientListResponseSchema,
-  clientBirthDataListResponseSchema,
   clientBirthPlaceReferenceParamsSchema,
   clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
@@ -31,7 +30,7 @@ describe("client contracts", () => {
     ).toMatchObject({ token: "join_1234567890abcdef" });
   });
 
-  it("accepts the full birth-data request shape", () => {
+  it("accepts a single-profile birth-data write with compare-and-swap revision", () => {
     expect(
       clientBirthDataUpsertRequestSchema.parse({
         label: "Основные данные",
@@ -46,12 +45,12 @@ describe("client contracts", () => {
         birthTimeDstOccurrence: "first",
         birthLatitude: 55.7558,
         birthLongitude: 37.6173,
-        isPrimary: true
+        expectedRevision: 4
       })
     ).toMatchObject({
       birthTimePrecision: "exact",
       birthTimeDstOccurrence: "first",
-      isPrimary: true
+      expectedRevision: 4
     });
   });
 
@@ -189,37 +188,33 @@ describe("client contracts", () => {
     expect(() => clientBirthPlaceSearchQuerySchema.parse({ query: "  Ри  " })).toThrow();
   });
 
-  it("accepts a client birth-profile list with one primary profile", () => {
+  it("exposes one birth profile with its revision and latest server-side actor", () => {
     expect(
-      clientBirthDataListResponseSchema.parse({
-        profiles: [
-          birthProfile({
-            id: "55555555-5555-4555-8555-555555555555",
-            label: "Я",
-            isPrimary: true
-          }),
-          birthProfile({
-            id: "66666666-6666-4666-8666-666666666666",
-            label: "Партнёр",
-            isPrimary: false
+      astrologerClientResponseSchema.parse({
+        client: {
+          clientUserId: "11111111-1111-4111-8111-111111111111",
+          displayName: "Марина Краснова",
+          relationshipStatus: "active",
+          firstLinkedAt: "2026-07-06T10:00:00.000Z",
+          lastLinkedAt: "2026-07-06T10:05:00.000Z",
+          birthData: birthProfile({
+            revision: 4,
+            lastEditedByRole: "astrologer",
+            source: "manual"
           })
-        ]
+        }
       })
     ).toMatchObject({
-      profiles: [
-        { label: "Я", isPrimary: true },
-        { label: "Партнёр", isPrimary: false }
-      ]
+      client: { birthData: { revision: 4, lastEditedByRole: "astrologer", source: "manual" } }
     });
   });
 
-  it("rejects a client birth-profile list with two primary profiles", () => {
+  it("rejects a multi-profile response shape", () => {
     expect(() =>
-      clientBirthDataListResponseSchema.parse({
-        profiles: [
-          birthProfile({ id: "55555555-5555-4555-8555-555555555555", isPrimary: true }),
-          birthProfile({ id: "66666666-6666-4666-8666-666666666666", isPrimary: true })
-        ]
+      clientCabinetOverviewResponseSchema.parse({
+        astrologers: [],
+        birthProfiles: [birthProfile()],
+        summary: emptySummary()
       })
     ).toThrow();
   });
@@ -237,20 +232,8 @@ describe("client contracts", () => {
             lastLinkedAt: "2026-07-06T10:00:00.000Z"
           }
         ],
-        birthProfiles: [
-          birthProfile({
-            id: "55555555-5555-4555-8555-555555555555",
-            label: "Я",
-            isPrimary: true
-          })
-        ],
-        summary: {
-          directLinkOnly: true,
-          upcomingBookingCount: 0,
-          availableMaterialCount: 0,
-          unreadNotificationCount: 0,
-          activeSubscriptionCount: 0
-        }
+        birthData: birthProfile(),
+        summary: emptySummary()
       })
     ).toMatchObject({
       summary: {
@@ -265,7 +248,9 @@ function birthProfile(
   overrides: Partial<{
     id: string;
     label: string | null;
-    isPrimary: boolean;
+    revision: number;
+    source: "client_profile" | "import" | "manual";
+    lastEditedByRole: "client" | "astrologer";
   }> = {}
 ) {
   return {
@@ -283,9 +268,21 @@ function birthProfile(
     birthTimeDstOccurrence: null,
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
-    source: "client_profile",
-    isPrimary: overrides.isPrimary ?? true,
+    source: overrides.source ?? "client_profile",
+    revision: overrides.revision ?? 1,
+    lastEditedByUserId: "11111111-1111-4111-8111-111111111111",
+    lastEditedByRole: overrides.lastEditedByRole ?? "client",
     createdAt: "2026-07-06T10:00:00.000Z",
     updatedAt: "2026-07-06T10:00:00.000Z"
+  };
+}
+
+function emptySummary() {
+  return {
+    directLinkOnly: true as const,
+    upcomingBookingCount: 0,
+    availableMaterialCount: 0,
+    unreadNotificationCount: 0,
+    activeSubscriptionCount: 0
   };
 }

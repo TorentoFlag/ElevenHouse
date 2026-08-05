@@ -4,6 +4,7 @@ import {
   createDrizzleFinancePolicyStore,
   createDrizzleOrderStore
 } from "@elevenhouse/db/finance";
+import { createDrizzlePlatformTariffAuthorityStore } from "@elevenhouse/db/platform-billing";
 import { createDrizzleProductStore } from "@elevenhouse/db/products";
 import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
@@ -16,7 +17,8 @@ import {
   ORDERS_FINANCE_POLICY_STORE,
   ORDERS_ORDER_STORE,
   ORDERS_PRODUCT_STORE,
-  ORDERS_RELATIONSHIP_READER
+  ORDERS_RELATIONSHIP_READER,
+  ORDERS_TARIFF_AUTHORITY_STORE
 } from "./orders.tokens";
 
 @Module({
@@ -54,6 +56,12 @@ import {
       provide: ORDERS_FINANCE_POLICY_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleFinancePolicyStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: ORDERS_TARIFF_AUTHORITY_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzlePlatformTariffAuthorityStore({ database: postgresRuntime.database }),
       inject: [PostgresRuntimeService]
     }
   ]

@@ -15,6 +15,10 @@ import { useAvailabilityScheduleQuery } from "../../features/availability/model/
 import { usePutDefaultAvailabilityScheduleMutation } from "../../features/availability/model/usePutDefaultAvailabilityScheduleMutation";
 import { productListQueryOptions } from "../../features/products/model/productsQueryOptions";
 import type { CreateManualBookingInput } from "../../features/bookings/api/createManualBooking";
+import {
+  bookingCalendarAnchorDate,
+  type BookingCalendarHandoff
+} from "../../features/bookings/model/bookingNavigation";
 import { useBookingQuery } from "../../features/bookings/model/useBookingQuery";
 import { useCreateManualBookingMutation } from "../../features/bookings/model/useCreateManualBookingMutation";
 import type { CreateManualBlockInput } from "../../features/calendar/api/createManualBlock";
@@ -60,14 +64,27 @@ export type CalendarPageAction =
   | { readonly type: "close_dialog" }
   | { readonly type: "booking_conflict"; readonly message: string };
 
-export function createInitialCalendarPageState(input: { readonly today: string }): CalendarPageState {
+export function createInitialCalendarPageState(input: {
+  readonly today: string;
+  readonly timeZone?: string;
+  readonly bookingHandoff?: BookingCalendarHandoff | null;
+}): CalendarPageState {
+  const bookingSelection =
+    input.bookingHandoff && input.timeZone
+      ? {
+          anchorDate: bookingCalendarAnchorDate(input.bookingHandoff, input.timeZone),
+          selectedEntryId: input.bookingHandoff.bookingId,
+          dialog: "booking_detail" as const
+        }
+      : null;
+
   return {
     view: "week",
-    anchorDate: input.today,
-    selectedEntryId: null,
+    anchorDate: bookingSelection?.anchorDate ?? input.today,
+    selectedEntryId: bookingSelection?.selectedEntryId ?? null,
     isAvailabilityMode: false,
     isSummaryPanelOpen: true,
-    dialog: null,
+    dialog: bookingSelection?.dialog ?? null,
     manualBookingStartAt: null,
     conflictMessage: null
   };
@@ -126,6 +143,7 @@ type CalendarPageControllerInput = {
   readonly timeZone: string;
   readonly locale: SupportedLocale;
   readonly copy: AstrologerCopy["calendar"];
+  readonly bookingHandoff: BookingCalendarHandoff | null;
 };
 
 export function useCalendarPageController(input: CalendarPageControllerInput) {
@@ -133,7 +151,11 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(
     calendarPageStateReducer,
-    { today: getTodayInTimeZone(input.timeZone) },
+    {
+      today: getTodayInTimeZone(input.timeZone),
+      timeZone: input.timeZone,
+      bookingHandoff: input.bookingHandoff
+    },
     createInitialCalendarPageState
   );
   const range = useMemo(
@@ -146,8 +168,7 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
     [input.timeZone, state.anchorDate, state.view]
   );
   const rangeQuery = useCalendarRangeQuery(range);
-  const needsSchedulingResources =
-    state.isAvailabilityMode || state.dialog === "manual_booking";
+  const needsSchedulingResources = state.isAvailabilityMode || state.dialog === "manual_booking";
   const availabilityQuery = useAvailabilityScheduleQuery(needsSchedulingResources);
   const availabilityProductsQuery = useQuery({
     ...productListQueryOptions({ status: "active", limit: 200, offset: 0 }),
@@ -159,7 +180,12 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
   const createBookingMutation = useCreateManualBookingMutation();
   const selectedEntry =
     rangeQuery.data?.entries.find((entry) => entry.id === state.selectedEntryId) ?? null;
-  const selectedBookingId = selectedEntry?.kind === "booking" ? selectedEntry.id : "";
+  const selectedBookingId =
+    state.dialog === "booking_detail" && state.selectedEntryId
+      ? state.selectedEntryId
+      : selectedEntry?.kind === "booking"
+        ? selectedEntry.id
+        : "";
   const bookingQuery = useBookingQuery(selectedBookingId);
   const today = getTodayInTimeZone(input.timeZone);
 
@@ -211,8 +237,7 @@ export function useCalendarPageController(input: CalendarPageControllerInput) {
     onPrevious: () => dispatch({ type: "navigate", direction: "previous" }),
     onNext: () => dispatch({ type: "navigate", direction: "next" }),
     onToday: () => dispatch({ type: "go_today", today }),
-    onSetSummaryPanelOpen: (open: boolean) =>
-      dispatch({ type: "set_summary_panel", open }),
+    onSetSummaryPanelOpen: (open: boolean) => dispatch({ type: "set_summary_panel", open }),
     onSetAvailabilityMode: (enabled: boolean) =>
       dispatch({ type: "set_availability_mode", enabled }),
     onSelectEntry: (entry: CalendarEntry) => {

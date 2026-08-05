@@ -1,33 +1,19 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const productionCompose = readFileSync("deployment/compose/compose.production.yml", "utf8");
 const deployWorkflow = readFileSync(".github/workflows/deploy.yml", "utf8");
-const productionBaselineReconciler = "packages/db/scripts/reconcile-production-baseline.ts";
-
 describe("production database seed deployment", () => {
-  it("reconciles before migration and attests the migrated fresh baseline before seeding", () => {
-    const reconcilerRun = "run --rm -T db-baseline-reconciler";
+  it("migrates the one pre-launch baseline before seeding without a legacy reconciler", () => {
     const migratorRun = "run --rm -T db-migrator";
     const seederRun = "run --rm -T db-seeder";
-    const firstReconciler = deployWorkflow.indexOf(reconcilerRun);
     const migrator = deployWorkflow.indexOf(migratorRun);
-    const secondReconciler = deployWorkflow.indexOf(
-      reconcilerRun,
-      firstReconciler + reconcilerRun.length
-    );
     const seeder = deployWorkflow.indexOf(seederRun);
 
-    expect(existsSync(productionBaselineReconciler)).toBe(true);
-    expect(productionCompose).toContain("db-baseline-reconciler:");
-    expect(productionCompose).toContain(
-      'command: ["pnpm", "--filter", "@elevenhouse/db", "db:reconcile-production-baseline"]'
-    );
-    expect(deployWorkflow).toContain(reconcilerRun);
-    expect(firstReconciler).toBeLessThan(migrator);
-    expect(secondReconciler).toBeGreaterThan(migrator);
-    expect(secondReconciler).toBeLessThan(seeder);
-    expect(deployWorkflow.indexOf(reconcilerRun, secondReconciler + reconcilerRun.length)).toBe(-1);
+    expect(productionCompose).not.toContain("db-baseline-reconciler:");
+    expect(deployWorkflow).not.toContain("db-baseline-reconciler");
+    expect(migrator).toBeGreaterThan(-1);
+    expect(seeder).toBeGreaterThan(migrator);
   });
 
   it("runs the idempotent database seed step after migrations", () => {

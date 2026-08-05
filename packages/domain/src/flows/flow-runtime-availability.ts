@@ -7,7 +7,7 @@ export const FLOW_RUNTIME_AVAILABILITY = Object.freeze({
   mode: "definition_only",
   executionAvailable: false,
   reasonCode: FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE,
-  historySemantics: "legacy_preview"
+  historySemantics: "durable_execution"
 } satisfies FlowRuntimeAvailability);
 
 export class FlowRuntimeExecutionUnavailableError extends Error {

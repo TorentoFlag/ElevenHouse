@@ -17,7 +17,6 @@ describe("finance policy contracts", () => {
       holdDurationHours: 48,
       reserveBps: 500,
       reserveReleaseDelayDays: 30,
-      platformFeeBps: 1000,
       providerSettlementRequired: true,
       snapshottedAt: "2026-07-24T10:00:00.000Z"
     } as const;
@@ -31,7 +30,6 @@ describe("finance policy contracts", () => {
       holdDurationHours: 72,
       reserveBps: 1500,
       reserveReleaseDelayDays: 90,
-      platformFeeBps: 1200,
       providerSettlementRequired: true
     } as const;
 
@@ -56,7 +54,6 @@ describe("finance policy contracts", () => {
       holdDurationHours: 48,
       reserveBps: 500,
       reserveReleaseDelayDays: 30,
-      platformFeeBps: 1000,
       providerSettlementRequired: true,
       isActive: true,
       createdByUserId: "22222222-2222-4222-8222-222222222222",
@@ -76,7 +73,6 @@ describe("finance policy contracts", () => {
         holdDurationHoursOverride: 168,
         reserveBpsOverride: 2000,
         reserveReleaseDelayDaysOverride: 90,
-        platformFeeBpsOverride: null,
         providerSettlementRequiredOverride: true,
         reviewedByUserId: "22222222-2222-4222-8222-222222222222",
         reviewedAt: "2026-07-25T10:00:00.000Z",
@@ -93,7 +89,6 @@ describe("finance policy contracts", () => {
       holdDurationHoursOverride: 168,
       reserveBpsOverride: 2000,
       reserveReleaseDelayDaysOverride: 90,
-      platformFeeBpsOverride: null,
       providerSettlementRequiredOverride: true
     } as const;
 

@@ -22,6 +22,7 @@ export function createChartBirthDataDraft(
     values: clientBirthDataUpsertRequestSchema.parse(
       birthData === null
         ? {
+            expectedRevision: null,
             label: null,
             birthDate: null,
             birthTime: null,
@@ -33,10 +34,10 @@ export function createChartBirthDataDraft(
             birthTimezone: null,
             birthTimeDstOccurrence: null,
             birthLatitude: null,
-            birthLongitude: null,
-            isPrimary: true
+            birthLongitude: null
           }
         : {
+            expectedRevision: birthData.revision,
             label: birthData.label,
             birthDate: birthData.birthDate,
             birthTime: birthData.birthTime,
@@ -48,8 +49,7 @@ export function createChartBirthDataDraft(
             birthTimezone: birthData.birthTimezone,
             birthTimeDstOccurrence: birthData.birthTimeDstOccurrence,
             birthLatitude: birthData.birthLatitude,
-            birthLongitude: birthData.birthLongitude,
-            isPrimary: birthData.isPrimary
+            birthLongitude: birthData.birthLongitude
           }
     )
   };

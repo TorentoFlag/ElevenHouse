@@ -13,6 +13,7 @@ import {
   astrologerProfiles,
   clientAstrologerRelationships,
   clientBirthData,
+  clientBirthDataHistory,
   clientBirthTimeDstOccurrenceValues,
   clientJoinIntents,
   clientProfiles,
@@ -117,6 +118,7 @@ describe("database account schema constants", () => {
   it("exports client relationship schema tables", () => {
     expect(clientProfiles).toBeDefined();
     expect(clientBirthData).toBeDefined();
+    expect(clientBirthDataHistory).toBeDefined();
     expect(clientBirthTimeDstOccurrenceValues).toEqual(["first", "second"]);
     expect(clientAstrologerRelationships).toBeDefined();
     expect(clientJoinIntents).toBeDefined();
@@ -127,12 +129,15 @@ describe("database account schema constants", () => {
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
-    expect(migration).toContain('"is_primary" boolean DEFAULT false NOT NULL');
+    expect(migration).not.toContain('client_birth_data_primary_unique');
+    expect(migration).not.toContain('client_birth_data_id_client_unique');
+    expect(migration).toContain('"last_edited_by_user_id" uuid NOT NULL');
+    expect(migration).toContain('CREATE TABLE "client_birth_data_history"');
     expect(migration).toContain('"birth_time_dst_occurrence" text');
     expect(migration).toContain("client_birth_data_time_dst_occurrence_check");
-    expect(migration).not.toContain('CREATE UNIQUE INDEX "client_birth_data_client_unique"');
+    expect(migration).toContain('CONSTRAINT "client_birth_data_client_unique" UNIQUE("client_user_id")');
     expect(migration).toContain(
-      'CREATE UNIQUE INDEX "client_birth_data_primary_unique" ON "client_birth_data" USING btree ("client_user_id") WHERE "client_birth_data"."is_primary" = true'
+      'CREATE TRIGGER "client_birth_data_history_append_only"'
     );
     expect(migration).toContain('CREATE TABLE "client_astrologer_relationships"');
     expect(migration).toContain('CREATE TABLE "client_join_intents"');
@@ -236,7 +241,7 @@ describe("database account schema constants", () => {
     expect(migration).toContain('"content" text NOT NULL');
     expect(dictionaryAstrologerEntriesTable).not.toContain('"status" text');
     expect(dictionaryAstrologerEntriesTable).not.toContain('"deleted_at"');
-    expect(migration).not.toContain('"body" text NOT NULL');
+    expect(dictionaryAstrologerEntriesTable).not.toContain('"body" text NOT NULL');
     expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_status_check"');
     expect(migration).not.toContain('CONSTRAINT "dictionary_astrologer_entries_deleted_at_check"');
     expect(migration).not.toContain('CONSTRAINT "dictionary_platform_entries_version_check"');

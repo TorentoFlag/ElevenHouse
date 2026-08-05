@@ -1,22 +1,28 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   PayoutStatusEvidenceError,
   type CreatePayoutMethodInput,
   type CreatePayoutRequestInput,
-  type FinancePaymentProvider,
   type ListPayoutRequestsInput,
   type Money,
-  type PaymentProviderEnvironment,
   type PayoutMethodRecord,
   type PayoutRequestRecord,
   type PayoutStore,
   type UpdatePayoutRequestStatusInput
 } from "@elevenhouse/domain";
+import { hasAsciiControlCharacter } from "@elevenhouse/domain/finance-core";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { payoutMethods, payoutRequests } from "../../schema";
+import {
+  financeArtifactTombstones,
+  financeArtifacts,
+  payoutMethodVersions,
+  payoutMethods,
+  payoutRequests
+} from "../../schema";
 import type { FinanceDatabase } from "./drizzle-finance-command-store";
 
 type PayoutMethodRow = typeof payoutMethods.$inferSelect;
+type PayoutMethodVersionRow = typeof payoutMethodVersions.$inferSelect;
 type PayoutRequestRow = typeof payoutRequests.$inferSelect;
 
 export function createDrizzlePayoutStore(database: ElevenHouseDatabase): PayoutStore {
@@ -53,31 +59,50 @@ async function createPayoutMethod(
       method: input.method,
       currency: input.currency,
       displayName: input.displayName,
-      manualBankTransferDetails: input.manualBankTransferDetails,
-      provider: input.provider,
-      environment: input.environment,
-      providerPayoutAccountId: input.providerPayoutAccountId,
       isDefault: input.isDefault,
       createdAt: timestamp,
       updatedAt: timestamp
     })
     .returning();
   if (!row) throw new Error("Expected payout method insert to return a row");
-  return toPayoutMethod(row);
+  const [destination] = await database
+    .insert(payoutMethodVersions)
+    .values({
+      payoutMethodId: row.id,
+      version: input.destination.payoutMethodVersion,
+      destinationKind: input.destination.destinationKind,
+      beneficiaryFingerprint: input.destination.beneficiaryFingerprint,
+      redactedDisplay: input.destination.redactedDisplay,
+      sealedDestinationRef: input.destination.sealedDestinationRef,
+      createdAt: timestamp
+    })
+    .returning();
+  if (!destination) throw new Error("Expected payout method destination insert to return a row");
+  if (Number(row.version) !== destination.version) {
+    throw new Error("Payout method root and destination versions must match");
+  }
+  return toPayoutMethod(row, destination);
 }
 
 async function findDefaultPayoutMethod(
   database: FinanceDatabase,
   astrologerUserId: string
 ): Promise<PayoutMethodRecord | null> {
-  const [row] = await database
+  const [result] = await database
     .select()
     .from(payoutMethods)
+    .innerJoin(
+      payoutMethodVersions,
+      and(
+        eq(payoutMethodVersions.payoutMethodId, payoutMethods.id),
+        eq(payoutMethodVersions.version, sql`${payoutMethods.version}::integer`)
+      )
+    )
     .where(
       and(eq(payoutMethods.astrologerUserId, astrologerUserId), eq(payoutMethods.isDefault, true))
     )
     .limit(1);
-  return row ? toPayoutMethod(row) : null;
+  return result ? toPayoutMethod(result.payout_methods, result.payout_method_versions) : null;
 }
 
 async function createPayoutRequest(
@@ -100,12 +125,15 @@ async function createPayoutRequest(
       ...(input.id ? { id: input.id } : {}),
       astrologerUserId: input.astrologerUserId,
       payoutMethodId: input.payoutMethodId,
+      payoutMethodVersion: method.destination.payoutMethodVersion,
+      destinationKind: method.destination.destinationKind,
+      beneficiaryFingerprint: method.destination.beneficiaryFingerprint,
+      redactedDisplay: method.destination.redactedDisplay,
+      sealedDestinationRef: method.destination.sealedDestinationRef,
       status: "requested",
       amountMinor: input.amount.amountMinor,
       currency: input.amount.currency,
       method: method.method,
-      provider: method.provider,
-      environment: method.environment,
       requestedAt: timestamp,
       metadata: input.metadata,
       createdAt: timestamp,
@@ -121,6 +149,9 @@ async function updatePayoutRequestStatus(
   input: UpdatePayoutRequestStatusInput
 ): Promise<PayoutRequestRecord | null> {
   assertPayoutStatusEvidence(input);
+  if (input.status === "paid") {
+    await assertActiveBankTransferProofArtifact(database, input.proofArtifact);
+  }
   const timestamp = new Date(input.now);
   const completedAt = isTerminalPayoutStatus(input.status) ? timestamp : undefined;
   const [row] = await database
@@ -132,12 +163,20 @@ async function updatePayoutRequestStatus(
       failureReason: input.failureReason,
       externalReference: input.externalReference,
       transferredAt: input.transferredAt ? new Date(input.transferredAt) : undefined,
-      providerPayoutId: input.providerPayoutId,
+      paidProofArtifactId: input.proofArtifact?.artifactId,
+      paidProofArtifactDigest: input.proofArtifact?.sha256Digest,
+      paidProofArtifactByteLength: input.proofArtifact?.byteLength,
+      version: sql`${payoutRequests.version} + 1`,
       reviewedAt: input.adminUserId ? timestamp : undefined,
       completedAt,
       updatedAt: timestamp
     })
-    .where(eq(payoutRequests.id, input.payoutRequestId))
+    .where(
+      and(
+        eq(payoutRequests.id, input.payoutRequestId),
+        eq(payoutRequests.version, String(input.expectedVersion))
+      )
+    )
     .returning();
   return row ? toPayoutRequest(row) : null;
 }
@@ -151,13 +190,13 @@ function isTerminalPayoutStatus(status: UpdatePayoutRequestStatusInput["status"]
 export function assertPayoutStatusEvidence(
   input: Pick<
     UpdatePayoutRequestStatusInput,
-    "status" | "externalReference" | "transferredAt" | "failureReason"
+    "status" | "externalReference" | "transferredAt" | "failureReason" | "proofArtifact"
   >
 ): void {
   if (input.status === "paid") {
-    if (!input.externalReference || !input.transferredAt) {
+    if (!input.externalReference || !input.transferredAt || !isPayoutProofArtifact(input.proofArtifact)) {
       throw new PayoutStatusEvidenceError(
-        "Paid payout requests require externalReference and transferredAt"
+        "Paid payout requests require externalReference, transferredAt and a proof artifact"
       );
     }
   }
@@ -166,16 +205,78 @@ export function assertPayoutStatusEvidence(
   }
 }
 
+async function assertActiveBankTransferProofArtifact(
+  database: FinanceDatabase,
+  proofArtifact: UpdatePayoutRequestStatusInput["proofArtifact"]
+): Promise<void> {
+  if (!isPayoutProofArtifact(proofArtifact)) {
+    throw new PayoutStatusEvidenceError("Paid payout requests require a valid proof artifact");
+  }
+  const [artifact] = await database
+    .select({
+      id: financeArtifacts.id,
+      artifactClass: financeArtifacts.artifactClass,
+      bindingKind: financeArtifacts.bindingKind,
+      sha256Digest: financeArtifacts.sha256Digest,
+      byteLength: financeArtifacts.byteLength,
+      tombstonedArtifactId: financeArtifactTombstones.artifactId
+    })
+    .from(financeArtifacts)
+    .leftJoin(
+      financeArtifactTombstones,
+      eq(financeArtifactTombstones.artifactId, financeArtifacts.id)
+    )
+    .where(eq(financeArtifacts.id, proofArtifact.artifactId))
+    .limit(1);
+  if (
+    !artifact ||
+    artifact.artifactClass !== "bank_transfer_evidence" ||
+    artifact.bindingKind !== "bank_cash_pool" ||
+    artifact.sha256Digest !== proofArtifact.sha256Digest ||
+    Number(artifact.byteLength) !== proofArtifact.byteLength ||
+    artifact.tombstonedArtifactId !== null
+  ) {
+    throw new PayoutStatusEvidenceError(
+      "Paid payout proof artifact must be an active exact bank transfer evidence artifact"
+    );
+  }
+}
+
+function isPayoutProofArtifact(
+  value: UpdatePayoutRequestStatusInput["proofArtifact"]
+): value is NonNullable<UpdatePayoutRequestStatusInput["proofArtifact"]> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof value.artifactId === "string" &&
+    value.artifactId.length >= 1 &&
+    value.artifactId.length <= 160 &&
+    value.artifactId.trim() === value.artifactId &&
+    !hasAsciiControlCharacter(value.artifactId) &&
+    typeof value.sha256Digest === "string" &&
+    /^sha256:[a-f0-9]{64}$/.test(value.sha256Digest) &&
+    Number.isSafeInteger(value.byteLength) &&
+    value.byteLength > 0
+  );
+}
+
 async function findPayoutMethodById(
   database: FinanceDatabase,
   payoutMethodId: string
 ): Promise<PayoutMethodRecord | null> {
-  const [row] = await database
+  const [result] = await database
     .select()
     .from(payoutMethods)
+    .innerJoin(
+      payoutMethodVersions,
+      and(
+        eq(payoutMethodVersions.payoutMethodId, payoutMethods.id),
+        eq(payoutMethodVersions.version, sql`${payoutMethods.version}::integer`)
+      )
+    )
     .where(eq(payoutMethods.id, payoutMethodId))
     .limit(1);
-  return row ? toPayoutMethod(row) : null;
+  return result ? toPayoutMethod(result.payout_methods, result.payout_method_versions) : null;
 }
 
 async function findPayoutRequestById(
@@ -210,17 +311,25 @@ async function listPayoutRequests(
   return rows.map(toPayoutRequest);
 }
 
-function toPayoutMethod(row: PayoutMethodRow): PayoutMethodRecord {
+function toPayoutMethod(
+  row: PayoutMethodRow,
+  destination: PayoutMethodVersionRow
+): PayoutMethodRecord {
   return {
     id: row.id,
     astrologerUserId: row.astrologerUserId,
     method: row.method as PayoutMethodRecord["method"],
     currency: money(0, row.currency).currency,
     displayName: row.displayName,
-    manualBankTransferDetails: row.manualBankTransferDetails,
-    provider: row.provider as FinancePaymentProvider | null,
-    environment: row.environment as PaymentProviderEnvironment | null,
-    providerPayoutAccountId: row.providerPayoutAccountId,
+    destination: {
+      kind: "sealed_payout_destination_snapshot",
+      payoutMethodId: row.id,
+      payoutMethodVersion: destination.version,
+      destinationKind: destination.destinationKind as PayoutMethodRecord["destination"]["destinationKind"],
+      beneficiaryFingerprint: destination.beneficiaryFingerprint as PayoutMethodRecord["destination"]["beneficiaryFingerprint"],
+      redactedDisplay: destination.redactedDisplay,
+      sealedDestinationRef: destination.sealedDestinationRef
+    },
     isDefault: row.isDefault,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
@@ -232,11 +341,19 @@ function toPayoutRequest(row: PayoutRequestRow): PayoutRequestRecord {
     id: row.id,
     astrologerUserId: row.astrologerUserId,
     payoutMethodId: row.payoutMethodId,
+    payoutMethodVersion: row.payoutMethodVersion,
+    destination: {
+      kind: "sealed_payout_destination_snapshot",
+      payoutMethodId: row.payoutMethodId,
+      payoutMethodVersion: row.payoutMethodVersion,
+      destinationKind: row.destinationKind as PayoutRequestRecord["destination"]["destinationKind"],
+      beneficiaryFingerprint: row.beneficiaryFingerprint as PayoutRequestRecord["destination"]["beneficiaryFingerprint"],
+      redactedDisplay: row.redactedDisplay,
+      sealedDestinationRef: row.sealedDestinationRef
+    },
     status: row.status as PayoutRequestRecord["status"],
     amount: money(row.amountMinor, row.currency),
     method: row.method as PayoutRequestRecord["method"],
-    provider: row.provider as FinancePaymentProvider | null,
-    environment: row.environment as PaymentProviderEnvironment | null,
     requestedAt: row.requestedAt.toISOString(),
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -245,7 +362,17 @@ function toPayoutRequest(row: PayoutRequestRow): PayoutRequestRecord {
     failureReason: row.failureReason,
     externalReference: row.externalReference,
     transferredAt: row.transferredAt?.toISOString() ?? null,
-    providerPayoutId: row.providerPayoutId,
+    paidProofArtifact:
+      row.paidProofArtifactId &&
+      row.paidProofArtifactDigest &&
+      row.paidProofArtifactByteLength !== null
+        ? {
+            artifactId: row.paidProofArtifactId,
+            sha256Digest: row.paidProofArtifactDigest,
+            byteLength: row.paidProofArtifactByteLength
+          }
+        : null,
+    version: Number(row.version),
     metadata: row.metadata,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()

@@ -5,6 +5,7 @@ import {
   flowDefinitionStateSchema,
   flowEnrollmentCommandRejectionResponseSchema,
   flowEnrollmentStateSchema,
+  flowStatusSchema,
   pauseFlowEnrollmentResponseSchema,
   pauseFlowEnrollmentRequestSchema,
   type ActivateFlowVersionRequest,
@@ -13,6 +14,7 @@ import {
   type FlowDefinitionState,
   type FlowEnrollmentCommandRejectionResponse,
   type FlowEnrollmentState,
+  type FlowStatus,
   type PauseFlowEnrollmentRequest,
   type PauseFlowEnrollmentResponse
 } from "@elevenhouse/contracts";
@@ -31,13 +33,29 @@ export type FlowEnrollmentCommandRouteTemplate =
 
 export type FlowEnrollmentCommand = {
   readonly apiSurface: "astrologer-api";
+  readonly actorSubjectId: string;
+  readonly ownerSubjectId: string;
+  readonly routeTemplate: FlowEnrollmentCommandRouteTemplate;
+  readonly resourceId: string;
+  readonly scope: FlowEnrollmentCommandScope;
+  readonly idempotencyKey: string;
+  readonly requestHash: `sha256:${string}`;
+};
+
+export type FlowEnrollmentCommandRequest = {
+  readonly apiSurface: "astrologer-api";
   readonly actorUserId: string;
   readonly ownerUserId: string;
   readonly routeTemplate: FlowEnrollmentCommandRouteTemplate;
   readonly resourceId: string;
   readonly scope: FlowEnrollmentCommandScope;
   readonly idempotencyKey: string;
-  readonly requestHash: `sha256:${string}`;
+  readonly request: ActivateFlowVersionRequest | PauseFlowEnrollmentRequest;
+};
+
+export type FlowEnrollmentCommandSubjectAuthority = {
+  readonly actorSubjectId: string;
+  readonly ownerSubjectId: string;
 };
 
 export type FlowEnrollmentCommandOutcome<T> =
@@ -57,16 +75,24 @@ export type FlowEnrollmentCommandResult<T> = {
 
 export type FlowEnrollmentControlStore = {
   readonly executeActivate: (input: {
-    readonly command: FlowEnrollmentCommand;
+    readonly commandRequest: FlowEnrollmentCommandRequest;
     readonly request: ActivateFlowVersionRequest;
+    /** Resolve both erasable subjects and invoke exactly once inside the command transaction. */
+    readonly createCommand: (
+      authority: FlowEnrollmentCommandSubjectAuthority
+    ) => FlowEnrollmentCommand;
     /** Invoke only after locking the owner-scoped authority and evaluating readiness in the same transaction. */
     readonly prepare: (
       context: FlowActivationPreparationContext
     ) => FlowEnrollmentTransitionPreparation<FlowActivationTransitionPlan>;
   }) => Promise<FlowEnrollmentCommandResult<ActivateFlowVersionResponse>>;
   readonly executePause: (input: {
-    readonly command: FlowEnrollmentCommand;
+    readonly commandRequest: FlowEnrollmentCommandRequest;
     readonly request: PauseFlowEnrollmentRequest;
+    /** Resolve both erasable subjects and invoke exactly once inside the command transaction. */
+    readonly createCommand: (
+      authority: FlowEnrollmentCommandSubjectAuthority
+    ) => FlowEnrollmentCommand;
     /** Invoke only after locking the owner-scoped authority in the command transaction. */
     readonly prepare: (
       context: FlowEnrollmentPausePreparationContext
@@ -79,6 +105,7 @@ export type FlowEnrollmentAuthoritySnapshot = {
   readonly ownerUserId: string;
   readonly definitionState: FlowDefinitionState;
   readonly definitionRevision: number;
+  readonly legacyRuntimeStatus: FlowStatus;
   readonly enrollmentState: FlowEnrollmentState;
   readonly enrollmentRevision: number;
   readonly activeVersionId: string | null;
@@ -128,6 +155,7 @@ export type FlowActivationTransactionalReadiness = {
   readonly versionId: string;
   readonly definitionRevision: number;
   readonly enrollmentRevision: number;
+  readonly expectedActiveVersionId: string | null;
   readonly runtimeMode: "definition_only" | "canary" | "enabled";
   readonly rolloutPolicyRevision: number;
   readonly checkedAt: string;
@@ -183,8 +211,17 @@ export class FlowEnrollmentAuthorityIntegrityError extends Error {
   override readonly name = "FlowEnrollmentAuthorityIntegrityError";
   readonly code = "FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR";
 
-  constructor() {
-    super("Persisted flow enrollment authority is inconsistent");
+  constructor(options?: ErrorOptions) {
+    super("Persisted flow enrollment authority is inconsistent", options);
+  }
+}
+
+export class FlowEnrollmentCommandBusyError extends Error {
+  override readonly name = "FlowEnrollmentCommandBusyError";
+  readonly code = "FLOW_ENROLLMENT_COMMAND_BUSY";
+
+  constructor(options?: ErrorOptions) {
+    super("Flow enrollment command could not acquire its database authority in time", options);
   }
 }
 
@@ -197,26 +234,40 @@ export async function activateFlowVersionEnrollment(input: {
   readonly request: ActivateFlowVersionRequest;
 }): Promise<FlowEnrollmentCommandResult<ActivateFlowVersionResponse>> {
   const request = activateFlowVersionRequestSchema.parse(input.request);
-  const command = createEnrollmentCommand({
+  const commandRequest = createEnrollmentCommandRequest({
     actorUserId: input.actorUserId,
     ownerUserId: input.ownerUserId,
     flowId: input.flowId,
     idempotencyKey: input.idempotencyKey,
     routeTemplate: "/flows/:flowId/activate",
     scope: "flows.enrollment.activate.v1",
-    requestSchemaVersion: request.schemaVersion,
     request
   });
+  let command: FlowEnrollmentCommand | undefined;
+  let commandCreationInvoked = false;
   let preparationInvoked = false;
   const rawResult = await input.store.executeActivate({
-    command,
+    commandRequest,
     request,
+    createCommand: (authority) => {
+      if (commandCreationInvoked) throw new FlowEnrollmentAuthorityIntegrityError();
+      commandCreationInvoked = true;
+      command = createFlowEnrollmentCommand({ request: commandRequest, ...authority });
+      return command;
+    },
     prepare: ({ current, target, readiness }) => {
       if (preparationInvoked) throw new FlowEnrollmentAuthorityIntegrityError();
       preparationInvoked = true;
-      return planFlowActivationTransition({ command, current, target, readiness, request });
+      return planFlowActivationTransition({
+        command: commandRequest,
+        current,
+        target,
+        readiness,
+        request
+      });
     }
   });
+  if (!command) throw new FlowEnrollmentAuthorityIntegrityError();
   const result = parseActivationCommandResult(rawResult, command, request);
   assertPreparationUsage(result, preparationInvoked);
   return result;
@@ -231,33 +282,41 @@ export async function pauseFlowEnrollment(input: {
   readonly request: PauseFlowEnrollmentRequest;
 }): Promise<FlowEnrollmentCommandResult<PauseFlowEnrollmentResponse>> {
   const request = pauseFlowEnrollmentRequestSchema.parse(input.request);
-  const command = createEnrollmentCommand({
+  const commandRequest = createEnrollmentCommandRequest({
     actorUserId: input.actorUserId,
     ownerUserId: input.ownerUserId,
     flowId: input.flowId,
     idempotencyKey: input.idempotencyKey,
     routeTemplate: "/flows/:flowId/pause-enrollment",
     scope: "flows.enrollment.pause.v1",
-    requestSchemaVersion: request.schemaVersion,
     request
   });
+  let command: FlowEnrollmentCommand | undefined;
+  let commandCreationInvoked = false;
   let preparationInvoked = false;
   const rawResult = await input.store.executePause({
-    command,
+    commandRequest,
     request,
+    createCommand: (authority) => {
+      if (commandCreationInvoked) throw new FlowEnrollmentAuthorityIntegrityError();
+      commandCreationInvoked = true;
+      command = createFlowEnrollmentCommand({ request: commandRequest, ...authority });
+      return command;
+    },
     prepare: ({ current }) => {
       if (preparationInvoked) throw new FlowEnrollmentAuthorityIntegrityError();
       preparationInvoked = true;
-      return planFlowEnrollmentPauseTransition({ command, current, request });
+      return planFlowEnrollmentPauseTransition({ command: commandRequest, current, request });
     }
   });
+  if (!command) throw new FlowEnrollmentAuthorityIntegrityError();
   const result = parsePauseCommandResult(rawResult, command, request);
   assertPreparationUsage(result, preparationInvoked);
   return result;
 }
 
 function planFlowActivationTransition(input: {
-  readonly command: Pick<FlowEnrollmentCommand, "ownerUserId" | "resourceId">;
+  readonly command: Pick<FlowEnrollmentCommandRequest, "ownerUserId" | "resourceId">;
   readonly current: FlowEnrollmentAuthoritySnapshot;
   readonly target: FlowActivationTargetVersion;
   readonly readiness: FlowActivationTransactionalReadiness;
@@ -288,6 +347,9 @@ function planFlowActivationTransition(input: {
   }
   if (input.current.definitionState === "archived") {
     return conflict("FLOW_DEFINITION_ARCHIVED");
+  }
+  if (input.current.legacyRuntimeStatus === "active") {
+    return conflict("FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE");
   }
   if (request.versionId !== input.target.id) {
     throw new FlowEnrollmentAuthorityIntegrityError();
@@ -322,7 +384,7 @@ function planFlowActivationTransition(input: {
 }
 
 function planFlowEnrollmentPauseTransition(input: {
-  readonly command: Pick<FlowEnrollmentCommand, "ownerUserId" | "resourceId">;
+  readonly command: Pick<FlowEnrollmentCommandRequest, "ownerUserId" | "resourceId">;
   readonly current: FlowEnrollmentAuthoritySnapshot;
   readonly request: PauseFlowEnrollmentRequest;
 }): FlowEnrollmentTransitionPreparation<FlowEnrollmentPauseTransitionPlan> {
@@ -360,48 +422,107 @@ function planFlowEnrollmentPauseTransition(input: {
   };
 }
 
-function createEnrollmentCommand(input: {
+function createEnrollmentCommandRequest(input: {
   readonly actorUserId: string;
   readonly ownerUserId: string;
   readonly flowId: string;
   readonly idempotencyKey: string;
   readonly routeTemplate: FlowEnrollmentCommandRouteTemplate;
   readonly scope: FlowEnrollmentCommandScope;
-  readonly requestSchemaVersion: string;
   readonly request: ActivateFlowVersionRequest | PauseFlowEnrollmentRequest;
-}): FlowEnrollmentCommand {
+}): FlowEnrollmentCommandRequest {
   const actorUserId = normalizeRequiredIdentifier(input.actorUserId);
   const ownerUserId = normalizeRequiredIdentifier(input.ownerUserId);
   const resourceId = normalizeRequiredIdentifier(input.flowId);
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
-  const identity = {
-    schemaVersion: "flow-enrollment-command.v1",
+  return normalizeEnrollmentCommandRequest({
     apiSurface: "astrologer-api" as const,
     actorUserId,
     ownerUserId,
     routeTemplate: input.routeTemplate,
     resourceId,
     scope: input.scope,
-    request: {
-      schemaVersion: input.requestSchemaVersion,
-      body: input.request
-    }
-  };
-  return {
-    apiSurface: identity.apiSurface,
-    actorUserId,
-    ownerUserId,
-    routeTemplate: input.routeTemplate,
-    resourceId,
-    scope: input.scope,
     idempotencyKey,
-    requestHash: sha256CanonicalJson(identity)
+    request: input.request
+  });
+}
+
+export function createFlowEnrollmentCommand(input: {
+  readonly request: FlowEnrollmentCommandRequest;
+  readonly actorSubjectId: string;
+  readonly ownerSubjectId: string;
+}): FlowEnrollmentCommand {
+  const request = normalizeEnrollmentCommandRequest(input.request);
+  const actorSubjectId = normalizeRequiredIdentifier(input.actorSubjectId);
+  const ownerSubjectId = normalizeRequiredIdentifier(input.ownerSubjectId);
+  return {
+    apiSurface: request.apiSurface,
+    actorSubjectId,
+    ownerSubjectId,
+    routeTemplate: request.routeTemplate,
+    resourceId: request.resourceId,
+    scope: request.scope,
+    idempotencyKey: request.idempotencyKey,
+    requestHash: sha256CanonicalJson({
+      schemaVersion: "flow-enrollment-command.v1",
+      apiSurface: request.apiSurface,
+      actorSubjectId,
+      ownerSubjectId,
+      routeTemplate: request.routeTemplate,
+      resourceId: request.resourceId,
+      scope: request.scope,
+      request: {
+        schemaVersion: request.request.schemaVersion,
+        body: request.request
+      }
+    })
   };
+}
+
+function normalizeEnrollmentCommandRequest(
+  input: FlowEnrollmentCommandRequest
+): FlowEnrollmentCommandRequest {
+  try {
+    const actorUserId = normalizeRequiredIdentifier(input.actorUserId);
+    const ownerUserId = normalizeRequiredIdentifier(input.ownerUserId);
+    const resourceId = normalizeRequiredIdentifier(input.resourceId);
+    const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
+    if (input.apiSurface !== "astrologer-api") {
+      throw new FlowEnrollmentAuthorityIntegrityError();
+    }
+    const request =
+      input.scope === "flows.enrollment.activate.v1" &&
+      input.routeTemplate === "/flows/:flowId/activate"
+        ? activateFlowVersionRequestSchema.parse(input.request)
+        : input.scope === "flows.enrollment.pause.v1" &&
+            input.routeTemplate === "/flows/:flowId/pause-enrollment"
+          ? pauseFlowEnrollmentRequestSchema.parse(input.request)
+          : null;
+    if (!request) throw new FlowEnrollmentAuthorityIntegrityError();
+    return {
+      apiSurface: "astrologer-api",
+      actorUserId,
+      ownerUserId,
+      routeTemplate: input.routeTemplate,
+      resourceId,
+      scope: input.scope,
+      idempotencyKey,
+      request
+    };
+  } catch (error) {
+    if (
+      error instanceof FlowEnrollmentAuthorityIntegrityError ||
+      error instanceof FlowRuntimeIdempotencyKeyInvalidError
+    ) {
+      throw error;
+    }
+    throw new FlowEnrollmentAuthorityIntegrityError();
+  }
 }
 
 function assertEnrollmentAuthority(
   current: FlowEnrollmentAuthoritySnapshot,
-  command: Pick<FlowEnrollmentCommand, "ownerUserId" | "resourceId">
+  command: Pick<FlowEnrollmentCommandRequest, "ownerUserId" | "resourceId">
 ): void {
   const activeFieldsPresent =
     current.activeVersionId !== null && current.activeActivationEpochId !== null;
@@ -413,6 +534,7 @@ function assertEnrollmentAuthority(
     !current.flowId.trim() ||
     !current.ownerUserId.trim() ||
     !flowDefinitionStateSchema.safeParse(current.definitionState).success ||
+    !flowStatusSchema.safeParse(current.legacyRuntimeStatus).success ||
     !flowEnrollmentStateSchema.safeParse(current.enrollmentState).success ||
     !Number.isSafeInteger(current.definitionRevision) ||
     current.definitionRevision < 1 ||
@@ -420,7 +542,8 @@ function assertEnrollmentAuthority(
     current.enrollmentRevision < 0 ||
     (current.enrollmentState === "inactive" && current.enrollmentRevision !== 0) ||
     (current.enrollmentState !== "inactive" && current.enrollmentRevision === 0) ||
-    (current.enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent)
+    (current.enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent) ||
+    (current.legacyRuntimeStatus === "active" && current.enrollmentState === "active")
   ) {
     throw new FlowEnrollmentAuthorityIntegrityError();
   }
@@ -448,7 +571,8 @@ function assertReadinessAuthority(
     readiness.flowId !== current.flowId ||
     readiness.versionId !== target.id ||
     readiness.definitionRevision !== current.definitionRevision ||
-    readiness.enrollmentRevision !== current.enrollmentRevision
+    readiness.enrollmentRevision !== current.enrollmentRevision ||
+    readiness.expectedActiveVersionId !== current.activeVersionId
   ) {
     throw new FlowEnrollmentAuthorityIntegrityError();
   }
@@ -473,6 +597,7 @@ function parseTransactionalReadinessShape(
       versionId: input.versionId,
       definitionRevision: input.definitionRevision,
       enrollmentRevision: input.enrollmentRevision,
+      expectedActiveVersionId: input.expectedActiveVersionId,
       runtimeMode: input.runtimeMode,
       rolloutPolicyRevision: input.rolloutPolicyRevision,
       evaluatedAt: input.checkedAt,
@@ -485,6 +610,7 @@ function parseTransactionalReadinessShape(
       versionId: review.versionId,
       definitionRevision: review.definitionRevision,
       enrollmentRevision: review.enrollmentRevision,
+      expectedActiveVersionId: review.expectedActiveVersionId,
       runtimeMode: review.runtimeMode,
       rolloutPolicyRevision: review.rolloutPolicyRevision,
       checkedAt: review.evaluatedAt,
@@ -513,7 +639,7 @@ function parseActivationCommandResult(
         nextEnrollmentRevision(request.expectedEnrollmentRevision) ||
       body.enrollment.activeVersionId !== request.versionId ||
       body.activationEpoch.flowVersionId !== request.versionId ||
-      body.activationEpoch.activatedByActorUserId !== command.actorUserId
+      body.activationEpoch.activatedByActorSubjectId !== command.actorSubjectId
     ) {
       throw new FlowEnrollmentAuthorityIntegrityError();
     }
@@ -539,7 +665,7 @@ function parsePauseCommandResult(
         nextEnrollmentRevision(request.expectedEnrollmentRevision) ||
       body.closedEpoch.id !== request.expectedActivationEpochId ||
       body.closedEpoch.flowVersionId !== request.expectedActiveVersionId ||
-      body.closedEpoch.closedByActorUserId !== command.actorUserId
+      body.closedEpoch.closedByActorSubjectId !== command.actorSubjectId
     ) {
       throw new FlowEnrollmentAuthorityIntegrityError();
     }

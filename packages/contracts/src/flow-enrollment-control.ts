@@ -10,7 +10,7 @@ const capabilityKeySchema = z
   .string()
   .trim()
   .min(1)
-  .max(180)
+  .max(240)
   .regex(/^[a-z0-9][a-z0-9._:-]*$/);
 
 export const flowEnrollmentStateValues = ["inactive", "active", "paused"] as const;
@@ -133,15 +133,15 @@ export const flowActivationEpochSchema = z
     effectiveTo: instantSchema.nullable(),
     manifestDigest: sha256DigestSchema,
     rolloutPolicyRevision: positiveRevisionSchema,
-    activatedByActorUserId: uuidSchema,
+    activatedByActorSubjectId: uuidSchema,
     activateCommandId: uuidSchema,
     closeReason: flowActivationEpochCloseReasonSchema.nullable(),
-    closedByActorUserId: uuidSchema.nullable(),
+    closedByActorSubjectId: uuidSchema.nullable(),
     closeCommandId: uuidSchema.nullable()
   })
   .strict()
   .superRefine((epoch, context) => {
-    const closeFields = [epoch.closeReason, epoch.closedByActorUserId, epoch.closeCommandId];
+    const closeFields = [epoch.closeReason, epoch.closedByActorSubjectId, epoch.closeCommandId];
     const allCloseFieldsAbsent = closeFields.every((value) => value === null);
     const allCloseFieldsPresent = closeFields.every((value) => value !== null);
 
@@ -179,18 +179,61 @@ export const flowActivationEpochSchema = z
   });
 export type FlowActivationEpoch = z.infer<typeof flowActivationEpochSchema>;
 
+export const flowEnrollmentDetailResponseSchema = z
+  .object({
+    schemaVersion: z.literal("flow-enrollment-detail.v1"),
+    enrollment: flowEnrollmentControlSchema,
+    activeActivationEpoch: flowActivationEpochSchema.nullable()
+  })
+  .strict()
+  .superRefine((response, context) => {
+    const enrollment = response.enrollment;
+    const epoch = response.activeActivationEpoch;
+    if (enrollment.state !== "active") {
+      if (epoch !== null) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["activeActivationEpoch"],
+          message: "Inactive or paused enrollment cannot expose an open activation epoch"
+        });
+      }
+      return;
+    }
+    if (
+      epoch === null ||
+      epoch.effectiveTo !== null ||
+      epoch.flowId !== enrollment.flowId ||
+      epoch.id !== enrollment.activeActivationEpochId ||
+      epoch.flowVersionId !== enrollment.activeVersionId ||
+      epoch.effectiveFrom !== enrollment.activeSince
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["activeActivationEpoch"],
+        message: "Active enrollment must expose its exact authoritative open epoch"
+      });
+    }
+  });
+export type FlowEnrollmentDetailResponse = z.infer<typeof flowEnrollmentDetailResponseSchema>;
+
 export const flowEnrollmentActivationBlockerCodeValues = [
+  "FLOW_DEFINITION_ARCHIVED",
+  "FLOW_ACTIVATION_ALREADY_ACTIVE",
+  "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE",
   "FLOW_RUNTIME_ROLLOUT_DISABLED",
   "FLOW_RUNTIME_OWNER_NOT_IN_CANARY",
+  "FLOW_RUNTIME_KILL_SWITCH_ENGAGED",
   "FLOW_ACTIVATION_REVIEW_STALE",
   "FLOW_GRAPH_MANIFEST_INVALID",
   "FLOW_VERSION_SCHEMA_UNSUPPORTED",
   "FLOW_TRIGGER_MATCHER_NOT_READY",
   "FLOW_EXECUTION_WORKER_NOT_READY",
   "FLOW_NODE_EXECUTOR_NOT_READY",
+  "FLOW_REQUIRED_CAPABILITY_NOT_READY",
   "FLOW_PRODUCT_UNAVAILABLE",
   "FLOW_ENTITLEMENT_UNAVAILABLE",
   "FLOW_AUTOMATION_QUOTA_EXCEEDED",
+  "FLOW_AUTOMATION_QUOTA_NOT_READY",
   "FLOW_LOCALE_CONTENT_MISSING"
 ] as const;
 export const flowEnrollmentActivationBlockerCodeSchema = z.enum(
@@ -209,6 +252,14 @@ export const flowActivationBlockerSchema = z
   .strict();
 export type FlowActivationBlocker = z.infer<typeof flowActivationBlockerSchema>;
 
+export const flowActivationReviewQuerySchema = z
+  .object({
+    versionId: uuidSchema
+  })
+  .strict();
+export type FlowActivationReviewQuery = z.infer<typeof flowActivationReviewQuerySchema>;
+export type FlowActivationReviewQueryInput = z.input<typeof flowActivationReviewQuerySchema>;
+
 export const flowActivationReviewResponseSchema = z
   .object({
     schemaVersion: z.literal("flow-activation-review.v1"),
@@ -216,6 +267,7 @@ export const flowActivationReviewResponseSchema = z
     versionId: uuidSchema,
     definitionRevision: positiveRevisionSchema,
     enrollmentRevision: nonNegativeRevisionSchema,
+    expectedActiveVersionId: uuidSchema.nullable(),
     runtimeMode: z.enum(["definition_only", "canary", "enabled"]),
     rolloutPolicyRevision: positiveRevisionSchema,
     evaluatedAt: instantSchema,
@@ -332,6 +384,7 @@ export const flowEnrollmentCommandRejectionSchema = z.discriminatedUnion("code",
     })
     .strict(),
   z.object({ code: z.literal("FLOW_DEFINITION_ARCHIVED") }).strict(),
+  z.object({ code: z.literal("FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE") }).strict(),
   z.object({ code: z.literal("FLOW_ACTIVATION_VERSION_UNSUPPORTED") }).strict(),
   z.object({ code: z.literal("FLOW_ACTIVATION_ALREADY_ACTIVE") }).strict(),
   z.object({ code: z.literal("FLOW_ENROLLMENT_NOT_ACTIVE") }).strict(),

@@ -11,6 +11,7 @@ import { AUTH_SESSION_AUTHENTICATION_STORE } from "../auth/identity-auth.tokens"
 
 export type AdminAuthenticatedAccount = {
   readonly id: string;
+  readonly sessionId: string;
   readonly status: UserAccountStatus;
   readonly roles: readonly string[];
 };
@@ -51,6 +52,7 @@ export class IdentityCurrentSessionService {
 
     return {
       id: context.user.id,
+      sessionId: context.session.id,
       status: context.user.status,
       roles: context.roleAssignments.map((assignment) => assignment.role)
     };

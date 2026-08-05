@@ -13,7 +13,6 @@ const defaultPolicy = {
   holdDurationHours: 48,
   reserveBps: 0,
   reserveReleaseDelayDays: 0,
-  platformFeeBps: 1_000,
   providerSettlementRequired: true
 };
 
@@ -22,7 +21,6 @@ export type UpdateFinancePolicyCommand = {
   readonly holdDurationHours: number;
   readonly reserveBps: number;
   readonly reserveReleaseDelayDays: number;
-  readonly platformFeeBps: number;
   readonly providerSettlementRequired: boolean;
 };
 
@@ -33,7 +31,6 @@ export type AssignAstrologerRiskProfileCommand = {
   readonly holdDurationHoursOverride: number | null;
   readonly reserveBpsOverride: number | null;
   readonly reserveReleaseDelayDaysOverride: number | null;
-  readonly platformFeeBpsOverride: number | null;
   readonly providerSettlementRequiredOverride: boolean | null;
 };
 
@@ -128,7 +125,6 @@ export async function assignAstrologerRiskProfile(input: {
     holdDurationHoursOverride: input.request.holdDurationHoursOverride,
     reserveBpsOverride: input.request.reserveBpsOverride,
     reserveReleaseDelayDaysOverride: input.request.reserveReleaseDelayDaysOverride,
-    platformFeeBpsOverride: input.request.platformFeeBpsOverride,
     providerSettlementRequiredOverride: input.request.providerSettlementRequiredOverride,
     reviewedByUserId: input.request.manualRiskTier ? input.adminUserId : null,
     reviewedAt: input.request.manualRiskTier ? nowIso : null,
@@ -184,7 +180,6 @@ async function createPolicySnapshot(
     holdDurationHours: input.request.holdDurationHours,
     reserveBps: input.request.reserveBps,
     reserveReleaseDelayDays: input.request.reserveReleaseDelayDays,
-    platformFeeBps: input.request.platformFeeBps,
     providerSettlementRequired: input.request.providerSettlementRequired,
     createdByUserId: input.adminUserId,
     now: input.now.toISOString()
@@ -198,7 +193,6 @@ function toOrderPolicyInput(policy: EffectiveFinancePolicy) {
     financePolicyHoldDurationHours: policy.holdDurationHours,
     financePolicyReserveBps: policy.reserveBps,
     financePolicyReserveReleaseDelayDays: policy.reserveReleaseDelayDays,
-    financePolicyPlatformFeeBps: policy.platformFeeBps,
     financePolicyProviderSettlementRequired: policy.providerSettlementRequired
   };
 }
@@ -211,7 +205,6 @@ function validatePolicyCommand(command: UpdateFinancePolicyCommand): void {
   assertIntegerRange(command.holdDurationHours, 0, 24 * 180, "holdDurationHours");
   assertIntegerRange(command.reserveBps, 0, 10_000, "reserveBps");
   assertIntegerRange(command.reserveReleaseDelayDays, 0, 540, "reserveReleaseDelayDays");
-  assertIntegerRange(command.platformFeeBps, 0, 10_000, "platformFeeBps");
 }
 
 function validateRiskProfileCommand(command: AssignAstrologerRiskProfileCommand): void {
@@ -229,7 +222,6 @@ function validateRiskProfileCommand(command: AssignAstrologerRiskProfileCommand)
     540,
     "reserveReleaseDelayDaysOverride"
   );
-  assertNullableIntegerRange(command.platformFeeBpsOverride, 0, 10_000, "platformFeeBpsOverride");
 }
 
 function assertNullableIntegerRange(

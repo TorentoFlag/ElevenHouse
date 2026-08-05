@@ -1,16 +1,25 @@
 import { HttpException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import {
   AvailabilityScheduleNotFoundError,
+  BookingCancellationNotAllowedError,
+  BookingCancellationRequiresRefundAuthorityError,
+  BookingCompletionNotAllowedError,
+  BookingCompletionTooEarlyError,
   BookingDailyLimitReachedError,
   BookingHorizonViolationError,
+  BookingLifecycleRevisionConflictError,
   BookingNotFoundError,
   BookingNoticeViolationError,
+  BookingRescheduleNotAllowedError,
   BookingValidationError,
   ClientRelationshipNotActiveError,
   IdempotencyKeyReuseError,
   ProductNotBookableError,
   SlotNoLongerAvailableError,
   SlotOutsideAvailabilityError,
+  cancelBooking as cancelBookingUseCase,
+  completeBooking as completeBookingUseCase,
+  rescheduleBooking as rescheduleBookingUseCase,
   createManualBooking,
   getAvailableBookingSlots,
   getBooking,
@@ -25,10 +34,19 @@ import {
   availableBookingSlotsResponseSchema,
   bookingParamsSchema,
   bookingResponseSchema,
+  cancelBookingRequestSchema,
+  cancelBookingResponseSchema,
+  completeBookingRequestSchema,
+  completeBookingResponseSchema,
+  rescheduleBookingRequestSchema,
+  rescheduleBookingResponseSchema,
   createManualBookingRequestSchema,
   manualBookingResponseSchema,
   type AvailableBookingSlotsResponse,
   type BookingResponse,
+  type CancelBookingResponse,
+  type CompleteBookingResponse,
+  type RescheduleBookingResponse,
   type ManualBookingResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
@@ -117,6 +135,123 @@ export class BookingsService {
       return bookingResponseSchema.parse({ booking: toResponse(booking) });
     });
   }
+
+  cancelBooking(
+    bookingId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<CancelBookingResponse> {
+    return mapBookingErrors(async () => {
+      const params = parseContract(
+        bookingParamsSchema,
+        { bookingId },
+        "Invalid booking identifier"
+      );
+      const parsedBody = parseContract(
+        cancelBookingRequestSchema,
+        body,
+        "Invalid booking cancellation request"
+      );
+      const result = await cancelBookingUseCase({
+        commandStore: this.store,
+        ownerUserId: requireOwnerUserId(request),
+        bookingId: params.bookingId,
+        idempotencyKey: idempotencyKey ?? "",
+        input: parsedBody,
+        now: this.clock.now()
+      });
+      return cancelBookingResponseSchema.parse({
+        booking: toResponse(result.booking),
+        lifecycleEvent: {
+          id: result.lifecycleEvent.id,
+          revision: result.lifecycleEvent.revision,
+          kind: result.lifecycleEvent.kind,
+          reasonCode: result.lifecycleEvent.reasonCode,
+          occurredAt: result.lifecycleEvent.occurredAt
+        },
+        replayed: result.replayed
+      });
+    });
+  }
+
+  completeBooking(
+    bookingId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<CompleteBookingResponse> {
+    return mapBookingErrors(async () => {
+      const params = parseContract(
+        bookingParamsSchema,
+        { bookingId },
+        "Invalid booking identifier"
+      );
+      const parsedBody = parseContract(
+        completeBookingRequestSchema,
+        body,
+        "Invalid booking completion request"
+      );
+      const result = await completeBookingUseCase({
+        commandStore: this.store,
+        ownerUserId: requireOwnerUserId(request),
+        bookingId: params.bookingId,
+        idempotencyKey: idempotencyKey ?? "",
+        input: parsedBody,
+        now: this.clock.now()
+      });
+      return completeBookingResponseSchema.parse({
+        booking: toResponse(result.booking),
+        lifecycleEvent: {
+          id: result.lifecycleEvent.id,
+          revision: result.lifecycleEvent.revision,
+          kind: result.lifecycleEvent.kind,
+          reasonCode: result.lifecycleEvent.reasonCode,
+          occurredAt: result.lifecycleEvent.occurredAt
+        },
+        replayed: result.replayed
+      });
+    });
+  }
+
+  rescheduleBooking(
+    bookingId: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+    request: AstrologerSessionRequest
+  ): Promise<RescheduleBookingResponse> {
+    return mapBookingErrors(async () => {
+      const params = parseContract(
+        bookingParamsSchema,
+        { bookingId },
+        "Invalid booking identifier"
+      );
+      const parsedBody = parseContract(
+        rescheduleBookingRequestSchema,
+        body,
+        "Invalid booking reschedule request"
+      );
+      const result = await rescheduleBookingUseCase({
+        commandStore: this.store,
+        ownerUserId: requireOwnerUserId(request),
+        bookingId: params.bookingId,
+        idempotencyKey: idempotencyKey ?? "",
+        input: parsedBody,
+        now: this.clock.now()
+      });
+      return rescheduleBookingResponseSchema.parse({
+        booking: toResponse(result.booking),
+        lifecycleEvent: {
+          id: result.lifecycleEvent.id,
+          revision: result.lifecycleEvent.revision,
+          kind: result.lifecycleEvent.kind,
+          reasonCode: result.lifecycleEvent.reasonCode,
+          occurredAt: result.lifecycleEvent.occurredAt
+        },
+        replayed: result.replayed
+      });
+    });
+  }
 }
 
 function toResponse(booking: Booking) {
@@ -127,6 +262,7 @@ function toResponse(booking: Booking) {
     productId: booking.productId,
     source: booking.source,
     state: booking.state,
+    lifecycleRevision: booking.lifecycleRevision,
     holdExpiresAt: booking.holdExpiresAt,
     startAt: booking.startAt,
     endAt: booking.endAt,
@@ -159,13 +295,13 @@ async function mapBookingErrors<T>(operation: () => Promise<T>): Promise<T> {
     return await operation();
   } catch (error) {
     if (error instanceof HttpException) throw error;
-    if (
-      error instanceof BookingValidationError ||
-      error instanceof SlotOutsideAvailabilityError
-    ) {
+    if (error instanceof BookingValidationError || error instanceof SlotOutsideAvailabilityError) {
       throw bookingHttpError(400, error.code, error.message);
     }
-    if (error instanceof BookingNotFoundError || error instanceof AvailabilityScheduleNotFoundError) {
+    if (
+      error instanceof BookingNotFoundError ||
+      error instanceof AvailabilityScheduleNotFoundError
+    ) {
       throw bookingHttpError(404, error.code, error.message);
     }
     if (
@@ -180,10 +316,40 @@ async function mapBookingErrors<T>(operation: () => Promise<T>): Promise<T> {
     if (error instanceof SlotNoLongerAvailableError || error instanceof IdempotencyKeyReuseError) {
       throw bookingHttpError(409, error.code, error.message);
     }
+    if (error instanceof BookingLifecycleRevisionConflictError) {
+      throw bookingHttpError(409, error.code, error.message, {
+        expectedLifecycleRevision: error.expectedRevision,
+        currentLifecycleRevision: error.currentRevision
+      });
+    }
+    if (error instanceof BookingCancellationNotAllowedError) {
+      throw bookingHttpError(409, error.code, error.message, {
+        currentState: error.state
+      });
+    }
+    if (error instanceof BookingCancellationRequiresRefundAuthorityError) {
+      throw bookingHttpError(409, error.code, error.message);
+    }
+    if (error instanceof BookingCompletionNotAllowedError) {
+      throw bookingHttpError(409, error.code, error.message, { currentState: error.state });
+    }
+    if (error instanceof BookingCompletionTooEarlyError) {
+      throw bookingHttpError(409, error.code, error.message);
+    }
+    if (error instanceof BookingRescheduleNotAllowedError) {
+      throw bookingHttpError(409, error.code, error.message, {
+        currentState: error.state
+      });
+    }
     throw error;
   }
 }
 
-function bookingHttpError(status: number, code: string, message: string): HttpException {
-  return new HttpException({ statusCode: status, error: code, code, message }, status);
+function bookingHttpError(
+  status: number,
+  code: string,
+  message: string,
+  details: Readonly<Record<string, unknown>> = {}
+): HttpException {
+  return new HttpException({ statusCode: status, error: code, code, message, ...details }, status);
 }

@@ -136,6 +136,7 @@ export function ChartBirthDataEditor({
       onSubmit={(event) => {
         event.preventDefault();
         void onSave({
+          expectedRevision: birthData?.revision ?? null,
           label: birthData?.label ?? copy.birthData.defaultLabel,
           birthDate: normalizeTextField(birthDate),
           birthTime: birthTimePrecision === "unknown" ? null : normalizeTextField(birthTime),
@@ -147,8 +148,7 @@ export function ChartBirthDataEditor({
           birthTimezone: normalizeTextField(birthTimezone),
           birthTimeDstOccurrence: birthTimePrecision === "unknown" ? null : birthTimeDstOccurrence,
           birthLatitude: normalizeNumberField(birthLatitude),
-          birthLongitude: normalizeNumberField(birthLongitude),
-          isPrimary: birthData?.isPrimary ?? true
+          birthLongitude: normalizeNumberField(birthLongitude)
         });
       }}
     >

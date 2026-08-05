@@ -10,11 +10,13 @@ import {
 } from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
+import { RequirePlatformTariffCapabilities } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
 import { NumerologyService } from "./numerology.service";
 
 @Controller("numerology")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class NumerologyController {
   constructor(private readonly numerologyService: NumerologyService) {}
 
@@ -41,6 +43,11 @@ export class NumerologyController {
   }
 
   @Post("calculations/:calculationId/ai-draft")
+  @RequirePlatformTariffCapabilities({
+    surfaceId: "ai.numerology.draft",
+    capabilities: ["ai", "numerology"],
+    operation: "generation"
+  })
   @RequireCsrf()
   createAiDraft(
     @Param("calculationId") calculationId: string,

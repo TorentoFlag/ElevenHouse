@@ -12,6 +12,8 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiGenerationService } from "../ai/ai-generation.service";
+import { createAiUsageRecorderStub } from "../ai/testing/ai-usage-recorder.stub";
+import { AI_USAGE_RECORDER } from "../ai/ai.tokens";
 import { SystemClock } from "../clock/system-clock.service";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { DICTIONARY_STORE } from "../dictionary/dictionary.tokens";
@@ -28,6 +30,8 @@ import {
 import { ASTROLOGER_REGISTRATION_SESSION_UNIT_OF_WORK } from "../identity/registration/identity-registration.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { TestPasswordlessRateLimiter } from "../identity/testing/test-passwordless-rate-limiter";
+import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
+import { createActivePlatformTariffEntitlementStore } from "../platform-entitlements/testing/active-platform-tariff-entitlement-store";
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { DictionaryAiModule } from "./dictionary-ai.module";
@@ -55,11 +59,16 @@ describe("dictionary AI HTTP routes", () => {
   let baseUrl: string;
   let dictionaryStore: DictionaryStore;
   let aiGeneration: AiGenerationService;
+  let entitlementStore: ReturnType<typeof createActivePlatformTariffEntitlementStore>;
 
   beforeEach(async () => {
     currentAuthRoles = ["astrologer"];
     dictionaryStore = createDictionaryStore();
     aiGeneration = createAiGeneration();
+    entitlementStore = createActivePlatformTariffEntitlementStore({
+      ownerUserId,
+      features: ["ai", "refs"]
+    });
     const authStore = createAuthStore();
     const passwordlessAuth: PasswordlessAuthUnitOfWork = {
       transact: async () => raise("Unexpected passwordless auth unit of work call")
@@ -105,6 +114,10 @@ describe("dictionary AI HTTP routes", () => {
       .useValue(dictionaryStore)
       .overrideProvider(AiGenerationService)
       .useValue(aiGeneration)
+      .overrideProvider(AI_USAGE_RECORDER)
+      .useValue(createAiUsageRecorderStub())
+      .overrideProvider(PLATFORM_TARIFF_ENTITLEMENT_STORE)
+      .useValue(entitlementStore)
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -174,6 +187,30 @@ describe("dictionary AI HTTP routes", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
+
+  it("blocks provider-backed AI generation before validation or provider work without both tariff capabilities", async () => {
+    entitlementStore.findCurrentSubscription.mockResolvedValue(null);
+
+    const response = await postJson(
+      "/dictionary/ai-draft",
+      {
+        categoryId,
+        locale: "ru",
+        title: "Солнце в Овне"
+      },
+      csrfHeaders()
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({
+      code: "entitlement_required",
+      capability: "ai",
+      operation: "generation",
+      access: "deny"
+    });
+    expect(dictionaryStore.listCategories).not.toHaveBeenCalled();
     expect(aiGeneration.generate).not.toHaveBeenCalled();
   });
 

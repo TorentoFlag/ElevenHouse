@@ -1,5 +1,6 @@
 import { Children, isValidElement, type ReactElement } from "react";
 import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/contracts";
+import { Button } from "@elevenhouse/design-system/components/Button";
 import { describe, expect, it, vi } from "vitest";
 import { ProductsResults } from "./components/ProductsResults";
 import { ProductsSummaryStrip } from "./components/ProductsSummaryStrip";
@@ -178,6 +179,23 @@ describe("ProductsPageView", () => {
     expect(results.props.errorLabel).toBe("Не удалось загрузить продукты");
     expect(results.props.emptyLabel).toBe("Нет продуктов в этом статусе");
   });
+
+  it("replaces product actions with a tariff lock when the server denies the capability", () => {
+    const onManageTariff = vi.fn();
+    const view = ProductsPageView({
+      ...createBaseProps(),
+      isTariffLocked: true,
+      onManageTariff
+    });
+
+    expect(findElementsByType(view, ProductsToolbar)).toEqual([]);
+    expect(findElementsByType(view, ProductsResults)).toEqual([]);
+    const action = findRequiredElementByType(view, Button);
+    expect(action.props.title).toBe("Выбрать тариф");
+    expect(action.props.onClick).toBeTypeOf("function");
+    action.props.onClick?.();
+    expect(onManageTariff).toHaveBeenCalledOnce();
+  });
 });
 
 function createBaseProps(): ProductsPageViewProps {
@@ -195,9 +213,12 @@ function createBaseProps(): ProductsPageViewProps {
     selectedStatus: "all",
     isLoading: false,
     isError: false,
+    isTariffLocked: false,
+    canManageProducts: true,
     isProductActionPending: false,
     onStatusChange: vi.fn(),
     onCreate: vi.fn(),
+    onManageTariff: vi.fn(),
     onEditProduct: vi.fn(),
     onDuplicateProduct: vi.fn(),
     onProductStatusChange: vi.fn()
@@ -218,6 +239,7 @@ type TestElementProps = {
   loadingLabel?: string;
   locale?: string;
   onCreate: () => void;
+  onClick?: () => void;
   onStatusChange: (status: string) => void;
   products?: unknown[];
   selectedStatus?: string;

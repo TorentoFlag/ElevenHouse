@@ -39,7 +39,8 @@ const issueMessagesRu = {
   cycle_detected: "Воронка не может содержать циклический маршрут.",
   unreachable_node: "Этот узел недостижим из стартового узла.",
   unterminated_path: "Каждая ветка должна завершаться итоговым узлом.",
-  migration_required: "Перед публикацией перенесите legacy-схему в V2."
+  work_item_due_policy_requires_booking_trigger:
+    "Срок относительно записи доступен только в воронке, которая начинается с подтверждения записи."
 } satisfies Record<FlowDefinitionValidationIssueCode, string>;
 
 function nodeIdFromPath(path: string): string | null {

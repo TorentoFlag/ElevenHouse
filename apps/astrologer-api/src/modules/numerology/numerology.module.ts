@@ -6,6 +6,7 @@ import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profil
 import { CalculationsModule } from "../calculations/calculations.module";
 import { ClientsModule } from "../clients/clients.module";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { NumerologyController } from "./numerology.controller";
 import { NumerologyPdfController } from "./numerology-pdf.controller";
@@ -21,6 +22,7 @@ import { NumerologyService } from "./numerology.service";
     ConfigModule,
     ClockModule,
     IdentityModule,
+    PlatformEntitlementsModule,
     SecurityModule
   ],
   controllers: [NumerologyController, NumerologyPdfController],

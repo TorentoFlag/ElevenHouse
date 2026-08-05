@@ -35,6 +35,7 @@ describe("payment contracts", () => {
     expect(
       createCheckoutRequestSchema.safeParse({
         orderId: "11111111-1111-4111-8111-111111111111",
+        buyerContact: { kind: "email", value: "client@example.test" },
         successUrl: "https://client.elevenhouse.test/payments/success",
         failureUrl: "https://client.elevenhouse.test/payments/failure",
         cancelUrl: "https://client.elevenhouse.test/payments/cancel"
@@ -44,6 +45,7 @@ describe("payment contracts", () => {
     expect(
       createCheckoutRequestSchema.safeParse({
         orderId: "11111111-1111-4111-8111-111111111111",
+        buyerContact: { kind: "phone", value: "79991234567" },
         successUrl: "http://client.elevenhouse.test/payments/success",
         failureUrl: "https://client.elevenhouse.test/payments/failure",
         cancelUrl: "https://client.elevenhouse.test/payments/cancel"

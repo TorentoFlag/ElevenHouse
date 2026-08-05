@@ -4,10 +4,9 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientCopy } from "../../common/i18n/clientCopy";
 import {
-  createClientBirthProfile,
   getClientCabinetOverview,
   searchClientBirthPlaces,
-  updateClientBirthProfile
+  upsertClientBirthData
 } from "../../features/client-profile/api/clientProfileApi";
 import {
   buildBirthProfileRequest,
@@ -19,7 +18,7 @@ import { MePageView, type ClientCabinetSection, type ClientCabinetStatus } from 
 const emptyForm = createBirthProfileForm(null);
 
 export function MePage() {
-  const { dictionary } = useI18n<ClientCopy>();
+  const { dictionary, locale } = useI18n<ClientCopy>();
   const [activeSection, setActiveSection] = useState<ClientCabinetSection>("home");
   const [form, setForm] = useState<BirthProfileFormState>(emptyForm);
   const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
@@ -36,8 +35,7 @@ export function MePage() {
       .then((nextOverview) => {
         if (isCancelled) return;
         setOverview(nextOverview);
-        const primaryProfile = nextOverview.birthProfiles.find((profile) => profile.isPrimary);
-        setForm(createBirthProfileForm(primaryProfile ?? null));
+        setForm(createBirthProfileForm(nextOverview.birthData));
         setStatus("ready");
       })
       .catch(() => {
@@ -60,7 +58,7 @@ export function MePage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const requestResult = buildBirthProfileRequest(form);
+    const requestResult = buildBirthProfileRequest(form, overview?.birthData?.revision ?? null);
     if (!requestResult.ok) {
       setStatus("validation-error");
       return;
@@ -69,10 +67,7 @@ export function MePage() {
     setStatus("saving");
 
     try {
-      const primaryProfile = overview?.birthProfiles.find((profile) => profile.isPrimary) ?? null;
-      const savedProfile = primaryProfile
-        ? await updateClientBirthProfile(primaryProfile.id, requestResult.request)
-        : await createClientBirthProfile(requestResult.request);
+      const savedProfile = await upsertClientBirthData(requestResult.request);
       const nextOverview = mergeBirthProfile(overview, savedProfile);
       setOverview(nextOverview);
       setForm(createBirthProfileForm(savedProfile));
@@ -90,6 +85,7 @@ export function MePage() {
         onSearch: searchBirthPlaces
       }}
       birthTimeOccurrenceCopy={dictionary.birthTimeOccurrence}
+      clientLocale={locale}
       form={form}
       overview={overview}
       status={status}
@@ -104,17 +100,18 @@ export function MePage() {
       }}
       onSectionChange={setActiveSection}
       onSubmit={handleSubmit}
+      purchaseFlowCopy={dictionary.purchaseFlow}
     />
   );
 }
 
 function mergeBirthProfile(
   overview: ClientCabinetOverviewResponse | null,
-  savedProfile: ClientCabinetOverviewResponse["birthProfiles"][number]
+  savedProfile: NonNullable<ClientCabinetOverviewResponse["birthData"]>
 ): ClientCabinetOverviewResponse {
   const currentOverview = overview ?? {
     astrologers: [],
-    birthProfiles: [],
+    birthData: null,
     summary: {
       activeSubscriptionCount: 0,
       availableMaterialCount: 0,
@@ -123,12 +120,8 @@ function mergeBirthProfile(
       upcomingBookingCount: 0
     }
   };
-  const birthProfiles = currentOverview.birthProfiles
-    .filter((profile) => profile.id !== savedProfile.id)
-    .map((profile) => (savedProfile.isPrimary ? { ...profile, isPrimary: false } : profile));
-
   return {
     ...currentOverview,
-    birthProfiles: [savedProfile, ...birthProfiles]
+    birthData: savedProfile
   };
 }

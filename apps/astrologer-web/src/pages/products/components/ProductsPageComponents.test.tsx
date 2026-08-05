@@ -355,6 +355,20 @@ describe("Products page components", () => {
     ]);
   });
 
+  it("does not render product mutation controls in read-only entitlement mode", () => {
+    const card = ProductCard({
+      product,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      actions: productActions,
+      isActionPending: false,
+      canManageProducts: false
+    });
+
+    expect(findElementsByType(card, ActionMenu)).toEqual([]);
+    expect(findElementsByProp(card, "data-product-card-edit")).toEqual([]);
+  });
+
   it("renders product type icon from the shared product icon mapping", () => {
     const card = ProductCard({
       product,

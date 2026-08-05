@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import { HttpError } from "../../../common/http/HttpError";
 import {
   buildCreateFlowDefinitionRequest,
+  buildFlowDefinitionPath,
   createFlowCommandAttemptRegistry,
   createFlowDefinitionIdempotencyKey,
   describeFlowDefinitionError,
-  getFlowDefinitionMigrationIssues,
   getFlowDefinitionRevisionConflict,
-  parseAstroCalendarFlowHandoff
+  parseAstroCalendarFlowHandoff,
+  parseFlowDefinitionSelection
 } from "./flowsPageModel";
 
 const template = {
@@ -46,6 +47,16 @@ describe("flows page model", () => {
       approvalMode: "manual_approve",
       source: { type: "blank" }
     });
+  });
+
+  it("passes explicit selected products to a parameterized server template", () => {
+    expect(
+      buildCreateFlowDefinitionRequest({
+        locale: "en",
+        template: { ...template, key: "booking-natal-preparation", parameters: [{ key: "product_ids", kind: "product_ids", required: true, minimumItems: 1, maximumItems: 100 }] },
+        parameters: { product_ids: ["11111111-1111-4111-8111-111111111111"] }
+      }).source
+    ).toMatchObject({ parameters: { product_ids: ["11111111-1111-4111-8111-111111111111"] } });
   });
 
   it("creates a bounded command-specific idempotency key", () => {
@@ -86,6 +97,16 @@ describe("flows page model", () => {
       clientId: "client-1"
     });
     expect(parseAstroCalendarFlowHandoff("?source=astro_calendar")).toBeNull();
+  });
+
+  it("accepts only a valid flow id for an operational deep link", () => {
+    expect(buildFlowDefinitionPath("66666666-6666-4666-8666-666666666666")).toBe(
+      "/flows?flowId=66666666-6666-4666-8666-666666666666"
+    );
+    expect(
+      parseFlowDefinitionSelection("?flowId=66666666-6666-4666-8666-666666666666&ignored=value")
+    ).toEqual({ flowId: "66666666-6666-4666-8666-666666666666" });
+    expect(parseFlowDefinitionSelection("?flowId=not-a-flow")).toBeNull();
   });
 
   it("turns typed revision and publish rejections into actionable localized errors", () => {
@@ -146,26 +167,4 @@ describe("flows page model", () => {
     ).toBeNull();
   });
 
-  it("preserves migration issue code, path and message from the server rejection", () => {
-    expect(
-      getFlowDefinitionMigrationIssues(
-        new HttpError(422, {
-          code: "FLOW_GRAPH_MIGRATION_BLOCKED",
-          issues: [
-            {
-              code: "unsupported_node",
-              path: "nodes.send-message",
-              message: "Legacy send_message has no lossless V2 mapping."
-            }
-          ]
-        })
-      )
-    ).toEqual([
-      {
-        code: "unsupported_node",
-        path: "nodes.send-message",
-        message: "Legacy send_message has no lossless V2 mapping."
-      }
-    ]);
-  });
 });

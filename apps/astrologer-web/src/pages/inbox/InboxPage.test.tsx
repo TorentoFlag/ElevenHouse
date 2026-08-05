@@ -26,16 +26,15 @@ describe("InboxPage", () => {
     expect(source).toContain("startTelegramMtprotoConnectionMutationOptions");
     expect(source).toContain("deriveTelegramMtprotoWizardState(result)");
     expect(source).toContain("useFlowListQuery");
-    expect(source).toContain(
-      'useFlowListQuery({ state: "all", runtimeStatus: "all", limit: 50, offset: 0 })'
-    );
+    expect(source).toContain('enrollmentState: "all"');
     expect(source).not.toContain('useFlowListQuery({ status: "all"');
+    expect(source).toContain("const runtimeFlows =");
+    expect(source).toContain('flow.enrollment.control.state !== "inactive"');
     expect(source).toContain("flowRunsQueryOptions");
     expect(source).toContain('limit: 100');
     expect(source).toContain("buildInboxFlowContexts");
     expect(source).toContain("canProjectLiveFlowRuntime");
-    expect(source).toContain("enabled: liveFlowRuntimeAvailable");
-    expect(source).toContain("runtimeAvailability: flowsQuery.data?.runtime");
+    expect(source).toContain("runtimeAvailabilityByFlowId");
     expect(source).toContain("flowContextStatus=");
     expect(source).not.toContain("flowContexts={[]}");
     expect(source).not.toContain('<h1 id="inbox-title">Сообщения</h1>');

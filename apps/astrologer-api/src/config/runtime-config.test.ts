@@ -28,9 +28,7 @@ const defaultTrustedStaticCode = {
   identifierNormalized: "+78005553535"
 };
 const defaultSecurityConfig = {
-  flows: {
-    publicationRolloutPhase: "legacy_v1"
-  },
+  flows: {},
   trustProxy: false,
   sessionTtlSeconds: 604800,
   sessionCookieSecure: false,
@@ -89,12 +87,15 @@ const defaultSecurityConfig = {
     downloadTtlSeconds: 300
   },
   billing: {
-    arcPayConfigured: false
+    arcPayConfigured: false,
+    arcPayEnvironment: "sandbox",
+    arcPayBrowserTokenization: null,
+    financeArtifactStorage: null,
+    savedCardDisclosureSeriesId: null
   },
   ai: defaultAiConfig,
   chartAi: {
-    enabled: false,
-    processingAuthorityVersion: null
+    enabled: false
   }
 };
 
@@ -120,14 +121,14 @@ describe("createAstrologerApiRuntimeConfig", () => {
     });
   });
 
-  it("parses the explicit Flow manifest rollout phase", () => {
+  it("does not expose retired V1 Flow rollout configuration", () => {
     expect(
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
         ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: "manifest_v2"
       })
     ).toMatchObject({
-      flows: { publicationRolloutPhase: "manifest_v2" }
+      flows: {}
     });
   });
 
@@ -756,16 +757,13 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
   });
 
-  it("keeps external chart AI disabled without inventing processing authority", () => {
+  it("keeps chart AI disabled by default", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_AI_ENABLED: "false"
     });
 
-    expect(config.chartAi).toEqual({
-      enabled: false,
-      processingAuthorityVersion: null
-    });
+    expect(config.chartAi).toEqual({ enabled: false });
   });
 
   it("requires the global provider contour before chart AI can be enabled", () => {
@@ -777,130 +775,54 @@ describe("createAstrologerApiRuntimeConfig", () => {
     ).toThrow("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
   });
 
-  it("requires a registered processing authority whenever chart AI is enabled", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-        ASTROLOGER_CHART_AI_ENABLED: "true"
-      })
-    ).toThrow(
-      "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required when ASTROLOGER_CHART_AI_ENABLED=true"
-    );
-  });
-
-  it("binds chart consent to the exact official OpenAI API endpoint", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-        ASTROLOGER_OPENAI_BASE_URL: "https://compatible-proxy.example/v1",
-        ASTROLOGER_CHART_AI_ENABLED: "true",
-        ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "verified-test-authority.v1"
-      })
-    ).toThrow(
-      "ASTROLOGER_OPENAI_BASE_URL must match the processor endpoint registered for chart AI authority"
-    );
-  });
-
-  it("rejects production chart AI without verified processing authority", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        NODE_ENV: "production",
-        ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
-        ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
-        ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
-        ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
-        ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
-        ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
-        ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-        ASTROLOGER_CHART_AI_ENABLED: "true",
-        CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
-      })
-    ).toThrow(
-      "ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION is required in production when ASTROLOGER_CHART_AI_ENABLED=true"
-    );
-  });
-
-  it("rejects a test or arbitrary authority identifier in production", () => {
-    for (const processingAuthorityVersion of [
-      "verified-test-authority.v1",
-      "invented-production-authority.v1"
-    ]) {
-      expect(() =>
-        createAstrologerApiRuntimeConfig({
-          ...requiredSecurityConfig,
-          NODE_ENV: "production",
-          ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
-          ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
-          ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
-          ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
-          ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
-          ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-          ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
-          ASTROLOGER_AI_ENABLED: "true",
-          ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-          ASTROLOGER_CHART_AI_ENABLED: "true",
-          ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: processingAuthorityVersion,
-          CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
-        })
-      ).toThrow("is not registered for production chart AI");
-    }
-  });
-
-  it("accepts the registered official OpenAI processing authority in production", () => {
-    const config = createAstrologerApiRuntimeConfig({
-      ...requiredSecurityConfig,
-      NODE_ENV: "production",
-      ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
-      ASTROLOGER_API_CSRF_SECRET: "configured-astrologer-csrf-secret-with-enough-entropy",
-      ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-provider-secret",
-      ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
-      ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
-      ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-      ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
-      ASTROLOGER_AI_ENABLED: "true",
-      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-      ASTROLOGER_CHART_AI_ENABLED: "true",
-      ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "openai-production-authority.v1",
-      CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
-    });
-
-    expect(config.chartAi).toEqual({
-      enabled: true,
-      processingAuthorityVersion: "openai-production-authority.v1"
-    });
-  });
-
-  it("exposes an explicit test authority version only when supplied", () => {
+  it("enables chart AI with the configured provider contour only", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_AI_ENABLED: "true",
       ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-      ASTROLOGER_CHART_AI_ENABLED: "true",
-      ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "verified-test-authority.v1"
+      ASTROLOGER_CHART_AI_ENABLED: "true"
     });
 
-    expect(config.chartAi).toEqual({
-      enabled: true,
-      processingAuthorityVersion: "verified-test-authority.v1"
-    });
+    expect(config.chartAi).toEqual({ enabled: true });
   });
+});
 
-  it("rejects an unbounded chart AI processing authority identifier", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-        ASTROLOGER_CHART_AI_ENABLED: "true",
-        ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION: "a".repeat(161)
-      })
-    ).toThrow("ASTROLOGER_CHART_AI_PROCESSING_AUTHORITY_VERSION must be at most 160 characters");
+describe("ArcPay browser tokenization config", () => {
+  it("requires public ArcPay and KMS-backed finance storage configuration when billing is enabled", () => {
+    expect(() => createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true"
+    })).toThrow(/ARC_PAY_API_BASE_URL/);
+    expect(() => createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true",
+      ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: "https://api.arcpay.space/",
+      ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: "pk_test_example"
+    })).toThrow("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT");
+    expect(createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true",
+      ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: "https://api.arcpay.space/",
+      ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: "pk_test_example",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT: "https://s3.example.com/",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "access-key",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "secret-key",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN: "arn:aws:kms:eu-central-1:123456789012:key/30000000-0000-4000-8000-000000000003",
+      ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
+      ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: "1"
+    }).billing).toMatchObject({
+      arcPayBrowserTokenization: {
+      apiBaseUrl: "https://api.arcpay.space",
+      publishableKey: "pk_test_example"
+      },
+      financeArtifactStorage: {
+        endpoint: "https://s3.example.com",
+        bucket: "elevenhouse-finance",
+        requestRetention: { policyId: "provider-request", policyVersion: "1" }
+      }
+    });
   });
 });

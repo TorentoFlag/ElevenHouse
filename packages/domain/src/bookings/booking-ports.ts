@@ -1,5 +1,15 @@
 import type { ProductCurrency, ProductDeliveryFormat } from "../products";
-import type { Booking, BookingPolicySnapshot, BookingProduct } from "./booking-types";
+import type { ProjectionContext } from "../availability";
+import type {
+  Booking,
+  BookingClientDataRequirementsSnapshot,
+  BookingPolicySnapshot,
+  BookingProduct
+} from "./booking-types";
+import type {
+  BookingCancellationReasonCode,
+  BookingLifecycleEvent
+} from "./booking-lifecycle-events";
 
 export type ManualBookingClaim = {
   readonly ownerUserId: string;
@@ -16,6 +26,7 @@ export type ManualBookingClaim = {
     readonly deliveryFormat: ProductDeliveryFormat;
     readonly priceMinor: number;
     readonly currency: ProductCurrency;
+    readonly clientDataRequirements: BookingClientDataRequirementsSnapshot;
   };
   readonly scheduleSnapshot: {
     readonly timeZone: string;
@@ -45,6 +56,55 @@ export type PaidBookingHoldCommand = {
   readonly expiresAt: string;
 };
 
+export type OwnerCancelBookingCommand = {
+  readonly actorUserId: string;
+  readonly scope: "bookings.owner.cancel";
+  readonly key: string;
+  readonly requestHash: `sha256:${string}`;
+  readonly now: string;
+  readonly expiresAt: string;
+};
+
+export type OwnerRescheduleBookingCommand = {
+  readonly actorUserId: string;
+  readonly scope: "bookings.owner.reschedule";
+  readonly key: string;
+  readonly requestHash: `sha256:${string}`;
+  readonly now: string;
+  readonly expiresAt: string;
+};
+
+export type OwnerCompleteBookingCommand = {
+  readonly actorUserId: string;
+  readonly scope: "bookings.owner.complete";
+  readonly key: string;
+  readonly requestHash: `sha256:${string}`;
+  readonly now: string;
+  readonly expiresAt: string;
+};
+
+export type BookingRescheduleContext = {
+  readonly booking: Booking;
+  readonly scheduleId: string;
+  readonly availability: ProjectionContext;
+};
+
+export type BookingRescheduleClaim = {
+  readonly ownerUserId: string;
+  readonly bookingId: string;
+  readonly reservationId: string;
+  readonly scheduleId: string;
+  readonly expectedLifecycleRevision: number;
+  readonly serviceStartAt: string;
+  readonly serviceEndAt: string;
+  readonly occupiedStartAt: string;
+  readonly occupiedEndAt: string;
+  readonly scheduleSnapshot: {
+    readonly timeZone: string;
+    readonly policy: BookingPolicySnapshot;
+  };
+};
+
 export type BookingCommandStore = {
   readonly executeManualBooking: (
     command: ManualBookingCommand,
@@ -59,6 +119,42 @@ export type BookingCommandStore = {
   ) => Promise<{
     readonly kind: "created" | "replayed";
     readonly booking: Booking;
+  }>;
+  readonly executeOwnerCancellation: (
+    command: OwnerCancelBookingCommand,
+    input: {
+      readonly bookingId: string;
+      readonly expectedLifecycleRevision: number;
+      readonly reasonCode: BookingCancellationReasonCode;
+    }
+  ) => Promise<{
+    readonly kind: "created" | "replayed";
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
+  }>;
+  readonly executeOwnerReschedule: (
+    command: OwnerRescheduleBookingCommand,
+    input: {
+      readonly bookingId: string;
+      readonly expectedLifecycleRevision: number;
+      readonly projectedStartAt: string;
+    },
+    createClaim: (context: BookingRescheduleContext) => Promise<BookingRescheduleClaim>
+  ) => Promise<{
+    readonly kind: "created" | "replayed";
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
+  }>;
+  readonly executeOwnerCompletion: (
+    command: OwnerCompleteBookingCommand,
+    input: {
+      readonly bookingId: string;
+      readonly expectedLifecycleRevision: number;
+    }
+  ) => Promise<{
+    readonly kind: "created" | "replayed";
+    readonly booking: Booking;
+    readonly lifecycleEvent: BookingLifecycleEvent;
   }>;
   readonly confirmPaidBooking: (input: {
     readonly bookingId: string;

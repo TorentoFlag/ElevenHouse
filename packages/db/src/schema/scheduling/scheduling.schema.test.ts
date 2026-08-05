@@ -9,6 +9,7 @@ import {
   availabilityProductAssignments,
   availabilitySchedules,
   availabilityWeeklyPeriods,
+  bookingLifecycleEvents,
   bookings,
   idempotencyCommands,
   manualCalendarBlocks,
@@ -102,8 +103,10 @@ describe("scheduling persistence schema", () => {
         "reservationId",
         "source",
         "state",
+        "lifecycleRevision",
         "holdExpiresAt",
-        "serviceStartAt"
+        "serviceStartAt",
+        "clientDataRequirementsSnapshot"
       ])
     );
     expect(bookingConfig.foreignKeys.map((key) => key.getName())).toEqual(
@@ -116,11 +119,56 @@ describe("scheduling persistence schema", () => {
       expect.arrayContaining([
         "bookings_state_check",
         "bookings_source_check",
-        "bookings_hold_expiry_check"
+        "bookings_hold_expiry_check",
+        "bookings_lifecycle_revision_check",
+        "bookings_client_data_requirements_snapshot_check"
       ])
     );
     expect(blockConfig.foreignKeys.map((key) => key.getName())).toContain(
       "manual_calendar_blocks_reservation_owner_fk"
+    );
+  });
+
+  it("persists immutable revisioned booking lifecycle authority", () => {
+    const config = getTableConfig(bookingLifecycleEvents);
+
+    expect(Object.keys(getTableColumns(bookingLifecycleEvents))).toEqual(
+      expect.arrayContaining([
+        "id",
+        "bookingId",
+        "ownerUserId",
+        "revision",
+        "eventKind",
+        "actorKind",
+        "actorUserId",
+        "reasonCode",
+        "beforeStartAt",
+        "beforeEndAt",
+        "beforeTimeZone",
+        "afterStartAt",
+        "afterEndAt",
+        "afterTimeZone",
+        "canonicalDigest",
+        "occurredAt"
+      ])
+    );
+    expect(config.uniqueConstraints.map((constraint) => constraint.name)).toContain(
+      "booking_lifecycle_events_booking_revision_unique"
+    );
+    expect(config.foreignKeys.map((key) => key.getName())).toEqual(
+      expect.arrayContaining([
+        "booking_lifecycle_events_booking_owner_fk",
+        "booking_lifecycle_events_actor_fk"
+      ])
+    );
+    expect(config.checks.map((check) => check.name)).toEqual(
+      expect.arrayContaining([
+        "booking_lifecycle_events_revision_check",
+        "booking_lifecycle_events_event_kind_check",
+        "booking_lifecycle_events_actor_check",
+        "booking_lifecycle_events_transition_check",
+        "booking_lifecycle_events_digest_check"
+      ])
     );
   });
 
@@ -162,6 +210,7 @@ describe("scheduling persistence schema", () => {
       "schedule_reservations",
       "manual_calendar_blocks",
       "bookings",
+      "booking_lifecycle_events",
       "idempotency_commands"
     ]) {
       expect(migration).toContain(`CREATE TABLE "${table}"`);
@@ -175,5 +224,7 @@ describe("scheduling persistence schema", () => {
       "tstzrange(\"occupied_start_at\", \"occupied_end_at\", '[)') WITH &&"
     );
     expect(migration).toContain("WHERE (\"lifecycle\" = 'active')");
+    expect(migration.match(/booking_lifecycle_events_immutable/g)).toHaveLength(1);
+    expect(migration.match(/booking_lifecycle_events_no_truncate/g)).toHaveLength(1);
   });
 });

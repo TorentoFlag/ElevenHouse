@@ -13,7 +13,7 @@ import { orders } from "./orders.schema";
 import { paymentReversalCaseReviews } from "./payment-reversal-case-reviews.schema";
 import { paymentAttempts, paymentProviderEvents, refunds } from "./payments.schema";
 import { astrologerRiskProfiles, financePolicies } from "./policies.schema";
-import { payoutMethods, payoutRequests } from "./payouts.schema";
+import { payoutMethodVersions, payoutMethods, payoutRequests } from "./payouts.schema";
 import { reconciliationRecords } from "./reconciliation.schema";
 
 export const ordersRelations = relations(orders, ({ many, one }) => ({
@@ -109,7 +109,15 @@ export const walletBalanceReadModelsRelations = relations(walletBalanceReadModel
 
 export const payoutMethodsRelations = relations(payoutMethods, ({ many, one }) => ({
   astrologer: one(users, { fields: [payoutMethods.astrologerUserId], references: [users.id] }),
-  payoutRequests: many(payoutRequests)
+  payoutRequests: many(payoutRequests),
+  versions: many(payoutMethodVersions)
+}));
+
+export const payoutMethodVersionsRelations = relations(payoutMethodVersions, ({ one }) => ({
+  payoutMethod: one(payoutMethods, {
+    fields: [payoutMethodVersions.payoutMethodId],
+    references: [payoutMethods.id]
+  })
 }));
 
 export const payoutRequestsRelations = relations(payoutRequests, ({ many, one }) => ({

@@ -1,19 +1,12 @@
-import type { FlowDefinitionSummaryV2, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummaryV3, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 
 export const flowRuntimeExecutionUnavailableMessageRu =
   "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать.";
-
-export const flowApprovalDecisionUnavailableMessageRu =
-  "Архивные подтверждения доступны только для просмотра; решения по ним не выполняются.";
-
-export const flowApprovalMixedHistoryMessageRu =
-  "Подтверждения из переходной истории доступны только для просмотра.";
 
 export type FlowRuntimeLocale = "ru" | "en";
 
 export type FlowRuntimePresentation = {
   readonly executionAvailable: boolean;
-  readonly historyIsLegacyPreview: boolean;
   readonly historySemantics: FlowRuntimeAvailability["historySemantics"] | "unverified";
   readonly unavailableReason: string | null;
 };
@@ -21,7 +14,7 @@ export type FlowRuntimePresentation = {
 export type FlowAutomationControlPresentation = {
   readonly checked: boolean;
   readonly canToggle: boolean;
-  readonly nextActive: boolean;
+  readonly nextAction: "review_activation" | "pause_enrollment" | "none";
   readonly accessibleLabel: string;
   readonly title: string;
   readonly statusLabel: string | null;
@@ -35,7 +28,6 @@ export function buildFlowRuntimePresentation(
   if (!runtimeAvailability) {
     return {
       executionAvailable: false,
-      historyIsLegacyPreview: false,
       historySemantics: "unverified",
       unavailableReason: copy.unverified
     };
@@ -45,7 +37,6 @@ export function buildFlowRuntimePresentation(
 
   return {
     executionAvailable,
-    historyIsLegacyPreview: runtimeAvailability.historySemantics === "legacy_preview",
     historySemantics: runtimeAvailability.historySemantics,
     unavailableReason: executionAvailable ? null : copy.unavailable
   };
@@ -61,57 +52,41 @@ export function canProjectLiveFlowRuntime(
 }
 
 export function buildFlowAutomationControl(
-  flow: Pick<FlowDefinitionSummaryV2, "runtimeStatus" | "latestPublishedVersionId">,
-  runtimeAvailability: FlowRuntimeAvailability | null | undefined,
+  flow: FlowDefinitionSummaryV3,
   locale: FlowRuntimeLocale = "ru"
 ): FlowAutomationControlPresentation {
   const copy = runtimeCopy[locale];
-  const runtime = buildFlowRuntimePresentation(runtimeAvailability, locale);
-  const checked = flow.runtimeStatus === "active";
-
-  if (checked && !runtime.executionAvailable) {
+  const enrollment = flow.enrollment.control;
+  if (enrollment.state === "active") {
+    const anotherVersionIsActive = enrollment.activeVersionId !== flow.latestPublishedVersionId;
     return {
-      checked,
+      checked: true,
       canToggle: true,
-      nextActive: false,
-      accessibleLabel: copy.persistedActiveLabel,
-      title: `${runtime.unavailableReason ?? copy.unavailableShort} ${copy.pausePersistedTitle}`,
-      statusLabel: copy.executionDisabled
-    };
-  }
-
-  if (checked) {
-    return {
-      checked,
-      canToggle: true,
-      nextActive: false,
+      nextAction: "pause_enrollment",
       accessibleLabel: copy.activeLabel,
       title: copy.pauseTitle,
-      statusLabel: null
+      statusLabel: anotherVersionIsActive ? copy.otherVersionActive : copy.active
     };
   }
 
-  const canActivateFromStatus =
-    flow.latestPublishedVersionId !== null &&
-    (flow.runtimeStatus === "published" || flow.runtimeStatus === "paused");
-
-  if (canActivateFromStatus && !runtime.executionAvailable) {
+  if (flow.state === "archived") {
     return {
-      checked,
+      checked: false,
       canToggle: false,
-      nextActive: true,
-      accessibleLabel: copy.versionUnavailableLabel,
-      title: runtime.unavailableReason ?? copy.unavailableShort,
+      nextAction: "none",
+      accessibleLabel: copy.archivedLabel,
+      title: copy.archivedLabel,
       statusLabel: null
     };
   }
 
+  const hasPublishedVersion = flow.latestPublishedVersionId !== null;
   return {
-    checked,
-    canToggle: canActivateFromStatus && runtime.executionAvailable,
-    nextActive: true,
-    accessibleLabel: canActivateFromStatus ? copy.activateLabel : copy.notStartedLabel,
-    title: canActivateFromStatus ? copy.activateTitle : copy.publishFirstTitle,
+    checked: false,
+    canToggle: hasPublishedVersion,
+    nextAction: hasPublishedVersion ? "review_activation" : "none",
+    accessibleLabel: hasPublishedVersion ? copy.reviewActivationLabel : copy.publishFirstTitle,
+    title: hasPublishedVersion ? copy.reviewActivationTitle : copy.publishFirstTitle,
     statusLabel: null
   };
 }
@@ -120,31 +95,25 @@ const runtimeCopy = {
   ru: {
     unverified: "Доступность исполнения этой версии не подтверждена сервером.",
     unavailable: flowRuntimeExecutionUnavailableMessageRu,
-    unavailableShort: "Исполнение воронки недоступно.",
-    persistedActiveLabel: "Исполнение отключено; сохраненную активацию можно поставить на паузу",
-    pausePersistedTitle: "Поставить сохраненный статус на паузу.",
-    executionDisabled: "Исполнение недоступно",
+    active: "Активна",
+    otherVersionActive: "Активна другая версия",
     activeLabel: "Автоматизация активна",
     pauseTitle: "Поставить автоматизацию на паузу",
-    versionUnavailableLabel: "Исполнение этой версии воронки недоступно",
-    activateLabel: "Включить автоматизацию",
-    notStartedLabel: "Автоматизация не запущена",
-    activateTitle: "Включить автоматизацию",
-    publishFirstTitle: "Сначала опубликуйте воронку"
+    reviewActivationLabel: "Проверить и включить автоматизацию",
+    reviewActivationTitle: "Проверить готовность опубликованной версии к запуску",
+    publishFirstTitle: "Сначала опубликуйте воронку",
+    archivedLabel: "Воронка находится в архиве"
   },
   en: {
     unverified: "Execution availability has not been confirmed by the server.",
     unavailable: "Flow execution is not available yet. You can edit and publish the definition.",
-    unavailableShort: "Flow execution is unavailable.",
-    persistedActiveLabel: "Execution is disabled; the persisted active state can be paused",
-    pausePersistedTitle: "Pause the persisted active state.",
-    executionDisabled: "Execution unavailable",
+    active: "Active",
+    otherVersionActive: "Another version is active",
     activeLabel: "Automation is active",
     pauseTitle: "Pause automation",
-    versionUnavailableLabel: "Execution is unavailable for this flow version",
-    activateLabel: "Enable automation",
-    notStartedLabel: "Automation has not started",
-    activateTitle: "Enable automation",
-    publishFirstTitle: "Publish the flow first"
+    reviewActivationLabel: "Review and enable automation",
+    reviewActivationTitle: "Review the published version before activation",
+    publishFirstTitle: "Publish the flow first",
+    archivedLabel: "The flow is archived"
   }
 } as const;

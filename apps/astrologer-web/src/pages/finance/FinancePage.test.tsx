@@ -250,7 +250,7 @@ describe("FinancePage", () => {
             failureReason: "Банк отклонил перевод",
             externalReference: null,
             transferredAt: null,
-            providerPayoutId: null
+            version: 1
           },
           {
             id: "55555555-5555-4555-8555-555555555555",
@@ -266,7 +266,7 @@ describe("FinancePage", () => {
             failureReason: null,
             externalReference: null,
             transferredAt: null,
-            providerPayoutId: null
+            version: 1
           },
           {
             id: "66666666-6666-4666-8666-666666666666",
@@ -282,7 +282,7 @@ describe("FinancePage", () => {
             failureReason: null,
             externalReference: "bank-1",
             transferredAt: "2026-07-24T10:55:00.000Z",
-            providerPayoutId: null
+            version: 1
           }
         ]
       }),
@@ -438,7 +438,7 @@ function financeOverview(
         failureReason: null,
         externalReference: null,
         transferredAt: null,
-        providerPayoutId: null
+        version: 1
       },
       {
         id: "33333333-3333-4333-8333-333333333333",
@@ -454,7 +454,7 @@ function financeOverview(
         failureReason: null,
         externalReference: "bank-1",
         transferredAt: "2026-07-24T10:55:00.000Z",
-        providerPayoutId: null
+        version: 1
       }
     ],
     canRequestPayout: true,
@@ -474,14 +474,16 @@ function financeOverview(
       recurringRevenueAmount: null,
       recurringRevenueUnavailableReason: "client_subscriptions_not_implemented"
     },
-    currentPlan: {
-      planId: "pro",
-      code: "pro",
+    currentTariff: {
+      tariffSeriesId: "pro",
+      tariffVersion: 2,
       name: "Pro",
-      monthlyPrice: { amountMinor: 199_000, currency: "RUB" },
-      platformFeeBps: 400,
+      price: { amountMinor: 199_000, currency: "RUB" },
+      commissionBps: 400,
       billingCycle: "month",
-      source: "subscription"
+      state: "active",
+      startsAt: "2026-07-26T10:00:00.000Z",
+      endsAt: "2026-08-26T10:00:00.000Z"
     }
   };
 

@@ -1,18 +1,20 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean,
   check,
   doublePrecision,
   index,
+  integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
+  unique,
   uuid
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import {
   clientBirthDataSourceValues,
+  clientBirthDataEditorRoleValues,
   clientBirthTimeDstOccurrenceValues,
   clientBirthTimePrecisionValues,
   formatClientSqlValues
@@ -38,14 +40,16 @@ export const clientBirthData = pgTable(
     birthLatitude: doublePrecision("birth_latitude"),
     birthLongitude: doublePrecision("birth_longitude"),
     source: text("source").notNull().default("client_profile"),
-    isPrimary: boolean("is_primary").notNull().default(false),
+    revision: integer("revision").notNull().default(1),
+    lastEditedByUserId: uuid("last_edited_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    lastEditedByRole: text("last_edited_by_role").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    uniqueIndex("client_birth_data_primary_unique")
-      .on(table.clientUserId)
-      .where(sql`${table.isPrimary} = true`),
+    unique("client_birth_data_client_unique").on(table.clientUserId),
     index("client_birth_data_client_idx").on(table.clientUserId),
     check(
       "client_birth_data_time_precision_check",
@@ -54,6 +58,10 @@ export const clientBirthData = pgTable(
     check(
       "client_birth_data_source_check",
       sql`${table.source} in ${sql.raw(formatClientSqlValues(clientBirthDataSourceValues))}`
+    ),
+    check(
+      "client_birth_data_last_edited_by_role_check",
+      sql`${table.lastEditedByRole} in ${sql.raw(formatClientSqlValues(clientBirthDataEditorRoleValues))}`
     ),
     check(
       "client_birth_data_time_dst_occurrence_check",
@@ -82,6 +90,47 @@ export const clientBirthData = pgTable(
     check(
       "client_birth_data_longitude_check",
       sql`${table.birthLongitude} is null or (${table.birthLongitude} >= -180 and ${table.birthLongitude} <= 180)`
+    ),
+    check("client_birth_data_revision_check", sql`${table.revision} >= 1`)
+  ]
+);
+
+export const clientBirthDataHistory = pgTable(
+  "client_birth_data_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    birthDataId: uuid("birth_data_id")
+      .notNull()
+      .references(() => clientBirthData.id),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    actorUserId: uuid("actor_user_id")
+      .notNull()
+      .references(() => users.id),
+    actorRole: text("actor_role").notNull(),
+    source: text("source").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    unique("client_birth_data_history_birth_data_revision_unique").on(
+      table.birthDataId,
+      table.revision
+    ),
+    index("client_birth_data_history_client_recorded_idx").on(
+      table.clientUserId,
+      table.recordedAt
+    ),
+    check("client_birth_data_history_revision_check", sql`${table.revision} >= 1`),
+    check(
+      "client_birth_data_history_actor_role_check",
+      sql`${table.actorRole} in ${sql.raw(formatClientSqlValues(clientBirthDataEditorRoleValues))}`
+    ),
+    check(
+      "client_birth_data_history_source_check",
+      sql`${table.source} in ${sql.raw(formatClientSqlValues(clientBirthDataSourceValues))}`
     )
   ]
 );

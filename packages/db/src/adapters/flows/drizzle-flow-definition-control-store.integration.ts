@@ -1,12 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import {
-  flowGraphSchema,
-  flowGraphV2Schema,
-  type FlowGraphRead,
-  type FlowPresentationV1
-} from "@elevenhouse/contracts";
+import { flowGraphV2Schema, type FlowGraphRead, type FlowPresentationV1 } from "@elevenhouse/contracts";
 import {
   createFlowDefinitionV2,
   createNextFlowDraftV2,
@@ -14,12 +9,8 @@ import {
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
   FlowDefinitionIntegrityError,
-  FlowDefinitionMigrationBlockedError,
-  FlowDefinitionMigrationRequiredError,
   FlowDefinitionRevisionConflictError,
-  migrateFlowDefinitionV2,
   publishFlowDefinitionV2,
-  projectFlowCapabilityManifestV1,
   sha256CanonicalJson,
   type CanonicalJson,
   updateFlowDefinitionDraftV2
@@ -29,7 +20,8 @@ import { Client } from "pg";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { reconcileFlowCapabilityManifestSafety } from "../../../scripts/flow-capability-manifest-safety-reconciliation";
+import { reconcileFlowEnrollmentControl } from "../../../scripts/flow-enrollment-control-reconciliation";
+import { reconcileFlowRuntimeControlAuthority } from "../../../scripts/flow-runtime-control-reconciliation";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { createDrizzleFlowDefinitionControlStore } from "./drizzle-flow-definition-control-store";
@@ -98,7 +90,8 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     await reconciliationClient.connect();
     try {
       await reconciliationClient.query("BEGIN");
-      await reconcileFlowCapabilityManifestSafety(reconciliationClient);
+      await reconcileFlowRuntimeControlAuthority(reconciliationClient);
+      await reconcileFlowEnrollmentControl(reconciliationClient);
       await reconciliationClient.query("COMMIT");
     } catch (error) {
       await reconciliationClient.query("ROLLBACK");
@@ -161,97 +154,10 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     expect(await selectCommands(ownerUserId)).toMatchObject([
       { state: "succeeded", response_status: 201 }
     ]);
-  });
-
-  it("migrates one lossless V1 draft and appends one evidence row", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId, legacyGraph());
-    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
-    const input = {
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: {
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 1,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      },
-      idempotencyKey: "flow-migrate-exact-replay",
-      now: "2026-08-02T19:40:00.000Z"
-    } as const;
-
-    const migrated = await Promise.all([
-      migrateFlowDefinitionV2(input),
-      migrateFlowDefinitionV2(input)
-    ]);
-    const laterReplay = await migrateFlowDefinitionV2({
-      ...input,
-      now: "2026-08-02T19:41:00.000Z"
+    await expect(selectEnrollmentReadAuthority(ownerUserId)).resolves.toEqual({
+      subjects: "1",
+      quotas: "1"
     });
-
-    expect(migrated[0]).toEqual(migrated[1]);
-    expect(laterReplay).toEqual(migrated[0]);
-    expect(migrated[0]).toMatchObject({
-      flow: {
-        id: flowId,
-        origin: { type: "migration", sourceVersionId: null },
-        state: "draft",
-        revision: 2
-      },
-      migration: {
-        sourceVersionId: null,
-        sourceRevision: 1,
-        sourceGraphHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/)
-      }
-    });
-    expect(await selectMigrations(flowId)).toMatchObject([
-      {
-        source_graph_schema_version: "flow-graph.v1",
-        target_graph_schema_version: "flow-graph.v2",
-        source_revision: 1,
-        target_revision: 2
-      }
-    ]);
-    expect(await selectCommands(flowId)).toMatchObject([
-      { state: "succeeded", response_status: 200 }
-    ]);
-  });
-
-  it("persists migration blockers without changing the V1 aggregate", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId, unsupportedLegacyGraph());
-    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
-    const input = {
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: {
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 1,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      },
-      idempotencyKey: "flow-migrate-blocked-db",
-      now: "2026-08-02T19:45:00.000Z"
-    } as const;
-
-    await expect(migrateFlowDefinitionV2(input)).rejects.toBeInstanceOf(
-      FlowDefinitionMigrationBlockedError
-    );
-    await expect(migrateFlowDefinitionV2(input)).rejects.toBeInstanceOf(
-      FlowDefinitionMigrationBlockedError
-    );
-
-    expect(await selectFlow(flowId)).toMatchObject({ origin: null, revision: 1 });
-    await expect(selectMigrations(flowId)).resolves.toHaveLength(0);
-    expect(await selectCommands(flowId)).toMatchObject([
-      {
-        state: "failed",
-        response_status: 422,
-        response_body: { code: "FLOW_GRAPH_MIGRATION_BLOCKED" }
-      }
-    ]);
   });
 
   it("serializes two publish keys and rolls the losing version write back", async () => {
@@ -266,9 +172,7 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
         flowId,
         request: { expectedRevision: 1 },
         idempotencyKey,
-        now: "2026-08-02T19:50:00.000Z",
-        responseVersion: "current_v3",
-        persistenceVersion: "current_v2"
+        now: "2026-08-02T19:50:00.000Z"
       });
 
     const race = await Promise.allSettled([
@@ -316,12 +220,9 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
             approvalMode: "manual_approve",
             graph: compiled.normalizedGraph!,
             presentation,
-            capabilityManifest: compiled.capabilityManifest!,
-            legacyCapabilityManifest: projectFlowCapabilityManifestV1(compiled.capabilityManifest!)
+            capabilityManifest: compiled.capabilityManifest!
           }
         }),
-        responseVersion: "current_v3",
-        persistenceVersion: "current_v2",
         assertCreatedResponse: () => {
           throw new FlowDefinitionIntegrityError();
         }
@@ -409,9 +310,7 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       flowId,
       request: { expectedRevision: 1 },
       idempotencyKey: "flow-publish-immutable-records",
-      now: "2026-08-02T20:10:00.000Z",
-      responseVersion: "current_v3",
-      persistenceVersion: "current_v2"
+      now: "2026-08-02T20:10:00.000Z"
     });
     const versionId = published?.version.id ?? raise("Expected published version");
     const commandId = await selectOnlyCommandId(flowId);
@@ -451,58 +350,17 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     });
   });
 
-  it("rejects direct mutation of migration evidence", async () => {
+  it("allows owner erasure to cascade through versions and definition commands", async () => {
     const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId, legacyGraph());
-    await migrateFlowDefinitionV2({
-      store: createDrizzleFlowDefinitionControlStore(runtime.database),
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: {
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 1,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      },
-      idempotencyKey: "flow-migration-immutable-evidence",
-      now: "2026-08-02T20:20:00.000Z"
-    });
-
-    await expect(
-      runtime.pool.query(
-        "update flow_definition_migrations set source_revision = source_revision where flow_id = $1",
-        [flowId]
-      )
-    ).rejects.toMatchObject({
-      code: "55000",
-      constraint: "flow_definition_migrations_immutable"
-    });
-  });
-
-  it("allows owner erasure to cascade through versions, commands and migration evidence", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId, legacyGraph());
+    const flowId = await createFlow(ownerUserId);
     const store = createDrizzleFlowDefinitionControlStore(runtime.database);
 
-    await migrateFlowDefinitionV2({
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: {
-        schemaVersion: "flow-definition-migrate.v2",
-        expectedRevision: 1,
-        targetGraphSchemaVersion: "flow-graph.v2"
-      },
-      idempotencyKey: "flow-owner-erasure-migrate",
-      now: "2026-08-02T19:50:00.000Z"
-    });
     await updateFlowDefinitionDraftV2({
       store,
       actorUserId: ownerUserId,
       ownerUserId,
       flowId,
-      request: { expectedRevision: 2, graph, presentation },
+      request: { expectedRevision: 1, graph, presentation },
       idempotencyKey: "flow-owner-erasure-update",
       now: "2026-08-02T19:50:30.000Z"
     });
@@ -511,11 +369,9 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       actorUserId: ownerUserId,
       ownerUserId,
       flowId,
-      request: { expectedRevision: 3 },
+      request: { expectedRevision: 2 },
       idempotencyKey: "flow-owner-erasure-publish",
-      now: "2026-08-02T19:51:00.000Z",
-      responseVersion: "current_v3",
-      persistenceVersion: "current_v2"
+      now: "2026-08-02T19:51:00.000Z"
     });
 
     await runtime.pool.query("delete from users where id = $1", [ownerUserId]);
@@ -525,7 +381,6 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
         (select count(*) from flows where owner_user_id = $1)
         + (select count(*) from flow_versions where owner_user_id = $1)
         + (select count(*) from flow_definition_commands where owner_user_id = $1)
-        + (select count(*) from flow_definition_migrations where owner_user_id = $1)
       )::text as count`,
       [ownerUserId]
     );
@@ -590,9 +445,7 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       flowId,
       request: { expectedRevision: 1 },
       idempotencyKey: "flow-publish-exact-replay",
-      now: "2026-08-02T20:00:00.000Z",
-      responseVersion: "legacy_v2",
-      persistenceVersion: "legacy_v1"
+      now: "2026-08-02T20:00:00.000Z"
     } as const;
 
     const publications = await Promise.all([
@@ -601,19 +454,15 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     ]);
     expect(publications[0]).toEqual(publications[1]);
     const published = publications[0] ?? raise("Expected published flow");
-    const upgradedReplay = await publishFlowDefinitionV2({
-      ...publishInput,
-      responseVersion: "current_v3",
-      persistenceVersion: "current_v2"
-    });
-    expect(upgradedReplay).toEqual(published);
-    expect(published.version.schemaVersion).toBe("flow-published-version.v2");
+    const replayed = await publishFlowDefinitionV2(publishInput);
+    expect(replayed).toEqual(published);
+    expect(published.version.schemaVersion).toBe("flow-published-version.v3");
     expect(published.flow).toMatchObject({ state: "versioned", revision: 2 });
     expect(published.version).toMatchObject({ version: 1, sourceRevision: 1 });
     await expect(selectVersions(flowId)).resolves.toMatchObject([
       {
         version: 1,
-        capability_manifest: { schemaVersion: "flow-capability-manifest.v1" }
+        capability_manifest: { schemaVersion: "flow-capability-manifest.v2" }
       }
     ]);
 
@@ -638,93 +487,6 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       latestPublishedVersionId: published.version.id
     });
     await expect(selectVersions(flowId)).resolves.toHaveLength(1);
-  });
-
-  it("persists V2 metadata after the fleet gate while returning a legacy wire response", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId);
-    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
-
-    const published = await publishFlowDefinitionV2({
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: { expectedRevision: 1 },
-      idempotencyKey: "flow-publish-current-storage-legacy-wire",
-      now: "2026-08-02T20:01:30.000Z",
-      responseVersion: "legacy_v2",
-      persistenceVersion: "current_v2"
-    });
-
-    expect(published?.version.schemaVersion).toBe("flow-published-version.v2");
-    await expect(selectVersions(flowId)).resolves.toMatchObject([
-      {
-        version: 1,
-        capability_manifest: { schemaVersion: "flow-capability-manifest.v2" }
-      }
-    ]);
-  });
-
-  it("replays a V3 publication exactly after the new binary returns to legacy phase", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId);
-    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
-    const input = {
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: { expectedRevision: 1 },
-      idempotencyKey: "flow-publish-v3-phase-replay",
-      now: "2026-08-02T20:01:45.000Z",
-      responseVersion: "current_v3",
-      persistenceVersion: "current_v2"
-    } as const;
-
-    const published = await publishFlowDefinitionV2(input);
-    const replayed = await publishFlowDefinitionV2({
-      ...input,
-      responseVersion: "legacy_v2",
-      persistenceVersion: "legacy_v1"
-    });
-
-    expect(published?.version.schemaVersion).toBe("flow-published-version.v3");
-    expect(replayed).toEqual(published);
-    await expect(selectVersions(flowId)).resolves.toHaveLength(1);
-  });
-
-  it("replays a deterministic V1 migration failure after the row changes", async () => {
-    const ownerUserId = await createUser();
-    const flowId = await createFlow(ownerUserId, legacyGraph());
-    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
-    const input = {
-      store,
-      actorUserId: ownerUserId,
-      ownerUserId,
-      flowId,
-      request: { expectedRevision: 1 },
-      idempotencyKey: "flow-publish-v1-failure",
-      now: "2026-08-02T20:02:00.000Z",
-      responseVersion: "current_v3",
-      persistenceVersion: "current_v2"
-    } as const;
-
-    await expect(publishFlowDefinitionV2(input)).rejects.toBeInstanceOf(
-      FlowDefinitionMigrationRequiredError
-    );
-    await runtime.pool.query("update flows set draft_graph = $2 where id = $1", [flowId, graph]);
-    await expect(publishFlowDefinitionV2(input)).rejects.toBeInstanceOf(
-      FlowDefinitionMigrationRequiredError
-    );
-    expect(await selectCommands(flowId)).toMatchObject([
-      {
-        state: "failed",
-        response_status: 409,
-        response_body: { code: "FLOW_GRAPH_MIGRATION_REQUIRED" }
-      }
-    ]);
-    await expect(selectVersions(flowId)).resolves.toHaveLength(0);
   });
 
   it("returns the same no-leak not-found result for foreign and missing resources", async () => {
@@ -815,11 +577,9 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
        returning id`,
       [
         ownerUserId,
-        draftGraph.schemaVersion === "flow-graph.v2"
-          ? { schemaVersion: "flow-definition-origin.v1", type: "blank" }
-          : null,
+        { schemaVersion: "flow-definition-origin.v1", type: "blank" },
         draftGraph,
-        draftGraph.schemaVersion === "flow-graph.v2" ? presentation : null
+        presentation
       ]
     );
     return result.rows[0]?.id ?? raise("Expected flow id");
@@ -865,6 +625,20 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     return result.rows;
   }
 
+  async function selectEnrollmentReadAuthority(ownerUserId: string) {
+    const result = await runtime.pool.query<{ subjects: string; quotas: string }>(
+      `SELECT
+         (SELECT count(*)::text FROM flow_runtime_owner_subjects
+           WHERE owner_user_id = $1 AND state = 'active') AS subjects,
+         (SELECT count(*)::text
+            FROM flow_automation_quota_authorities quota
+            JOIN flow_runtime_owner_subjects subject USING (owner_subject_id)
+           WHERE subject.owner_user_id = $1) AS quotas`,
+      [ownerUserId]
+    );
+    return result.rows[0] ?? raise("Expected enrollment read authority counts");
+  }
+
   async function selectCommands(resourceId: string) {
     const result = await runtime.pool.query<{
       owner_user_id: string;
@@ -882,25 +656,6 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
         where command.resource_id = $1
         order by command.created_at, command.id`,
       [resourceId]
-    );
-    return result.rows;
-  }
-
-  async function selectMigrations(flowId: string) {
-    const result = await runtime.pool.query<{
-      source_graph_schema_version: string;
-      target_graph_schema_version: string;
-      source_revision: number;
-      target_revision: number;
-    }>(
-      `select source_graph_schema_version,
-              target_graph_schema_version,
-              source_revision,
-              target_revision
-         from flow_definition_migrations
-        where flow_id = $1
-        order by migrated_at, id`,
-      [flowId]
     );
     return result.rows;
   }
@@ -955,46 +710,6 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     return { id: row.id };
   }
 });
-
-function legacyGraph(): FlowGraphRead {
-  return flowGraphSchema.parse({
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "manual",
-        category: "trigger",
-        kind: "manual",
-        title: "Ручной запуск",
-        config: {}
-      }
-    ],
-    edges: []
-  });
-}
-
-function unsupportedLegacyGraph(): FlowGraphRead {
-  return flowGraphSchema.parse({
-    schemaVersion: "flow-graph.v1",
-    nodes: [
-      {
-        id: "manual",
-        category: "trigger",
-        kind: "manual",
-        title: "Ручной запуск",
-        config: {}
-      },
-      {
-        id: "send-message",
-        category: "action",
-        kind: "send_message",
-        title: "Сообщение",
-        approvalMode: "manual_approve",
-        config: {}
-      }
-    ],
-    edges: [{ id: "manual-message", fromNodeId: "manual", toNodeId: "send-message" }]
-  });
-}
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {
   if (!value) throw new Error("INTEGRATION_DATABASE_URL is required for integration tests");

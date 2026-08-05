@@ -39,7 +39,7 @@ describe("ChartEngineWorkspace", () => {
     );
 
     expect(screen.getByRole("status", { name: "Choose a client" })).toHaveTextContent(
-      "The chart and calculation data appear after choosing a client from CRM."
+      "The chart appears after choosing a client."
     );
   });
 

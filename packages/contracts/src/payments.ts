@@ -11,6 +11,16 @@ const httpsUrlSchema = z
     message: "Expected an HTTPS URL"
   });
 const providerMetadataSchema = z.record(z.string().min(1).max(80), z.unknown());
+const fiscalBuyerContactSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("email"),
+    value: z.string().trim().min(1).max(254).regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+  }).strict(),
+  z.object({
+    kind: z.literal("phone"),
+    value: z.string().regex(/^\+[1-9]\d{1,14}$/)
+  }).strict()
+]);
 
 export const financePaymentProviderValues = ["arc_pay"] as const;
 export const financePaymentProviderSchema = z.enum(financePaymentProviderValues);
@@ -98,6 +108,7 @@ export type PaymentProviderEvent = z.infer<typeof paymentProviderEventSchema>;
 export const createCheckoutRequestSchema = z
   .object({
     orderId: uuidSchema,
+    buyerContact: fiscalBuyerContactSchema,
     successUrl: httpsUrlSchema,
     failureUrl: httpsUrlSchema,
     cancelUrl: httpsUrlSchema
@@ -105,16 +116,34 @@ export const createCheckoutRequestSchema = z
   .strict();
 export type CreateCheckoutRequest = z.infer<typeof createCheckoutRequestSchema>;
 
-export const checkoutResponseSchema = z
+/** Accepted async preparation; the HPP URL is deliberately never a persisted checkout response. */
+export const checkoutPreparationResponseSchema = z
   .object({
-    paymentAttemptId: uuidSchema,
-    provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
-    checkoutUrl: z.string().url(),
-    providerCheckoutId: z.string().min(1).max(160)
+    checkoutPreparationId: z.string().trim().min(1).max(160),
+    state: z.literal("checkout_requested")
   })
   .strict();
-export type CheckoutResponse = z.infer<typeof checkoutResponseSchema>;
+export type CheckoutPreparationResponse = z.infer<typeof checkoutPreparationResponseSchema>;
+
+export const checkoutPreparationStateValues = [
+  "checkout_requested",
+  "checkout_ready",
+  "provider_session_unknown",
+  "failed"
+] as const;
+export const checkoutPreparationStateSchema = z.enum(checkoutPreparationStateValues);
+export type CheckoutPreparationState = z.infer<typeof checkoutPreparationStateSchema>;
+
+/** Public owner-scoped status: it deliberately carries no provider checkout URL or ID. */
+export const checkoutPreparationStateResponseSchema = z
+  .object({
+    checkoutPreparationId: z.string().trim().min(1).max(160),
+    state: checkoutPreparationStateSchema
+  })
+  .strict();
+export type CheckoutPreparationStateResponse = z.infer<
+  typeof checkoutPreparationStateResponseSchema
+>;
 
 export const adminPaymentReversalCaseTypeValues = ["refund", "chargeback"] as const;
 export const adminPaymentReversalCaseTypeSchema = z.enum(adminPaymentReversalCaseTypeValues);

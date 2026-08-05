@@ -43,6 +43,7 @@ const booking = {
   productId: "00000000-0000-4000-8000-000000000002",
   source: "manual",
   state: "confirmed",
+  lifecycleRevision: 1,
   holdExpiresAt: null,
   startAt: "2026-05-29T09:00:00.000Z",
   endAt: "2026-05-29T10:00:00.000Z",

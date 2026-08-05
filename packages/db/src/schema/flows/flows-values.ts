@@ -8,23 +8,31 @@ export const flowDefinitionCommandScopeValues = [
   "flows.definition.create.v2",
   "flows.definition.update-draft.v2",
   "flows.definition.publish.v2",
-  "flows.definition.create-next-draft.v2",
-  "flows.definition.migrate.v2"
+  "flows.definition.create-next-draft.v2"
 ] as const;
 
 export const flowDefinitionRouteTemplateValues = [
   "/flows",
   "/flows/:flowId/draft",
   "/flows/:flowId/publish",
-  "/flows/:flowId/next-draft",
-  "/flows/:flowId/migrations/v2"
+  "/flows/:flowId/next-draft"
 ] as const;
 
 export const flowRuntimeCommandStateValues = ["processing", "succeeded", "failed"] as const;
 
-export const flowRuntimeCommandScopeValues = ["flows.runtime.cancel.v1"] as const;
+export const flowRuntimeCommandScopeValues = [
+  "flows.runtime.cancel.v1",
+  "flows.work-items.start.v1",
+  "flows.work-items.snooze.v1",
+  "flows.work-items.complete.v1"
+] as const;
 
-export const flowRuntimeCommandRouteTemplateValues = ["/flow-runs/:runId/cancel"] as const;
+export const flowRuntimeCommandRouteTemplateValues = [
+  "/flow-runs/:runId/cancel",
+  "/flow-work-items/:workItemId/start",
+  "/flow-work-items/:workItemId/snooze",
+  "/flow-work-items/:workItemId/complete"
+] as const;
 
 export const flowApprovalModeValues = [
   "draft_only",
@@ -42,6 +50,38 @@ export const flowRuntimeEventSourceValues = [
   "chart",
   "astro_calendar",
   "manual"
+] as const;
+
+export const flowRuntimeEventKindValues = ["booking_confirmed"] as const;
+
+export const flowRuntimeEventClassificationValues = ["personal"] as const;
+
+export const flowRuntimeEventIngestionOutcomeValues = [
+  "enrolled",
+  "no_match",
+  "late_unmatched",
+  "subject_ineligible",
+  "suppressed"
+] as const;
+
+export const flowEnrollmentPolicyKeyValues = ["once_per_occurrence"] as const;
+
+export const flowExecutionAuthorityBasisValues = [
+  "current_entitlement",
+  "paid_order_obligation"
+] as const;
+
+export const flowBookingLifecycleStateValues = ["confirmed", "completed", "cancelled"] as const;
+
+export const flowBookingLifecycleReceiptOutcomeValues = [
+  "enrolled",
+  "no_match",
+  "late_unmatched",
+  "subject_ineligible",
+  "suppressed",
+  "completed",
+  "canceled",
+  "rescheduled"
 ] as const;
 
 export const flowRunSubjectTypeValues = [
@@ -94,8 +134,11 @@ export const flowExecutionAttemptOutcomeValues = [
 ] as const;
 
 export const flowRunEventTypeValues = [
+  "run_enrolled",
   "token_advanced",
   "token_waiting",
+  "work_item_available",
+  "booking_rescheduled",
   "token_retry_scheduled",
   "token_lease_expired",
   "run_completed",

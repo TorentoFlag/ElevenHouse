@@ -11,30 +11,39 @@ import {
 } from "./flow-definition-templates";
 
 describe("flow definition V2 server-owned templates", () => {
-  it("returns a localized versioned catalog with one honest available template", () => {
+  it("returns a localized V2-only catalog with the manual and natal booking templates", () => {
     const catalog = getFlowDefinitionTemplateCatalogV2("ru");
 
     expect(listFlowDefinitionTemplatesV2ResponseSchema.parse(catalog)).toEqual(catalog);
     expect(catalog).toMatchObject({
       schemaVersion: "flow-definition-template-catalog.v2",
-      catalogVersion: 1,
+      catalogVersion: 3,
       locale: "ru"
     });
     expect(catalog.templates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           key: "manual-consultation-preparation",
-          version: 1,
+          version: 2,
           availability: "available",
           blockerCode: null
         }),
         expect.objectContaining({
-          key: "session-prep",
-          availability: "legacy_read_only",
-          blockerCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+          key: "booking-natal-preparation",
+          availability: "available",
+          parameters: [
+            {
+              key: "product_ids",
+              kind: "product_ids",
+              required: true,
+              minimumItems: 1,
+              maximumItems: 100
+            }
+          ]
         })
       ])
     );
+    expect(catalog.templates).toHaveLength(2);
     expect(catalog.templates.every((template) => !("graph" in template))).toBe(true);
 
     const english = getFlowDefinitionTemplateCatalogV2("en");
@@ -73,7 +82,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "manual-consultation-preparation",
-          templateVersion: 1,
+          templateVersion: 2,
           parameters: {}
         }
       })
@@ -84,7 +93,7 @@ describe("flow definition V2 server-owned templates", () => {
         origin: {
           type: "template",
           templateKey: "manual-consultation-preparation",
-          templateVersion: 1
+          templateVersion: 2
         }
       }
     });
@@ -94,6 +103,48 @@ describe("flow definition V2 server-owned templates", () => {
       issues: []
     });
     expect(templated.value.presentation?.nodes).toHaveLength(3);
+    expect(templated.value.graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "preparation-completed",
+          displayTitle: "Preparation task completed",
+          config: { goalKey: "manual_preparation_task_completed" }
+        })
+      ])
+    );
+
+    const bookingNatal = prepareFlowDefinitionV2Creation(
+      createFlowDefinitionV2RequestSchema.parse({
+        schemaVersion: "flow-definition-create.v2",
+        name: "Natal preparation",
+        locale: "en",
+        source: {
+          type: "template",
+          templateKey: "booking-natal-preparation",
+          templateVersion: 1,
+          parameters: { product_ids: ["11111111-1111-4111-8111-111111111111"] }
+        }
+      })
+    );
+    expect(bookingNatal).toMatchObject({
+      kind: "accepted",
+      value: {
+        graph: {
+          nodes: expect.arrayContaining([
+            expect.objectContaining({
+              kind: "booking_confirmed",
+              config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
+            }),
+            expect.objectContaining({ kind: "natal_chart_request" })
+          ])
+        }
+      }
+    });
+    if (bookingNatal.kind !== "accepted") throw new Error("Expected natal booking template draft");
+    expect(compileFlowGraphV2(bookingNatal.value.graph)).toMatchObject({
+      publishable: true,
+      issues: []
+    });
   });
 
   it("returns deterministic typed failures for unknown, stale, unavailable and invalid sources", () => {
@@ -127,23 +178,6 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "manual-consultation-preparation",
-          templateVersion: 2,
-          parameters: {}
-        }
-      })
-    ).toMatchObject({
-      kind: "rejected",
-      response: {
-        statusCode: 409,
-        body: { code: "FLOW_TEMPLATE_VERSION_CONFLICT", currentVersion: 1 }
-      }
-    });
-    expect(
-      prepareFlowDefinitionV2Creation({
-        ...base,
-        source: {
-          type: "template",
-          templateKey: "session-prep",
           templateVersion: 1,
           parameters: {}
         }
@@ -152,9 +186,27 @@ describe("flow definition V2 server-owned templates", () => {
       kind: "rejected",
       response: {
         statusCode: 409,
+        body: { code: "FLOW_TEMPLATE_VERSION_CONFLICT", currentVersion: 2 }
+      }
+    });
+    expect(
+      prepareFlowDefinitionV2Creation({
+        ...base,
+        source: {
+          type: "template",
+          templateKey: "booking-natal-preparation",
+          templateVersion: 1,
+          parameters: {}
+        }
+      })
+    ).toMatchObject({
+      kind: "rejected",
+      response: {
+        statusCode: 422,
         body: {
-          code: "FLOW_TEMPLATE_NOT_AVAILABLE",
-          reasonCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+          code: "FLOW_TEMPLATE_PARAMETERS_INVALID",
+          templateKey: "booking-natal-preparation",
+          parameterPaths: ["product_ids"]
         }
       }
     });
@@ -163,7 +215,7 @@ describe("flow definition V2 server-owned templates", () => {
         ...base,
         source: {
           type: "template",
-          templateKey: "manual-consultation-preparation",
+          templateKey: "booking-natal-preparation",
           templateVersion: 1,
           parameters: { product_id: "33333333-3333-4333-8333-333333333333" }
         }
@@ -174,8 +226,8 @@ describe("flow definition V2 server-owned templates", () => {
         statusCode: 422,
         body: {
           code: "FLOW_TEMPLATE_PARAMETERS_INVALID",
-          templateKey: "manual-consultation-preparation",
-          parameterPaths: ["product_id"]
+          templateKey: "booking-natal-preparation",
+          parameterPaths: ["product_id", "product_ids"]
         }
       }
     });

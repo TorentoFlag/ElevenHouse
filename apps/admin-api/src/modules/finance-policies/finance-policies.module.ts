@@ -2,13 +2,16 @@ import { Module } from "@nestjs/common";
 import { createDrizzleAuditLogStore } from "@elevenhouse/db/audit-log";
 import {
   createDrizzleFinancePolicyStore,
-  createDrizzleLedgerTransactionStore,
+  createDrizzleOnlineWalletPayoutRequestReader,
+  createDrizzleOnlineWalletPayoutReleaseUnitOfWork,
+  createDrizzleOnlineWalletPayoutReviewUnitOfWork,
   createDrizzleOrderTransactionStore,
-  createDrizzlePayoutStore,
   createDrizzlePaymentReversalCaseStore,
   createDrizzleReconciliationStore,
+  transactDrizzleFinanceAuthorizationCommand,
   executeIdempotentFinanceCommand
 } from "@elevenhouse/db/finance";
+import { consumeFinanceAuthorizationGrant } from "@elevenhouse/domain";
 import type { FinanceTransaction } from "@elevenhouse/db/finance";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -41,6 +44,25 @@ import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-wo
               postgresRuntime.database.transaction((transaction) =>
                 input.replay(createUnitOfWorkContext(transaction), result)
               )
+          }),
+        executeAuthorized: (input) =>
+          transactDrizzleFinanceAuthorizationCommand({
+            database: postgresRuntime.database,
+            operation: async ({ transaction, authorizationStore }) => {
+              const proof = await consumeFinanceAuthorizationGrant({
+                actorUserId: input.authorization.actorUserId,
+                sessionId: input.authorization.sessionId,
+                sessionKind: "standard",
+                actionKind: input.authorization.actionKind,
+                aggregateId: input.authorization.aggregateId,
+                expectedVersion: input.authorization.expectedVersion,
+                payload: input.authorization.payload,
+                authorizationId: input.authorization.authorizationId,
+                store: authorizationStore,
+                clock: { now: () => input.authorization.occurredAt }
+              });
+              return input.operation(createUnitOfWorkContext(transaction), proof);
+            }
           })
       }),
       inject: [PostgresRuntimeService]
@@ -53,10 +75,17 @@ function createUnitOfWorkContext(transaction: FinanceTransaction) {
   return {
     store: createDrizzleFinancePolicyStore(transaction),
     orderStore: createDrizzleOrderTransactionStore(transaction),
-    payoutStore: createDrizzlePayoutStore(transaction),
-    ledgerStore: createDrizzleLedgerTransactionStore(transaction),
     reversalCaseStore: createDrizzlePaymentReversalCaseStore(transaction),
     reconciliationStore: createDrizzleReconciliationStore(transaction),
+    onlineWalletPayoutRequestReader: createDrizzleOnlineWalletPayoutRequestReader({
+      database: transaction
+    }),
+    onlineWalletPayoutRelease: createDrizzleOnlineWalletPayoutReleaseUnitOfWork({
+      database: transaction
+    }),
+    onlineWalletPayoutReview: createDrizzleOnlineWalletPayoutReviewUnitOfWork({
+      database: transaction
+    }),
     auditSink: new DurableAdminFinancePolicyAuditSink(createDrizzleAuditLogStore(transaction))
   };
 }

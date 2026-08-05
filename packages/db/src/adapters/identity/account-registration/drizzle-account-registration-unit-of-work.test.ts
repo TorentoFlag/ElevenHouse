@@ -308,4 +308,47 @@ describe("createDrizzleAccountRegistrationUnitOfWork", () => {
       })
     ).rejects.toBeInstanceOf(CustomerAccountIdentityConflictError);
   });
+
+  it("maps a Drizzle-wrapped duplicate auth identity to a domain conflict", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const postgresDuplicate = Object.assign(new Error("duplicate key value"), {
+      code: "23505",
+      constraint: "auth_identities_phone_login_unique"
+    });
+    const drizzleWrappedDuplicate = Object.assign(new Error("Failed query"), {
+      cause: postgresDuplicate
+    });
+    const database = createFakeDrizzleDatabase([
+      {
+        id: "user_1",
+        status: "active",
+        deletionRequestedAt: null,
+        deletionScheduledAt: null,
+        deletedAt: null,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        userId: "user_1",
+        displayName: "Анна",
+        createdAt: now,
+        updatedAt: now
+      },
+      drizzleWrappedDuplicate
+    ]);
+
+    await expect(
+      registerCustomerAccount({
+        accountRegistration: createDrizzleAccountRegistrationUnitOfWork(database),
+        identity: {
+          provider: "phone",
+          providerSubject: "+78005553535",
+          phoneNumber: "+78005553535",
+          phoneVerifiedAt: now
+        },
+        displayName: "Анна",
+        roles: ["client"]
+      })
+    ).rejects.toBeInstanceOf(CustomerAccountIdentityConflictError);
+  });
 });

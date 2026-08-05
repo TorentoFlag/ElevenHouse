@@ -57,7 +57,7 @@ export function FlowRuntimePanel({
   const runtime = buildFlowRuntimePresentation(runtimeAvailability);
   const commandUnavailableReason = unavailableReason ?? runtime.unavailableReason;
   const canRunCommands = runtime.executionAvailable;
-  const unverifiedHistory = runtimeHistoryPresentation(runtime.historySemantics);
+  const unverifiedHistory = runtime.historySemantics === "unverified";
 
   return (
     <section className={className("runtimePanel")} aria-label="Запуски воронки">
@@ -132,11 +132,11 @@ export function FlowRuntimePanel({
               return (
                 <li key={run.id}>
                   <span>
-                    {unverifiedHistory?.label ?? runStatusLabel[run.status]}
+                    {unverifiedHistory ? "Неподтвержденный запуск" : runStatusLabel[run.status]}
                   </span>
                   <strong>{run.sourceEventId}</strong>
                   <small>{formatRuntimeDate(run.updatedAt)}</small>
-                  {unverifiedHistory ? <em>{unverifiedHistory.notice}</em> : null}
+                  {unverifiedHistory ? <em>Источник исполнения не подтвержден сервером.</em> : null}
                   {reason ? <em>{reason}</em> : null}
                 </li>
               );
@@ -148,35 +148,7 @@ export function FlowRuntimePanel({
   );
 }
 
-function runtimeHistoryPresentation(
-  semantics: FlowRuntimeAvailability["historySemantics"] | "unverified"
-): { readonly label: string; readonly notice: string } | null {
-  if (semantics === "durable_execution") return null;
-  if (semantics === "legacy_preview") {
-    return {
-      label: "Архивный предпросмотр",
-      notice: "Фактическое выполнение действий не подтверждено."
-    };
-  }
-  if (semantics === "mixed") {
-    return {
-      label: "Переходная история",
-      notice: "Тип исполнения запуска не подтвержден."
-    };
-  }
-  return {
-    label: "Неподтвержденная история",
-    notice: "Источник исполнения не подтвержден сервером."
-  };
-}
-
 function runtimeReason(run: FlowRunResponse): string | null {
-  const payloadReason = run.snapshot.payload.reason;
-
-  if (typeof payloadReason === "string" && payloadReason.trim()) {
-    return payloadReason.trim();
-  }
-
   if (run.status === "suppressed") return "Запуск подавлен правилами воронки";
   if (run.status === "failed_retryable" || run.status === "failed_terminal") return "Требуется проверка";
   return null;

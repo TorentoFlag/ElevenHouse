@@ -73,7 +73,6 @@ async function findEffectivePolicyForAstrologer(
     reserveBps: profile?.reserveBpsOverride ?? policy.reserveBps,
     reserveReleaseDelayDays:
       profile?.reserveReleaseDelayDaysOverride ?? policy.reserveReleaseDelayDays,
-    platformFeeBps: profile?.platformFeeBpsOverride ?? policy.platformFeeBps,
     providerSettlementRequired:
       profile?.providerSettlementRequiredOverride ?? policy.providerSettlementRequired
   };
@@ -107,7 +106,6 @@ async function insertPolicySnapshot(
       holdDurationHours: input.holdDurationHours,
       reserveBps: input.reserveBps,
       reserveReleaseDelayDays: input.reserveReleaseDelayDays,
-      platformFeeBps: input.platformFeeBps,
       providerSettlementRequired: input.providerSettlementRequired,
       isActive: true,
       createdByUserId: input.createdByUserId,
@@ -133,7 +131,6 @@ async function upsertAstrologerRiskProfile(
       holdDurationHoursOverride: input.holdDurationHoursOverride,
       reserveBpsOverride: input.reserveBpsOverride,
       reserveReleaseDelayDaysOverride: input.reserveReleaseDelayDaysOverride,
-      platformFeeBpsOverride: input.platformFeeBpsOverride,
       providerSettlementRequiredOverride: input.providerSettlementRequiredOverride,
       reviewedByUserId: input.reviewedByUserId,
       reviewedAt: input.reviewedAt ? new Date(input.reviewedAt) : null,
@@ -148,7 +145,6 @@ async function upsertAstrologerRiskProfile(
         holdDurationHoursOverride: input.holdDurationHoursOverride,
         reserveBpsOverride: input.reserveBpsOverride,
         reserveReleaseDelayDaysOverride: input.reserveReleaseDelayDaysOverride,
-        platformFeeBpsOverride: input.platformFeeBpsOverride,
         providerSettlementRequiredOverride: input.providerSettlementRequiredOverride,
         reviewedByUserId: input.reviewedByUserId,
         reviewedAt: input.reviewedAt ? new Date(input.reviewedAt) : null,
@@ -172,7 +168,6 @@ function toFinancePolicySnapshot(row: FinancePolicyRow): FinancePolicySnapshot {
     holdDurationHours: row.holdDurationHours,
     reserveBps: row.reserveBps,
     reserveReleaseDelayDays: row.reserveReleaseDelayDays,
-    platformFeeBps: row.platformFeeBps,
     providerSettlementRequired: row.providerSettlementRequired,
     isActive: row.isActive,
     createdByUserId: row.createdByUserId,
@@ -190,7 +185,6 @@ function toAstrologerRiskProfile(row: AstrologerRiskProfileRow): AstrologerRiskP
     holdDurationHoursOverride: row.holdDurationHoursOverride,
     reserveBpsOverride: row.reserveBpsOverride,
     reserveReleaseDelayDaysOverride: row.reserveReleaseDelayDaysOverride,
-    platformFeeBpsOverride: row.platformFeeBpsOverride,
     providerSettlementRequiredOverride: row.providerSettlementRequiredOverride,
     reviewedByUserId: row.reviewedByUserId,
     reviewedAt: row.reviewedAt?.toISOString() ?? null,

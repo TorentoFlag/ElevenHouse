@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import {
-  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+  FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type FlowRuntimeDispatchOutboxDispositionResult,
   type FlowRuntimeDispatchOutboxQuarantineNotice,
@@ -45,7 +46,10 @@ export function createDrizzleFlowRuntimeDispatchOutboxStore(
           with exhausted as (
             select ${outboxEvents.id}
               from ${outboxEvents}
-             where ${outboxEvents.eventType} = ${FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT}
+             where ${outboxEvents.eventType} in (
+                     ${FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT},
+                     ${BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED}
+                   )
                and ${outboxEvents.attempts} >= ${input.maxAttempts}
                and (
                  (
@@ -88,7 +92,10 @@ export function createDrizzleFlowRuntimeDispatchOutboxStore(
           with claimable as (
             select ${outboxEvents.id}
               from ${outboxEvents}
-             where ${outboxEvents.eventType} = ${FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT}
+             where ${outboxEvents.eventType} in (
+                     ${FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT},
+                     ${BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED}
+                   )
                and ${outboxEvents.attempts} < ${input.maxAttempts}
                and (
                  (
@@ -163,6 +170,31 @@ export function createDrizzleFlowRuntimeDispatchOutboxStore(
             updatedAt: sql`transaction_timestamp()`
           })
           .where(dispositionFence(input))
+          .returning({ id: outboxEvents.id })
+      );
+    },
+    markDeferred: async (input) => {
+      assertPositiveInteger(input.retryDelayMs, "retryDelayMs", 86_400_000);
+      return dispositionFromRows(
+        await database
+          .update(outboxEvents)
+          .set({
+            status: "pending",
+            attempts: sql`${outboxEvents.attempts} - 1`,
+            availableAt: sql`transaction_timestamp() + (${input.retryDelayMs} * interval '1 millisecond')`,
+            lockedAt: null,
+            publishedAt: null,
+            quarantinedAt: null,
+            quarantineReasonCode: null,
+            lastError: input.reasonCode,
+            updatedAt: sql`transaction_timestamp()`
+          })
+          .where(
+            and(
+              dispositionFence(input),
+              sql`${outboxEvents.attempts} > 0`
+            )
+          )
           .returning({ id: outboxEvents.id })
       );
     },

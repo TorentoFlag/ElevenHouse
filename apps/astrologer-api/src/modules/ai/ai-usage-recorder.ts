@@ -1,7 +1,6 @@
 import type { AiGenerationResult } from "@elevenhouse/ai";
 import type {
   AiUsageAttempt,
-  AiUsageConsentAuthorization,
   AiUsageResourceEvidence,
   AiUsageSafeErrorCode
 } from "@elevenhouse/domain";
@@ -13,8 +12,6 @@ export type AiUsageStartRecord = {
   readonly promptVersion: number;
   readonly provider: "openai";
   readonly ownerSafetyId: string;
-  readonly consentAuthorizations: readonly AiUsageConsentAuthorization[];
-  readonly processingAuthorityVersion: string | null;
   readonly resourceEvidence: AiUsageResourceEvidence | null;
   readonly startedAt: Date;
 };

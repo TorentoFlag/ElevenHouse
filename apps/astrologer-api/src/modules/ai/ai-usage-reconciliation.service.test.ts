@@ -13,8 +13,6 @@ const staleAttempt: AiUsageAttempt = {
   promptVersion: 3,
   provider: "openai",
   ownerSafetyId: `eh_${"a".repeat(61)}`,
-  consentRecordIds: [],
-  processingAuthorityVersion: null,
   resourceType: null,
   resourceId: null,
   sourceChecksum: null,

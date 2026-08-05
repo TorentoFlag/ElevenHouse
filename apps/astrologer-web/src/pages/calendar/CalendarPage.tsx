@@ -1,10 +1,11 @@
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import { useI18n } from "@elevenhouse/i18n";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useCurrentAstrologerProfileQuery } from "../../features/astrologer-profile/model/useCurrentAstrologerProfileQuery";
+import { parseBookingCalendarHandoff } from "../../features/bookings/model/bookingNavigation";
 import styles from "./CalendarPage.module.css";
 import { CalendarPageView } from "./CalendarPageView";
 import { useCalendarPageController } from "./useCalendarPageController";
@@ -12,7 +13,9 @@ import { useCalendarPageController } from "./useCalendarPageController";
 export function CalendarPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
   const profileQuery = useCurrentAstrologerProfileQuery();
+  const location = useLocation();
   const navigate = useNavigate();
+  const bookingHandoff = parseBookingCalendarHandoff(location.search);
 
   useDocumentTitle(dictionary.calendar.documentTitle);
 
@@ -56,6 +59,8 @@ export function CalendarPage() {
 
   return (
     <CalendarPageContent
+      key={bookingHandoff ? `${bookingHandoff.bookingId}:${bookingHandoff.startAt}` : "calendar"}
+      bookingHandoff={bookingHandoff}
       copy={dictionary.calendar}
       locale={locale}
       timeZone={profileQuery.data.profile.timezone}
@@ -64,14 +69,16 @@ export function CalendarPage() {
 }
 
 function CalendarPageContent({
+  bookingHandoff,
   copy,
   locale,
   timeZone
 }: {
+  readonly bookingHandoff: ReturnType<typeof parseBookingCalendarHandoff>;
   readonly copy: AstrologerCopy["calendar"];
   readonly locale: "ru" | "en";
   readonly timeZone: string;
 }) {
-  const calendar = useCalendarPageController({ copy, locale, timeZone });
+  const calendar = useCalendarPageController({ bookingHandoff, copy, locale, timeZone });
   return <CalendarPageView copy={copy} locale={locale} calendar={calendar} />;
 }

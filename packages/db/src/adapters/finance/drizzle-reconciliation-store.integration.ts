@@ -154,6 +154,8 @@ async function createFixture(): Promise<{
   const clientUserId = randomUUID();
   const productId = randomUUID();
   const policyId = randomUUID();
+  const tariffSeriesId = `tariff-${randomUUID()}`;
+  const tariffVersionDigest = `sha256:${randomUUID().replaceAll("-", "").repeat(2)}`;
   const orderId = randomUUID();
   const paymentAttemptId = randomUUID();
   const providerPaymentId = randomUUID();
@@ -172,21 +174,24 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into finance_policies
-      (id, policy_version, risk_tier, hold_duration_hours, platform_fee_bps, is_active)
-     values ($1, 1, 'standard', 48, 1000, false)`,
+      (id, policy_version, risk_tier, hold_duration_hours, is_active)
+     values ($1, 1, 'standard', 48, false)`,
     [policyId]
   );
+  await insertTariffVersion({ tariffSeriesId, tariffVersionDigest, commissionBps: 1000 });
   await runtime.pool.query(
     `insert into orders
       (id, client_user_id, astrologer_user_id, product_id, status,
+       product_title_snapshot,
        gross_amount_minor, gross_currency, platform_fee_amount_minor, platform_fee_currency,
        astrologer_net_amount_minor, astrologer_net_currency, finance_policy_snapshot_id,
        finance_policy_risk_tier, finance_policy_hold_duration_hours,
        finance_policy_reserve_bps, finance_policy_reserve_release_delay_days,
-       finance_policy_platform_fee_bps, finance_policy_provider_settlement_required)
-     values ($1, $2, $3, $4, 'paid', 50000, 'RUB', 5000, 'RUB', 45000, 'RUB',
-       $5, 'standard', 48, 0, 0, 1000, true)`,
-    [orderId, clientUserId, astrologerUserId, productId, policyId]
+       tariff_series_id, tariff_version, tariff_version_digest, tariff_commission_bps,
+       finance_policy_provider_settlement_required)
+     values ($1, $2, $3, $4, 'paid', 'Reconciliation integration', 50000, 'RUB', 5000, 'RUB', 45000, 'RUB',
+       $5, 'standard', 48, 0, 0, $6, 1, $7, 1000, true)`,
+    [orderId, clientUserId, astrologerUserId, productId, policyId, tariffSeriesId, tariffVersionDigest]
   );
   await runtime.pool.query(
     `insert into payment_attempts
@@ -208,6 +213,25 @@ async function createFixture(): Promise<{
   );
 
   return { providerPaymentId, paymentAttemptId, settledEventId, exceptionEventId };
+}
+
+async function insertTariffVersion(input: {
+  readonly tariffSeriesId: string;
+  readonly tariffVersionDigest: string;
+  readonly commissionBps: number;
+}): Promise<void> {
+  await runtime.pool.query(`insert into platform_tariff_series (id, code) values ($1, $2)`, [
+    input.tariffSeriesId,
+    input.tariffSeriesId
+  ]);
+  await runtime.pool.query(
+    `insert into platform_tariff_versions
+       (tariff_series_id, version, lifecycle, name, tagline, monthly_price_minor, yearly_price_minor,
+        currency, client_sale_commission_bps, display_order, canonical_preimage, canonical_digest)
+     values ($1, 1, 'draft', 'Integration tariff', 'Integration tariff', 0, 0,
+        'RUB', $2, 0, '{"schemaVersion":"integration.v1"}', $3)`,
+    [input.tariffSeriesId, input.commissionBps, input.tariffVersionDigest]
+  );
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

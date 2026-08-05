@@ -926,23 +926,6 @@ async function insertOwnedResourceGraph(pool, input) {
   try {
     await client.query(
       `
-        insert into client_data_consents (
-          id, relationship_id, client_user_id, astrologer_user_id, purpose,
-          policy_version, processor_code, notice_locale, notice_sha256, granted_at
-        ) values ($1, $2, $3, $4, 'chart_ai_interpretation',
-                  'chart-ai-consent.v1', 'openai', 'ru', $5, $6)
-      `,
-      [
-        resourceIds.consentId,
-        context.relationshipId,
-        context.clientUserId,
-        context.astrologerUserId,
-        digest("3"),
-        now
-      ]
-    );
-    await client.query(
-      `
         insert into calculation_records (
           id, owner_user_id, module, mode, interpretation_mode, method_code, title,
           status, request_fingerprint, input_data, result_data, result_summary,
@@ -1028,11 +1011,10 @@ async function insertOwnedResourceGraph(pool, input) {
       `
         insert into ai_usage_records (
           id, status, feature, prompt_id, prompt_version, provider, owner_safety_id,
-          processing_authority_version, resource_type, resource_id, source_checksum,
+          resource_type, resource_id, source_checksum,
           model, finish_reason, duration_ms, started_at, completed_at
         ) values ($1, 'started', 'chart_interpretation', 'chart-interpretation-draft', 1,
-                  'openai', $2, 'verified-test-authority.v1', 'chart_calculation',
-                  $3, $4, null, null, null, $5, null)
+                  'openai', $2, 'chart_calculation', $3, $4, null, null, null, $5, null)
       `,
       [
         resourceIds.aiUsageId,
@@ -1041,10 +1023,6 @@ async function insertOwnedResourceGraph(pool, input) {
         resultChecksum,
         now
       ]
-    );
-    await client.query(
-      `insert into ai_usage_consent_records (usage_record_id, consent_record_id) values ($1, $2)`,
-      [resourceIds.aiUsageId, resourceIds.consentId]
     );
     await client.query(
       `
@@ -1220,7 +1198,6 @@ async function recoverExactProcessingFixture(pool, context, chartJobId) {
 
 function createResourceIds() {
   return {
-    consentId: randomUUID(),
     calculationId: randomUUID(),
     participantId: randomUUID(),
     interpretationId: randomUUID(),

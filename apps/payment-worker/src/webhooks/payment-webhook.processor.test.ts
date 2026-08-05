@@ -19,6 +19,7 @@ import type {
   WalletBalance
 } from "@elevenhouse/domain";
 import { verifyArcPayWebhookSignature } from "../arc-pay/arc-pay-signature";
+import type { FinanceReversalWebhookIngress } from "./finance-reversal-webhook-ingress";
 import { createPaymentWebhookHandler } from "./payment-webhook.server";
 import { createPaymentWebhookProcessor } from "./payment-webhook.processor";
 
@@ -28,7 +29,6 @@ const paymentAttemptId = "11111111-1111-4111-8111-111111111111";
 const providerPaymentId = "22222222-2222-4222-8222-222222222222";
 const orderId = "33333333-3333-4333-8333-333333333333";
 const bookingId = "99999999-9999-4999-8999-999999999999";
-const payoutRequestId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 
 describe("Arc Pay payment webhook ingestion", () => {
@@ -50,94 +50,33 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.createdEvents).toEqual([]);
   });
 
-  it("persists a valid captured event exactly once when Arc Pay retries the same webhook id", async () => {
+  it("fails closed for a captured event until v2 canonical ingress is configured", async () => {
     const harness = createHarness();
     const request = signedRequest(capturedPayload({ eventId: eventId(2) }));
 
     await expect(harness.handler.handle(request)).resolves.toEqual({
-      statusCode: 200,
-      body: { accepted: true, duplicate: false }
+      statusCode: 503,
+      body: { error: "canonical_capture_not_configured" }
     });
-    await expect(harness.handler.handle(request)).resolves.toEqual({
-      statusCode: 200,
-      body: { accepted: true, duplicate: true }
-    });
-
-    expect(harness.createdEvents).toHaveLength(1);
-    expect(harness.createdEvents[0]).toMatchObject({
-      providerWebhookId: eventId(2),
-      providerPaymentId,
-      type: "payment.captured"
-    });
-    expect(harness.linkedProviderPaymentIds).toEqual([providerPaymentId]);
-    expect(harness.ledgerTransactions).toHaveLength(1);
-    expect(harness.outboxEvents).toHaveLength(4);
-    expect(harness.resolvePaymentAttemptId).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects a captured event whose amount does not match its linked order and attempt", async () => {
-    const harness = createHarness();
-
-    await expect(
-      harness.handler.handle(
-        signedRequest(capturedPayload({ eventId: eventId(3), amount: 49_999 }))
-      )
-    ).resolves.toEqual({ statusCode: 422, body: { error: "payment_amount_mismatch" } });
 
     expect(harness.createdEvents).toEqual([]);
     expect(harness.linkedProviderPaymentIds).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.outboxEvents).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
   });
 
-  it("rejects a captured event whose currency does not match its linked order and attempt", async () => {
-    const harness = createHarness();
-
-    await expect(
-      harness.handler.handle(
-        signedRequest(capturedPayload({ eventId: eventId(4), currency: "KZT" }))
-      )
-    ).resolves.toEqual({ statusCode: 422, body: { error: "payment_currency_mismatch" } });
-
-    expect(harness.createdEvents).toEqual([]);
-    expect(harness.linkedProviderPaymentIds).toEqual([]);
-  });
-
-  it("rejects refunded and chargeback amounts or currencies that do not match the linked payment", async () => {
-    const refundHarness = createHarness();
-    await expect(
-      refundHarness.handler.handle(
-        signedRequest({
-          ...basePayload(eventId(7)),
-          event_type: "payment.refunded",
-          data: {
-            payment_id: providerPaymentId,
-            refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            refund_amount: 50_001,
-            total_refunded: 50_001,
-            currency: "RUB"
-          }
-        })
-      )
-    ).resolves.toEqual({ statusCode: 422, body: { error: "payment_amount_mismatch" } });
-
-    const chargebackHarness = createHarness();
-    await expect(
-      chargebackHarness.handler.handle(
-        signedRequest({
-          ...basePayload(eventId(8)),
-          event_type: "payment.chargeback",
-          data: { payment_id: providerPaymentId, amount: 50_000, currency: "KZT" }
-        })
-      )
-    ).resolves.toEqual({ statusCode: 422, body: { error: "payment_currency_mismatch" } });
-  });
-
-  it("records a provider refund through the reversal unit of work", async () => {
+  it("queues a verified refund for the canonical V2 worker without running the legacy reversal projector", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => ({ duplicate: false }))
+    } satisfies FinanceReversalWebhookIngress;
     const harness = createHarness({
+      financeIngress,
       orderStatus: "paid",
       wallet: { pending: 45_000, available: 0, reserved: 0, negativeBalance: 0 }
     });
     const request = signedRequest({
-      ...basePayload(eventId(13)),
+      ...basePayload(eventId(91)),
       event_type: "payment.refunded",
       data: {
         payment_id: providerPaymentId,
@@ -152,91 +91,122 @@ describe("Arc Pay payment webhook ingestion", () => {
       statusCode: 200,
       body: { accepted: true, duplicate: false }
     });
+
+    expect(financeIngress.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signature: expect.objectContaining({ kind: "verified", webhookId: eventId(91) }),
+        transport: expect.objectContaining({ providerEventType: "payment.refunded" }),
+        rawBody: new TextEncoder().encode(request.rawBody)
+      })
+    );
+    expect(harness.createdEvents).toHaveLength(0);
+    expect(harness.ledgerTransactions).toHaveLength(0);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for a refund until V2 canonical ingress is configured", async () => {
+    const harness = createHarness();
+    const request = signedRequest({
+      ...basePayload(eventId(94)),
+      event_type: "payment.refunded",
+      data: {
+        payment_id: providerPaymentId,
+        refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        refund_amount: 50_000,
+        total_refunded: 50_000,
+        currency: "RUB"
+      }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 503,
+      body: { error: "canonical_refund_not_configured" }
+    });
+    expect(harness.createdEvents).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
+  it("stores verified capture transport evidence without running the legacy capture projector", async () => {
+    const calls: string[] = [];
+    const financeIngress = {
+      store: vi.fn(async () => {
+        calls.push("sealed");
+        return { duplicate: false };
+      })
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress });
+    const request = signedRequest(capturedPayload({ eventId: eventId(92) }));
+
     await expect(harness.handler.handle(request)).resolves.toEqual({
       statusCode: 200,
-      body: { accepted: true, duplicate: true }
+      body: { accepted: true, duplicate: false }
     });
 
-    expect(harness.refunds).toEqual([
+    expect(financeIngress.store).toHaveBeenCalledWith(
       expect.objectContaining({
-        providerRefundId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        amount: { amountMinor: 50_000, currency: "RUB" }
+        signature: expect.objectContaining({ kind: "verified", webhookId: eventId(92) }),
+        transport: expect.objectContaining({ providerEventType: "payment.captured" }),
+        rawBody: new TextEncoder().encode(request.rawBody)
       })
-    ]);
-    expect(harness.ledgerTransactions).toHaveLength(1);
-    expect(harness.ledgerTransactions[0]).toMatchObject({ operationType: "refund_recorded" });
-    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
-      orderId,
-      status: "refunded",
-      now: now.toISOString()
-    });
+    );
+    expect(harness.createdEvents).toHaveLength(0);
+    expect(harness.ledgerTransactions).toHaveLength(0);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+    expect(calls).toEqual(["sealed"]);
   });
 
-  it("records a provider chargeback through the reversal unit of work", async () => {
-    const harness = createHarness({
-      orderStatus: "fulfilled",
-      wallet: { pending: 0, available: 0, reserved: 0, payoutPending: 45_000, negativeBalance: 0 },
-      payoutRequests: [payoutRequest({ status: "approved" })]
-    });
+  it("does not run the legacy capture projector when durable capture ingress fails", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => {
+        throw new Error("object storage unavailable");
+      })
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress });
 
     await expect(
-      harness.handler.handle(
-        signedRequest({
-          ...basePayload(eventId(14)),
-          event_type: "payment.chargeback",
-          data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
-        })
-      )
-    ).resolves.toEqual({ statusCode: 200, body: { accepted: true, duplicate: false } });
+      harness.handler.handle(signedRequest(capturedPayload({ eventId: eventId(93) })))
+    ).resolves.toEqual({ statusCode: 500, body: { error: "webhook_processing_failed" } });
 
-    expect(harness.refunds).toEqual([]);
-    expect(harness.ledgerTransactions).toHaveLength(2);
-    expect(harness.ledgerTransactions[0]).toMatchObject({
-      operationType: "payout_failed",
-      payoutRequestId
-    });
-    expect(harness.ledgerTransactions[1]).toMatchObject({
-      operationType: "chargeback_recorded",
-      entries: [
-        expect.objectContaining({
-          account: expect.objectContaining({ accountType: "platform_revenue" })
-        }),
-        expect.objectContaining({
-          account: expect.objectContaining({ accountType: "astrologer_available" })
-        }),
-        expect.objectContaining({
-          account: expect.objectContaining({ accountType: "platform_clearing" })
-        })
-      ]
-    });
-    expect(harness.orderStore.updateStatus).toHaveBeenCalledWith({
-      orderId,
-      status: "chargeback",
-      now: now.toISOString()
-    });
-    expect(harness.payoutStatusUpdates).toEqual([
-      expect.objectContaining({
-        payoutRequestId,
-        status: "cancelled",
-        adminUserId: null,
-        adminNote: expect.stringContaining("provider chargeback"),
-        failureReason: "Provider chargeback blocked payout before paid confirmation",
-        now: now.toISOString()
-      })
-    ]);
+    expect(harness.createdEvents).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
   });
 
-  it("deduplicates a duplicate captured event by webhook id without another order or ledger effect", async () => {
+  it("queues a verified chargeback for the V2 worker without running the legacy reversal projector", async () => {
+    const financeIngress = { store: vi.fn(async () => ({ duplicate: false })) } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress });
+    const request = signedRequest({
+      ...basePayload(eventId(14)),
+      event_type: "payment.chargeback",
+      data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: false }
+    });
+    expect(financeIngress.store).toHaveBeenCalledWith(expect.objectContaining({
+      transport: expect.objectContaining({ providerEventType: "payment.chargeback" }),
+      rawBody: new TextEncoder().encode(request.rawBody)
+    }));
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.orderStore.updateStatus).not.toHaveBeenCalled();
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for a chargeback until V2 canonical ingress is configured", async () => {
     const harness = createHarness();
-    const request = signedRequest(capturedPayload({ eventId: eventId(5) }));
-
-    await harness.handler.handle(request);
-    await harness.handler.handle(request);
-
-    expect(harness.createdEvents).toHaveLength(1);
-    expect(harness.markOrderPaid).toHaveBeenCalledTimes(1);
-    expect(harness.ledgerTransactions).toHaveLength(1);
-    expect(harness.outboxEvents).toHaveLength(4);
+    await expect(harness.handler.handle(signedRequest({
+      ...basePayload(eventId(8)),
+      event_type: "payment.chargeback",
+      data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
+    }))).resolves.toEqual({
+      statusCode: 503,
+      body: { error: "canonical_chargeback_not_configured" }
+    });
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
   });
 
   it("persists payment.timeout as non-terminal evidence without changing the order", async () => {
@@ -363,16 +333,6 @@ describe("Arc Pay payment webhook ingestion", () => {
     ]);
   });
 
-  it("returns retryable 500 when the local attempt is not available yet", async () => {
-    const harness = createHarness({ attemptMissing: true });
-
-    await expect(
-      harness.handler.handle(signedRequest(capturedPayload({ eventId: eventId(12) })))
-    ).resolves.toEqual({ statusCode: 500, body: { error: "payment_webhook_attempt_not_found" } });
-
-    expect(harness.createdEvents).toEqual([]);
-  });
-
   it("accepts a rotated v1 signature and rejects a timestamp outside the 300 second window", () => {
     const rawBody = JSON.stringify(capturedPayload({ eventId: eventId(9) }));
     const timestamp = String(unix(now));
@@ -438,6 +398,7 @@ function createHarness(
       readonly negativeBalance: number;
     };
     readonly payoutRequests?: readonly PayoutRequestRecord[];
+    readonly financeIngress?: FinanceReversalWebhookIngress;
   } = {}
 ) {
   const attempt: PaymentAttempt = {
@@ -459,6 +420,7 @@ function createHarness(
     clientUserId: "55555555-5555-4555-8555-555555555555",
     astrologerUserId: "66666666-6666-4666-8666-666666666666",
     productId: "77777777-7777-4777-8777-777777777777",
+    productTitleSnapshot: "Natal reading",
     directLinkIntentId: null,
     bookingId,
     status: options.orderStatus ?? "pending_payment",
@@ -470,7 +432,10 @@ function createHarness(
     financePolicyHoldDurationHours: 48,
     financePolicyReserveBps: 0,
     financePolicyReserveReleaseDelayDays: 0,
-    financePolicyPlatformFeeBps: 1_000,
+    tariffSeriesId: "pro",
+    tariffVersion: 1,
+    tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    tariffCommissionBps: 1_000,
     financePolicyProviderSettlementRequired: true,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
@@ -730,7 +695,8 @@ function createHarness(
       webhookSecret,
       timestampToleranceSeconds: 300,
       now: () => now,
-      processor
+      processor,
+      financeIngress: options.financeIngress
     })
   };
 }
@@ -766,6 +732,7 @@ function paidBooking(state: "cancelled" | "expired"): Booking {
     productId: "55555555-5555-4555-8555-555555555555",
     source: "client_paid",
     state,
+    lifecycleRevision: 1,
     holdExpiresAt: null,
     startAt: "2026-07-25T09:00:00.000Z",
     endAt: "2026-07-25T10:00:00.000Z",
@@ -780,33 +747,15 @@ function paidBooking(state: "cancelled" | "expired"): Booking {
       bufferAfterMinutes: 10,
       minimumNoticeMinutes: 360
     },
+    clientDataRequirementsSnapshot: {
+      schemaVersion: "booking-client-data-requirements.v1",
+      executionMode: "live",
+      participantMode: "solo",
+      requiredClientData: ["chart1"],
+      methods: ["natal"]
+    },
     createdAt: now.toISOString(),
     updatedAt: now.toISOString()
-  };
-}
-
-function payoutRequest(overrides: Partial<PayoutRequestRecord> = {}): PayoutRequestRecord {
-  return {
-    id: overrides.id ?? payoutRequestId,
-    astrologerUserId: overrides.astrologerUserId ?? "66666666-6666-4666-8666-666666666666",
-    payoutMethodId: overrides.payoutMethodId ?? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-    status: overrides.status ?? "requested",
-    amount: overrides.amount ?? { amountMinor: 45_000, currency: "RUB" },
-    method: overrides.method ?? "manual_bank_transfer",
-    provider: overrides.provider ?? null,
-    environment: overrides.environment ?? null,
-    requestedAt: overrides.requestedAt ?? now.toISOString(),
-    reviewedAt: overrides.reviewedAt ?? null,
-    completedAt: overrides.completedAt ?? null,
-    adminUserId: overrides.adminUserId ?? null,
-    adminNote: overrides.adminNote ?? null,
-    failureReason: overrides.failureReason ?? null,
-    externalReference: overrides.externalReference ?? null,
-    transferredAt: overrides.transferredAt ?? null,
-    providerPayoutId: overrides.providerPayoutId ?? null,
-    metadata: overrides.metadata ?? {},
-    createdAt: overrides.createdAt ?? now.toISOString(),
-    updatedAt: overrides.updatedAt ?? now.toISOString()
   };
 }
 

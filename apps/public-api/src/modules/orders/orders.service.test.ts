@@ -4,12 +4,14 @@ import {
   OrderClientRelationshipRequiredError,
   OrderFinancePolicyUnavailableError,
   OrderProductNotAvailableError,
+  createPlatformTariffDraft,
   type ClientAstrologerRelationshipReader,
   type CreateFinanceOrderRecordInput,
   type EffectiveFinancePolicy,
   type FinanceOrder,
   type FinanceOrderStore,
   type FinancePolicyStore,
+  type PlatformTariffEntitlementStore,
   type Product,
   type ProductStore
 } from "@elevenhouse/domain";
@@ -22,7 +24,18 @@ const productId = "33333333-3333-4333-8333-333333333333";
 const directLinkIntentId = "44444444-4444-4444-8444-444444444444";
 const policyId = "55555555-5555-4555-8555-555555555555";
 const orderId = "66666666-6666-4666-8666-666666666666";
+const bookingId = "77777777-7777-4777-8777-777777777777";
 const now = new Date("2026-07-24T10:00:00.000Z");
+const tariff = {
+  ...createPlatformTariffDraft({
+  tariffSeriesId: "pro", version: 1, name: "Pro", tagline: "For active practice",
+  monthlyPriceMinor: 2_500, yearlyPriceMinor: 25_000, clientSaleCommissionBps: 800,
+  monthlyRecurringFrequencyDays: 30, yearlyRecurringFrequencyDays: 365,
+  seatsLimit: 1, bookingsLimit: null, aiRequestsLimit: null, automationLimit: null,
+    isPopular: false, displayOrder: 0, features: ["products"]
+  }),
+  lifecycle: "published" as const
+};
 
 describe("OrdersService", () => {
   it("creates a contract-safe order response", async () => {
@@ -31,7 +44,7 @@ describe("OrdersService", () => {
     await expect(
       service.createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId },
+        { astrologerUserId, productId, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).resolves.toEqual({
@@ -41,18 +54,18 @@ describe("OrdersService", () => {
       clientUserId,
       astrologerUserId,
       productId,
+      productTitleSnapshot: "Natal reading",
       directLinkIntentId,
-      bookingId: null,
+      bookingId,
       status: "pending_payment",
       grossAmount: { amountMinor: 500_00, currency: "RUB" },
-      platformFee: { amountMinor: 50_00, currency: "RUB" },
-      astrologerNetAmount: { amountMinor: 450_00, currency: "RUB" },
+      platformFee: { amountMinor: 40_00, currency: "RUB" },
+      astrologerNetAmount: { amountMinor: 460_00, currency: "RUB" },
       financePolicySnapshotId: policyId,
       financePolicyRiskTier: "standard",
       financePolicyHoldDurationHours: 48,
       financePolicyReserveBps: 0,
       financePolicyReserveReleaseDelayDays: 0,
-      financePolicyPlatformFeeBps: 1_000,
       financePolicyProviderSettlementRequired: true,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
@@ -67,7 +80,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ hasRelationship: false }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId },
+        { astrologerUserId, productId, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(403, new OrderClientRelationshipRequiredError().code));
@@ -75,7 +88,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ product: null }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId },
+        { astrologerUserId, productId, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(404, new OrderProductNotAvailableError().code));
@@ -83,7 +96,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ hasPolicy: false }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId },
+        { astrologerUserId, productId, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(409, new OrderFinancePolicyUnavailableError().code));
@@ -93,7 +106,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ conflict: true }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId },
+        { astrologerUserId, productId, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(409, new FinanceIdempotencyConflictError().code));
@@ -120,8 +133,24 @@ function createService(options: {
     )
   } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
   const orderStore = createOrderStore(options.conflict);
+  const tariffAuthorityStore = {
+    findCurrentSubscription: vi.fn(async () => ({
+      subscriptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      ownerUserId: astrologerUserId,
+      tariffSeriesId: tariff.tariffSeriesId,
+      tariffVersion: tariff.version,
+      tariffVersionDigest: tariff.canonicalDigest,
+      commissionBpsSnapshot: tariff.clientSaleCommissionBps,
+      version: 1,
+      state: "active" as const,
+      startsAt: "2026-07-01T00:00:00.000Z",
+      endsAt: "2026-08-01T00:00:00.000Z"
+    })),
+    findTariffVersion: vi.fn(async () => tariff),
+    findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
+  } satisfies PlatformTariffEntitlementStore;
 
-  return new OrdersService(orderStore, relationshipReader, productStore, financePolicyStore, {
+  return new OrdersService(orderStore, relationshipReader, productStore, financePolicyStore, tariffAuthorityStore, {
     now: () => now
   });
 }
@@ -182,7 +211,6 @@ function effectivePolicy(): EffectiveFinancePolicy {
     holdDurationHours: 48,
     reserveBps: 0,
     reserveReleaseDelayDays: 0,
-    platformFeeBps: 1_000,
     providerSettlementRequired: true
   };
 }
@@ -193,6 +221,7 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     clientUserId: input.clientUserId,
     astrologerUserId: input.astrologerUserId,
     productId: input.productId,
+    productTitleSnapshot: input.productTitleSnapshot,
     directLinkIntentId: input.directLinkIntentId,
     bookingId: input.bookingId ?? null,
     status: input.status ?? "pending_payment",
@@ -204,7 +233,10 @@ function toOrder(input: CreateFinanceOrderRecordInput): FinanceOrder {
     financePolicyHoldDurationHours: input.financePolicyHoldDurationHours,
     financePolicyReserveBps: input.financePolicyReserveBps,
     financePolicyReserveReleaseDelayDays: input.financePolicyReserveReleaseDelayDays,
-    financePolicyPlatformFeeBps: input.financePolicyPlatformFeeBps,
+    tariffSeriesId: input.tariffSeriesId,
+    tariffVersion: input.tariffVersion,
+    tariffVersionDigest: input.tariffVersionDigest,
+    tariffCommissionBps: input.tariffCommissionBps,
     financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
     createdAt: input.now,
     updatedAt: input.now

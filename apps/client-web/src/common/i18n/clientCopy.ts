@@ -63,10 +63,44 @@ export type BirthTimeOccurrenceCopy = {
   helper: string;
 };
 
+export type ClientPurchaseFlowCopy = {
+  eyebrow: string;
+  title: string;
+  relationshipOnly: string;
+  astrologerLabel: string;
+  loadingProducts: string;
+  noProducts: string;
+  loadProductsFailed: string;
+  loadSlotsFailed: string;
+  liveProductHint: string;
+  asyncProductFallbackHint: string;
+  formatLabel: string;
+  availableSlotsLabel: string;
+  noSlots: string;
+  receiptContactLabel: string;
+  emailLabel: string;
+  phoneLabel: string;
+  phonePlaceholderLabel: string;
+  receiptContactHint: string;
+  preparingPayment: string;
+  creatingOrder: string;
+  pay: string;
+  checkoutUnknown: string;
+  checkoutFailed: string;
+  checkoutFailedGeneric: string;
+  checkoutRequiresHttps: string;
+  returnStatusLabel: string;
+  paid: string;
+  pendingPayment: string;
+  paymentNotCompleted: string;
+  deliveryFormats: Record<string, string>;
+};
+
 export type ClientCopy = {
   auth: AuthCopy;
   birthPlaceSearch: BirthPlaceSearchCopy;
   birthTimeOccurrence: BirthTimeOccurrenceCopy;
+  purchaseFlow: ClientPurchaseFlowCopy;
 };
 
 export const clientCopyByLocale = {
@@ -171,6 +205,38 @@ export const clientCopyByLocale = {
       first: "Первое вхождение",
       second: "Второе вхождение",
       helper: "Выберите вариант только если местное время повторялось при переводе часов."
+    },
+    purchaseFlow: {
+      eyebrow: "Запись и оплата",
+      title: "Выберите услугу связанного астролога",
+      relationshipOnly: "В этом кабинете нет каталога: показываем только услуги астрологов, с которыми у вас уже есть связь.",
+      astrologerLabel: "Астролог",
+      loadingProducts: "Загружаем доступные услуги…",
+      noProducts: "У этого астролога пока нет доступных для онлайн-оплаты услуг.",
+      loadProductsFailed: "Не удалось загрузить доступные услуги. Повторите попытку.",
+      loadSlotsFailed: "Не удалось получить свободное время. Выберите услугу позже.",
+      liveProductHint: "Выберите время, затем оплатите",
+      asyncProductFallbackHint: "После оплаты астролог начнёт работу по услуге.",
+      formatLabel: "Формат",
+      availableSlotsLabel: "Свободное время",
+      noSlots: "На ближайшие 14 дней свободного времени нет.",
+      receiptContactLabel: "Чек: подтверждённый контакт",
+      emailLabel: "Email",
+      phoneLabel: "Телефон",
+      phonePlaceholderLabel: "Телефон в формате +7999…",
+      receiptContactHint: "Используйте email или телефон, подтверждённый при входе: он нужен для кассового чека.",
+      preparingPayment: "Подготавливаем защищённую оплату…",
+      creatingOrder: "Создаём заказ…",
+      pay: "Оплатить {amount}",
+      checkoutUnknown: "Состояние платёжной сессии требует проверки. Повторно не списывайте средства.",
+      checkoutFailed: "Не удалось подготовить оплату. Средства не списаны.",
+      checkoutFailedGeneric: "Не удалось создать оплату. Проверьте подтверждённый email или телефон и попробуйте ещё раз.",
+      checkoutRequiresHttps: "Не удалось открыть защищённую оплату: для return URL требуется HTTPS. Средства не списаны.",
+      returnStatusLabel: "Статус заказа",
+      paid: "Оплата подтверждена. Астролог получит заказ в кабинете.",
+      pendingPayment: "Проверяем результат оплаты. Не создавайте повторный заказ, обновите страницу через минуту.",
+      paymentNotCompleted: "Оплата не завершена. Средства по этому заказу не списаны либо будут отражены после проверки банка.",
+      deliveryFormats: { video: "Видео", chat: "Чат", audio: "Аудио", text: "Текст", file: "Файл", channel: "Канал" }
     }
   },
   en: {
@@ -274,6 +340,38 @@ export const clientCopyByLocale = {
       first: "First occurrence",
       second: "Second occurrence",
       helper: "Choose only when the local clock time occurred twice during a DST change."
+    },
+    purchaseFlow: {
+      eyebrow: "Booking and payment",
+      title: "Choose a service from your connected astrologer",
+      relationshipOnly: "There is no catalogue in this account. We show services only from astrologers you are already connected with.",
+      astrologerLabel: "Astrologer",
+      loadingProducts: "Loading available services…",
+      noProducts: "This astrologer has no services available for online payment yet.",
+      loadProductsFailed: "Could not load available services. Please try again.",
+      loadSlotsFailed: "Could not load available times. Please choose a service later.",
+      liveProductHint: "Choose a time, then pay",
+      asyncProductFallbackHint: "After payment, the astrologer will begin work on the service.",
+      formatLabel: "Format",
+      availableSlotsLabel: "Available times",
+      noSlots: "There are no available times in the next 14 days.",
+      receiptContactLabel: "Receipt: verified contact",
+      emailLabel: "Email",
+      phoneLabel: "Phone",
+      phonePlaceholderLabel: "Phone in +7999… format",
+      receiptContactHint: "Use the email or phone verified during sign-in. It is required for the fiscal receipt.",
+      preparingPayment: "Preparing secure payment…",
+      creatingOrder: "Creating order…",
+      pay: "Pay {amount}",
+      checkoutUnknown: "The payment session needs review. Do not attempt to pay again.",
+      checkoutFailed: "Payment could not be prepared. No funds were charged.",
+      checkoutFailedGeneric: "Could not create the payment. Check your verified email or phone and try again.",
+      checkoutRequiresHttps: "Secure payment could not be opened: the return URL requires HTTPS. No funds were charged.",
+      returnStatusLabel: "Order status",
+      paid: "Payment is confirmed. The astrologer will receive the order in their account.",
+      pendingPayment: "We are checking the payment result. Do not create another order; refresh the page in a minute.",
+      paymentNotCompleted: "Payment is not complete. Funds for this order were not charged, or will appear after bank review.",
+      deliveryFormats: { video: "Video", chat: "Chat", audio: "Audio", text: "Text", file: "File", channel: "Channel" }
     }
   }
 } satisfies Record<SupportedLocale, ClientCopy>;

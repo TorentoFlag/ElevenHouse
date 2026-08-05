@@ -13,6 +13,7 @@ import { ClientsModule } from "../clients/clients.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { MediaModule } from "../media/media.module";
 import { SecurityModule } from "../security/security.module";
 import { MatrixController } from "./matrix.controller";
@@ -37,6 +38,7 @@ import { MATRIX_REPORT_ID_GENERATOR, MATRIX_REPORT_STORE } from "./matrix-report
     MediaModule,
     ClockModule,
     IdentityModule,
+    PlatformEntitlementsModule,
     SecurityModule
   ],
   controllers: [

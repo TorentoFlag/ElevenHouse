@@ -17,8 +17,28 @@ const schema = z.object({
     .default(25),
   WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(60000),
   WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
-  WORKERS_FLOW_EXECUTION_MODE: z.enum(["definition_only", "canary"]).default("definition_only"),
-  WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS: z.string().default(""),
+  WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS: z.coerce
+    .number()
+    .int()
+    .min(60_000)
+    .max(31 * 24 * 60 * 60 * 1_000)
+    .default(7 * 24 * 60 * 60 * 1_000),
+  WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(60 * 60 * 1_000)
+    .default(5 * 60 * 1_000),
+  WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .default(30_000),
+  WORKERS_FLOW_EXECUTION_MAX_MODE: z
+    .enum(["definition_only", "canary"])
+    .default("definition_only"),
+  WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: z.string().default(""),
   WORKERS_FLOW_EXECUTION_INSTANCE_ID: z
     .string()
     .trim()
@@ -26,12 +46,6 @@ const schema = z.object({
     .max(180)
     .regex(/^[A-Za-z0-9._:-]+$/)
     .default("flows-worker-local"),
-  WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS: z.coerce
-    .number()
-    .int()
-    .min(1_000)
-    .max(300_000)
-    .default(30_000),
   WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -46,6 +60,13 @@ const schema = z.object({
     .max(300_000)
     .default(5_000),
   WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
+  WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(300_000)
+    .default(5_000),
+  WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
   WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -65,6 +86,38 @@ const schema = z.object({
     .max(300_000)
     .default(30_000),
   WORKERS_FLOW_EXECUTION_ERROR_JITTER: z.coerce.number().min(0).max(1).default(0.5),
+  WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS: z.coerce
+    .number()
+    .int()
+    .min(250)
+    .max(20_000)
+    .default(2_000),
+  WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(86_400_000)
+    .default(60_000),
+  WORKERS_FLOW_RUNTIME_CONTROL_RETENTION_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(100),
+  WORKERS_DEPLOYMENT_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .max(180)
+    .regex(/^[A-Za-z0-9._:-]+$/)
+    .default("local-deployment"),
+  WORKERS_BUILD_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .max(180)
+    .regex(/^[A-Za-z0-9._:-]+$/)
+    .default("local-build"),
   WORKERS_CALCULATION_PDF_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
   WORKERS_CALCULATION_PDF_BACKOFF_MS: z.coerce.number().int().positive().default(1000),
   WORKERS_CALCULATION_PDF_JITTER: z.coerce.number().min(0).max(1).default(0.5),
@@ -93,17 +146,26 @@ const productionRequiredKeys = [
   "WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE",
   "WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS",
   "WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS",
-  "WORKERS_FLOW_EXECUTION_MODE",
+  "WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS",
+  "WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS",
+  "WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS",
+  "WORKERS_FLOW_EXECUTION_MAX_MODE",
   "WORKERS_FLOW_EXECUTION_INSTANCE_ID",
-  "WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS",
   "WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS",
   "WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE",
   "WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS",
   "WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE",
+  "WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS",
+  "WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE",
   "WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS",
   "WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS",
   "WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS",
   "WORKERS_FLOW_EXECUTION_ERROR_JITTER",
+  "WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS",
+  "WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS",
+  "WORKERS_FLOW_RUNTIME_CONTROL_RETENTION_BATCH_SIZE",
+  "WORKERS_DEPLOYMENT_ID",
+  "WORKERS_BUILD_ID",
   "WORKERS_CALCULATION_PDF_ATTEMPTS",
   "WORKERS_CALCULATION_PDF_BACKOFF_MS",
   "WORKERS_CALCULATION_PDF_JITTER",
@@ -123,9 +185,6 @@ export function createWorkersRuntimeConfig(
   if (isProduction) requireExplicitProductionSettings(source);
   const value = schema.parse(source);
   const flowExecution = createFlowExecutionConfig(value);
-  if (isProduction && flowExecution.rollout.mode === "canary") {
-    throw new Error("WORKERS_FLOW_EXECUTION_PERSISTED_CONTROL_REQUIRED");
-  }
   if (isProduction) assertProductionSafety(value);
   return {
     redisUrl: value.REDIS_URL,
@@ -135,7 +194,22 @@ export function createWorkersRuntimeConfig(
     outboxRelayBatchSize: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE,
     outboxLockTimeoutMs: value.WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS,
     flowRuntimeOutboxMaxAttempts: value.WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS,
+    flowBookingEnrollment: {
+      latenessHorizonMs: value.WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS,
+      futureSkewToleranceMs:
+        value.WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS,
+      deferDelayMs: value.WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS
+    },
     flowExecution,
+    flowRuntimeControl: {
+      heartbeatIntervalMaxMs:
+        value.WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS,
+      maintenanceIntervalMs:
+        value.WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS,
+      retentionBatchSize: value.WORKERS_FLOW_RUNTIME_CONTROL_RETENTION_BATCH_SIZE,
+      deploymentId: value.WORKERS_DEPLOYMENT_ID,
+      buildId: value.WORKERS_BUILD_ID
+    },
     calculationPdfAttempts: value.WORKERS_CALCULATION_PDF_ATTEMPTS,
     calculationPdfBackoffMs: value.WORKERS_CALCULATION_PDF_BACKOFF_MS,
     calculationPdfJitter: value.WORKERS_CALCULATION_PDF_JITTER,
@@ -152,21 +226,17 @@ export function createWorkersRuntimeConfig(
 }
 
 function createFlowExecutionConfig(value: z.infer<typeof schema>) {
-  const ownerUserIds = parseCanaryOwnerUserIds(value.WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS);
-  if (value.WORKERS_FLOW_EXECUTION_MODE === "definition_only" && ownerUserIds.length > 0) {
+  const ownerUserIds = parseCanaryOwnerUserIds(
+    value.WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS
+  );
+  if (value.WORKERS_FLOW_EXECUTION_MAX_MODE === "definition_only" && ownerUserIds.length > 0) {
     throw new Error(
-      "WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS must be empty in definition_only mode"
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must be empty in definition_only mode"
     );
   }
-  if (value.WORKERS_FLOW_EXECUTION_MODE === "canary" && ownerUserIds.length === 0) {
-    throw new Error("WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS is required in canary mode");
-  }
-  if (
-    value.WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS >=
-    value.WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS
-  ) {
+  if (value.WORKERS_FLOW_EXECUTION_MAX_MODE === "canary" && ownerUserIds.length === 0) {
     throw new Error(
-      "WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS must be shorter than the execution lease"
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS is required in canary mode"
     );
   }
   if (
@@ -181,7 +251,8 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
     value.WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS <
     Math.max(
       value.WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS,
-      value.WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS
+      value.WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS,
+      value.WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS
     )
   ) {
     throw new Error(
@@ -190,19 +261,20 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
   }
 
   return {
-    rollout:
-      value.WORKERS_FLOW_EXECUTION_MODE === "definition_only"
+    deploymentCeiling:
+      value.WORKERS_FLOW_EXECUTION_MAX_MODE === "definition_only"
         ? ({ mode: "definition_only" } as const)
         : ({
             mode: "canary",
-            ownerScope: { kind: "allowlist", ownerUserIds }
+            ownerUserIds
           } as const),
-    leaseOwner: value.WORKERS_FLOW_EXECUTION_INSTANCE_ID,
-    leaseDurationMs: value.WORKERS_FLOW_EXECUTION_LEASE_DURATION_MS,
+    instanceId: value.WORKERS_FLOW_EXECUTION_INSTANCE_ID,
     pollIntervalMs: value.WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS,
     pollBatchSize: value.WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE,
     recoveryIntervalMs: value.WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS,
     recoveryBatchSize: value.WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE,
+    workItemWakeIntervalMs: value.WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS,
+    workItemWakeBatchSize: value.WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE,
     operationTimeoutMs: value.WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS,
     drainTimeoutMs: value.WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS,
     errorBackoffMaxMs: value.WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS,
@@ -222,10 +294,14 @@ function parseCanaryOwnerUserIds(raw: string): readonly string[] {
         )
     )
   ) {
-    throw new Error("WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS must contain 1 to 100 UUIDs");
+    throw new Error(
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain 1 to 100 UUIDs"
+    );
   }
   if (new Set(ownerUserIds).size !== ownerUserIds.length) {
-    throw new Error("WORKERS_FLOW_EXECUTION_CANARY_OWNER_IDS must contain unique UUIDs");
+    throw new Error(
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain unique UUIDs"
+    );
   }
   return [...ownerUserIds].sort();
 }

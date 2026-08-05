@@ -2,12 +2,20 @@ import { existsSync, readFileSync } from "node:fs";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+import * as refundCaseSchemaModule from "./refund-cases.schema";
 import {
   astrologerRiskProfiles,
   financeCurrencyValues,
   financeIdempotencyCommands,
   financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
+  financeRefundAllocationAuthorities,
+  financeRefundAllocationLinks,
+  financeRefundCases,
+  financeRefundCumulativePositions,
+  financeRefundFundingPositions,
+  financeRefundFundingTransitionAuthorities,
+  financeRefundLifecycleValues,
   financePolicies,
   financeSafeIntegerMinorUnitMax,
   ledgerAccounts,
@@ -99,7 +107,6 @@ describe("Finance persistence schema", () => {
       "under_review",
       "approved",
       "processing_manual",
-      "processing_provider",
       "paid",
       "failed",
       "rejected",
@@ -126,11 +133,15 @@ describe("Finance persistence schema", () => {
     expect(Object.keys(orderColumns)).toEqual(
       expect.arrayContaining([
         "bookingId",
+        "productTitleSnapshot",
         "financePolicyRiskTier",
         "financePolicyHoldDurationHours",
         "financePolicyReserveBps",
         "financePolicyReserveReleaseDelayDays",
-        "financePolicyPlatformFeeBps",
+        "tariffSeriesId",
+        "tariffVersion",
+        "tariffVersionDigest",
+        "tariffCommissionBps",
         "financePolicyProviderSettlementRequired"
       ])
     );
@@ -140,6 +151,7 @@ describe("Finance persistence schema", () => {
     expect(tableCheckNames(orders)).toEqual(
       expect.arrayContaining([
         "orders_status_check",
+        "orders_product_title_snapshot_check",
         "orders_money_currency_check",
         "orders_money_amount_check",
         "orders_money_allocation_check",
@@ -147,7 +159,7 @@ describe("Finance persistence schema", () => {
         "orders_finance_policy_hold_duration_check",
         "orders_finance_policy_reserve_bps_check",
         "orders_finance_policy_reserve_release_check",
-        "orders_finance_policy_platform_fee_check"
+        "orders_tariff_commission_check"
       ])
     );
     expect(tableCheckNames(paymentAttempts)).toEqual(
@@ -193,6 +205,136 @@ describe("Finance persistence schema", () => {
     );
     expect(tableIndexNames(refunds)).toEqual(
       expect.arrayContaining(["refunds_provider_refund_unique"])
+    );
+  });
+
+  it("keeps authoritative outbound refund cases separate from legacy webhook refund rows", () => {
+    expect(getTableName(financeRefundCases)).toBe("finance_refund_cases");
+    expect(getTableName(financeRefundAllocationAuthorities)).toBe(
+      "finance_refund_allocation_authorities"
+    );
+    expect(getTableName(financeRefundAllocationLinks)).toBe("finance_refund_allocation_links");
+    expect(financeRefundLifecycleValues).toEqual([
+      "requested",
+      "approved",
+      "provider_unknown",
+      "succeeded",
+      "failed",
+      "allocation_blocked"
+    ]);
+    expect(Object.keys(getTableColumns(financeRefundCases))).toEqual(
+      expect.arrayContaining([
+        "economicPaymentIntentId",
+        "providerPaymentId",
+        "previousCumulativeRefundedMinor",
+        "approvedCumulativeRefundedMinor",
+        "version",
+        "allocationAuthorityId",
+        "allocationAuthorityVersion",
+        "allocationAuthorityDigest",
+        "fundingCoverageDigest",
+        "providerOperationIntentId",
+        "providerRefundId"
+      ])
+    );
+    expect(Object.keys(getTableColumns(financeRefundAllocationAuthorities))).toEqual([
+      "refundId",
+      "authorityId",
+      "authorityVersion",
+      "allocationPayload",
+      "allocationPreimage",
+      "allocationDigest",
+      "persistedAt"
+    ]);
+    expect(Object.keys(getTableColumns(financeRefundCumulativePositions))).toEqual(
+      expect.arrayContaining([
+        "positionId",
+        "seriesId",
+        "providerAccountId",
+        "providerIdentityVersion",
+        "providerPaymentId",
+        "version",
+        "positionPayload",
+        "positionDigest"
+      ])
+    );
+    expect(Object.keys(getTableColumns(financeRefundFundingPositions))).toEqual(
+      expect.arrayContaining([
+        "positionId",
+        "version",
+        "sourceKind",
+        "sourcePayload",
+        "capacityMinor",
+        "freeMinor",
+        "reservedMinor",
+        "consumedMinor",
+        "positionPayload",
+        "positionDigest"
+      ])
+    );
+    expect(Object.keys(getTableColumns(financeRefundFundingTransitionAuthorities))).toEqual(
+      expect.arrayContaining([
+        "refundId",
+        "operation",
+        "bindingId",
+        "bindingPayload",
+        "bindingDigest"
+      ])
+    );
+    expect(tableCheckNames(financeRefundAllocationAuthorities)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_allocation_authorities_shape_check",
+        "finance_refund_allocation_authorities_digest_check"
+      ])
+    );
+    expect(tableCheckNames(financeRefundFundingPositions)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_funding_positions_source_kind_check",
+        "finance_refund_funding_positions_amount_check",
+        "finance_refund_funding_positions_payload_check"
+      ])
+    );
+    expect(tableCheckNames(financeRefundFundingTransitionAuthorities)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_funding_transition_authorities_operation_check",
+        "finance_refund_funding_transition_authorities_digest_check"
+      ])
+    );
+    expect(tableCheckNames(financeRefundCases)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_cases_cumulative_amount_check",
+        "finance_refund_cases_lifecycle_provider_result_check",
+        "finance_refund_cases_identifier_check"
+      ])
+    );
+    expect(tableIndexNames(financeRefundCases)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_cases_payment_cumulative_unique",
+        "finance_refund_cases_provider_refund_unique"
+      ])
+    );
+    expect(tableForeignKeyNames(financeRefundAllocationLinks)).toEqual(
+      expect.arrayContaining([
+        "finance_refund_allocation_links_refund_fk",
+        "finance_refund_allocation_links_source_lot_fk",
+        "finance_refund_allocation_links_refund_pending_lot_fk"
+      ])
+    );
+    const integritySql = String(
+      Reflect.get(refundCaseSchemaModule, "financeRefundAllocationAuthorityIntegritySql")
+    ).replaceAll(/\s+/g, " ").toLowerCase();
+    expect(integritySql).toContain("finance_canonical_jsonb_v1");
+    expect(integritySql).toContain("allocation_payload - 'allocationdigest'");
+    expect(integritySql).toContain("refund allocation authorities are immutable");
+    expect(integritySql).toContain(
+      "refund case allocation authority does not bind its economic identity"
+    );
+    expect(integritySql).toContain("'{refundapprovalauthorityref,canonicaldigest}'");
+    expect(integritySql).toContain("provider_operation.operation_kind = 'refund'");
+    expect(integritySql).toContain("refund funding positions are append-only");
+    expect(integritySql).toContain("refund funding transition authorities are immutable");
+    expect(integritySql).toContain(
+      "refund funding transition authority does not bind persisted positions"
     );
   });
 
@@ -249,12 +391,12 @@ describe("Finance persistence schema", () => {
   });
 
   it("supports payout methods, paid evidence, and failure evidence at the DB boundary", () => {
-    expect(payoutMethodValues).toEqual(["manual_bank_transfer", "arc_pay_provider"]);
+    expect(payoutMethodValues).toEqual(["manual_bank_transfer"]);
     expect(tableCheckNames(payoutMethods)).toEqual(
       expect.arrayContaining([
         "payout_methods_method_check",
-        "payout_methods_provider_check",
-        "payout_methods_method_provider_shape_check"
+        "payout_methods_manual_only_check",
+        "payout_methods_version_check"
       ])
     );
     expect(tableCheckNames(payoutRequests)).toEqual(
@@ -262,10 +404,24 @@ describe("Finance persistence schema", () => {
         "payout_requests_status_check",
         "payout_requests_method_check",
         "payout_requests_paid_evidence_check",
+        "payout_requests_paid_proof_shape_check",
         "payout_requests_failure_reason_check",
         "payout_requests_amount_check",
         "payout_requests_currency_check"
       ])
+    );
+    expect(Object.keys(getTableColumns(payoutRequests))).toEqual(
+      expect.arrayContaining([
+        "paidProofArtifactId",
+        "paidProofArtifactDigest",
+        "paidProofArtifactByteLength"
+      ])
+    );
+    expect(tableForeignKeyNames(payoutRequests)).toEqual(
+      expect.arrayContaining(["payout_requests_paid_proof_artifact_fk"])
+    );
+    expect(tableIndexNames(payoutRequests)).toEqual(
+      expect.arrayContaining(["payout_requests_paid_proof_artifact_unique"])
     );
   });
 
@@ -276,7 +432,7 @@ describe("Finance persistence schema", () => {
         "finance_policies_risk_tier_check",
         "finance_policies_hold_duration_check",
         "finance_policies_reserve_bps_check",
-        "finance_policies_platform_fee_bps_check"
+        "finance_policies_reserve_release_delay_check"
       ])
     );
     expect(tableCheckNames(astrologerRiskProfiles)).toEqual(
@@ -301,15 +457,10 @@ describe("Finance persistence schema", () => {
   it("keeps conditional finance checks null-safe in the generated baseline", () => {
     const migration = readFileSync(baselineMigrationFile, "utf8");
 
-    expect(migration).toContain(
-      '"manual_bank_transfer_details" is not null and jsonb_typeof("payout_methods"."manual_bank_transfer_details") = \'object\''
-    );
-    expect(migration).toContain(
-      '"provider_payout_account_id" is not null and length(trim("payout_methods"."provider_payout_account_id")) between 1 and 160'
-    );
-    expect(migration).toContain(
-      '"payout_requests"."provider" is not null and "payout_requests"."provider" = \'arc_pay\''
-    );
+    expect(migration).toContain('CREATE TABLE "payout_method_versions"');
+    expect(migration).not.toContain('"manual_bank_transfer_details"');
+    expect(migration).not.toContain('"provider_payout_account_id"');
+    expect(migration).not.toContain('"payout_requests"."provider_payout_id"');
     expect(migration).toContain(
       '"payout_requests"."failure_reason" is not null and length(trim("payout_requests"."failure_reason")) between 1 and 2000'
     );
@@ -377,8 +528,12 @@ describe("Finance persistence schema", () => {
     expect(migration).toContain(
       'CREATE INDEX "ledger_entries_transaction_account_side_idx" ON "ledger_entries" USING btree ("ledger_transaction_id","account_id","entry_side")'
     );
+    expect(migration).toContain('"payout_requests"."paid_proof_artifact_id" is not null');
+    expect(migration).toContain('CONSTRAINT "payout_requests_paid_proof_artifact_fk"');
+    expect(migration).toContain('CREATE UNIQUE INDEX "payout_requests_paid_proof_artifact_unique"');
+    expect(migration).toContain("create or replace function finance_validate_paid_payout_proof()");
     expect(migration).toContain(
-      'CONSTRAINT "payout_requests_paid_evidence_check" CHECK ("payout_requests"."status" <> \'paid\' or ("payout_requests"."external_reference" is not null and "payout_requests"."transferred_at" is not null))'
+      "paid payout proof must reference one active exact bank transfer artifact"
     );
     expect(migration).toContain(
       'ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_account_id_ledger_accounts_id_fk" FOREIGN KEY ("account_id") REFERENCES "public"."ledger_accounts"("id") ON DELETE restrict ON UPDATE no action'

@@ -28,6 +28,7 @@ ElevenHouse/
     db/
     design-system/
     domain/
+    finance-infrastructure/
     i18n/
     numerology-presentation/
     observability/
@@ -78,6 +79,9 @@ workflows добавляются только здесь, а не в `public-api
 - `db`: schema, migrations, repositories, transaction helpers.
 - `design-system`: собственная UI-система ElevenHouse, tokens, primitives, components.
 - `domain`: business use cases и domain services.
+- `finance-infrastructure`: private finance-only adapters for sealed provider
+  artifacts and object storage. It implements domain ports; provider credentials
+  never enter browser bundles or the general shared-contract package.
 - `i18n`: translation infrastructure и shared message keys.
 - `numerology-presentation`: deterministic presentation helpers for numerology
   result rendering.

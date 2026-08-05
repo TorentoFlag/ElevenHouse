@@ -11,6 +11,7 @@ export type WorkerReadiness = {
     readonly calculationPdfWorker: Dependency;
     readonly privateObjectStorage: Dependency;
     readonly flowExecutionRuntime: Dependency;
+    readonly flowWorkerControl: Dependency;
   };
 };
 
@@ -22,6 +23,7 @@ export async function createWorkerReadiness(input: {
     readonly calculationPdfWorker: () => Promise<void>;
     readonly privateObjectStorage: () => Promise<void>;
     readonly flowExecutionRuntime: () => Promise<void>;
+    readonly flowWorkerControl: () => Promise<void>;
   };
   readonly now?: Date;
 }): Promise<WorkerReadiness> {
@@ -30,20 +32,23 @@ export async function createWorkerReadiness(input: {
     calculationPdfQueue,
     calculationPdfWorker,
     privateObjectStorage,
-    flowExecutionRuntime
+    flowExecutionRuntime,
+    flowWorkerControl
   ] = await Promise.all([
     run(input.checks.postgres),
     run(input.checks.calculationPdfQueue),
     run(input.checks.calculationPdfWorker),
     run(input.checks.privateObjectStorage),
-    run(input.checks.flowExecutionRuntime)
+    run(input.checks.flowExecutionRuntime),
+    run(input.checks.flowWorkerControl)
   ]);
   const dependencies = {
     postgres,
     calculationPdfQueue,
     calculationPdfWorker,
     privateObjectStorage,
-    flowExecutionRuntime
+    flowExecutionRuntime,
+    flowWorkerControl
   };
   return {
     service: input.service,

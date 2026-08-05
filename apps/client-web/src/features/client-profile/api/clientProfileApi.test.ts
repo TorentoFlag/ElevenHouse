@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
 import {
-  createClientBirthProfile,
   getClientCabinetOverview,
-  listClientBirthProfiles,
   searchClientBirthPlaces,
-  updateClientBirthProfile
+  upsertClientBirthData
 } from "./clientProfileApi";
 
 const clientUserId = "11111111-1111-4111-8111-111111111111";
@@ -16,12 +14,12 @@ describe("clientProfileApi", () => {
     vi.restoreAllMocks();
   });
 
-  it("reads the cabinet overview and birth profiles through validated contracts", async () => {
+  it("reads the cabinet overview and its singleton birth profile through validated contracts", async () => {
     const get = vi.spyOn(application.http, "get").mockImplementation(async (path) => {
       if (path === "/me/overview") {
         return {
           astrologers: [],
-          birthProfiles: [birthProfile()],
+          birthData: birthProfile(),
           summary: {
             directLinkOnly: true,
             upcomingBookingCount: 0,
@@ -31,49 +29,21 @@ describe("clientProfileApi", () => {
           }
         };
       }
-      if (path === "/me/birth-profiles") {
-        return { profiles: [birthProfile()] };
-      }
       throw new Error(`Unexpected GET ${path}`);
     });
 
     await expect(getClientCabinetOverview()).resolves.toMatchObject({
       summary: { directLinkOnly: true },
-      birthProfiles: [{ isPrimary: true }]
-    });
-    await expect(listClientBirthProfiles()).resolves.toMatchObject({
-      profiles: [{ isPrimary: true }]
+      birthData: { revision: 1 }
     });
     expect(get).toHaveBeenCalledWith("/me/overview");
-    expect(get).toHaveBeenCalledWith("/me/birth-profiles");
   });
 
-  it("creates and updates birth profiles with CSRF", async () => {
-    const post = vi
-      .spyOn(application.http, "post")
-      .mockResolvedValue(birthProfile({ label: "Мама" }));
+  it("upserts the singleton birth profile with CSRF and its expected revision", async () => {
     const put = vi.spyOn(application.http, "put").mockResolvedValue(birthProfile({ label: "Я" }));
 
     await expect(
-      createClientBirthProfile({
-        label: "Мама",
-        birthDate: "1962-11-05",
-        birthTime: null,
-        birthTimePrecision: "unknown",
-        birthPlaceText: "Тула",
-        birthCountryCode: null,
-        birthCity: null,
-        birthRegion: null,
-        birthTimezone: null,
-        birthTimeDstOccurrence: null,
-        birthLatitude: null,
-        birthLongitude: null,
-        isPrimary: false
-      })
-    ).resolves.toMatchObject({ label: "Мама" });
-
-    await expect(
-      updateClientBirthProfile(birthDataId, {
+      upsertClientBirthData({
         label: "Я",
         birthDate: "1990-03-14",
         birthTime: "08:25",
@@ -86,18 +56,13 @@ describe("clientProfileApi", () => {
         birthTimeDstOccurrence: null,
         birthLatitude: null,
         birthLongitude: null,
-        isPrimary: true
+        expectedRevision: 1
       })
     ).resolves.toMatchObject({ label: "Я" });
 
-    expect(post).toHaveBeenCalledWith(
-      "/me/birth-profiles",
-      expect.objectContaining({ label: "Мама", isPrimary: false }),
-      { csrf: true }
-    );
     expect(put).toHaveBeenCalledWith(
-      `/me/birth-profiles/${birthDataId}`,
-      expect.objectContaining({ label: "Я", isPrimary: true }),
+      "/me/birth-data",
+      expect.objectContaining({ label: "Я", expectedRevision: 1 }),
       { csrf: true }
     );
   });
@@ -131,7 +96,7 @@ describe("clientProfileApi", () => {
   });
 });
 
-function birthProfile(overrides: Partial<{ label: string; isPrimary: boolean }> = {}) {
+function birthProfile(overrides: Partial<{ label: string }> = {}) {
   return {
     id: birthDataId,
     clientUserId,
@@ -148,7 +113,9 @@ function birthProfile(overrides: Partial<{ label: string; isPrimary: boolean }> 
     birthLatitude: null,
     birthLongitude: null,
     source: "client_profile",
-    isPrimary: overrides.isPrimary ?? true,
+    revision: 1,
+    lastEditedByUserId: clientUserId,
+    lastEditedByRole: "client",
     createdAt: "2026-07-06T10:00:00.000Z",
     updatedAt: "2026-07-06T10:00:00.000Z"
   };

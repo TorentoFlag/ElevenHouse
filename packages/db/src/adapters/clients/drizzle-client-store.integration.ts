@@ -524,9 +524,9 @@ describe("client store Drizzle/PostgreSQL integration", () => {
     }
   });
 
-  it("lists one client with primary birth data when multiple birth profiles exist", async () => {
-    const { clientUserId, astrologerUserId, primaryBirthDataId } =
-      await createLinkedClientWithMultipleBirthProfiles();
+  it("lists one client with its only birth profile", async () => {
+    const { clientUserId, astrologerUserId, birthDataId } =
+      await createLinkedClientWithBirthProfile();
 
     const result = await createDrizzleClientStore(runtime.database).listAstrologerClients({
       astrologerUserId,
@@ -539,13 +539,13 @@ describe("client store Drizzle/PostgreSQL integration", () => {
     expect(result.clients).toHaveLength(1);
     expect(result.clients[0]).toMatchObject({
       clientUserId,
-      birthData: { id: primaryBirthDataId, label: "Primary", isPrimary: true }
+      birthData: { id: birthDataId, label: "Primary", revision: 1 }
     });
   });
 
-  it("gets the primary birth data when multiple birth profiles exist", async () => {
-    const { clientUserId, astrologerUserId, primaryBirthDataId } =
-      await createLinkedClientWithMultipleBirthProfiles();
+  it("gets the only birth profile for an active relationship", async () => {
+    const { clientUserId, astrologerUserId, birthDataId } =
+      await createLinkedClientWithBirthProfile();
 
     const result = await createDrizzleClientStore(runtime.database).getAstrologerClient({
       astrologerUserId,
@@ -554,8 +554,77 @@ describe("client store Drizzle/PostgreSQL integration", () => {
 
     expect(result).toMatchObject({
       clientUserId,
-      birthData: { id: primaryBirthDataId, label: "Primary", isPrimary: true }
+      birthData: { id: birthDataId, label: "Primary", revision: 1 }
     });
+  });
+
+  it("records immutable birth-profile revisions and rejects stale compare-and-swap writes", async () => {
+    const { clientUserId, astrologerUserId, birthDataId } = await createLinkedClientWithBirthProfile();
+    const store = createDrizzleClientStore(runtime.database);
+
+    await expect(
+      store.writeClientBirthProfile({
+        clientUserId,
+        actor: { userId: clientUserId, role: "client" },
+        expectedRevision: 1,
+        data: {
+          label: "Corrected",
+          birthDate: "1991-03-03",
+          birthTime: null,
+          birthTimePrecision: "unknown",
+          birthPlaceText: null,
+          birthCountryCode: null,
+          birthCity: null,
+          birthRegion: null,
+          birthTimezone: null,
+          birthTimeDstOccurrence: null,
+          birthLatitude: null,
+          birthLongitude: null,
+          source: "client_profile"
+        },
+        now: "2026-08-03T10:05:00.000Z"
+      })
+    ).resolves.toMatchObject({ kind: "written", profile: { revision: 2 } });
+
+    await expect(
+      store.writeClientBirthProfile({
+        clientUserId,
+        actor: { userId: astrologerUserId, role: "astrologer" },
+        expectedRevision: 1,
+        data: {
+          label: "Stale",
+          birthDate: "1992-04-04",
+          birthTime: null,
+          birthTimePrecision: "unknown",
+          birthPlaceText: null,
+          birthCountryCode: null,
+          birthCity: null,
+          birthRegion: null,
+          birthTimezone: null,
+          birthTimeDstOccurrence: null,
+          birthLatitude: null,
+          birthLongitude: null,
+          source: "manual"
+        },
+        now: "2026-08-03T10:10:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "conflict" });
+
+    const history = await runtime.pool.query<{
+      revision: number;
+      actor_user_id: string;
+      snapshot_birth_date: string;
+    }>(
+      `select revision, actor_user_id, snapshot ->> 'birthDate' as snapshot_birth_date
+       from client_birth_data_history
+       where birth_data_id = $1
+       order by revision`,
+      [birthDataId]
+    );
+    expect(history.rows).toEqual([
+      { revision: 1, actor_user_id: astrologerUserId, snapshot_birth_date: "1990-02-02" },
+      { revision: 2, actor_user_id: clientUserId, snapshot_birth_date: "1991-03-03" }
+    ]);
   });
 
   async function createUser(input: {
@@ -578,21 +647,19 @@ describe("client store Drizzle/PostgreSQL integration", () => {
     return userId;
   }
 
-  async function createLinkedClientWithMultipleBirthProfiles(): Promise<{
+  async function createLinkedClientWithBirthProfile(): Promise<{
     readonly clientUserId: string;
     readonly astrologerUserId: string;
-    readonly primaryBirthDataId: string;
+    readonly birthDataId: string;
   }> {
-    const clientUserId = await createUser({ role: "client", displayName: "Multiple Profiles" });
+    const clientUserId = await createUser({ role: "client", displayName: "Birth Profile" });
     const astrologerUserId = await createUser({
       role: "astrologer",
       displayName: "Profiles Astrologer"
     });
-    const secondaryBirthDataId = randomUUID();
-    const primaryBirthDataId = randomUUID();
     await runtime.pool.query(
       `insert into client_profiles (user_id, display_name_snapshot)
-       values ($1, 'Multiple Profiles')`,
+       values ($1, 'Birth Profile')`,
       [clientUserId]
     );
     await runtime.pool.query(
@@ -601,15 +668,29 @@ describe("client store Drizzle/PostgreSQL integration", () => {
        ) values ($1, $2, 'direct_link', 'active', $3, $3)`,
       [clientUserId, astrologerUserId, linkedAt]
     );
-    await runtime.pool.query(
-      `insert into client_birth_data (
-         id, client_user_id, label, birth_date, birth_time_precision, source, is_primary
-       ) values
-         ($1, $3, 'Secondary', '1980-01-01', 'unknown', 'client_profile', false),
-         ($2, $3, 'Primary', '1990-02-02', 'unknown', 'client_profile', true)`,
-      [secondaryBirthDataId, primaryBirthDataId, clientUserId]
-    );
-    return { clientUserId, astrologerUserId, primaryBirthDataId };
+    const write = await createDrizzleClientStore(runtime.database).writeClientBirthProfile({
+      clientUserId,
+      actor: { userId: astrologerUserId, role: "astrologer" },
+      expectedRevision: null,
+      data: {
+        label: "Primary",
+        birthDate: "1990-02-02",
+        birthTime: null,
+        birthTimePrecision: "unknown",
+        birthPlaceText: null,
+        birthCountryCode: null,
+        birthCity: null,
+        birthRegion: null,
+        birthTimezone: null,
+        birthTimeDstOccurrence: null,
+        birthLatitude: null,
+        birthLongitude: null,
+        source: "manual"
+      },
+      now: linkedAt
+    });
+    if (write.kind !== "written") throw new Error("Expected birth profile write");
+    return { clientUserId, astrologerUserId, birthDataId: write.profile.id };
   }
 });
 

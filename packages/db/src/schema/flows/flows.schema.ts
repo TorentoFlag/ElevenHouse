@@ -38,7 +38,7 @@ export const flows = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    origin: jsonb("origin").$type<FlowDefinitionOriginV1>(),
+    origin: jsonb("origin").$type<FlowDefinitionOriginV1>().notNull(),
     status: text("status").notNull().default("draft"),
     definitionState: text("definition_state").notNull().default("draft"),
     approvalMode: text("approval_mode").notNull().default("manual_approve"),
@@ -130,16 +130,10 @@ export const flows = pgTable(
       check("flows_draft_graph_object_check", sql`jsonb_typeof(${table.draftGraph}) = 'object'`),
       check(
         "flows_graph_origin_check",
-        sql`(
-          ${table.draftGraph}->>'schemaVersion' = 'flow-graph.v1'
-          and ${table.origin} is null
-          and ${table.draftPresentation} is null
-        ) or (
-          ${table.draftGraph}->>'schemaVersion' = 'flow-graph.v2'
+        sql`${table.draftGraph}->>'schemaVersion' = 'flow-graph.v2'
           and jsonb_typeof(${table.origin}) = 'object'
           and ${table.origin}->>'schemaVersion' = 'flow-definition-origin.v1'
-          and ${table.origin}->>'type' in ('blank', 'template', 'migration')
-        )`
+          and ${table.origin}->>'type' in ('blank', 'template')`
       ),
       check(
         "flows_draft_presentation_object_check",
@@ -166,16 +160,17 @@ export const flowVersions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
-    sourceRevision: integer("source_revision"),
+    sourceRevision: integer("source_revision").notNull(),
     approvalMode: text("approval_mode").notNull(),
-    graphSchemaVersion: text("graph_schema_version"),
+    graphSchemaVersion: text("graph_schema_version").notNull(),
     graph: jsonb("graph").notNull(),
     presentation: jsonb("presentation"),
-    capabilityManifest: jsonb("capability_manifest"),
+    capabilityManifest: jsonb("capability_manifest").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull()
   },
   (table) => [
     unique("flow_versions_id_owner_unique").on(table.id, table.ownerUserId),
+    unique("flow_versions_flow_id_id_unique").on(table.flowId, table.id),
     unique("flow_versions_flow_id_id_owner_unique").on(table.flowId, table.id, table.ownerUserId),
     unique("flow_versions_flow_id_id_owner_published_unique").on(
       table.flowId,
@@ -191,7 +186,7 @@ export const flowVersions = pgTable(
     check("flow_versions_positive_version_check", sql`${table.version} > 0`),
     check(
       "flow_versions_source_revision_check",
-      sql`${table.sourceRevision} is null or ${table.sourceRevision} > 0`
+        sql`${table.sourceRevision} > 0`
     ),
     check(
       "flow_versions_approval_mode_check",
@@ -204,16 +199,9 @@ export const flowVersions = pgTable(
     ),
     check(
       "flow_versions_v2_metadata_check",
-      sql`(
-        ${table.sourceRevision} is null
-        and ${table.graphSchemaVersion} is null
-        and ${table.capabilityManifest} is null
-      ) or (
-        ${table.sourceRevision} > 0
-        and ${table.graphSchemaVersion} = 'flow-graph.v2'
-        and ${table.graph}->>'schemaVersion' = 'flow-graph.v2'
-        and jsonb_typeof(${table.capabilityManifest}) = 'object'
-      )`
+        sql`${table.graphSchemaVersion} = 'flow-graph.v2'
+          and ${table.graph}->>'schemaVersion' = 'flow-graph.v2'
+          and jsonb_typeof(${table.capabilityManifest}) = 'object'`
     ),
     check(
       "flow_versions_capability_manifest_schema_check",
@@ -223,7 +211,6 @@ export const flowVersions = pgTable(
     uniqueIndex("flow_versions_flow_version_unique").on(table.flowId, table.version),
     uniqueIndex("flow_versions_flow_source_revision_unique")
       .on(table.flowId, table.sourceRevision)
-      .where(sql`${table.sourceRevision} is not null`)
   ]
 );
 

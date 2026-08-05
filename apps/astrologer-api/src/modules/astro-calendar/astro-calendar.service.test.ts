@@ -280,7 +280,7 @@ function createClientStore(overrides: Partial<ClientStore> = {}): ClientStore {
     markJoinIntentClaimed: vi.fn(),
     ensureRelationship: vi.fn(),
     upsertClientProfile: vi.fn(),
-    upsertClientBirthData: vi.fn(),
+    writeClientBirthProfile: vi.fn(),
     listAstrologerClients: vi.fn(async () => ({
       clients: [client({ clientUserId: clientId })],
       total: 1
@@ -352,7 +352,6 @@ function birthData(targetClientId: string): ClientBirthData {
     id: "55555555-5555-4555-8555-555555555555",
     clientUserId: targetClientId,
     label: null,
-    isPrimary: true,
     birthDate: "1990-07-15",
     birthTime: "14:30",
     birthTimePrecision: "exact" as const,
@@ -365,6 +364,9 @@ function birthData(targetClientId: string): ClientBirthData {
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
     source: "manual" as const,
+    revision: 1,
+    lastEditedByUserId: ownerUserId,
+    lastEditedByRole: "astrologer" as const,
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z"
   };

@@ -211,7 +211,9 @@ function clientOption(label: string, birthDate: string) {
       birthLatitude: null,
       birthLongitude: null,
       source: "client_profile" as const,
-      isPrimary: true,
+      revision: 1,
+      lastEditedByUserId: "11111111-1111-4111-8111-111111111111",
+      lastEditedByRole: "client" as const,
       createdAt: "2026-07-06T00:00:00.000Z",
       updatedAt: "2026-07-06T00:00:00.000Z"
     }

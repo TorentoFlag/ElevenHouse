@@ -23,6 +23,12 @@ async function main(): Promise<void> {
     const result = await seedAdminFinanceBrowserFixture(runtime, {
       sessionCookieName: process.env.ADMIN_API_SESSION_COOKIE_NAME,
       astrologerSessionCookieName: process.env.ASTROLOGER_API_SESSION_COOKIE_NAME,
+      astrologerCsrfCookieName: process.env.ASTROLOGER_API_CSRF_COOKIE_NAME,
+      astrologerCsrfHeaderName: process.env.ASTROLOGER_API_CSRF_HEADER_NAME,
+      astrologerCsrfSecret: process.env.ASTROLOGER_API_CSRF_SECRET,
+      astrologerCsrfTokenTtlSeconds: parsePositiveInt(
+        process.env.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS
+      ),
       csrfCookieName: process.env.ADMIN_API_CSRF_COOKIE_NAME,
       csrfHeaderName: process.env.ADMIN_API_CSRF_HEADER_NAME,
       csrfSecret: process.env.ADMIN_API_CSRF_SECRET,
@@ -34,6 +40,8 @@ async function main(): Promise<void> {
     console.log(`Astrologer user: ${result.astrologerUserId}`);
     console.log(`Session cookie: ${result.sessionCookie}`);
     console.log(`Astrologer session cookie: ${result.astrologerSessionCookie}`);
+    console.log(`Astrologer CSRF cookie: ${result.astrologerCsrfCookie}`);
+    console.log(`Astrologer CSRF header: ${result.astrologerCsrfHeaderName}: ${result.astrologerCsrfToken}`);
     console.log(`CSRF cookie: ${result.csrfCookie}`);
     console.log(`CSRF header: ${result.csrfHeaderName}: ${result.csrfToken}`);
     console.log(`Browser console helper: ${result.browserConsoleHelper}`);

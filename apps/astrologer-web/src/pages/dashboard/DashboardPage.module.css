@@ -27,36 +27,18 @@
 }
 
 .flowTasks {
-  display: grid;
-  max-width: 780px;
-  gap: 14px;
-  border: 1px solid rgb(216 212 236 / 0.1);
-  border-radius: 8px;
-  padding: 18px;
-  background: rgb(13 12 32 / 0.72);
+  --flows-line: var(--eh-color-moon-300-alpha-14);
+  --flows-muted: var(--eh-color-moon-500);
+  --flows-gold: var(--eh-color-gold);
+  --flows-gold-soft: rgb(244 196 48 / 0.14);
+  width: 100%;
+  max-width: 1126px;
 }
 
-.sectionHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  justify-content: space-between;
-}
-
-.sectionHeader h2 {
-  margin: 2px 0 0;
-  color: var(--eh-color-moon-100);
-  font-size: 18px;
-  font-weight: 760;
-}
-
-.sectionEyebrow {
-  margin: 0;
-  color: var(--eh-color-muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
+.flowTasks .flowTasksPanel {
+  border: 0;
+  padding: 18px 20px;
+  background: transparent;
 }
 
 .sectionAction {
@@ -64,76 +46,33 @@
   min-height: 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgb(244 196 48 / 0.36);
+  border: 1px solid rgb(216 212 236 / 0.12);
   border-radius: 8px;
   padding: 0 13px;
-  background: rgb(244 196 48 / 0.13);
-  color: var(--eh-color-gold);
+  background: rgb(30 27 62 / 0.62);
+  color: var(--eh-color-moon-300);
   font-size: 13px;
   font-weight: 760;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.approvalList {
-  display: grid;
-  gap: 10px;
-}
-
-.approvalCard {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 12px;
-  justify-content: space-between;
-  border: 1px solid rgb(216 212 236 / 0.1);
-  border-radius: 8px;
-  padding: 13px 14px;
-  background: rgb(30 27 62 / 0.72);
-}
-
-.approvalCard h3 {
-  margin: 0;
-  color: var(--eh-color-moon-100);
-  font-size: 14px;
-  font-weight: 760;
-}
-
-.approvalCard p,
-.stateText,
-.errorText {
-  margin: 5px 0 0;
-  color: var(--eh-color-muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.errorText {
-  color: #ff9f9f;
-  font-weight: 760;
-}
-
-.approvalCard > span {
-  display: inline-flex;
-  min-height: 26px;
-  align-items: center;
-  border: 1px solid rgb(244 196 48 / 0.28);
-  border-radius: 999px;
-  padding: 0 10px;
+.sectionAction:hover {
+  border-color: rgb(244 196 48 / 0.28);
   color: var(--eh-color-gold);
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
+}
+
+.sectionAction:focus-visible {
+  outline: 2px solid var(--eh-color-gold);
+  outline-offset: 2px;
 }
 
 @media (max-width: 640px) {
-  .sectionHeader,
-  .approvalCard {
-    align-items: stretch;
-    flex-direction: column;
+  .flowTasks .flowTasksPanel {
+    padding: 14px 0;
   }
 
   .sectionAction {
-    width: 100%;
+    min-height: 34px;
   }
 }

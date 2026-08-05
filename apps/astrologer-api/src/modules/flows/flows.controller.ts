@@ -10,46 +10,55 @@ import {
   Post,
   Query,
   Req,
-  Res,
   UseGuards
 } from "@nestjs/common";
-import {
-  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
-  FLOW_PUBLICATION_V3_MEDIA_TYPE
-} from "@elevenhouse/contracts";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
+import { RequirePlatformTariffCapability } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { FlowsService } from "./flows.service";
-import {
-  negotiateFlowPublicationResponse,
-  negotiateFlowValidationResponse,
-  setFlowNegotiatedResponseHeaders,
-  type FlowNegotiatedResponse
-} from "./flow-response-negotiation";
 
 @Controller("flow-templates")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class FlowTemplatesController {
   constructor(private readonly service: FlowsService) {}
 
   @Get()
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.templates.read",
+    capability: "funnels",
+    operation: "read"
+  })
   listFlowTemplates(@Query() query: unknown) {
     return this.service.listFlowTemplates(query);
   }
 }
 
 @Controller("flows")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class FlowsController {
   constructor(private readonly service: FlowsService) {}
 
   @Get()
-  listFlows(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.list",
+    capability: "funnels",
+    operation: "read"
+  })
+  listFlows(
+    @Query() query: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
     return this.service.listFlows(query, request);
   }
 
   @Post()
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.create",
+    capability: "funnels",
+    operation: "mutation"
+  })
   @RequireCsrf()
   @RequireIdempotency({ scope: "flows.definition.create.v2" })
   createFlow(
@@ -61,36 +70,40 @@ export class FlowsController {
   }
 
   @Get(":flowId")
-  getFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.read",
+    capability: "funnels",
+    operation: "read"
+  })
+  getFlow(
+    @Param("flowId") flowId: string,
+    @Req() request: AstrologerSessionRequest
+  ) {
     return this.service.getFlow(flowId, request);
   }
 
   @Post(":flowId/validate")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.validate",
+    capability: "funnels",
+    operation: "mutation"
+  })
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
-  async validateFlowDefinition(
+  validateFlowDefinition(
     @Param("flowId") flowId: string,
     @Body() body: unknown,
-    @Headers("accept") accept: string | undefined,
-    @Req() request: AstrologerSessionRequest,
-    @Res({ passthrough: true }) response: FlowNegotiatedResponse
+    @Req() request: AstrologerSessionRequest
   ) {
-    const result = await this.service.validateFlowDefinition(
-      flowId,
-      body,
-      request,
-      negotiateFlowValidationResponse(accept)
-    );
-    setFlowNegotiatedResponseHeaders(
-      response,
-      result.schemaVersion === "flow-definition-validation.v2"
-        ? FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE
-        : "application/json"
-    );
-    return result;
+    return this.service.validateFlowDefinition(flowId, body, request);
   }
 
   @Patch(":flowId/draft")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.draft.update",
+    capability: "funnels",
+    operation: "mutation"
+  })
   @RequireCsrf()
   @RequireIdempotency({ scope: "flows.definition.update-draft.v2" })
   updateFlowDraft(
@@ -103,34 +116,29 @@ export class FlowsController {
   }
 
   @Post(":flowId/publish")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.publish",
+    capability: "funnels",
+    operation: "mutation"
+  })
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
   @RequireIdempotency({ scope: "flows.definition.publish.v2" })
-  async publishFlow(
+  publishFlow(
     @Param("flowId") flowId: string,
     @Body() body: unknown,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Headers("accept") accept: string | undefined,
-    @Req() request: AstrologerSessionRequest,
-    @Res({ passthrough: true }) response: FlowNegotiatedResponse
+    @Req() request: AstrologerSessionRequest
   ) {
-    const result = await this.service.publishFlow(
-      flowId,
-      body,
-      idempotencyKey,
-      request,
-      negotiateFlowPublicationResponse(accept)
-    );
-    setFlowNegotiatedResponseHeaders(
-      response,
-      result.version.schemaVersion === "flow-published-version.v3"
-        ? FLOW_PUBLICATION_V3_MEDIA_TYPE
-        : "application/json"
-    );
-    return result;
+    return this.service.publishFlow(flowId, body, idempotencyKey, request);
   }
 
   @Post(":flowId/next-draft")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.next-draft.create",
+    capability: "funnels",
+    operation: "mutation"
+  })
   @HttpCode(HttpStatus.OK)
   @RequireCsrf()
   @RequireIdempotency({ scope: "flows.definition.create-next-draft.v2" })
@@ -141,54 +149,6 @@ export class FlowsController {
     @Req() request: AstrologerSessionRequest
   ) {
     return this.service.createNextFlowDraft(flowId, body, idempotencyKey, request);
-  }
-
-  @Post(":flowId/migrations/v2")
-  @HttpCode(HttpStatus.OK)
-  @RequireCsrf()
-  @RequireIdempotency({ scope: "flows.definition.migrate.v2" })
-  migrateFlowDefinition(
-    @Param("flowId") flowId: string,
-    @Body() body: unknown,
-    @Headers("idempotency-key") idempotencyKey: string | undefined,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.service.migrateFlowDefinition(flowId, body, idempotencyKey, request);
-  }
-
-  @Post(":flowId/activate")
-  @HttpCode(HttpStatus.OK)
-  @RequireCsrf()
-  activateFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
-    return this.service.activateFlow(flowId, request);
-  }
-
-  @Post(":flowId/pause")
-  @HttpCode(HttpStatus.OK)
-  @RequireCsrf()
-  pauseFlow(@Param("flowId") flowId: string, @Req() request: AstrologerSessionRequest) {
-    return this.service.pauseFlow(flowId, request);
-  }
-
-  @Post(":flowId/simulate")
-  @HttpCode(HttpStatus.OK)
-  @RequireCsrf()
-  simulateFlow(
-    @Param("flowId") flowId: string,
-    @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.service.simulateFlow(flowId, body, request);
-  }
-
-  @Post(":flowId/manual-runs")
-  @RequireCsrf()
-  createManualRun(
-    @Param("flowId") flowId: string,
-    @Body() body: unknown,
-    @Req() request: AstrologerSessionRequest
-  ) {
-    return this.service.createManualRun(flowId, body, request);
   }
 
   @Get(":flowId/runs")

@@ -1,4 +1,4 @@
-import type { FlowExecutionStore } from "@elevenhouse/domain";
+import type { FlowExecutionWorkerStore } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
 
 const MAX_FLOW_EXECUTION_RECOVERY_BATCH_SIZE = 100;
@@ -12,7 +12,7 @@ export type RecoverExpiredFlowExecutionsResult = {
 };
 
 export async function recoverExpiredFlowExecutions(input: {
-  readonly store: FlowExecutionStore;
+  readonly store: Pick<FlowExecutionWorkerStore, "recoverExpired">;
   readonly limit: number;
   readonly logger?: Logger;
 }): Promise<RecoverExpiredFlowExecutionsResult> {

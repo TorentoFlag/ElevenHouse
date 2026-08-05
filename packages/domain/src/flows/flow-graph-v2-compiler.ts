@@ -2,7 +2,6 @@ import {
   FLOW_GRAPH_V2_MAX_EDGES,
   FLOW_GRAPH_V2_MAX_NODES,
   flowGraphV2Schema,
-  type FlowCapabilityManifestV1,
   type FlowCapabilityManifestV2,
   type FlowCapabilityRequirement,
   type FlowDefinitionValidationIssue,
@@ -10,19 +9,16 @@ import {
   type FlowGraphV2,
   type FlowGraphV2CompileIssueCode,
   type FlowNodeKindV2,
-  type FlowNodeExecutorRequirement,
   type FlowNodeV2,
   type FlowSourceHandleV2,
   type FlowTriggerMatcherRequirement
 } from "@elevenhouse/contracts";
 
 export type {
-  FlowCapabilityManifestV1,
   FlowCapabilityManifestV2,
   FlowCapabilityRequirement,
   FlowExecutableNodeExecutorRequirement,
   FlowGraphV2CompileIssueCode,
-  FlowNodeExecutorRequirement,
   FlowTriggerMatcherRequirement
 } from "@elevenhouse/contracts";
 
@@ -89,6 +85,14 @@ const nodeRules = {
     requiredHandles: conditionHandles,
     capabilities: ["clients.birth_data.read.service_preparation"],
     branching: true,
+    terminal: false,
+    trigger: false
+  },
+  natal_chart_request: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["charts.calculate.natal.booking_context"],
+    branching: false,
     terminal: false,
     trigger: false
   },
@@ -195,6 +199,21 @@ export function compileFlowGraphV2(
     });
   }
 
+  if (triggerNodes.length === 1 && triggerNodes[0]?.kind !== "booking_confirmed") {
+    for (const node of nodesById.values()) {
+      if (
+        node.kind === "astrologer_work_item" &&
+        node.config.duePolicy?.kind === "before_booking_start"
+      ) {
+        addIssue(issues, {
+          code: "work_item_due_policy_requires_booking_trigger",
+          path: `nodes.${node.id}.config.duePolicy`,
+          message: "A booking-relative work-item deadline requires a booking trigger."
+        });
+      }
+    }
+  }
+
   const structurallyValidEdges = sortedEdges.filter((edge) => {
     if (edgeIdCounts.get(edge.id) !== 1) return false;
     if (!nodesById.has(edge.sourceNodeId) || !nodesById.has(edge.targetNodeId)) {
@@ -228,7 +247,7 @@ export function compileFlowGraphV2(
       });
     }
 
-    if (incoming.length > 1) {
+    if (incoming.length > 1 && !isHumanGatedBirthDataRecheckFanIn(node, incoming, nodesById)) {
       addIssue(issues, {
         code: "implicit_fan_in",
         path: `nodes.${node.id}`,
@@ -285,7 +304,10 @@ export function compileFlowGraphV2(
     }
   }
 
-  if (containsCycle(nodesById, structurallyValidEdges)) {
+  if (
+    containsCycle(nodesById, structurallyValidEdges) &&
+    !hasOnlyHumanGatedBirthDataRecheckCycle(nodesById, structurallyValidEdges)
+  ) {
     addIssue(issues, {
       code: "cycle_detected",
       path: "edges",
@@ -342,15 +364,86 @@ export function compileFlowGraphV2(
   };
 }
 
+function hasOnlyHumanGatedBirthDataRecheckCycle(
+  nodesById: ReadonlyMap<string, FlowNodeV2>,
+  edges: readonly FlowGraphV2["edges"][number][]
+): boolean {
+  const birthDataNodes = [...nodesById.values()].filter(
+    (node): node is Extract<FlowNodeV2, { readonly kind: "birth_data_available" }> =>
+      node.kind === "birth_data_available"
+  );
+  const collectionNodes = [...nodesById.values()].filter(
+    (node): node is Extract<FlowNodeV2, { readonly kind: "astrologer_work_item" }> =>
+      node.kind === "astrologer_work_item" && node.config.taskKind === "birth_data_collection"
+  );
+  if (birthDataNodes.length !== 1 || collectionNodes.length !== 1) return false;
+
+  const birthData = birthDataNodes[0]!;
+  const collection = collectionNodes[0]!;
+  const hasFalseToCollection = edges.some(
+    (edge) =>
+      edge.sourceNodeId === birthData.id &&
+      edge.sourceHandle === "false" &&
+      edge.targetNodeId === collection.id
+  );
+  const hasSuccessToBirthData = edges.some(
+    (edge) =>
+      edge.sourceNodeId === collection.id &&
+      edge.sourceHandle === "success" &&
+      edge.targetNodeId === birthData.id
+  );
+  if (!hasFalseToCollection || !hasSuccessToBirthData) return false;
+
+  const cycleEdges = edges.filter(
+    (edge) =>
+      (edge.sourceNodeId === birthData.id && edge.targetNodeId === collection.id) ||
+      (edge.sourceNodeId === collection.id && edge.targetNodeId === birthData.id)
+  );
+  return cycleEdges.length === 2;
+}
+
+function isHumanGatedBirthDataRecheckFanIn(
+  node: FlowNodeV2,
+  incoming: readonly FlowGraphV2["edges"][number][],
+  nodesById: ReadonlyMap<string, FlowNodeV2>
+): boolean {
+  if (node.kind !== "birth_data_available" || incoming.length !== 2) return false;
+  return incoming.some((edge) => {
+    const source = nodesById.get(edge.sourceNodeId);
+    return source?.kind === "booking_confirmed" && edge.sourceHandle === "next";
+  }) && incoming.some((edge) => {
+    const source = nodesById.get(edge.sourceNodeId);
+    return (
+      source?.kind === "astrologer_work_item" &&
+      source.config.taskKind === "birth_data_collection" &&
+      edge.sourceHandle === "success"
+    );
+  });
+}
+
 function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
-  if (node.kind !== "booking_confirmed") return node;
-  return {
-    ...node,
-    config: {
-      ...node.config,
-      productIds: [...node.config.productIds].sort(compareStableText)
-    }
-  };
+  if (node.kind === "booking_confirmed") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        productIds: [...node.config.productIds].sort(compareStableText)
+      }
+    };
+  }
+  if (node.kind === "astrologer_work_item") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        duePolicy: node.config.duePolicy ?? { kind: "none" },
+        completionRequirements: node.config.completionRequirements ?? {
+          resultSummary: "optional"
+        }
+      }
+    };
+  }
+  return node;
 }
 
 function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityManifestV2 {
@@ -391,25 +484,6 @@ function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityM
       compareStableText(left.kind, right.kind)
     ),
     requiredCapabilities: [...capabilities].sort(compareStableText)
-  };
-}
-
-export function projectFlowCapabilityManifestV1(
-  manifest: FlowCapabilityManifestV2
-): FlowCapabilityManifestV1 {
-  const triggerExecutor: FlowNodeExecutorRequirement = {
-    kind: manifest.triggerMatcher.kind,
-    configSchemaVersion: manifest.triggerMatcher.configSchemaVersion,
-    executorContractVersion: manifest.triggerMatcher.matcherContractVersion
-  };
-
-  return {
-    schemaVersion: "flow-capability-manifest.v1",
-    executionSemanticsVersion: manifest.executionSemanticsVersion,
-    nodeExecutors: [...manifest.nodeExecutors, triggerExecutor].sort((left, right) =>
-      compareStableText(left.kind, right.kind)
-    ),
-    requiredCapabilities: [...manifest.requiredCapabilities]
   };
 }
 

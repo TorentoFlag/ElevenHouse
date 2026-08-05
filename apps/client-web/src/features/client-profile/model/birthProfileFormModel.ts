@@ -145,7 +145,10 @@ export function updateBirthTimeDstOccurrence(
   };
 }
 
-export function buildBirthProfileRequest(form: BirthProfileFormState): BirthProfileRequestResult {
+export function buildBirthProfileRequest(
+  form: BirthProfileFormState,
+  expectedRevision: number | null
+): BirthProfileRequestResult {
   const typedPlace = normalizeVisibleText(form.birthPlaceText);
   const selectedPlace = normalizeVisibleText(form.selectedBirthPlaceText);
 
@@ -181,7 +184,7 @@ export function buildBirthProfileRequest(form: BirthProfileFormState): BirthProf
       birthTimeDstOccurrence: birthTime ? form.birthTimeDstOccurrence : null,
       birthLatitude: hasSelectedPlace ? form.birthLatitude : null,
       birthLongitude: hasSelectedPlace ? form.birthLongitude : null,
-      isPrimary: true
+      expectedRevision
     }
   };
 }

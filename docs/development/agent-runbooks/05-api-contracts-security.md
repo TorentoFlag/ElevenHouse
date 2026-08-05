@@ -82,8 +82,9 @@ Do not add payment or booking status transitions as plain controller mutations.
 
 ## Sensitive Data Rules
 
-- Birth data, recordings and use of anonymized data require explicit consent
-  records.
+- Birth-data processing follows the registration legal policy; it has no
+  separate consent, grant or revoke workflow. Recordings and use of anonymized
+  data retain their own explicit consent records.
 - Recordings require recording consent before capture.
 - KYC/legal identity fields are not ordinary profile fields.
 - Verification status is protected workflow state.

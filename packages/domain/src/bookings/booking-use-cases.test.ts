@@ -19,6 +19,7 @@ import type {
 } from "./booking-ports";
 import type { Booking, BookingProduct } from "./booking-types";
 import {
+  completeBooking,
   createManualBooking,
   createPaidBookingHold,
   getAvailableBookingSlots,
@@ -60,6 +61,8 @@ const product: BookingProduct = {
   participantMode: "solo",
   durationMinutes: 60,
   deliveryFormats: ["video", "audio"],
+  requiredClientData: ["chart1"],
+  methods: ["natal"],
   priceMinor: 490000,
   currency: "RUB"
 };
@@ -98,6 +101,7 @@ function bookingFromClaim(claim: ManualBookingClaim, now: string): Booking {
     productId: claim.productId,
     source: "manual",
     state: "confirmed",
+    lifecycleRevision: 1,
     holdExpiresAt: null,
     startAt: claim.serviceStartAt,
     endAt: claim.serviceEndAt,
@@ -108,6 +112,7 @@ function bookingFromClaim(claim: ManualBookingClaim, now: string): Booking {
     currency: claim.productSnapshot.currency,
     timeZone: claim.scheduleSnapshot.timeZone,
     policySnapshot: claim.scheduleSnapshot.policy,
+    clientDataRequirementsSnapshot: claim.productSnapshot.clientDataRequirements,
     createdAt: now,
     updatedAt: now
   };
@@ -122,6 +127,7 @@ function paidBookingFromClaim(claim: PaidBookingHoldClaim, now: string): Booking
     productId: claim.productId,
     source: "client_paid",
     state: "hold",
+    lifecycleRevision: 0,
     holdExpiresAt: claim.holdExpiresAt,
     startAt: claim.serviceStartAt,
     endAt: claim.serviceEndAt,
@@ -132,6 +138,7 @@ function paidBookingFromClaim(claim: PaidBookingHoldClaim, now: string): Booking
     currency: claim.productSnapshot.currency,
     timeZone: claim.scheduleSnapshot.timeZone,
     policySnapshot: claim.scheduleSnapshot.policy,
+    clientDataRequirementsSnapshot: claim.productSnapshot.clientDataRequirements,
     createdAt: now,
     updatedAt: now
   };
@@ -158,7 +165,14 @@ function createCommandStore(options: { replay?: boolean } = {}): BookingCommandS
                 durationMinutes: 60,
                 deliveryFormat: "video",
                 priceMinor: 490000,
-                currency: "RUB"
+                currency: "RUB",
+                clientDataRequirements: {
+                  schemaVersion: "booking-client-data-requirements.v1",
+                  executionMode: "live",
+                  participantMode: "solo",
+                  requiredClientData: ["chart1"],
+                  methods: ["natal"]
+                }
               },
               scheduleSnapshot: {
                 timeZone: schedule.timeZone,
@@ -178,6 +192,15 @@ function createCommandStore(options: { replay?: boolean } = {}): BookingCommandS
       return { kind: "created" as const, booking: bookingFromClaim(claim, command.now) };
     }),
     executePaidHold: vi.fn(),
+    executeOwnerCancellation: vi.fn(async () => {
+      throw new Error("Cancellation is outside this fixture");
+    }),
+    executeOwnerReschedule: vi.fn(async () => {
+      throw new Error("Reschedule is outside this fixture");
+    }),
+    executeOwnerCompletion: vi.fn(async () => {
+      throw new Error("Completion is outside this fixture");
+    }),
     confirmPaidBooking: vi.fn(async () => null),
     releasePaidBookingPaymentHold: vi.fn(async () => null),
     findByOwnerAndId: vi.fn(async () => null)
@@ -207,7 +230,14 @@ function createPaidCommandStore(options: { replay?: boolean } = {}): BookingComm
                 durationMinutes: 60,
                 deliveryFormat: "video",
                 priceMinor: 490000,
-                currency: "RUB"
+                currency: "RUB",
+                clientDataRequirements: {
+                  schemaVersion: "booking-client-data-requirements.v1",
+                  executionMode: "live",
+                  participantMode: "solo",
+                  requiredClientData: ["chart1"],
+                  methods: ["natal"]
+                }
               },
               scheduleSnapshot: {
                 timeZone: schedule.timeZone,
@@ -307,7 +337,14 @@ describe("booking use cases", () => {
         deliveryFormat: "video",
         priceMinor: 490000,
         currency: "RUB",
-        timeZone: "Europe/Moscow"
+        timeZone: "Europe/Moscow",
+        clientDataRequirementsSnapshot: {
+          schemaVersion: "booking-client-data-requirements.v1",
+          executionMode: "live",
+          participantMode: "solo",
+          requiredClientData: ["chart1"],
+          methods: ["natal"]
+        }
       }
     });
 
@@ -344,7 +381,14 @@ describe("booking use cases", () => {
         state: "hold",
         holdExpiresAt: "2026-05-20T00:15:00Z",
         startAt: "2026-05-29T07:00:00Z",
-        endAt: "2026-05-29T08:00:00Z"
+        endAt: "2026-05-29T08:00:00Z",
+        clientDataRequirementsSnapshot: {
+          schemaVersion: "booking-client-data-requirements.v1",
+          executionMode: "live",
+          participantMode: "solo",
+          requiredClientData: ["chart1"],
+          methods: ["natal"]
+        }
       }
     });
 
@@ -532,7 +576,14 @@ describe("booking use cases", () => {
             durationMinutes: 60,
             deliveryFormat: "video",
             priceMinor: 490000,
-            currency: "RUB"
+            currency: "RUB",
+            clientDataRequirements: {
+              schemaVersion: "booking-client-data-requirements.v1",
+              executionMode: "live",
+              participantMode: "solo",
+              requiredClientData: ["chart1"],
+              methods: ["natal"]
+            }
           },
           scheduleSnapshot: {
             timeZone: schedule.timeZone,
@@ -553,6 +604,99 @@ describe("booking use cases", () => {
     vi.mocked(store.findByOwnerAndId).mockResolvedValue(null);
     await expect(getBooking({ store, ownerUserId, bookingId })).rejects.toBeInstanceOf(
       BookingNotFoundError
+    );
+  });
+
+  it("submits an owner-authenticated paid-live completion with a revision fence", async () => {
+    const completedBooking: Booking = {
+      ...paidBookingFromClaim(
+        {
+          ownerUserId,
+          clientUserId,
+          productId,
+          scheduleId,
+          serviceStartAt: "2026-05-20T07:00:00.000Z",
+          serviceEndAt: "2026-05-20T08:00:00.000Z",
+          occupiedStartAt: "2026-05-20T07:00:00.000Z",
+          occupiedEndAt: "2026-05-20T08:00:00.000Z",
+          holdExpiresAt: "2026-05-19T08:00:00.000Z",
+          productSnapshot: {
+            title: product.title,
+            durationMinutes: 60,
+            deliveryFormat: "video",
+            priceMinor: 490000,
+            currency: "RUB",
+            clientDataRequirements: {
+              schemaVersion: "booking-client-data-requirements.v1",
+              executionMode: "live",
+              participantMode: "solo",
+              requiredClientData: ["chart1"],
+              methods: ["natal"]
+            }
+          },
+          scheduleSnapshot: {
+            timeZone: schedule.timeZone,
+            policy: {
+              bufferBeforeMinutes: 10,
+              bufferAfterMinutes: 10,
+              minimumNoticeMinutes: 60
+            }
+          }
+        },
+        "2026-05-20T08:01:00.000Z"
+      ),
+      state: "completed",
+      lifecycleRevision: 2,
+      holdExpiresAt: null
+    };
+    const store = {
+      ...createCommandStore(),
+      executeOwnerCompletion: vi.fn(async () => ({
+        kind: "created" as const,
+        booking: completedBooking,
+        lifecycleEvent: {
+          schemaVersion: "booking-lifecycle-event.v1" as const,
+          id: "77777777-7777-4777-8777-777777777777",
+          bookingId,
+          ownerUserId,
+          revision: 2,
+          kind: "completed" as const,
+          actor: { kind: "astrologer" as const, userId: ownerUserId },
+          reasonCode: null,
+          before: {
+            startAt: completedBooking.startAt,
+            endAt: completedBooking.endAt,
+            timeZone: completedBooking.timeZone
+          },
+          after: null,
+          occurredAt: "2026-05-20T08:01:00.000Z",
+          canonicalDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const
+        }
+      }))
+    } as BookingCommandStore;
+
+    await expect(
+      completeBooking({
+        commandStore: store,
+        ownerUserId,
+        bookingId,
+        idempotencyKey: "booking-complete-12345",
+        input: { expectedLifecycleRevision: 1 },
+        now: new Date("2026-05-20T08:01:00.000Z")
+      })
+    ).resolves.toMatchObject({
+      replayed: false,
+      booking: { state: "completed", lifecycleRevision: 2 },
+      lifecycleEvent: { kind: "completed", revision: 2 }
+    });
+
+    expect(store.executeOwnerCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: ownerUserId,
+        scope: "bookings.owner.complete",
+        key: "booking-complete-12345"
+      }),
+      { bookingId, expectedLifecycleRevision: 1 }
     );
   });
 });

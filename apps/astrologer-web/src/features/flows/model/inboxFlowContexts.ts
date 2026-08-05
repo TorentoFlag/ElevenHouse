@@ -1,10 +1,11 @@
 import type {
-  FlowDefinitionSummaryV2,
+  FlowDefinitionSummaryV3,
   FlowRunResponse,
   FlowRuntimeAvailability,
   MessagingThread
 } from "@elevenhouse/contracts";
 import { canProjectLiveFlowRuntime } from "./flowRuntimePresentation";
+import { flowRunClientUserId } from "./flowRunSnapshotModel";
 
 export type FlowInboxContext = {
   readonly threadId: string;
@@ -14,8 +15,10 @@ export type FlowInboxContext = {
 
 type BuildInboxFlowContextsInput = {
   readonly threads: readonly MessagingThread[];
-  readonly flows: readonly FlowDefinitionSummaryV2[];
-  readonly runtimeAvailability: FlowRuntimeAvailability | null | undefined;
+  readonly flows: readonly FlowDefinitionSummaryV3[];
+  readonly runtimeAvailabilityByFlowId: Readonly<
+    Record<string, FlowRuntimeAvailability | null | undefined>
+  >;
   readonly runsByFlowId: Readonly<Record<string, readonly FlowRunResponse[]>>;
 };
 
@@ -31,28 +34,33 @@ const terminalRunStatuses = new Set([
 export function buildInboxFlowContexts({
   threads,
   flows,
-  runtimeAvailability,
+  runtimeAvailabilityByFlowId,
   runsByFlowId
 }: BuildInboxFlowContextsInput): FlowInboxContext[] {
-  if (!canProjectLiveFlowRuntime(runtimeAvailability)) {
-    return [];
-  }
-
   const flowsById = new Map(flows.map((flow) => [flow.id, flow]));
   const activeRuns = Object.values(runsByFlowId)
     .flat()
-    .filter((run) => run.snapshot.subjectType === "client" && !terminalRunStatuses.has(run.status))
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+    .flatMap((run) => {
+      const clientUserId = flowRunClientUserId(run.snapshot);
+      return clientUserId && !terminalRunStatuses.has(run.status)
+        ? [{ run, clientUserId }]
+        : [];
+    })
+    .sort(
+      (left, right) => Date.parse(right.run.updatedAt) - Date.parse(left.run.updatedAt)
+    );
 
   return threads.flatMap((thread) => {
     const clientUserId = thread.clientUserId;
     if (!clientUserId) return [];
 
-    const run = activeRuns.find((candidate) => candidate.snapshot.subjectId === clientUserId);
-    if (!run) return [];
+    const activeRun = activeRuns.find((candidate) => candidate.clientUserId === clientUserId);
+    if (!activeRun) return [];
+    const { run } = activeRun;
 
     const flow = flowsById.get(run.flowId);
     if (!flow) return [];
+    if (!canProjectLiveFlowRuntime(runtimeAvailabilityByFlowId[flow.id])) return [];
 
     return [
       {

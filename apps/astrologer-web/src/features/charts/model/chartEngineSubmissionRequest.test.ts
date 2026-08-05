@@ -90,7 +90,9 @@ const client = {
     birthLatitude: 41.9028,
     birthLongitude: 12.4964,
     source: "manual",
-    isPrimary: true,
+    revision: 1,
+    lastEditedByUserId: "22222222-2222-4222-8222-222222222222",
+    lastEditedByRole: "client",
     createdAt: "2026-08-03T10:00:00.000Z",
     updatedAt: "2026-08-03T10:00:00.000Z"
   }

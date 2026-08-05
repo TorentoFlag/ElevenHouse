@@ -1,332 +1,213 @@
 import {
-  FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-  FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE,
+  BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+  FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FlowBookingEnrollmentDeferredError,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type FlowRuntimeDispatchOutboxStore
 } from "@elevenhouse/domain";
-import type { Logger } from "@elevenhouse/observability";
 import { describe, expect, it, vi } from "vitest";
+
 import {
   relayPendingFlowRuntimeDispatchEvents,
-  type FlowRuntimeOutboxDispatcher
+  type FlowBookingEnrollmentDispatcher,
+  type FlowBookingLifecycleDispatcher
 } from "./flow-runtime.outbox-relay";
 
 const eventId = "00000000-0000-4000-8000-000000000001";
 const bookingId = "00000000-0000-4000-8000-000000000002";
-const ownerUserId = "00000000-0000-4000-8000-000000000003";
-const clientUserId = "00000000-0000-4000-8000-000000000004";
-const productId = "00000000-0000-4000-8000-000000000005";
-const now = new Date("2026-07-17T10:00:00.000Z");
-const claimFence = 7n;
+const lifecycleEventId = "00000000-0000-4000-8000-000000000003";
+const claimFence = 1n;
 
 describe("relayPendingFlowRuntimeDispatchEvents", () => {
-  it("fenced-publishes a booking runtime dispatch after dispatch succeeds", async () => {
+  it("publishes a confirmed-booking enrollment only after the durable enrollment outcome", async () => {
     const store = createStore({
       id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+      eventType: FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
       aggregateId: bookingId,
-      payload: validPayload(),
+      payload: enrollmentPayload(),
       attempts: 1,
       claimFence
     });
-    const calls: string[] = [];
-    const dispatch = vi.fn(async () => {
-      calls.push("dispatch");
-      return noMatchingFlow();
-    }) satisfies FlowRuntimeOutboxDispatcher;
-    vi.mocked(store.markPublished).mockImplementationOnce(async () => {
-      calls.push("published");
-      return { status: "applied" as const };
-    });
+    const enrollBookingConfirmed = vi.fn(async () => enrollmentResult("enrolled"));
 
-    await expect(relayPendingFlowRuntimeDispatchEvents(relayInput(store, dispatch))).resolves.toBe(
-      1
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, enrollBookingConfirmed })
     );
 
-    expect(store.claimBatch).toHaveBeenCalledWith({
-      limit: 20,
-      publishingLockTimeoutMs: 60_000,
-      maxAttempts: 3
-    });
-    expect(dispatch).toHaveBeenCalledWith({ ...validPayload(), now: now.toISOString() });
-    expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
-    expect(calls).toEqual(["dispatch", "published"]);
-  });
-
-  it("quarantines an aggregate mismatch immediately without leaking payload fields", async () => {
-    const store = createStore({
-      id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: {
-        ...validPayload(),
-        subjectId: "00000000-0000-4000-8000-000000000006",
-        payload: { ...validPayload().payload, secret: "do-not-log" }
-      },
-      attempts: 1,
-      claimFence
-    });
-    const dispatch = vi.fn(async () => noMatchingFlow()) satisfies FlowRuntimeOutboxDispatcher;
-    const logger = createLogger();
-
-    await relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger });
-
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(store.markRetry).not.toHaveBeenCalled();
-    expect(store.markQuarantined).toHaveBeenCalledWith({
-      eventId,
-      claimFence,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_AGGREGATE_MISMATCH"
-    });
-    expect(logger.error).toHaveBeenCalledWith("flow runtime dispatch outbox event quarantined", {
-      outboxEventId: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      attempts: 1,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_AGGREGATE_MISMATCH"
-    });
-    expect(vi.mocked(store.markQuarantined).mock.calls[0]?.[0]).not.toHaveProperty("payload");
-    expect(JSON.stringify(vi.mocked(logger.error).mock.calls)).not.toContain("do-not-log");
-  });
-
-  it("quarantines a malformed payload without dispatching or retrying it", async () => {
-    const store = createStore({
-      id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: { ownerUserId, secret: "do-not-log" },
-      attempts: 1,
-      claimFence
-    });
-    const dispatch = vi.fn(async () => noMatchingFlow()) satisfies FlowRuntimeOutboxDispatcher;
-
-    await relayPendingFlowRuntimeDispatchEvents(relayInput(store, dispatch));
-
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(store.markRetry).not.toHaveBeenCalled();
-    expect(store.markQuarantined).toHaveBeenCalledWith({
-      eventId,
-      claimFence,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_PAYLOAD_INVALID"
-    });
-    expect(vi.mocked(store.markQuarantined).mock.calls[0]?.[0]).not.toHaveProperty("payload");
-  });
-
-  it("retries a transient dispatch failure below the configured attempt ceiling", async () => {
-    const store = createStore({
-      id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: validPayload(),
-      attempts: 2,
-      claimFence
-    });
-    const dispatch = vi.fn(async () => {
-      throw new Error("temporary database failure: secret=do-not-log");
-    }) satisfies FlowRuntimeOutboxDispatcher;
-    const logger = createLogger();
-
-    await relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger });
-
-    expect(store.markRetry).toHaveBeenCalledWith({
-      eventId,
-      claimFence,
-      retryDelayMs: 2_000,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_RETRYABLE_FAILURE"
-    });
-    expect(store.markQuarantined).not.toHaveBeenCalled();
-    expect(vi.mocked(store.markRetry).mock.calls[0]?.[0]).not.toHaveProperty("errorMessage");
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain("do-not-log");
-  });
-
-  it("quarantines a transient dispatch failure at the configured attempt ceiling", async () => {
-    const store = createStore({
-      id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: validPayload(),
-      attempts: 3,
-      claimFence
-    });
-    const dispatch = vi.fn(async () => {
-      throw new Error("temporary database failure");
-    }) satisfies FlowRuntimeOutboxDispatcher;
-
-    await relayPendingFlowRuntimeDispatchEvents(relayInput(store, dispatch));
-
-    expect(store.markRetry).not.toHaveBeenCalled();
-    expect(store.markQuarantined).toHaveBeenCalledWith({
-      eventId,
-      claimFence,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_RETRY_EXHAUSTED"
-    });
-  });
-
-  it("consumes an unavailable matching dispatch without retaining payload for retry", async () => {
-    const store = createStore({
-      id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: {
-        ...validPayload(),
-        payload: { ...validPayload().payload, secret: "do-not-log" }
-      },
-      attempts: 1,
-      claimFence
-    });
-    const dispatch = vi.fn(async () => ({
-      status: "execution_unavailable" as const,
-      matchedFlows: 1,
-      reasonCode: FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE,
-      total: 0 as const,
-      results: [] as const
-    })) satisfies FlowRuntimeOutboxDispatcher;
-    const logger = createLogger();
-
-    await expect(
-      relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger })
-    ).resolves.toBe(1);
-
+    expect(enrollBookingConfirmed).toHaveBeenCalledWith(enrollmentPayload());
     expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
     expect(store.markRetry).not.toHaveBeenCalled();
     expect(store.markQuarantined).not.toHaveBeenCalled();
-    expect(logger.info).toHaveBeenCalledWith("flow runtime dispatch outbox event ignored", {
-      outboxEventId: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      matchedFlows: 1,
-      reasonCode: FLOW_RUNTIME_EXECUTION_UNAVAILABLE_CODE
-    });
-    expect(JSON.stringify(vi.mocked(logger.info).mock.calls)).not.toContain("do-not-log");
   });
 
-  it("observes a stale publication fence without retrying an already dispatched event", async () => {
+  it("publishes a booking lifecycle event only after its Flow processing outcome", async () => {
     const store = createStore({
       id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      payload: validPayload(),
+      eventType: BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+      aggregateId: lifecycleEventId,
+      payload: lifecyclePayload(),
       attempts: 1,
       claimFence
     });
-    vi.mocked(store.markPublished).mockResolvedValueOnce({ status: "stale" });
-    const dispatch = vi.fn(async () => noMatchingFlow()) satisfies FlowRuntimeOutboxDispatcher;
-    const logger = createLogger();
+    const processBookingLifecycleEvent = vi.fn(async () => lifecycleResult());
 
-    await relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger });
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, processBookingLifecycleEvent })
+    );
 
+    expect(processBookingLifecycleEvent).toHaveBeenCalledWith(lifecycleEventId);
+    expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
     expect(store.markRetry).not.toHaveBeenCalled();
-    expect(store.markQuarantined).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith("flow runtime dispatch outbox disposition is stale", {
-      outboxEventId: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-      aggregateId: bookingId,
-      attemptedDisposition: "published"
-    });
   });
 
-  it("alerts once when claim recovery quarantines an exhausted crashed event", async () => {
+  it("quarantines an invalid confirmed-booking enrollment envelope before dispatch", async () => {
     const store = createStore({
       id: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+      eventType: FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
       aggregateId: bookingId,
-      payload: validPayload(),
+      payload: { ...enrollmentPayload(), subjectId: lifecycleEventId },
       attempts: 1,
       claimFence
     });
-    vi.mocked(store.claimBatch).mockResolvedValueOnce({
-      claimed: [],
-      quarantined: [
-        {
-          id: eventId,
-          eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
-          aggregateId: bookingId,
-          attempts: 3,
-          reasonCode: "FLOW_RUNTIME_DISPATCH_RETRY_EXHAUSTED"
-        }
-      ]
+    const enrollBookingConfirmed = vi.fn(async () => enrollmentResult("no_match"));
+
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, enrollBookingConfirmed })
+    );
+
+    expect(enrollBookingConfirmed).not.toHaveBeenCalled();
+    expect(store.markQuarantined).toHaveBeenCalledWith({
+      eventId,
+      claimFence,
+      reasonCode: "FLOW_BOOKING_ENROLLMENT_PAYLOAD_INVALID"
     });
-    const dispatch = vi.fn(async () => noMatchingFlow()) satisfies FlowRuntimeOutboxDispatcher;
-    const logger = createLogger();
+  });
 
-    await expect(
-      relayPendingFlowRuntimeDispatchEvents({ ...relayInput(store, dispatch), logger })
-    ).resolves.toBe(1);
-
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith("flow runtime dispatch outbox event quarantined", {
-      outboxEventId: eventId,
-      eventType: FLOW_RUNTIME_DISPATCH_REQUESTED_EVENT,
+  it("defers enrollment when booking projection is not ready without consuming retry budget", async () => {
+    const store = createStore({
+      id: eventId,
+      eventType: FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
       aggregateId: bookingId,
-      attempts: 3,
-      reasonCode: "FLOW_RUNTIME_DISPATCH_RETRY_EXHAUSTED"
+      payload: enrollmentPayload(),
+      attempts: 1,
+      claimFence
+    });
+    const enrollBookingConfirmed = vi.fn(async () => {
+      throw new FlowBookingEnrollmentDeferredError();
+    });
+
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, enrollBookingConfirmed })
+    );
+
+    expect(store.markDeferred).toHaveBeenCalledWith({
+      eventId,
+      claimFence,
+      retryDelayMs: 30_000,
+      reasonCode: "FLOW_BOOKING_ENROLLMENT_DEFERRED"
+    });
+    expect(store.markPublished).not.toHaveBeenCalled();
+    expect(store.markRetry).not.toHaveBeenCalled();
+  });
+
+  it("quarantines an unexpected event type instead of dispatching it", async () => {
+    const store = createStore({
+      id: eventId,
+      eventType: "unrelated.event.v1",
+      aggregateId: bookingId,
+      payload: {},
+      attempts: 1,
+      claimFence
+    });
+    const enrollBookingConfirmed = vi.fn(async () => enrollmentResult("no_match"));
+    const processBookingLifecycleEvent = vi.fn(async () => lifecycleResult());
+
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, enrollBookingConfirmed, processBookingLifecycleEvent })
+    );
+
+    expect(enrollBookingConfirmed).not.toHaveBeenCalled();
+    expect(processBookingLifecycleEvent).not.toHaveBeenCalled();
+    expect(store.markQuarantined).toHaveBeenCalledWith({
+      eventId,
+      claimFence,
+      reasonCode: "FLOW_RUNTIME_DISPATCH_EVENT_TYPE_UNSUPPORTED"
     });
   });
 });
 
-function relayInput(store: FlowRuntimeDispatchOutboxStore, dispatch: FlowRuntimeOutboxDispatcher) {
+function relayInput(input: {
+  readonly store: FlowRuntimeDispatchOutboxStore;
+  readonly enrollBookingConfirmed?: FlowBookingEnrollmentDispatcher;
+  readonly processBookingLifecycleEvent?: FlowBookingLifecycleDispatcher;
+}) {
   return {
-    store,
-    dispatch,
-    now,
+    store: input.store,
+    enrollBookingConfirmed: input.enrollBookingConfirmed ?? (async () => enrollmentResult("no_match")),
+    processBookingLifecycleEvent:
+      input.processBookingLifecycleEvent ?? (async () => lifecycleResult()),
+    now: new Date("2026-08-05T00:00:00.000Z"),
     batchSize: 20,
     publishingLockTimeoutMs: 60_000,
-    maxAttempts: 3
+    maxAttempts: 3,
+    enrollmentDeferDelayMs: 30_000
   };
 }
 
-function validPayload() {
+function enrollmentPayload() {
   return {
-    ownerUserId,
-    triggerKind: "booking_confirmed" as const,
+    schemaVersion: "flow-booking-confirmed-enrollment-request.v1" as const,
+    eventKind: "booking_confirmed" as const,
     source: "booking" as const,
     sourceEventId: `booking:${bookingId}:confirmed`,
     subjectType: "booking" as const,
     subjectId: bookingId,
-    occurredAt: "2026-07-17T09:00:00.000Z",
-    timeZone: "Europe/Moscow",
-    payload: {
-      bookingId,
-      clientUserId,
-      productId,
-      startAt: "2026-07-20T07:00:00.000Z",
-      endAt: "2026-07-20T08:00:00.000Z"
-    }
+    occurrenceKey: bookingId,
+    occurredAt: "2026-08-05T00:00:00.000Z",
+    payloadSchemaVersion: 1 as const,
+    payload: { bookingId }
   };
 }
 
-function noMatchingFlow() {
+function lifecyclePayload() {
   return {
-    status: "no_matching_flow" as const,
-    matchedFlows: 0 as const,
-    total: 0 as const,
-    results: [] as const
+    schemaVersion: "booking-lifecycle-event-dispatch-request.v1" as const,
+    lifecycleEventId
   };
 }
 
-function createStore(event: ClaimedFlowRuntimeDispatchOutboxEvent) {
+function enrollmentResult(status: "enrolled" | "no_match") {
   return {
-    claimBatch: vi.fn<FlowRuntimeDispatchOutboxStore["claimBatch"]>(async () => ({
-      claimed: [event],
-      quarantined: []
-    })),
-    markPublished: vi.fn<FlowRuntimeDispatchOutboxStore["markPublished"]>(async () => ({
-      status: "applied"
-    })),
-    markRetry: vi.fn<FlowRuntimeDispatchOutboxStore["markRetry"]>(async () => ({
-      status: "applied"
-    })),
-    markQuarantined: vi.fn<FlowRuntimeDispatchOutboxStore["markQuarantined"]>(async () => ({
-      status: "applied"
-    }))
-  } satisfies FlowRuntimeDispatchOutboxStore;
+    status,
+    replayed: false,
+    eventId: "00000000-0000-4000-8000-000000000004",
+    runs: []
+  } as const;
 }
 
-function createLogger(): Logger {
+function lifecycleResult() {
   return {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn()
+    lifecycleEventId,
+    bookingId,
+    ownerUserId: "00000000-0000-4000-8000-000000000005",
+    appliedRevision: 1,
+    eventKind: "confirmed" as const,
+    outcome: "enrolled" as const,
+    replayed: false,
+    affectedRunCount: 1,
+    affectedWorkItemCount: 0,
+    preservedCompletedWorkItemCount: 0
+  };
+}
+
+function createStore(
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): FlowRuntimeDispatchOutboxStore {
+  return {
+    claimBatch: vi.fn(async () => ({ claimed: [event], quarantined: [] })),
+    markPublished: vi.fn(async () => ({ status: "applied" as const })),
+    markRetry: vi.fn(async () => ({ status: "applied" as const })),
+    markDeferred: vi.fn(async () => ({ status: "applied" as const })),
+    markQuarantined: vi.fn(async () => ({ status: "applied" as const }))
   };
 }
