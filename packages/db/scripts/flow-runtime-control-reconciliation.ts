@@ -123,6 +123,12 @@ export async function reconcileFlowRuntimeControlAuthority(
   await client.query("SELECT pg_advisory_xact_lock(hashtext('elevenhouse:flows:runtime-control:v2'))");
   const before = await readRuntimeControlCatalog(client);
   if (matchesRuntimeControlCatalog(before, currentRuntimeControlCatalog)) {
+    if (await isRuntimeControlDataEmpty(client)) {
+      await client.query(flowRuntimeControlBootstrapDataSql);
+      await assertFlowRuntimeControlAuthorityData(client);
+      await client.query("RELEASE SAVEPOINT flow_runtime_control_reconciliation_guard");
+      return "reconciled";
+    }
     await assertFlowRuntimeControlAuthorityData(client);
     await client.query("RELEASE SAVEPOINT flow_runtime_control_reconciliation_guard");
     return "already_current";
@@ -157,6 +163,72 @@ export async function assertFlowRuntimeControlAuthority(client: Client): Promise
     throw driftError(actual);
   }
   await assertFlowRuntimeControlAuthorityData(client);
+}
+
+const flowRuntimeControlBootstrapDataSql = `
+INSERT INTO flow_runtime_rollout_policy_versions (
+  revision, supersedes_revision, schema_version, mode, canary_owner_subject_ids,
+  allowed_requirement_keys, enrollment_global_kill_switch,
+  claim_global_kill_switch, external_dispatch_global_kill_switch,
+  enrollment_killed_owner_subject_ids, claim_killed_owner_subject_ids,
+  external_dispatch_killed_owner_subject_ids, enrollment_killed_capability_keys,
+  claim_killed_capability_keys, external_dispatch_killed_capability_keys,
+  readiness_lease_ttl_ms, token_lease_duration_ms, canonical_preimage,
+  policy_digest, change_source, created_by_actor_subject_id, reason, created_at
+) VALUES (
+  1,
+  null,
+  'flow-runtime-rollout-policy.v2',
+  'definition_only',
+  array[]::uuid[],
+  array[]::text[],
+  true,
+  true,
+  true,
+  array[]::uuid[],
+  array[]::uuid[],
+  array[]::uuid[],
+  array[]::text[],
+  array[]::text[],
+  array[]::text[],
+  30000,
+  30000,
+  '{"allowedRequirementKeys":[],"canaryOwnerSubjectIds":[],"killSwitches":{"claim":{"capabilityKeys":[],"global":true,"ownerSubjectIds":[]},"enrollment":{"capabilityKeys":[],"global":true,"ownerSubjectIds":[]},"externalDispatch":{"capabilityKeys":[],"global":true,"ownerSubjectIds":[]}},"mode":"definition_only","readinessLeaseTtlMs":30000,"schemaVersion":"flow-runtime-rollout-policy.v2","tokenLeaseDurationMs":30000}',
+  'sha256:8f179908494865d038955f31b1adfc69b1448e36d69a1f4eda3bfee8201f9f4c',
+  'bootstrap',
+  null,
+  'Initial fail-closed Flow runtime authority',
+  clock_timestamp()
+);
+
+INSERT INTO flow_runtime_control_authority (
+  authority_key, current_policy_revision, control_revision, change_source,
+  updated_by_actor_subject_id, reason, updated_at
+) VALUES (
+  'primary',
+  1,
+  1,
+  'bootstrap',
+  null,
+  'Initial fail-closed Flow runtime authority',
+  clock_timestamp()
+);
+`;
+
+async function isRuntimeControlDataEmpty(client: Client): Promise<boolean> {
+  const result = await client.query<{ populated_relation_count: string }>(`
+    SELECT (
+      (CASE WHEN EXISTS (SELECT 1 FROM flow_runtime_owner_subjects) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_runtime_control_commands) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_runtime_control_command_outcomes) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_runtime_rollout_policy_versions) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_runtime_control_authority) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_worker_registrations) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_worker_readiness_leases) THEN 1 ELSE 0 END)
+      + (CASE WHEN EXISTS (SELECT 1 FROM flow_worker_registration_tombstones) THEN 1 ELSE 0 END)
+    )::text AS populated_relation_count
+  `);
+  return result.rows[0]?.populated_relation_count === "0";
 }
 
 export const flowRuntimeControlAuthorityBaselineDdl = `

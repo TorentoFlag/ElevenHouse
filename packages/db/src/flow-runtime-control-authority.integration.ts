@@ -15,6 +15,7 @@ import {
 } from "../scripts/audit-actor-subject-reconciliation";
 import {
   assertFlowRuntimeControlAuthority,
+  flowRuntimeControlAuthorityBaselineDdl,
   reconcileFlowRuntimeControlAuthority
 } from "../scripts/flow-runtime-control-reconciliation";
 import { createDrizzleFlowRuntimeControlCommandStore } from "./adapters/flows/drizzle-flow-runtime-control-command-store";
@@ -76,6 +77,32 @@ describe("Flow runtime control authority PostgreSQL integration", () => {
 
     await applyReconciliation("already_current");
     await expect(readPhysicalEvidence()).resolves.toEqual(before);
+  });
+
+  it("initializes the immutable fail-closed authority when the current control schema has no rows", async () => {
+    const schemaSql = flowRuntimeControlAuthorityBaselineDdl.split(
+      "INSERT INTO flow_runtime_rollout_policy_versions",
+      1
+    )[0]!;
+    await databaseClient.query("BEGIN");
+    try {
+      await reconcileAuditActorSubjects(databaseClient);
+      await databaseClient.query(schemaSql);
+      await databaseClient.query("COMMIT");
+    } catch (error) {
+      await databaseClient.query("ROLLBACK");
+      throw error;
+    }
+
+    await applyReconciliation("reconciled");
+    await expect(assertFlowRuntimeControlAuthority(databaseClient)).resolves.toBeUndefined();
+    await expect(readCurrentAuthority()).resolves.toMatchObject({
+      authorityKey: "primary",
+      controlRevision: 1,
+      currentPolicyRevision: 1,
+      mode: "definition_only",
+      canaryOwnerSubjectIds: []
+    });
   });
 
   it("requires an explicit caller-owned transaction", async () => {

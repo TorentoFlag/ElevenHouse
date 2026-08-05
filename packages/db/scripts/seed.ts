@@ -3,10 +3,12 @@ import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { Pool } from "pg";
 import { createPostgresConnectionConfig } from "../src/index";
+import { reconcileAuditActorSubjects } from "./audit-actor-subject-reconciliation";
 import {
   dictionarySeedCategories,
   dictionarySeedPlatformEntries
 } from "./dictionary-seed-data/index";
+import { reconcileFlowRuntimeControlAuthority } from "./flow-runtime-control-reconciliation";
 import { productTemplateSeedData } from "./product-template-seed-data/index";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +22,7 @@ const pool = new Pool({ connectionString });
 async function main() {
   try {
     await pool.query("select 1");
+    await seedFlowRuntimeControlAuthority();
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
     await seedProductTemplates();
@@ -28,6 +31,21 @@ async function main() {
     );
   } finally {
     await pool.end();
+  }
+}
+
+async function seedFlowRuntimeControlAuthority() {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await reconcileAuditActorSubjects(client);
+    await reconcileFlowRuntimeControlAuthority(client);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
