@@ -33,6 +33,23 @@ describe("createFlowWorkerControl", () => {
     });
   });
 
+  it("keeps the readiness heartbeat timer referenced while the worker is running", async () => {
+    const unref = vi.fn();
+    const setTimeoutSpy = vi
+      .spyOn(globalThis, "setTimeout")
+      .mockReturnValue({ unref } as unknown as ReturnType<typeof setTimeout>);
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout").mockImplementation(() => undefined);
+    const control = createControl(createStore());
+
+    await control.register();
+    control.start();
+
+    expect(unref).not.toHaveBeenCalled();
+    await control.stop();
+    setTimeoutSpy.mockRestore();
+    clearTimeoutSpy.mockRestore();
+  });
+
   it("never overlaps heartbeats and closes local claims through a transient failure", async () => {
     const pending = deferred<FlowWorkerReadinessAuthority>();
     const store = createStore();

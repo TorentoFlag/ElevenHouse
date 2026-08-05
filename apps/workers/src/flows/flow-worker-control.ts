@@ -75,7 +75,6 @@ export function createFlowWorkerControl(input: {
       heartbeatTimer = undefined;
       void runHeartbeatOnce().catch(() => undefined);
     }, delayMs);
-    heartbeatTimer.unref();
   };
 
   const runHeartbeatOnce = (): Promise<FlowWorkerReadinessAuthority> => {
