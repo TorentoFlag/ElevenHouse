@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   flowEnrollmentTraceConstraintIntegritySql,
@@ -33,9 +34,10 @@ export type MigrationLedgerRow = {
 export const currentBaseline = readCurrentBaselineIdentity();
 
 function readCurrentBaselineIdentity(): MigrationIdentity {
-  const migration = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql");
+  const migrationDirectory = join(__dirname, "../drizzle");
+  const migration = readFileSync(join(migrationDirectory, "0000_sticky_rictor.sql"));
   const journal = JSON.parse(
-    readFileSync("packages/db/drizzle/meta/_journal.json", "utf8")
+    readFileSync(join(migrationDirectory, "meta/_journal.json"), "utf8")
   ) as { readonly entries?: readonly { readonly when?: number }[] };
   const createdAt = journal.entries?.[0]?.when;
   if (!Number.isSafeInteger(createdAt)) {

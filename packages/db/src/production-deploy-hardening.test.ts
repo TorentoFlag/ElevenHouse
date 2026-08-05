@@ -321,6 +321,25 @@ describe("production chart deployment hardening", () => {
     expect(gitignore).toContain("!deployment/env/.env.chart-engine.production.example");
     expect(gitignore).toContain("!deployment/env/.env.chart-worker.production.example");
   });
+
+  it("loads the baseline identity from the db-migrator package working directory", () => {
+    const result = spawnSync(
+      "pnpm",
+      [
+        "--dir",
+        "packages/db",
+        "exec",
+        "tsx",
+        "-e",
+        "import('./scripts/production-baseline-plan.ts').then((module) => console.log(JSON.stringify(module.currentBaseline ?? module.default?.currentBaseline)))"
+      ],
+      { cwd: repositoryRoot, encoding: "utf8" }
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('"hash"');
+    expect(result.stdout).toContain('"createdAt"');
+  });
 });
 
 describe("chart service environment materialization", () => {
