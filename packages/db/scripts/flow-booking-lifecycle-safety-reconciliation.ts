@@ -48,7 +48,7 @@ const lifecycleFunctions = [
 ] as const;
 
 const currentCatalog = {
-  hash: "1b6407951212ef47717a089d363983eb92b648e2d9d638eac2741405b624d85c",
+  hash: "f3680857b26aad15576227c30099e7b1a30dfde0aebafc188e1800aab431a8ac",
   relations: 3,
   columns: 40,
   constraints: 33,
