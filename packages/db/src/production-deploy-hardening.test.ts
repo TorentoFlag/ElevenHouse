@@ -39,6 +39,10 @@ const chartWorkerEnvTemplatePath = join(
   repositoryRoot,
   "deployment/env/.env.chart-worker.production.example"
 );
+const productionEnvTemplatePath = join(
+  repositoryRoot,
+  "deployment/env/.env.production.example"
+);
 
 const chartEngineEnvKeys = [
   "CHART_ENGINE_EXPECTED_EPHEMERIS",
@@ -260,6 +264,23 @@ describe("production chart deployment hardening", () => {
     expect(workflow.indexOf(promoteDeployEnv)).toBeLessThan(workflow.indexOf(postgresStart));
     expect(workflow.indexOf(runtimeValidation)).toBeLessThan(workflow.indexOf(postgresStart));
     expect(workflow.indexOf(runtimeValidation)).toBeLessThan(workflow.indexOf(backup));
+  });
+
+  it("validates the admin finance WebAuthn runtime contract before PostgreSQL or schema mutation", () => {
+    const workflow = readFileSync(deployWorkflowPath, "utf8");
+    const productionEnvTemplate = readFileSync(productionEnvTemplatePath, "utf8");
+    const stagedCompose =
+      "docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next";
+    const runtimeValidation = `${stagedCompose} run --rm -T --no-deps admin-api`;
+    const postgresStart = `${stagedCompose} up -d --no-recreate --wait --wait-timeout 120 postgres`;
+
+    expect(productionEnvTemplate).toContain("ADMIN_API_FINANCE_WEBAUTHN_RP_ID=admin.elevenhouse.ai");
+    expect(productionEnvTemplate).toContain("ADMIN_API_FINANCE_WEBAUTHN_ORIGIN=https://admin.elevenhouse.ai");
+    expect(workflow).toContain(runtimeValidation);
+    expect(workflow).toContain(
+      "node -e \"require('./apps/admin-api/dist/config/runtime-config.js').createAdminApiRuntimeConfig(process.env)\""
+    );
+    expect(workflow.indexOf(runtimeValidation)).toBeLessThan(workflow.indexOf(postgresStart));
   });
 
   it("records immutable successful-release evidence only after internal and external smoke", () => {

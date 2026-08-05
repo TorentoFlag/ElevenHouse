@@ -255,6 +255,8 @@ jobs:
             node apps/workers/dist/validate-startup-config.js </dev/null
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
             node apps/chart-worker/dist/validate-startup-config.js </dev/null
+          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps admin-api \
+            node -e "require('./apps/admin-api/dist/config/runtime-config.js').createAdminApiRuntimeConfig(process.env)" </dev/null
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next up -d --no-recreate --wait --wait-timeout 120 postgres
           if [[ "${PRELAUNCH_RESET}" != "true" ]]; then
             docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T db-baseline-preflight </dev/null
