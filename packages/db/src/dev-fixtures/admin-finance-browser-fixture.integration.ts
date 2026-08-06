@@ -137,6 +137,15 @@ describe("admin finance browser fixture", () => {
       }
     ]);
 
+    const deliveryFormats = await runtime.pool.query<{ readonly value: string }>(
+      `select value
+       from product_delivery_formats
+       where product_id = $1
+       order by "order"`,
+      ["10000000-0000-4000-8000-000000000006"]
+    );
+    expect(deliveryFormats.rows).toEqual([{ value: "video" }]);
+
     const commissionSnapshots = await runtime.pool.query<{
       readonly order_count: string;
       readonly tariff_series_id: string;

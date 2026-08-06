@@ -40,14 +40,18 @@ let baseUrl: string;
 let relationshipReader: ClientAstrologerRelationshipReader;
 let relationshipAllowed: boolean;
 let productStore: Pick<ProductStore, "listByOwner">;
+let listedProducts: readonly Product[];
 
 describe("client commerce public HTTP flow", () => {
   beforeEach(async () => {
     relationshipAllowed = true;
+    listedProducts = [activeProduct];
     relationshipReader = { hasActiveRelationship: vi.fn(async () => relationshipAllowed) };
     productStore = {
       listByOwner: vi.fn(async () => ({
-        products: [activeProduct], total: 1, counts: { all: 1, active: 1, draft: 0, archived: 0 }
+        products: listedProducts,
+        total: listedProducts.length,
+        counts: { all: listedProducts.length, active: listedProducts.length, draft: 0, archived: 0 }
       }))
     };
     moduleRef = await Test.createTestingModule({
@@ -92,6 +96,18 @@ describe("client commerce public HTTP flow", () => {
     await expect(getPurchaseOptions(authCookie())).resolves.toMatchObject({
       status: 200,
       body: { astrologerUserId, products: [expect.objectContaining({ id: productId, priceMinor: 50_000 })] }
+    });
+  });
+
+  it("omits incomplete products instead of failing the entire purchase-options response", async () => {
+    listedProducts = [
+      activeProduct,
+      { ...activeProduct, id: "99999999-9999-4999-8999-999999999999", deliveryFormats: [] }
+    ];
+
+    await expect(getPurchaseOptions(authCookie())).resolves.toMatchObject({
+      status: 200,
+      body: { astrologerUserId, products: [expect.objectContaining({ id: productId })] }
     });
   });
 });

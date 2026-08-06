@@ -537,6 +537,14 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
   );
   await query(
     client,
+    `insert into product_delivery_formats (product_id, value, "order")
+     values ($1, 'video', 0)
+     on conflict (product_id, value) do update
+     set "order" = excluded."order"`,
+    [fixture.productId]
+  );
+  await query(
+    client,
     `insert into orders
        (id, client_user_id, astrologer_user_id, product_id, product_title_snapshot, status,
         gross_amount_minor, gross_currency, platform_fee_amount_minor, platform_fee_currency,

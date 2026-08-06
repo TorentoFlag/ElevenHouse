@@ -5,6 +5,7 @@ import {
   createDrizzleBookingCommandStore
 } from "@elevenhouse/db/scheduling";
 import { createDrizzleProductStore } from "@elevenhouse/db/products";
+import type { BookingProduct, Product } from "@elevenhouse/domain";
 import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -61,19 +62,7 @@ import {
         return {
           findByOwnerAndId: async (input: { ownerUserId: string; productId: string }) => {
             const product = await products.findByOwnerAndId(input);
-            return product
-              ? {
-                  id: product.id,
-                  title: product.title,
-                  status: product.status,
-                  executionMode: product.executionMode,
-                  participantMode: product.participantMode,
-                  durationMinutes: product.durationMinutes,
-                  deliveryFormats: product.deliveryFormats,
-                  priceMinor: product.priceMinor,
-                  currency: product.currency
-                }
-              : null;
+            return product ? toBookingProduct(product) : null;
           }
         };
       },
@@ -82,3 +71,19 @@ import {
   ]
 })
 export class BookingModule {}
+
+export function toBookingProduct(product: Product): BookingProduct {
+  return {
+    id: product.id,
+    title: product.title,
+    status: product.status,
+    executionMode: product.executionMode,
+    participantMode: product.participantMode,
+    durationMinutes: product.durationMinutes,
+    deliveryFormats: product.deliveryFormats,
+    requiredClientData: product.requiredClientData,
+    methods: product.methods,
+    priceMinor: product.priceMinor,
+    currency: product.currency
+  };
+}

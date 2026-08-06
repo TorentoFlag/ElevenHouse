@@ -118,6 +118,7 @@ export class ClientCommerceService {
     return listed.products.filter(
       (product) =>
         product.priceMinor > 0 &&
+        product.deliveryFormats.length > 0 &&
         (product.paymentModel === "once" || product.paymentModel === "pack") &&
         (product.executionMode !== "live" || product.durationMinutes !== null)
     );
