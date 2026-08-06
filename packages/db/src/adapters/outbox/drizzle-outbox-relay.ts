@@ -105,6 +105,7 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
           status: "published",
           lockedAt: null,
           publishedAt: input.publishedAt,
+          lastError: null,
           updatedAt: input.publishedAt
         })
         .where(claimDispositionFence(input))

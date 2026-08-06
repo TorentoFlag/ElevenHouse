@@ -1100,10 +1100,17 @@ create or replace function finance_require_economic_payment_head_evidence()
 returns trigger language plpgsql set search_path = pg_catalog, public as $$
 declare
   latest_session finance_economic_payment_sessions%rowtype;
+  current_intent finance_economic_payment_intents%rowtype;
   matching_transition_exists boolean;
   capture_exists boolean;
 begin
   if new.state = 'created' then
+    -- This deferred trigger also runs for the original INSERT after a later UPDATE in the same
+    -- transaction. That stale event must not reject the now-open checkout head.
+    select * into current_intent from finance_economic_payment_intents where id = new.id;
+    if current_intent.state <> 'created' or current_intent.version <> new.version then
+      return null;
+    end if;
     if exists (select 1 from finance_economic_payment_sessions where economic_payment_intent_id = new.id) then
       raise exception 'created payment cannot already have a session' using errcode = '23514';
     end if;

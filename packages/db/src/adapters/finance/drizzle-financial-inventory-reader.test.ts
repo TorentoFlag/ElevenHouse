@@ -561,4 +561,56 @@ describe("readCanonicalFinancialInventorySnapshot", () => {
     ]);
     expect(buildFinancialInventoryReport(snapshot).status).toBe("passed");
   });
+
+  it("inventories zero-balance finance directory rows without treating configuration as uncontrolled money", async () => {
+    const queryable = new RecordingQueryable({
+      canonical_provider_accounts: [
+        {
+          row_count: "1",
+          ids: ["arc-pay-merchant"]
+        }
+      ],
+      canonical_bank_cash_pools: [
+        {
+          row_count: "1",
+          ids: ["main-bank-pool"]
+        }
+      ],
+      canonical_journal_accounts: [
+        {
+          account_id: "platform-clearing-rub",
+          account_type: "platform_clearing",
+          astrologer_user_id: null,
+          balance_bucket: null,
+          currency: "RUB",
+          debit_amount_minor: "0",
+          credit_amount_minor: "0"
+        }
+      ]
+    });
+
+    const snapshot = await readCanonicalFinancialInventorySnapshot(queryable, {
+      generatedAt: "2026-08-07T09:00:00.000Z",
+      targetIdentityDigest
+    });
+
+    expect(snapshot.datasets.arc_provider_accounts).toMatchObject({
+      availability: "present",
+      scope: "scoped",
+      rowCount: "1",
+      ids: ["arc-pay-merchant"]
+    });
+    expect(snapshot.datasets.bank_cash_pools).toMatchObject({
+      rowCount: "1",
+      ids: ["main-bank-pool"]
+    });
+    const report = buildFinancialInventoryReport(snapshot);
+    expect(report.status).toBe("blocked");
+    expect(report.discrepancies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "provider_control_missing" }),
+        expect.objectContaining({ code: "bank_control_missing" })
+      ])
+    );
+  });
 });

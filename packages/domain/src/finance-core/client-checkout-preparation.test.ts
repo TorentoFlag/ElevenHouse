@@ -55,6 +55,20 @@ describe("client checkout preparation", () => {
     });
   });
 
+  it("accepts ArcPay's UUIDv7 hosted checkout identifier", () => {
+    expect(
+      publishClientCheckoutReady(requested, {
+        providerCheckoutId: "019fd91e-4ac6-7e0f-a536-4d8b10782d51",
+        responseArtifactId: "response-artifact-1",
+        responseArtifactDigest:
+          "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      })
+    ).toMatchObject({
+      state: "checkout_ready",
+      providerCheckoutId: "019fd91e-4ac6-7e0f-a536-4d8b10782d51"
+    });
+  });
+
   it("keeps an ambiguous ArcPay creation result blocked instead of creating another session", () => {
     expect(recordClientCheckoutProviderSessionUnknown(requested)).toMatchObject({
       state: "provider_session_unknown",

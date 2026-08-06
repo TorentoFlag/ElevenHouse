@@ -72,8 +72,9 @@ export class ClientCheckoutPreparationService {
     });
     const bytes = canonicalizeFinanceCommandPayload(prepared.dispatchEnvelope);
     const digest = sha256(bytes);
+    const requestArtifactId = providerRequestArtifactId(prepared.providerAccount, digest);
     const written = await this.privateObjectStorage.writeImmutable({
-      artifactId: ids.requestArtifactId,
+      artifactId: requestArtifactId,
       contentType: "application/json",
       bytes,
       expectedSha256Digest: digest
@@ -87,7 +88,7 @@ export class ClientCheckoutPreparationService {
     }
     const artifact = await this.artifactRegistry.registerSealedArtifact({
       artifact: {
-        artifactId: ids.requestArtifactId,
+        artifactId: requestArtifactId,
         sha256Digest: digest,
         byteLength: bytes.byteLength
       },
@@ -99,7 +100,7 @@ export class ClientCheckoutPreparationService {
       binding: { kind: "provider", providerAccount: prepared.providerAccount }
     });
     if (
-      artifact.artifactId !== ids.requestArtifactId ||
+      artifact.artifactId !== requestArtifactId ||
       artifact.sha256Digest !== digest ||
       artifact.byteLength !== bytes.byteLength
     ) {
@@ -151,8 +152,19 @@ function checkoutIds(clientUserId: string, orderId: string, idempotencyKey: stri
     economicPaymentIntentId: `client-order-intent:${uuid("economic-intent")}`,
     economicPaymentSessionId: `client-order-session:${uuid("economic-session")}`,
     providerOperationIntentId: operation,
-    requestArtifactId: `provider-request:${uuid("request-artifact")}`
   });
+}
+
+function providerRequestArtifactId(
+  providerAccount: Readonly<{
+    seriesId: string;
+    providerAccountId: string;
+    identityVersion: number;
+  }>,
+  digest: `sha256:${string}`
+): string {
+  const identity = `${providerAccount.seriesId}\u0000${providerAccount.providerAccountId}\u0000${providerAccount.identityVersion}\u0000${digest}`;
+  return `provider-request:${createHash("sha256").update(identity, "utf8").digest("hex")}`;
 }
 
 function deterministicUuid(value: string): string {

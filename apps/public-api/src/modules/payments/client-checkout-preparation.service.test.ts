@@ -66,6 +66,42 @@ describe("ClientCheckoutPreparationService", () => {
       input.idempotencyKey
     );
   });
+
+  it("reuses one provider-request artifact when distinct checkout keys produce the same sealed request", async () => {
+    const artifactIdsByDigest = new Map<string, string>();
+    const factory = {
+      prepare: vi.fn(async () => ({
+        providerAccount: { seriesId: "arcpay-sandbox", providerAccountId: "merchant", identityVersion: 1 },
+        operationEnvelope: { kind: "resolved_finance_operation_envelope", policyId: "limits", policyVersion: 1, policyDigest: digest("limits"), maximumRows: 100, maximumDecimalDigits: 38, maximumArtifactBytes: 2_097_152 },
+        dispatchEnvelope: { kind: "checkout_session_create", amount: order.grossAmount, captureMode: "one_stage", paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }], successUrl: "https://client.elevenhouse.test/success", failureUrl: "https://client.elevenhouse.test/failure", cancelUrl: "https://client.elevenhouse.test/cancel", externalId: "eh-checkout-1", orderId: order.id, fiscalSnapshot: {} }
+      }))
+    } as unknown as ClientOrderCheckoutCommandFactory;
+    const storage = {
+      writeImmutable: vi.fn(async (input) => ({ privateObjectKey: `finance/${input.artifactId}`, privateObjectVersion: input.expectedSha256Digest, envelopeKeyVersion: "filesystem-v1", sha256Digest: input.expectedSha256Digest, byteLength: input.bytes.byteLength, contentType: input.contentType }))
+    } satisfies Pick<FinancePrivateObjectStoragePort, "writeImmutable">;
+    const registry = {
+      registerSealedArtifact: vi.fn(async (input) => {
+        const existingArtifactId = artifactIdsByDigest.get(input.artifact.sha256Digest);
+        if (existingArtifactId && existingArtifactId !== input.artifact.artifactId) {
+          throw new Error("provider artifact digest identity conflict");
+        }
+        artifactIdsByDigest.set(input.artifact.sha256Digest, input.artifact.artifactId);
+        return input.artifact;
+      })
+    } satisfies Pick<FinanceArtifactRegistry, "registerSealedArtifact">;
+    const uow = {
+      prepareClientOrderCheckout: vi.fn(async (command) => ({ kind: "client_order_checkout_preparation_receipt" as const, checkoutPreparation: { checkoutPreparationId: command.checkoutPreparationId, state: "checkout_requested" }, providerDispatch: {} }))
+    } as unknown as ClientOrderCheckoutPreparationUnitOfWork;
+    const service = new ClientCheckoutPreparationService(factory, storage, registry, uow, {
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" }, clock: { now: () => new Date("2026-08-04T10:00:00.000Z") }
+    });
+    const request = { orderId: order.id, buyerContact: { kind: "email" as const, value: "client@example.test" }, successUrl: "https://client.elevenhouse.test/success", failureUrl: "https://client.elevenhouse.test/failure", cancelUrl: "https://client.elevenhouse.test/cancel" };
+
+    await expect(service.accept({ order, clientUserId: order.clientUserId, idempotencyKey: "checkout-key-0001", request })).resolves.toMatchObject({ state: "checkout_requested" });
+    await expect(service.accept({ order, clientUserId: order.clientUserId, idempotencyKey: "checkout-key-0002", request })).resolves.toMatchObject({ state: "checkout_requested" });
+    expect(artifactIdsByDigest).toHaveLength(1);
+  });
 });
 
 function digest(value: string): `sha256:${string}` {

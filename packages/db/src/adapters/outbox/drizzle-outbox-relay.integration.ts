@@ -144,6 +144,37 @@ describe("generic outbox relay store Drizzle/PostgreSQL integration", () => {
       last_error: "current failure"
     });
   });
+
+  it("clears the recorded retry error after a later fenced claim publishes", async () => {
+    const event = await insertEvent();
+    const store = createDrizzleOutboxRelayStore(runtime.database);
+    const failedClaim = onlyClaim(await store.claimPending(claimInput(firstClaimAt)));
+    const retryAt = new Date("2030-01-01T12:01:00.000Z");
+
+    await store.markPublishFailed({
+      eventId: event.id,
+      claimFence: failedClaim.claimFence,
+      failedAt: firstClaimAt,
+      nextAvailableAt: retryAt,
+      errorMessage: "temporary provider failure"
+    });
+    const retryClaim = onlyClaim(await store.claimPending(claimInput(reclaimedAt)));
+
+    await store.markPublished({
+      eventId: event.id,
+      claimFence: retryClaim.claimFence,
+      publishedAt: reclaimedAt
+    });
+
+    expect(await selectEvent(event.id)).toMatchObject({
+      status: "published",
+      attempts: 1,
+      claim_fence: "2",
+      locked_at: null,
+      published_at: reclaimedAt,
+      last_error: null
+    });
+  });
 });
 
 function claimInput(now: Date) {

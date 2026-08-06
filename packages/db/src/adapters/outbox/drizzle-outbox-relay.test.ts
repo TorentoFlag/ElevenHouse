@@ -74,4 +74,36 @@ describe("createDrizzleOutboxRelayStore", () => {
       })
     ).rejects.toThrow("At least one outbox event type is required");
   });
+
+  it("clears a prior relay error only when its fenced claim is published", async () => {
+    const updates: unknown[] = [];
+    const database = {
+      update: () => ({
+        set: (values: unknown) => {
+          updates.push(values);
+          return {
+            where: () => ({
+              returning: async () => [{ id: "00000000-0000-4000-8000-000000000001" }]
+            })
+          };
+        }
+      })
+    };
+    const publishedAt = new Date("2026-08-07T12:00:00.000Z");
+
+    await createDrizzleOutboxRelayStore(database as never).markPublished({
+      eventId: "00000000-0000-4000-8000-000000000001",
+      claimFence: 3n,
+      publishedAt
+    });
+
+    expect(updates).toEqual([
+      expect.objectContaining({
+        status: "published",
+        lastError: null,
+        lockedAt: null,
+        publishedAt
+      })
+    ]);
+  });
 });

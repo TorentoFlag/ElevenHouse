@@ -108,6 +108,35 @@ describe("admin finance browser fixture", () => {
     );
     expect(policies.rows[0]?.count).toBe("1");
 
+    const captureAuthorities = await runtime.pool.query<{
+      readonly policy_id: string;
+      readonly policy_version: string;
+      readonly effective_risk_tier: string;
+      readonly registry_key: string;
+      readonly registry_revision: string;
+    }>(
+      `select risk.policy_id,
+              risk.policy_version::text,
+              risk.effective_risk_tier,
+              fulfillment.registry_key,
+              fulfillment.registry_revision::text
+       from finance_risk_policy_versions risk
+       cross join finance_paid_product_fulfillment_decisions fulfillment
+       where risk.policy_id = '10000000-0000-4000-8000-000000000007'
+         and risk.policy_version = 970001
+         and fulfillment.registry_key = 'single.once.live.solo'
+         and fulfillment.registry_revision = 1`
+    );
+    expect(captureAuthorities.rows).toEqual([
+      {
+        policy_id: "10000000-0000-4000-8000-000000000007",
+        policy_version: "970001",
+        effective_risk_tier: "manual_review",
+        registry_key: "single.once.live.solo",
+        registry_revision: "1"
+      }
+    ]);
+
     const commissionSnapshots = await runtime.pool.query<{
       readonly order_count: string;
       readonly tariff_series_id: string;

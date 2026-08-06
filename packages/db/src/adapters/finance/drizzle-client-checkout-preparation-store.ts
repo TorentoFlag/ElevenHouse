@@ -289,8 +289,15 @@ function normalizeBaseCommand(command: BaseCommand): BaseCommand {
   return Object.freeze({
     checkoutPreparationId: uuid(command.checkoutPreparationId),
     providerOperationIntentId: uuid(command.providerOperationIntentId),
-    expectedVersion: positiveVersion(command.expectedVersion)
+    expectedVersion: expectedVersion(command.expectedVersion)
   });
+}
+
+function expectedVersion(value: unknown): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+    fail("invalid_command");
+  }
+  return value;
 }
 
 function positiveVersion(value: unknown): number {
@@ -303,7 +310,7 @@ function positiveVersion(value: unknown): number {
 function uuid(value: unknown): string {
   if (
     typeof value !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   ) {
     fail("invalid_command");
   }

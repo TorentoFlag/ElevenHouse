@@ -9,6 +9,7 @@ import type {
   PaymentProviderPort,
   PaymentStore
 } from "@elevenhouse/domain";
+import { ClientOrderCheckoutCommandFactoryError } from "@elevenhouse/domain/finance-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemClock } from "../../common/system-clock.js";
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -18,6 +19,7 @@ import { PublicCsrfTokenService } from "../security/csrf/public-csrf-token.servi
 import { CsrfGuard } from "../security/csrf/csrf.guard";
 import { IdempotencyGuard } from "../security/idempotency/idempotency.guard";
 import { PaymentsController } from "./payments.controller";
+import type { ClientCheckoutPreparationService } from "./client-checkout-preparation.service";
 import { PaymentsService } from "./payments.service";
 import {
   PAYMENTS_CHECKOUT_ACTION_SERVICE,
@@ -138,6 +140,29 @@ describe("payments checkout public HTTP flow", () => {
     expect(response).toMatchObject({
       status: 404,
       body: { code: "payment_checkout_order_not_found" }
+    });
+    expect(provider.openCheckout).not.toHaveBeenCalled();
+  });
+
+  it("returns a retryable unavailable error when finance authority cannot prepare checkout", async () => {
+    const service = moduleRef.get(PaymentsService) as unknown as {
+      checkoutPreparation: Pick<ClientCheckoutPreparationService, "accept"> | null;
+    };
+    service.checkoutPreparation = {
+      accept: vi.fn(async () => {
+        throw new ClientOrderCheckoutCommandFactoryError("capture_authority_missing");
+      })
+    };
+
+    const response = await postCheckout(authenticatedCookies(), {
+      origin: "http://localhost:3000",
+      [csrfHeaderName]: csrfToken,
+      "idempotency-key": "checkout:e2e-authority-unavailable"
+    });
+
+    expect(response).toMatchObject({
+      status: 503,
+      body: { code: "payment_checkout_unavailable" }
     });
     expect(provider.openCheckout).not.toHaveBeenCalled();
   });

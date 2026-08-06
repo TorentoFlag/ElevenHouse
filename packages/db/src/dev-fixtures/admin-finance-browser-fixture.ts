@@ -416,6 +416,30 @@ async function seedFinancePolicy(client: Queryable): Promise<void> {
   );
   await query(
     client,
+    `insert into finance_risk_policy_versions
+       (policy_id, policy_version, effective_risk_tier, hold_anchor, hold_duration_hours,
+        reserve_bps, reserve_release_delay_days, provider_settlement_required,
+        payout_minimum_amount_minor, payout_minimum_currency, exception_authority_id,
+        exception_authority_version, effective_at)
+     values ($1, 970001, 'manual_review', 'booking_completed', 48, 0, 0, true,
+       0, 'RUB', null, null, $2)
+     on conflict (policy_id, policy_version) do nothing`,
+    [fixture.financePolicyId, now]
+  );
+  await query(
+    client,
+    `insert into finance_paid_product_fulfillment_decisions
+       (supported, registry_key, registry_revision, hold_anchor,
+        terminal_evidence_owner, terminal_evidence_status,
+        terminal_evidence_contract_version, cancellation_allocator_owner,
+        cancellation_allocator_port, cancellation_allocator_policy_version)
+     values (true, 'single.once.live.solo', 1, 'booking_completed',
+       'booking', 'completed', 1, 'booking',
+       'BookingCancellationRefundDecisionPort', 1)
+     on conflict (registry_key, registry_revision) do nothing`
+  );
+  await query(
+    client,
     `insert into astrologer_risk_profiles
        (astrologer_user_id, risk_tier, manual_risk_tier, manual_override_reason,
         reviewed_by_user_id, reviewed_at, updated_at)

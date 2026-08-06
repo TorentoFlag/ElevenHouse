@@ -4,6 +4,7 @@ import {
   PaymentCheckoutOrderNotFoundError,
   type FinanceOrderStore
 } from "@elevenhouse/domain";
+import { ClientOrderCheckoutCommandFactoryError } from "@elevenhouse/domain/finance-core";
 import {
   createCheckoutRequestSchema,
   type CheckoutPreparationResponse
@@ -76,6 +77,27 @@ async function mapPaymentErrors<T>(operation: () => Promise<T>): Promise<T> {
     if (error instanceof HttpException) throw error;
     if (error instanceof PaymentCheckoutOrderNotFoundError) {
       throw paymentHttpError(404, "payment_checkout_order_not_found", "Order was not found");
+    }
+    if (error instanceof ClientOrderCheckoutCommandFactoryError) {
+      if (error.reason === "buyer_contact_unverified") {
+        throw paymentHttpError(
+          422,
+          "payment_checkout_buyer_contact_unverified",
+          "Buyer contact must be verified before checkout"
+        );
+      }
+      if (error.reason === "order_not_payable") {
+        throw paymentHttpError(
+          409,
+          "payment_checkout_order_not_payable",
+          "Order is not available for checkout"
+        );
+      }
+      throw paymentHttpError(
+        503,
+        "payment_checkout_unavailable",
+        "Payment checkout is temporarily unavailable"
+      );
     }
     if (error instanceof LegacySynchronousCheckoutDisabledError) {
       throw paymentHttpError(503, error.code, "Payment checkout is preparing through the secure payment service");
