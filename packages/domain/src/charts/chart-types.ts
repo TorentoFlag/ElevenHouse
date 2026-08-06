@@ -5,6 +5,7 @@ import type {
   ChartMethodVersion,
   ReproducibleChartResult
 } from "@elevenhouse/contracts";
+import { z } from "@elevenhouse/validation";
 export type {
   ChartCalculationMethod,
   ChartExecutionProfile,
@@ -14,6 +15,7 @@ export type {
 
 export type ChartJobStatus = "queued" | "processing" | "succeeded" | "failed";
 export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1";
+export const CHART_CALCULATION_TERMINAL_EVENT = "chart.calculation.terminal.v1";
 export const DEFAULT_CHART_JOB_MAX_ATTEMPTS = 3;
 
 export type ChartCalculationParticipant = {
@@ -71,6 +73,17 @@ export type CreateOrReuseNatalJobResult = CreateOrReuseChartJobResult;
 export type ChartCalculationRequestedPayload = {
   readonly jobId: string;
 };
+
+export const chartCalculationTerminalPayloadSchema = z
+  .object({
+    jobId: z.string().uuid(),
+    ownerUserId: z.string().uuid(),
+    outcome: z.enum(["succeeded", "failed"]),
+    occurredAt: z.string().datetime({ offset: true })
+  })
+  .strict();
+
+export type ChartCalculationTerminalPayload = z.infer<typeof chartCalculationTerminalPayloadSchema>;
 
 export type ChartCalculationJobStore = {
   readonly createOrReuseChartJob: (
