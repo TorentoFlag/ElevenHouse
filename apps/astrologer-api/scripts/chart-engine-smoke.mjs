@@ -588,15 +588,22 @@ async function seedSmokeData(pool, context) {
             id, client_user_id, label, birth_date, birth_time, birth_time_precision,
             birth_place_text, birth_country_code, birth_city, birth_region,
             birth_timezone, birth_time_dst_occurrence, birth_latitude,
-            birth_longitude, source, is_primary, created_at, updated_at
+            birth_longitude, source, revision, last_edited_by_user_id,
+            last_edited_by_role, created_at, updated_at
           ) values (
             $1, $2, $3, '1990-07-15', '10:30', 'exact', 'Rome, Italy', 'IT',
             'Rome', 'Lazio', 'Europe/Rome', null, 41.9028, 12.4964,
-            'manual', true, $4, $4
+            'manual', 1, $5, 'astrologer', $4, $4
           )
           returning id
         `,
-        [context.birthDataId, context.clientUserId, context.namespace, context.startedAt]
+        [
+          context.birthDataId,
+          context.clientUserId,
+          context.namespace,
+          context.startedAt,
+          context.astrologerUserId
+        ]
       ),
       [context.birthDataId],
       "birth data"
