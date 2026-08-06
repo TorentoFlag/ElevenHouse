@@ -7,13 +7,13 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
-import { bookings, clientBirthData } from "../../schema";
+import { bookings, clientAstrologerRelationships, clientBirthData } from "../../schema";
 
 export function createDrizzleFlowBirthDataReadinessReader(
   database: ElevenHouseDatabase
 ): FlowBirthDataReadinessReader {
   return {
-    read: async ({ bookingId, clientUserId }) => {
+    read: async ({ ownerUserId, bookingId, clientUserId }) => {
       const [row] = await database
         .select({
           state: bookings.state,
@@ -28,14 +28,28 @@ export function createDrizzleFlowBirthDataReadinessReader(
           birthTimeDstOccurrence: clientBirthData.birthTimeDstOccurrence
         })
         .from(bookings)
+        .innerJoin(
+          clientAstrologerRelationships,
+          and(
+            eq(clientAstrologerRelationships.clientUserId, bookings.clientUserId),
+            eq(clientAstrologerRelationships.astrologerUserId, bookings.ownerUserId),
+            eq(clientAstrologerRelationships.status, "active")
+          )
+        )
         .leftJoin(clientBirthData, eq(clientBirthData.clientUserId, bookings.clientUserId))
-        .where(and(eq(bookings.id, bookingId), eq(bookings.clientUserId, clientUserId)))
+        .where(
+          and(
+            eq(bookings.id, bookingId),
+            eq(bookings.ownerUserId, ownerUserId),
+            eq(bookings.clientUserId, clientUserId)
+          )
+        )
         .limit(1);
 
       if (!row || row.state !== "confirmed") {
         throw new FlowExecutionIntegrityError(
           "FLOW_TOKEN_RUNTIME_STATE_INVALID",
-          "Birth-data readiness requires the pinned confirmed booking and client"
+          "Birth-data readiness requires the pinned confirmed booking, owner, client, and relationship"
         );
       }
 

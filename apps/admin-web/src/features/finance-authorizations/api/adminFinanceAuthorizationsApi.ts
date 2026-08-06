@@ -2,6 +2,7 @@ import {
   beginFinanceAuthorizationRequestSchema,
   beginFinanceAuthorizationResponseSchema,
   verifyFinanceAuthorizationResponseSchema,
+  type BeginFinanceAuthorizationResponse,
   type BeginFinanceAuthorizationRequest,
   type VerifyFinanceAuthorizationResponse
 } from "@elevenhouse/contracts";
@@ -13,6 +14,13 @@ import {
 
 export type AdminFinanceAuthorizationClient = Readonly<{
   authorize(input: BeginFinanceAuthorizationRequest): Promise<VerifyFinanceAuthorizationResponse>;
+  /**
+   * Completes a ceremony whose canonical command was prepared by a privileged server endpoint.
+   * The browser receives only the challenge, never mutable ledger, liquidity or payout facts.
+   */
+  complete(
+    authorization: BeginFinanceAuthorizationResponse
+  ): Promise<VerifyFinanceAuthorizationResponse>;
 }>;
 
 export type CreateAdminFinanceAuthorizationClientInput = Readonly<{
@@ -61,6 +69,16 @@ export function createAdminFinanceAuthorizationClient(
       const authorization = beginFinanceAuthorizationResponseSchema.parse(
         await request("/admin/finance/authorizations/begin", authorizationRequest)
       );
+      return completeAuthorization(authorization);
+    },
+    async complete(rawAuthorization) {
+      return completeAuthorization(beginFinanceAuthorizationResponseSchema.parse(rawAuthorization));
+    }
+  } satisfies AdminFinanceAuthorizationClient);
+
+  async function completeAuthorization(
+    authorization: BeginFinanceAuthorizationResponse
+  ): Promise<VerifyFinanceAuthorizationResponse> {
       const assertion = await createFinanceWebAuthnAssertion({
         authorization,
         credentials: input.credentials
@@ -71,8 +89,7 @@ export function createAdminFinanceAuthorizationClient(
           assertion
         })
       );
-    }
-  } satisfies AdminFinanceAuthorizationClient);
+  }
 }
 
 function readAdminCsrfCookie(): string | null {

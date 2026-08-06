@@ -17,7 +17,7 @@ import {
   type VerifiedWalletOperationCommitReceipt,
   type VerifiedCaptureApplicationUnitOfWork
 } from "@elevenhouse/domain/finance-core";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import { financeVerifiedCaptureApplicationReceipts } from "../../schema/finance/capture-application.schema";
@@ -971,13 +971,12 @@ async function lockPlatformInvoiceCaptureAuthority(
     .for("update");
   if (
     !subscription ||
-    subscription.state !== "awaiting_initial_payment" ||
+    (subscription.state !== "awaiting_initial_payment" && subscription.state !== "past_due") ||
     subscription.ownerUserId !== invoice.ownerUserId ||
     subscription.tariffSeriesId !== invoice.tariffSeriesId ||
     subscription.tariffVersion !== invoice.tariffVersion ||
     subscription.tariffVersionDigest !== invoice.tariffVersionDigest ||
-    subscription.startsAt !== null ||
-    subscription.endsAt !== null
+    !isMatchingPlatformInvoiceSubscriptionPeriod(subscription, invoice)
   ) {
     fail("financial_mutation_conflict");
   }
@@ -1073,7 +1072,7 @@ async function activateCapturedPlatformInvoice(
     .where(
       and(
         eq(platformTariffSubscriptions.id, platformInvoice.subscription.id),
-        eq(platformTariffSubscriptions.state, "awaiting_initial_payment"),
+        inArray(platformTariffSubscriptions.state, ["awaiting_initial_payment", "past_due"]),
         eq(platformTariffSubscriptions.version, version)
       )
     )
@@ -1085,6 +1084,21 @@ async function activateCapturedPlatformInvoice(
   ) {
     fail("financial_mutation_conflict");
   }
+}
+
+function isMatchingPlatformInvoiceSubscriptionPeriod(
+  subscription: typeof platformTariffSubscriptions.$inferSelect,
+  invoice: typeof platformTariffInvoices.$inferSelect
+): boolean {
+  if (subscription.state === "awaiting_initial_payment") {
+    return subscription.startsAt === null && subscription.endsAt === null;
+  }
+  return (
+    subscription.state === "past_due" &&
+    subscription.startsAt !== null &&
+    subscription.endsAt !== null &&
+    subscription.endsAt.getTime() === invoice.billingPeriodStartAt.getTime()
+  );
 }
 
 async function rehydratePlatformInvoiceJournalReceipt(

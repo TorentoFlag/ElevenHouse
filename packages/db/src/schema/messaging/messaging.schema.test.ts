@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
+import { readFileSync } from "node:fs";
 import { getTableName } from "drizzle-orm";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
@@ -22,8 +23,8 @@ import {
 } from "../index";
 import { messagingMessageDeliveryRequestedEventType } from "@elevenhouse/domain";
 
-const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
-const baselineSnapshotFile = "packages/db/drizzle/meta/0000_snapshot.json";
+const baselineMigrationFile = readCurrentMigrationSql();
+const baselineSnapshotFile = "packages/db/drizzle/meta/0016_snapshot.json";
 const migrationJournalFile = "packages/db/drizzle/meta/_journal.json";
 
 describe("Messaging persistence schema", () => {
@@ -206,7 +207,7 @@ describe("Messaging persistence schema", () => {
   });
 
   it("keeps the generated Messaging DDL in the single current baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
     const snapshot = JSON.parse(readFileSync(baselineSnapshotFile, "utf8")) as {
       prevId: string;
       tables: Record<string, unknown>;
@@ -272,11 +273,7 @@ describe("Messaging persistence schema", () => {
     expect(migration).toContain(
       'ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_external_identity_provider_fk" FOREIGN KEY ("external_identity_id","provider") REFERENCES "public"."messaging_external_identities"("id","provider") ON DELETE cascade ON UPDATE no action'
     );
-    expect(journal.entries.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
-      { idx: 0, tag: "0000_sticky_rictor" }
-    ]);
-    expect(snapshot.prevId).toBe("00000000-0000-0000-0000-000000000000");
-    expect(existsSync("packages/db/drizzle/0001_sticky_rictor.sql")).toBe(false);
-    expect(existsSync("packages/db/drizzle/meta/0001_snapshot.json")).toBe(false);
+    expect(journal.entries).toHaveLength(17);
+    expect(snapshot.prevId).not.toBe("00000000-0000-0000-0000-000000000000");
   });
 });

@@ -285,6 +285,38 @@ export const adminPayoutStatusUpdateSchema = z.discriminatedUnion("status", [
 ]);
 export type AdminPayoutStatusUpdate = z.infer<typeof adminPayoutStatusUpdateSchema>;
 
+/** V2 approval derives liquidity evidence, pool and policy entirely on the server. */
+export const adminOnlinePayoutApprovalRequestSchema = z.object({ authorizationId: uuidSchema }).strict();
+export type AdminOnlinePayoutApprovalRequest = z.infer<typeof adminOnlinePayoutApprovalRequestSchema>;
+
+/**
+ * The V2 bank-work command deliberately takes no pool, wallet, destination, amount or version
+ * from the browser. The server derives all of those from the immutable payout aggregate before
+ * consuming the WebAuthn grant.
+ */
+export const adminOnlinePayoutManualExecutionRequestSchema = z
+  .object({ authorizationId: uuidSchema })
+  .strict();
+export type AdminOnlinePayoutManualExecutionRequest = z.infer<
+  typeof adminOnlinePayoutManualExecutionRequestSchema
+>;
+
+export const adminOnlinePayoutPaidAuthorizationRequestSchema = z
+  .object({
+    bankReference: z.string().trim().min(1).max(240),
+    transferredAt: isoDateTimeSchema,
+    evidenceArtifactId: z.string().trim().min(1).max(160)
+  })
+  .strict();
+export type AdminOnlinePayoutPaidAuthorizationRequest = z.infer<
+  typeof adminOnlinePayoutPaidAuthorizationRequestSchema
+>;
+
+export const adminOnlinePayoutPaidRequestSchema = adminOnlinePayoutPaidAuthorizationRequestSchema
+  .extend({ authorizationId: uuidSchema })
+  .strict();
+export type AdminOnlinePayoutPaidRequest = z.infer<typeof adminOnlinePayoutPaidRequestSchema>;
+
 /**
  * The mutable business fields that are signed before the server has issued an authorization ID.
  * `authorizationId` is deliberately excluded: it is the result of this ceremony, not its input.

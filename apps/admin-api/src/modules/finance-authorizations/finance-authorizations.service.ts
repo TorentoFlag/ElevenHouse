@@ -23,6 +23,7 @@ import {
   verifyFinanceWebAuthnRegistrationRequestSchema,
   verifyFinanceWebAuthnRegistrationResponseSchema,
   type BeginFinanceAuthorizationResponse,
+  type BeginFinanceAuthorizationRequest,
   type BeginFinanceWebAuthnRegistrationResponse,
   type VerifyFinanceAuthorizationResponse,
   type VerifyFinanceWebAuthnRegistrationResponse
@@ -61,15 +62,27 @@ export class AdminFinanceAuthorizationsService {
   ): Promise<BeginFinanceAuthorizationResponse> {
     const request = beginFinanceAuthorizationRequestSchema.safeParse(body);
     if (!request.success) throw invalidRequest();
+    return this.beginResolved(account, request.data);
+  }
+
+  /**
+   * Used by server-owned finance workflows after they derive the canonical aggregate/version/
+   * payload from persisted facts. Keeping it here preserves the same ceremony, TTL and credential
+   * policy as the generic endpoint without trusting browser-provided money instructions.
+   */
+  async beginResolved(
+    account: AdminAuthenticatedAccount,
+    request: BeginFinanceAuthorizationRequest
+  ): Promise<BeginFinanceAuthorizationResponse> {
     const config = this.webAuthnConfig();
     const result = await beginFinanceAuthorization({
       actorUserId: account.id,
       sessionId: account.sessionId,
       sessionKind: "standard",
-      actionKind: request.data.actionKind,
-      aggregateId: request.data.aggregateId,
-      expectedVersion: request.data.expectedVersion,
-      payload: request.data.payload,
+      actionKind: request.actionKind,
+      aggregateId: request.aggregateId,
+      expectedVersion: request.expectedVersion,
+      payload: request.payload,
       store: createDrizzleFinanceAuthorizationStore(this.postgresRuntime.database),
       randomSource: { randomBytes },
       clock: { now: () => this.clock.now().toISOString() },

@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { calculationRecords, matrixNotes } from "../index";
 
-const migrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
+const migrationFile = readCurrentMigrationSql();
 
 describe("Matrix private note persistence schema", () => {
   it("exports the checksum-bound private note columns", () => {
@@ -41,7 +41,7 @@ describe("Matrix private note persistence schema", () => {
   });
 
   it("keeps the ownership boundary in the checked-in baseline migration", () => {
-    const migration = readFileSync(migrationFile, "utf8");
+    const migration = migrationFile;
 
     expect(migration).toContain('CREATE TABLE "matrix_notes"');
     expect(migration).toContain("matrix_notes_calculation_owner_fk");

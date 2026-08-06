@@ -7,6 +7,7 @@ import type {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import {
+  financeOnlinePayoutPaidReceipts,
   financeOnlinePayoutRequests,
   financeOnlinePayoutStateTransitions
 } from "../../schema/finance/online-payouts.schema";
@@ -54,6 +55,10 @@ export function createDrizzleOnlineWalletPayoutRequestReader(input: Readonly<{
             )
           )
         )
+        .leftJoin(
+          financeOnlinePayoutPaidReceipts,
+          eq(financeOnlinePayoutPaidReceipts.payoutRequestId, financeOnlinePayoutRequests.id)
+        )
         .where(
           and(
             eq(financeOnlinePayoutRequests.id, payoutRequestId),
@@ -81,6 +86,10 @@ export function createDrizzleOnlineWalletPayoutRequestReader(input: Readonly<{
             )
           )
         )
+        .leftJoin(
+          financeOnlinePayoutPaidReceipts,
+          eq(financeOnlinePayoutPaidReceipts.payoutRequestId, financeOnlinePayoutRequests.id)
+        )
         .where(eq(financeOnlinePayoutRequests.id, payoutRequestId))
         .limit(2);
       if (rows.length > 1) throw new OnlineWalletPayoutRequestReadError("projection_conflict");
@@ -103,6 +112,10 @@ export function createDrizzleOnlineWalletPayoutRequestReader(input: Readonly<{
               financeOnlinePayoutRequests.version
             )
           )
+        )
+        .leftJoin(
+          financeOnlinePayoutPaidReceipts,
+          eq(financeOnlinePayoutPaidReceipts.payoutRequestId, financeOnlinePayoutRequests.id)
         )
         .where(
           normalized.statuses
@@ -131,6 +144,10 @@ export function createDrizzleOnlineWalletPayoutRequestReader(input: Readonly<{
             )
           )
         )
+        .leftJoin(
+          financeOnlinePayoutPaidReceipts,
+          eq(financeOnlinePayoutPaidReceipts.payoutRequestId, financeOnlinePayoutRequests.id)
+        )
         .where(eq(financeOnlinePayoutRequests.astrologerUserId, normalized.astrologerUserId))
         .orderBy(desc(financeOnlinePayoutRequests.requestedAt), desc(financeOnlinePayoutRequests.id))
         .limit(normalized.limit);
@@ -151,7 +168,9 @@ const projectionFields = {
   latestTransitionActorUserId: financeOnlinePayoutStateTransitions.actorUserId,
   latestTransitionOccurredAt: financeOnlinePayoutStateTransitions.occurredAt,
   latestTransitionFailureReason: financeOnlinePayoutStateTransitions.failureReason,
-  latestTransitionAdminNote: financeOnlinePayoutStateTransitions.adminNote
+  latestTransitionAdminNote: financeOnlinePayoutStateTransitions.adminNote,
+  paidBankReference: financeOnlinePayoutPaidReceipts.bankReference,
+  paidTransferredAt: financeOnlinePayoutPaidReceipts.transferredAt
 };
 
 type DatabasePayoutProjection = Readonly<{
@@ -167,6 +186,8 @@ type DatabasePayoutProjection = Readonly<{
   latestTransitionOccurredAt: Date;
   latestTransitionFailureReason: string | null;
   latestTransitionAdminNote: string | null;
+  paidBankReference: string | null;
+  paidTransferredAt: Date | null;
 }>;
 
 function toProjection(row: DatabasePayoutProjection): OnlineWalletPayoutRequestProjection {
@@ -183,7 +204,9 @@ function toProjection(row: DatabasePayoutProjection): OnlineWalletPayoutRequestP
     latestTransitionActorUserId: row.latestTransitionActorUserId,
     latestTransitionOccurredAt: row.latestTransitionOccurredAt.toISOString(),
     latestTransitionFailureReason: row.latestTransitionFailureReason,
-    latestTransitionAdminNote: row.latestTransitionAdminNote
+    latestTransitionAdminNote: row.latestTransitionAdminNote,
+    paidBankReference: row.paidBankReference,
+    paidTransferredAt: row.paidTransferredAt?.toISOString() ?? null
   });
 }
 

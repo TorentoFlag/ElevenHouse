@@ -1,3 +1,4 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -33,8 +34,9 @@ import { createDrizzleFlowRuntimeControlCommandStore } from "./drizzle-flow-runt
 import { createDrizzleFlowWorkerReadinessStore } from "./drizzle-flow-worker-readiness-store";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
-const integrationBaselinePath =
-  process.env.FLOW_INTEGRATION_BASELINE_PATH ?? "packages/db/drizzle/0000_sticky_rictor.sql";
+const integrationBaselineSql = process.env.FLOW_INTEGRATION_BASELINE_PATH
+  ? readFileSync(process.env.FLOW_INTEGRATION_BASELINE_PATH, "utf8")
+  : readCurrentMigrationSql();
 const databaseName = `elevenhouse_flow_enrollment_store_${randomUUID().replaceAll("-", "")}`;
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
@@ -103,7 +105,7 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
   beforeEach(async () => {
     await runtime.pool.query("DROP SCHEMA public CASCADE");
     await runtime.pool.query("CREATE SCHEMA public");
-    await runtime.pool.query(readFileSync(integrationBaselinePath, "utf8"));
+    await runtime.pool.query(integrationBaselineSql);
     await inTransaction(async (client) => {
       await reconcileAuditActorSubjects(client);
       await reconcileFlowRuntimeControlAuthority(client);

@@ -1,19 +1,20 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { currentBaseline, isCurrentBaselineHistory } from "./production-baseline-plan";
+import { approvedLineage, isCurrentBaselineHistory } from "./production-baseline-plan";
 
 describe("pre-launch production baseline identity", () => {
-  it("matches the checked-in single baseline and accepts no predecessor ledger", () => {
-    const migration = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql");
-
-    expect(createHash("sha256").update(migration).digest("hex")).toBe(currentBaseline.hash);
+  it("accepts exactly the checked-in ordered lineage", () => {
+    expect(
+      isCurrentBaselineHistory(
+        approvedLineage.map((migration) => ({ hash: migration.hash, created_at: migration.createdAt }))
+      )
+    ).toBe(true);
     expect(
       isCurrentBaselineHistory([
-        { hash: currentBaseline.hash, created_at: currentBaseline.createdAt }
+        { hash: "0".repeat(64), created_at: approvedLineage[0]!.createdAt },
+        ...approvedLineage.slice(1).map((migration) => ({ hash: migration.hash, created_at: migration.createdAt }))
       ])
-    ).toBe(true);
+    ).toBe(false);
     expect(isCurrentBaselineHistory([])).toBe(false);
   });
 });

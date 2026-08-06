@@ -30,6 +30,17 @@ export type PlatformTariffSubscriptionPurchaseRecord = Readonly<{
   invoice: PlatformTariffInvoiceRecord | null;
 }>;
 
+/** Worker-only authority that creates the next paid period before any provider I/O. */
+export type PlatformTariffRenewalInvoiceIssuer = Readonly<{
+  issueDueRenewalInvoices(input: Readonly<{
+    now: string;
+    limit: number;
+  }>): Promise<Readonly<{
+    issued: number;
+    skipped: number;
+  }>>;
+}>;
+
 /**
  * Admin tariff mutations and runtime entitlement reads share this port; infrastructure chooses
  * locks and audit/outbox mechanics, while callers never mutate tariff rows directly.

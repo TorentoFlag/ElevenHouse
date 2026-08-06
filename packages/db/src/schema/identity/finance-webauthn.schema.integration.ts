@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client, Pool } from "pg";
@@ -26,7 +26,7 @@ describe.sequential("finance WebAuthn PostgreSQL invariants", () => {
     await admin.connect();
     await admin.query(`create database "${databaseName}"`);
     pool = new Pool({ connectionString: isolatedDatabaseUrl });
-    await pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await pool.query(readCurrentMigrationSql());
     await seedUsersAndSessions(pool);
   }, 30_000);
 

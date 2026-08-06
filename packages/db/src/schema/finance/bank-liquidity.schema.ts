@@ -13,7 +13,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { financeBankCashPools, financeBankStatementRows } from "./bank-cash.schema";
+import { financeArtifacts } from "./finance-artifacts.schema";
 import { financeNumeric38String, financeRevisionString } from "./finance-values";
+import { financeAuthorizationGrants } from "../identity/finance-webauthn.schema";
+import { users } from "../identity/accounts.schema";
 
 const digestPattern = "^sha256:[0-9a-f]{64}$";
 const digestSqlPattern = sql.raw(`'${digestPattern}'`);
@@ -67,6 +70,93 @@ function nullableIdentifierCheck(...columns: Array<{ getSQL(): unknown }>) {
   );
 }
 
+/**
+ * Immutable operator attestation for a manual bank-balance snapshot. It preserves the exact
+ * private evidence artifact and WebAuthn grant that authorized the amount before that snapshot
+ * can affect payout liquidity. The snapshot table binds this receipt by its canonical digest.
+ */
+export const financeBankLiquidityAttestationReceipts = pgTable(
+  "finance_bank_liquidity_attestation_receipts",
+  {
+    attestationId: uuid("attestation_id").primaryKey(),
+    attestationVersion: integer("attestation_version").notNull().default(1),
+    bankCashPoolId: varchar("bank_cash_pool_id", { length: 160 }).notNull(),
+    currency: text("currency").notNull(),
+    expectedBankLiquidityRevision: financeRevisionString("expected_bank_liquidity_revision").notNull(),
+    unrestrictedAvailableMinor: financeNumeric38String("unrestricted_available_minor").notNull(),
+    sourceCheckpoint: varchar("source_checkpoint", { length: 320 }).notNull(),
+    asOf: timestamp("as_of", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    evidenceArtifactId: varchar("evidence_artifact_id", { length: 160 }).notNull(),
+    evidenceArtifactDigest: varchar("evidence_artifact_digest", { length: 71 }).notNull(),
+    authorizationId: uuid("authorization_id").notNull(),
+    authorizationPayloadDigest: varchar("authorization_payload_digest", { length: 71 }).notNull(),
+    attestedByActorId: uuid("attested_by_actor_id").notNull(),
+    canonicalPreimage: text("canonical_preimage").notNull().default(sql`''`),
+    canonicalDigest: varchar("canonical_digest", { length: 71 }).notNull().default(sql`''`),
+    attestedAt: timestamp("attested_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    foreignKey({
+      name: "finance_bank_liquidity_attestations_pool_fk",
+      columns: [table.bankCashPoolId, table.currency],
+      foreignColumns: [financeBankCashPools.id, financeBankCashPools.currency]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_bank_liquidity_attestations_artifact_fk",
+      columns: [table.evidenceArtifactId],
+      foreignColumns: [financeArtifacts.id]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_bank_liquidity_attestations_authorization_fk",
+      columns: [table.authorizationId],
+      foreignColumns: [financeAuthorizationGrants.authorizationId]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_bank_liquidity_attestations_actor_fk",
+      columns: [table.attestedByActorId],
+      foreignColumns: [users.id]
+    }).onDelete("restrict"),
+    unique("finance_bank_liquidity_attestations_exact_unique").on(
+      table.attestationId,
+      table.attestationVersion,
+      table.canonicalDigest
+    ),
+    unique("finance_bank_liquidity_attestations_artifact_unique").on(table.evidenceArtifactId),
+    unique("finance_bank_liquidity_attestations_authorization_unique").on(table.authorizationId),
+    unique("finance_bank_liquidity_attestations_digest_unique").on(
+      table.bankCashPoolId,
+      table.currency,
+      table.canonicalDigest
+    ),
+    check(
+      "finance_bank_liquidity_attestations_snapshot_shape_check",
+      sql`${table.attestationVersion} = 1
+        and ${table.currency} = 'RUB'
+        and ${table.expectedBankLiquidityRevision} >= 0
+        and ${table.unrestrictedAvailableMinor} >= 0
+        and ${table.expiresAt} > ${table.asOf}`
+    ),
+    check(
+      "finance_bank_liquidity_attestations_digest_check",
+      sql`${table.evidenceArtifactDigest} ~ ${digestSqlPattern}
+        and ${table.authorizationPayloadDigest} ~ ${digestSqlPattern}
+        and ${table.canonicalDigest} ~ ${digestSqlPattern}
+        and length(${table.canonicalPreimage}) > 0`
+    ),
+    check(
+      "finance_bank_liquidity_attestations_identifier_check",
+      identifierCheck(table.bankCashPoolId, table.sourceCheckpoint, table.evidenceArtifactId)
+    ),
+    index("finance_bank_liquidity_attestations_pool_checkpoint_idx").on(
+      table.bankCashPoolId,
+      table.currency,
+      table.sourceCheckpoint,
+      table.attestedAt
+    )
+  ]
+);
+
 export const financeBankLiquiditySnapshots = pgTable(
   "finance_bank_liquidity_snapshots",
   {
@@ -80,6 +170,9 @@ export const financeBankLiquiditySnapshots = pgTable(
     asOf: timestamp("as_of", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     evidenceDigest: varchar("evidence_digest", { length: 71 }).notNull(),
+    attestationId: uuid("attestation_id").notNull(),
+    attestationVersion: integer("attestation_version").notNull(),
+    attestationDigest: varchar("attestation_digest", { length: 71 }).notNull(),
     verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -88,6 +181,15 @@ export const financeBankLiquiditySnapshots = pgTable(
       name: "finance_bank_liquidity_snapshots_pool_fk",
       columns: [table.bankCashPoolId, table.currency],
       foreignColumns: [financeBankCashPools.id, financeBankCashPools.currency]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_bank_liquidity_snapshots_attestation_fk",
+      columns: [table.attestationId, table.attestationVersion, table.attestationDigest],
+      foreignColumns: [
+        financeBankLiquidityAttestationReceipts.attestationId,
+        financeBankLiquidityAttestationReceipts.attestationVersion,
+        financeBankLiquidityAttestationReceipts.canonicalDigest
+      ]
     }).onDelete("restrict"),
     unique("finance_bank_liquidity_snapshots_checkpoint_unique").on(
       table.bankCashPoolId,
@@ -126,7 +228,10 @@ export const financeBankLiquiditySnapshots = pgTable(
     check("finance_bank_liquidity_snapshots_expiry_check", sql`${table.expiresAt} > ${table.asOf}`),
     check(
       "finance_bank_liquidity_snapshots_digest_check",
-      sql`${table.snapshotVersion} >= 1 and ${table.evidenceDigest} ~ ${digestSqlPattern}`
+      sql`${table.snapshotVersion} >= 1
+        and ${table.evidenceDigest} ~ ${digestSqlPattern}
+        and ${table.attestationVersion} = 1
+        and ${table.attestationDigest} = ${table.evidenceDigest}`
     ),
     check(
       "finance_bank_liquidity_snapshots_identifier_check",
@@ -787,12 +892,82 @@ begin
 end;
 $$;
 
+create or replace function finance_issue_bank_liquidity_attestation_receipt()
+returns trigger language plpgsql
+set search_path = pg_catalog, public as $$
+declare
+  artifact_row finance_artifacts%rowtype;
+  authorization_row finance_authorization_grants%rowtype;
+  attested timestamptz;
+begin
+  select * into strict artifact_row
+    from finance_artifacts artifact
+    where artifact.id = new.evidence_artifact_id;
+  if artifact_row.binding_kind <> 'bank_cash_pool'
+     or artifact_row.bank_cash_pool_id <> new.bank_cash_pool_id
+     or artifact_row.currency <> new.currency
+     or artifact_row.sha256_digest <> new.evidence_artifact_digest
+     or artifact_row.artifact_class not in ('bank_statement', 'bank_transfer_evidence') then
+    raise exception 'bank liquidity attestation requires exact sealed bank evidence'
+      using errcode = '23514';
+  end if;
+  select * into strict authorization_row
+    from finance_authorization_grants grant_row
+    where grant_row.authorization_id = new.authorization_id;
+  if authorization_row.action_kind <> 'bank_snapshot_attest'
+     or authorization_row.aggregate_id <> new.attestation_id
+     or authorization_row.expected_version <> new.expected_bank_liquidity_revision
+     or authorization_row.payload_hash <> new.authorization_payload_digest
+     or authorization_row.actor_user_id <> new.attested_by_actor_id
+     or authorization_row.status <> 'consumed' then
+    raise exception 'bank liquidity attestation requires its exact consumed authorization'
+      using errcode = '23514';
+  end if;
+  attested := clock_timestamp();
+  new.attestation_version := 1;
+  new.attested_at := attested;
+  new.canonical_preimage := jsonb_build_object(
+    'kind', 'bank_liquidity_snapshot_attestation_receipt',
+    'attestationId', new.attestation_id,
+    'version', new.attestation_version,
+    'bankCashPoolId', new.bank_cash_pool_id,
+    'currency', new.currency,
+    'expectedBankLiquidityRevision', new.expected_bank_liquidity_revision,
+    'unrestrictedAvailableMinor', new.unrestricted_available_minor,
+    'sourceCheckpoint', new.source_checkpoint,
+    'asOf', to_char(new.as_of at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'expiresAt', to_char(new.expires_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
+    'evidenceArtifact', jsonb_build_object(
+      'artifactId', new.evidence_artifact_id,
+      'sha256Digest', new.evidence_artifact_digest
+    ),
+    'authorization', jsonb_build_object(
+      'authorizationId', new.authorization_id,
+      'payloadDigest', new.authorization_payload_digest,
+      'actorUserId', new.attested_by_actor_id
+    ),
+    'attestedAt', to_char(new.attested_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+  )::text;
+  new.canonical_digest := 'sha256:' || encode(digest(new.canonical_preimage, 'sha256'), 'hex');
+  return new;
+exception
+  when no_data_found then
+    raise exception 'bank liquidity attestation requires exact artifact and authorization facts'
+      using errcode = '23503';
+end;
+$$;
+
+create trigger finance_bank_liquidity_attestations_issue
+before insert on finance_bank_liquidity_attestation_receipts
+for each row execute function finance_issue_bank_liquidity_attestation_receipt();
+
 create or replace function finance_prepare_bank_liquidity_snapshot()
 returns trigger language plpgsql
 set search_path = pg_catalog, public as $$
 declare
   verified timestamptz;
   pool_activated_at timestamptz;
+  attestation finance_bank_liquidity_attestation_receipts%rowtype;
 begin
   select pool.activated_at into strict pool_activated_at
     from finance_bank_cash_pools pool
@@ -806,6 +981,21 @@ begin
   end if;
   if new.as_of > verified then
     raise exception 'bank liquidity snapshot as-of cannot be in the future'
+      using errcode = '23514';
+  end if;
+  select * into strict attestation
+    from finance_bank_liquidity_attestation_receipts receipt
+    where receipt.attestation_id = new.attestation_id
+      and receipt.attestation_version = new.attestation_version
+      and receipt.canonical_digest = new.attestation_digest;
+  if new.evidence_digest <> attestation.canonical_digest
+     or new.bank_cash_pool_id <> attestation.bank_cash_pool_id
+     or new.currency <> attestation.currency
+     or new.unrestricted_available_minor <> attestation.unrestricted_available_minor
+     or new.source_checkpoint <> attestation.source_checkpoint
+     or new.as_of <> attestation.as_of
+     or new.expires_at <> attestation.expires_at then
+    raise exception 'bank liquidity snapshot must preserve its exact attested evidence'
       using errcode = '23514';
   end if;
   new.verified_at := verified;
@@ -1499,6 +1689,12 @@ execute function finance_assert_bank_exposure_liquidity_head();
 
 create trigger finance_bank_liquidity_heads_no_truncate
 before truncate on finance_bank_liquidity_heads
+for each statement execute function finance_reject_bank_liquidity_history_mutation();
+create trigger finance_bank_liquidity_attestations_immutable
+before update or delete on finance_bank_liquidity_attestation_receipts
+for each row execute function finance_reject_bank_liquidity_history_mutation();
+create trigger finance_bank_liquidity_attestations_no_truncate
+before truncate on finance_bank_liquidity_attestation_receipts
 for each statement execute function finance_reject_bank_liquidity_history_mutation();
 create trigger finance_bank_liquidity_snapshots_immutable
 before update or delete on finance_bank_liquidity_snapshots

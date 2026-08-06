@@ -103,10 +103,12 @@ import type {
   BankCashMatchAuthority,
   BankCashMatchUnitOfWork,
   BankLiquiditySnapshotAdoptionUnitOfWork,
+  BankStatementIngestionCommitReceipt,
   BankStatementIngestionUnitOfWork,
   CashPoolDirectoryBootstrapPort,
   EmptyCashPoolDirectoryReceipt
 } from "./bank-cash-pool-port";
+import type { OnlineWalletPayoutPaidReceiptRef } from "./online-wallet-payout-execution-uow";
 import type { PayoutRequestUnitOfWork } from "./payout-request-uow";
 import type {
   PayoutApprovalCommitReceiptRef,
@@ -707,10 +709,15 @@ describe("finance persistence port contracts", () => {
 
   it("binds a complete bank row to aggregate payout authority and decoder-issued identity", () => {
     expectTypeOf<VerifiedBankStatementEvidence["sourceStatementId"]>().toEqualTypeOf<string>();
+    expectTypeOf<VerifiedBankStatementEvidence["sourceCheckpoint"]>().toEqualTypeOf<string>();
+    expectTypeOf<BankStatementIngestionCommitReceipt["sourceCheckpoint"]>().toEqualTypeOf<string>();
     expectTypeOf<VerifiedBankStatementEvidence["sourceRowId"]>().toEqualTypeOf<string>();
     expectTypeOf<
       Extract<BankCashMatchAuthority, { kind: "merchant_settlement" }>["merchantPayout"]
     >().toEqualTypeOf<MerchantPayoutConfirmationCommitReceiptRef>();
+    expectTypeOf<
+      Extract<BankCashMatchAuthority, { kind: "manual_payout" }>["payoutPaid"]
+    >().toEqualTypeOf<OnlineWalletPayoutPaidReceiptRef>();
     expectTypeOf<
       Extract<BankCashMatchAuthority, { kind: "merchant_settlement" }>
     >().not.toMatchTypeOf<

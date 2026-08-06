@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import {
   beginFinanceAuthorization,
@@ -37,7 +37,7 @@ describe.sequential("finance authorization Drizzle persistence", () => {
     await admin.query(`create database "${databaseName}"`);
     pool = new Pool({ connectionString: isolatedDatabaseUrl });
     database = drizzle(pool) as unknown as ElevenHouseDatabase;
-    await pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await pool.query(readCurrentMigrationSql());
     await pool.query("insert into users (id) values ($1)", [actorUserId]);
     await pool.query(
       `insert into user_sessions (id, user_id, token_hash, expires_at)

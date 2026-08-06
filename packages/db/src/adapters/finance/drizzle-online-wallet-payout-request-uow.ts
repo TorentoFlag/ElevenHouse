@@ -259,6 +259,7 @@ async function persist(
   await transaction.insert(financeOnlinePayableSourceAllocations).values(outputs);
   await transaction.insert(financeOnlinePayoutRequests).values({
     id: command.payoutRequestId,
+    authorizationAggregateId: randomUUID(),
     walletId: head.id,
     walletMutationId: mutationId,
     astrologerUserId: command.astrologerUserId,

@@ -110,7 +110,7 @@ async function prepare<TSchema extends Record<string, unknown>>(
     .limit(1)
     .for("update");
   if (
-    !subscription || subscription.state !== "awaiting_initial_payment" ||
+    !subscription || !chargeableSubscriptionForInvoice(subscription, invoice) ||
     subscription.version !== request.expectedSubscriptionVersion ||
     subscription.id !== invoice.subscriptionId || subscription.ownerUserId !== invoice.ownerUserId ||
     subscription.tariffSeriesId !== invoice.tariffSeriesId || subscription.tariffVersion !== invoice.tariffVersion ||
@@ -126,7 +126,7 @@ async function prepare<TSchema extends Record<string, unknown>>(
     ))
     .limit(1)
     .for("share");
-  if (!tariff || tariff.lifecycle !== "published") fail("tariff_snapshot_not_chargeable");
+  if (!tariff || (tariff.lifecycle !== "published" && tariff.lifecycle !== "retired")) fail("tariff_snapshot_not_chargeable");
 
   const envelope = createProviderDispatchEnvelope(command.dispatchEnvelope);
   if (envelope.kind !== "saved_card_charge") fail("invalid_command");
@@ -265,6 +265,17 @@ function assertEnvelopeMatchesTariff(envelope: Extract<ReturnType<typeof createP
   if (envelope.externalId !== invoice.id || envelope.amount.amountMinor !== invoice.amountMinor || envelope.amount.currency !== "RUB" ||
     envelope.savedCardCredential.credentialId !== command.savedCardCredential.credentialId || envelope.savedCardCredential.credentialVersion !== command.savedCardCredential.credentialVersion ||
     frequency === null || !Number.isSafeInteger(frequency) || envelope.recurringFrequencyDays !== frequency || price !== invoice.amountMinor) fail("invalid_command");
+}
+
+function chargeableSubscriptionForInvoice(
+  subscription: typeof platformTariffSubscriptions.$inferSelect,
+  invoice: typeof platformTariffInvoices.$inferSelect
+): boolean {
+  if (subscription.state === "awaiting_initial_payment") {
+    return subscription.startsAt === null && subscription.endsAt === null;
+  }
+  if (subscription.state !== "past_due" || subscription.startsAt === null || subscription.endsAt === null) return false;
+  return subscription.endsAt.getTime() === invoice.billingPeriodStartAt.getTime();
 }
 
 function replay(row: typeof financePlatformTariffInvoiceChargePreparationRequests.$inferSelect, command: PreparePlatformTariffInvoiceChargeCommand): PlatformTariffInvoiceChargePreparationReceipt {

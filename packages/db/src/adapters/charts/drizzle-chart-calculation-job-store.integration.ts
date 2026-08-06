@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -18,6 +18,7 @@ import {
   ChartCalculationReplacementError,
   ChartStoredResultIntegrityError,
   CHART_CALCULATION_REQUESTED_EVENT,
+  CHART_CALCULATION_TERMINAL_EVENT,
   approveCalculationInterpretation,
   createCalculation,
   linkCalculationToClient,
@@ -73,7 +74,7 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
   beforeAll(async () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${isolatedDatabaseName}"`);
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     await reconciliationClient.query("begin");
@@ -588,6 +589,78 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
         reason: "Provider result is permanently invalid"
       })
     ).resolves.toEqual({ kind: "failed", attempts: 1, maxAttempts: 3 });
+  });
+
+  it("emits one redacted terminal outbox event for each terminal chart outcome", async () => {
+    const succeededContext = await createClientContext();
+    const succeededInput = natalInput(succeededContext);
+    const succeededJob = await createActiveNatalJob(succeededContext, succeededInput);
+    const workerStore = createDrizzleChartWorkerJobStore(runtime.database);
+    const succeededClaim = await claim(workerStore, succeededJob.jobId, "chart-worker-terminal-success");
+    const succeededResult = natalResult(succeededInput.inputSnapshot);
+
+    await expect(
+      workerStore.complete({
+        jobId: succeededJob.jobId,
+        workerId: "chart-worker-terminal-success",
+        leaseGeneration: succeededClaim.lease.leaseGeneration,
+        result: succeededResult,
+        resultChecksum: sha256CanonicalJson(succeededResult as CanonicalJson)
+      })
+    ).resolves.toBe(true);
+
+    const failedContext = await createClientContext();
+    const failedJob = await createActiveNatalJob(failedContext);
+    const failedClaim = await claim(workerStore, failedJob.jobId, "chart-worker-terminal-failure");
+    await expect(
+      workerStore.recordAttemptFailure({
+        jobId: failedJob.jobId,
+        workerId: "chart-worker-terminal-failure",
+        leaseGeneration: failedClaim.lease.leaseGeneration,
+        code: "invalid_provider_result",
+        reason: "Provider response cannot be parsed",
+        disposition: "permanent",
+        retryDelayMs: 1_000
+      })
+    ).resolves.toEqual({ kind: "failed", attempts: 1, maxAttempts: 3 });
+
+    const terminalEvents = await runtime.pool.query<{
+      readonly aggregate_id: string;
+      readonly payload: Record<string, unknown>;
+    }>(
+      `select aggregate_id, payload
+         from outbox_events
+        where event_type = $1
+          and aggregate_id in ($2, $3)
+        order by aggregate_id`,
+      [CHART_CALCULATION_TERMINAL_EVENT, succeededJob.jobId, failedJob.jobId]
+    );
+
+    expect(terminalEvents.rows).toEqual(
+      expect.arrayContaining([
+        {
+          aggregate_id: succeededJob.jobId,
+          payload: {
+            jobId: succeededJob.jobId,
+            ownerUserId: succeededContext.ownerUserId,
+            outcome: "succeeded",
+            occurredAt: expect.any(String)
+          }
+        },
+        {
+          aggregate_id: failedJob.jobId,
+          payload: {
+            jobId: failedJob.jobId,
+            ownerUserId: failedContext.ownerUserId,
+            outcome: "failed",
+            occurredAt: expect.any(String)
+          }
+        }
+      ])
+    );
+    expect(terminalEvents.rows).toHaveLength(2);
+    expect(JSON.stringify(terminalEvents.rows)).not.toContain("Provider response cannot be parsed");
+    expect(JSON.stringify(terminalEvents.rows)).not.toContain("birthDate");
   });
 
   it("atomically recovers expired work, re-arms delivery, and terminalizes exhausted work", async () => {
@@ -1213,7 +1286,7 @@ describe("chart calculation job Drizzle/PostgreSQL integration", () => {
     try {
       await adminClient.query(`CREATE DATABASE "${predecessorDatabaseName}"`);
       await predecessorRuntime.pool.query(
-        readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8")
+        readCurrentMigrationSql()
       );
       await predecessorClient.connect();
       await augmentIsolatedSchemaForCurrentSources(predecessorClient);

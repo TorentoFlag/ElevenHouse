@@ -32,7 +32,7 @@ export function createPaymentWebhookHandler(input: {
   readonly now?: () => Date;
   readonly processor: PaymentWebhookProcessor;
   /**
-   * Captures, refunds and chargebacks are acknowledged only after durable ingress. Their
+   * Captures, partial/full refunds and chargebacks are acknowledged only after durable ingress. Their
    * canonical workers apply V2 accounting effects later; this boundary must never run a legacy
    * projector for client money.
    */
@@ -64,6 +64,7 @@ export function createPaymentWebhookHandler(input: {
         if (
           transport.providerEventType === "payment.captured" ||
           transport.providerEventType === "payment.refunded" ||
+          transport.providerEventType === "payment.partially_refunded" ||
           transport.providerEventType === "payment.chargeback"
         ) {
           if (!input.financeIngress) {
@@ -95,10 +96,12 @@ export function createPaymentWebhookHandler(input: {
 }
 
 function canonicalIngressConfigurationError(
-  eventType: "payment.captured" | "payment.refunded" | "payment.chargeback"
+  eventType: "payment.captured" | "payment.refunded" | "payment.partially_refunded" | "payment.chargeback"
 ): "canonical_capture_not_configured" | "canonical_refund_not_configured" | "canonical_chargeback_not_configured" {
   if (eventType === "payment.captured") return "canonical_capture_not_configured";
-  if (eventType === "payment.refunded") return "canonical_refund_not_configured";
+  if (eventType === "payment.refunded" || eventType === "payment.partially_refunded") {
+    return "canonical_refund_not_configured";
+  }
   return "canonical_chargeback_not_configured";
 }
 

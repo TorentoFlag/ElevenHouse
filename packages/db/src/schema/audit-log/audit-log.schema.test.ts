@@ -1,11 +1,12 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { existsSync, readFileSync } from "node:fs";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { auditLogEntries } from "./index";
 
-const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
-const baselineSnapshotFile = "packages/db/drizzle/meta/0000_snapshot.json";
+const baselineMigrationFile = readCurrentMigrationSql();
+const baselineSnapshotFile = "packages/db/drizzle/meta/0016_snapshot.json";
 
 function tableCheckNames(table: Parameters<typeof getTableConfig>[0]): string[] {
   return getTableConfig(table).checks.map((check) => check.name);
@@ -56,7 +57,7 @@ describe("Audit log persistence schema", () => {
   });
 
   it("keeps audit log DDL in the single current baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
     const snapshot = JSON.parse(readFileSync(baselineSnapshotFile, "utf8")) as {
       tables: Record<string, unknown>;
     };

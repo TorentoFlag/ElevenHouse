@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -16,7 +16,7 @@ import {
   scheduleReservations
 } from "./index";
 
-const migrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
+const migrationFile = readCurrentMigrationSql();
 
 describe("scheduling persistence schema", () => {
   it("owns the complete availability aggregate with owner-scoped references", () => {
@@ -199,7 +199,7 @@ describe("scheduling persistence schema", () => {
   });
 
   it("keeps scheduling tables and the active-range exclusion in the baseline", () => {
-    const migration = readFileSync(migrationFile, "utf8");
+    const migration = migrationFile;
 
     for (const table of [
       "availability_schedules",

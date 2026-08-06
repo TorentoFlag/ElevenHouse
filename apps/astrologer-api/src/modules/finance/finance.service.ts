@@ -396,13 +396,19 @@ function toOnlinePayoutRequestResponse(
     amount: { amountMinor: Number(request.amountMinor), currency: request.currency },
     method: "manual_bank_transfer",
     requestedAt: request.requestedAt,
-    reviewedAt: null,
-    completedAt: null,
+    reviewedAt: request.status === "requested" ? null : request.latestTransitionOccurredAt,
+    completedAt:
+      request.status === "cancelled" ||
+      request.status === "rejected" ||
+      request.status === "failed" ||
+      request.status === "paid"
+        ? request.latestTransitionOccurredAt
+        : null,
     adminUserId: null,
     adminNote: null,
     failureReason: null,
-    externalReference: null,
-    transferredAt: null,
+    externalReference: request.paidBankReference,
+    transferredAt: request.paidTransferredAt,
     version: Number(request.version)
   });
 }

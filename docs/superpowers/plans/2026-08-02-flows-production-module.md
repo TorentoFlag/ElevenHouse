@@ -1469,30 +1469,58 @@ reduced-motion and exact modal/overlay states. Evidence lives under
 
 ### Milestone 5: Client Data, Durable Waits and Charts
 
-**Observable outcome:** a missing-data branch creates an owner-branded client
-action request, waits across reload, resumes from canonical consent/data
-submission and then dispatches one canonical chart calculation whose real
-result signal advances the run.
+**Observable outcome:** a missing-data branch creates a Flow-owned astrologer
+work item, waits across reload, rechecks the client's one canonical birth
+profile after a real profile update and then
+dispatches one canonical chart calculation whose real result signal advances
+the run.
 
 **Owned paths:**
 
 - Flows wait executors, timer/signal runtime and tests;
-- Clients/BirthData action-request contracts/domain/schema/API/events after
-  preserving current BirthPlace work;
-- `apps/public-api` and `apps/client-web` action-request surfaces/tests;
+- singleton Clients/BirthData profile CAS, immutable history and redacted
+  profile-revision events after preserving current BirthPlace work;
+- client profile API/UI remains the entry surface; a separate typed client
+  action request is deferred until a product workflow needs its own deadline,
+  status and client-visible lifecycle;
 - Charts command/result port, owning use case/outbox/worker adapter/tests;
 - flow template, runtime trace and frontend client-wait/chart states;
 - DB baseline/snapshot and canonical docs.
 
-**Behavior sequence:** typed `ClientActionRequest` -> relationship/purpose
-authorization -> consent/input UI -> canonical owning-module mutation + event
--> signal-before-wait-safe resume -> duration/date/event waits with IANA
+**Behavior sequence:** Flow-owned astrologer work item -> active relationship
+plus booking/service-context authorization -> client profile input or
+astrologer entry -> canonical single-profile CAS mutation + immutable
+history/audit + redacted revision event -> idempotent per-run readiness recheck
+-> duration/date/event waits with IANA
 timezone/DST policy -> chart command intent -> chart-worker result -> trace.
 
-**Acceptance:** revoked-before-read and revoked-before-submit fail closed;
-client sees no graph internals; duplicate submission/signal/chart request does
-not duplicate state; timer DST gap/overlap fixtures pass; chart mechanics never
-run inside Flows/browser.
+**Acceptance:** inactive relationship or missing booking/service context fails
+closed before read or mutation; the client sees no graph internals; duplicate
+submission/profile-update signal/chart request does not duplicate state; CAS
+conflict, immutable birth-data history and audit actor are preserved; timer DST
+gap/overlap fixtures pass; chart mechanics never run inside Flows/browser.
+
+#### Birth-profile recheck contract (2026-08-06)
+
+Every successful singleton-profile revision atomically emits the redacted
+`client.birth_profile.updated.v1` outbox event. Its aggregate identity is the
+immutable `client_birth_data_history.id`, not the profile id, so a second
+revision remains independently deliverable. The payload contains only profile,
+history, client, revision, editor role and time identifiers; it never contains
+birth date, time, place, timezone or coordinates.
+
+The Flow relay fans one event out only to matching waiting
+`birth_data_collection` runs. It persists one receipt for each
+`(source_outbox_event_id, flow_run_id)` before a transition. Under lock it
+rechecks the confirmed booking, current active client--astrologer relationship,
+current singleton profile and service requirements. `not_ready` records that
+outcome and leaves the work item active; a later revision produces a new event.
+`ready` transitions to the pinned `birth_data_available` node for a normal
+runtime evaluation. This is a system resolution, not a forged astrologer
+command: the work-item audit records the immutable profile-history source and
+explicit resolution source, while `completedByUserId` remains reserved for a
+human command actor. Duplicate relay delivery is a receipt replay and cannot
+advance a run twice.
 
 ### Milestone 6: Reviewed AI and First Product E2E
 
@@ -1688,8 +1716,10 @@ network data and reload; component fixtures are not browser acceptance.
   are lossless and deterministic.
 - External provider/owning-module acceptance is not business completion;
   outcome-unknown is reconciled before retry.
-- Consent/relationship/capability is checked by Flows and atomically by the
-  owning command receiver where authority can change.
+- Relationship, booking/service context and action-specific capability are
+  checked by Flows and atomically by the owning command receiver where authority
+  can change. Channel consent is a Messaging check; it is not a BirthData,
+  Charts or AI authority.
 - Work-item completion and approval decision are different transitions.
 - No raw restricted data, credentials or full content bodies enter graph config
   or append-only audit trace.

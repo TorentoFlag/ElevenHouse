@@ -13,7 +13,6 @@ import {
 
 import { users } from "../identity/accounts.schema";
 import { orders } from "./orders.schema";
-import { financeRefundCases } from "./refund-cases.schema";
 import { financeRevisionString } from "./finance-values";
 
 export const financeRefundCandidateStatusValues = [
@@ -47,10 +46,8 @@ export const financeRefundCandidates = pgTable(
     statement: text("statement").notNull(),
     status: text("status").notNull().default("submitted"),
     version: financeRevisionString("version").notNull(),
-    resolvedRefundCaseId: varchar("resolved_refund_case_id", { length: 160 }).references(
-      () => financeRefundCases.id,
-      { onDelete: "restrict" }
-    ),
+    /** V2 case identity; the V2 case table owns the authoritative candidate FK. */
+    resolvedRefundCaseId: varchar("resolved_refund_case_id", { length: 200 }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -108,10 +105,8 @@ export const financeRefundCandidateReviews = pgTable(
       .references(() => users.id, { onDelete: "restrict" }),
     action: text("action").notNull(),
     note: text("note").notNull(),
-    refundCaseId: varchar("refund_case_id", { length: 160 }).references(
-      () => financeRefundCases.id,
-      { onDelete: "restrict" }
-    ),
+    /** V2 case identity; validated by the approval transaction instead of a legacy FK. */
+    refundCaseId: varchar("refund_case_id", { length: 200 }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
   },

@@ -35,6 +35,7 @@ import {
   createDrizzlePlatformTariffInvoiceChargePreparationReader,
   createDrizzlePlatformTariffInvoiceChargePreparationUnitOfWork,
   createDrizzlePlatformTariffInvoiceChargeTerminalReconciliationReader,
+  createDrizzlePlatformTariffRenewalInvoiceIssuer,
   createDrizzleActiveProviderAccountReader,
   createDrizzleActiveProviderAccountWebhookContextReader,
   createDrizzleFiscalProfileReader,
@@ -107,6 +108,10 @@ import {
   startPlatformTariffInvoiceChargeTerminalReconciliationInterval
 } from "./provider-operations/platform-tariff-invoice-charge-terminal-reconciliation-processor";
 import { createPlatformTariffInvoiceChargeTerminalReconciler } from "./provider-operations/platform-tariff-invoice-charge-terminal-reconciler";
+import {
+  createPlatformTariffRenewalProcessor,
+  startPlatformTariffRenewalInterval
+} from "./provider-operations/platform-tariff-renewal-processor";
 import {
   createPaymentWebhookHandler,
   createPaymentWebhookServer
@@ -403,6 +408,21 @@ async function startPaymentWorker(): Promise<void> {
         logger.error("platform tariff charge preparation tick failed", {
           error: serializeError(error)
         })
+    });
+    startPlatformTariffRenewalInterval({
+      processor: createPlatformTariffRenewalProcessor({
+        issuer: createDrizzlePlatformTariffRenewalInvoiceIssuer({
+          database: postgresRuntime.database
+        }),
+        batchSize: config.financeProviderDispatch.batchSize
+      }),
+      intervalMs: config.financeProviderDispatch.intervalMs,
+      onResult: (result) => {
+        if (result.issued > 0 || result.skipped > 0)
+          logger.info("platform tariff renewal tick completed", result);
+      },
+      onError: (error) =>
+        logger.error("platform tariff renewal tick failed", { error: serializeError(error) })
     });
     startSavedCardSetupPreparationInterval({
       processor: createSavedCardSetupPreparationProcessor({

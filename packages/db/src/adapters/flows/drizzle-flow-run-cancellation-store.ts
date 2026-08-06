@@ -24,6 +24,7 @@ import {
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowExecutionAttempts,
+  flowExecutionSignalWaits,
   flowExecutionTokens,
   flowRunEvents,
   flowRuns,
@@ -264,6 +265,19 @@ async function cancelLockedRun(
     .returning({ canceledAt: flowExecutionTokens.terminalAt });
   if (!canceledToken?.canceledAt) throw new FlowRuntimeCommandIntegrityError();
 
+  await transaction
+    .update(flowExecutionSignalWaits)
+    .set({ state: "canceled", canceledAt: canceledToken.canceledAt })
+    .where(
+      and(
+        eq(flowExecutionSignalWaits.ownerUserId, command.ownerUserId),
+        eq(flowExecutionSignalWaits.flowRunId, command.resourceId),
+        eq(flowExecutionSignalWaits.tokenId, token.id),
+        eq(flowExecutionSignalWaits.nodeActivationSequence, token.nodeActivationSequence),
+        eq(flowExecutionSignalWaits.state, "waiting")
+      )
+    );
+
   if (activeWorkItem) {
     const [canceledWorkItem] = await transaction
       .update(flowWorkItems)
@@ -494,6 +508,7 @@ function isCancelableRuntime(run: LockedRun, token: FlowExecutionTokenRow): bool
     (token.state === "runnable" ||
       token.state === "claimed" ||
       token.state === "retry_scheduled" ||
+      token.state === "waiting_signal" ||
       token.state === "waiting_work_item")
   );
 }

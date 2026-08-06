@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, gt, ilike, isNull, ne, or, sql, type SQL } f
 import {
   ClientAstrologerRelationshipBlockedError,
   ClientAstrologerRelationshipRoleError,
+  CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   ClientProfileProjectionError,
   type AstrologerClientList,
   type AstrologerClientListItem,
@@ -20,6 +21,7 @@ import {
   clientBirthDataHistory,
   clientJoinIntents,
   clientProfiles,
+  outboxEvents,
   userProfiles,
   userRoleAssignments
 } from "../../schema";
@@ -126,7 +128,8 @@ async function writeClientBirthProfile(
 
     if (updated) {
       const profile = toClientBirthData(updated);
-      await appendClientBirthDataHistory(transaction, profile);
+      const historyId = await appendClientBirthDataHistory(transaction, profile);
+      await enqueueBirthProfileUpdatedEvent(transaction, profile, historyId);
       return { kind: "written", profile };
     }
     if (input.expectedRevision !== null) {
@@ -151,7 +154,8 @@ async function writeClientBirthProfile(
     }
 
     const profile = toClientBirthData(created);
-    await appendClientBirthDataHistory(transaction, profile);
+    const historyId = await appendClientBirthDataHistory(transaction, profile);
+    await enqueueBirthProfileUpdatedEvent(transaction, profile, historyId);
     return { kind: "written", profile };
   });
 }
@@ -159,17 +163,52 @@ async function writeClientBirthProfile(
 async function appendClientBirthDataHistory(
   database: ClientDrizzleDatabase,
   profile: ClientBirthData
+): Promise<string> {
+  const [history] = await database
+    .insert(clientBirthDataHistory)
+    .values({
+      birthDataId: profile.id,
+      clientUserId: profile.clientUserId,
+      revision: profile.revision,
+      actorUserId: profile.lastEditedByUserId,
+      actorRole: profile.lastEditedByRole,
+      source: profile.source,
+      snapshot: profile,
+      recordedAt: new Date(profile.updatedAt)
+    })
+    .returning({ id: clientBirthDataHistory.id });
+  if (!history) throw new Error("CLIENT_BIRTH_DATA_HISTORY_NOT_PERSISTED");
+  return history.id;
+}
+
+async function enqueueBirthProfileUpdatedEvent(
+  database: ClientDrizzleDatabase,
+  profile: ClientBirthData,
+  birthDataHistoryId: string
 ): Promise<void> {
-  await database.insert(clientBirthDataHistory).values({
-    birthDataId: profile.id,
-    clientUserId: profile.clientUserId,
-    revision: profile.revision,
-    actorUserId: profile.lastEditedByUserId,
-    actorRole: profile.lastEditedByRole,
-    source: profile.source,
-    snapshot: profile,
-    recordedAt: new Date(profile.updatedAt)
-  });
+  const occurredAt = new Date(profile.updatedAt);
+  await database
+    .insert(outboxEvents)
+    .values({
+      eventType: CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
+      aggregateId: birthDataHistoryId,
+      payload: {
+        schemaVersion: "client-birth-profile-updated.v1",
+        birthDataHistoryId,
+        birthDataId: profile.id,
+        clientUserId: profile.clientUserId,
+        revision: profile.revision,
+        actorUserId: profile.lastEditedByUserId,
+        actorRole: profile.lastEditedByRole,
+        occurredAt: profile.updatedAt
+      },
+      status: "pending",
+      attempts: 0,
+      availableAt: occurredAt,
+      createdAt: occurredAt,
+      updatedAt: occurredAt
+    })
+    .onConflictDoNothing({ target: [outboxEvents.eventType, outboxEvents.aggregateId] });
 }
 
 async function createJoinIntent(

@@ -104,6 +104,37 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
   });
 
+  it("queues a verified partial refund for the canonical V2 worker without running the legacy reversal projector", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => ({ duplicate: false }))
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress });
+    const request = signedRequest({
+      ...basePayload(eventId(95)),
+      event_type: "payment.partially_refunded",
+      data: {
+        payment_id: providerPaymentId,
+        refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        refund_amount: 20_000,
+        total_refunded: 20_000,
+        currency: "RUB"
+      }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: false }
+    });
+
+    expect(financeIngress.store).toHaveBeenCalledWith(expect.objectContaining({
+      transport: expect.objectContaining({ providerEventType: "payment.partially_refunded" }),
+      rawBody: new TextEncoder().encode(request.rawBody)
+    }));
+    expect(harness.createdEvents).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
   it("fails closed for a refund until V2 canonical ingress is configured", async () => {
     const harness = createHarness();
     const request = signedRequest({
@@ -119,6 +150,27 @@ describe("Arc Pay payment webhook ingestion", () => {
     });
 
     await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 503,
+      body: { error: "canonical_refund_not_configured" }
+    });
+    expect(harness.createdEvents).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for a partial refund until V2 canonical ingress is configured", async () => {
+    const harness = createHarness();
+    await expect(harness.handler.handle(signedRequest({
+      ...basePayload(eventId(96)),
+      event_type: "payment.partially_refunded",
+      data: {
+        payment_id: providerPaymentId,
+        refund_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        refund_amount: 20_000,
+        total_refunded: 20_000,
+        currency: "RUB"
+      }
+    }))).resolves.toEqual({
       statusCode: 503,
       body: { error: "canonical_refund_not_configured" }
     });

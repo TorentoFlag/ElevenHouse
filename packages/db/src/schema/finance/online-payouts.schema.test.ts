@@ -14,6 +14,7 @@ describe("online payout schema", () => {
     expect(Object.keys(getTableColumns(financeOnlinePayoutRequests))).toEqual(
       expect.arrayContaining([
         "id",
+        "authorizationAggregateId",
         "walletId",
         "walletMutationId",
         "astrologerUserId",
@@ -24,6 +25,9 @@ describe("online payout schema", () => {
         "payoutMethodVersion",
         "beneficiaryFingerprint"
       ])
+    );
+    expect(getTableConfig(financeOnlinePayoutRequests).uniqueConstraints.map((constraint) => constraint.name)).toContain(
+      "finance_online_payout_requests_authorization_aggregate_unique"
     );
     expect(getTableName(financeOnlinePayoutRequestAllocations)).toBe(
       "finance_online_payout_request_allocations"

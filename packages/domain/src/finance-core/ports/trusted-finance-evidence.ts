@@ -18,11 +18,13 @@ declare const verifiedArcMerchantPayoutEvidenceBrand: unique symbol;
 declare const verifiedArcMerchantPayoutStatementEvidenceBrand: unique symbol;
 declare const verifiedBankStatementEvidenceBrand: unique symbol;
 declare const verifiedBankLiquiditySnapshotEvidenceBrand: unique symbol;
+declare const bankLiquiditySnapshotAttestationReceiptRefBrand: unique symbol;
 declare const verifiedPayoutDestinationSnapshotBrand: unique symbol;
 declare const verifiedPayoutApprovalAuthorityBrand: unique symbol;
 declare const verifiedPayoutExecutionEvidenceBrand: unique symbol;
 declare const verifiedPayoutPaidEvidenceBrand: unique symbol;
 declare const verifiedRefundApprovalAuthorityBrand: unique symbol;
+declare const verifiedOnlineWalletRefundApprovalAuthorityBrand: unique symbol;
 declare const verifiedChargebackResolutionAuthorityBrand: unique symbol;
 declare const verifiedPayoutBankReturnEvidenceBrand: unique symbol;
 
@@ -146,6 +148,31 @@ export type VerifiedRefundProviderOutcome = Readonly<{
   [verifiedRefundProviderOutcomeBrand]: true;
 }>;
 
+/**
+ * Step-up-authorised V2 refund decision. Unlike the legacy refund authority it is bound to the
+ * online capture/wallet graph and can only authorize a provider command after V2 reservation.
+ */
+export type VerifiedOnlineWalletRefundApprovalAuthority = Readonly<{
+  kind: "verified_online_wallet_refund_approval_authority";
+  refundCaseId: string;
+  refundCandidateId: string;
+  refundCandidateVersion: number;
+  orderId: string;
+  captureApplicationId: string;
+  walletId: string;
+  economicPaymentIntentId: string;
+  providerAccount: FinanceProviderAccountIdentity;
+  providerPaymentId: string;
+  previousCumulativeRefundedMinor: string;
+  approvedCumulativeRefundedMinor: string;
+  approvalAuthorityId: string;
+  approvalAuthorityVersion: string;
+  approvalAuthorityDigest: FinanceDigest;
+  approvedByActorId: string;
+  approvedAt: string;
+  [verifiedOnlineWalletRefundApprovalAuthorityBrand]: true;
+}>;
+
 export type VerifiedChargebackProviderEvidence = Readonly<{
   kind: "verified_chargeback_provider_evidence";
   providerAccount: FinanceProviderAccountIdentity;
@@ -226,6 +253,8 @@ export type VerifiedBankStatementEvidence = Readonly<{
   bankCashPoolId: string;
   bankStatementEntryId: string;
   sourceStatementId: string;
+  /** Immutable cursor/checkpoint emitted by the bank-statement decoder for this source export. */
+  sourceCheckpoint: string;
   sourceRowId: string;
   direction: "credit" | "debit";
   amountMinor: string;
@@ -246,7 +275,17 @@ export type VerifiedBankLiquiditySnapshotEvidence = Readonly<{
   asOf: string;
   expiresAt: string;
   evidenceDigest: FinanceDigest;
+  attestation: BankLiquiditySnapshotAttestationReceiptRef;
   [verifiedBankLiquiditySnapshotEvidenceBrand]: true;
+}>;
+
+/** Immutable receipt binding a manual snapshot to exact bank evidence and a consumed WebAuthn grant. */
+export type BankLiquiditySnapshotAttestationReceiptRef = Readonly<{
+  kind: "bank_liquidity_snapshot_attestation_receipt";
+  attestationId: string;
+  version: 1;
+  canonicalDigest: FinanceDigest;
+  [bankLiquiditySnapshotAttestationReceiptRefBrand]: true;
 }>;
 
 export type VerifiedPayoutDestinationSnapshot = Readonly<{
@@ -360,6 +399,8 @@ export type VerifiedChargebackResolutionAuthority = Readonly<{
   expectedChargebackVersion: number;
   resolution: "won" | "lost";
   cumulativePrincipalMinor: string;
+  /** The terminal provider fact is verified and sealed before this authority is issued. */
+  providerEvidence: VerifiedChargebackProviderEvidence;
   allocationAuthorityId: string;
   allocationAuthorityVersion: string;
   allocationAuthorityDigest: FinanceDigest;

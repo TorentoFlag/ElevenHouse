@@ -22,6 +22,7 @@ import {
   ChartParticipantRelationshipInactiveError,
   ChartStoredResultIntegrityError,
   CHART_CALCULATION_REQUESTED_EVENT,
+  CHART_CALCULATION_TERMINAL_EVENT,
   sha256CanonicalJson,
   stableJson,
   type CanonicalJson,
@@ -536,6 +537,7 @@ async function recordChartJobAttemptFailure(
   return withChartWorkerTransaction(database, operationTimeoutMs, async (transaction) => {
     const result = await transaction.execute(sql<{
       status: string;
+      ownerUserId: string;
       attempts: number;
       maxAttempts: number;
       updatedAt: Date | string;
@@ -570,6 +572,7 @@ async function recordChartJobAttemptFailure(
         and ${chartCalculationJobs.leaseGeneration} = ${leaseGeneration}
         and ${chartCalculationJobs.lockedUntil} > db_clock.db_now
       returning ${chartCalculationJobs.status} as "status",
+        ${chartCalculationJobs.ownerUserId} as "ownerUserId",
         ${chartCalculationJobs.attempts} as "attempts",
         ${chartCalculationJobs.maxAttempts} as "maxAttempts",
         ${chartCalculationJobs.updatedAt} as "updatedAt"
@@ -578,6 +581,7 @@ async function recordChartJobAttemptFailure(
   `);
     const [updated] = result.rows as unknown as {
       status: string;
+      ownerUserId: string;
       attempts: number;
       maxAttempts: number;
       updatedAt: Date | string;
@@ -591,6 +595,13 @@ async function recordChartJobAttemptFailure(
         ).getTime() + retryDelayMs
       );
       await rearmChartCalculationOutbox(transaction, [input.jobId], retryAt);
+    } else {
+      await persistChartCalculationTerminalOutbox(
+        transaction,
+        [{ jobId: input.jobId, ownerUserId: updated.ownerUserId }],
+        "failed",
+        parseChartDatabaseTimestamp(updated.updatedAt, "CHART_JOB_FAILURE_CLOCK_INVALID")
+      );
     }
     return {
       kind: updated.status === "failed" ? "failed" : "requeued",
@@ -774,6 +785,9 @@ async function completeChartJob(
       `);
       const [updated] = finalResult.rows;
       if (!updated) throw new LeaseLostDuringCompletionError();
+      await persistChartCalculationTerminalOutbox(transaction, [
+        { jobId: job.id, ownerUserId: job.ownerUserId }
+      ], "succeeded", dbNow);
       return true;
     });
   } catch (error) {
@@ -1420,7 +1434,7 @@ async function terminalizeChartJobs(
   failure: { readonly code: string; readonly message: string }
 ): Promise<void> {
   if (jobIds.length === 0) return;
-  await transaction
+  const finalized = await transaction
     .update(chartCalculationJobs)
     .set({
       status: "failed",
@@ -1435,7 +1449,41 @@ async function terminalizeChartJobs(
       lastErrorMessage: failure.message,
       updatedAt: now
     })
-    .where(inArray(chartCalculationJobs.id, jobIds));
+    .where(inArray(chartCalculationJobs.id, jobIds))
+    .returning({ id: chartCalculationJobs.id, ownerUserId: chartCalculationJobs.ownerUserId });
+  await persistChartCalculationTerminalOutbox(transaction, finalized.map((job) => ({
+    jobId: job.id,
+    ownerUserId: job.ownerUserId
+  })), "failed", now);
+}
+
+async function persistChartCalculationTerminalOutbox(
+  transaction: ChartTransaction,
+  jobs: readonly { readonly jobId: string; readonly ownerUserId: string }[],
+  outcome: "succeeded" | "failed",
+  occurredAt: Date
+): Promise<void> {
+  if (jobs.length === 0) return;
+  await transaction
+    .insert(outboxEvents)
+    .values(
+      jobs.map((job) => ({
+        eventType: CHART_CALCULATION_TERMINAL_EVENT,
+        aggregateId: job.jobId,
+        payload: {
+          jobId: job.jobId,
+          ownerUserId: job.ownerUserId,
+          outcome,
+          occurredAt: occurredAt.toISOString()
+        },
+        status: "pending" as const,
+        attempts: 0,
+        availableAt: occurredAt,
+        createdAt: occurredAt,
+        updatedAt: occurredAt
+      }))
+    )
+    .onConflictDoNothing({ target: [outboxEvents.eventType, outboxEvents.aggregateId] });
 }
 
 async function rearmChartCalculationOutbox(

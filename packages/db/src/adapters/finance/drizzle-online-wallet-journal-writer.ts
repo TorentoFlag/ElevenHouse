@@ -144,6 +144,93 @@ export async function writeOnlineWalletAstrologerJournal(
 }
 
 /**
+ * A confirmed manual payout is the one V2 wallet operation that spans the astrologer's payable
+ * and a company bank-cash-pool clearing account. Keeping this separate from the astrologer-only
+ * writer prevents a caller from accidentally creating a bank-scoped journal under an
+ * astrologer-scoped source identity.
+ */
+export async function writeOnlineWalletManualPayoutPaidJournal(
+  transaction: FinanceTransaction,
+  input: Readonly<{
+    journal: FinanceJournalTransaction;
+    astrologerUserId: string;
+    bankCashPoolId: string;
+  }>
+): Promise<OnlineWalletJournalWriteReceipt> {
+  const { journal, astrologerUserId, bankCashPoolId } = input;
+  if (
+    journal.sourceKey.kind !== "payout" ||
+    journal.sourceKey.operation !== "paid" ||
+    !isIdentifier(astrologerUserId) ||
+    !isIdentifier(bankCashPoolId)
+  ) {
+    throw new OnlineWalletJournalWriteError();
+  }
+  const [source] = await transaction
+    .insert(financeSourceIdentities)
+    .values({
+      sourceKind: journal.sourceKey.kind,
+      sourceId: journal.sourceKey.sourceId,
+      sourceOperationKey: journal.sourceKey.operation,
+      sourceScopeKind: "bank_cash_pool_and_astrologer",
+      providerAccountVersionId: null,
+      providerAccountSeriesId: null,
+      providerAccountId: null,
+      providerIdentityVersion: null,
+      bankCashPoolId,
+      astrologerUserId,
+      refundId: null,
+      payoutRequestId: null
+    })
+    .returning({ id: financeSourceIdentities.id });
+  if (!source) throw new OnlineWalletJournalWriteError();
+  await transaction.insert(financeJournalTransactions).values({
+    id: journal.id,
+    sourceIdentityId: source.id,
+    occurredAt: instant(journal.occurredAt),
+    postedAt: instant(journal.postedAt),
+    reversesJournalTransactionId: journal.reversesTransactionId,
+    currency: "RUB"
+  });
+
+  const accounts = new Map<string, string>();
+  const entries: { id: string; entryIndex: number }[] = [];
+  for (const [entryIndex, entry] of journal.entries.entries()) {
+    assertManualPayoutPaidAccount(entry.account, astrologerUserId, bankCashPoolId);
+    const key = JSON.stringify(entry.account);
+    let accountId = accounts.get(key);
+    if (!accountId) {
+      accountId = await resolveManualPayoutPaidAccount(
+        transaction,
+        entry.account,
+        astrologerUserId,
+        bankCashPoolId
+      );
+      accounts.set(key, accountId);
+    }
+    const [row] = await transaction
+      .insert(financeJournalEntries)
+      .values({
+        journalTransactionId: journal.id,
+        occurredAt: instant(journal.occurredAt),
+        entryIndex,
+        accountId,
+        side: entry.side,
+        amountMinor: String(entry.amount.amountMinor),
+        currency: "RUB",
+        originalSaleId: entry.links.originalSaleId,
+        componentId: entry.links.componentId,
+        payableLotId: entry.links.payableLotId,
+        payoutAllocationId: entry.links.payoutAllocationId
+      })
+      .returning({ id: financeJournalEntries.id, entryIndex: financeJournalEntries.entryIndex });
+    if (!row) throw new OnlineWalletJournalWriteError();
+    entries.push(row);
+  }
+  return sealOnlineWalletJournal(transaction, journal, entries);
+}
+
+/**
  * Writes a provider-confirmed online reversal/dispute journal. Unlike a hold or payout
  * reclassification, these source operations are scoped to both the provider account and the
  * original astrologer, even when a provisional chargeback posting has not yet allocated any
@@ -161,8 +248,14 @@ export async function writeOnlineWalletProviderAstrologerJournal(
   const { journal, astrologerUserId, providerAccount } = input;
   if (
     !(
-      (journal.sourceKey.kind === "refund" && journal.sourceKey.operation === "confirmed") ||
-      (journal.sourceKey.kind === "chargeback" && journal.sourceKey.operation === "confirmed")
+      (journal.sourceKey.kind === "refund" &&
+        (journal.sourceKey.operation === "approved" ||
+          journal.sourceKey.operation === "confirmed" ||
+          journal.sourceKey.operation === "failed")) ||
+      (journal.sourceKey.kind === "chargeback" &&
+        (journal.sourceKey.operation === "confirmed" ||
+          journal.sourceKey.operation === "principal_allocated" ||
+          journal.sourceKey.operation === "won"))
     ) ||
     !isIdentifier(astrologerUserId) ||
     !isProviderAccount(providerAccount)
@@ -182,6 +275,9 @@ export async function writeOnlineWalletProviderAstrologerJournal(
       providerIdentityVersion: providerAccount.identityVersion,
       bankCashPoolId: null,
       astrologerUserId,
+      // `provider_account_and_astrologer` deliberately has no refund/payout aggregate columns.
+      // The V2 case linkage is enforced by its own receipt/table guard, while preserving the
+      // long-established source-identity shape for terminal provider operations.
       refundId: null,
       payoutRequestId: null
     })
@@ -277,6 +373,75 @@ async function resolveAstrologerAccount(
         eq(financeAccounts.code, account.code),
         eq(financeAccounts.currency, "RUB"),
         eq(financeAccounts.astrologerUserId, astrologerUserId)
+      )
+    )
+    .limit(2);
+  if (rows.length !== 1 || !rows[0]) throw new OnlineWalletJournalWriteError();
+  return rows[0].id;
+}
+
+function assertManualPayoutPaidAccount(
+  account: FinanceLedgerAccountRef,
+  astrologerUserId: string,
+  bankCashPoolId: string
+): void {
+  const scope = financeLedgerChart[account.code].scopeKind;
+  if (
+    (scope === "astrologer" &&
+      (!("astrologerUserId" in account) || account.astrologerUserId !== astrologerUserId)) ||
+    (scope === "bank_cash_pool" &&
+      (!("bankCashPoolId" in account) || account.bankCashPoolId !== bankCashPoolId)) ||
+    (scope !== "astrologer" && scope !== "bank_cash_pool")
+  ) {
+    throw new OnlineWalletJournalWriteError();
+  }
+}
+
+async function resolveManualPayoutPaidAccount(
+  transaction: FinanceTransaction,
+  account: FinanceLedgerAccountRef,
+  astrologerUserId: string,
+  bankCashPoolId: string
+): Promise<string> {
+  assertManualPayoutPaidAccount(account, astrologerUserId, bankCashPoolId);
+  const chart = financeLedgerChart[account.code];
+  const astrologerBound = "astrologerUserId" in account;
+  const bankCashPoolBound = "bankCashPoolId" in account;
+  const values = {
+    code: account.code,
+    accountClass: chart.accountClass,
+    normalSide: chart.normalSide,
+    scopeKind: chart.scopeKind,
+    providerAccountVersionId: null,
+    providerAccountSeriesId: null,
+    providerAccountId: null,
+    providerIdentityVersion: null,
+    bankCashPoolId: bankCashPoolBound ? bankCashPoolId : null,
+    astrologerUserId: astrologerBound ? astrologerUserId : null,
+    refundId: null,
+    payoutRequestId: null,
+    currency: "RUB" as const
+  };
+  const [created] = await transaction
+    .insert(financeAccounts)
+    .values(values)
+    .onConflictDoNothing()
+    .returning({ id: financeAccounts.id });
+  if (created) return created.id;
+  const rows = await transaction
+    .select({ id: financeAccounts.id })
+    .from(financeAccounts)
+    .where(
+      and(
+        eq(financeAccounts.code, account.code),
+        eq(financeAccounts.currency, "RUB"),
+        isNull(financeAccounts.providerAccountVersionId),
+        bankCashPoolBound
+          ? eq(financeAccounts.bankCashPoolId, bankCashPoolId)
+          : isNull(financeAccounts.bankCashPoolId),
+        astrologerBound
+          ? eq(financeAccounts.astrologerUserId, astrologerUserId)
+          : isNull(financeAccounts.astrologerUserId)
       )
     )
     .limit(2);

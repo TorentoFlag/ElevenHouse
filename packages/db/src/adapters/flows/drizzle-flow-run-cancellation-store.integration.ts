@@ -1,11 +1,12 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { flowGraphV2Schema, type FlowRunSnapshot } from "@elevenhouse/contracts";
 import {
   cancelDurableFlowRun,
   compileFlowGraphV2,
   createBuiltInFlowNodeExecutorRegistry,
+  FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
   FlowRuntimeIdempotencyConflictError,
   FlowRuntimeIdempotencyExpiredError,
   interpretFlowExecutionClaim,
@@ -19,7 +20,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { createDrizzleFlowExecutionStore } from "./drizzle-flow-execution-store";
+import {
+  createDrizzleFlowExecutionSignalStore,
+  createDrizzleFlowExecutionStore
+} from "./drizzle-flow-execution-store";
 import { createDrizzleFlowRunCancellationStore } from "./drizzle-flow-run-cancellation-store";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
@@ -89,7 +93,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     try {
@@ -244,6 +248,76 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
         ownerScope: { kind: "all" }
       })
     ).resolves.toBeNull();
+  });
+
+  it("cancels a chart wait and leaves a later terminal signal unconsumed", async () => {
+    const fixture = await createFixture();
+    const tokenId = fixture.tokenId ?? raise("Expected execution token");
+    const correlationId = randomUUID();
+    await runtime.pool.query(
+      `update flow_execution_tokens
+          set state = 'waiting_signal', updated_at = transaction_timestamp()
+        where id = $1`,
+      [tokenId]
+    );
+    await runtime.pool.query(
+      `update flow_runs
+          set status = 'waiting', updated_at = transaction_timestamp()
+        where id = $1`,
+      [fixture.runId]
+    );
+    await runtime.pool.query(
+      `insert into flow_execution_signal_waits
+        (owner_user_id, flow_run_id, flow_version_id, token_id, node_activation_sequence,
+         node_id, signal_type, correlation_id, success_handle, state, created_at)
+       values ($1, $2, $3, $4, 1, 'completed', $5, $6, 'next', 'waiting', transaction_timestamp())`,
+      [
+        fixture.ownerUserId,
+        fixture.runId,
+        fixture.flowVersionId,
+        tokenId,
+        FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId
+      ]
+    );
+
+    const cancellationStore = createDrizzleFlowRunCancellationStore(runtime.database);
+    await expect(
+      cancelDurableFlowRun({
+        store: cancellationStore,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        runId: fixture.runId,
+        idempotencyKey: "cancel-chart-wait-1",
+        request: {}
+      })
+    ).resolves.toMatchObject({ outcome: { kind: "succeeded" } });
+
+    const signalStore = createDrizzleFlowExecutionSignalStore(runtime.database);
+    await expect(
+      signalStore.ingest({
+        sourceEventId: randomUUID(),
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId,
+        outcome: "succeeded",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "stored" });
+
+    const [wait, run, token, inbox] = await Promise.all([
+      runtime.pool.query("select * from flow_execution_signal_waits where token_id = $1", [tokenId]),
+      runtime.pool.query("select * from flow_runs where id = $1", [fixture.runId]),
+      runtime.pool.query("select * from flow_execution_tokens where id = $1", [tokenId]),
+      runtime.pool.query("select * from flow_execution_signal_inbox where correlation_id = $1", [
+        correlationId
+      ])
+    ]);
+    expect(wait.rows).toMatchObject([{ state: "canceled", consumed_signal_id: null }]);
+    expect(wait.rows[0]?.canceled_at).not.toBeNull();
+    expect(run.rows).toMatchObject([{ status: "canceled" }]);
+    expect(token.rows).toMatchObject([{ state: "canceled" }]);
+    expect(inbox.rows).toMatchObject([{ correlation_id: correlationId, consumed_at: null }]);
   });
 
   it("lets a due retry claim commit first, then cancellation closes that exact attempt", async () => {

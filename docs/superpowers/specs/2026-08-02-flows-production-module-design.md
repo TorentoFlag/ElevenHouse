@@ -284,7 +284,9 @@ All initial nodes pin `executorContractVersion: 1`. A compiler capability
 manifest states which exact executor contracts and owning-module capabilities
 the graph requires; it does not claim those executors are deployed or ready.
 Static unknown capability blocks publish. Exact deployed-version, resource,
-consent-purpose and provider readiness is mutable activation evidence.
+and provider readiness is mutable activation evidence. Channel consent remains
+Messaging-owned evidence for a future external-send node; it is not a
+BirthData, Charts or AI activation prerequisite.
 
 Next capability slices add:
 
@@ -372,7 +374,7 @@ real adapter/integration test, operational trace and browser acceptance.
 | Reference action | Decision | Owning module/prerequisite | Slice |
 | --- | --- | --- | --- |
 | Send message | Implement gated | Messaging consent/capability/delivery/reconciliation | 6 |
-| Request client/birth data | Implement | Clients/BirthData client action request | 4 |
+| Request client/birth data | Implement | Singleton Clients/BirthData profile plus Flow-owned astrologer work item; no consent/grant or generic client-action framework in the first path | 4 |
 | Build/calculate chart | Implement | Charts canonical command/result | 4 |
 | Offer slot | Implement later | Booking availability/hold command | 7 |
 | Request payment | Implement later | Orders/Payments idempotent request, no money mutation in Flows | 7-8 |
@@ -515,14 +517,15 @@ Exit conditions can stop a run before another step is claimed. Examples:
 
 - booking canceled;
 - owner-client relationship revoked;
-- required consent withdrawn;
+- required birth-data readiness is no longer satisfied;
 - order refunded/canceled;
 - owner manually stops this client/run;
 - flow-level time-to-live expires.
 
-Relationship, consent and provider capability are also rechecked immediately
-before an external action; an enrollment snapshot is not sufficient authority
-for a later send.
+Relationship and provider capability are rechecked immediately before an
+external action; channel consent remains a Messaging-owned requirement for a
+later send. Birth-data access is not a consent workflow: it is rechecked by
+the active relationship and the required booking/service context.
 
 ## 9. Durable Runtime
 
@@ -640,13 +643,15 @@ Conditions are pure domain decisions. They return selected handle, a redacted
 input summary and an explicit reason. They do not mutate another module.
 
 The initial `birth_data_available` condition calls an owner-scoped BirthData
-read port with astrologer, client, booking, purpose `service_preparation` and
-required consent/share authority. The port distinguishes `available`,
-`missing` and `access_denied` without leaking existence across owners.
-`available`/`missing` select `true`/`false`; `access_denied` creates an explicit
-authorization suppression/failure and never masquerades as missing data. The
-trace stores the consent-record reference and redacted decision, not raw birth
-data. Revocation before read is re-evaluated by the owning module.
+read port with astrologer, client, booking and purpose `service_preparation`.
+The port authorizes the active explicit client--astrologer relationship and the
+required booking/service context, then reads the client's single canonical
+profile. It distinguishes `available`, `missing` and `access_denied` without
+leaking existence across owners. `available`/`missing` select `true`/`false`;
+`access_denied` creates an explicit authorization suppression/failure and never
+masquerades as missing data. The trace stores a redacted readiness decision and
+profile revision/audit reference, never raw birth data. Relationship or context
+loss before read is re-evaluated by the owning module.
 
 ### Timers
 
@@ -781,7 +786,7 @@ action was undone.
 | Module | Produces for Flows | Flows may request | Flows must not do |
 | --- | --- | --- | --- |
 | CRM/Clients/BirthData | relationship, profile and data-change events | owner-scoped reads, tag command later | bypass relationship or mutate profile tables |
-| Client action surface | form/consent/material-action completion events | create a typed relationship-scoped action request | expose graph internals or another owner's request |
+| Client action surface | form/birth-data/material-action completion events | create a typed relationship-scoped action request | expose graph internals or another owner's request |
 | Booking | confirmed/canceled/rescheduled/no-show/completed | read booking context | own booking transitions or slot rules |
 | Products/Orders/Payments | claim/purchase/payment/order lifecycle | payment request through owning use case later | mutate money, ledger or order state |
 | Charts | calculation completed/failed | idempotent calculation command | calculate astrology in browser/runtime |
@@ -804,7 +809,7 @@ linked to astrologer relationship, booking/order purpose and run correlation.
 `public-api`/`client-web` provide owner-branded, relationship-scoped reads and
 commands for:
 
-- requested birth-data completion or consent;
+- requested birth-data completion;
 - requested questionnaire/form completion;
 - client material acknowledgment when delivery exists;
 - channel/purpose opt-out and communication preferences.
@@ -812,15 +817,18 @@ commands for:
 Client state is explicit:
 
 ```text
-unavailable | needs_consent | needs_input | submitting | submitted
+unavailable | needs_input | submitting | submitted
 accepted | expired | canceled | validation_error | retryable_error
 ```
 
 Submission goes through the owning Clients/BirthData/Products module, not
-Flows. Its transaction updates canonical state and emits a typed completion or
-revocation event. The signal resumes the waiting flow token idempotently. The
-client sees only the requested task, astrologer identity, purpose, deadline and
-privacy context, never node ids, prompts, internal traces or audience logic.
+Flows. Its transaction updates the one canonical birth profile through CAS,
+records immutable history/audit actor and emits a typed profile-update/readiness
+event. The signal resumes the waiting flow token idempotently after it rechecks
+readiness. The client sees only the requested task, astrologer identity,
+purpose, deadline and privacy context, never node ids, prompts, internal traces
+or audience logic. An active linked astrologer may instead receive the ordinary
+work item and enter the same profile on the client's behalf.
 
 ### Segment and broadcast enrollment
 
@@ -984,7 +992,6 @@ by the corresponding Clients/BirthData/Products module):
 ```text
 GET    /me/action-requests
 GET    /me/action-requests/:requestId
-POST   /me/action-requests/:requestId/consent
 POST   /me/action-requests/:requestId/submit
 POST   /me/communication-preferences/opt-out
 ```
@@ -1033,7 +1040,7 @@ AI language/tone is typed config, not inferred from browser locale.
 - run pending/running/waiting/approval/retry/failure/completed/canceled;
 - work item pending/in-progress/snoozed/completed/expired/canceled;
 - approval pending/approved/rejected/snoozed/expired;
-- client action unavailable/consent/input/submitting/submitted/accepted/
+- client action unavailable/input/submitting/submitted/accepted/
   expired/canceled/error in `client-web`;
 - desktop and mobile responsive states;
 - keyboard, focus, reduced motion and long RU/EN strings.
@@ -1054,7 +1061,7 @@ been reviewed and the astrologer has completed the preparation work item.
    capabilities and its manual-review posture.
 3. Publish creates immutable v1; explicit activation pins it in an epoch.
 4. Activation is rejected if any referenced capability, executor version,
-   consent purpose or retention policy is unavailable.
+   required client-data action or retention policy is unavailable.
 
 ### Runtime
 
@@ -1064,7 +1071,7 @@ booking.confirmed
   -> dedupe once per booking across flow versions
   -> authorized birth_data_available
      -> missing: create Clients/BirthData client action request
-                 -> wait for consent/data event with bounded timeout
+                 -> wait for birth-profile update/readiness event with bounded timeout
                  -> on timeout create an astrologer work item or terminate
      -> available: continue
   -> dispatch idempotent canonical chart calculation
@@ -1083,8 +1090,8 @@ implied; a future Messaging node may notify the client only after its own
 safety slice. Chart mechanics remain in chart-engine/chart-worker. AI receives
 minimized approved context and cannot send or deliver its output.
 
-Reload shows the pinned version and executor semantics, trigger, consent/data
-decision, selected edge, waits, chart and AI command/result correlations,
+Reload shows the pinned version and executor semantics, trigger, birth-data
+readiness decision, selected edge, waits, chart and AI command/result correlations,
 approval candidate checksum, work-item actor and terminal goal. Duplicate
 booking/client/chart/AI signals do not duplicate runs or effects. Pause
 enrollment blocks later bookings but does not rewrite this run.
@@ -1137,7 +1144,7 @@ producer inventory.
 ### Slice 4: client data, waits and calculations
 
 - duration/date/event waits with timezone/DST policy;
-- client action request and `client-web` consent/data completion contour;
+- client action request and `client-web` birth-data completion contour;
 - chart calculation command and completion/failure signal;
 - missing-data wait and recovery;
 - consultation-preparation template expansion.
@@ -1233,8 +1240,8 @@ Fake query builders do not satisfy this level.
 - failpoints before/after claim, fence finalize, outbox publish, provider
   acceptance, early result signal and reconciliation;
 - transient/permanent/rate-limit failures;
-- revoked-before-read consent, command-acceptance consent revocation and
-  cross-owner subject/source rejection;
+- inactive-relationship or missing-context rejection before birth-data read and
+  profile mutation, plus cross-owner subject/source rejection;
 - unavailable capabilities fail closed.
 - missing required RU/EN client-content variant blocks activation rather than
   falling back silently.
@@ -1258,8 +1265,9 @@ With existing services running under explicit lifecycle authority:
 3. publish v1, publish v2 without switching, then explicitly activate one
    version;
 4. confirm a real owned booking and observe one run/one selected branch;
-5. in the missing-data fixture, open `client-web`, grant required consent and
-   submit canonical birth data; prove one resume after reload/replayed signal;
+5. in the missing-data fixture, open `client-web` and submit canonical birth
+   data, or let the active linked astrologer enter it through the ordinary work
+   item; prove one readiness recheck and resume after reload/replayed signal;
 6. observe one real chart command/result and one minimized AI brief result;
 7. approve the exact brief candidate, complete the separate work item and
    observe `consultation_prepared` with the pinned version;
@@ -1276,7 +1284,8 @@ Separate deterministic E2E fixtures exercise, rather than conditionally skip:
 - cancel before claim, during pure work and after external dispatch;
 - transient retry, permanent failure, outcome-unknown reconciliation and
   eligible redrive;
-- relationship/consent revoked before read and before command acceptance;
+- relationship or booking/service context lost before read and before profile
+  mutation;
 - late event, early signal and concurrent active-version switch.
 
 ### Design parity and accessibility

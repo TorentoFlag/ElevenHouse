@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { flowGraphV2Schema, type FlowGraphRead, type FlowPresentationV1 } from "@elevenhouse/contracts";
 import {
@@ -85,7 +85,7 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     try {

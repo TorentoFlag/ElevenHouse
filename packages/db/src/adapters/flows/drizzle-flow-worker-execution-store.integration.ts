@@ -1,3 +1,4 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -24,8 +25,9 @@ import { createDrizzleFlowRuntimeOwnerSubjectStore } from "./drizzle-flow-runtim
 import { createDrizzleFlowWorkerReadinessStore } from "./drizzle-flow-worker-readiness-store";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
-const integrationBaselinePath =
-  process.env.FLOW_INTEGRATION_BASELINE_PATH ?? "packages/db/drizzle/0000_sticky_rictor.sql";
+const integrationBaselineSql = process.env.FLOW_INTEGRATION_BASELINE_PATH
+  ? readFileSync(process.env.FLOW_INTEGRATION_BASELINE_PATH, "utf8")
+  : readCurrentMigrationSql();
 const databaseName = `elevenhouse_flow_worker_claim_${randomUUID().replaceAll("-", "")}`;
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
@@ -95,7 +97,7 @@ describe("DB-authoritative Flow worker execution store", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(readFileSync(integrationBaselinePath, "utf8"));
+    await runtime.pool.query(integrationBaselineSql);
     const client = await runtime.pool.connect();
     try {
       await client.query("BEGIN");

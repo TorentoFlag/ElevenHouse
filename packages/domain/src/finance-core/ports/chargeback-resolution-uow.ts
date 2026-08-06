@@ -1,4 +1,3 @@
-import type { VerifiedWalletOperationCommitReceipt } from "../wallet-operation-commit-binding-types";
 import type { ResolvedFinanceOperationEnvelope } from "./finance-port-types";
 import type { VerifiedChargebackResolutionAuthority } from "./trusted-finance-evidence";
 
@@ -9,6 +8,7 @@ export type ResolveChargebackCommand = Readonly<{
   expectedChargebackVersion: number;
   walletId: string;
   expectedWalletRevision: string;
+  /** Legacy lot-position revisions are deliberately not used by the V2 online-wallet boundary. */
   expectedPrincipalPositionVersion: string;
   expectedRecoveryPositionVersion: string;
   resolutionAuthority: VerifiedChargebackResolutionAuthority;
@@ -19,10 +19,10 @@ export type ChargebackResolutionCommitReceipt = Readonly<{
   kind: "chargeback_resolution_commit_receipt";
   chargebackCaseId: string;
   chargebackVersion: number;
-  resolution: "won_reversed" | "lost_final";
-  principalPositionVersion: string;
-  recoveryPositionVersion: string;
-  walletJournalCommitReceipt: VerifiedWalletOperationCommitReceipt;
+  resolution: "won_reversed" | "lost_after_paid_platform_loss";
+  walletRevision: string;
+  journalTransactionId: string;
+  journalCanonicalDigest: string;
   persistenceTransactionBoundaryRef: string;
   committedAt: string;
   [chargebackResolutionCommitReceiptBrand]: true;

@@ -123,6 +123,18 @@ export const flowExecutionTokenStateValues = [
   "canceled"
 ] as const;
 
+export const flowExecutionSignalTypeValues = ["chart.calculation.terminal.v1"] as const;
+
+export const flowExecutionSignalOutcomeValues = ["succeeded", "failed"] as const;
+
+export const flowExecutionSignalWaitStateValues = ["waiting", "consumed", "canceled"] as const;
+
+export const flowBirthProfileRecheckReceiptOutcomeValues = [
+  "ready",
+  "not_ready",
+  "stale"
+] as const;
+
 export const flowExecutionAttemptOutcomeValues = [
   "advanced",
   "waiting",
@@ -137,6 +149,7 @@ export const flowRunEventTypeValues = [
   "run_enrolled",
   "token_advanced",
   "token_waiting",
+  "token_signaled",
   "work_item_available",
   "booking_rescheduled",
   "token_retry_scheduled",

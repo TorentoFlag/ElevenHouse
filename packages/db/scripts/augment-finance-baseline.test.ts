@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { augmentSavedCardDisclosureMigrationSource, financeIntegritySql } from "./augment-finance-baseline";
+import {
+  augmentOnlineWalletRefundCaseMigrationSource,
+  augmentSavedCardDisclosureMigrationSource,
+  financeIntegritySql
+} from "./augment-finance-baseline";
 
 describe("finance migration augmentation", () => {
   it("puts saved-card disclosure integrity after the migration that creates its table", () => {
@@ -16,6 +20,21 @@ describe("finance migration augmentation", () => {
     expect(augmented.indexOf("CREATE TABLE \"finance_saved_card_disclosure_versions\""))
       .toBeLessThan(augmented.indexOf("create trigger finance_saved_card_disclosure_versions_sealed_immutable"));
     expect(financeIntegritySql).not.toContain("finance_saved_card_disclosure_versions");
+  });
+
+  it("puts V2 refund-case triggers after the migration that creates the V2 aggregate", () => {
+    const source = [
+      'CREATE TABLE "finance_online_wallet_refund_cases" ("refund_case_id" varchar(200) PRIMARY KEY);',
+      "--> statement-breakpoint",
+      'CREATE TABLE "finance_online_wallet_refund_case_allocations" ("refund_case_id" varchar(200) NOT NULL);'
+    ].join("\n");
+
+    const augmented = augmentOnlineWalletRefundCaseMigrationSource(source);
+
+    expect(augmented.indexOf('CREATE TABLE "finance_online_wallet_refund_cases"')).toBeLessThan(
+      augmented.indexOf("create trigger finance_online_wallet_refund_cases_transition_guard")
+    );
+    expect(financeIntegritySql).not.toContain("finance_online_wallet_refund_cases_transition_guard");
   });
 
   it("includes tariff-invoice customer-action integrity in the managed finance block", () => {

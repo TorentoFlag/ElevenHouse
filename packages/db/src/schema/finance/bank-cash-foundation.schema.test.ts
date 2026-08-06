@@ -18,6 +18,7 @@ import {
 import {
   financeBankExposureHistory,
   financeBankExposures,
+  financeBankLiquidityAttestationReceipts,
   financeBankLiquidityHeads,
   financeBankLiquidityHistory,
   financeBankLiquidityIntegritySql,
@@ -25,6 +26,10 @@ import {
   financeBankLiquiditySnapshots,
   financeBankSnapshotExposureCoverage
 } from "./bank-liquidity.schema";
+import {
+  financeOnlinePayoutExecutionReceipts,
+  financeOnlinePayoutPaidReceipts
+} from "./online-payouts.schema";
 
 function config(table: Parameters<typeof getTableConfig>[0]) {
   return getTableConfig(table);
@@ -52,6 +57,7 @@ const ownedBankTables = [
   financeBankCashMatchReceipts,
   financeBankExceptions,
   financeBankLiquiditySnapshots,
+  financeBankLiquidityAttestationReceipts,
   financeBankLiquiditySnapshotAdoptionReceipts,
   financeBankLiquidityHistory,
   financeBankLiquidityHeads,
@@ -61,6 +67,46 @@ const ownedBankTables = [
 ] as const;
 
 describe("normalized bank cash and liquidity persistence foundation", () => {
+  it("keeps execution and paid proof in immutable V2 receipts rather than bank cash", () => {
+    expect(getTableName(financeOnlinePayoutExecutionReceipts)).toBe(
+      "finance_online_payout_execution_receipts"
+    );
+    expect(Object.keys(getTableColumns(financeOnlinePayoutExecutionReceipts))).toEqual(
+      expect.arrayContaining([
+        "payoutRequestId",
+        "executionTransitionId",
+        "approvalReceiptId",
+        "bankExposureId",
+        "executorActorUserId",
+        "authorizationId",
+        "canonicalDigest"
+      ])
+    );
+    expect(getTableName(financeOnlinePayoutPaidReceipts)).toBe("finance_online_payout_paid_receipts");
+    expect(Object.keys(getTableColumns(financeOnlinePayoutPaidReceipts))).toEqual(
+      expect.arrayContaining([
+        "payoutRequestId",
+        "paidTransitionId",
+        "executionReceiptId",
+        "walletId",
+        "walletMutationId",
+        "journalTransactionId",
+        "approvalReceiptId",
+        "bankExposureId",
+        "bankReference",
+        "transferredAt",
+        "evidenceArtifactId",
+        "authorizationId",
+        "canonicalDigest"
+      ])
+    );
+    expect(names(config(financeOnlinePayoutPaidReceipts).uniqueConstraints)).toEqual(
+      expect.arrayContaining([
+        "finance_online_payout_paid_receipts_bank_reference_unique",
+        "finance_online_payout_paid_receipts_evidence_unique"
+      ])
+    );
+  });
   it("keeps the cash-pool directory reference-only and rejects overlapping active identities", () => {
     expect(getTableName(financeBankCashPools)).toBe("finance_bank_cash_pools");
     expect(Object.keys(getTableColumns(financeBankCashPools))).toEqual([
@@ -118,6 +164,9 @@ describe("normalized bank cash and liquidity persistence foundation", () => {
   it("stores only verified unrestricted-available snapshots behind a pool/currency CAS head", () => {
     expect(getTableName(financeBankLiquidityHeads)).toBe("finance_bank_liquidity_heads");
     expect(getTableName(financeBankLiquiditySnapshots)).toBe("finance_bank_liquidity_snapshots");
+    expect(getTableName(financeBankLiquidityAttestationReceipts)).toBe(
+      "finance_bank_liquidity_attestation_receipts"
+    );
     expect(getTableName(financeBankLiquidityHistory)).toBe("finance_bank_liquidity_history");
     expect(getTableName(financeBankLiquiditySnapshotAdoptionReceipts)).toBe(
       "finance_bank_liquidity_snapshot_adoption_receipts"
@@ -144,6 +193,31 @@ describe("normalized bank cash and liquidity persistence foundation", () => {
         "finance_bank_liquidity_snapshots_basis_check",
         "finance_bank_liquidity_snapshots_expiry_check",
         "finance_bank_liquidity_snapshots_digest_check"
+      ])
+    );
+    expect(Object.keys(getTableColumns(financeBankLiquidityAttestationReceipts))).toEqual(
+      expect.arrayContaining([
+        "attestationId",
+        "attestationVersion",
+        "bankCashPoolId",
+        "currency",
+        "expectedBankLiquidityRevision",
+        "unrestrictedAvailableMinor",
+        "sourceCheckpoint",
+        "asOf",
+        "expiresAt",
+        "evidenceArtifactId",
+        "evidenceArtifactDigest",
+        "authorizationId",
+        "authorizationPayloadDigest",
+        "canonicalDigest"
+      ])
+    );
+    expect(foreignKeyNames(financeBankLiquidityAttestationReceipts)).toEqual(
+      expect.arrayContaining([
+        "finance_bank_liquidity_attestations_pool_fk",
+        "finance_bank_liquidity_attestations_artifact_fk",
+        "finance_bank_liquidity_attestations_authorization_fk"
       ])
     );
     expect(names(config(financeBankLiquidityHeads).uniqueConstraints)).toContain(
@@ -436,6 +510,8 @@ describe("normalized bank cash and liquidity persistence foundation", () => {
     expect(liquiditySql).toContain("exact payout debit transition");
     expect(liquiditySql).toContain("coverage exceeds the exact statement amount");
     expect(liquiditySql).toContain("snapshot must still be eligible when adopted");
+    expect(liquiditySql).toContain("bank liquidity attestation requires exact sealed bank evidence");
+    expect(liquiditySql).toContain("bank liquidity attestation requires its exact consumed authorization");
     expect(liquiditySql).toContain("snapshot predates cash pool activation");
     expect(liquiditySql).toContain("current_revision := 0");
     expect(liquiditySql).toContain("initial liquidity head requires a real bank fact or snapshot");
@@ -451,6 +527,7 @@ describe("normalized bank cash and liquidity persistence foundation", () => {
     );
     for (const tableName of [
       "finance_bank_liquidity_snapshots",
+      "finance_bank_liquidity_attestation_receipts",
       "finance_bank_liquidity_snapshot_adoption_receipts",
       "finance_bank_liquidity_history",
       "finance_bank_exposure_history",

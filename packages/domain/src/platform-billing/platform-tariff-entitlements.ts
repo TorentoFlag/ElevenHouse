@@ -113,7 +113,7 @@ function isValidHistoricalCapabilityGrant(input: Readonly<{
   const { subscription, tariff } = input.grant;
   if (
     subscription.ownerUserId !== input.ownerUserId ||
-    !["active", "past_due", "cancelled", "expired"].includes(subscription.state) ||
+    !["active", "cancelled", "expired"].includes(subscription.state) ||
     subscription.startsAt === null ||
     subscription.endsAt === null ||
     subscription.tariffSeriesId !== tariff.tariffSeriesId ||

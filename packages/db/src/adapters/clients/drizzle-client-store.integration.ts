@@ -20,12 +20,27 @@ describe("client store Drizzle/PostgreSQL integration", () => {
     if (createdUserIds.length === 0) return;
     const userIds = createdUserIds.splice(0);
     await runtime.pool.query(
+      `delete from outbox_events
+       where event_type = 'client.birth_profile.updated.v1'
+         and payload ->> 'clientUserId' = any($1::text[])`,
+      [userIds]
+    );
+    await runtime.pool.query(
       `delete from client_join_intents
        where astrologer_user_id = any($1::uuid[])
           or claimed_by_client_user_id = any($1::uuid[])`,
       [userIds]
     );
-    await runtime.pool.query("delete from users where id = any($1::uuid[])", [userIds]);
+    await runtime.pool.query(
+      "alter table client_birth_data_history disable trigger client_birth_data_history_append_only"
+    );
+    try {
+      await runtime.pool.query("delete from users where id = any($1::uuid[])", [userIds]);
+    } finally {
+      await runtime.pool.query(
+        "alter table client_birth_data_history enable trigger client_birth_data_history_append_only"
+      );
+    }
   });
 
   afterAll(async () => {
@@ -625,6 +640,58 @@ describe("client store Drizzle/PostgreSQL integration", () => {
       { revision: 1, actor_user_id: astrologerUserId, snapshot_birth_date: "1990-02-02" },
       { revision: 2, actor_user_id: clientUserId, snapshot_birth_date: "1991-03-03" }
     ]);
+
+    const events = await runtime.pool.query<{
+      aggregate_id: string;
+      payload: {
+        readonly schemaVersion: string;
+        readonly birthDataHistoryId: string;
+        readonly birthDataId: string;
+        readonly clientUserId: string;
+        readonly revision: number;
+        readonly actorUserId: string;
+        readonly actorRole: string;
+        readonly occurredAt: string;
+      };
+    }>(
+      `select aggregate_id, payload
+       from outbox_events
+       where event_type = 'client.birth_profile.updated.v1'
+         and payload ->> 'clientUserId' = $1
+       order by (payload ->> 'revision')::integer`,
+      [clientUserId]
+    );
+    expect(events.rows).toHaveLength(2);
+    expect(events.rows).toEqual([
+      expect.objectContaining({
+        aggregate_id: events.rows[0]?.payload.birthDataHistoryId,
+        payload: {
+          schemaVersion: "client-birth-profile-updated.v1",
+          birthDataHistoryId: events.rows[0]?.aggregate_id,
+          birthDataId,
+          clientUserId,
+          revision: 1,
+          actorUserId: astrologerUserId,
+          actorRole: "astrologer",
+          occurredAt: linkedAt
+        }
+      }),
+      expect.objectContaining({
+        aggregate_id: events.rows[1]?.payload.birthDataHistoryId,
+        payload: {
+          schemaVersion: "client-birth-profile-updated.v1",
+          birthDataHistoryId: events.rows[1]?.aggregate_id,
+          birthDataId,
+          clientUserId,
+          revision: 2,
+          actorUserId: clientUserId,
+          actorRole: "client",
+          occurredAt: "2026-08-03T10:05:00.000Z"
+        }
+      })
+    ]);
+    expect(JSON.stringify(events.rows)).not.toContain("1990-02-02");
+    expect(JSON.stringify(events.rows)).not.toContain("1991-03-03");
   });
 
   async function createUser(input: {

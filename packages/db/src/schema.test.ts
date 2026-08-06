@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { platformRoles } from "@elevenhouse/auth";
 import { describe, expect, it } from "vitest";
 import {
@@ -74,7 +74,14 @@ import {
   verificationDocumentKindValues
 } from "./schema/index";
 
-const currentBaselineMigration = "packages/db/drizzle/0000_sticky_rictor.sql";
+function readCurrentLineageSql(): string {
+  const directory = "packages/db/drizzle";
+  return readdirSync(directory)
+    .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+    .sort()
+    .map((file) => readFileSync(`${directory}/${file}`, "utf8"))
+    .join("\n");
+}
 
 describe("database account schema constants", () => {
   it("keeps database role checks aligned with the application role model", () => {
@@ -125,7 +132,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps client relationship tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
@@ -161,7 +168,7 @@ describe("database account schema constants", () => {
     expect(outboxEvents.quarantinedAt).toBeDefined();
     expect(outboxEvents.quarantineReasonCode).toBeDefined();
 
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
     expect(migration).toContain('"claim_fence" bigint DEFAULT 0 NOT NULL');
     expect(migration).toContain('"quarantined_at" timestamp with time zone');
     expect(migration).toContain('"quarantine_reason_code" text');
@@ -191,7 +198,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps verification tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "verification_applications"');
     expect(migration).toContain('CREATE TABLE "verification_application_documents"');
@@ -225,7 +232,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps dictionary tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
     const dictionaryAstrologerEntriesTable = getCreateTableStatement(
       migration,
       "dictionary_astrologer_entries"
@@ -332,7 +339,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps product tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "products"');
     expect(migration).toContain('"owner_user_id" uuid NOT NULL');
@@ -360,7 +367,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps product template tables in the product template migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "product_templates"');
     expect(migration).toContain(
@@ -394,7 +401,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps platform billing tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "platform_plans"');
     expect(migration).toContain('"monthly_price_minor" integer NOT NULL');
@@ -448,7 +455,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps media tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "media_assets"');
     expect(migration).toContain('"owner_user_id" uuid NOT NULL');
@@ -483,7 +490,7 @@ describe("database account schema constants", () => {
   });
 
   it("exports messaging media ingestion schema and keeps it in the baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(messageMediaIngestions).toBeDefined();
     expect(migration).toContain('CREATE TABLE "message_media_ingestions"');
@@ -513,7 +520,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps astrologer profile tables in the current baseline migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "astrologer_profiles"');
     expect(migration).toContain('"owner_user_id" uuid PRIMARY KEY NOT NULL');
@@ -550,7 +557,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps pending passwordless challenges unique per channel and identifier", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "auth_challenges_pending_identifier_unique" ON "auth_challenges" USING btree ("channel","identifier_normalized") WHERE "auth_challenges"."status" = \'pending\''
@@ -558,7 +565,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps user profiles in the current identity migration", () => {
-    const migration = readFileSync(currentBaselineMigration, "utf8");
+    const migration = readCurrentLineageSql();
 
     expect(migration).toContain('CREATE TABLE "user_profiles"');
     expect(migration).toContain('"display_name" text NOT NULL');

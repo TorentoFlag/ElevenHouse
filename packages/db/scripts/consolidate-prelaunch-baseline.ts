@@ -14,6 +14,11 @@ type DrizzleSnapshot = {
   tables: Record<string, unknown>;
 };
 
+type PrelaunchMigrationChain = {
+  readonly sqlPaths: readonly string[];
+  readonly snapshotPaths: readonly string[];
+};
+
 /**
  * Pre-launch only: folds a freshly generated schema delta into the one resettable
  * baseline while preserving the explicitly managed integrity blocks at its end.
@@ -94,40 +99,126 @@ export function mergePrelaunchBaselineSnapshot(
 }
 
 /**
- * Pre-launch only: removes the exact generated root artifacts so Drizzle can
- * regenerate a complete one-file baseline. Unknown SQL is a hard stop rather
- * than collateral damage.
+ * Pre-launch only: validates that every generated artifact is one contiguous
+ * Drizzle chain from 0000, then removes that exact chain so Drizzle can
+ * regenerate one complete root baseline. This is the safe answer when an
+ * incremental delta drops/replaces a root constraint: SQL statement splicing
+ * cannot preserve that transition in a fresh root installation.
+ *
+ * Unknown, skipped, or divergent artifacts are a hard stop rather than
+ * collateral damage. The caller must immediately run the normal `db:generate`
+ * pipeline, which rebuilds every schema object and reapplies the managed
+ * augmenter blocks in dependency-safe order.
  */
 export async function clearPrelaunchBaselineArtifacts(migrationDirectory: string): Promise<void> {
-  const sqlFiles = (await readdir(migrationDirectory))
-    .filter((entry) => entry.endsWith(".sql"))
-    .sort();
-  const unexpectedSqlFiles = sqlFiles.filter((entry) => entry !== "0000_sticky_rictor.sql");
-  if (unexpectedSqlFiles.length > 0) {
-    throw new Error(
-      `Cannot clear pre-launch baseline: unexpected SQL migrations: ${unexpectedSqlFiles.join(", ")}`
-    );
-  }
-
+  const chain = await inspectPrelaunchMigrationChain(migrationDirectory);
   const metadataDirectory = join(migrationDirectory, "meta");
-  const metadataFiles = (await readdir(metadataDirectory)).sort();
-  const allowedMetadataFiles = new Set(["0000_snapshot.json", "_journal.json"]);
-  const unexpectedMetadataFiles = metadataFiles.filter((entry) => !allowedMetadataFiles.has(entry));
-  if (unexpectedMetadataFiles.length > 0) {
-    throw new Error(
-      `Cannot clear pre-launch baseline: unexpected metadata artifacts: ${unexpectedMetadataFiles.join(", ")}`
-    );
-  }
 
   await Promise.all([
-    rm(join(migrationDirectory, "0000_sticky_rictor.sql"), { force: true }),
-    rm(join(metadataDirectory, "0000_snapshot.json"), { force: true })
+    ...chain.sqlPaths.map((path) => rm(path, { force: true })),
+    ...chain.snapshotPaths.map((path) => rm(path, { force: true }))
   ]);
   await writeFile(
     join(metadataDirectory, "_journal.json"),
     '{\n  "version": "7",\n  "dialect": "postgresql",\n  "entries": []\n}\n',
     "utf8"
   );
+}
+
+/**
+ * Read-only gate for the destructive generated-artifact step above. The chain
+ * is accepted only when SQL, snapshots and Drizzle journal agree on every
+ * contiguous migration index and snapshot parent. It intentionally accepts no
+ * unrecognised side artifacts: a one-time pre-launch rebuild must never delete
+ * a hand-authored migration accidentally.
+ */
+export async function inspectPrelaunchMigrationChain(
+  migrationDirectory: string
+): Promise<PrelaunchMigrationChain> {
+  const migrationEntries = (await readdir(migrationDirectory)).sort();
+  const sqlFiles = migrationEntries.filter((entry) => entry.endsWith(".sql"));
+  const unexpectedSqlFiles = sqlFiles.filter((entry) => !/^\d{4}_.+\.sql$/.test(entry));
+  if (unexpectedSqlFiles.length > 0) {
+    throw new Error(
+      `Cannot clear pre-launch baseline: unexpected SQL migrations: ${unexpectedSqlFiles.join(", ")}`
+    );
+  }
+  const sqlIndices = parseContiguousMigrationIndexes(sqlFiles, "SQL migrations");
+
+  const metadataDirectory = join(migrationDirectory, "meta");
+  const metadataFiles = (await readdir(metadataDirectory)).sort();
+  const snapshotFiles = metadataFiles.filter((entry) => entry.endsWith("_snapshot.json"));
+  const unexpectedMetadataFiles = metadataFiles.filter(
+    (entry) => entry !== "_journal.json" && !/^\d{4}_snapshot\.json$/.test(entry)
+  );
+  if (unexpectedMetadataFiles.length > 0) {
+    throw new Error(
+      `Cannot clear pre-launch baseline: unexpected metadata artifacts: ${unexpectedMetadataFiles.join(", ")}`
+    );
+  }
+  const snapshotIndices = parseContiguousMigrationIndexes(
+    snapshotFiles.map((entry) => entry.replace(/_snapshot\.json$/, ".sql")),
+    "snapshots"
+  );
+  if (snapshotIndices.join(",") !== sqlIndices.join(",")) {
+    throw new Error("Cannot clear pre-launch baseline: SQL migrations and snapshots do not cover the same chain");
+  }
+
+  const journal = JSON.parse(await readFile(join(metadataDirectory, "_journal.json"), "utf8")) as {
+    entries?: Array<{ idx?: number; tag?: string; version?: string; when?: number; breakpoints?: boolean }>;
+  };
+  if (!Array.isArray(journal.entries) || journal.entries.length !== sqlFiles.length) {
+    throw new Error("Cannot clear pre-launch baseline: journal does not cover the exact generated chain");
+  }
+  const expectedTags = sqlFiles.map((file) => file.slice(0, -".sql".length));
+  for (const [offset, entry] of journal.entries.entries()) {
+    if (
+      entry?.idx !== offset ||
+      entry.tag !== expectedTags[offset] ||
+      entry.version !== "7" ||
+      !Number.isSafeInteger(entry.when) ||
+      entry.breakpoints !== true
+    ) {
+      throw new Error("Cannot clear pre-launch baseline: journal is not an exact contiguous generated chain");
+    }
+  }
+
+  const snapshots = await Promise.all(
+    snapshotFiles.map(async (file) => parseSnapshot(await readFile(join(metadataDirectory, file), "utf8"), file))
+  );
+  const root = snapshots[0];
+  if (root?.prevId !== zeroSnapshotId) {
+    throw new Error("Cannot clear pre-launch baseline: 0000 snapshot is not a root snapshot");
+  }
+  for (let index = 1; index < snapshots.length; index += 1) {
+    const previous = snapshots[index - 1]!;
+    const current = snapshots[index]!;
+    if (
+      current.prevId !== previous.id ||
+      current.version !== root!.version ||
+      current.dialect !== root!.dialect
+    ) {
+      throw new Error("Cannot clear pre-launch baseline: snapshots are not one contiguous Drizzle chain");
+    }
+  }
+
+  return {
+    sqlPaths: sqlFiles.map((file) => join(migrationDirectory, file)),
+    snapshotPaths: snapshotFiles.map((file) => join(metadataDirectory, file))
+  };
+}
+
+function parseContiguousMigrationIndexes(files: readonly string[], label: string): number[] {
+  if (files.length === 0) {
+    throw new Error(`Cannot clear pre-launch baseline: ${label} are empty`);
+  }
+  const indexes = files.map((file) => Number.parseInt(file.slice(0, 4), 10));
+  for (const [offset, index] of indexes.entries()) {
+    if (index !== offset) {
+      throw new Error(`Cannot clear pre-launch baseline: ${label} are not contiguous from 0000`);
+    }
+  }
+  return indexes;
 }
 
 async function findExactFile(directory: string, pattern: RegExp, label: string): Promise<string> {
@@ -197,6 +288,13 @@ export async function consolidatePrelaunchBaseline(migrationDirectory: string): 
 
 async function main(): Promise<void> {
   const migrationDirectory = join(__dirname, "../drizzle");
+  if (process.argv.includes("--prepare-regeneration")) {
+    await clearPrelaunchBaselineArtifacts(migrationDirectory);
+    console.log(
+      `Validated and cleared the exact pre-launch migration chain in ${migrationDirectory}; run pnpm db:generate next.`
+    );
+    return;
+  }
   await consolidatePrelaunchBaseline(migrationDirectory);
   console.log(`Consolidated the inspected pre-launch delta into ${migrationDirectory}`);
 }

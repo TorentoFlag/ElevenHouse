@@ -1,4 +1,4 @@
-import type { PayoutPaidConfirmationCommitReceiptRef } from "./payout-paid-confirmation-uow";
+import type { OnlineWalletPayoutPaidReceiptRef } from "./online-wallet-payout-execution-uow";
 import type { MerchantPayoutConfirmationCommitReceiptRef } from "./settlement-persistence-port";
 import type {
   FinanceCurrency,
@@ -6,7 +6,10 @@ import type {
   RawBankArtifactRef,
   ResolvedFinanceOperationEnvelope
 } from "./finance-port-types";
+import type { FinanceTransactionAuthorizationProof } from "../../finance-authorization";
+import type { BankLiquiditySnapshotAttestationInput } from "../bank-liquidity-snapshot-attestation";
 import type {
+  BankLiquiditySnapshotAttestationReceiptRef,
   VerifiedBankLiquiditySnapshotEvidence,
   VerifiedBankStatementEvidence
 } from "./trusted-finance-evidence";
@@ -92,6 +95,49 @@ export type BankLiquiditySnapshotAdoptionUnitOfWork = Readonly<{
   ): Promise<BankLiquiditySnapshotAdoptionReceipt>;
 }>;
 
+export type AttestBankLiquiditySnapshotCommand = Readonly<
+  BankLiquiditySnapshotAttestationInput & {
+    authorization: FinanceTransactionAuthorizationProof;
+  }
+>;
+
+export type BankLiquiditySnapshotAttestationCommitReceipt = Readonly<{
+  ref: BankLiquiditySnapshotAttestationReceiptRef;
+  bankCashPoolId: string;
+  currency: FinanceCurrency;
+  expectedBankLiquidityRevision: string;
+  evidence: VerifiedBankLiquiditySnapshotEvidence;
+  attestedAt: string;
+}>;
+
+export type BankLiquiditySnapshotAttestationUnitOfWork = Readonly<{
+  attestBankLiquiditySnapshot(
+    command: AttestBankLiquiditySnapshotCommand
+  ): Promise<BankLiquiditySnapshotAttestationCommitReceipt>;
+}>;
+
+/**
+ * Server-side reader for the only snapshot that can authorize a new payout commitment.
+ * It deliberately returns `null` for stale, superseded or incomplete state; callers must never
+ * select a historical receipt from an admin browser.
+ */
+export type CurrentEligibleBankLiquiditySnapshot = Readonly<{
+  bankCashPoolId: string;
+  currency: FinanceCurrency;
+  bankLiquidityRevision: string;
+  adoptedSnapshot: BankLiquiditySnapshotAdoptionReceiptRef;
+  sourceCheckpoint: string;
+  expiresAt: string;
+  availableLiquidityMinor: string;
+}>;
+
+export type CurrentEligibleBankLiquiditySnapshotReader = Readonly<{
+  findCurrentEligibleBankLiquiditySnapshot(input: Readonly<{
+    bankCashPoolId: string;
+    currency: FinanceCurrency;
+  }>): Promise<CurrentEligibleBankLiquiditySnapshot | null>;
+}>;
+
 export type IngestVerifiedBankStatementEntryCommand = Readonly<{
   bankCashPoolId: string;
   expectedStatementImportVersion: string;
@@ -113,6 +159,7 @@ export type BankStatementIngestionCommitReceipt = Readonly<{
   bankCashPoolId: string;
   bankStatementEntryId: string;
   sourceStatementId: string;
+  sourceCheckpoint: string;
   sourceRowId: string;
   artifact: RawBankArtifactRef;
   statementImportVersion: string;
@@ -144,7 +191,8 @@ export type BankCashMatchAuthority =
     }>
   | Readonly<{
       kind: "manual_payout";
-      payoutPaid: PayoutPaidConfirmationCommitReceiptRef;
+      /** New client money and manual payout lifecycle are canonical V2 only. */
+      payoutPaid: OnlineWalletPayoutPaidReceiptRef;
     }>
   | Readonly<{
       kind: "unmatched_to_suspense";

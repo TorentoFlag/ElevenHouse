@@ -4,10 +4,12 @@ import { createLogger } from "@elevenhouse/observability";
 import {
   createDrizzleFlowBookingEnrollmentStore,
   createDrizzleFlowBirthDataReadinessReader,
+  createDrizzleFlowBirthProfileRecheckStore,
   createDrizzleFlowBookingLifecycleStore,
   createDrizzleFlowNatalChartRequester,
   createDrizzleFlowRuntimeOwnerSubjectStore,
   createDrizzleFlowRuntimeDispatchOutboxStore,
+  createDrizzleFlowExecutionSignalStore,
   createDrizzleFlowWorkItemWakeStore,
   createDrizzleFlowWorkerExecutionStore,
   createDrizzleFlowWorkerReadinessStore,
@@ -89,6 +91,7 @@ const flowWorkerReadinessStore = createDrizzleFlowWorkerReadinessStore(postgres.
 const flowRuntimeDispatchOutboxStore = createDrizzleFlowRuntimeDispatchOutboxStore(
   postgres.database
 );
+const flowExecutionSignalStore = createDrizzleFlowExecutionSignalStore(postgres.database);
 const flowBookingEnrollmentStore = createDrizzleFlowBookingEnrollmentStore(
   postgres.database,
   flowWorkerIdentity
@@ -98,6 +101,7 @@ const flowBookingLifecycleStore = createDrizzleFlowBookingLifecycleStore(
   flowWorkerIdentity
 );
 const flowBirthDataReadinessReader = createDrizzleFlowBirthDataReadinessReader(postgres.database);
+const flowBirthProfileRecheckStore = createDrizzleFlowBirthProfileRecheckStore(postgres.database);
 const chartExecutionProfile = resolveChartExecutionProfile(process.env);
 const flowNatalChartRequester = createDrizzleFlowNatalChartRequester(postgres.database, {
   commandStore: createDrizzleChartCalculationCommandStore(postgres.database),
@@ -273,6 +277,16 @@ const relay = createCalculationPdfOutboxRelay({
           futureSkewToleranceMs:
             config.flowBookingEnrollment.futureSkewToleranceMs
         }),
+      deliverChartTerminalSignal: (signal) =>
+        flowExecutionSignalStore.ingest({
+          sourceEventId: signal.sourceEventId,
+          ownerUserId: signal.ownerUserId,
+          signalType: "chart.calculation.terminal.v1",
+          correlationId: signal.jobId,
+          outcome: signal.outcome,
+          occurredAt: signal.occurredAt
+        }),
+      recheckBirthProfile: (input) => flowBirthProfileRecheckStore.recheck(input),
       now,
       batchSize: config.outboxRelayBatchSize,
       publishingLockTimeoutMs: config.outboxLockTimeoutMs,

@@ -1,3 +1,4 @@
+import { readCurrentMigrationSql } from "./testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -18,10 +19,9 @@ const databaseName = `elevenhouse_flow_booking_lifecycle_safety_${randomUUID().r
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
 const databaseClient = new Client({ connectionString: isolatedDatabaseUrl });
-const currentBaselineSql = readFileSync(
-  process.env.FLOW_INTEGRATION_BASELINE_PATH ?? "packages/db/drizzle/0000_sticky_rictor.sql",
-  "utf8"
-);
+const currentBaselineSql = process.env.FLOW_INTEGRATION_BASELINE_PATH
+  ? readFileSync(process.env.FLOW_INTEGRATION_BASELINE_PATH, "utf8")
+  : readCurrentMigrationSql();
 
 describe("Flow Booking lifecycle safety baseline PostgreSQL integration", () => {
   beforeAll(async () => {

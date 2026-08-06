@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -31,30 +31,42 @@ export type MigrationLedgerRow = {
   readonly created_at: string;
 };
 
-export const currentBaseline = readCurrentBaselineIdentity();
+export const approvedLineage = readApprovedLineage();
+/** @deprecated Use approvedLineage for any migration-history decision. */
+export const currentBaseline = approvedLineage.at(-1)!;
 
-function readCurrentBaselineIdentity(): MigrationIdentity {
+function readApprovedLineage(): readonly MigrationIdentity[] {
   const migrationDirectory = join(__dirname, "../drizzle");
-  const migration = readFileSync(join(migrationDirectory, "0000_sticky_rictor.sql"));
   const journal = JSON.parse(
     readFileSync(join(migrationDirectory, "meta/_journal.json"), "utf8")
-  ) as { readonly entries?: readonly { readonly when?: number }[] };
-  const createdAt = journal.entries?.[0]?.when;
-  if (!Number.isSafeInteger(createdAt)) {
-    throw new Error("Current Drizzle baseline journal entry is missing");
+  ) as { readonly entries?: readonly { readonly idx?: number; readonly tag?: string; readonly when?: number }[] };
+  const entries = journal.entries;
+  const migrationFiles = readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort();
+  if (!entries || entries.length === 0 || entries.length !== migrationFiles.length) {
+    throw new Error("Approved Drizzle lineage is missing or incomplete");
   }
 
-  return {
-    hash: createHash("sha256").update(migration).digest("hex"),
-    createdAt: String(createdAt)
-  };
+  return migrationFiles.map((file, index) => {
+    const entry = entries[index];
+    const tag = file.slice(0, -".sql".length);
+    if (!entry || entry.idx !== index || entry.tag !== tag || !Number.isSafeInteger(entry.when)) {
+      throw new Error("Approved Drizzle lineage journal is invalid");
+    }
+    return {
+      hash: createHash("sha256").update(readFileSync(join(migrationDirectory, file))).digest("hex"),
+      createdAt: String(entry.when)
+    };
+  });
 }
 
 export function isCurrentBaselineHistory(migrations: readonly MigrationLedgerRow[]): boolean {
   return (
-    migrations.length === 1 &&
-    migrations[0]?.hash === currentBaseline.hash &&
-    migrations[0]?.created_at === currentBaseline.createdAt
+    migrations.length === approvedLineage.length &&
+    migrations.every(
+      (migration, index) =>
+        migration.hash === approvedLineage[index]?.hash &&
+        migration.created_at === approvedLineage[index]?.createdAt
+    )
   );
 }
 

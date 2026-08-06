@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -27,7 +27,7 @@ import {
 } from "../index";
 import { flowRunIntegritySql, flowRuntimeEventIntegritySql } from "./flow-runtime.schema";
 
-const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
+const baselineMigrationFile = readCurrentMigrationSql();
 
 describe("Flows persistence schema", () => {
   it("exports flow draft and immutable version tables", () => {
@@ -604,7 +604,7 @@ describe("Flows persistence schema", () => {
   });
 
   it("keeps Flows DDL in the single current baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
 
     expect(migration).toContain('CREATE TABLE "flows"');
     expect(migration).toContain('CREATE TABLE "flow_versions"');

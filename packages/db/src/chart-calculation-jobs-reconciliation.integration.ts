@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "./testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
 import { assertChartCalculationJobs } from "../scripts/chart-calculation-jobs-reconciliation";
@@ -102,7 +102,7 @@ async function withCurrentBaseline(run: (client: Client) => Promise<void>): Prom
     await adminClient.query(`CREATE DATABASE ${databaseName}`);
     databaseClient = new Client({ connectionString: databaseUrl.toString() });
     await databaseClient.connect();
-    await databaseClient.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await databaseClient.query(readCurrentMigrationSql());
     await run(databaseClient);
   } finally {
     await databaseClient?.end();

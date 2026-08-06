@@ -23,6 +23,7 @@ import {
   flowBookingLifecycleHeads,
   flowBookingLifecycleReceipts,
   flowExecutionAttempts,
+  flowExecutionSignalWaits,
   flowExecutionTokens,
   flowRunEvents,
   flowRuns,
@@ -816,6 +817,19 @@ async function cancelOneBookingRun(
     )
     .returning({ id: flowExecutionTokens.id });
   if (!canceledToken) throw runtimeIntegrity("the Booking cancellation token fence became stale");
+
+  await transaction
+    .update(flowExecutionSignalWaits)
+    .set({ state: "canceled", canceledAt })
+    .where(
+      and(
+        eq(flowExecutionSignalWaits.ownerUserId, event.ownerUserId),
+        eq(flowExecutionSignalWaits.flowRunId, run.id),
+        eq(flowExecutionSignalWaits.tokenId, token.id),
+        eq(flowExecutionSignalWaits.nodeActivationSequence, token.nodeActivationSequence),
+        eq(flowExecutionSignalWaits.state, "waiting")
+      )
+    );
 
   const attemptId =
     token.state === "claimed"

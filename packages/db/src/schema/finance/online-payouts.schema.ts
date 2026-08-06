@@ -15,6 +15,13 @@ import {
 
 import { users } from "../identity/accounts.schema";
 import {
+  financeBankExposures,
+  financeBankLiquiditySnapshotAdoptionReceipts
+} from "./bank-liquidity.schema";
+import { financeArtifacts } from "./finance-artifacts.schema";
+import { financeJournalTransactions } from "./ledger.schema";
+import { financeOnlineWalletHeads } from "./online-sale-capture.schema";
+import {
   financeCurrencyValues,
   financeNumeric38String,
   financeRevisionString,
@@ -25,7 +32,6 @@ import {
   financeOnlinePayableSourceAllocations,
   financeOnlineWalletMutations
 } from "./online-wallet-mutations.schema";
-import { financeOnlineWalletHeads } from "./online-sale-capture.schema";
 import { payoutMethodVersions, payoutMethods } from "./payouts.schema";
 
 const identifierCheck = (value: SQLWrapper) =>
@@ -39,6 +45,8 @@ export const financeOnlinePayoutRequests = pgTable(
   "finance_online_payout_requests",
   {
     id: varchar("id", { length: 160 }).primaryKey(),
+    /** UUID aggregate identity used exclusively by the sensitive-action authorization boundary. */
+    authorizationAggregateId: uuid("authorization_aggregate_id").notNull(),
     walletId: uuid("wallet_id").notNull(),
     /** Exact v2 wallet commitment which reserved this payout. */
     walletMutationId: uuid("wallet_mutation_id").notNull(),
@@ -73,6 +81,9 @@ export const financeOnlinePayoutRequests = pgTable(
       foreignColumns: [financeOnlineWalletMutations.mutationId]
     }).onDelete("restrict"),
     unique("finance_online_payout_requests_wallet_mutation_unique").on(table.walletMutationId),
+    unique("finance_online_payout_requests_authorization_aggregate_unique").on(
+      table.authorizationAggregateId
+    ),
     foreignKey({
       name: "finance_online_payout_requests_method_owner_fk",
       columns: [table.payoutMethodId],
@@ -229,6 +240,220 @@ export const financeOnlinePayoutStateTransitions = pgTable(
   ]
 );
 
+/**
+ * The durable V2 approval receipt. It binds the approved payout head to the exact exposure and
+ * adopted liquidity snapshot, so a later bank initiation or paid confirmation can never rely on
+ * a mutable operator status alone.
+ */
+export const financeOnlinePayoutApprovalReceipts = pgTable(
+  "finance_online_payout_approval_receipts",
+  {
+    receiptId: uuid("receipt_id").primaryKey(),
+    receiptVersion: integer("receipt_version").notNull().default(1),
+    payoutRequestId: varchar("payout_request_id", { length: 160 }).notNull(),
+    payoutVersion: financeRevisionString("payout_version").notNull(),
+    approvalTransitionId: uuid("approval_transition_id").notNull(),
+    bankExposureId: varchar("bank_exposure_id", { length: 200 }).notNull(),
+    bankExposureVersion: financeRevisionString("bank_exposure_version").notNull(),
+    bankLiquidityRevision: financeRevisionString("bank_liquidity_revision").notNull(),
+    bankCashPoolId: varchar("bank_cash_pool_id", { length: 160 }).notNull(),
+    currency: text("currency").notNull(),
+    snapshotAdoptionReceiptId: varchar("snapshot_adoption_receipt_id", { length: 200 }).notNull(),
+    snapshotAdoptionReceiptVersion: integer("snapshot_adoption_receipt_version").notNull(),
+    snapshotAdoptionReceiptDigest: varchar("snapshot_adoption_receipt_digest", { length: 71 }).notNull(),
+    approverActorUserId: uuid("approver_actor_user_id").notNull(),
+    authorizationId: varchar("authorization_id", { length: 200 }).notNull(),
+    authorizationVersion: financeRevisionString("authorization_version").notNull(),
+    authorizationDigest: varchar("authorization_digest", { length: 71 }).notNull(),
+    persistenceTransactionBoundaryRef: varchar("persistence_transaction_boundary_ref", {
+      length: 200
+    }).notNull(),
+    canonicalPreimage: text("canonical_preimage").notNull(),
+    canonicalDigest: varchar("canonical_digest", { length: 71 }).notNull(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    foreignKey({
+      name: "finance_online_payout_approval_receipts_request_fk",
+      columns: [table.payoutRequestId],
+      foreignColumns: [financeOnlinePayoutRequests.id]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_online_payout_approval_receipts_transition_fk",
+      columns: [table.approvalTransitionId],
+      foreignColumns: [financeOnlinePayoutStateTransitions.transitionId]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_online_payout_approval_receipts_exposure_fk",
+      columns: [table.bankExposureId, table.bankCashPoolId, table.currency],
+      foreignColumns: [
+        financeBankExposures.exposureId,
+        financeBankExposures.bankCashPoolId,
+        financeBankExposures.currency
+      ]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_online_payout_approval_receipts_snapshot_adoption_fk",
+      columns: [
+        table.snapshotAdoptionReceiptId,
+        table.snapshotAdoptionReceiptVersion,
+        table.snapshotAdoptionReceiptDigest
+      ],
+      foreignColumns: [
+        financeBankLiquiditySnapshotAdoptionReceipts.receiptId,
+        financeBankLiquiditySnapshotAdoptionReceipts.receiptVersion,
+        financeBankLiquiditySnapshotAdoptionReceipts.canonicalDigest
+      ]
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "finance_online_payout_approval_receipts_approver_fk",
+      columns: [table.approverActorUserId],
+      foreignColumns: [users.id]
+    }).onDelete("restrict"),
+    unique("finance_online_payout_approval_receipts_payout_unique").on(table.payoutRequestId),
+    unique("finance_online_payout_approval_receipts_transition_unique").on(
+      table.approvalTransitionId
+    ),
+    unique("finance_online_payout_approval_receipts_exposure_unique").on(table.bankExposureId),
+    unique("finance_online_payout_approval_receipts_authorization_unique").on(
+      table.authorizationId,
+      table.authorizationVersion,
+      table.authorizationDigest
+    ),
+    unique("finance_online_payout_approval_receipts_exact_unique").on(
+      table.receiptId,
+      table.receiptVersion,
+      table.canonicalDigest
+    ),
+    check(
+      "finance_online_payout_approval_receipts_shape_check",
+      sql`${table.receiptVersion} = 1
+        and ${table.payoutVersion} >= 2
+        and ${table.bankExposureVersion} = 1
+        and ${table.bankLiquidityRevision} >= 1
+        and ${table.snapshotAdoptionReceiptVersion} = 1
+        and ${table.authorizationVersion} >= 1
+        and ${table.currency} in ${sql.raw(formatFinanceSqlValues(financeCurrencyValues))}
+        and ${table.snapshotAdoptionReceiptDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.authorizationDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.canonicalDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and length(${table.canonicalPreimage}) > 0
+        and ${table.persistenceTransactionBoundaryRef} ~ '^postgres-xid:[0-9]+$'`
+    ),
+    check(
+      "finance_online_payout_approval_receipts_identifier_check",
+      sql`${identifierCheck(table.payoutRequestId)}
+        and ${identifierCheck(table.bankExposureId)}
+        and ${identifierCheck(table.bankCashPoolId)}
+        and ${identifierCheck(table.snapshotAdoptionReceiptId)}
+        and ${identifierCheck(table.authorizationId)}
+        and ${identifierCheck(table.persistenceTransactionBoundaryRef)}`
+    )
+  ]
+);
+
+/**
+ * Immutable execution-start fact. It binds the `processing_manual` transition to exactly the
+ * approval and exposure that authorised it; this is deliberately distinct from the later proof
+ * that the bank actually transferred money.
+ */
+export const financeOnlinePayoutExecutionReceipts = pgTable(
+  "finance_online_payout_execution_receipts",
+  {
+    receiptId: uuid("receipt_id").primaryKey(),
+    receiptVersion: integer("receipt_version").notNull().default(1),
+    payoutRequestId: varchar("payout_request_id", { length: 160 }).notNull(),
+    payoutVersion: financeRevisionString("payout_version").notNull(),
+    executionTransitionId: uuid("execution_transition_id").notNull(),
+    approvalReceiptId: uuid("approval_receipt_id").notNull(),
+    bankExposureId: varchar("bank_exposure_id", { length: 200 }).notNull(),
+    bankExposureVersion: financeRevisionString("bank_exposure_version").notNull(),
+    bankCashPoolId: varchar("bank_cash_pool_id", { length: 160 }).notNull(),
+    currency: text("currency").notNull(),
+    executorActorUserId: uuid("executor_actor_user_id").notNull(),
+    authorizationId: varchar("authorization_id", { length: 200 }).notNull(),
+    authorizationVersion: financeRevisionString("authorization_version").notNull(),
+    authorizationDigest: varchar("authorization_digest", { length: 71 }).notNull(),
+    persistenceTransactionBoundaryRef: varchar("persistence_transaction_boundary_ref", { length: 200 }).notNull(),
+    canonicalPreimage: text("canonical_preimage").notNull(),
+    canonicalDigest: varchar("canonical_digest", { length: 71 }).notNull(),
+    initiatedAt: timestamp("initiated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    foreignKey({ name: "finance_online_payout_execution_receipts_request_fk", columns: [table.payoutRequestId], foreignColumns: [financeOnlinePayoutRequests.id] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_execution_receipts_transition_fk", columns: [table.executionTransitionId], foreignColumns: [financeOnlinePayoutStateTransitions.transitionId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_execution_receipts_approval_fk", columns: [table.approvalReceiptId], foreignColumns: [financeOnlinePayoutApprovalReceipts.receiptId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_execution_receipts_executor_fk", columns: [table.executorActorUserId], foreignColumns: [users.id] }).onDelete("restrict"),
+    unique("finance_online_payout_execution_receipts_payout_unique").on(table.payoutRequestId),
+    unique("finance_online_payout_execution_receipts_transition_unique").on(table.executionTransitionId),
+    unique("finance_online_payout_execution_receipts_exposure_unique").on(table.bankExposureId),
+    unique("finance_online_payout_execution_receipts_authorization_unique").on(table.authorizationId, table.authorizationVersion, table.authorizationDigest),
+    unique("finance_online_payout_execution_receipts_exact_unique").on(table.receiptId, table.receiptVersion, table.canonicalDigest),
+    check("finance_online_payout_execution_receipts_shape_check", sql`${table.receiptVersion} = 1 and ${table.payoutVersion} >= 3 and ${table.bankExposureVersion} >= 2 and ${table.currency} in ${sql.raw(formatFinanceSqlValues(financeCurrencyValues))} and ${table.authorizationDigest} ~ '^sha256:[a-f0-9]{64}$' and ${table.canonicalDigest} ~ '^sha256:[a-f0-9]{64}$' and ${table.persistenceTransactionBoundaryRef} ~ '^postgres-xid:[0-9]+$' and length(${table.canonicalPreimage}) > 0`),
+    check("finance_online_payout_execution_receipts_identifier_check", sql`${identifierCheck(table.payoutRequestId)} and ${identifierCheck(table.bankExposureId)} and ${identifierCheck(table.bankCashPoolId)} and ${identifierCheck(table.authorizationId)} and ${identifierCheck(table.persistenceTransactionBoundaryRef)}`)
+  ]
+);
+
+/**
+ * Immutable proof of a manual bank transfer. It records the transfer fact but deliberately does
+ * not modify bank cash: statement reconciliation later clears bank_outbound_clearing exactly once.
+ */
+export const financeOnlinePayoutPaidReceipts = pgTable(
+  "finance_online_payout_paid_receipts",
+  {
+    receiptId: uuid("receipt_id").primaryKey(),
+    receiptVersion: integer("receipt_version").notNull().default(1),
+    payoutRequestId: varchar("payout_request_id", { length: 160 }).notNull(),
+    payoutVersion: financeRevisionString("payout_version").notNull(),
+    paidTransitionId: uuid("paid_transition_id").notNull(),
+    executionReceiptId: uuid("execution_receipt_id").notNull(),
+    walletId: uuid("wallet_id").notNull(),
+    walletRevision: financeRevisionString("wallet_revision").notNull(),
+    walletMutationId: uuid("wallet_mutation_id").notNull(),
+    journalTransactionId: varchar("journal_transaction_id", { length: 200 }).notNull(),
+    approvalReceiptId: uuid("approval_receipt_id").notNull(),
+    bankExposureId: varchar("bank_exposure_id", { length: 200 }).notNull(),
+    bankExposureVersion: financeRevisionString("bank_exposure_version").notNull(),
+    bankCashPoolId: varchar("bank_cash_pool_id", { length: 160 }).notNull(),
+    currency: text("currency").notNull(),
+    bankReference: varchar("bank_reference", { length: 240 }).notNull(),
+    transferredAt: timestamp("transferred_at", { withTimezone: true }).notNull(),
+    evidenceArtifactId: varchar("evidence_artifact_id", { length: 160 }).notNull(),
+    evidenceArtifactDigest: varchar("evidence_artifact_digest", { length: 71 }).notNull(),
+    confirmerActorUserId: uuid("confirmer_actor_user_id").notNull(),
+    authorizationId: varchar("authorization_id", { length: 200 }).notNull(),
+    authorizationVersion: financeRevisionString("authorization_version").notNull(),
+    authorizationDigest: varchar("authorization_digest", { length: 71 }).notNull(),
+    persistenceTransactionBoundaryRef: varchar("persistence_transaction_boundary_ref", { length: 200 }).notNull(),
+    canonicalPreimage: text("canonical_preimage").notNull(),
+    canonicalDigest: varchar("canonical_digest", { length: 71 }).notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    foreignKey({ name: "finance_online_payout_paid_receipts_request_fk", columns: [table.payoutRequestId], foreignColumns: [financeOnlinePayoutRequests.id] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_transition_fk", columns: [table.paidTransitionId], foreignColumns: [financeOnlinePayoutStateTransitions.transitionId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_execution_fk", columns: [table.executionReceiptId], foreignColumns: [financeOnlinePayoutExecutionReceipts.receiptId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_wallet_fk", columns: [table.walletId], foreignColumns: [financeOnlineWalletHeads.id] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_wallet_mutation_fk", columns: [table.walletMutationId], foreignColumns: [financeOnlineWalletMutations.mutationId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_journal_fk", columns: [table.journalTransactionId], foreignColumns: [financeJournalTransactions.id] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_approval_fk", columns: [table.approvalReceiptId], foreignColumns: [financeOnlinePayoutApprovalReceipts.receiptId] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_evidence_fk", columns: [table.evidenceArtifactId], foreignColumns: [financeArtifacts.id] }).onDelete("restrict"),
+    foreignKey({ name: "finance_online_payout_paid_receipts_confirmer_fk", columns: [table.confirmerActorUserId], foreignColumns: [users.id] }).onDelete("restrict"),
+    unique("finance_online_payout_paid_receipts_payout_unique").on(table.payoutRequestId),
+    unique("finance_online_payout_paid_receipts_transition_unique").on(table.paidTransitionId),
+    unique("finance_online_payout_paid_receipts_wallet_mutation_unique").on(table.walletMutationId),
+    unique("finance_online_payout_paid_receipts_journal_unique").on(table.journalTransactionId),
+    unique("finance_online_payout_paid_receipts_exposure_unique").on(table.bankExposureId),
+    unique("finance_online_payout_paid_receipts_bank_reference_unique").on(table.bankCashPoolId, table.currency, table.bankReference),
+    unique("finance_online_payout_paid_receipts_evidence_unique").on(table.evidenceArtifactId),
+    unique("finance_online_payout_paid_receipts_authorization_unique").on(table.authorizationId, table.authorizationVersion, table.authorizationDigest),
+    unique("finance_online_payout_paid_receipts_exact_unique").on(table.receiptId, table.receiptVersion, table.canonicalDigest),
+    check("finance_online_payout_paid_receipts_shape_check", sql`${table.receiptVersion} = 1 and ${table.payoutVersion} >= 4 and ${table.walletRevision} >= 1 and ${table.bankExposureVersion} >= 1 and ${table.currency} in ${sql.raw(formatFinanceSqlValues(financeCurrencyValues))} and ${table.evidenceArtifactDigest} ~ '^sha256:[a-f0-9]{64}$' and ${table.authorizationDigest} ~ '^sha256:[a-f0-9]{64}$' and ${table.canonicalDigest} ~ '^sha256:[a-f0-9]{64}$' and ${table.persistenceTransactionBoundaryRef} ~ '^postgres-xid:[0-9]+$' and length(${table.canonicalPreimage}) > 0`),
+    check("finance_online_payout_paid_receipts_identifier_check", sql`${identifierCheck(table.payoutRequestId)} and ${identifierCheck(table.bankExposureId)} and ${identifierCheck(table.bankCashPoolId)} and ${identifierCheck(table.bankReference)} and ${identifierCheck(table.evidenceArtifactId)} and ${identifierCheck(table.authorizationId)} and ${identifierCheck(table.persistenceTransactionBoundaryRef)}`)
+  ]
+);
+
 export const financeOnlinePayoutIntegritySql = `
 create or replace function finance_reject_online_payout_history_mutation()
 returns trigger language plpgsql set search_path = pg_catalog, public as $$
@@ -243,6 +468,160 @@ for each row execute function finance_reject_online_payout_history_mutation();
 create trigger finance_online_payout_state_transitions_immutable
 before update or delete on finance_online_payout_state_transitions
 for each row execute function finance_reject_online_payout_history_mutation();
+create trigger finance_online_payout_approval_receipts_immutable
+before update or delete on finance_online_payout_approval_receipts
+for each row execute function finance_reject_online_payout_history_mutation();
+create trigger finance_online_payout_execution_receipts_immutable
+before update or delete on finance_online_payout_execution_receipts
+for each row execute function finance_reject_online_payout_history_mutation();
+create trigger finance_online_payout_paid_receipts_immutable
+before update or delete on finance_online_payout_paid_receipts
+for each row execute function finance_reject_online_payout_history_mutation();
+
+create or replace function finance_validate_online_payout_paid_receipt()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare transition_row finance_online_payout_state_transitions%rowtype;
+declare approval_row finance_online_payout_approval_receipts%rowtype;
+declare execution_row finance_online_payout_execution_receipts%rowtype;
+declare exposure_row finance_bank_exposures%rowtype;
+declare artifact_row finance_artifacts%rowtype;
+declare mutation_row finance_online_wallet_mutations%rowtype;
+declare journal_row finance_journal_transactions%rowtype;
+begin
+  select * into strict transition_row from finance_online_payout_state_transitions where transition_id = new.paid_transition_id;
+  select * into strict approval_row from finance_online_payout_approval_receipts where receipt_id = new.approval_receipt_id;
+  select * into strict execution_row from finance_online_payout_execution_receipts where receipt_id = new.execution_receipt_id;
+  select * into strict exposure_row from finance_bank_exposures where exposure_id = new.bank_exposure_id;
+  select * into strict artifact_row from finance_artifacts where id = new.evidence_artifact_id;
+  select * into strict mutation_row from finance_online_wallet_mutations where mutation_id = new.wallet_mutation_id;
+  select * into strict journal_row from finance_journal_transactions where id = new.journal_transaction_id;
+  if transition_row.payout_request_id <> new.payout_request_id
+     or transition_row.payout_version <> new.payout_version
+     or transition_row.previous_status <> 'processing_manual'
+     or transition_row.status <> 'paid'
+     or transition_row.actor_kind <> 'user'
+     or transition_row.actor_user_id <> new.confirmer_actor_user_id
+     or transition_row.authority_id <> new.authorization_id
+     or transition_row.authority_version <> new.authorization_version
+     or transition_row.authority_digest <> new.authorization_digest
+     or approval_row.payout_request_id <> new.payout_request_id
+     or approval_row.bank_exposure_id <> new.bank_exposure_id
+     or approval_row.bank_cash_pool_id <> new.bank_cash_pool_id
+     or approval_row.currency <> new.currency
+     or execution_row.payout_request_id <> new.payout_request_id
+     or execution_row.approval_receipt_id <> new.approval_receipt_id
+     or execution_row.bank_exposure_id <> new.bank_exposure_id
+     or execution_row.bank_cash_pool_id <> new.bank_cash_pool_id
+     or execution_row.currency <> new.currency
+     or execution_row.bank_exposure_version <> new.bank_exposure_version - 1
+     or new.confirmer_actor_user_id = execution_row.executor_actor_user_id
+     or new.confirmer_actor_user_id = approval_row.approver_actor_user_id
+     or exposure_row.payout_request_id <> new.payout_request_id
+     or exposure_row.version <> new.bank_exposure_version
+     or exposure_row.state <> 'paid_unreflected'
+     or mutation_row.wallet_id <> new.wallet_id
+     or mutation_row.next_wallet_revision <> new.wallet_revision
+     or mutation_row.operation_kind <> 'payout_paid'
+     or mutation_row.journal_transaction_id <> new.journal_transaction_id
+     or journal_row.sealed_at is null
+     or artifact_row.binding_kind <> 'bank_cash_pool'
+     or artifact_row.bank_cash_pool_id <> new.bank_cash_pool_id
+     or artifact_row.currency <> new.currency
+     or artifact_row.sha256_digest <> new.evidence_artifact_digest
+     or artifact_row.artifact_class <> 'bank_transfer_evidence' then
+    raise exception 'online payout paid receipt is not bound to exact manual-transfer facts' using errcode = '23514';
+  end if;
+  return null;
+exception when no_data_found then
+  raise exception 'online payout paid receipt requires exact prior payout, exposure and evidence facts' using errcode = '23503';
+end;
+$$;
+create constraint trigger finance_online_payout_paid_receipts_guard
+after insert on finance_online_payout_paid_receipts
+deferrable initially deferred for each row execute function finance_validate_online_payout_paid_receipt();
+
+create or replace function finance_validate_online_payout_execution_receipt()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare transition_row finance_online_payout_state_transitions%rowtype;
+declare approval_row finance_online_payout_approval_receipts%rowtype;
+declare exposure_row finance_bank_exposures%rowtype;
+begin
+  select * into strict transition_row from finance_online_payout_state_transitions where transition_id = new.execution_transition_id;
+  select * into strict approval_row from finance_online_payout_approval_receipts where receipt_id = new.approval_receipt_id;
+  select * into strict exposure_row from finance_bank_exposures where exposure_id = new.bank_exposure_id;
+  if transition_row.payout_request_id <> new.payout_request_id
+     or transition_row.payout_version <> new.payout_version
+     or transition_row.previous_status <> 'approved'
+     or transition_row.status <> 'processing_manual'
+     or transition_row.actor_kind <> 'user'
+     or transition_row.actor_user_id <> new.executor_actor_user_id
+     or transition_row.authority_id <> new.authorization_id
+     or transition_row.authority_version <> new.authorization_version
+     or transition_row.authority_digest <> new.authorization_digest
+     or approval_row.payout_request_id <> new.payout_request_id
+     or approval_row.bank_exposure_id <> new.bank_exposure_id
+     or approval_row.bank_cash_pool_id <> new.bank_cash_pool_id
+     or approval_row.currency <> new.currency
+     or approval_row.approver_actor_user_id = new.executor_actor_user_id
+     or exposure_row.payout_request_id <> new.payout_request_id
+     or exposure_row.version <> new.bank_exposure_version
+     or exposure_row.state <> 'initiated_unreflected' then
+    raise exception 'online payout execution receipt is not bound to exact approved bank work' using errcode = '23514';
+  end if;
+  return null;
+exception when no_data_found then
+  raise exception 'online payout execution receipt requires exact prior approval and exposure facts' using errcode = '23503';
+end;
+$$;
+create constraint trigger finance_online_payout_execution_receipts_guard
+after insert on finance_online_payout_execution_receipts
+deferrable initially deferred for each row execute function finance_validate_online_payout_execution_receipt();
+
+create or replace function finance_validate_online_payout_approval_receipt()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare
+  transition_row finance_online_payout_state_transitions%rowtype;
+  exposure_row finance_bank_exposures%rowtype;
+  snapshot_receipt finance_bank_liquidity_snapshot_adoption_receipts%rowtype;
+begin
+  select * into strict transition_row
+    from finance_online_payout_state_transitions
+   where transition_id = new.approval_transition_id;
+  select * into strict exposure_row
+    from finance_bank_exposures
+   where exposure_id = new.bank_exposure_id
+     and bank_cash_pool_id = new.bank_cash_pool_id
+     and currency = new.currency;
+  select * into strict snapshot_receipt
+    from finance_bank_liquidity_snapshot_adoption_receipts
+   where receipt_id = new.snapshot_adoption_receipt_id
+     and receipt_version = new.snapshot_adoption_receipt_version
+     and canonical_digest = new.snapshot_adoption_receipt_digest;
+  if transition_row.payout_request_id <> new.payout_request_id
+     or transition_row.payout_version <> new.payout_version
+     or transition_row.status <> 'approved'
+     or transition_row.actor_kind <> 'user'
+     or transition_row.actor_user_id <> new.approver_actor_user_id
+     or transition_row.authority_id <> new.authorization_id
+     or transition_row.authority_version <> new.authorization_version
+     or transition_row.authority_digest <> new.authorization_digest
+     or exposure_row.payout_request_id <> new.payout_request_id
+     or exposure_row.version <> new.bank_exposure_version
+     or exposure_row.state <> 'committed'
+     or snapshot_receipt.bank_cash_pool_id <> new.bank_cash_pool_id
+     or snapshot_receipt.currency <> new.currency
+     or snapshot_receipt.bank_liquidity_revision >= new.bank_liquidity_revision then
+    raise exception 'online payout approval receipt is not bound to its exact payout, authority, exposure and liquidity snapshot'
+      using errcode = '23514';
+  end if;
+  return null;
+exception when no_data_found then
+  raise exception 'online payout approval receipt requires exact prior approval facts' using errcode = '23503';
+end;
+$$;
+create constraint trigger finance_online_payout_approval_receipts_guard
+after insert on finance_online_payout_approval_receipts
+deferrable initially deferred for each row execute function finance_validate_online_payout_approval_receipt();
 
 create or replace function finance_validate_online_payout_request_head()
 returns trigger language plpgsql set search_path = pg_catalog, public as $$

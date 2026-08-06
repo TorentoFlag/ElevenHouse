@@ -14,6 +14,10 @@ import {
   createDrizzleClientOrderCanonicalWebhookCaptureUnitOfWork,
   createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork,
   createDrizzleOnlineSaleCapturePersistenceResolver,
+  createDrizzleBankStatementIngestionUnitOfWork,
+  createDrizzleBankCashMatchUnitOfWork,
+  createDrizzleBankLiquiditySnapshotAttestationUnitOfWork,
+  createDrizzleOnlineWalletRefundTerminalUnitOfWork,
   createDrizzleWebhookInboxProcessingUnitOfWork,
   createDrizzleRefundCandidateStore,
   createFinanceArtifactRegistry
@@ -34,6 +38,10 @@ describe("finance adapter public entry point", () => {
     expect(createDrizzleClientOrderCanonicalWebhookCaptureUnitOfWork).toBeTypeOf("function");
     expect(createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork).toBeTypeOf("function");
     expect(createDrizzleOnlineSaleCapturePersistenceResolver).toBeTypeOf("function");
+    expect(createDrizzleBankStatementIngestionUnitOfWork).toBeTypeOf("function");
+    expect(createDrizzleBankCashMatchUnitOfWork).toBeTypeOf("function");
+    expect(createDrizzleBankLiquiditySnapshotAttestationUnitOfWork).toBeTypeOf("function");
+    expect(createDrizzleOnlineWalletRefundTerminalUnitOfWork).toBeTypeOf("function");
     expect(createDrizzleWebhookInboxProcessingUnitOfWork).toBeTypeOf("function");
     expect(createDrizzleRefundCandidateStore).toBeTypeOf("function");
     expect(createFinanceArtifactRegistry).toBeTypeOf("function");

@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import {
   buildInitialRefundCumulativePositionInput,
@@ -27,7 +27,7 @@ describe.sequential("refund allocation authority PostgreSQL boundary", () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${databaseName}"`);
     await client.connect();
-    await client.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await client.query(readCurrentMigrationSql());
     await seedProviderIdentity();
 
     // This isolated persistence-boundary test does not exercise order/capture creation. It seeds

@@ -4,7 +4,9 @@ import {
   applyVerifiedTariffInvoiceCapture,
   createPlatformTariffDraft,
   PlatformTariffAuthorityError,
+  type PlatformTariffSubscriptionPurchase,
   preparePlatformTariffInitialInvoice,
+  preparePlatformTariffRenewalInvoice,
   preparePlatformTariffSubscriptionPurchase,
   publishPlatformTariffDraft
 } from "./platform-tariff-authority";
@@ -166,10 +168,50 @@ describe("preparePlatformTariffSubscriptionPurchase", () => {
       reason: "invoice_capture_transition_invalid"
     }));
   });
+
+  it("creates the next exact period as past_due and restores access only after its verified capture", () => {
+    const active = {
+      ...preparePlatformTariffSubscriptionPurchase({
+        ownerUserId: "11111111-1111-4111-8111-111111111111",
+        tariff: publishedTariff,
+        billingCycle: "month",
+        now: "2026-01-31T10:00:00.000Z"
+      }).subscription,
+      state: "active" as const,
+      startsAt: "2026-01-31T10:00:00Z",
+      endsAt: "2026-02-28T10:00:00Z"
+    };
+    const renewal = preparePlatformTariffRenewalInvoice({
+      subscription: active, tariff: { ...publishedTariff, lifecycle: "retired" }, now: "2026-02-28T10:00:00Z"
+    });
+    if (!renewal.invoice) throw new Error("Expected renewal invoice");
+    expect(renewal).toMatchObject({
+      subscription: { state: "past_due", startsAt: active.startsAt, endsAt: active.endsAt },
+      invoice: {
+        state: "open", billingPeriodStartAt: "2026-02-28T10:00:00Z", billingPeriodEndAt: "2026-03-28T10:00:00Z"
+      }
+    });
+    const captured = applyVerifiedTariffInvoiceCapture({
+      subscription: renewal.subscription,
+      invoice: invoiceAuthority(renewal, "payment_pending"),
+      capturedAt: "2026-02-28T10:02:00Z"
+    });
+    expect(captured.subscription).toMatchObject({ state: "active", startsAt: renewal.invoice.billingPeriodStartAt, endsAt: renewal.invoice.billingPeriodEndAt });
+  });
+
+  it("rejects a renewal before the exact current period has ended", () => {
+    const active = {
+      ...preparePlatformTariffSubscriptionPurchase({ ownerUserId: "11111111-1111-4111-8111-111111111111", tariff: publishedTariff, billingCycle: "month", now: "2026-01-31T10:00:00Z" }).subscription,
+      state: "active" as const, startsAt: "2026-01-31T10:00:00Z", endsAt: "2026-02-28T10:00:00Z"
+    };
+    expect(() => preparePlatformTariffRenewalInvoice({ subscription: active, tariff: publishedTariff, now: "2026-02-27T23:59:59Z" })).toThrow(
+      expect.objectContaining<Partial<PlatformTariffAuthorityError>>({ reason: "invoice_capture_transition_invalid" })
+    );
+  });
 });
 
 function invoiceAuthority(
-  purchase: ReturnType<typeof preparePlatformTariffInitialInvoice>,
+  purchase: PlatformTariffSubscriptionPurchase,
   state: "open" | "payment_pending"
 ) {
   if (!purchase.invoice) throw new Error("Expected paid invoice fixture");

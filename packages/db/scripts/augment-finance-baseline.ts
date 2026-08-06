@@ -17,6 +17,7 @@ import { financeOperationResourcePolicyIntegritySql } from "../src/schema/financ
 import { financeOnlineSaleCaptureIntegritySql } from "../src/schema/finance/online-sale-capture.schema";
 import { financeOnlineWalletMutationIntegritySql } from "../src/schema/finance/online-wallet-mutations.schema";
 import { financeOnlineWalletRefundApplicationIntegritySql } from "../src/schema/finance/online-wallet-refund-applications.schema";
+import { financeOnlineWalletRefundCaseIntegritySql } from "../src/schema/finance/online-wallet-refund-cases.schema";
 import { financeOnlineWalletChargebackCaseIntegritySql } from "../src/schema/finance/online-wallet-chargeback-cases.schema";
 import { financeOnlinePayoutIntegritySql } from "../src/schema/finance/online-payouts.schema";
 import { financeProviderIdentityImmutabilitySql } from "../src/schema/finance/provider-accounts.schema";
@@ -44,6 +45,9 @@ const markerEnd = "-- ElevenHouse finance integrity objects: end";
 const savedCardDisclosureMarkerStart = "-- ElevenHouse saved-card disclosure integrity objects: begin";
 const savedCardDisclosureMarkerEnd = "-- ElevenHouse saved-card disclosure integrity objects: end";
 const savedCardDisclosureTableDdl = 'CREATE TABLE "finance_saved_card_disclosure_versions"';
+const onlineWalletRefundCaseMarkerStart = "-- ElevenHouse online-wallet refund-case integrity objects: begin";
+const onlineWalletRefundCaseMarkerEnd = "-- ElevenHouse online-wallet refund-case integrity objects: end";
+const onlineWalletRefundCaseTableDdl = 'CREATE TABLE "finance_online_wallet_refund_cases"';
 
 /**
  * Drizzle owns table DDL. Finance's reviewed PostgreSQL functions/triggers are deliberately
@@ -115,6 +119,46 @@ export function augmentSavedCardDisclosureMigrationSource(source: string): strin
 async function augmentSavedCardDisclosureMigration(migrationPath: string): Promise<void> {
   const source = await readFile(migrationPath, "utf8");
   const augmented = augmentSavedCardDisclosureMigrationSource(source);
+  if (augmented !== source) await writeFile(migrationPath, augmented, "utf8");
+}
+
+/**
+ * The V2 refund-case tables can be generated after the original 0000 baseline. Their trigger
+ * block therefore follows the migration that creates the aggregate rather than making fresh
+ * databases execute `CREATE TRIGGER ... ON` a table that does not exist yet.
+ */
+export function augmentOnlineWalletRefundCaseMigrationSource(source: string): string {
+  if (!source.includes(onlineWalletRefundCaseTableDdl)) {
+    throw new Error("Cannot augment online-wallet refund-case migration: missing finance_online_wallet_refund_cases");
+  }
+  return replaceManagedIntegrityBlock(
+    source,
+    onlineWalletRefundCaseMarkerStart,
+    onlineWalletRefundCaseMarkerEnd,
+    financeOnlineWalletRefundCaseIntegritySql
+  );
+}
+
+async function findOnlineWalletRefundCaseMigration(): Promise<string> {
+  const migrationDirectory = join(__dirname, "../drizzle");
+  const migrations = (await readdir(migrationDirectory))
+    .filter((entry) => /^\d{4}_.+\.sql$/.test(entry))
+    .sort();
+  const matches = (await Promise.all(migrations.map(async (entry) => {
+    const migrationPath = join(migrationDirectory, entry);
+    return (await readFile(migrationPath, "utf8")).includes(onlineWalletRefundCaseTableDdl)
+      ? migrationPath
+      : null;
+  }))).filter((migrationPath): migrationPath is string => migrationPath !== null);
+  if (matches.length !== 1) {
+    throw new Error(`Expected exactly one online-wallet refund-case table migration, found ${matches.length}`);
+  }
+  return matches[0]!;
+}
+
+async function augmentOnlineWalletRefundCaseMigration(migrationPath: string): Promise<void> {
+  const source = await readFile(migrationPath, "utf8");
+  const augmented = augmentOnlineWalletRefundCaseMigrationSource(source);
   if (augmented !== source) await writeFile(migrationPath, augmented, "utf8");
 }
 
@@ -198,7 +242,9 @@ async function main(): Promise<void> {
   await augmentFinanceBaseline(migrationPath);
   const savedCardDisclosureMigrationPath = await findSavedCardDisclosureMigration();
   await augmentSavedCardDisclosureMigration(savedCardDisclosureMigrationPath);
-  console.log(`Finance integrity objects verified in ${migrationPath}; saved-card disclosure integrity verified in ${savedCardDisclosureMigrationPath}`);
+  const onlineWalletRefundCaseMigrationPath = await findOnlineWalletRefundCaseMigration();
+  await augmentOnlineWalletRefundCaseMigration(onlineWalletRefundCaseMigrationPath);
+  console.log(`Finance integrity objects verified in ${migrationPath}; saved-card disclosure integrity verified in ${savedCardDisclosureMigrationPath}; online-wallet refund-case integrity verified in ${onlineWalletRefundCaseMigrationPath}`);
 }
 
 if (require.main === module) {

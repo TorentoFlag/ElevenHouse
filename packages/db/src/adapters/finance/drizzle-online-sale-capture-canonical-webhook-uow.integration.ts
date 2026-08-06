@@ -1,10 +1,12 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import {
+  createBankLiquiditySnapshotAttestationAuthorizationPayload,
   createCapturedProviderPaymentSemanticSourceId,
   createOrderEconomicsSnapshot,
   createRiskPolicySnapshot,
+  digestFinanceCanonicalValueV1,
   hashFinanceCommandPayload
 } from "@elevenhouse/domain/finance-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -33,9 +35,17 @@ import {
 } from "./drizzle-online-wallet-payout-request-uow";
 import { createDrizzleOnlineWalletPayoutRequestReader } from "./drizzle-online-wallet-payout-request-reader";
 import { createDrizzleOnlineWalletPayoutReviewUnitOfWork } from "./drizzle-online-wallet-payout-review-uow";
-import { createDrizzleOnlineWalletPayoutReleaseUnitOfWork } from "./drizzle-online-wallet-payout-release-uow";
+import { createDrizzleOnlineWalletPayoutExecutionUnitOfWork } from "./drizzle-online-wallet-payout-execution-uow";
+import { createDrizzleBankLiquiditySnapshotAdoptionUnitOfWork } from "./drizzle-bank-liquidity-snapshot-adoption-uow";
+import { createDrizzleBankLiquiditySnapshotAttestationUnitOfWork } from "./drizzle-bank-liquidity-snapshot-attestation-uow";
+import { createDrizzleBankStatementIngestionUnitOfWork } from "./drizzle-bank-statement-ingestion-uow";
+import { createDrizzleBankCashMatchUnitOfWork } from "./drizzle-bank-cash-match-uow";
+import { createDrizzleCashPoolDirectoryBootstrapPort } from "./drizzle-cash-pool-directory-bootstrap";
 import { createDrizzleOnlineWalletRefundApplicationUnitOfWork } from "./drizzle-online-wallet-refund-application-uow";
+import { createDrizzleOnlineWalletRefundApprovalUnitOfWork } from "./drizzle-online-wallet-refund-approval-uow";
+import { createDrizzleOnlineWalletRefundTerminalUnitOfWork } from "./drizzle-online-wallet-refund-terminal-uow";
 import { createDrizzleOnlineWalletChargebackCaseUnitOfWork } from "./drizzle-online-wallet-chargeback-case-uow";
+import { createDrizzleOnlineWalletChargebackResolutionUnitOfWork, OnlineWalletChargebackResolutionPersistenceError } from "./drizzle-online-wallet-chargeback-resolution-uow";
 import { createDrizzleOnlineWalletRefundPositionReader } from "./drizzle-online-wallet-refund-position-reader";
 import { createDrizzleWebhookIngressStorageUnitOfWork } from "./drizzle-webhook-ingress-storage-uow";
 import { createDrizzleBookingCommandStore } from "../scheduling/drizzle-booking-command-store";
@@ -59,7 +69,7 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
     await adminClient.connect();
     await adminClient.query(`create database "${databaseName}"`);
     runtime = createPostgresRuntime({ DATABASE_URL: isolatedDatabaseUrl });
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     artifacts = createFinanceArtifactRegistry(runtime.database);
     await runtime.database.transaction(async (transaction) => {
       await transaction.insert(financeProviderAccountSeries).values({
@@ -91,6 +101,14 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
           policyId: "online-capture-canonical-retention",
           policyVersion: "1",
           artifactClass: "provider_canonical_read",
+          retainForSeconds: "3600",
+          authorityRef: "integration-test",
+          effectiveAt: new Date("2020-01-01T00:00:00.000Z")
+        },
+        {
+          policyId: "online-capture-provider-request-retention",
+          policyVersion: "1",
+          artifactClass: "provider_request",
           retainForSeconds: "3600",
           authorityRef: "integration-test",
           effectiveAt: new Date("2020-01-01T00:00:00.000Z")
@@ -459,97 +477,549 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
       status: "under_review",
       payoutVersion: "2"
     });
+    const bankCashPoolId = `online-payout-rub-${randomUUID()}`;
+    await createDrizzleCashPoolDirectoryBootstrapPort({ database: runtime.database })
+      .ensureEmptySystemCashPoolReference({
+        bankCashPoolId,
+        currency: "RUB",
+        bankAccountFingerprint: sha(`bank-account:${bankCashPoolId}`),
+        statementSourceFingerprint: sha(`statement-source:${bankCashPoolId}`)
+      });
+    const expiredAttestation = await attestLiquiditySnapshot({
+      bankCashPoolId,
+      expectedBankLiquidityRevision: "0",
+      unrestrictedAvailableMinor: "10000",
+      sourceCheckpoint: `statement:${bankCashPoolId}:1`,
+      asOf: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 250).toISOString()
+    });
+    const expiredLiquiditySnapshot = await createDrizzleBankLiquiditySnapshotAdoptionUnitOfWork({
+      database: runtime.database
+    }).adoptVerifiedLiquiditySnapshot({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "0",
+      evidence: expiredAttestation.evidence,
+      operationEnvelope: operationEnvelope()
+    } as never);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const expiredApprovalCommand = {
+      payoutRequestId,
+      expectedPayoutVersion: "2",
+      expectedBeneficiaryFingerprint: payoutCommand.destination.beneficiaryFingerprint,
+      bankCashPoolId,
+      currency: "RUB" as const,
+      expectedBankLiquidityRevision: "1",
+      adoptedLiquiditySnapshot: expiredLiquiditySnapshot.ref,
+      occurredAt: new Date().toISOString(),
+      operationEnvelope: operationEnvelope()
+    } as const;
     await expect(
       createDrizzleOnlineWalletPayoutReviewUnitOfWork({ database: runtime.database })
-        .transitionOnlineWalletPayout({
-          payoutRequestId,
-          expectedPayoutVersion: "2",
-          nextStatus: "approved",
+        .approveOnlineWalletPayout({
+          ...expiredApprovalCommand,
           actorUserId: reviewerUserId,
-          adminNote: "Invalid self-approval",
           authority: {
             authorityId: `payout-approve-authority:${payoutRequestId}`,
             authorityVersion: "1",
             authorityDigest: sha(`payout-approve-authority:${payoutRequestId}`)
-          },
-          occurredAt: completedAt
-        })
+          }
+        } as never)
     ).rejects.toMatchObject({ code: "online_wallet_payout_review_persistence_error" });
     await expect(
       createDrizzleOnlineWalletPayoutReviewUnitOfWork({ database: runtime.database })
-        .transitionOnlineWalletPayout({
-          payoutRequestId,
-          expectedPayoutVersion: "2",
-          nextStatus: "approved",
+        .approveOnlineWalletPayout({
+          ...expiredApprovalCommand,
           actorUserId: approverUserId,
-          adminNote: "Approved",
+          authority: {
+            authorityId: `expired-payout-approve-authority:${payoutRequestId}`,
+            authorityVersion: "1",
+            authorityDigest: sha(`expired-payout-approve-authority:${payoutRequestId}`)
+          }
+        } as never)
+    ).rejects.toMatchObject({ code: "online_wallet_payout_review_persistence_error" });
+    const freshAttestation = await attestLiquiditySnapshot({
+      bankCashPoolId,
+      expectedBankLiquidityRevision: "1",
+      unrestrictedAvailableMinor: "10000",
+      sourceCheckpoint: `statement:${bankCashPoolId}:2`,
+      asOf: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString()
+    });
+    const liquiditySnapshot = await createDrizzleBankLiquiditySnapshotAdoptionUnitOfWork({
+      database: runtime.database
+    }).adoptVerifiedLiquiditySnapshot({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "1",
+      evidence: freshAttestation.evidence,
+      operationEnvelope: operationEnvelope()
+    } as never);
+    const approvalCommand = {
+      ...expiredApprovalCommand,
+      expectedBankLiquidityRevision: "2",
+      adoptedLiquiditySnapshot: liquiditySnapshot.ref
+    } as const;
+    await expect(
+      createDrizzleOnlineWalletPayoutReviewUnitOfWork({ database: runtime.database })
+        .approveOnlineWalletPayout({
+          ...approvalCommand,
+          actorUserId: approverUserId,
           authority: {
             authorityId: `payout-approve-authority:${payoutRequestId}`,
             authorityVersion: "1",
             authorityDigest: sha(`payout-approve-authority:${payoutRequestId}`)
-          },
-          occurredAt: completedAt
-        })
+          }
+        } as never)
     ).resolves.toMatchObject({
       effect: "applied_once",
-      previousStatus: "under_review",
-      status: "approved",
+      bankExposureVersion: "1",
+      bankLiquidityRevision: "3",
       payoutVersion: "3"
     });
     await expect(
-      createDrizzleOnlineWalletPayoutReviewUnitOfWork({ database: runtime.database })
-        .transitionOnlineWalletPayout({
-          payoutRequestId,
-          expectedPayoutVersion: "3",
-          nextStatus: "processing_manual",
-          actorUserId: approverUserId,
-          adminNote: "Sent to bank operator",
-          authority: {
-            authorityId: `payout-processing-authority:${payoutRequestId}`,
-            authorityVersion: "1",
-            authorityDigest: sha(`payout-processing-authority:${payoutRequestId}`)
-          },
-          occurredAt: completedAt
-        })
+      runtime.pool.query(
+        `select request.status, request.version::text as payout_version,
+                exposure.state as exposure_state, exposure.version::text as exposure_version,
+                liquidity.revision::text as liquidity_revision,
+                liquidity.available_liquidity_minor::text as available_liquidity_minor,
+                (select count(*)::int from finance_online_payout_approval_receipts) as approval_receipt_count
+           from finance_online_payout_requests request
+           join finance_bank_exposures exposure on exposure.payout_request_id = request.id
+           join finance_bank_liquidity_heads liquidity
+             on liquidity.bank_cash_pool_id = exposure.bank_cash_pool_id and liquidity.currency = exposure.currency
+          where request.id = $1`,
+        [payoutRequestId]
+      )
     ).resolves.toMatchObject({
-      effect: "applied_once",
-      previousStatus: "approved",
-      status: "processing_manual",
-      payoutVersion: "4"
+      rows: [
+        {
+          status: "approved",
+          payout_version: "3",
+          exposure_state: "committed",
+          exposure_version: "1",
+          liquidity_revision: "3",
+          available_liquidity_minor: "5000",
+          approval_receipt_count: 1
+        }
+      ]
     });
-    await expect(
-      createDrizzleOnlineWalletPayoutReleaseUnitOfWork({ database: runtime.database })
-        .releaseOnlineWalletPayout({
-          payoutRequestId,
-          expectedPayoutVersion: "4",
-          nextStatus: "failed",
-          failureReason: "Bank transfer was rejected before debit",
-          adminNote: "Confirmed before bank debit",
-          actorUserId: approverUserId,
-          authority: {
-            authorityId: `payout-failed-authority:${payoutRequestId}`,
-            authorityVersion: "1",
-            authorityDigest: sha(`payout-failed-authority:${payoutRequestId}`)
-          },
-          occurredAt: completedAt
-        })
-    ).resolves.toMatchObject({
-      effect: "applied_once",
-      previousStatus: "processing_manual",
-      status: "failed",
-      payoutVersion: "5",
-      walletRevision: "5"
-    });
-    await expect(
-      payoutReader.findPayoutRequest({ payoutRequestId, astrologerUserId: fixture.astrologerUserId })
-    ).resolves.toMatchObject({ status: "failed", version: "5", latestTransitionFailureReason: "Bank transfer was rejected before debit" });
-    const walletAfterFailedPayout = await runtime.pool.query(
-      "select available_minor::text, payout_pending_minor::text, revision::text from finance_online_wallet_heads where id = $1",
-      [released!.walletId]
+
+    const approvalReceiptResult = await runtime.pool.query<{
+      receipt_id: string;
+      canonical_digest: `sha256:${string}`;
+    }>(
+      `select receipt_id, canonical_digest
+         from finance_online_payout_approval_receipts
+        where payout_request_id = $1`,
+      [payoutRequestId]
     );
-    expect(walletAfterFailedPayout.rows).toEqual([
-      { available_minor: "7640", payout_pending_minor: "1000", revision: "5" }
+    const approvalReceipt = approvalReceiptResult.rows[0];
+    expect(approvalReceipt).toBeDefined();
+    const executorActorUserId = randomUUID();
+    const confirmerActorUserId = randomUUID();
+    await runtime.pool.query("insert into users (id) values ($1), ($2)", [
+      executorActorUserId,
+      confirmerActorUserId
     ]);
+    const executionUnitOfWork = createDrizzleOnlineWalletPayoutExecutionUnitOfWork({
+      database: runtime.database
+    });
+    const execution = await executionUnitOfWork.startOnlineWalletPayoutManualExecution({
+      payoutRequestId,
+      expectedPayoutVersion: "3",
+      expectedBankExposureVersion: "1",
+      approval: {
+        kind: "online_wallet_payout_approval_receipt",
+        receiptId: approvalReceipt!.receipt_id,
+        canonicalDigest: approvalReceipt!.canonical_digest
+      },
+      executorActorUserId,
+      authority: {
+        authorityId: `payout-execute-authority:${payoutRequestId}`,
+        authorityVersion: "1",
+        authorityDigest: sha(`payout-execute-authority:${payoutRequestId}`)
+      },
+      occurredAt: new Date().toISOString()
+    } as never);
+    expect(execution).toMatchObject({
+      effect: "applied_once",
+      payoutVersion: "4",
+      bankExposureVersion: "2",
+      state: "processing_manual"
+    });
+    await expect(
+      executionUnitOfWork.startOnlineWalletPayoutManualExecution({
+        payoutRequestId,
+        expectedPayoutVersion: "3",
+        expectedBankExposureVersion: "1",
+        approval: {
+          kind: "online_wallet_payout_approval_receipt",
+          receiptId: approvalReceipt!.receipt_id,
+          canonicalDigest: approvalReceipt!.canonical_digest
+        },
+        executorActorUserId,
+        authority: {
+          authorityId: `payout-execute-authority:${payoutRequestId}`,
+          authorityVersion: "1",
+          authorityDigest: sha(`payout-execute-authority:${payoutRequestId}`)
+        },
+        occurredAt: new Date().toISOString()
+      } as never)
+    ).resolves.toMatchObject({ effect: "replayed", payoutVersion: "4" });
+
+    const transferArtifactId = `payout-transfer-proof-${randomUUID()}`;
+    const transferArtifactDigest = sha(`payout-transfer-proof:${transferArtifactId}`);
+    const transferRetentionPolicyId = `payout-transfer-retention-${randomUUID()}`;
+    const evidenceNow = new Date("2020-01-01T00:00:00.000Z");
+    await runtime.pool.query(
+      `insert into finance_artifact_retention_policies
+         (policy_id, policy_version, artifact_class, retain_for_seconds, authority_ref, effective_at)
+       values ($1, 1, 'bank_transfer_evidence', 86400, 'integration-test', $2)`,
+      [transferRetentionPolicyId, evidenceNow]
+    );
+    await runtime.pool.query(
+      `insert into finance_artifacts
+         (id, artifact_class, sha256_digest, byte_length, content_type, binding_kind,
+          bank_cash_pool_id, currency, statement_source_fingerprint, private_object_key,
+          private_object_version, envelope_key_version, retention_policy_id, retention_policy_version,
+          retained_until)
+       values ($1, 'bank_transfer_evidence', $2, 2048, 'application/pdf', 'bank_cash_pool',
+               $3, 'RUB', $4, $5, 'v1', 'kms-v1', $6, 1, $7)`,
+      [
+        transferArtifactId,
+        transferArtifactDigest,
+        bankCashPoolId,
+        sha(`statement-source:${bankCashPoolId}`),
+        `private/payout-transfer/${transferArtifactId}`,
+        transferRetentionPolicyId,
+        new Date("2030-01-01T00:00:00.000Z")
+      ]
+    );
+    const transferredAt = new Date().toISOString();
+    const paid = await executionUnitOfWork.confirmOnlineWalletPayoutPaid({
+      payoutRequestId,
+      expectedPayoutVersion: "4",
+      expectedWalletRevision: "4",
+      expectedBankExposureVersion: "2",
+      approval: {
+        kind: "online_wallet_payout_approval_receipt",
+        receiptId: approvalReceipt!.receipt_id,
+        canonicalDigest: approvalReceipt!.canonical_digest
+      },
+      bankReference: `manual-bank-${payoutRequestId}`,
+      transferredAt,
+      evidenceArtifactId: transferArtifactId,
+      evidenceArtifactDigest: transferArtifactDigest,
+      confirmerActorUserId,
+      authority: {
+        authorityId: `payout-paid-authority:${payoutRequestId}`,
+        authorityVersion: "1",
+        authorityDigest: sha(`payout-paid-authority:${payoutRequestId}`)
+      },
+      occurredAt: new Date(Date.now() + 1).toISOString()
+    } as never);
+    expect(paid).toMatchObject({
+      effect: "applied_once",
+      payoutVersion: "5",
+      walletRevision: "5",
+      bankExposureVersion: "3",
+      bankExposureState: "paid_unreflected"
+    });
+    await expect(
+      runtime.pool.query(
+        `select request.status, request.version::text as payout_version,
+                wallet.payout_pending_minor::text as payout_pending_minor,
+                wallet.available_minor::text as available_minor,
+                wallet.revision::text as wallet_revision,
+                exposure.state as exposure_state, exposure.version::text as exposure_version,
+                (select count(*)::int from finance_online_payout_execution_receipts
+                  where payout_request_id = request.id) as execution_receipt_count,
+                (select count(*)::int from finance_online_payout_paid_receipts
+                  where payout_request_id = request.id) as paid_receipt_count,
+                (select count(*)::int from finance_journal_entries entry
+                   join finance_accounts account on account.id = entry.account_id
+                  where entry.journal_transaction_id = $2 and account.code = 'bank_cash') as bank_cash_entry_count,
+                (select count(*)::int from finance_journal_entries entry
+                   join finance_accounts account on account.id = entry.account_id
+                  where entry.journal_transaction_id = $2 and account.code = 'bank_outbound_clearing') as outbound_clearing_entry_count
+           from finance_online_payout_requests request
+           join finance_online_wallet_heads wallet on wallet.id = request.wallet_id
+           join finance_bank_exposures exposure on exposure.payout_request_id = request.id
+          where request.id = $1`,
+        [payoutRequestId, paid.journalTransactionId]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          status: "paid",
+          payout_version: "5",
+          payout_pending_minor: "1000",
+          available_minor: "2640",
+          wallet_revision: "5",
+          exposure_state: "paid_unreflected",
+          exposure_version: "3",
+          execution_receipt_count: 1,
+          paid_receipt_count: 1,
+          bank_cash_entry_count: 0,
+          outbound_clearing_entry_count: 1
+        }
+      ]
+    });
+    await expect(
+      executionUnitOfWork.confirmOnlineWalletPayoutPaid({
+        payoutRequestId,
+        expectedPayoutVersion: "4",
+        expectedWalletRevision: "4",
+        expectedBankExposureVersion: "2",
+        approval: {
+          kind: "online_wallet_payout_approval_receipt",
+          receiptId: approvalReceipt!.receipt_id,
+          canonicalDigest: approvalReceipt!.canonical_digest
+        },
+        bankReference: `manual-bank-${payoutRequestId}`,
+        transferredAt,
+        evidenceArtifactId: transferArtifactId,
+        evidenceArtifactDigest: transferArtifactDigest,
+        confirmerActorUserId,
+        authority: {
+          authorityId: `payout-paid-authority:${payoutRequestId}`,
+          authorityVersion: "1",
+          authorityDigest: sha(`payout-paid-authority:${payoutRequestId}`)
+        },
+        occurredAt: new Date(Date.now() + 2).toISOString()
+      } as never)
+    ).resolves.toMatchObject({ effect: "replayed", payoutVersion: "5" });
+
+    const statementArtifactId = `payout-statement-${randomUUID()}`;
+    const statementArtifactDigest = sha(`payout-statement:${statementArtifactId}`);
+    const statementRetentionPolicyId = `payout-statement-retention-${randomUUID()}`;
+    const statementObservedAt = new Date().toISOString();
+    await runtime.pool.query(
+      `insert into finance_artifact_retention_policies
+         (policy_id, policy_version, artifact_class, retain_for_seconds, authority_ref, effective_at)
+       values ($1, 1, 'bank_statement', 86400, 'integration-test', $2)`,
+      // A retention policy is an operational prerequisite, not evidence timed at the statement
+      // observation instant. Keep the fixture deterministically effective before the trigger's
+      // clock_timestamp() registration time.
+      [statementRetentionPolicyId, new Date("2020-01-01T00:00:00.000Z")]
+    );
+    await runtime.pool.query(
+      `insert into finance_artifacts
+         (id, artifact_class, sha256_digest, byte_length, content_type, binding_kind,
+          bank_cash_pool_id, currency, statement_source_fingerprint, private_object_key,
+          private_object_version, envelope_key_version, retention_policy_id, retention_policy_version,
+          retained_until)
+       values ($1, 'bank_statement', $2, 2048, 'application/pdf', 'bank_cash_pool',
+               $3, 'RUB', $4, $5, 'v1', 'kms-v1', $6, 1, $7)`,
+      [
+        statementArtifactId,
+        statementArtifactDigest,
+        bankCashPoolId,
+        sha(`statement-source:${bankCashPoolId}`),
+        `private/payout-statement/${statementArtifactId}`,
+        statementRetentionPolicyId,
+        new Date("2030-01-01T00:00:00.000Z")
+      ]
+    );
+    const ingestion = await createDrizzleBankStatementIngestionUnitOfWork({ database: runtime.database })
+      .ingestVerifiedStatementEntry({
+        bankCashPoolId,
+        expectedStatementImportVersion: "1",
+        evidence: {
+          kind: "verified_bank_statement_evidence",
+          bankCashPoolId,
+          bankStatementEntryId: `payout-statement-entry:${payoutRequestId}`,
+          sourceStatementId: `payout-statement:${bankCashPoolId}`,
+          sourceCheckpoint: `payout-statement:${bankCashPoolId}:1`,
+          sourceRowId: `payout-row:${payoutRequestId}`,
+          direction: "debit",
+          amountMinor: "5000",
+          currency: "RUB",
+          occurredAt: statementObservedAt,
+          bankReference: `manual-bank-${payoutRequestId}`,
+          artifact: {
+            artifactId: statementArtifactId,
+            sha256Digest: statementArtifactDigest,
+            byteLength: 2048,
+            bankCashPoolId,
+            statementSourceFingerprint: sha(`statement-source:${bankCashPoolId}`)
+          }
+        },
+        operationEnvelope: operationEnvelope()
+      } as never);
+    expect(ingestion).toMatchObject({
+      sourceCheckpoint: `payout-statement:${bankCashPoolId}:1`,
+      dedupeResult: "inserted",
+      journalTransactionId: null
+    });
+    await expect(
+      createDrizzleBankStatementIngestionUnitOfWork({ database: runtime.database })
+        .ingestVerifiedStatementEntry({
+          bankCashPoolId,
+          expectedStatementImportVersion: "1",
+          evidence: {
+            kind: "verified_bank_statement_evidence",
+            bankCashPoolId,
+            bankStatementEntryId: `payout-statement-entry:${payoutRequestId}`,
+            sourceStatementId: `payout-statement:${bankCashPoolId}`,
+            sourceCheckpoint: `payout-statement:${bankCashPoolId}:tampered`,
+            sourceRowId: `payout-row:${payoutRequestId}`,
+            direction: "debit",
+            amountMinor: "5000",
+            currency: "RUB",
+            occurredAt: statementObservedAt,
+            bankReference: `manual-bank-${payoutRequestId}`,
+            artifact: {
+              artifactId: statementArtifactId,
+              sha256Digest: statementArtifactDigest,
+              byteLength: 2048,
+              bankCashPoolId,
+              statementSourceFingerprint: sha(`statement-source:${bankCashPoolId}`)
+            }
+          },
+          operationEnvelope: operationEnvelope()
+        } as never)
+    ).rejects.toMatchObject({
+      code: "bank_statement_ingestion_persistence_error",
+      reason: "statement_conflict"
+    });
+    await expect(runtime.pool.query(
+      `select
+         (select count(*)::int from finance_bank_statement_imports) as imports,
+         (select count(*)::int from finance_bank_statement_rows) as rows,
+         (select count(*)::int from finance_bank_statement_ingestion_receipts) as receipts,
+         (select count(*)::int from finance_bank_matches) as matches`
+    )).resolves.toMatchObject({ rows: [{ imports: 1, rows: 1, receipts: 1, matches: 0 }] });
+
+    const matchUnitOfWork = createDrizzleBankCashMatchUnitOfWork({ database: runtime.database });
+    const ingestCandidate = async (suffix: string, amountMinor: string, bankReference: string) => {
+      const artifactId = `payout-statement-${suffix}-${randomUUID()}`;
+      const artifactDigest = sha(`payout-statement:${artifactId}`);
+      await runtime.pool.query(
+        `insert into finance_artifacts
+           (id, artifact_class, sha256_digest, byte_length, content_type, binding_kind,
+            bank_cash_pool_id, currency, statement_source_fingerprint, private_object_key,
+            private_object_version, envelope_key_version, retention_policy_id, retention_policy_version,
+            retained_until)
+         values ($1, 'bank_statement', $2, 2048, 'application/pdf', 'bank_cash_pool',
+                 $3, 'RUB', $4, $5, 'v1', 'kms-v1', $6, 1, $7)`,
+        [
+          artifactId,
+          artifactDigest,
+          bankCashPoolId,
+          sha(`statement-source:${bankCashPoolId}`),
+          `private/payout-statement/${artifactId}`,
+          statementRetentionPolicyId,
+          new Date("2030-01-01T00:00:00.000Z")
+        ]
+      );
+      return createDrizzleBankStatementIngestionUnitOfWork({ database: runtime.database })
+        .ingestVerifiedStatementEntry({
+          bankCashPoolId,
+          expectedStatementImportVersion: "1",
+          evidence: {
+            kind: "verified_bank_statement_evidence",
+            bankCashPoolId,
+            bankStatementEntryId: `payout-statement-entry:${suffix}:${payoutRequestId}`,
+            sourceStatementId: `payout-statement:${suffix}:${bankCashPoolId}`,
+            sourceCheckpoint: `payout-statement:${suffix}:${bankCashPoolId}:1`,
+            sourceRowId: `payout-row:${suffix}:${payoutRequestId}`,
+            direction: "debit",
+            amountMinor,
+            currency: "RUB",
+            occurredAt: statementObservedAt,
+            bankReference,
+            artifact: {
+              artifactId,
+              sha256Digest: artifactDigest,
+              byteLength: 2048,
+              bankCashPoolId,
+              statementSourceFingerprint: sha(`statement-source:${bankCashPoolId}`)
+            }
+          },
+          operationEnvelope: operationEnvelope()
+        } as never);
+    };
+    const mismatchedAmount = await ingestCandidate("wrong-amount", "4999", `manual-bank-${payoutRequestId}`);
+    await expect(matchUnitOfWork.matchBankCash({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "3",
+      statementIngestion: mismatchedAmount.ref,
+      matchAuthority: { kind: "manual_payout", payoutPaid: paid.ref },
+      operationEnvelope: operationEnvelope()
+    } as never)).rejects.toMatchObject({
+      code: "bank_cash_match_persistence_error",
+      reason: "manual_payout_binding_invalid"
+    });
+    const mismatchedReference = await ingestCandidate("wrong-reference", "5000", `wrong-${payoutRequestId}`);
+    await expect(matchUnitOfWork.matchBankCash({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "3",
+      statementIngestion: mismatchedReference.ref,
+      matchAuthority: { kind: "manual_payout", payoutPaid: paid.ref },
+      operationEnvelope: operationEnvelope()
+    } as never)).rejects.toMatchObject({
+      code: "bank_cash_match_persistence_error",
+      reason: "manual_payout_binding_invalid"
+    });
+    const matched = await matchUnitOfWork.matchBankCash({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "3",
+      statementIngestion: ingestion.ref,
+      matchAuthority: { kind: "manual_payout", payoutPaid: paid.ref },
+      operationEnvelope: operationEnvelope()
+    } as never);
+    expect(matched).toMatchObject({
+      bankStatementEntryId: ingestion.bankStatementEntryId,
+      matchResult: "manual_payout",
+      bankLiquidityRevision: "4"
+    });
+    await expect(matchUnitOfWork.matchBankCash({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "3",
+      statementIngestion: ingestion.ref,
+      matchAuthority: { kind: "manual_payout", payoutPaid: paid.ref },
+      operationEnvelope: operationEnvelope()
+    } as never)).resolves.toMatchObject({ ref: matched.ref, bankLiquidityRevision: "4" });
+    await expect(matchUnitOfWork.matchBankCash({
+      bankCashPoolId,
+      currency: "RUB",
+      expectedBankLiquidityRevision: "4",
+      statementIngestion: ingestion.ref,
+      matchAuthority: { kind: "manual_payout", payoutPaid: paid.ref },
+      operationEnvelope: operationEnvelope()
+    } as never)).rejects.toMatchObject({
+      code: "bank_cash_match_persistence_error",
+      reason: "bank_match_conflict"
+    });
+    await expect(runtime.pool.query(
+      `select
+         exposure.state as exposure_state, exposure.version::text as exposure_version,
+         liquidity.revision::text as liquidity_revision,
+         (select count(*)::int from finance_bank_matches) as match_count,
+         (select count(*)::int from finance_bank_cash_match_receipts) as receipt_count,
+         (select count(*)::int from finance_journal_entries entry join finance_accounts account on account.id = entry.account_id
+           where entry.journal_transaction_id = $1 and account.code = 'bank_outbound_clearing' and entry.side = 'debit') as clearing_debit_count,
+         (select count(*)::int from finance_journal_entries entry join finance_accounts account on account.id = entry.account_id
+           where entry.journal_transaction_id = $1 and account.code = 'bank_cash' and entry.side = 'credit') as cash_credit_count
+       from finance_bank_exposures exposure
+       join finance_bank_liquidity_heads liquidity on liquidity.bank_cash_pool_id = exposure.bank_cash_pool_id and liquidity.currency = exposure.currency
+      where exposure.payout_request_id = $2`,
+      [matched.journalTransactionId, payoutRequestId]
+    )).resolves.toMatchObject({ rows: [{
+      exposure_state: "statement_reflected",
+      exposure_version: "4",
+      liquidity_revision: "4",
+      match_count: 1,
+      receipt_count: 1,
+      clearing_debit_count: 1,
+      cash_credit_count: 1
+    }] });
   });
 
   it("applies a canonical ArcPay refund to the V2 pending payable exactly once", async () => {
@@ -748,6 +1218,138 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
         }
       ]
     });
+  });
+
+  it("terminally applies only an approved V2 refund case, then replays its canonical ArcPay outcome", async () => {
+    const workerId = "online-refund-terminal-integration-worker";
+    const fixture = await seedCaptureFixture();
+    await applyCapturedFixture(fixture, workerId);
+    const refundCaseId = `refund-case-${randomUUID()}`;
+    const providerRefundId = `refund-${randomUUID()}`;
+    const canonicalArtifact = await registerArtifact({
+      artifactId: `refund-terminal-canonical-${randomUUID()}`,
+      artifactClass: "provider_canonical_read",
+      policyId: "online-capture-canonical-retention",
+      bytes: new TextEncoder().encode(`terminal-refund:${providerRefundId}`)
+    });
+    const makeClaim = async (suffix: string, occurredAt: string) => {
+      const webhookId = `refund-terminal-webhook-${suffix}-${randomUUID()}`;
+      const webhookBytes = new TextEncoder().encode(webhookId);
+      const webhookArtifact = await registerArtifact({
+        artifactId: `refund-terminal-webhook-artifact-${suffix}-${randomUUID()}`,
+        artifactClass: "provider_webhook",
+        policyId: "online-capture-webhook-retention",
+        bytes: webhookBytes
+      });
+      await createDrizzleWebhookIngressStorageUnitOfWork({ database: runtime.database })
+        .storeBeforeAcknowledgement({
+          expectedTransportIdentityAbsent: true,
+          ingressEvidence: {
+            kind: "verified_webhook_ingress_evidence",
+            provider: "arc_pay", providerAccount, receivingEnvironment: "sandbox", webhookId,
+            providerEventType: "payment.refunded", rawBodyDigest: digest(webhookBytes),
+            sealedPayloadRef: webhookArtifact.artifactId, signatureScheme: "arc_pay_hmac_sha256_v1",
+            verifierContractVersion: "arc_pay_webhook_ingress_v1", webhookSigningKeyVersionId: "key-v1",
+            signedTimestamp: "2020-01-01T12:00:00.000Z",
+            signatureEvidenceDigest: sha(`refund-terminal-signature:${webhookId}`),
+            verifiedAt: "2020-01-01T12:00:01.000Z", receivedAt: "2020-01-01T12:00:02.000Z"
+          }
+        } as never);
+      const claim = await createDrizzleRefundedClientOrderWebhookClaimPort({
+        database: runtime.database, workerId, leaseDurationSeconds: 60,
+        retryPolicy: { maximumAttempts: 3, baseDelayMilliseconds: 100, maximumDelayMilliseconds: 500 }
+      }).claimNextRefundedClientOrderWebhook();
+      if (!claim) throw new Error("refund fixture was not claimable");
+      return {
+        semanticFact: {
+          inboxItemId: claim.inboxItemId, expectedInboxVersion: claim.inboxVersion,
+          expectedCheckpointSequence: claim.expectedCheckpointSequence, processorVersion: 1,
+          semanticEvidence: {
+            kind: "verified_webhook_semantic_evidence", providerAccount, webhookId,
+            semanticSourceKind: "refund", semanticSourceId: providerRefundId,
+            economicPaymentIntentId: fixture.intentId, economicPaymentSessionId: null,
+            providerPaymentId: null, amountMinor: null, currency: null, purpose: "client_order",
+            canonicalFactDigest: sha(`refund-terminal-fact:${providerRefundId}`), artifact: canonicalArtifact,
+            observedAt: fixture.observedAt
+          }, operationEnvelope: operationEnvelope()
+        }, refundCaseId, providerPaymentId: fixture.providerPaymentId, providerRefundId,
+        previousCumulativeRefundedMinor: "0", cumulativeRefundedMinor: "5000", occurredAt
+      } as const;
+    };
+    const terminal = createDrizzleOnlineWalletRefundTerminalUnitOfWork({ database: runtime.database, workerId });
+    const beforeApproval = await makeClaim("before-approval", new Date().toISOString());
+    await expect(terminal.applyCanonicalApprovedOnlineWalletRefund(beforeApproval as never)).rejects.toMatchObject({
+      code: "online_wallet_refund_terminal_persistence_error", reason: "refund_case_not_approved"
+    });
+
+    const candidateId = randomUUID();
+    await runtime.pool.query(
+      `insert into finance_refund_candidates (id, order_id, client_user_id, statement, status, version)
+       select $1, id, client_user_id, 'Terminal refund fixture', 'under_review', 1 from orders where id = $2`,
+      [candidateId, fixture.orderId]
+    );
+    const terminalOccurredAt = new Date().toISOString();
+    const economicPaymentRow = (await runtime.pool.query<{ version: string }>(
+      "select version::text as version from finance_economic_payment_intents where id = $1", [fixture.intentId]
+    )).rows[0];
+    const captureRow = (await runtime.pool.query<{
+      captureApplicationId: string;
+      walletId: string;
+    }>(
+      `select id as "captureApplicationId", online_wallet_id as "walletId"
+         from finance_online_sale_capture_applications where economic_payment_intent_id = $1`,
+      [fixture.intentId]
+    )).rows[0];
+    if (!economicPaymentRow || !captureRow) throw new Error("capture fixture authority is missing");
+    const { version: economicPaymentVersion } = economicPaymentRow;
+    const { captureApplicationId, walletId } = captureRow;
+    const approvalAuthorityDigest = sha(`refund-terminal-approval:${refundCaseId}`);
+    const dispatchEnvelope = {
+      kind: "refund" as const, providerPaymentId: fixture.providerPaymentId,
+      amount: { amountMinor: 5000, currency: "RUB" as const }, externalId: refundCaseId
+    };
+    const dispatchArtifact = await registerArtifact({
+      artifactId: `refund-terminal-dispatch-${randomUUID()}`, artifactClass: "provider_request",
+      policyId: "online-capture-provider-request-retention",
+      bytes: new TextEncoder().encode("sealed provider refund request"),
+      sha256Digest: digestFinanceCanonicalValueV1(dispatchEnvelope)
+    });
+    await createDrizzleOnlineWalletRefundApprovalUnitOfWork({ database: runtime.database })
+      .approveOnlineWalletRefund({
+        authority: {
+          kind: "verified_online_wallet_refund_approval_authority", refundCaseId,
+          refundCandidateId: candidateId, refundCandidateVersion: 1, orderId: fixture.orderId,
+          captureApplicationId, walletId, economicPaymentIntentId: fixture.intentId,
+          providerAccount, providerPaymentId: fixture.providerPaymentId,
+          previousCumulativeRefundedMinor: "0", approvedCumulativeRefundedMinor: "5000",
+          approvalAuthorityId: `refund-approval-${refundCaseId}`, approvalAuthorityVersion: "1",
+          approvalAuthorityDigest, approvedByActorId: fixture.astrologerUserId, approvedAt: terminalOccurredAt
+        }, expectedWalletRevision: "1",
+        providerDispatch: {
+          providerOperationIntentId: randomUUID(), economicPaymentIntentId: fixture.intentId,
+          expectedEconomicPaymentVersion: Number(economicPaymentVersion), expectedProviderOperationSourceVersion: 0,
+          providerAccount, dispatchArtifact, replacementAuthority: null,
+          idempotencyKey: `refund-idempotency-${randomUUID()}`,
+          idempotencyRetentionDeadline: new Date(Date.now() + 60 * 60_000).toISOString(),
+          operationEnvelope: operationEnvelope(), operationKind: "refund", economicPaymentSessionId: null,
+          dispatchEnvelope
+        }
+      } as never);
+    const applied = await terminal.applyCanonicalApprovedOnlineWalletRefund(
+      (await makeClaim("success", terminalOccurredAt)) as never
+    );
+    expect(applied).toMatchObject({ effect: "applied_once", refundCaseId, walletRevision: "3" });
+    const replay = await terminal.applyCanonicalApprovedOnlineWalletRefund((await makeClaim("replay", terminalOccurredAt)) as never);
+    expect(replay).toMatchObject({ effect: "semantic_replay", refundCaseId, walletRevision: "3" });
+    await expect(runtime.pool.query(
+      `select c.status, c.version::text as version, w.refund_pending_minor::text as refund_pending_minor,
+              (select count(*)::int from finance_online_wallet_refund_applications a where a.provider_refund_id = $1) as application_count,
+              (select count(*)::int from finance_online_wallet_mutations m
+                join finance_online_wallet_refund_applications a on a.wallet_mutation_id = m.mutation_id
+                where a.id = c.terminal_application_id and m.operation_kind = 'refund_confirmed') as terminal_mutation_count
+         from finance_online_wallet_refund_cases c join finance_online_wallet_heads w on w.id = c.wallet_id
+        where c.refund_case_id = $2`, [providerRefundId, refundCaseId]
+    )).resolves.toMatchObject({ rows: [{ status: "succeeded", version: "2", refund_pending_minor: "0", application_count: 1, terminal_mutation_count: 1 }] });
   });
 
   it("records an ArcPay chargeback as a V2 provisional provider loss and blocks only its root from a new payout", async () => {
@@ -1012,6 +1614,31 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
         reason: "insufficient_available_balance"
       })
     );
+    const outcomeArtifact = await registerArtifact({
+      artifactId: `chargeback-outcome-artifact-${randomUUID()}`,
+      artifactClass: "provider_canonical_read",
+      policyId: "online-capture-canonical-retention",
+      bytes: new TextEncoder().encode(JSON.stringify({ payment_id: fixture.providerPaymentId, status: "won" }))
+    });
+    const [{ revision: walletRevision }] = (await runtime.pool.query(
+      `select revision::text as revision from finance_online_wallet_heads where id = $1`, [receipt.walletId]
+    )).rows as [{ revision: string }];
+    const resolution = createDrizzleOnlineWalletChargebackResolutionUnitOfWork({ database: runtime.database });
+    const authority = (outcome: "won" | "lost") => ({
+      kind: "verified_chargeback_resolution_authority", chargebackCaseId: receipt.chargebackCaseId,
+      expectedChargebackVersion: 1, resolution: outcome, cumulativePrincipalMinor: "10000",
+      providerEvidence: { kind: "verified_chargeback_provider_evidence", providerAccount, chargebackCaseId: receipt.chargebackCaseId, providerPaymentId: fixture.providerPaymentId, lifecycleFact: outcome, cumulativePrincipalMinor: "10000", currency: "RUB", artifact: outcomeArtifact, observedAt: fixture.observedAt },
+      allocationAuthorityId: `chargeback-resolution:${receipt.chargebackCaseId}`, allocationAuthorityVersion: "1", allocationAuthorityDigest: sha(`chargeback-resolution:${receipt.chargebackCaseId}`), decidedByActorId: fixture.astrologerUserId, decidedAt: fixture.observedAt
+    });
+    const command = (outcome: "won" | "lost") => ({ chargebackCaseId: receipt.chargebackCaseId, expectedChargebackVersion: 1, walletId: receipt.walletId, expectedWalletRevision: walletRevision, expectedPrincipalPositionVersion: "1", expectedRecoveryPositionVersion: "1", resolutionAuthority: authority(outcome), operationEnvelope: operationEnvelope() });
+    await expect(resolution.resolveChargeback(command("lost") as never)).rejects.toMatchObject(
+      expect.objectContaining<Partial<OnlineWalletChargebackResolutionPersistenceError>>({ reason: "unallocated_source_position" })
+    );
+    await expect(resolution.resolveChargeback(command("won") as never)).resolves.toMatchObject({ resolution: "won_reversed", walletRevision });
+    await expect(resolution.resolveChargeback(command("won") as never)).resolves.toMatchObject({ resolution: "won_reversed" });
+    await expect(runtime.pool.query(
+      `select resolution, provider_lifecycle_fact, count(*)::int as resolution_count from finance_online_wallet_chargeback_resolutions where chargeback_case_id = $1 group by resolution, provider_lifecycle_fact`, [receipt.chargebackCaseId]
+    )).resolves.toMatchObject({ rows: [{ resolution: "won_reversed", provider_lifecycle_fact: "won", resolution_count: 1 }] });
   });
 
   async function seedCaptureFixture() {
@@ -1265,13 +1892,61 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
     };
   }
 
+  async function applyCapturedFixture(
+    fixture: Awaited<ReturnType<typeof seedCaptureFixture>>,
+    workerId: string
+  ): Promise<void> {
+    const claim = await createDrizzleCapturedClientOrderWebhookClaimPort({
+      database: runtime.database,
+      workerId,
+      leaseDurationSeconds: 60,
+      retryPolicy: { maximumAttempts: 3, baseDelayMilliseconds: 100, maximumDelayMilliseconds: 500 }
+    }).claimNextCapturedClientOrderWebhook();
+    if (!claim) throw new Error("capture fixture was not claimable");
+    await createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork({
+      database: runtime.database,
+      workerId,
+      mutationResolver: createDrizzleOnlineSaleCapturePersistenceResolver()
+    }).applyCanonicalOnlineSaleCapture({
+      semanticFact: {
+        inboxItemId: claim.inboxItemId,
+        expectedInboxVersion: claim.inboxVersion,
+        expectedCheckpointSequence: claim.expectedCheckpointSequence,
+        processorVersion: 1,
+        semanticEvidence: {
+          kind: "verified_webhook_semantic_evidence",
+          providerAccount,
+          webhookId: fixture.webhookId,
+          semanticSourceKind: "payment_transition",
+          semanticSourceId: createCapturedProviderPaymentSemanticSourceId(fixture.providerPaymentId),
+          economicPaymentIntentId: fixture.intentId,
+          economicPaymentSessionId: fixture.sessionId,
+          providerPaymentId: fixture.providerPaymentId,
+          amountMinor: "10000",
+          currency: "RUB",
+          purpose: "client_order",
+          canonicalFactDigest: fixture.canonicalFactDigest,
+          artifact: fixture.canonicalArtifact,
+          observedAt: fixture.observedAt
+        },
+        operationEnvelope: operationEnvelope()
+      },
+      capture: {
+        economicPaymentIntentId: fixture.intentId,
+        expectedEconomicPaymentVersion: 2,
+        operationEnvelope: operationEnvelope()
+      }
+    } as never);
+  }
+
   async function registerArtifact(input: {
     artifactId: string;
-    artifactClass: "provider_webhook" | "provider_canonical_read";
+    artifactClass: "provider_webhook" | "provider_canonical_read" | "provider_request";
     policyId: string;
     bytes: Uint8Array;
+    sha256Digest?: `sha256:${string}`;
   }) {
-    const sha256Digest = digest(input.bytes);
+    const sha256Digest = input.sha256Digest ?? digest(input.bytes);
     return artifacts.registerSealedArtifact({
       artifact: { artifactId: input.artifactId, sha256Digest, byteLength: input.bytes.byteLength },
       artifactClass: input.artifactClass,
@@ -1287,6 +1962,108 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
       },
       retentionPolicyId: input.policyId,
       retentionPolicyVersion: "1"
+    });
+  }
+
+  async function attestLiquiditySnapshot(input: Readonly<{
+    bankCashPoolId: string;
+    expectedBankLiquidityRevision: string;
+    unrestrictedAvailableMinor: string;
+    sourceCheckpoint: string;
+    asOf: string;
+    expiresAt: string;
+  }>) {
+    const actorUserId = randomUUID();
+    const sessionId = randomUUID();
+    const attestationId = randomUUID();
+    const authorizationId = randomUUID();
+    const artifactId = `liquidity-statement-${randomUUID()}`;
+    const artifactDigest = sha(`liquidity-artifact:${artifactId}`);
+    const statementSourceFingerprint = sha(`statement-source:${input.bankCashPoolId}`);
+    const now = new Date();
+    const attestationInput = {
+      attestationId,
+      bankCashPoolId: input.bankCashPoolId,
+      currency: "RUB" as const,
+      expectedBankLiquidityRevision: input.expectedBankLiquidityRevision,
+      unrestrictedAvailableMinor: input.unrestrictedAvailableMinor,
+      sourceCheckpoint: input.sourceCheckpoint,
+      asOf: input.asOf,
+      expiresAt: input.expiresAt,
+      evidenceArtifact: {
+        artifactId,
+        sha256Digest: artifactDigest,
+        byteLength: 1024,
+        bankCashPoolId: input.bankCashPoolId,
+        statementSourceFingerprint
+      }
+    } as const;
+    const payloadHash = hashFinanceCommandPayload(
+      createBankLiquiditySnapshotAttestationAuthorizationPayload(attestationInput)
+    );
+    const retentionPolicyId = `liquidity-retention-${attestationId}`;
+    await runtime.pool.query("insert into users (id) values ($1)", [actorUserId]);
+    await runtime.pool.query(
+      `insert into user_sessions (id, user_id, token_hash, expires_at)
+       values ($1, $2, $3, $4)`,
+      [sessionId, actorUserId, `liquidity-session-${sessionId}`, new Date(now.getTime() + 60 * 60_000)]
+    );
+    await runtime.pool.query(
+      `insert into finance_artifact_retention_policies
+         (policy_id, policy_version, artifact_class, retain_for_seconds, authority_ref, effective_at)
+       values ($1, 1, 'bank_statement', 86400, 'integration-test', $2)`,
+      [retentionPolicyId, now]
+    );
+    await runtime.pool.query(
+      `insert into finance_artifacts
+         (id, artifact_class, sha256_digest, byte_length, content_type, binding_kind,
+          bank_cash_pool_id, currency, statement_source_fingerprint, private_object_key,
+          private_object_version, envelope_key_version, retention_policy_id, retention_policy_version,
+          retained_until)
+       values ($1, 'bank_statement', $2, 1024, 'application/pdf', 'bank_cash_pool',
+               $3, 'RUB', $4, $5, 'v1', 'kms-v1', $6, 1, $7)`,
+      [
+        artifactId,
+        artifactDigest,
+        input.bankCashPoolId,
+        statementSourceFingerprint,
+        `private/liquidity/${artifactId}`,
+        retentionPolicyId,
+        new Date(now.getTime() + 86_400_000)
+      ]
+    );
+    await runtime.pool.query(
+      `insert into finance_authorization_grants
+         (authorization_id, actor_user_id, session_id, action_kind, aggregate_id, expected_version,
+          payload_hash, verified_at, expires_at, status, consumed_at)
+       values ($1, $2, $3, 'bank_snapshot_attest', $4, $5, $6, $7, $8, 'consumed', $7)`,
+      [
+        authorizationId,
+        actorUserId,
+        sessionId,
+        attestationId,
+        Number(input.expectedBankLiquidityRevision),
+        payloadHash,
+        now,
+        new Date(now.getTime() + 60_000)
+      ]
+    );
+    return createDrizzleBankLiquiditySnapshotAttestationUnitOfWork({
+      database: runtime.database
+    }).attestBankLiquiditySnapshot({
+      ...attestationInput,
+      authorization: {
+        authorizationId,
+        actorUserId,
+        sessionId,
+        actionKind: "bank_snapshot_attest",
+        aggregateId: attestationId,
+        expectedVersion: Number(input.expectedBankLiquidityRevision),
+        payloadHash,
+        verifiedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 60_000).toISOString(),
+        status: "consumed"
+      }
     });
   }
 });

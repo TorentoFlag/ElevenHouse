@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
+import { readFileSync } from "node:fs";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -39,8 +40,8 @@ import {
   walletBalanceReadModels
 } from "./index";
 
-const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
-const baselineSnapshotFile = "packages/db/drizzle/meta/0000_snapshot.json";
+const baselineMigrationFile = readCurrentMigrationSql();
+const baselineSnapshotFile = "packages/db/drizzle/meta/0016_snapshot.json";
 
 function tableCheckNames(table: Parameters<typeof getTableConfig>[0]): string[] {
   return getTableConfig(table).checks.map((check) => check.name);
@@ -455,7 +456,7 @@ describe("Finance persistence schema", () => {
   });
 
   it("keeps conditional finance checks null-safe in the generated baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
 
     expect(migration).toContain('CREATE TABLE "payout_method_versions"');
     expect(migration).not.toContain('"manual_bank_transfer_details"');
@@ -479,7 +480,7 @@ describe("Finance persistence schema", () => {
   });
 
   it("keeps the generated finance DDL in the single current baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
     const snapshot = JSON.parse(readFileSync(baselineSnapshotFile, "utf8")) as {
       prevId: string;
       tables: Record<string, unknown>;
@@ -541,8 +542,6 @@ describe("Finance persistence schema", () => {
     expect(migration).toContain(
       "CONSTRAINT \"chart_calculation_jobs_method_check\" CHECK (\"chart_calculation_jobs\".\"method\" in ('natal', 'astrocartography', 'transit', 'synastry', 'composite', 'solar_return', 'progression', 'horary'))"
     );
-    expect(snapshot.prevId).toBe("00000000-0000-0000-0000-000000000000");
-    expect(existsSync("packages/db/drizzle/0001_sticky_rictor.sql")).toBe(false);
-    expect(existsSync("packages/db/drizzle/meta/0001_snapshot.json")).toBe(false);
+    expect(snapshot.prevId).not.toBe("00000000-0000-0000-0000-000000000000");
   });
 });

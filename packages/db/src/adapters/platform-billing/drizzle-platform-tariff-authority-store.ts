@@ -490,7 +490,7 @@ async function applyVerifiedInvoiceCaptureInTransaction<TSchema extends Record<s
     })
     .where(and(
       eq(platformTariffSubscriptions.id, subscriptionRow.id),
-      eq(platformTariffSubscriptions.state, "awaiting_initial_payment"),
+      inArray(platformTariffSubscriptions.state, ["awaiting_initial_payment", "past_due"]),
       eq(platformTariffSubscriptions.version, subscriptionRow.version)
     ))
     .returning();

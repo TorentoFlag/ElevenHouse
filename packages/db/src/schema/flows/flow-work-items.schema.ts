@@ -195,7 +195,6 @@ export const flowWorkItems = pgTable(
         ${table.status} = 'completed'
         and ${table.startedAt} is not null
         and ${table.completedAt} is not null
-        and ${table.completedByUserId} is not null
         and ${table.snoozedUntil} is null
         and ${table.expiredAt} is null
         and ${table.canceledAt} is null
@@ -317,6 +316,42 @@ BEGIN
           AND (event.summary->>'toRevision')::integer = NEW.revision
           AND (event.summary->>'scheduledFor')::timestamptz
                 IS NOT DISTINCT FROM OLD.snoozed_until
+     ) THEN
+    RETURN NEW;
+  END IF;
+
+  IF OLD.status IN ('pending', 'in_progress', 'snoozed')
+     AND NEW.status = 'completed'
+     AND NEW.completed_by_user_id IS NULL
+     AND NEW.last_command_id IS NULL
+     AND NEW.last_run_event_id IS NOT NULL
+     AND NEW.last_run_event_id IS DISTINCT FROM OLD.last_run_event_id
+     AND NEW.due_at IS NOT DISTINCT FROM OLD.due_at
+     AND NEW.due_booking_lifecycle_revision
+           IS NOT DISTINCT FROM OLD.due_booking_lifecycle_revision
+     AND NEW.started_at IS NOT NULL
+     AND NEW.completed_at IS NOT NULL
+     AND NEW.completed_at IS NOT DISTINCT FROM NEW.updated_at
+     AND (
+       SELECT count(*) = 1
+         FROM flow_run_events event
+        WHERE event.id = NEW.last_run_event_id
+          AND event.owner_user_id = NEW.owner_user_id
+          AND event.flow_run_id = NEW.flow_run_id
+          AND event.event_type = 'token_advanced'
+          AND event.node_id = NEW.node_id
+          AND event.attempt_id IS NULL
+          AND event.command_id IS NULL
+          AND event.occurred_at IS NOT DISTINCT FROM NEW.updated_at
+          AND event.summary->>'schemaVersion' = 'flow-runtime-trace.v1'
+          AND event.summary->>'outcome' = 'advanced'
+          AND event.summary->>'nodeKind' = 'astrologer_work_item'
+          AND event.summary->>'reasonCode' = 'FLOW_BIRTH_PROFILE_RECHECK_READY'
+          AND event.summary->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
+          AND event.summary->>'sourceHandle' = 'success'
+          AND event.summary->>'workItemId' = NEW.id::text
+          AND (event.summary->>'fromRevision')::integer = OLD.revision
+          AND (event.summary->>'toRevision')::integer = NEW.revision
      ) THEN
     RETURN NEW;
   END IF;
@@ -460,6 +495,11 @@ BEGIN
          NEW.event_type = 'work_item_available'
          OR NEW.event_type = 'booking_rescheduled'
          OR (NEW.event_type = 'run_canceled' AND NEW.booking_lifecycle_event_id IS NOT NULL)
+         OR (
+           NEW.event_type = 'token_advanced'
+           AND NEW.command_id IS NULL
+           AND NEW.summary->>'reasonCode' = 'FLOW_BIRTH_PROFILE_RECHECK_READY'
+         )
        ) THEN
       RETURN NULL;
     END IF;
@@ -587,8 +627,27 @@ BEGIN
        ) THEN
       RAISE EXCEPTION 'flow work item and Booking reschedule provenance do not agree'
         USING ERRCODE = '23514', CONSTRAINT = 'flow_work_items_event_consistency';
+    ELSIF event_row.event_type = 'token_advanced' AND (
+         work_item_row.status IS DISTINCT FROM 'completed'
+         OR work_item_row.completed_by_user_id IS NOT NULL
+         OR work_item_row.completed_at IS DISTINCT FROM event_row.occurred_at
+         OR event_row.attempt_id IS NOT NULL
+         OR event_row.command_id IS NOT NULL
+         OR event_row.summary->>'outcome' IS DISTINCT FROM 'advanced'
+         OR event_row.summary->>'nodeKind' IS DISTINCT FROM 'astrologer_work_item'
+         OR event_row.summary->>'reasonCode' IS DISTINCT FROM 'FLOW_BIRTH_PROFILE_RECHECK_READY'
+         OR event_row.summary->>'resultCode' IS DISTINCT FROM 'FLOW_TOKEN_ADVANCED'
+         OR event_row.summary->>'sourceHandle' IS DISTINCT FROM 'success'
+         OR event_row.summary->>'workItemId' IS DISTINCT FROM work_item_row.id::text
+         OR (event_row.summary->>'fromRevision')::integer
+              IS DISTINCT FROM work_item_row.revision - 1
+         OR (event_row.summary->>'toRevision')::integer
+              IS DISTINCT FROM work_item_row.revision
+       ) THEN
+      RAISE EXCEPTION 'flow work item and birth-profile recheck provenance do not agree'
+        USING ERRCODE = '23514', CONSTRAINT = 'flow_work_items_event_consistency';
     ELSIF event_row.event_type NOT IN (
-      'work_item_available', 'run_canceled', 'booking_rescheduled'
+      'work_item_available', 'run_canceled', 'booking_rescheduled', 'token_advanced'
     ) THEN
       RAISE EXCEPTION 'work-item service transition requires a supported durable run event'
         USING ERRCODE = '23514', CONSTRAINT = 'flow_work_items_event_consistency';

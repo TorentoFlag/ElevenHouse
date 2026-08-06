@@ -10,6 +10,7 @@ export * from "./drizzle-flow-runtime-dispatch-outbox-store";
 export * from "./drizzle-flow-booking-enrollment-store";
 export * from "./drizzle-flow-booking-lifecycle-store";
 export * from "./drizzle-flow-birth-data-readiness-reader";
+export * from "./drizzle-flow-birth-profile-recheck-store";
 export * from "./drizzle-flow-natal-chart-requester";
 export * from "./drizzle-flow-runtime-control-reader";
 export * from "./drizzle-flow-runtime-control-command-store";

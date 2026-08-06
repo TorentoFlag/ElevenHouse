@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
@@ -86,7 +86,7 @@ describe("Flow work-item persistence schema", () => {
   });
 
   it("is present with its critical constraints in the canonical baseline", () => {
-    const baseline = readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8");
+    const baseline = readCurrentMigrationSql();
 
     expect(baseline).toContain('CREATE TABLE "flow_work_items"');
     expect(baseline).toContain('CONSTRAINT "flow_work_items_run_version_owner_fk"');

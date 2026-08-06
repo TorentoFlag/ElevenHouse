@@ -79,7 +79,7 @@ const templateDefinitions: readonly TemplateDefinition[] = [
   {
     schemaVersion: "flow-definition-template.v2",
     key: "booking-natal-preparation",
-    version: 1,
+    version: 2,
     name: {
       ru: "Подготовка натальной консультации",
       en: "Natal consultation preparation"
@@ -356,10 +356,10 @@ function createBookingNatalPreparationTemplate(
       {
         id: "natal-preparation-completed",
         kind: "completed",
-        displayTitle: locale === "ru" ? "Карта поставлена в расчёт" : "Chart calculation requested",
+        displayTitle: locale === "ru" ? "Натальная карта рассчитана" : "Natal chart calculated",
         configSchemaVersion: 1,
         executorContractVersion: 1,
-        config: { goalKey: "natal_chart_calculation_requested" }
+        config: { goalKey: "natal_chart_calculated" }
       }
     ],
     edges: [

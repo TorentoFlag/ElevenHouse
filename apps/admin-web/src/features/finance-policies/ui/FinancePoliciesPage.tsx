@@ -31,10 +31,8 @@ import type {
   AdminPayoutQueueResponse,
   AdminPayoutQueueStatusFilter,
   AdminPayoutStatusUpdate,
-  PayoutStatusAuthorizationInput,
   PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
-import { createPayoutStatusAuthorizationPayload } from "@elevenhouse/contracts/payouts";
 import type {
   AdminReconciliationException,
   AdminReconciliationExceptionEvidenceFilter,
@@ -121,8 +119,6 @@ type PayoutActionForm = {
    * The browser never uploads or invents a private-object locator.
    */
   readonly proofArtifactId: string;
-  readonly proofSha256Digest: string;
-  readonly proofByteLength: string;
   readonly adminNote: string;
   readonly failureReason: string;
 };
@@ -460,30 +456,29 @@ export function FinancePoliciesPage({
     event.preventDefault();
     if (!selectedPayout) return;
     if (isPayoutActionBlocked(selectedPayout)) return;
-    const proofByteLength = Number(payoutAction.proofByteLength.trim());
-    if (!Number.isSafeInteger(proofByteLength) || proofByteLength <= 0) {
-      setSubmitError(
-        "Укажите положительный размер уже зарегистрированного банковского подтверждения."
-      );
+    const bankReference = payoutAction.externalReference.trim();
+    const evidenceArtifactId = payoutAction.proofArtifactId.trim();
+    if (!bankReference || !evidenceArtifactId) {
+      setSubmitError("Укажите банковский reference и загрузите банковское подтверждение.");
       return;
     }
     setSavingPayout(true);
     setSubmitError(null);
     try {
-      const update = await authorizeSensitivePayoutStatusUpdate({
-        status: "paid",
-        expectedVersion: selectedPayout.version,
-        externalReference: payoutAction.externalReference.trim(),
+      const command = {
+        bankReference,
         transferredAt: payoutAction.transferredAt,
-        proofArtifact: {
-          artifactId: payoutAction.proofArtifactId.trim(),
-          sha256Digest: payoutAction.proofSha256Digest.trim(),
-          byteLength: proofByteLength
-        },
-        adminNote: payoutAction.adminNote.trim() || null
+        evidenceArtifactId
+      } as const;
+      const authorization = await api.beginOnlinePayoutPaidAuthorization(selectedPayout.id, command);
+      const grant = await authorizationClient.complete(authorization);
+      await api.confirmOnlinePayoutPaid(selectedPayout.id, {
+        ...command,
+        authorizationId: grant.authorizationId
       });
-      await api.updatePayoutRequestStatus(selectedPayout.id, update);
-      setStatusMessage("Выплата отмечена оплаченной. Ledger списал payout pending.");
+      setStatusMessage(
+        "Выплата подтверждена. Ledger перенёс сумму в bank outbound clearing; bank cash ждёт сверку выписки."
+      );
       const nextPayoutAction = emptyPayoutAction();
       payoutActionRef.current = nextPayoutAction;
       setPayoutAction(nextPayoutAction);
@@ -503,9 +498,7 @@ export function FinancePoliciesPage({
       const evidence = await api.uploadPayoutBankEvidence(file);
       setPayoutAction((previous) => ({
         ...previous,
-        proofArtifactId: evidence.artifactId,
-        proofSha256Digest: evidence.sha256Digest,
-        proofByteLength: String(evidence.byteLength)
+        proofArtifactId: evidence.artifactId
       }));
       setStatusMessage("Банковское подтверждение сохранено в закрытом evidence store.");
     } catch (error) {
@@ -523,7 +516,7 @@ export function FinancePoliciesPage({
     setSavingPayout(true);
     setSubmitError(null);
     try {
-      let update: AdminPayoutStatusUpdate;
+      let update: AdminPayoutStatusUpdate | null = null;
       if (status === "under_review") {
         update = {
           status: "under_review",
@@ -531,19 +524,21 @@ export function FinancePoliciesPage({
           adminNote: payoutAction.adminNote.trim() || null
         };
       } else if (status === "approved") {
-        update = await authorizeSensitivePayoutStatusUpdate({
-          status: "approved",
-          expectedVersion: selectedPayout.version,
-          adminNote: payoutAction.adminNote.trim() || null
+        const authorization = await api.beginOnlinePayoutApprovalAuthorization(selectedPayout.id);
+        const grant = await authorizationClient.complete(authorization);
+        await api.approveOnlinePayout(selectedPayout.id, {
+          authorizationId: grant.authorizationId
         });
       } else {
-        update = await authorizeSensitivePayoutStatusUpdate({
-          status: "processing_manual",
-          expectedVersion: selectedPayout.version,
-          adminNote: payoutAction.adminNote.trim() || null
+        const authorization = await api.beginOnlinePayoutManualExecutionAuthorization(selectedPayout.id);
+        const grant = await authorizationClient.complete(authorization);
+        await api.startOnlinePayoutManualExecution(selectedPayout.id, {
+          authorizationId: grant.authorizationId
         });
       }
-      await api.updatePayoutRequestStatus(selectedPayout.id, update);
+      if (update) {
+        await api.updatePayoutRequestStatus(selectedPayout.id, update);
+      }
       setStatusMessage(payoutStatusMessage(status));
       await refreshFinance();
     } catch (error) {
@@ -551,27 +546,6 @@ export function FinancePoliciesPage({
     } finally {
       setSavingPayout(false);
     }
-  }
-
-  async function authorizeSensitivePayoutStatusUpdate(
-    update: PayoutStatusAuthorizationInput
-  ): Promise<AdminPayoutStatusUpdate> {
-    const actionKind =
-      update.status === "approved"
-        ? "payout_approve"
-        : update.status === "processing_manual"
-          ? "payout_start_processing"
-          : "payout_confirm_paid";
-    const grant = await authorizationClient.authorize({
-      actionKind,
-      aggregateId: selectedPayout!.id,
-      expectedVersion: update.expectedVersion,
-      payload: createPayoutStatusAuthorizationPayload(update)
-    });
-    return {
-      ...update,
-      authorizationId: grant.authorizationId
-    } as AdminPayoutStatusUpdate;
   }
 
   async function handlePayoutRejected() {
@@ -1142,7 +1116,7 @@ function PayoutsPanel(props: {
             />
             <form className="adminFinanceForm adminFinancePayoutForm" onSubmit={props.onPaid}>
               <label className="adminFinanceField adminFinanceFieldWide">
-                <span>External reference</span>
+                <span>Банковский reference</span>
                 <input
                   name="payoutExternalReference"
                   value={props.action.externalReference}
@@ -1198,33 +1172,9 @@ function PayoutsPanel(props: {
                   disabled={paidActionDisabled}
                 />
               </label>
-              <label className="adminFinanceField adminFinanceFieldWide">
-                <span>Evidence SHA-256</span>
-                <input
-                  name="payoutProofSha256Digest"
-                  value={props.action.proofSha256Digest}
-                  readOnly
-                  placeholder="Заполняется после безопасной загрузки"
-                  required
-                  disabled={paidActionDisabled}
-                />
-              </label>
-              <label className="adminFinanceField adminFinanceFieldWide">
-                <span>Evidence size (bytes)</span>
-                <input
-                  name="payoutProofByteLength"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={props.action.proofByteLength}
-                  readOnly
-                  required
-                  disabled={paidActionDisabled}
-                />
-              </label>
               <p className="adminFinanceMuted adminFinanceFieldWide">
-                Выплата не будет проведена без активного доказательства, связанного с cash pool
-                ElevenHouse. Сервер повторно сверяет hash и размер при переходе в paid.
+                Выплата не будет подтверждена без активного доказательства, связанного с cash pool
+                ElevenHouse. Сервер сам повторно читает hash и размер, а браузер не передаёт их.
               </p>
               <label className="adminFinanceField adminFinanceFieldWide">
                 <span>Admin note</span>
@@ -2100,7 +2050,7 @@ function PayoutDetail(props: { readonly request: AdminPayoutRequestResponse }) {
     <DetailSection title="Payout detail">
       <div className="adminFinanceDetailGrid">
         <Fact
-          label="External reference"
+          label="Банковский reference"
           value={props.request.externalReference ?? "manual evidence missing"}
         />
         <Fact label="Transferred" value={nullableDateTime(props.request.transferredAt)} />
@@ -2280,8 +2230,6 @@ function emptyPayoutAction(): PayoutActionForm {
     externalReference: "",
     transferredAt: new Date().toISOString(),
     proofArtifactId: "",
-    proofSha256Digest: "",
-    proofByteLength: "",
     adminNote: "",
     failureReason: ""
   };
@@ -2469,7 +2417,7 @@ function errorMessage(error: unknown, context: AdminFinanceErrorContext): string
     const backendHint = backendCodeHint(providerMessage);
     const suffix = backendHint ? ` ${backendHint}` : "";
     if (error.status === 400) {
-      return `${actionLabel(context)} отклонено: проверьте подтверждение выплаты, обязательные поля и формат evidence. Для выплаты нужны External reference и Transferred at; для отказа нужна причина.${suffix}`;
+      return `${actionLabel(context)} отклонено: проверьте подтверждение выплаты, обязательные поля и формат evidence. Для выплаты нужны банковский reference и время перевода; для отказа нужна причина.${suffix}`;
     }
     if (error.status === 401 || error.status === 403) {
       return `${actionLabel(context)} не выполнено: сессия администратора или CSRF-token недействительны. Обновите страницу, войдите заново при необходимости и повторите действие.`;
@@ -2483,7 +2431,7 @@ function errorMessage(error: unknown, context: AdminFinanceErrorContext): string
     return `${actionLabel(context)} не выполнено: admin-api вернул ${error.status}. Обновите очередь и проверьте операционный лог.${suffix}`;
   }
   if (isClientValidationError(error)) {
-    return `${actionLabel(context)} не выполнено: проверьте обязательные поля и формат evidence перед отправкой. Для выплаты нужны External reference и Transferred at; для отказа нужна причина.`;
+  return `${actionLabel(context)} не выполнено: проверьте обязательные поля и формат evidence перед отправкой. Для выплаты нужны банковский reference и время перевода; для отказа нужна причина.`;
   }
   return error instanceof Error ? error.message : "Unknown admin finance error";
 }

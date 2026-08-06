@@ -109,10 +109,7 @@ export const flowWorkItemSchema = z
       );
     }
     if (item.status === "completed") {
-      requirePresent(
-        ["startedAt", "completedAt", "completedByUserId"],
-        "Completed work items require start and completion evidence"
-      );
+      requirePresent(["startedAt", "completedAt"], "Completed work items require start and completion evidence");
       rejectPresent(
         ["snoozedUntil", "expiredAt", "canceledAt"],
         "Completed work items cannot expose another lifecycle outcome"

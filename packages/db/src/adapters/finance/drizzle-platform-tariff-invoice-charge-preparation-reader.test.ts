@@ -32,6 +32,26 @@ describe("platform tariff invoice charge preparation reader mapping", () => {
 
     expect(mapPlatformTariffInvoiceChargePreparationCandidate(value)).toBeNull();
   });
+
+  it("permits only the exact next period while renewal is past_due", () => {
+    const value = row();
+    value.subscription = {
+      ...value.subscription,
+      state: "past_due",
+      startsAt: new Date("2026-07-04T12:00:00.000Z"),
+      endsAt: new Date("2026-08-04T12:00:00.000Z")
+    };
+    value.invoice = {
+      ...value.invoice,
+      billingPeriodStartAt: new Date("2026-08-04T12:00:00.000Z"),
+      billingPeriodEndAt: new Date("2026-09-04T12:00:00.000Z")
+    };
+    expect(mapPlatformTariffInvoiceChargePreparationCandidate(value)).toMatchObject({
+      subscription: { state: "past_due", endsAt: "2026-08-04T12:00:00.000Z" }
+    });
+    value.invoice.billingPeriodStartAt = new Date("2026-08-04T12:00:01.000Z");
+    expect(mapPlatformTariffInvoiceChargePreparationCandidate(value)).toBeNull();
+  });
 });
 
 function row(): any {

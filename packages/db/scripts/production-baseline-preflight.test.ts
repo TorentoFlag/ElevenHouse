@@ -4,9 +4,7 @@ import {
   assessProductionBaselinePreflight,
   type ProductionBaselinePreflightInput
 } from "./production-baseline-preflight";
-import {
-  currentBaseline,
-} from "./production-baseline-plan";
+import { approvedLineage } from "./production-baseline-plan";
 
 describe("production baseline read-only preflight", () => {
   it("accepts a fresh database and the exact current ledger", () => {
@@ -14,7 +12,7 @@ describe("production baseline read-only preflight", () => {
       assessProductionBaselinePreflight(input({ ledgerExists: false, usersExists: false }))
     ).toEqual({ kind: "fresh" });
     expect(
-      assessProductionBaselinePreflight(input({ migrations: [row(currentBaseline)] }))
+      assessProductionBaselinePreflight(input({ migrations: approvedLineage.map(row) }))
     ).toEqual({ kind: "current" });
   });
 

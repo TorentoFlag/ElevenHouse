@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -12,7 +12,7 @@ import {
   chartCalculationJobs
 } from "./index";
 
-const migrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
+const migrationFile = readCurrentMigrationSql();
 
 describe("current calculation persistence schema", () => {
   it("stores one canonical input and result directly on calculation_records", () => {
@@ -73,7 +73,7 @@ describe("current calculation persistence schema", () => {
   });
 
   it("declares publication bindings in the checked-in baseline migration", () => {
-    const migration = readFileSync(migrationFile, "utf8");
+    const migration = migrationFile;
 
     expect(migration).toContain('"published_interpretation_id" uuid');
     expect(migration).toContain('"published_result_checksum" text');
@@ -85,7 +85,7 @@ describe("current calculation persistence schema", () => {
   });
 
   it("keeps the checked-in migration free of calculation result versions", () => {
-    const migration = readFileSync(migrationFile, "utf8");
+    const migration = migrationFile;
 
     expect(migration).not.toContain('CREATE TABLE "calculation_versions"');
     expect(migration).toContain('"request_fingerprint" text NOT NULL');
@@ -197,7 +197,7 @@ describe("current calculation persistence schema", () => {
   });
 
   it("defines the generic PDF table directly in the baseline migration", () => {
-    const migration = readFileSync(migrationFile, "utf8");
+    const migration = migrationFile;
 
     expect(migration).toContain('CREATE TABLE "calculation_pdf_jobs"');
     expect(migration).toContain('"source_locator" jsonb NOT NULL');
@@ -207,11 +207,8 @@ describe("current calculation persistence schema", () => {
   });
 
   it("defines chart calculation jobs directly in the baseline migration", () => {
-    const migration = readFileSync(migrationFile, "utf8");
-    const chartJobsTable = migration.slice(
-      migration.indexOf('CREATE TABLE "chart_calculation_jobs"'),
-      migration.indexOf('CREATE TABLE "client_profiles"')
-    );
+    const migration = migrationFile;
+    const chartJobsTable = migration.match(/CREATE TABLE "chart_calculation_jobs" \([\s\S]*?\n\);/)?.[0] ?? "";
 
     expect(migration).toContain('CREATE TABLE "chart_calculation_jobs"');
     expect(migration).toContain('"result_calculation_id" uuid');

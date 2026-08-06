@@ -5,8 +5,120 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1785788910481,
-      "tag": "0000_sticky_rictor",
+      "when": 1786016958695,
+      "tag": "0000_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786016959100,
+      "tag": "0001_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786016959506,
+      "tag": "0002_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786016959917,
+      "tag": "0003_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786016960330,
+      "tag": "0004_products",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786016960764,
+      "tag": "0005_platform_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786016961214,
+      "tag": "0006_client_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786016961665,
+      "tag": "0007_astrologer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786016962111,
+      "tag": "0008_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786016962567,
+      "tag": "0009_dictionary",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786016963036,
+      "tag": "0010_calculations_matrix",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786016963519,
+      "tag": "0011_astro_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786016964007,
+      "tag": "0012_scheduling",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786016964743,
+      "tag": "0013_flows",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786016965604,
+      "tag": "0014_messaging",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786016966277,
+      "tag": "0015_ai_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786016967150,
+      "tag": "0016_finance",
       "breakpoints": true
     }
   ]

@@ -1,17 +1,25 @@
 import {
   BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED,
+  CHART_CALCULATION_TERMINAL_EVENT,
+  CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FlowExecutionIntegrityError,
   FlowBookingEnrollmentDeferredError,
   FlowBookingEnrollmentIntegrityError,
   FlowBookingLifecycleDeferredError,
   FlowBookingLifecycleIntegrityError,
   FlowBookingLifecycleRuntimeDeferredError,
   bookingLifecycleDispatchRequestedPayloadSchema,
+  chartCalculationTerminalPayloadSchema,
+  clientBirthProfileUpdatedEventSchema,
   flowBookingConfirmedEnrollmentRequestedPayloadV1Schema,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
+  type ChartCalculationTerminalPayload,
+  type ClientBirthProfileUpdatedEvent,
   type FlowBookingConfirmedEnrollmentRequestedPayloadV1,
   type FlowBookingEnrollmentResult,
   type FlowBookingLifecycleProcessingResult,
+  type FlowBirthProfileRecheckResult,
   type FlowRuntimeDispatchOutboxReason,
   type FlowRuntimeDispatchOutboxStore
 } from "@elevenhouse/domain";
@@ -25,10 +33,21 @@ export type FlowBookingLifecycleDispatcher = (
   lifecycleEventId: string
 ) => Promise<FlowBookingLifecycleProcessingResult>;
 
+export type FlowChartTerminalSignalDispatcher = (
+  input: ChartCalculationTerminalPayload & { readonly sourceEventId: string }
+) => Promise<unknown>;
+
+export type FlowBirthProfileRecheckDispatcher = (input: {
+  readonly sourceOutboxEventId: string;
+  readonly event: ClientBirthProfileUpdatedEvent;
+}) => Promise<FlowBirthProfileRecheckResult>;
+
 type FlowRuntimeOutboxRelayInput = {
   readonly store: FlowRuntimeDispatchOutboxStore;
   readonly enrollBookingConfirmed: FlowBookingEnrollmentDispatcher;
   readonly processBookingLifecycleEvent: FlowBookingLifecycleDispatcher;
+  readonly deliverChartTerminalSignal: FlowChartTerminalSignalDispatcher;
+  readonly recheckBirthProfile: FlowBirthProfileRecheckDispatcher;
   readonly now: Date;
   readonly batchSize: number;
   readonly publishingLockTimeoutMs: number;
@@ -69,10 +88,84 @@ export async function relayPendingFlowRuntimeDispatchEvents(
       await relayBookingEnrollment(input, event);
       continue;
     }
+    if (event.eventType === CHART_CALCULATION_TERMINAL_EVENT) {
+      await relayChartTerminalSignal(input, event);
+      continue;
+    }
+    if (event.eventType === CLIENT_BIRTH_PROFILE_UPDATED_EVENT) {
+      await relayBirthProfileRecheck(input, event);
+      continue;
+    }
     await quarantine(input, event, "FLOW_RUNTIME_DISPATCH_EVENT_TYPE_UNSUPPORTED");
   }
 
   return batch.claimed.length + batch.quarantined.length;
+}
+
+async function relayBirthProfileRecheck(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = clientBirthProfileUpdatedEventSchema.safeParse(event.payload);
+  if (!parsedPayload.success) {
+    await quarantine(input, event, "FLOW_BIRTH_PROFILE_RECHECK_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.data.birthDataHistoryId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_BIRTH_PROFILE_RECHECK_AGGREGATE_MISMATCH");
+    return;
+  }
+  let result: FlowBirthProfileRecheckResult;
+  try {
+    result = await input.recheckBirthProfile({
+      sourceOutboxEventId: event.id,
+      event: parsedPayload.data
+    });
+  } catch (error) {
+    if (error instanceof FlowExecutionIntegrityError) {
+      await quarantine(input, event, "FLOW_BIRTH_PROFILE_RECHECK_INTEGRITY_INVALID");
+      return;
+    }
+    await handleTransientFailure(input, event);
+    return;
+  }
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow birth-profile recheck outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    outcome: result.outcome,
+    replayed: result.replayed,
+    affectedRunCount: result.affectedRunCount
+  });
+}
+
+async function relayChartTerminalSignal(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = chartCalculationTerminalPayloadSchema.safeParse(event.payload);
+  if (!parsedPayload.success) {
+    await quarantine(input, event, "FLOW_CHART_TERMINAL_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.data.jobId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_CHART_TERMINAL_AGGREGATE_MISMATCH");
+    return;
+  }
+  try {
+    await input.deliverChartTerminalSignal({ ...parsedPayload.data, sourceEventId: event.id });
+  } catch {
+    await handleTransientFailure(input, event);
+    return;
+  }
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow chart terminal signal outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    outcome: parsedPayload.data.outcome
+  });
 }
 
 async function relayBookingLifecycleEvent(

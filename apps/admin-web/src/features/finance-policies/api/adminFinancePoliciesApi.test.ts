@@ -130,6 +130,81 @@ describe("createAdminFinancePoliciesApi", () => {
     );
   });
 
+  it("uses V2 payout endpoints so the browser never supplies payout ledger facts", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(financeAuthorizationChallenge()))
+      .mockResolvedValueOnce(jsonResponse(payoutResponse({ status: "approved" })))
+      .mockResolvedValueOnce(jsonResponse(financeAuthorizationChallenge()))
+      .mockResolvedValueOnce(jsonResponse(payoutResponse({ status: "processing_manual" })))
+      .mockResolvedValueOnce(jsonResponse(financeAuthorizationChallenge()))
+      .mockResolvedValueOnce(jsonResponse(payoutResponse({ status: "paid" })));
+    const api = createAdminFinancePoliciesApi({
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+    const payoutRequestId = "11111111-1111-4111-8111-111111111111";
+    const authorizationId = "22222222-2222-4222-8222-222222222222";
+
+    await api.beginOnlinePayoutApprovalAuthorization(payoutRequestId);
+    await api.approveOnlinePayout(payoutRequestId, { authorizationId });
+    await api.beginOnlinePayoutManualExecutionAuthorization(payoutRequestId);
+    await api.startOnlinePayoutManualExecution(payoutRequestId, { authorizationId });
+    await api.beginOnlinePayoutPaidAuthorization(payoutRequestId, {
+      bankReference: "bank-transfer-1001",
+      transferredAt: "2026-08-05T10:00:00.000Z",
+      evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111"
+    });
+    await api.confirmOnlinePayoutPaid(payoutRequestId, {
+      authorizationId,
+      bankReference: "bank-transfer-1001",
+      transferredAt: "2026-08-05T10:00:00.000Z",
+      evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111"
+    });
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      `/admin/finance/payout-requests/${payoutRequestId}/approval/authorization`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "x-csrf-token": "csrf-token" })
+      })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      `/admin/finance/payout-requests/${payoutRequestId}/approval`,
+      expect.objectContaining({ body: JSON.stringify({ authorizationId }) })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      4,
+      `/admin/finance/payout-requests/${payoutRequestId}/manual-execution`,
+      expect.objectContaining({ body: JSON.stringify({ authorizationId }) })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      5,
+      `/admin/finance/payout-requests/${payoutRequestId}/paid/authorization`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          bankReference: "bank-transfer-1001",
+          transferredAt: "2026-08-05T10:00:00.000Z",
+          evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111"
+        })
+      })
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      6,
+      `/admin/finance/payout-requests/${payoutRequestId}/paid`,
+      expect.objectContaining({
+        body: JSON.stringify({
+          bankReference: "bank-transfer-1001",
+          transferredAt: "2026-08-05T10:00:00.000Z",
+          evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
+          authorizationId
+        })
+      })
+    );
+  });
+
   it("uploads raw bank evidence only through the authenticated admin API route", async () => {
     const fetcher = vi.fn(async () =>
       jsonResponse({
@@ -390,4 +465,37 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     json: async () => body
   } as Response;
+}
+
+function financeAuthorizationChallenge() {
+  return {
+    challengeId: "11111111-1111-4111-8111-111111111111",
+    expiresAt: "2026-08-05T10:05:00.000Z",
+    publicKey: {
+      challenge: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      rpId: "admin.elevenhouse.test",
+      timeout: 300_000,
+      userVerification: "required"
+    }
+  };
+}
+
+function payoutResponse(overrides: { readonly status: "approved" | "processing_manual" | "paid" }) {
+  const paid = overrides.status === "paid";
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    astrologerUserId: "22222222-2222-4222-8222-222222222222",
+    status: overrides.status,
+    amount: { amountMinor: 10_000_00, currency: "RUB" },
+    method: "manual_bank_transfer",
+    requestedAt: "2026-07-24T10:00:00.000Z",
+    reviewedAt: "2026-07-24T10:05:00.000Z",
+    completedAt: paid ? "2026-07-24T10:20:00.000Z" : null,
+    adminUserId: "33333333-3333-4333-8333-333333333333",
+    adminNote: null,
+    failureReason: null,
+    externalReference: paid ? "bank-transfer-1001" : null,
+    transferredAt: paid ? "2026-07-24T10:20:00.000Z" : null,
+    version: 2
+  };
 }

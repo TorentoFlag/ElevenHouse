@@ -1,8 +1,31 @@
+import { z } from "@elevenhouse/validation";
+
 export type ClientBirthTimePrecision = "exact" | "approximate" | "unknown";
 export type ClientBirthTimeDstOccurrence = "first" | "second";
 
 export type ClientBirthDataSource = "client_profile" | "import" | "manual";
 export type ClientBirthDataEditorRole = "client" | "astrologer";
+
+export const CLIENT_BIRTH_PROFILE_UPDATED_EVENT = "client.birth_profile.updated.v1";
+
+/**
+ * Redacted lifecycle notification for a singleton birth-profile revision.
+ * The profile data itself stays in the profile/history tables and never crosses
+ * the outbox boundary.
+ */
+export const clientBirthProfileUpdatedEventSchema = z
+  .object({
+    schemaVersion: z.literal("client-birth-profile-updated.v1"),
+    birthDataHistoryId: z.string().uuid(),
+    birthDataId: z.string().uuid(),
+    clientUserId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    actorUserId: z.string().uuid(),
+    actorRole: z.enum(["client", "astrologer"]),
+    occurredAt: z.string().datetime({ offset: true })
+  })
+  .strict();
+export type ClientBirthProfileUpdatedEvent = z.infer<typeof clientBirthProfileUpdatedEventSchema>;
 
 export type ClientRelationshipSource =
   | "direct_link"

@@ -180,6 +180,48 @@ export function preparePlatformTariffInitialInvoice(input: Readonly<{
 }
 
 /**
+ * Issues the next immutable billing-period authority for an already activated paid tariff.
+ * The caller must persist the resulting `past_due` state and invoice atomically.  Access is
+ * not extended here: it resumes only after the ordinary verified-provider capture transition.
+ */
+export function preparePlatformTariffRenewalInvoice(input: Readonly<{
+  subscription: PlatformTariffSubscriptionPurchase["subscription"];
+  tariff: PlatformTariffVersion;
+  now: string;
+}>): PlatformTariffSubscriptionPurchase {
+  if (input.subscription.state !== "active" || !input.subscription.startsAt || !input.subscription.endsAt) {
+    fail("invoice_capture_transition_invalid");
+  }
+  const tariff = verifyPlatformTariffVersion(input.tariff);
+  if (
+    (tariff.lifecycle !== "published" && tariff.lifecycle !== "retired") ||
+    input.subscription.tariffSeriesId !== tariff.tariffSeriesId ||
+    input.subscription.tariffVersion !== tariff.version ||
+    input.subscription.tariffVersionDigest !== tariff.canonicalDigest ||
+    input.subscription.commissionBpsSnapshot !== tariff.clientSaleCommissionBps
+  ) fail("subscription_snapshot_mismatch");
+
+  const now = canonicalInstant(input.now);
+  const billingPeriodStartAt = canonicalInstant(input.subscription.endsAt);
+  if (Date.parse(now) < Date.parse(billingPeriodStartAt)) fail("invoice_capture_transition_invalid");
+  const amountMinor = input.subscription.billingCycle === "month"
+    ? tariff.monthlyPriceMinor
+    : tariff.yearlyPriceMinor;
+  if (!minor(amountMinor) || amountMinor === 0) fail("invoice_capture_transition_invalid");
+  const billingPeriodEndAt = addBillingPeriod(billingPeriodStartAt, input.subscription.billingCycle);
+  return Object.freeze({
+    subscription: Object.freeze({ ...input.subscription, state: "past_due" as const }),
+    invoice: Object.freeze({
+      amountMinor,
+      currency: "RUB" as const,
+      state: "open" as const,
+      billingPeriodStartAt,
+      billingPeriodEndAt
+    })
+  });
+}
+
+/**
  * Applies an already verified provider capture to the tariff authority. The worker/UOW must prove
  * the provider result before calling this transition; an invoice in any pre-dispatch state cannot
  * grant access.
@@ -194,7 +236,10 @@ export function applyVerifiedTariffInvoiceCapture(input: Readonly<{
   subscription: PlatformTariffSubscriptionPurchase["subscription"];
   invoice: PlatformTariffInvoiceCaptureAuthority & { state: "captured"; capturedAt: string };
 }> {
-  if (input.subscription.state !== "awaiting_initial_payment" || input.invoice.state !== "payment_pending") {
+  if (
+    (input.subscription.state !== "awaiting_initial_payment" && input.subscription.state !== "past_due") ||
+    input.invoice.state !== "payment_pending"
+  ) {
     fail("invoice_capture_transition_invalid");
   }
   if (
@@ -210,6 +255,10 @@ export function applyVerifiedTariffInvoiceCapture(input: Readonly<{
   const billingPeriodEndAt = canonicalInstant(input.invoice.billingPeriodEndAt);
   const capturedAt = canonicalInstant(input.capturedAt);
   if (Date.parse(billingPeriodEndAt) <= Date.parse(billingPeriodStartAt)) fail("invalid_tariff");
+  if (
+    input.subscription.state === "past_due" &&
+    (input.subscription.endsAt === null || billingPeriodStartAt !== canonicalInstant(input.subscription.endsAt))
+  ) fail("invoice_capture_transition_invalid");
   return Object.freeze({
     subscription: Object.freeze({
       ...input.subscription,

@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   IdempotencyKeyReuseError,
@@ -37,7 +37,7 @@ describe("scheduling command stores Drizzle/PostgreSQL integration", () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${databaseName}"`);
     runtime = createPostgresRuntime({ DATABASE_URL: isolatedDatabaseUrl });
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
   }, 30_000);
 
   afterAll(async () => {

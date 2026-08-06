@@ -17,6 +17,8 @@ export type OnlineWalletPayoutRequestProjection = Readonly<{
   latestTransitionOccurredAt: string;
   latestTransitionFailureReason: string | null;
   latestTransitionAdminNote: string | null;
+  paidBankReference: string | null;
+  paidTransferredAt: string | null;
 }>;
 
 /**

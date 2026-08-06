@@ -2,6 +2,12 @@ import { Module } from "@nestjs/common";
 import { createDrizzleAuditLogStore } from "@elevenhouse/db/audit-log";
 import {
   createDrizzleFinancePolicyStore,
+  createDrizzleBankLiquiditySnapshotAttestationUnitOfWork,
+  createDrizzleCurrentEligibleBankLiquiditySnapshotReader,
+  createDrizzleFinanceOperationResourcePolicyReader,
+  createDrizzleOnlineWalletPayoutApprovalPreparationReader,
+  createDrizzleOnlineWalletPayoutExecutionPreparationReader,
+  createDrizzleOnlineWalletPayoutExecutionUnitOfWork,
   createDrizzleOnlineWalletPayoutRequestReader,
   createDrizzleOnlineWalletPayoutReleaseUnitOfWork,
   createDrizzleOnlineWalletPayoutReviewUnitOfWork,
@@ -17,6 +23,7 @@ import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
+import { AdminFinanceAuthorizationsModule } from "../finance-authorizations/finance-authorizations.module";
 import { DurableAdminFinancePolicyAuditSink } from "./finance-policies.audit";
 import { FinancePoliciesController } from "./finance-policies.controller";
 import { FinancePoliciesService } from "./finance-policies.service";
@@ -24,7 +31,7 @@ import { ADMIN_FINANCE_POLICY_UNIT_OF_WORK } from "./finance-policies.tokens";
 import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
 
 @Module({
-  imports: [DatabaseModule, IdentityModule, SecurityModule],
+  imports: [DatabaseModule, IdentityModule, SecurityModule, AdminFinanceAuthorizationsModule],
   controllers: [FinancePoliciesController],
   providers: [
     FinancePoliciesService,
@@ -80,10 +87,23 @@ function createUnitOfWorkContext(transaction: FinanceTransaction) {
     onlineWalletPayoutRequestReader: createDrizzleOnlineWalletPayoutRequestReader({
       database: transaction
     }),
+    onlineWalletPayoutApprovalPreparationReader:
+      createDrizzleOnlineWalletPayoutApprovalPreparationReader({ database: transaction }),
+    currentEligibleBankLiquiditySnapshotReader:
+      createDrizzleCurrentEligibleBankLiquiditySnapshotReader(transaction),
+    financeOperationResourcePolicyReader: createDrizzleFinanceOperationResourcePolicyReader(transaction),
+    bankLiquiditySnapshotAttestation: createDrizzleBankLiquiditySnapshotAttestationUnitOfWork({
+      database: transaction
+    }),
     onlineWalletPayoutRelease: createDrizzleOnlineWalletPayoutReleaseUnitOfWork({
       database: transaction
     }),
     onlineWalletPayoutReview: createDrizzleOnlineWalletPayoutReviewUnitOfWork({
+      database: transaction
+    }),
+    onlineWalletPayoutExecutionPreparationReader:
+      createDrizzleOnlineWalletPayoutExecutionPreparationReader({ database: transaction }),
+    onlineWalletPayoutExecution: createDrizzleOnlineWalletPayoutExecutionUnitOfWork({
       database: transaction
     }),
     auditSink: new DurableAdminFinancePolicyAuditSink(createDrizzleAuditLogStore(transaction))

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clearPrelaunchBaselineArtifacts,
+  inspectPrelaunchMigrationChain,
   mergePrelaunchBaselineSnapshot,
   mergePrelaunchBaselineSql
 } from "./consolidate-prelaunch-baseline";
@@ -84,15 +85,15 @@ SELECT 1;
     ).toThrow("generated delta owns an integrity block");
   });
 
-  it("clears only the three generated root artifacts before a clean pre-launch rebuild", async () => {
+  it("clears the exact root artifacts before a clean pre-launch rebuild", async () => {
     const directory = await mkdtemp(join(tmpdir(), "elevenhouse-baseline-"));
     const metadataDirectory = join(directory, "meta");
     await mkdir(metadataDirectory);
-    await Promise.all([
-      writeFile(join(directory, ".gitkeep"), ""),
-      writeFile(join(directory, "0000_sticky_rictor.sql"), "old baseline"),
-      writeFile(join(metadataDirectory, "0000_snapshot.json"), "{}"),
-      writeFile(join(metadataDirectory, "_journal.json"), "{}")
+      await Promise.all([
+        writeFile(join(directory, ".gitkeep"), ""),
+        writeFile(join(directory, "0000_sticky_rictor.sql"), "old baseline"),
+        writeFile(join(metadataDirectory, "0000_snapshot.json"), snapshot("root", zeroSnapshotId)),
+        writeFile(join(metadataDirectory, "_journal.json"), journal(["0000_sticky_rictor"]))
     ]);
 
     try {
@@ -109,7 +110,7 @@ SELECT 1;
     }
   });
 
-  it("refuses to clear a directory containing another migration artifact", async () => {
+  it("refuses to clear a non-contiguous migration artifact", async () => {
     const directory = await mkdtemp(join(tmpdir(), "elevenhouse-baseline-"));
     const metadataDirectory = join(directory, "meta");
     await mkdir(metadataDirectory);
@@ -117,10 +118,81 @@ SELECT 1;
 
     try {
       await expect(clearPrelaunchBaselineArtifacts(directory)).rejects.toThrow(
-        "unexpected SQL migrations"
+        "SQL migrations are not contiguous from 0000"
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("clears a fully validated contiguous generated chain for root regeneration", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "elevenhouse-baseline-"));
+    const metadataDirectory = join(directory, "meta");
+    await mkdir(metadataDirectory);
+    await Promise.all([
+      writeFile(join(directory, "0000_sticky_rictor.sql"), "root"),
+      writeFile(join(directory, "0001_sticky_rictor.sql"), "first delta"),
+      writeFile(join(directory, "0002_sticky_rictor.sql"), "second delta"),
+      writeFile(join(metadataDirectory, "0000_snapshot.json"), snapshot("root", zeroSnapshotId)),
+      writeFile(join(metadataDirectory, "0001_snapshot.json"), snapshot("one", "root")),
+      writeFile(join(metadataDirectory, "0002_snapshot.json"), snapshot("two", "one")),
+      writeFile(
+        join(metadataDirectory, "_journal.json"),
+        journal(["0000_sticky_rictor", "0001_sticky_rictor", "0002_sticky_rictor"])
+      )
+    ]);
+
+    try {
+      const inspected = await inspectPrelaunchMigrationChain(directory);
+      expect(inspected.sqlPaths).toHaveLength(3);
+      expect(inspected.snapshotPaths).toHaveLength(3);
+
+      await clearPrelaunchBaselineArtifacts(directory);
+
+      await expect(readFile(join(directory, "0000_sticky_rictor.sql"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(directory, "0001_sticky_rictor.sql"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(directory, "0002_sticky_rictor.sql"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(metadataDirectory, "0002_snapshot.json"), "utf8")).rejects.toThrow();
+      await expect(readFile(join(metadataDirectory, "_journal.json"), "utf8")).resolves.toBe(
+        '{\n  "version": "7",\n  "dialect": "postgresql",\n  "entries": []\n}\n'
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to clear a skipped or divergent generated chain", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "elevenhouse-baseline-"));
+    const metadataDirectory = join(directory, "meta");
+    await mkdir(metadataDirectory);
+    await Promise.all([
+      writeFile(join(directory, "0000_sticky_rictor.sql"), "root"),
+      writeFile(join(directory, "0002_sticky_rictor.sql"), "skipped delta"),
+      writeFile(join(metadataDirectory, "0000_snapshot.json"), snapshot("root", zeroSnapshotId)),
+      writeFile(join(metadataDirectory, "0002_snapshot.json"), snapshot("two", "root")),
+      writeFile(join(metadataDirectory, "_journal.json"), journal(["0000_sticky_rictor", "0002_sticky_rictor"]))
+    ]);
+
+    try {
+      await expect(clearPrelaunchBaselineArtifacts(directory)).rejects.toThrow(
+        "SQL migrations are not contiguous from 0000"
       );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });
 });
+
+const zeroSnapshotId = "00000000-0000-0000-0000-000000000000";
+
+function snapshot(id: string, prevId: string): string {
+  return JSON.stringify({ id, prevId, version: "7", dialect: "postgresql", tables: {} });
+}
+
+function journal(tags: readonly string[]): string {
+  return JSON.stringify({
+    version: "7",
+    dialect: "postgresql",
+    entries: tags.map((tag, idx) => ({ idx, version: "7", when: idx + 1, tag, breakpoints: true }))
+  });
+}

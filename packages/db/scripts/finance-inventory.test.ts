@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runFinanceInventoryCli, type FinanceInventoryCliClient } from "./finance-inventory";
-import { currentBaseline } from "./production-baseline-plan";
+import { approvedLineage } from "./production-baseline-plan";
 
 describe("finance inventory CLI", () => {
   it.each([
@@ -74,7 +74,7 @@ describe("finance inventory CLI", () => {
         if (text.includes("finance_inventory:migration_ledger")) {
           return {
             rows: [
-              { hash: currentBaseline.hash, created_at: currentBaseline.createdAt }
+              ...approvedLineage.map((migration) => ({ hash: migration.hash, created_at: migration.createdAt }))
             ] as unknown as readonly Row[]
           };
         }
@@ -146,12 +146,10 @@ describe("finance inventory CLI", () => {
         }
         if (text.includes("finance_inventory:migration_ledger")) {
           return {
-            rows: [
-              {
-                hash: currentBaseline.hash,
-                created_at: currentBaseline.createdAt
-              }
-            ] as unknown as readonly Row[]
+            rows: approvedLineage.map((migration) => ({
+              hash: migration.hash,
+              created_at: migration.createdAt
+            })) as unknown as readonly Row[]
           };
         }
         return { rows: [] };
@@ -186,7 +184,7 @@ describe("finance inventory CLI", () => {
               ? ([{ transaction_read_only: "on" }] as unknown as readonly Row[])
               : text.includes("finance_inventory:migration_ledger")
                 ? ([
-                    { hash: currentBaseline.hash, created_at: currentBaseline.createdAt }
+                    ...approvedLineage.map((migration) => ({ hash: migration.hash, created_at: migration.createdAt }))
                   ] as unknown as readonly Row[])
               : []
         })

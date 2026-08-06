@@ -134,7 +134,7 @@ export function mapPlatformTariffInvoiceChargePreparationCandidate(
       request.invoiceId !== invoice.id || request.subscriptionId !== subscription.id ||
       request.expectedInvoiceVersion !== invoice.version || request.expectedSubscriptionVersion !== subscription.version ||
       invoice.state !== "open" || invoice.amountMinor <= 0 || invoice.currency !== "RUB" ||
-      subscription.state !== "awaiting_initial_payment" || subscription.startsAt !== null || subscription.endsAt !== null ||
+      !chargeableSubscriptionForInvoice(subscription, invoice) ||
       invoice.subscriptionId !== subscription.id || invoice.ownerUserId !== subscription.ownerUserId ||
       invoice.tariffSeriesId !== subscription.tariffSeriesId || invoice.tariffVersion !== subscription.tariffVersion || invoice.tariffVersionDigest !== subscription.tariffVersionDigest ||
       credentialHead.currentLifecycle !== "active" || credentialHead.currentCredentialId !== credential.credentialId || credentialHead.currentCredentialVersion !== credential.credentialVersion ||
@@ -171,7 +171,9 @@ export function mapPlatformTariffInvoiceChargePreparationCandidate(
         tariffSeriesId: subscription.tariffSeriesId, tariffVersion: subscription.tariffVersion,
         tariffVersionDigest: subscription.tariffVersionDigest as `sha256:${string}`,
         commissionBpsSnapshot: subscription.commissionBpsSnapshot, billingCycle: cycle(subscription.billingCycle),
-        state: "awaiting_initial_payment", version: subscription.version, startsAt: null, endsAt: null
+        state: subscription.state as "awaiting_initial_payment" | "past_due", version: subscription.version,
+        startsAt: subscription.startsAt ? iso(subscription.startsAt) : null,
+        endsAt: subscription.endsAt ? iso(subscription.endsAt) : null
       }),
       savedCardCredential: Object.freeze({
         kind: "restricted_saved_card_credential_ref", schemaVersion: 1,
@@ -197,4 +199,17 @@ function cycle(value: string): "month" | "year" { if (value === "month" || value
 function iso(value: Date | string): string { const date = value instanceof Date ? value : new Date(value); if (Number.isNaN(date.getTime())) throw new Error("invalid date"); return date.toISOString(); }
 function validBuyerContact(kind: string, value: string): kind is "email" | "phone" {
   return (kind === "email" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) || (kind === "phone" && /^\+[1-9][0-9]{1,14}$/.test(value));
+}
+
+function chargeableSubscriptionForInvoice(
+  subscription: typeof platformTariffSubscriptions.$inferSelect,
+  invoice: typeof platformTariffInvoices.$inferSelect
+): boolean {
+  if (subscription.state === "awaiting_initial_payment") {
+    return subscription.startsAt === null && subscription.endsAt === null;
+  }
+  if (subscription.state !== "past_due" || subscription.startsAt === null || subscription.endsAt === null) {
+    return false;
+  }
+  return iso(invoice.billingPeriodStartAt) === iso(subscription.endsAt);
 }

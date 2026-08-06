@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
@@ -18,7 +18,7 @@ describe.sequential("payout request canonical persistence baseline", () => {
     await admin.connect();
     await admin.query(`create database "${databaseName}"`);
     await isolated.connect();
-    await isolated.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await isolated.query(readCurrentMigrationSql());
   }, 30_000);
 
   afterAll(async () => {

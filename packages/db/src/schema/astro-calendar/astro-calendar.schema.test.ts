@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableName } from "drizzle-orm";
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { astroCalendarEvents, astroCalendarGenerations } from "../index";
 
-const baselineMigrationFile = "packages/db/drizzle/0000_sticky_rictor.sql";
+const baselineMigrationFile = readCurrentMigrationSql();
 
 describe("Astro Calendar persistence schema", () => {
   it("exports generation and event read-model tables", () => {
@@ -80,7 +80,7 @@ describe("Astro Calendar persistence schema", () => {
   });
 
   it("keeps Astro Calendar DDL in the single current baseline", () => {
-    const migration = readFileSync(baselineMigrationFile, "utf8");
+    const migration = baselineMigrationFile;
 
     expect(migration).toContain('CREATE TABLE "astro_calendar_generations"');
     expect(migration).toContain('CREATE TABLE "astro_calendar_events"');

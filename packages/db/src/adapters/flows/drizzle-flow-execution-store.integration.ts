@@ -9,6 +9,7 @@ import {
   createBookingLifecycleEvent,
   createBuiltInFlowNodeExecutorRegistry,
   createFlowNodeExecutorRegistry,
+  FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
   interpretFlowExecutionClaim,
   listOwnerFlowWorkItems,
   normalizeBookingConfirmedFlowLifecycleEvent,
@@ -27,16 +28,22 @@ import { reconcileAuditActorSubjects } from "../../../scripts/audit-actor-subjec
 import { reconcileFlowRuntimeControlAuthority } from "../../../scripts/flow-runtime-control-reconciliation";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { createDrizzleFlowExecutionStore } from "./drizzle-flow-execution-store";
+import {
+  createDrizzleFlowExecutionSignalStore,
+  createDrizzleFlowExecutionStore
+} from "./drizzle-flow-execution-store";
 import { createDrizzleFlowBookingLifecycleStore } from "./drizzle-flow-booking-lifecycle-store";
 import { createDrizzleFlowRunCancellationStore } from "./drizzle-flow-run-cancellation-store";
 import { createDrizzleFlowWorkItemWakeStore } from "./drizzle-flow-work-item-wake-store";
 import { createDrizzleFlowWorkItemStore } from "./drizzle-flow-work-item-store";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 
 const integrationDatabaseUrl = getIntegrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
-const integrationBaselinePath =
-  process.env.FLOW_INTEGRATION_BASELINE_PATH ?? "packages/db/drizzle/0000_sticky_rictor.sql";
+const integrationMigrationPaths = (process.env.FLOW_INTEGRATION_MIGRATION_PATHS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const databaseName = `elevenhouse_flow_execution_${randomUUID().replaceAll("-", "")}`;
 const isolatedDatabaseUrl = withDatabaseName(integrationDatabaseUrl, databaseName);
 const adminClient = new Client({ connectionString: integrationDatabaseUrl });
@@ -183,6 +190,59 @@ const workItemGraph = flowGraphV2Schema.parse({
   ]
 });
 
+const chartWaitGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { productIds: ["10000000-0000-4000-8000-000000000001"] }
+    },
+    {
+      id: "natal-chart",
+      kind: "natal_chart_request",
+      displayTitle: "Рассчитать натальную карту",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        interpretationMode: "adult_natal",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    }
+  ],
+  edges: [
+    {
+      id: "booking-natal-chart",
+      sourceNodeId: "booking",
+      targetNodeId: "natal-chart",
+      sourceHandle: "next"
+    },
+    {
+      id: "natal-chart-completed",
+      sourceNodeId: "natal-chart",
+      targetNodeId: "completed",
+      sourceHandle: "next"
+    }
+  ]
+});
+
 const bookingWorkItemGraph = flowGraphV2Schema.parse({
   schemaVersion: "flow-graph.v2",
   nodes: [
@@ -243,6 +303,7 @@ function requireCapabilityManifest(input: FlowGraphV2) {
 const capabilityManifest = requireCapabilityManifest(graph);
 const advancingCapabilityManifest = requireCapabilityManifest(advancingGraph);
 const workItemCapabilityManifest = requireCapabilityManifest(workItemGraph);
+const chartWaitCapabilityManifest = requireCapabilityManifest(chartWaitGraph);
 const bookingWorkItemCapabilityManifest = requireCapabilityManifest(bookingWorkItemGraph);
 
 function createBirthDataRegistry() {
@@ -270,7 +331,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(readFileSync(integrationBaselinePath, "utf8"));
+    await runtime.pool.query(integrationMigrationPaths.length ? integrationMigrationPaths.map((migrationPath) => readFileSync(migrationPath, "utf8")).join("\n") : readCurrentMigrationSql());
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     try {
@@ -710,6 +771,252 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         [fixture.runId]
       )
     ).resolves.toMatchObject({ rows: [{ count: "1" }] });
+  });
+
+  it("persists a chart terminal-signal wait without advancing the token", async () => {
+    const fixture = await createChartWaitFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-chart-wait",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_request:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartRequester: {
+          request: async () => ({ kind: "active_job", jobId: fixture.chartJobId })
+        }
+      })
+    });
+
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied",
+      traceSequence: 1n
+    });
+
+    const [execution, waits] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_execution_signal_waits where token_id = $1", [
+        fixture.tokenId
+      ])
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "waiting",
+      current_node_id: "natal-chart",
+      trace_sequence: "1"
+    });
+    expect(execution.token).toMatchObject({
+      state: "waiting_signal",
+      node_id: "natal-chart",
+      node_activation_sequence: "1"
+    });
+    expect(execution.attempts).toMatchObject([
+      {
+        node_id: "natal-chart",
+        outcome: "waiting",
+        result_code: "FLOW_WAITING_SIGNAL",
+        trace_summary: decision.trace
+      }
+    ]);
+    expect(waits.rows).toMatchObject([
+      {
+        owner_user_id: fixture.ownerUserId,
+        flow_run_id: fixture.runId,
+        flow_version_id: fixture.flowVersionId,
+        token_id: fixture.tokenId,
+        node_activation_sequence: "1",
+        node_id: "natal-chart",
+        signal_type: "chart.calculation.terminal.v1",
+        correlation_id: fixture.chartJobId,
+        success_handle: "next",
+        state: "waiting",
+        consumed_signal_id: null
+      }
+    ]);
+  });
+
+  it("consumes a successful chart terminal signal once and resumes the pinned next node", async () => {
+    const fixture = await createChartWaitFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const signalStore = createDrizzleFlowExecutionSignalStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-chart-signal-success",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_request:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartRequester: {
+          request: async () => ({ kind: "active_job", jobId: fixture.chartJobId })
+        }
+      })
+    });
+    await store.finalize({ claim, decision });
+
+    const sourceEventId = randomUUID();
+    await expect(
+      signalStore.ingest({
+        sourceEventId,
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId: fixture.chartJobId,
+        outcome: "succeeded",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "consumed", runId: fixture.runId, traceSequence: 2n });
+    await expect(
+      signalStore.ingest({
+        sourceEventId,
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId: fixture.chartJobId,
+        outcome: "succeeded",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "replayed" });
+
+    const [execution, waits, inbox] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_execution_signal_waits where token_id = $1", [
+        fixture.tokenId
+      ]),
+      runtime.pool.query("select * from flow_execution_signal_inbox where source_event_id = $1", [
+        sourceEventId
+      ])
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "running",
+      current_node_id: "completed",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "runnable",
+      node_id: "completed",
+      node_kind: "completed",
+      node_activation_sequence: "2"
+    });
+    expect(execution.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting", node_id: "natal-chart" },
+      {
+        sequence: "2",
+        event_type: "token_signaled",
+        node_id: "natal-chart",
+        summary: {
+          reasonCode: "FLOW_CHART_CALCULATION_COMPLETED",
+          resultCode: "FLOW_TOKEN_ADVANCED",
+          targetNodeId: "completed"
+        }
+      }
+    ]);
+    expect(waits.rows).toMatchObject([{ state: "consumed", consumed_signal_id: inbox.rows[0]?.id }]);
+    expect(inbox.rows).toMatchObject([{ source_event_id: sourceEventId, outcome: "succeeded" }]);
+    expect(inbox.rows[0]?.consumed_at).not.toBeNull();
+  });
+
+  it("terminally fails the waiting Flow when the chart terminal signal fails", async () => {
+    const fixture = await createChartWaitFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const signalStore = createDrizzleFlowExecutionSignalStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-chart-signal-failure",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_request:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartRequester: {
+          request: async () => ({ kind: "active_job", jobId: fixture.chartJobId })
+        }
+      })
+    });
+    await store.finalize({ claim, decision });
+
+    await expect(
+      signalStore.ingest({
+        sourceEventId: randomUUID(),
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId: fixture.chartJobId,
+        outcome: "failed",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "consumed", runId: fixture.runId, traceSequence: 2n });
+
+    const execution = await selectExecution(fixture.runId);
+    expect(execution.run).toMatchObject({
+      status: "failed_terminal",
+      current_node_id: "natal-chart",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "failed",
+      failure_disposition: "failed_terminal",
+      failure_reason_code: "FLOW_CHART_CALCULATION_FAILED"
+    });
+    expect(execution.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting", node_id: "natal-chart" },
+      {
+        sequence: "2",
+        event_type: "run_failed",
+        node_id: "natal-chart",
+        summary: {
+          reasonCode: "FLOW_CHART_CALCULATION_FAILED",
+          resultCode: "FLOW_EXECUTION_FAILED_TERMINAL"
+        }
+      }
+    ]);
+  });
+
+  it("consumes a stored terminal signal when the chart wait is persisted later", async () => {
+    const fixture = await createChartWaitFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const signalStore = createDrizzleFlowExecutionSignalStore(runtime.database);
+    const sourceEventId = randomUUID();
+    await expect(
+      signalStore.ingest({
+        sourceEventId,
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId: fixture.chartJobId,
+        outcome: "succeeded",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "stored" });
+
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-chart-signal-before-wait",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_request:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartRequester: {
+          request: async () => ({ kind: "active_job", jobId: fixture.chartJobId })
+        }
+      })
+    });
+
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied",
+      traceSequence: 2n
+    });
+    const execution = await selectExecution(fixture.runId);
+    expect(execution.run).toMatchObject({ status: "running", trace_sequence: "2" });
+    expect(execution.token).toMatchObject({ state: "runnable", node_id: "completed" });
+    await expect(
+      signalStore.ingest({
+        sourceEventId,
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+        correlationId: fixture.chartJobId,
+        outcome: "succeeded",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "replayed" });
   });
 
   it("pins a booking-relative deadline in the human work item", async () => {
@@ -3856,6 +4163,21 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       },
       capabilityManifest: workItemCapabilityManifest
     });
+  }
+
+  async function createChartWaitFixture(ownerUserId?: string) {
+    const fixture = await createTerminalFixture({
+      ownerUserId,
+      graph: chartWaitGraph,
+      initialNode: {
+        id: "natal-chart",
+        kind: "natal_chart_request",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: chartWaitCapabilityManifest
+    });
+    return { ...fixture, chartJobId: randomUUID() };
   }
 
   async function createBookingWorkItemFixture(ownerUserId?: string) {

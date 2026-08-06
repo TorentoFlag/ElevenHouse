@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Inject,
   Param,
@@ -19,6 +20,7 @@ import type {
   ReconciliationRecordResponse,
   PayoutRequestResponse,
   AstrologerRiskProfileResponse,
+  BeginFinanceAuthorizationResponse,
   FinancePoliciesResponse,
   FinancePolicyResponse,
   OrderResponse
@@ -137,6 +139,82 @@ export class FinancePoliciesController {
       body
     );
   }
+
+  @Post("payout-requests/:payoutRequestId/approval/authorization")
+  @RequireCsrf()
+  beginOnlinePayoutApprovalAuthorization(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string
+  ): Promise<BeginFinanceAuthorizationResponse> {
+    return this.service.beginOnlinePayoutApprovalAuthorization(
+      requireSuperAdminAccount(request),
+      payoutRequestId
+    );
+  }
+
+  @Post("payout-requests/:payoutRequestId/approval")
+  @RequireCsrf()
+  approveOnlinePayout(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string,
+    @Body() body: unknown
+  ): Promise<PayoutRequestResponse> {
+    return this.service.approveOnlinePayout(requireSuperAdminAccount(request), payoutRequestId, body);
+  }
+
+  @Post("payout-requests/:payoutRequestId/manual-execution/authorization")
+  @RequireCsrf()
+  beginOnlinePayoutManualExecutionAuthorization(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string
+  ): Promise<BeginFinanceAuthorizationResponse> {
+    return this.service.beginOnlinePayoutManualExecutionAuthorization(
+      requireSuperAdminAccount(request),
+      payoutRequestId
+    );
+  }
+
+  @Post("payout-requests/:payoutRequestId/manual-execution")
+  @RequireCsrf()
+  startOnlinePayoutManualExecution(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string,
+    @Body() body: unknown
+  ): Promise<PayoutRequestResponse> {
+    return this.service.startOnlinePayoutManualExecution(
+      requireSuperAdminAccount(request),
+      payoutRequestId,
+      body
+    );
+  }
+
+  @Post("payout-requests/:payoutRequestId/paid/authorization")
+  @RequireCsrf()
+  beginOnlinePayoutPaidAuthorization(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string,
+    @Body() body: unknown
+  ): Promise<BeginFinanceAuthorizationResponse> {
+    return this.service.beginOnlinePayoutPaidAuthorization(
+      requireSuperAdminAccount(request),
+      payoutRequestId,
+      body
+    );
+  }
+
+  @Post("payout-requests/:payoutRequestId/paid")
+  @RequireCsrf()
+  confirmOnlinePayoutPaid(
+    @Req() request: AdminSessionRequest,
+    @Param("payoutRequestId") payoutRequestId: string,
+    @Body() body: unknown
+  ): Promise<PayoutRequestResponse> {
+    return this.service.confirmOnlinePayoutPaid(
+      requireSuperAdminAccount(request),
+      payoutRequestId,
+      body
+    );
+  }
 }
 
 function requireAdminUserId(request: AdminSessionRequest): string {
@@ -147,6 +225,14 @@ function requireAdminAccount(request: AdminSessionRequest): AdminAuthenticatedAc
   const account = request.currentAdminAccount;
   if (!account) {
     throw new UnauthorizedException("Valid admin session is required");
+  }
+  return account;
+}
+
+function requireSuperAdminAccount(request: AdminSessionRequest): AdminAuthenticatedAccount {
+  const account = requireAdminAccount(request);
+  if (!account.roles.includes("super_admin")) {
+    throw new ForbiddenException("Super-admin finance authorization is required");
   }
   return account;
 }

@@ -217,72 +217,56 @@ describe("FinancePoliciesPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Одобрить" }));
     await waitFor(() =>
-      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+      expect(api.approveOnlinePayout).toHaveBeenCalledWith(
         "11111111-1111-4111-8111-111111111111",
         {
-          status: "approved",
-          expectedVersion: 2,
-          authorizationId: "22222222-2222-4222-8222-222222222222",
-          adminNote: null
+          authorizationId: "22222222-2222-4222-8222-222222222222"
         }
       )
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Передать в банк" }));
     await waitFor(() =>
-      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+      expect(api.startOnlinePayoutManualExecution).toHaveBeenCalledWith(
         "11111111-1111-4111-8111-111111111111",
         {
-          status: "processing_manual",
-          expectedVersion: 3,
-          authorizationId: "33333333-3333-4333-8333-333333333333",
-          adminNote: null
+          authorizationId: "33333333-3333-4333-8333-333333333333"
         }
       )
     );
 
-    fireEvent.change(screen.getByLabelText("External reference"), {
+    fireEvent.change(screen.getByLabelText("Банковский reference"), {
       target: { value: "bank-transfer-1001" }
     });
     await uploadPaidPayoutEvidence(api);
     fireEvent.click(screen.getByRole("button", { name: "Отметить оплаченной" }));
 
     await waitFor(() =>
-      expect(api.updatePayoutRequestStatus).toHaveBeenCalledWith(
+      expect(api.confirmOnlinePayoutPaid).toHaveBeenCalledWith(
         "11111111-1111-4111-8111-111111111111",
         {
-          status: "paid",
-          expectedVersion: 4,
           authorizationId: "44444444-4444-4444-8444-444444444444",
-          externalReference: "bank-transfer-1001",
+          bankReference: "bank-transfer-1001",
           transferredAt: expect.any(String),
-          proofArtifact: {
-            artifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
-            sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            byteLength: 1024
-          },
-          adminNote: null
+          evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111"
         }
       )
     );
-    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(1, {
-      actionKind: "payout_approve",
-      aggregateId: "11111111-1111-4111-8111-111111111111",
-      expectedVersion: 2,
-      payload: { status: "approved", adminNote: null }
-    });
-    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(2, {
-      actionKind: "payout_start_processing",
-      aggregateId: "11111111-1111-4111-8111-111111111111",
-      expectedVersion: 3,
-      payload: { status: "processing_manual", adminNote: null }
-    });
-    expect(authorizationClient.authorize).toHaveBeenNthCalledWith(3, {
-      actionKind: "payout_confirm_paid",
-      aggregateId: "11111111-1111-4111-8111-111111111111",
-      expectedVersion: 4,
-      payload: expect.objectContaining({ status: "paid", externalReference: "bank-transfer-1001" })
-    });
+    expect(api.beginOnlinePayoutApprovalAuthorization).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111"
+    );
+    expect(api.beginOnlinePayoutManualExecutionAuthorization).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111"
+    );
+    expect(api.beginOnlinePayoutPaidAuthorization).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      expect.objectContaining({
+        bankReference: "bank-transfer-1001",
+        evidenceArtifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111"
+      })
+    );
+    expect(authorizationClient.complete).toHaveBeenCalledTimes(3);
+    expect(authorizationClient.authorize).not.toHaveBeenCalled();
   });
 
   it("does not offer a bank handoff before a second administrator has approved the payout", async () => {
@@ -301,7 +285,7 @@ describe("FinancePoliciesPage", () => {
   it("shows an actionable CSRF/session error for protected finance mutations", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
-    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+    vi.mocked(api.confirmOnlinePayoutPaid).mockRejectedValue(
       new AdminFinancePoliciesApiError(403, {
         message: "CSRF token is missing or invalid"
       })
@@ -310,7 +294,7 @@ describe("FinancePoliciesPage", () => {
     render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
-    fireEvent.change(screen.getByLabelText("External reference"), {
+    fireEvent.change(screen.getByLabelText("Банковский reference"), {
       target: { value: "bank-transfer-1001" }
     });
     await uploadPaidPayoutEvidence(api);
@@ -324,7 +308,7 @@ describe("FinancePoliciesPage", () => {
   it("shows payout evidence guidance when a finance mutation is rejected as invalid", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
-    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+    vi.mocked(api.confirmOnlinePayoutPaid).mockRejectedValue(
       new AdminFinancePoliciesApiError(400, {
         message: "payout_status_evidence_invalid"
       })
@@ -333,7 +317,7 @@ describe("FinancePoliciesPage", () => {
     render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
-    fireEvent.change(screen.getByLabelText("External reference"), {
+    fireEvent.change(screen.getByLabelText("Банковский reference"), {
       target: { value: "bank-transfer-1001" }
     });
     await uploadPaidPayoutEvidence(api);
@@ -341,13 +325,13 @@ describe("FinancePoliciesPage", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("проверьте подтверждение выплаты");
-    expect(alert.textContent).toContain("External reference");
+    expect(alert.textContent).toContain("банковский reference");
   });
 
   it("shows stale-state guidance when a payout mutation conflicts with backend state", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
-    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+    vi.mocked(api.confirmOnlinePayoutPaid).mockRejectedValue(
       new AdminFinancePoliciesApiError(409, {
         message: "payout_status_transition_invalid"
       })
@@ -356,7 +340,7 @@ describe("FinancePoliciesPage", () => {
     render(<FinancePoliciesPage api={api} authorizationClient={authorizationStub()} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
-    fireEvent.change(screen.getByLabelText("External reference"), {
+    fireEvent.change(screen.getByLabelText("Банковский reference"), {
       target: { value: "bank-transfer-1001" }
     });
     await uploadPaidPayoutEvidence(api);
@@ -370,7 +354,7 @@ describe("FinancePoliciesPage", () => {
   it("lets operators refresh the finance queue directly from a mutation error", async () => {
     const api = apiStub();
     vi.mocked(api.listPayoutRequests).mockResolvedValue(payoutQueue([payoutRequest()]));
-    vi.mocked(api.updatePayoutRequestStatus).mockRejectedValue(
+    vi.mocked(api.confirmOnlinePayoutPaid).mockRejectedValue(
       new AdminFinancePoliciesApiError(409, {
         message: "payout_status_transition_invalid"
       })
@@ -379,7 +363,7 @@ describe("FinancePoliciesPage", () => {
     render(<FinancePoliciesPage api={api} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
-    fireEvent.change(screen.getByLabelText("External reference"), {
+    fireEvent.change(screen.getByLabelText("Банковский reference"), {
       target: { value: "bank-transfer-1001" }
     });
     await uploadPaidPayoutEvidence(api);
@@ -454,7 +438,7 @@ describe("FinancePoliciesPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Выплаты" }));
 
     expect(await screen.findByText("Payout detail")).toBeTruthy();
-    expect(screen.getAllByText("External reference").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Банковский reference").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("bank-transfer-777")).toBeTruthy();
     expect(screen.getByText("Admin actor")).toBeTruthy();
     expect(screen.getByText("77777777...7777")).toBeTruthy();
@@ -691,6 +675,21 @@ function apiStub(): AdminFinancePoliciesApi {
     })),
     resolveReconciliationException: vi.fn(),
     updatePayoutRequestStatus: vi.fn(),
+    beginOnlinePayoutApprovalAuthorization: vi.fn(async () => financeAuthorizationChallenge()),
+    approveOnlinePayout: vi.fn(async () => payoutRequest({ status: "approved", version: 2 })),
+    beginOnlinePayoutManualExecutionAuthorization: vi.fn(async () => financeAuthorizationChallenge()),
+    startOnlinePayoutManualExecution: vi.fn(async () =>
+      payoutRequest({ status: "processing_manual", version: 3 })
+    ),
+    beginOnlinePayoutPaidAuthorization: vi.fn(async () => financeAuthorizationChallenge()),
+    confirmOnlinePayoutPaid: vi.fn(async () =>
+      payoutRequest({
+        status: "paid",
+        version: 4,
+        externalReference: "bank-transfer-1001",
+        transferredAt: "2026-08-05T10:00:00.000Z"
+      })
+    ),
     uploadPayoutBankEvidence: vi.fn(async () => ({
       artifactId: "bank-transfer-proof:11111111-1111-4111-8111-111111111111",
       sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -702,7 +701,8 @@ function apiStub(): AdminFinancePoliciesApi {
 
 function authorizationStub(): AdminFinanceAuthorizationClient {
   return {
-    authorize: vi
+    authorize: vi.fn(),
+    complete: vi
       .fn()
       .mockResolvedValueOnce({
         authorizationId: "22222222-2222-4222-8222-222222222222",
@@ -716,5 +716,18 @@ function authorizationStub(): AdminFinanceAuthorizationClient {
         authorizationId: "44444444-4444-4444-8444-444444444444",
         expiresAt: "2026-08-05T10:05:00.000Z"
       })
+  };
+}
+
+function financeAuthorizationChallenge() {
+  return {
+    challengeId: "11111111-1111-4111-8111-111111111111",
+    expiresAt: "2026-08-05T10:05:00.000Z",
+    publicKey: {
+      challenge: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      rpId: "admin.elevenhouse.test",
+      timeout: 300_000 as const,
+      userVerification: "required" as const
+    }
   };
 }

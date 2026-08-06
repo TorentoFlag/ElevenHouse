@@ -21,6 +21,7 @@ import {
   flowExecutionRetryableFailureReasonCodeValues,
   flowExecutionRetryPolicyV1,
   FlowExecutionIntegrityError,
+  FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
   FlowBookingExecutionContextIntegrityError,
   FlowRuntimeControlIntegrityError,
   FlowWorkerReadinessLeaseLostError,
@@ -43,6 +44,8 @@ import {
   type FlowExecutionOwnerScope,
   type FlowExecutionRunDetail,
   type FlowExecutionStore,
+  type FlowExecutionSignalIngestResult,
+  type FlowExecutionSignalStore,
   type FlowExecutionTokenDetail,
   type FlowExecutionWorkerStore,
   type FlowNodeExecutorKey,
@@ -54,6 +57,8 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowBookingLifecycleHeads,
   flowExecutionAttempts,
+  flowExecutionSignalInbox,
+  flowExecutionSignalWaits,
   flowExecutionTokens,
   flowRuntimeOwnerSubjects,
   flowRuntimeEvents,
@@ -172,6 +177,38 @@ export function createDrizzleFlowExecutionStore(database: ElevenHouseDatabase): 
     finalizeFailure: (input) => finalizeFailure(database, input),
     recoverExpired: (input) => recoverExpired(database, input),
     getRunDetail: (input) => getRunDetail(database, input)
+  };
+}
+
+export function createDrizzleFlowExecutionSignalStore(
+  database: ElevenHouseDatabase
+): FlowExecutionSignalStore {
+  return {
+    ingest: async (input) => {
+      validateFlowExecutionSignalInput(input);
+      return database.transaction(async (transaction) => {
+        const [signal] = await transaction
+          .insert(flowExecutionSignalInbox)
+          .values({
+            sourceEventId: input.sourceEventId,
+            ownerUserId: input.ownerUserId,
+            signalType: input.signalType,
+            correlationId: input.correlationId,
+            outcome: input.outcome,
+            occurredAt: new Date(input.occurredAt)
+          })
+          .onConflictDoNothing()
+          .returning({
+            id: flowExecutionSignalInbox.id,
+            ownerUserId: flowExecutionSignalInbox.ownerUserId,
+            signalType: flowExecutionSignalInbox.signalType,
+            correlationId: flowExecutionSignalInbox.correlationId,
+            outcome: flowExecutionSignalInbox.outcome
+          });
+        if (!signal) return { status: "replayed" } as const;
+        return consumeFlowExecutionSignal(transaction, signal);
+      });
+    }
   };
 }
 
@@ -898,6 +935,11 @@ async function finalize(
       readonly dueAt: string | null;
       readonly dueBookingLifecycleRevision: number | null;
     } | null = null;
+    let signalWait: {
+      readonly signalType: "chart.calculation.terminal.v1";
+      readonly correlationId: string;
+      readonly successHandle: "next";
+    } | null = null;
     let transitionResultCode = decision.resultCode;
     let transitionTrace = decision.trace;
 
@@ -987,6 +1029,30 @@ async function finalize(
         };
         break;
       }
+      case "wait_signal":
+        if (
+          persistedNode.kind !== "natal_chart_request" ||
+          decision.wait.signalType !== "chart.calculation.terminal.v1" ||
+          decision.wait.successHandle !== "next"
+        ) {
+          throw new Error(
+            "FLOW_RUNTIME_TRACE_INVALID: signal-wait decision does not match persisted node"
+          );
+        }
+        resolvePinnedFlowExecutionAdvanceTarget({
+          definition: persistedDefinition,
+          sourceHandle: decision.wait.successHandle
+        });
+        signalWait = decision.wait;
+        transitionResultCode = "FLOW_WAITING_SIGNAL";
+        transitionTrace = {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: "natal_chart_request",
+          reasonCode: "FLOW_CHART_CALCULATION_REQUESTED",
+          resultCode: "FLOW_WAITING_SIGNAL"
+        };
+        break;
       default:
         assertNeverFlowExecutionDecision(decision);
     }
@@ -1015,6 +1081,18 @@ async function finalize(
                 quarantinedAt: null,
                 updatedAt: transitionAt
               }
+            : decision.kind === "wait_signal"
+              ? {
+                  state: "waiting_signal",
+                  claimedAt: null,
+                  leaseOwner: null,
+                  leaseExpiresAt: null,
+                  failureDisposition: null,
+                  failureReasonCode: null,
+                  terminalAt: null,
+                  quarantinedAt: null,
+                  updatedAt: transitionAt
+                }
             : {
                 nodeId: advanceTarget?.node.id,
                 nodeKind: advanceTarget?.node.kind,
@@ -1081,6 +1159,25 @@ async function finalize(
         .returning({ id: flowWorkItems.id });
       if (!createdWorkItem) throw new Error("Flow work item was not persisted");
     }
+    if (signalWait) {
+      const [createdSignalWait] = await transaction
+        .insert(flowExecutionSignalWaits)
+        .values({
+          ownerUserId: input.claim.ownerUserId,
+          flowRunId: input.claim.runId,
+          flowVersionId: input.claim.flowVersionId,
+          tokenId: input.claim.tokenId,
+          nodeActivationSequence: token.nodeActivationSequence,
+          nodeId: input.claim.nodeId,
+          signalType: signalWait.signalType,
+          correlationId: signalWait.correlationId,
+          successHandle: signalWait.successHandle,
+          state: "waiting",
+          createdAt: transitionAt
+        })
+        .returning({ id: flowExecutionSignalWaits.id });
+      if (!createdSignalWait) throw new Error("Flow signal wait was not persisted");
+    }
 
     const [run] = await transaction
       .update(flowRuns)
@@ -1088,7 +1185,7 @@ async function finalize(
         status:
           decision.kind === "terminal"
             ? "completed"
-            : decision.kind === "wait_work_item"
+            : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
               ? "waiting"
               : "running",
         currentNodeId: decision.kind === "advance" ? advanceTarget?.node.id : input.claim.nodeId,
@@ -1129,7 +1226,7 @@ async function finalize(
         outcome:
           decision.kind === "terminal"
             ? "completed"
-            : decision.kind === "wait_work_item"
+            : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
               ? "waiting"
               : "advanced",
         resultCode: transitionResultCode,
@@ -1149,7 +1246,7 @@ async function finalize(
       eventType:
         decision.kind === "terminal"
           ? "run_completed"
-          : decision.kind === "wait_work_item"
+          : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
             ? "token_waiting"
             : "token_advanced",
       nodeId: input.claim.nodeId,
@@ -1158,8 +1255,241 @@ async function finalize(
       occurredAt: transitionAt
     });
 
+    if (signalWait) {
+      const [storedSignal] = await transaction
+        .select({
+          id: flowExecutionSignalInbox.id,
+          ownerUserId: flowExecutionSignalInbox.ownerUserId,
+          signalType: flowExecutionSignalInbox.signalType,
+          correlationId: flowExecutionSignalInbox.correlationId,
+          outcome: flowExecutionSignalInbox.outcome
+        })
+        .from(flowExecutionSignalInbox)
+        .where(
+          and(
+            eq(flowExecutionSignalInbox.ownerUserId, input.claim.ownerUserId),
+            eq(flowExecutionSignalInbox.signalType, signalWait.signalType),
+            eq(flowExecutionSignalInbox.correlationId, signalWait.correlationId),
+            sql`${flowExecutionSignalInbox.consumedAt} is null`
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (storedSignal) {
+        const consumed = await consumeFlowExecutionSignal(transaction, storedSignal);
+        if (consumed.status === "consumed") {
+          return { status: "applied", attemptId: attempt.id, traceSequence: consumed.traceSequence };
+        }
+      }
+    }
+
     return { status: "applied", attemptId: attempt.id, traceSequence: run.traceSequence };
   });
+}
+
+async function consumeFlowExecutionSignal(
+  transaction: FlowTransaction,
+  signal: {
+    readonly id: string;
+    readonly ownerUserId: string;
+    readonly signalType: string;
+    readonly correlationId: string;
+    readonly outcome: string;
+  }
+): Promise<FlowExecutionSignalIngestResult> {
+  const [wait] = await transaction
+    .select({
+      waitId: flowExecutionSignalWaits.id,
+      waitNodeId: flowExecutionSignalWaits.nodeId,
+      waitSuccessHandle: flowExecutionSignalWaits.successHandle,
+      tokenId: flowExecutionTokens.id,
+      tokenNodeActivationSequence: flowExecutionTokens.nodeActivationSequence,
+      tokenConfigSchemaVersion: flowExecutionTokens.configSchemaVersion,
+      tokenExecutorContractVersion: flowExecutionTokens.executorContractVersion,
+      runId: flowRuns.id,
+      flowVersionId: flowRuns.flowVersionId,
+      graph: flowVersions.graph,
+      capabilityManifest: flowVersions.capabilityManifest
+    })
+    .from(flowExecutionSignalWaits)
+    .innerJoin(
+      flowExecutionTokens,
+      and(
+        eq(flowExecutionTokens.id, flowExecutionSignalWaits.tokenId),
+        eq(flowExecutionTokens.flowRunId, flowExecutionSignalWaits.flowRunId),
+        eq(flowExecutionTokens.ownerUserId, flowExecutionSignalWaits.ownerUserId)
+      )
+    )
+    .innerJoin(
+      flowRuns,
+      and(
+        eq(flowRuns.id, flowExecutionSignalWaits.flowRunId),
+        eq(flowRuns.flowVersionId, flowExecutionSignalWaits.flowVersionId),
+        eq(flowRuns.ownerUserId, flowExecutionSignalWaits.ownerUserId)
+      )
+    )
+    .innerJoin(
+      flowVersions,
+      and(
+        eq(flowVersions.id, flowExecutionSignalWaits.flowVersionId),
+        eq(flowVersions.ownerUserId, flowExecutionSignalWaits.ownerUserId)
+      )
+    )
+    .where(
+      and(
+        eq(flowExecutionSignalWaits.ownerUserId, signal.ownerUserId),
+        eq(flowExecutionSignalWaits.signalType, signal.signalType),
+        eq(flowExecutionSignalWaits.correlationId, signal.correlationId),
+        eq(flowExecutionSignalWaits.state, "waiting"),
+        eq(flowExecutionTokens.state, "waiting_signal"),
+        eq(flowRuns.status, "waiting")
+      )
+    )
+    .orderBy(asc(flowExecutionSignalWaits.createdAt), asc(flowExecutionSignalWaits.id))
+    .limit(1)
+    .for("update");
+  if (!wait) return { status: "stored" } as const;
+
+  const persistedDefinition = {
+    flowVersionId: wait.flowVersionId,
+    nodeId: wait.waitNodeId,
+    nodeKind: "natal_chart_request" as const,
+    configSchemaVersion: wait.tokenConfigSchemaVersion,
+    executorContractVersion: wait.tokenExecutorContractVersion,
+    graph: wait.graph,
+    capabilityManifest: wait.capabilityManifest
+  };
+  const persistedNode = resolvePinnedFlowExecutionNode(persistedDefinition);
+  if (persistedNode.kind !== "natal_chart_request" || wait.waitSuccessHandle !== "next") {
+    throw new Error("FLOW_RUNTIME_TRACE_INVALID: signal wait does not match a pinned natal node");
+  }
+  const transitionAt = await readPostLockDatabaseInstant(transaction);
+  const terminalFailure = signal.outcome === "failed";
+  const target = terminalFailure
+    ? null
+    : resolvePinnedFlowExecutionAdvanceTarget({ definition: persistedDefinition, sourceHandle: "next" });
+  const [transitionedToken] = await transaction
+    .update(flowExecutionTokens)
+    .set(
+      terminalFailure
+        ? {
+            state: "failed",
+            claimedAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            failureDisposition: "failed_terminal",
+            failureReasonCode: "FLOW_CHART_CALCULATION_FAILED",
+            terminalAt: transitionAt,
+            quarantinedAt: null,
+            updatedAt: transitionAt
+          }
+        : {
+            nodeId: target?.node.id,
+            nodeKind: target?.node.kind,
+            configSchemaVersion: target?.node.configSchemaVersion,
+            executorContractVersion: target?.node.executorContractVersion,
+            executorKey: target ? formatFlowNodeExecutorKey(target.node) : undefined,
+            state: "runnable",
+            availableAt: transitionAt,
+            claimedAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            nodeActivationSequence: sql`${flowExecutionTokens.nodeActivationSequence} + 1`,
+            attemptCounter: 0n,
+            failureDisposition: null,
+            failureReasonCode: null,
+            terminalAt: null,
+            quarantinedAt: null,
+            updatedAt: transitionAt
+          }
+    )
+    .where(
+      and(
+        eq(flowExecutionTokens.id, wait.tokenId),
+        eq(flowExecutionTokens.state, "waiting_signal"),
+        eq(flowExecutionTokens.nodeActivationSequence, wait.tokenNodeActivationSequence)
+      )
+    )
+    .returning({ id: flowExecutionTokens.id });
+  if (!transitionedToken) return { status: "stored" } as const;
+
+  const [run] = await transaction
+    .update(flowRuns)
+    .set({
+      status: terminalFailure ? "failed_terminal" : "running",
+      currentNodeId: terminalFailure ? wait.waitNodeId : target?.node.id,
+      traceSequence: sql`${flowRuns.traceSequence} + 1`,
+      completedAt: terminalFailure ? transitionAt : null,
+      updatedAt: transitionAt
+    })
+    .where(
+      and(
+        eq(flowRuns.id, wait.runId),
+        eq(flowRuns.ownerUserId, signal.ownerUserId),
+        eq(flowRuns.flowVersionId, wait.flowVersionId),
+        eq(flowRuns.status, "waiting")
+      )
+    )
+    .returning({ traceSequence: flowRuns.traceSequence });
+  if (!run) throw new Error("Flow run became unavailable while consuming a terminal signal");
+
+  const [consumedWait] = await transaction
+    .update(flowExecutionSignalWaits)
+    .set({ state: "consumed", consumedSignalId: signal.id, consumedAt: transitionAt })
+    .where(and(eq(flowExecutionSignalWaits.id, wait.waitId), eq(flowExecutionSignalWaits.state, "waiting")))
+    .returning({ id: flowExecutionSignalWaits.id });
+  if (!consumedWait) throw new Error("Flow signal wait became unavailable while consuming a terminal signal");
+  const [consumedSignal] = await transaction
+    .update(flowExecutionSignalInbox)
+    .set({ consumedAt: transitionAt })
+    .where(and(eq(flowExecutionSignalInbox.id, signal.id), sql`${flowExecutionSignalInbox.consumedAt} is null`))
+    .returning({ id: flowExecutionSignalInbox.id });
+  if (!consumedSignal) throw new Error("Flow signal inbox row became unavailable while consuming a terminal signal");
+
+  const trace = terminalFailure
+    ? {
+        schemaVersion: "flow-runtime-trace.v1" as const,
+        outcome: "failed" as const,
+        nodeKind: "natal_chart_request" as const,
+        reasonCode: "FLOW_CHART_CALCULATION_FAILED" as const,
+        resultCode: "FLOW_EXECUTION_FAILED_TERMINAL" as const
+      }
+    : {
+        schemaVersion: "flow-runtime-trace.v1" as const,
+        outcome: "advanced" as const,
+        nodeKind: "natal_chart_request" as const,
+        reasonCode: "FLOW_CHART_CALCULATION_COMPLETED" as const,
+        resultCode: "FLOW_TOKEN_ADVANCED" as const,
+        sourceHandle: "next" as const,
+        selectedEdgeId: target!.edgeId,
+        targetNodeId: target!.node.id,
+        targetNodeKind: target!.node.kind
+      };
+  await transaction.insert(flowRunEvents).values({
+    ownerUserId: signal.ownerUserId,
+    flowRunId: wait.runId,
+    sequence: run.traceSequence,
+    eventType: terminalFailure ? "run_failed" : "token_signaled",
+    nodeId: wait.waitNodeId,
+    summary: trace,
+    occurredAt: transitionAt
+  });
+  return { status: "consumed", runId: wait.runId, traceSequence: run.traceSequence };
+}
+
+function validateFlowExecutionSignalInput(
+  input: Parameters<FlowExecutionSignalStore["ingest"]>[0]
+): void {
+  if (
+    !UUID_PATTERN.test(input.sourceEventId) ||
+    !UUID_PATTERN.test(input.ownerUserId) ||
+    !UUID_PATTERN.test(input.correlationId) ||
+    input.signalType !== FLOW_CHART_CALCULATION_TERMINAL_SIGNAL ||
+    (input.outcome !== "succeeded" && input.outcome !== "failed") ||
+    Number.isNaN(Date.parse(input.occurredAt))
+  ) {
+    throw new Error("FLOW_EXECUTION_SIGNAL_INVALID");
+  }
 }
 
 async function finalizeFailure(

@@ -1,7 +1,6 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   financeLedgerAccountCodeValues,
   financeLedgerChart,
@@ -281,6 +280,7 @@ describe("sealed finance journal schema", () => {
     expect(normalized).toContain("finance journal persistence receipt is cross-wired");
     expect(normalized).toContain("finance_online_wallet_refund_applications");
     expect(normalized).toContain("finance_online_wallet_chargeback_cases");
+    expect(normalized).toContain("finance_online_wallet_chargeback_resolutions");
     expect(normalized).toContain("source_row.source_kind = 'refund'");
     expect(normalized).toContain("source_row.source_kind = 'chargeback'");
     expect(normalized).toContain("source_row.source_operation_key = 'confirmed'");
@@ -322,10 +322,7 @@ describe("sealed finance journal schema", () => {
   });
 
   it("keeps chart and journal rows lazy instead of seeding synthetic opening history", () => {
-    const baseline = readFileSync(
-      resolve(process.cwd(), "packages/db/drizzle/0000_sticky_rictor.sql"),
-      "utf8"
-    ).toLowerCase();
+    const baseline = readCurrentMigrationSql().toLowerCase();
 
     expect(baseline).not.toMatch(/insert\s+into\s+"?finance_accounts"?/);
     expect(baseline).not.toMatch(/insert\s+into\s+"?finance_journal_(transactions|entries)"?/);

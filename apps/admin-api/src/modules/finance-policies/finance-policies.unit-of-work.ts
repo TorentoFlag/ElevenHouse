@@ -13,6 +13,12 @@ import type {
 } from "@elevenhouse/domain";
 import type { FinanceTransactionAuthorizationProof } from "@elevenhouse/domain";
 import type {
+  BankLiquiditySnapshotAttestationUnitOfWork,
+  CurrentEligibleBankLiquiditySnapshotReader,
+  FinanceOperationResourcePolicyReader,
+  OnlineWalletPayoutApprovalPreparationReader,
+  OnlineWalletPayoutExecutionPreparationReader,
+  OnlineWalletPayoutExecutionUnitOfWork,
   OnlineWalletPayoutReleaseUnitOfWork,
   OnlineWalletPayoutReviewUnitOfWork,
   OnlineWalletPayoutRequestReader
@@ -24,8 +30,14 @@ export type AdminFinancePolicyUnitOfWorkContext = {
   readonly reversalCaseStore: AdminPaymentReversalCaseStore;
   readonly reconciliationStore: Pick<ReconciliationStore, "listOpenExceptions" | "resolveException">;
   readonly onlineWalletPayoutRequestReader: OnlineWalletPayoutRequestReader;
+  readonly onlineWalletPayoutApprovalPreparationReader: OnlineWalletPayoutApprovalPreparationReader;
+  readonly currentEligibleBankLiquiditySnapshotReader: CurrentEligibleBankLiquiditySnapshotReader;
+  readonly financeOperationResourcePolicyReader: FinanceOperationResourcePolicyReader;
+  readonly bankLiquiditySnapshotAttestation: BankLiquiditySnapshotAttestationUnitOfWork;
   readonly onlineWalletPayoutRelease: OnlineWalletPayoutReleaseUnitOfWork;
   readonly onlineWalletPayoutReview: OnlineWalletPayoutReviewUnitOfWork;
+  readonly onlineWalletPayoutExecutionPreparationReader: OnlineWalletPayoutExecutionPreparationReader;
+  readonly onlineWalletPayoutExecution: OnlineWalletPayoutExecutionUnitOfWork;
   readonly auditSink: AdminFinancePolicyAuditSink;
 };
 

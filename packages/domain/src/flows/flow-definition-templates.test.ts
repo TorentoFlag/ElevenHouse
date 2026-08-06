@@ -30,6 +30,7 @@ describe("flow definition V2 server-owned templates", () => {
         }),
         expect.objectContaining({
           key: "booking-natal-preparation",
+          version: 2,
           availability: "available",
           parameters: [
             {
@@ -121,7 +122,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 1,
+          templateVersion: 2,
           parameters: { product_ids: ["11111111-1111-4111-8111-111111111111"] }
         }
       })
@@ -135,7 +136,12 @@ describe("flow definition V2 server-owned templates", () => {
               kind: "booking_confirmed",
               config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
             }),
-            expect.objectContaining({ kind: "natal_chart_request" })
+            expect.objectContaining({ kind: "natal_chart_request" }),
+            expect.objectContaining({
+              id: "natal-preparation-completed",
+              displayTitle: "Natal chart calculated",
+              config: { goalKey: "natal_chart_calculated" }
+            })
           ])
         }
       }
@@ -195,7 +201,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 1,
+          templateVersion: 2,
           parameters: {}
         }
       })
@@ -216,7 +222,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 1,
+          templateVersion: 2,
           parameters: { product_id: "33333333-3333-4333-8333-333333333333" }
         }
       })

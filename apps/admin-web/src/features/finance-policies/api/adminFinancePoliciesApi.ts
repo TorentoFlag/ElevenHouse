@@ -19,9 +19,17 @@ import {
   type AdminPaymentReversalQueueResponse
 } from "@elevenhouse/contracts/payments";
 import {
+  adminOnlinePayoutApprovalRequestSchema,
+  adminOnlinePayoutManualExecutionRequestSchema,
+  adminOnlinePayoutPaidAuthorizationRequestSchema,
+  adminOnlinePayoutPaidRequestSchema,
   adminPayoutQueueResponseSchema,
   payoutBankEvidenceUploadResponseSchema,
   adminPayoutStatusUpdateSchema,
+  type AdminOnlinePayoutApprovalRequest,
+  type AdminOnlinePayoutManualExecutionRequest,
+  type AdminOnlinePayoutPaidAuthorizationRequest,
+  type AdminOnlinePayoutPaidRequest,
   type AdminPayoutQueueStatusFilter,
   payoutRequestResponseSchema,
   type AdminPayoutQueueResponse,
@@ -29,6 +37,10 @@ import {
   type PayoutBankEvidenceUploadResponse,
   type PayoutRequestResponse
 } from "@elevenhouse/contracts/payouts";
+import {
+  beginFinanceAuthorizationResponseSchema,
+  type BeginFinanceAuthorizationResponse
+} from "@elevenhouse/contracts";
 import {
   adminReconciliationExceptionQueueResponseSchema,
   type AdminReconciliationExceptionEvidenceFilter,
@@ -69,6 +81,28 @@ export type AdminFinancePoliciesApi = {
   readonly updatePayoutRequestStatus: (
     payoutRequestId: string,
     request: AdminPayoutStatusUpdate
+  ) => Promise<PayoutRequestResponse>;
+  readonly beginOnlinePayoutApprovalAuthorization: (
+    payoutRequestId: string
+  ) => Promise<BeginFinanceAuthorizationResponse>;
+  readonly approveOnlinePayout: (
+    payoutRequestId: string,
+    request: AdminOnlinePayoutApprovalRequest
+  ) => Promise<PayoutRequestResponse>;
+  readonly beginOnlinePayoutManualExecutionAuthorization: (
+    payoutRequestId: string
+  ) => Promise<BeginFinanceAuthorizationResponse>;
+  readonly startOnlinePayoutManualExecution: (
+    payoutRequestId: string,
+    request: AdminOnlinePayoutManualExecutionRequest
+  ) => Promise<PayoutRequestResponse>;
+  readonly beginOnlinePayoutPaidAuthorization: (
+    payoutRequestId: string,
+    request: AdminOnlinePayoutPaidAuthorizationRequest
+  ) => Promise<BeginFinanceAuthorizationResponse>;
+  readonly confirmOnlinePayoutPaid: (
+    payoutRequestId: string,
+    request: AdminOnlinePayoutPaidRequest
   ) => Promise<PayoutRequestResponse>;
   readonly uploadPayoutBankEvidence: (file: File) => Promise<PayoutBankEvidenceUploadResponse>;
 };
@@ -178,6 +212,62 @@ export function createAdminFinancePoliciesApi(
             body: JSON.stringify(parsed)
           }
         )
+      );
+    },
+    beginOnlinePayoutApprovalAuthorization: async (payoutRequestId) =>
+      beginFinanceAuthorizationResponseSchema.parse(
+        await request(
+          `/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/approval/authorization`,
+          { method: "POST" }
+        )
+      ),
+    approveOnlinePayout: async (payoutRequestId, rawRequest) => {
+      const parsed = adminOnlinePayoutApprovalRequestSchema.parse(rawRequest);
+      return payoutRequestResponseSchema.parse(
+        await request(`/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/approval`, {
+          method: "POST",
+          body: JSON.stringify(parsed)
+        })
+      );
+    },
+    beginOnlinePayoutManualExecutionAuthorization: async (payoutRequestId) =>
+      beginFinanceAuthorizationResponseSchema.parse(
+        await request(
+          `/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/manual-execution/authorization`,
+          { method: "POST" }
+        )
+      ),
+    startOnlinePayoutManualExecution: async (payoutRequestId, rawRequest) => {
+      const parsed = adminOnlinePayoutManualExecutionRequestSchema.parse(rawRequest);
+      return payoutRequestResponseSchema.parse(
+        await request(
+          `/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/manual-execution`,
+          {
+            method: "POST",
+            body: JSON.stringify(parsed)
+          }
+        )
+      );
+    },
+    beginOnlinePayoutPaidAuthorization: async (payoutRequestId, rawRequest) => {
+      const parsed = adminOnlinePayoutPaidAuthorizationRequestSchema.parse(rawRequest);
+      return beginFinanceAuthorizationResponseSchema.parse(
+        await request(
+          `/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/paid/authorization`,
+          {
+            method: "POST",
+            body: JSON.stringify(parsed)
+          }
+        )
+      );
+    },
+    confirmOnlinePayoutPaid: async (payoutRequestId, rawRequest) => {
+      const parsed = adminOnlinePayoutPaidRequestSchema.parse(rawRequest);
+      return payoutRequestResponseSchema.parse(
+        await request(`/admin/finance/payout-requests/${encodeURIComponent(payoutRequestId)}/paid`, {
+          method: "POST",
+          body: JSON.stringify(parsed)
+        })
       );
     },
     uploadPayoutBankEvidence: async (file) => {

@@ -101,6 +101,15 @@ describe("resolvePlatformTariffCapability", () => {
     ).resolves.toBe("read_only");
   });
 
+  it("does not preserve any capability while a failed renewal is past_due", async () => {
+    const tariff = tariffWith("funnels");
+    const subscription = { ...expiredSubscription(tariff), state: "past_due" as const };
+    const store = entitlementStore({ subscription: null, historicalGrant: { subscription, tariff } });
+    await expect(resolvePlatformTariffCapability({
+      store, ownerUserId, capability: "funnels", operation: "read", now
+    })).resolves.toBe("deny");
+  });
+
   it("rejects malformed historical evidence instead of treating any old subscription as a grant", async () => {
     const tariff = tariffWith("funnels");
     const store = entitlementStore({

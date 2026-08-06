@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import {
   hashFinanceCommandPayload,
@@ -44,7 +44,7 @@ describe.sequential("refund terminal result PostgreSQL integration", () => {
     await admin.query(`create database "${databaseName}"`);
     pool = new Pool({ connectionString: isolatedDatabaseUrl });
     database = drizzle(pool) as unknown as ElevenHouseDatabase;
-    await pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await pool.query(readCurrentMigrationSql());
   }, 30_000);
 
   afterAll(async () => {

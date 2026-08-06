@@ -9,6 +9,13 @@ import {
   type FinanceTransactionAuthorizationProof
 } from "@elevenhouse/domain";
 import type {
+  BankLiquiditySnapshotAttestationUnitOfWork,
+  CurrentEligibleBankLiquiditySnapshotReader,
+  FinanceOperationResourcePolicyReader,
+  OnlineWalletPayoutApprovalPreparationReader,
+  OnlineWalletPayoutExecutionPreparationReader,
+  OnlineWalletPayoutExecutionUnitOfWork,
+  OnlineWalletPayoutExecutionPreparation,
   OnlineWalletPayoutReleaseUnitOfWork,
   OnlineWalletPayoutRequestProjection,
   OnlineWalletPayoutRequestReader,
@@ -45,6 +52,7 @@ import { DurableAdminFinancePolicyAuditSink } from "./finance-policies.audit";
 import type { AdminFinancePolicyUnitOfWork } from "./finance-policies.unit-of-work";
 import { PayoutEvidenceController } from "../payout-evidence/payout-evidence.controller";
 import { PayoutEvidenceService } from "../payout-evidence/payout-evidence.service";
+import { AdminFinanceAuthorizationsService } from "../finance-authorizations/finance-authorizations.service";
 
 const now = new Date("2026-07-25T10:00:00.000Z");
 const sessionCookieName = "elevenhouse_admin_session";
@@ -63,8 +71,14 @@ let store: FinancePolicyStore;
 let orderStore: Pick<FinanceOrderStore, "applyFinancePolicy" | "findById">;
 let payoutStore: Pick<PayoutStore, "findRequestById" | "listRequests" | "updateRequestStatus">;
 let onlineWalletPayoutRequestReader: OnlineWalletPayoutRequestReader;
+let onlineWalletPayoutApprovalPreparationReader: OnlineWalletPayoutApprovalPreparationReader;
+let currentEligibleBankLiquiditySnapshotReader: CurrentEligibleBankLiquiditySnapshotReader;
+let financeOperationResourcePolicyReader: FinanceOperationResourcePolicyReader;
 let onlineWalletPayoutReview: OnlineWalletPayoutReviewUnitOfWork;
 let onlineWalletPayoutRelease: OnlineWalletPayoutReleaseUnitOfWork;
+let onlineWalletPayoutExecutionPreparationReader: OnlineWalletPayoutExecutionPreparationReader;
+let onlineWalletPayoutExecution: OnlineWalletPayoutExecutionUnitOfWork;
+let bankLiquiditySnapshotAttestation: BankLiquiditySnapshotAttestationUnitOfWork;
 let ledgerStore: Pick<LedgerStore, "createTransaction" | "findWalletBalance">;
 let reversalCaseStore: AdminPaymentReversalCaseStore;
 let reconciliationStore: ReconciliationStore;
@@ -72,6 +86,7 @@ let auditLogStore: AuditLogStore;
 let unitOfWork: AdminFinancePolicyUnitOfWork;
 let roles: readonly PlatformRole[];
 let payoutEvidenceService: Pick<PayoutEvidenceService, "maximumFileBytes" | "ingest">;
+let financeAuthorizations: { beginResolved: ReturnType<typeof vi.fn> };
 
 describe("admin finance policy HTTP flow", () => {
   beforeEach(async () => {
@@ -81,9 +96,17 @@ describe("admin finance policy HTTP flow", () => {
     payoutStore = createPayoutStore();
     ({
       reader: onlineWalletPayoutRequestReader,
+      approvalPreparationReader: onlineWalletPayoutApprovalPreparationReader,
+      eligibleLiquiditySnapshotReader: currentEligibleBankLiquiditySnapshotReader,
+      operationResourcePolicyReader: financeOperationResourcePolicyReader,
       review: onlineWalletPayoutReview,
-      release: onlineWalletPayoutRelease
+      release: onlineWalletPayoutRelease,
+      executionPreparationReader: onlineWalletPayoutExecutionPreparationReader,
+      execution: onlineWalletPayoutExecution
     } = createOnlineWalletPayoutFixture());
+    bankLiquiditySnapshotAttestation = {
+      attestBankLiquiditySnapshot: vi.fn()
+    };
     ledgerStore = createLedgerStore();
     reversalCaseStore = createReversalCaseStore();
     reconciliationStore = createReconciliationStore();
@@ -97,6 +120,7 @@ describe("admin finance policy HTTP flow", () => {
         contentType: "application/pdf" as const
       }))
     };
+    financeAuthorizations = { beginResolved: vi.fn() };
     const completedFinanceCommands = new Map<string, Record<string, unknown>>();
     const financeCommandHashes = new Map<string, string>();
     unitOfWork = {
@@ -105,8 +129,14 @@ describe("admin finance policy HTTP flow", () => {
           store,
           orderStore,
           onlineWalletPayoutRequestReader,
+          onlineWalletPayoutApprovalPreparationReader,
+          currentEligibleBankLiquiditySnapshotReader,
+          financeOperationResourcePolicyReader,
+          bankLiquiditySnapshotAttestation,
           onlineWalletPayoutReview,
           onlineWalletPayoutRelease,
+          onlineWalletPayoutExecutionPreparationReader,
+          onlineWalletPayoutExecution,
           reversalCaseStore,
           reconciliationStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
@@ -126,8 +156,14 @@ describe("admin finance policy HTTP flow", () => {
               store,
               orderStore,
               onlineWalletPayoutRequestReader,
+              onlineWalletPayoutApprovalPreparationReader,
+              currentEligibleBankLiquiditySnapshotReader,
+              financeOperationResourcePolicyReader,
+              bankLiquiditySnapshotAttestation,
               onlineWalletPayoutReview,
               onlineWalletPayoutRelease,
+              onlineWalletPayoutExecutionPreparationReader,
+              onlineWalletPayoutExecution,
               reversalCaseStore,
               reconciliationStore,
               auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
@@ -143,8 +179,14 @@ describe("admin finance policy HTTP flow", () => {
           store,
           orderStore,
           onlineWalletPayoutRequestReader,
+          onlineWalletPayoutApprovalPreparationReader,
+          currentEligibleBankLiquiditySnapshotReader,
+          financeOperationResourcePolicyReader,
+          bankLiquiditySnapshotAttestation,
           onlineWalletPayoutReview,
           onlineWalletPayoutRelease,
+          onlineWalletPayoutExecutionPreparationReader,
+          onlineWalletPayoutExecution,
           reversalCaseStore,
           reconciliationStore,
           auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
@@ -173,8 +215,14 @@ describe("admin finance policy HTTP flow", () => {
             store,
             orderStore,
             onlineWalletPayoutRequestReader,
+            onlineWalletPayoutApprovalPreparationReader,
+            currentEligibleBankLiquiditySnapshotReader,
+            financeOperationResourcePolicyReader,
+            bankLiquiditySnapshotAttestation,
             onlineWalletPayoutReview,
             onlineWalletPayoutRelease,
+            onlineWalletPayoutExecutionPreparationReader,
+            onlineWalletPayoutExecution,
             reversalCaseStore,
             reconciliationStore,
             auditSink: new DurableAdminFinancePolicyAuditSink(auditLogStore)
@@ -199,6 +247,7 @@ describe("admin finance policy HTTP flow", () => {
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: authStore() },
         { provide: ADMIN_FINANCE_POLICY_UNIT_OF_WORK, useValue: unitOfWork },
         { provide: PayoutEvidenceService, useValue: payoutEvidenceService }
+        , { provide: AdminFinanceAuthorizationsService, useValue: financeAuthorizations }
       ]
     }).compile();
 
@@ -325,6 +374,90 @@ describe("admin finance policy HTTP flow", () => {
         metadata: { riskTier: "standard", policyVersion: 2 }
       })
     );
+  });
+
+  it("runs V2 manual payout execution and paid confirmation through server-derived WebAuthn facts", async () => {
+    roles = ["super_admin"];
+    const authorizationId = "66666666-6666-4666-8666-666666666666";
+    financeAuthorizations.beginResolved.mockResolvedValue({
+      challengeId: authorizationId,
+      expiresAt: new Date(now.getTime() + 300_000).toISOString(),
+      publicKey: {
+        challenge: "a".repeat(43),
+        rpId: "localhost",
+        timeout: 300_000,
+        userVerification: "required"
+      }
+    });
+    const payoutRequestId = "77777777-7777-4777-8777-777777777777";
+    const headers = { origin: "http://localhost:5175", [csrfHeaderName]: csrfToken };
+
+    const executionAuthorization = await postJson(
+      `/admin/finance/payout-requests/${payoutRequestId}/manual-execution/authorization`,
+      undefined,
+      authenticatedCookies(),
+      headers
+    );
+    expect(executionAuthorization).toMatchObject({ status: 201, body: { challengeId: authorizationId } });
+    expect(financeAuthorizations.beginResolved).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: adminUserId }),
+      expect.objectContaining({
+        actionKind: "payout_start_processing",
+        aggregateId: "88888888-8888-4888-8888-888888888888",
+        expectedVersion: 3,
+        payload: expect.not.objectContaining({ walletId: expect.anything() })
+      })
+    );
+
+    const execution = await postJson(
+      `/admin/finance/payout-requests/${payoutRequestId}/manual-execution`,
+      { authorizationId },
+      authenticatedCookies(),
+      headers
+    );
+    expect(execution).toMatchObject({ status: 201, body: { id: payoutRequestId, status: "processing_manual", version: 4 } });
+
+    const paidInput = {
+      bankReference: "BANK-TRANSFER-777",
+      transferredAt: now.toISOString(),
+      evidenceArtifactId: "payout-bank-evidence:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    };
+    const paidAuthorization = await postJson(
+      `/admin/finance/payout-requests/${payoutRequestId}/paid/authorization`,
+      paidInput,
+      authenticatedCookies(),
+      headers
+    );
+    expect(paidAuthorization).toMatchObject({ status: 201, body: { challengeId: authorizationId } });
+    expect(financeAuthorizations.beginResolved).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: adminUserId }),
+      expect.objectContaining({
+        actionKind: "payout_confirm_paid",
+        expectedVersion: 4,
+        payload: expect.objectContaining({
+          bankReference: "BANK-TRANSFER-777",
+          evidenceArtifactId: paidInput.evidenceArtifactId,
+          bankCashPoolId: "elevenhouse-rub-main"
+        })
+      })
+    );
+
+    const paid = await postJson(
+      `/admin/finance/payout-requests/${payoutRequestId}/paid`,
+      { ...paidInput, authorizationId },
+      authenticatedCookies(),
+      headers
+    );
+    expect(paid).toMatchObject({
+      status: 201,
+      body: {
+        id: payoutRequestId,
+        status: "paid",
+        version: 5,
+        externalReference: "BANK-TRANSFER-777",
+        transferredAt: now.toISOString()
+      }
+    });
   });
 
   it("records manual astrologer risk overrides with required reason", async () => {
@@ -542,7 +675,7 @@ describe("admin finance policy HTTP flow", () => {
 
     expect(paid).toMatchObject({
       status: 409,
-      body: { message: "online_payout_paid_requires_bank_settlement_command" }
+      body: { message: "online_payout_requires_v2_bank_evidence_command" }
     });
     expect(ledgerStore.createTransaction).not.toHaveBeenCalled();
     expect(auditLogStore.createEntry).not.toHaveBeenCalled();
@@ -629,7 +762,7 @@ describe("admin finance policy HTTP flow", () => {
     expect(ledgerStore.createTransaction).not.toHaveBeenCalled();
   });
 
-  it("does not approve a v2 payout from an unverified authorization identifier", async () => {
+  it("rejects generic approval even when the caller supplies an authorization identifier", async () => {
     const approved = await putJson(
       "/admin/finance/payout-requests/44444444-4444-4444-8444-444444444444/status",
       {
@@ -644,12 +777,12 @@ describe("admin finance policy HTTP flow", () => {
 
     expect(approved).toMatchObject({
       status: 409,
-      body: { message: "finance_authorization_rejected" }
+      body: { message: "online_payout_requires_v2_bank_evidence_command" }
     });
     expect(onlineWalletPayoutReview.transitionOnlineWalletPayout).not.toHaveBeenCalled();
   });
 
-  it("binds the approved transition to its consumed WebAuthn authorization proof", async () => {
+  it("does not expose a generic endpoint for V2 approval", async () => {
     const approved = await putJson(
       "/admin/finance/payout-requests/44444444-4444-4444-8444-444444444444/status",
       {
@@ -662,29 +795,12 @@ describe("admin finance policy HTTP flow", () => {
       { origin: "http://localhost:5175", [csrfHeaderName]: csrfToken }
     );
 
-    expect(approved).toMatchObject({ status: 200, body: { status: "approved", version: 2 } });
-    expect(unitOfWork.executeAuthorized).toHaveBeenCalledWith(
-      expect.objectContaining({
-        authorization: expect.objectContaining({
-          actionKind: "payout_approve",
-          aggregateId: "44444444-4444-4444-8444-444444444444",
-          expectedVersion: 1,
-          payload: {
-            status: "approved",
-            adminNote: "Payout recipient and amount checked"
-          }
-        })
-      })
-    );
-    expect(onlineWalletPayoutReview.transitionOnlineWalletPayout).toHaveBeenCalledWith(
-      expect.objectContaining({
-        nextStatus: "approved",
-        authority: expect.objectContaining({
-          authorityId: "66666666-6666-4666-8666-666666666666",
-          authorityDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        })
-      })
-    );
+    expect(approved).toMatchObject({
+      status: 409,
+      body: { message: "online_payout_requires_v2_bank_evidence_command" }
+    });
+    expect(unitOfWork.executeAuthorized).not.toHaveBeenCalled();
+    expect(onlineWalletPayoutReview.transitionOnlineWalletPayout).not.toHaveBeenCalled();
   });
 
   it("lists payment reversal cases for authenticated internal users with optional type filtering", async () => {
@@ -1182,8 +1298,13 @@ function createPayoutStore(): Pick<
 
 function createOnlineWalletPayoutFixture(): {
   readonly reader: OnlineWalletPayoutRequestReader;
+  readonly approvalPreparationReader: OnlineWalletPayoutApprovalPreparationReader;
+  readonly eligibleLiquiditySnapshotReader: CurrentEligibleBankLiquiditySnapshotReader;
+  readonly operationResourcePolicyReader: FinanceOperationResourcePolicyReader;
   readonly review: OnlineWalletPayoutReviewUnitOfWork;
   readonly release: OnlineWalletPayoutReleaseUnitOfWork;
+  readonly executionPreparationReader: OnlineWalletPayoutExecutionPreparationReader;
+  readonly execution: OnlineWalletPayoutExecutionUnitOfWork;
 } {
   let requests: OnlineWalletPayoutRequestProjection[] = [
     {
@@ -1198,7 +1319,9 @@ function createOnlineWalletPayoutFixture(): {
       latestTransitionActorUserId: astrologerUserId,
       latestTransitionOccurredAt: now.toISOString(),
       latestTransitionFailureReason: null,
-      latestTransitionAdminNote: null
+      latestTransitionAdminNote: null,
+      paidBankReference: null,
+      paidTransferredAt: null
     },
     {
       payoutRequestId: "55555555-5555-4555-8555-555555555555",
@@ -1212,7 +1335,9 @@ function createOnlineWalletPayoutFixture(): {
       latestTransitionActorUserId: adminUserId,
       latestTransitionOccurredAt: now.toISOString(),
       latestTransitionFailureReason: null,
-      latestTransitionAdminNote: null
+      latestTransitionAdminNote: null,
+      paidBankReference: null,
+      paidTransferredAt: null
     },
     {
       payoutRequestId: "66666666-6666-4666-8666-666666666666",
@@ -1226,7 +1351,9 @@ function createOnlineWalletPayoutFixture(): {
       latestTransitionActorUserId: adminUserId,
       latestTransitionOccurredAt: now.toISOString(),
       latestTransitionFailureReason: null,
-      latestTransitionAdminNote: null
+      latestTransitionAdminNote: null,
+      paidBankReference: null,
+      paidTransferredAt: null
     }
   ];
   const update = (input: {
@@ -1276,6 +1403,15 @@ function createOnlineWalletPayoutFixture(): {
         .slice(0, input.limit)
     )
   };
+  const approvalPreparationReader: OnlineWalletPayoutApprovalPreparationReader = {
+    findPayoutApprovalPreparation: vi.fn(async () => null)
+  };
+  const eligibleLiquiditySnapshotReader: CurrentEligibleBankLiquiditySnapshotReader = {
+    findCurrentEligibleBankLiquiditySnapshot: vi.fn(async () => null)
+  };
+  const operationResourcePolicyReader: FinanceOperationResourcePolicyReader = {
+    findPublishedForOperation: vi.fn(async () => null)
+  };
   const review: OnlineWalletPayoutReviewUnitOfWork = {
     transitionOnlineWalletPayout: vi.fn(async (input) => {
       update({ ...input, failureReason: null });
@@ -1287,7 +1423,8 @@ function createOnlineWalletPayoutFixture(): {
         status: input.nextStatus,
         payoutVersion: String(Number(input.expectedPayoutVersion) + 1)
       };
-    })
+    }),
+    approveOnlineWalletPayout: vi.fn()
   };
   const release: OnlineWalletPayoutReleaseUnitOfWork = {
     releaseOnlineWalletPayout: vi.fn(async (input) => {
@@ -1306,7 +1443,93 @@ function createOnlineWalletPayoutFixture(): {
       };
     })
   };
-  return { reader, review, release };
+  const v2PayoutRequestId = "77777777-7777-4777-8777-777777777777";
+  const approval = {
+    kind: "online_wallet_payout_approval_receipt" as const,
+    receiptId: "99999999-9999-4999-8999-999999999999",
+    canonicalDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  } as unknown as OnlineWalletPayoutExecutionPreparation["approval"];
+  let v2PayoutStatus: "approved" | "processing_manual" = "approved";
+  const executionPreparationReader: OnlineWalletPayoutExecutionPreparationReader = {
+    findPayoutExecutionPreparation: vi.fn(async ({ payoutRequestId }) =>
+      payoutRequestId === v2PayoutRequestId
+        ? {
+            payoutRequestId,
+            authorizationAggregateId: "88888888-8888-4888-8888-888888888888",
+            payoutVersion: v2PayoutStatus === "approved" ? "3" : "4",
+            payoutStatus: v2PayoutStatus,
+            walletId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            walletRevision: "5",
+            astrologerUserId,
+            amountMinor: "200000",
+            currency: "RUB" as const,
+            approval,
+            bankExposureId: "online-payout-exposure-777",
+            bankExposureVersion: v2PayoutStatus === "approved" ? "2" : "3",
+            bankCashPoolId: "elevenhouse-rub-main"
+          }
+        : null
+    ),
+    findBankTransferEvidence: vi.fn(async ({ artifactId, bankCashPoolId, currency }) =>
+      artifactId === "payout-bank-evidence:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" &&
+      bankCashPoolId === "elevenhouse-rub-main" &&
+      currency === "RUB"
+        ? {
+            artifactId,
+            sha256Digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const
+          }
+        : null
+    )
+  };
+  const execution: OnlineWalletPayoutExecutionUnitOfWork = {
+    startOnlineWalletPayoutManualExecution: vi.fn(async () => {
+      v2PayoutStatus = "processing_manual";
+      requests = [
+        ...requests,
+        {
+          payoutRequestId: v2PayoutRequestId,
+          walletId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          astrologerUserId,
+          amountMinor: "200000",
+          currency: "RUB" as const,
+          status: "processing_manual" as const,
+          version: "4",
+          requestedAt: now.toISOString(),
+          latestTransitionActorUserId: adminUserId,
+          latestTransitionOccurredAt: now.toISOString(),
+          latestTransitionFailureReason: null,
+          latestTransitionAdminNote: null,
+          paidBankReference: null,
+          paidTransferredAt: null
+        }
+      ];
+      return {} as never;
+    }),
+    confirmOnlineWalletPayoutPaid: vi.fn(async (input) => {
+      requests = requests.map((request) =>
+        request.payoutRequestId === v2PayoutRequestId
+          ? {
+              ...request,
+              status: "paid" as const,
+              version: "5",
+              paidBankReference: input.bankReference,
+              paidTransferredAt: input.transferredAt
+            }
+          : request
+      );
+      return {} as never;
+    })
+  };
+  return {
+    reader,
+    approvalPreparationReader,
+    eligibleLiquiditySnapshotReader,
+    operationResourcePolicyReader,
+    review,
+    release,
+    executionPreparationReader,
+    execution
+  };
 }
 
 function createLedgerStore(): Pick<LedgerStore, "createTransaction" | "findWalletBalance"> {

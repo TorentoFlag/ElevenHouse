@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -27,7 +27,7 @@ describe("chart AI draft durable command Drizzle/PostgreSQL integration", () => 
   beforeAll(async () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${isolatedDatabaseName}"`);
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     await runtime.pool.query("insert into users (id, status) values ($1, 'active')", [actorUserId]);
   }, 30_000);
 

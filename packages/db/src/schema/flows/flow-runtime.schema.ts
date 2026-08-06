@@ -682,6 +682,14 @@ export const flowExecutionAttempts = pgTable(
           )
           or
           (
+            ${table.outcome} = 'waiting'
+            and ${table.traceSummary}->>'nodeKind' = 'natal_chart_request'
+            and ${table.traceSummary}->>'outcome' = 'waiting'
+            and ${table.traceSummary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_REQUESTED'
+            and ${table.traceSummary}->>'resultCode' = 'FLOW_WAITING_SIGNAL'
+          )
+          or
+          (
             ${table.outcome} = 'completed'
             and ${table.traceSummary}->>'nodeKind' = 'completed'
             and ${table.traceSummary}->>'outcome' = 'terminal'
@@ -890,6 +898,53 @@ export const flowRunEvents = pgTable(
               'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
               'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
             ]::text[] = '{}'::jsonb
+          ) or (
+            ${table.eventType} = 'token_advanced'
+            and ${table.summary} ?& array[
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind',
+              'sourceOutboxEventId', 'birthDataHistoryId', 'birthDataRevision',
+              'workItemId', 'fromRevision', 'toRevision'
+            ]::text[]
+            and ${table.summary} - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind',
+              'sourceOutboxEventId', 'birthDataHistoryId', 'birthDataRevision',
+              'workItemId', 'fromRevision', 'toRevision'
+            ]::text[] = '{}'::jsonb
+            and jsonb_typeof(${table.summary}->'sourceHandle') = 'string'
+            and jsonb_typeof(${table.summary}->'selectedEdgeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeKind') = 'string'
+            and jsonb_typeof(${table.summary}->'sourceOutboxEventId') = 'string'
+            and jsonb_typeof(${table.summary}->'birthDataHistoryId') = 'string'
+            and jsonb_typeof(${table.summary}->'birthDataRevision') = 'number'
+            and jsonb_typeof(${table.summary}->'workItemId') = 'string'
+            and jsonb_typeof(${table.summary}->'fromRevision') = 'number'
+            and jsonb_typeof(${table.summary}->'toRevision') = 'number'
+            and ${table.summary}->>'sourceOutboxEventId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and ${table.summary}->>'birthDataHistoryId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and ${table.summary}->>'workItemId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            and scale((${table.summary}->>'birthDataRevision')::numeric) = 0
+            and (${table.summary}->>'birthDataRevision')::numeric between 1 and 2147483647
+            and scale((${table.summary}->>'fromRevision')::numeric) = 0
+            and scale((${table.summary}->>'toRevision')::numeric) = 0
+            and (${table.summary}->>'fromRevision')::numeric between 1 and 2147483646
+            and (${table.summary}->>'toRevision')::numeric =
+              (${table.summary}->>'fromRevision')::numeric + 1
+          )
+          or (
+            ${table.eventType} = 'token_signaled'
+            and ${table.summary} ?& array[
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[]
+            and jsonb_typeof(${table.summary}->'sourceHandle') = 'string'
+            and jsonb_typeof(${table.summary}->'selectedEdgeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeKind') = 'string'
+            and ${table.summary} - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[] = '{}'::jsonb
           )
           or (
             ${table.eventType} = 'work_item_available'
@@ -1036,7 +1091,7 @@ export const flowRunEvents = pgTable(
           )
           or (
             ${table.eventType} not in (
-              'token_advanced', 'work_item_available', 'booking_rescheduled'
+              'token_advanced', 'token_signaled', 'work_item_available', 'booking_rescheduled'
             )
             and ${table.summary} - array[
               'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
@@ -1081,8 +1136,33 @@ export const flowRunEvents = pgTable(
                 and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
                 and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_COMPLETED'
                 and ${table.summary}->>'sourceHandle' = 'success'
+              ) or (
+                ${table.attemptId} is null
+                and ${table.commandId} is null
+                and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
+                and ${table.summary}->>'reasonCode' = 'FLOW_BIRTH_PROFILE_RECHECK_READY'
+                and ${table.summary}->>'sourceHandle' = 'success'
               )
             )
+          )
+          or
+          (
+            ${table.eventType} = 'token_signaled'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is null
+            and ${table.commandId} is null
+            and ${table.summary}->>'nodeKind' = 'natal_chart_request'
+            and ${table.summary}->>'outcome' = 'advanced'
+            and ${table.summary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_COMPLETED'
+            and ${table.summary}->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
+            and ${table.summary}->>'sourceHandle' = 'next'
+            and ${table.summary}->>'targetNodeKind' in ${sql.raw(
+              formatFlowSqlValues(flowExecutableNodeKindV2Values)
+            )}
+            and length(${table.summary}->>'selectedEdgeId') between 1 and 160
+            and ${table.summary}->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and length(${table.summary}->>'targetNodeId') between 1 and 160
+            and ${table.summary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
           )
           or
           (
@@ -1112,10 +1192,18 @@ export const flowRunEvents = pgTable(
             and ${table.nodeId} is not null
             and ${table.attemptId} is not null
             and ${table.commandId} is null
-            and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
             and ${table.summary}->>'outcome' = 'waiting'
-            and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_CREATED'
-            and ${table.summary}->>'resultCode' = 'FLOW_WAITING_WORK_ITEM'
+            and (
+              (
+                ${table.summary}->>'nodeKind' = 'astrologer_work_item'
+                and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_CREATED'
+                and ${table.summary}->>'resultCode' = 'FLOW_WAITING_WORK_ITEM'
+              ) or (
+                ${table.summary}->>'nodeKind' = 'natal_chart_request'
+                and ${table.summary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_REQUESTED'
+                and ${table.summary}->>'resultCode' = 'FLOW_WAITING_SIGNAL'
+              )
+            )
           )
           or
           (

@@ -19,6 +19,7 @@ import type {
   CalculationPdfRequestedPayload,
   ChartCalculationRequestedPayload,
   BookingLifecycleDispatchRequestedPayload,
+  ClientBirthProfileUpdatedEvent,
   FlowBookingConfirmedEnrollmentRequestedPayloadV1,
   MessagingMessageDeliveryRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
@@ -46,6 +47,7 @@ export type OutboxEventPayload =
   | CalculationPdfDeleteRequestedPayload
   | ChartCalculationRequestedPayload
   | BookingLifecycleDispatchRequestedPayload
+  | ClientBirthProfileUpdatedEvent
   | FinanceProviderOperationDispatchRequestedPayload
   | FinanceEconomicPaymentCaptureAppliedPayload
   | FinanceSavedCardSetupPreparationRequestedPayload

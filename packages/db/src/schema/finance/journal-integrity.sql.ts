@@ -317,6 +317,36 @@ begin
          )
        )
        or (
+         source_row.source_kind = 'payout'
+         and source_row.source_operation_key = 'paid'
+         and not exists (
+           select 1
+             from finance_online_wallet_mutations mutation
+             join finance_online_payout_paid_receipts paid_receipt
+               on paid_receipt.wallet_mutation_id = mutation.mutation_id
+              and paid_receipt.journal_transaction_id = mutation.journal_transaction_id
+            where mutation.journal_transaction_id = transaction_row.id
+              and mutation.operation_kind = 'payout_paid'
+              and paid_receipt.payout_request_id = source_row.source_id
+         )
+       )
+       or (
+         source_row.source_kind = 'refund'
+         and source_row.source_operation_key = 'approved'
+         and not exists (
+           select 1
+             from finance_online_wallet_mutations mutation
+             join finance_online_wallet_refund_cases refund_case
+               on refund_case.approval_wallet_mutation_id = mutation.mutation_id
+              and refund_case.approval_journal_transaction_id = mutation.journal_transaction_id
+            where mutation.journal_transaction_id = transaction_row.id
+              and mutation.operation_kind = 'refund_approved'
+              and refund_case.refund_case_id = source_row.source_id
+              and refund_case.status = 'approved'
+              and refund_case.xmin = pg_current_xact_id()::xid
+         )
+       )
+       or (
          source_row.source_kind = 'refund'
          and source_row.source_operation_key = 'confirmed'
          and not exists (
@@ -327,15 +357,28 @@ begin
               and application.journal_transaction_id = mutation.journal_transaction_id
             where mutation.journal_transaction_id = transaction_row.id
               and mutation.operation_kind = 'refund_confirmed'
-              and application.provider_refund_id = source_row.source_id
               and application.outcome = 'applied'
               and application.xmin = pg_current_xact_id()::xid
+              and (
+                application.provider_refund_id = source_row.source_id
+                or exists (
+                  select 1
+                    from finance_online_wallet_refund_cases refund_case
+                   where refund_case.terminal_application_id = application.id
+                     and refund_case.refund_case_id = source_row.source_id
+                     and refund_case.provider_refund_id = application.provider_refund_id
+                     and refund_case.status = 'succeeded'
+                     and refund_case.xmin = pg_current_xact_id()::xid
+                )
+              )
          )
        )
        or not (
          (source_row.source_kind = 'reserve' and source_row.source_operation_key = 'hold_released')
          or (source_row.source_kind = 'payout' and source_row.source_operation_key = 'requested')
          or (source_row.source_kind = 'payout' and source_row.source_operation_key = 'released')
+         or (source_row.source_kind = 'payout' and source_row.source_operation_key = 'paid')
+         or (source_row.source_kind = 'refund' and source_row.source_operation_key = 'approved')
          or (source_row.source_kind = 'refund' and source_row.source_operation_key = 'confirmed')
        ) then
       raise exception 'finance online-wallet mutation journal proof is incomplete or cross-wired'
@@ -369,6 +412,17 @@ begin
        ) then
       raise exception 'finance online-wallet chargeback journal proof is incomplete or cross-wired'
         using errcode = '23514';
+    end if;
+    return new;
+  end if;
+
+  -- Terminal V2 outcomes are append-only facts separate from the immutable provisional case.
+  if to_regclass('public.finance_online_wallet_chargeback_resolutions') is not null
+     and exists (select 1 from finance_online_wallet_chargeback_resolutions resolution where resolution.journal_transaction_id = transaction_row.id) then
+    if not (source_row.source_kind = 'chargeback' and source_row.source_operation_key in ('won', 'principal_allocated'))
+       or (select count(*) from finance_online_wallet_chargeback_resolutions resolution where resolution.journal_transaction_id = transaction_row.id and resolution.xmin = pg_current_xact_id()::xid) <> 1
+       or exists (select 1 from finance_allocation_link_proofs legacy_proof where legacy_proof.journal_transaction_id = transaction_row.id) then
+      raise exception 'finance online-wallet chargeback resolution journal proof is incomplete or cross-wired' using errcode = '23514';
     end if;
     return new;
   end if;

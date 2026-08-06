@@ -1,5 +1,5 @@
+import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import {
   createProviderAccountIdentityBinding,
@@ -46,7 +46,7 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
     await adminClient.connect();
     await adminClient.query(`CREATE DATABASE "${databaseName}"`);
     runtime = createPostgresRuntime({ DATABASE_URL: isolatedDatabaseUrl });
-    await runtime.pool.query(readFileSync("packages/db/drizzle/0000_sticky_rictor.sql", "utf8"));
+    await runtime.pool.query(readCurrentMigrationSql());
     artifacts = createFinanceArtifactRegistry(runtime.database);
     await runtime.database.transaction(async (transaction) => {
       await transaction.insert(financeProviderAccountSeries).values({

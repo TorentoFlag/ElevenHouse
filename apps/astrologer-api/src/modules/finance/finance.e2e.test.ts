@@ -560,7 +560,9 @@ function createOnlineWalletPayoutRequestReader(): OnlineWalletPayoutRequestReade
     latestTransitionActorUserId: astrologerUserId,
     latestTransitionOccurredAt: now.toISOString(),
     latestTransitionFailureReason: null,
-    latestTransitionAdminNote: null
+    latestTransitionAdminNote: null,
+    paidBankReference: null,
+    paidTransferredAt: null
   });
 
   return {

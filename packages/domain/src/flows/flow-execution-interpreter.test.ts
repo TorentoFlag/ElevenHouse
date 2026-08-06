@@ -632,7 +632,13 @@ describe("flow execution interpreter", () => {
   });
 
   it("registers booking birth-data readiness only with an injected authoritative reader", async () => {
-    const reader = { read: async () => ({ ready: true }) };
+    const calls: unknown[] = [];
+    const reader = {
+      read: async (input: unknown) => {
+        calls.push(input);
+        return { ready: true };
+      }
+    };
 
     const decision = await interpretFlowExecutionClaim({
       claim: claim({
@@ -647,6 +653,49 @@ describe("flow execution interpreter", () => {
       kind: "advance",
       sourceHandle: "true",
       targetNodeId: "completed"
+    });
+    expect(calls).toEqual([
+      {
+        ownerUserId: "22222222-2222-4222-8222-222222222222",
+        bookingId: "88888888-8888-4888-8888-888888888888",
+        clientUserId: "99999999-9999-4999-8999-999999999999"
+      }
+    ]);
+  });
+
+  it("waits for the durable terminal signal of a newly requested natal chart", async () => {
+    const requester = {
+      request: async () => ({
+        kind: "active_job" as const,
+        jobId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      })
+    };
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph: natalChartGraph(),
+          nodeId: "natal-chart",
+          nodeKind: "natal_chart_request"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry({ natalChartRequester: requester })
+      })
+    ).resolves.toEqual({
+      kind: "wait_signal",
+      sourceNodeId: "natal-chart",
+      resultCode: "FLOW_WAITING_SIGNAL",
+      wait: {
+        signalType: "chart.calculation.terminal.v1",
+        correlationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        successHandle: "next"
+      },
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "waiting",
+        nodeKind: "natal_chart_request",
+        reasonCode: "FLOW_CHART_CALCULATION_REQUESTED",
+        resultCode: "FLOW_WAITING_SIGNAL"
+      }
     });
   });
 
@@ -1121,6 +1170,54 @@ function workItemGraph(instructions = "Проверьте карту и вопр
         sourceNodeId: "prepare-consultation",
         targetNodeId: "completed",
         sourceHandle: "success"
+      }
+    ]
+  });
+}
+
+function natalChartGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "booking",
+        kind: "booking_confirmed",
+        displayTitle: "Запись подтверждена",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
+      },
+      {
+        id: "natal-chart",
+        kind: "natal_chart_request",
+        displayTitle: "Рассчитать натальную карту",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          interpretationMode: "adult_natal",
+          settings: {
+            houseSystem: "placidus",
+            zodiac: "tropical",
+            nodeType: "true",
+            aspectPreset: "major",
+            orbMultiplier: 1
+          }
+        }
+      },
+      completedNode()
+    ],
+    edges: [
+      {
+        id: "booking-natal-chart",
+        sourceNodeId: "booking",
+        targetNodeId: "natal-chart",
+        sourceHandle: "next"
+      },
+      {
+        id: "natal-chart-completed",
+        sourceNodeId: "natal-chart",
+        targetNodeId: "completed",
+        sourceHandle: "next"
       }
     ]
   });
