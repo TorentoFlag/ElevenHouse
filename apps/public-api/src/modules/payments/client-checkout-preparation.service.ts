@@ -34,7 +34,6 @@ export class ClientCheckoutPreparationService {
     private readonly artifactRegistry: Pick<FinanceArtifactRegistry, "registerSealedArtifact">,
     private readonly preparation: ClientOrderCheckoutPreparationUnitOfWork,
     private readonly options: Readonly<{
-      environment: "sandbox" | "live";
       paymentMethods: readonly Readonly<{
         method:
           | "bank_card"
@@ -65,7 +64,6 @@ export class ClientCheckoutPreparationService {
     const prepared = await this.factory.prepare({
       order: input.order,
       clientUserId: input.clientUserId,
-      environment: this.options.environment,
       buyerContact: input.request.buyerContact,
       paymentMethods: this.options.paymentMethods,
       successUrl: input.request.successUrl,

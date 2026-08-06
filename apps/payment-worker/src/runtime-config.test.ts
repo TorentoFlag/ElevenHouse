@@ -12,7 +12,6 @@ describe("payment worker runtime config", () => {
         apiBaseUrl: "https://api.arcpay.space",
         apiSecret: null,
         webhookSecret: null,
-        environment: "sandbox",
         timestampToleranceSeconds: 300
       },
       onlineWalletHoldRelease: {
@@ -106,7 +105,7 @@ describe("payment worker runtime config", () => {
     ).toThrow("PAYMENT_WORKER_CANONICAL_CAPTURE_RETRY_MAXIMUM_DELAY_MS must not be below the base delay");
   });
 
-  it("requires explicit ArcPay, private S3/KMS and retention authority before enabling provider dispatch", () => {
+  it("requires ArcPay credentials but uses local immutable artifacts for provider dispatch", () => {
     expect(() =>
       createPaymentWorkerRuntimeConfig({
         PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED: "true"
@@ -127,14 +126,6 @@ describe("payment worker runtime config", () => {
         PAYMENT_WORKER_ARC_PAY_API_SECRET: "arc-secret",
         PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: "arc-webhook-secret",
         PAYMENT_WORKER_ARC_PAY_WEBHOOK_SIGNING_KEY_VERSION_ID: "arc-pay-webhook-key-2026-08",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ENDPOINT: "https://s3.example.test",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance-private",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "access-key",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "secret-key",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
-        PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN:
-          "arn:aws:kms:eu-central-1:123456789012:key/4b456f46-bf3c-4764-9c1b-381e8c69a545",
         PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_ID: "provider-response",
         PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_VERSION: "1",
         PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
@@ -150,15 +141,7 @@ describe("payment worker runtime config", () => {
       intervalMs: 5_000,
       batchSize: 25,
       publishingLockTimeoutMs: 60_000,
-      artifactStorage: {
-        endpoint: "https://s3.example.test",
-        region: "eu-central-1",
-        bucket: "elevenhouse-finance-private",
-        accessKeyId: "access-key",
-        secretAccessKey: "secret-key",
-        forcePathStyle: false,
-        kmsKeyArn: "arn:aws:kms:eu-central-1:123456789012:key/4b456f46-bf3c-4764-9c1b-381e8c69a545"
-      },
+      artifactDirectory: ".local/finance-artifacts",
       responseArtifactRetention: { policyId: "provider-response", policyVersion: "1" },
       requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" },
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" },

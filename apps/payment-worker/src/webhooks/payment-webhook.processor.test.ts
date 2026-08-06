@@ -50,6 +50,27 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.createdEvents).toEqual([]);
   });
 
+  it("acknowledges Arc Pay's signed endpoint test without invoking money processing", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => ({ duplicate: false }))
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress });
+    const request = signedRequest({
+      ...basePayload(eventId(97)),
+      event_type: "webhook.test",
+      data: { message: "This is a test webhook delivery from Arc Pay" }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, test: true }
+    });
+
+    expect(financeIngress.store).not.toHaveBeenCalled();
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+    expect(harness.createdEvents).toEqual([]);
+  });
+
   it("fails closed for a captured event until v2 canonical ingress is configured", async () => {
     const harness = createHarness();
     const request = signedRequest(capturedPayload({ eventId: eventId(2) }));

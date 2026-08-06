@@ -13,7 +13,7 @@ const providerAccount = createProviderAccountIdentityBinding({
 });
 
 describe("verified ArcPay webhook ingress evidence", () => {
-  it("issues branded ingress authority only for one verified, environment-matched sealed transport", () => {
+  it("issues branded ingress authority only for one verified sealed transport", () => {
     const evidence = createVerifiedArcPayWebhookIngressEvidence({
       signature: {
         kind: "verified",
@@ -29,7 +29,6 @@ describe("verified ArcPay webhook ingress evidence", () => {
         occurredAt: "2026-08-04T12:00:00.000Z"
       },
       providerAccount,
-      expectedEnvironment: "sandbox",
       sealedPayloadRef: "provider-webhook:11111111-1111-4111-8111-111111111111",
       rawBody: new TextEncoder().encode('{"event_type":"payment.captured"}'),
       webhookSigningKeyVersionId: "arc-pay-webhook-key:2026-08",
@@ -54,7 +53,7 @@ describe("verified ArcPay webhook ingress evidence", () => {
     });
   });
 
-  it("refuses to issue evidence when a signed transport is for a different environment", () => {
+  it("refuses to issue evidence when the signed webhook identity is cross-wired", () => {
     try {
       createVerifiedArcPayWebhookIngressEvidence({
         signature: {
@@ -64,24 +63,23 @@ describe("verified ArcPay webhook ingress evidence", () => {
           signatureEvidenceDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         transport: {
-          providerWebhookId: "11111111-1111-4111-8111-111111111111",
+          providerWebhookId: "22222222-2222-4222-8222-222222222222",
           providerEventType: "payment.captured",
           merchantTenantId: "22222222-2222-4222-8222-222222222222",
-          environment: "live",
+          environment: "sandbox",
           occurredAt: "2026-08-04T12:00:00.000Z"
         },
         providerAccount,
-        expectedEnvironment: "sandbox",
         sealedPayloadRef: "provider-webhook:11111111-1111-4111-8111-111111111111",
         rawBody: new TextEncoder().encode('{"event_type":"payment.captured"}'),
         webhookSigningKeyVersionId: "arc-pay-webhook-key:2026-08",
         verifiedAt: "2026-08-04T12:00:01.000Z",
         receivedAt: "2026-08-04T12:00:01.000Z"
       });
-      throw new Error("Expected environment mismatch");
+      throw new Error("Expected webhook correlation mismatch");
     } catch (error) {
       expect(error).toBeInstanceOf(VerifiedArcPayWebhookIngressEvidenceError);
-      expect(error).toMatchObject({ reason: "environment" });
+      expect(error).toMatchObject({ reason: "correlation" });
     }
   });
 });

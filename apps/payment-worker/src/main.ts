@@ -56,7 +56,7 @@ import { createPlatformTariffInvoiceChargeCommandFactory } from "@elevenhouse/do
 import {
   createFinanceTransientSecretVault,
   createFinanceRestrictedProviderCredentialVault,
-  createS3FinancePrivateObjectStorage
+  createFilesystemFinancePrivateObjectStorage
 } from "@elevenhouse/finance-infrastructure";
 import { createArcPayCanonicalPaymentReader } from "./arc-pay/arc-pay-canonical-payment-reader";
 import { createArcPayCheckoutSessionClient } from "./arc-pay/arc-pay-checkout-session-client";
@@ -64,15 +64,10 @@ import { createArcPayCardSetupClient } from "./arc-pay/arc-pay-card-setup-client
 import { createArcPayRefundClient } from "./arc-pay/arc-pay-refund-client";
 import { createArcPaySavedCardChargeClient } from "./arc-pay/arc-pay-saved-card-charge-client";
 import { createArcPayPaymentAttemptResolver } from "./arc-pay/arc-pay-payment-reader";
-import { createArcPaySettlementLedgerClient } from "./arc-pay/arc-pay-settlement-ledger-client";
 import {
   createOnlineWalletHoldReleaseProcessor,
   startOnlineWalletHoldReleaseInterval
 } from "./holds/online-wallet-hold-release.processor";
-import {
-  createSettlementLedgerReconciliationProcessor,
-  startSettlementLedgerReconciliationInterval
-} from "./reconciliation/settlement-ledger.processor";
 import { createPaymentWorkerRuntimeConfig } from "./runtime-config";
 import { createHostedCheckoutSessionDispatcher } from "./provider-operations/hosted-checkout-session-dispatcher";
 import { createArcPayOperationDispatcher } from "./provider-operations/arc-pay-operation-dispatcher";
@@ -155,9 +150,9 @@ async function startPaymentWorker(): Promise<void> {
   const readinessServer = createBasicWorkerReadinessServer({ service });
 
   if (config.financeProviderDispatch) {
-    const privateStorage = createS3FinancePrivateObjectStorage(
-      config.financeProviderDispatch.artifactStorage
-    );
+    const privateStorage = createFilesystemFinancePrivateObjectStorage({
+      rootDirectory: config.financeProviderDispatch.artifactDirectory
+    });
     await privateStorage.checkReady();
     const artifactRegistry = createFinanceArtifactRegistry(postgresRuntime.database);
     financeIngress = createFinanceWebhookIngress({
@@ -169,7 +164,6 @@ async function startPaymentWorker(): Promise<void> {
       ingressStorage: createDrizzleWebhookIngressStorageUnitOfWork({
         database: postgresRuntime.database
       }),
-      environment: config.arcPay.environment,
       webhookSigningKeyVersionId: config.financeProviderDispatch.webhookSigningKeyVersionId,
       webhookArtifactRetention: config.financeProviderDispatch.webhookArtifactRetention
     });
@@ -536,7 +530,9 @@ async function startPaymentWorker(): Promise<void> {
       webhookSecret: config.arcPay.webhookSecret,
       timestampToleranceSeconds: config.arcPay.timestampToleranceSeconds,
       processor,
-      financeIngress
+      financeIngress,
+      onSignatureRejected: ({ headerNames }) =>
+        logger.warn("ArcPay webhook signature rejected", { headerNames })
     })
   });
 
@@ -563,30 +559,6 @@ async function startPaymentWorker(): Promise<void> {
       logger.error("online wallet holds release tick failed", { error: serializeError(error) });
     }
   });
-  if (config.arcPay.apiSecret) {
-    startSettlementLedgerReconciliationInterval({
-      processor: createSettlementLedgerReconciliationProcessor({
-        client: createArcPaySettlementLedgerClient(config.arcPay),
-        store: reconciliationStore,
-        provider: "arc_pay",
-        environment: config.arcPay.environment,
-        lookbackMs: config.reconciliation.lookbackMs,
-        pageLimit: config.reconciliation.pageLimit,
-        currency: config.reconciliation.currency
-      }),
-      intervalMs: config.reconciliation.intervalMs,
-      onResult: (result) => {
-        if (result.matched > 0 || result.exceptions > 0 || result.replayed > 0) {
-          logger.info("settlement ledger reconciliation tick completed", result);
-        }
-      },
-      onError: (error) => {
-        logger.error("settlement ledger reconciliation tick failed", {
-          error: serializeError(error)
-        });
-      }
-    });
-  }
 
   logger.info("payment worker ready", {
     ...createReadinessResponse(service),

@@ -44,31 +44,23 @@ const defaultTrustedStaticCode = {
 };
 
 describe("createPublicApiRuntimeConfig", () => {
-  it("keeps checkout preparation disabled until private storage and retention are explicitly configured", () => {
+  it("keeps checkout preparation disabled until payment methods are explicitly configured", () => {
     expect(createPublicApiRuntimeConfig(requiredSecurityConfig).financeCheckout).toBeNull();
     expect(() => createPublicApiRuntimeConfig({
       ...requiredSecurityConfig,
       PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: "true"
-    })).toThrow("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires private artifact storage");
+    })).toThrow("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires payment methods");
   });
 
-  it("requires encrypted private artifact storage when checkout preparation is enabled", () => {
+  it("uses direct local artifacts when checkout preparation is enabled", () => {
     expect(createPublicApiRuntimeConfig({
       ...requiredSecurityConfig,
       PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: "true",
-      PUBLIC_API_FINANCE_CHECKOUT_ENVIRONMENT: "sandbox",
       PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"redirect"}]',
-      PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT: "https://s3.example.test",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance-private",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "access-key",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "secret-key",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
-      PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN: "arn:aws:kms:eu-central-1:123456789012:key/4b456f46-bf3c-4764-9c1b-381e8c69a545",
       PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
       PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: "1"
     }).financeCheckout).toMatchObject({
-      environment: "sandbox",
+      artifactDirectory: ".local/finance-artifacts",
       paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
       requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" }
     });

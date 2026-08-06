@@ -38,7 +38,6 @@ describe("finance reversal webhook ingress", () => {
       privateObjectStorage: { writeImmutable } as never,
       artifactRegistry: { registerSealedArtifact: vi.fn(async ({ artifact }: { artifact: unknown }) => artifact) } as never,
       ingressStorage: { storeBeforeAcknowledgement } as never,
-      environment: "sandbox",
       webhookSigningKeyVersionId: "arc-webhook-key-v1",
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" }
     });
@@ -70,7 +69,6 @@ describe("finance reversal webhook ingress", () => {
       privateObjectStorage: { writeImmutable } as never,
       artifactRegistry: { registerSealedArtifact } as never,
       ingressStorage: { storeBeforeAcknowledgement } as never,
-      environment: "sandbox",
       webhookSigningKeyVersionId: "arc-webhook-key-v1",
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" },
       now: () => new Date("2026-08-05T12:00:00.000Z")
@@ -115,7 +113,6 @@ describe("finance reversal webhook ingress", () => {
       privateObjectStorage: { writeImmutable } as never,
       artifactRegistry: { registerSealedArtifact: vi.fn() } as never,
       ingressStorage: { storeBeforeAcknowledgement: vi.fn() } as never,
-      environment: "sandbox",
       webhookSigningKeyVersionId: "arc-webhook-key-v1",
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" }
     });
@@ -141,7 +138,6 @@ describe("finance reversal webhook ingress", () => {
       privateObjectStorage: { writeImmutable } as never,
       artifactRegistry: { registerSealedArtifact: vi.fn() } as never,
       ingressStorage: { storeBeforeAcknowledgement: vi.fn() } as never,
-      environment: "sandbox",
       webhookSigningKeyVersionId: "arc-webhook-key-v1",
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" }
     });

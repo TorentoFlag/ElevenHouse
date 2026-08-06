@@ -24,12 +24,11 @@ describe("createArcPayPaymentAttemptResolver", () => {
     const resolver = createArcPayPaymentAttemptResolver({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: "arc-pay-secret",
-      environment: "sandbox",
       fetchImpl: fetchImpl as typeof fetch
     });
 
     await expect(
-      resolver.resolvePaymentAttemptId({ providerPaymentId, environment: "sandbox" })
+      resolver.resolvePaymentAttemptId({ providerPaymentId })
     ).resolves.toBe(paymentAttemptId);
 
     expect(calls).toMatchObject([
@@ -40,17 +39,16 @@ describe("createArcPayPaymentAttemptResolver", () => {
     ]);
   });
 
-  it("fails closed when the secret is absent or the environment does not match", async () => {
+  it("fails closed when the secret is absent", async () => {
     const fetchImpl = vi.fn();
     const resolver = createArcPayPaymentAttemptResolver({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: null,
-      environment: "sandbox",
       fetchImpl
     });
 
     await expect(
-      resolver.resolvePaymentAttemptId({ providerPaymentId, environment: "sandbox" })
+      resolver.resolvePaymentAttemptId({ providerPaymentId })
     ).rejects.toBeInstanceOf(ArcPayPaymentLookupError);
     expect(fetchImpl).not.toHaveBeenCalled();
   });

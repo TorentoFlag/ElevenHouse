@@ -1,7 +1,6 @@
 export type ArcPayPaymentAttemptResolver = {
   readonly resolvePaymentAttemptId: (input: {
     readonly providerPaymentId: string;
-    readonly environment: "sandbox" | "live";
   }) => Promise<string>;
 };
 
@@ -15,14 +14,12 @@ export class ArcPayPaymentLookupError extends Error {
 export function createArcPayPaymentAttemptResolver(input: {
   readonly apiBaseUrl: string;
   readonly apiSecret: string | null;
-  readonly environment: "sandbox" | "live";
   readonly fetchImpl?: typeof fetch;
 }): ArcPayPaymentAttemptResolver {
   const fetchImpl = input.fetchImpl ?? fetch;
   return {
-    async resolvePaymentAttemptId({ providerPaymentId, environment }): Promise<string> {
-      if (!input.apiSecret || environment !== input.environment)
-        throw new ArcPayPaymentLookupError();
+    async resolvePaymentAttemptId({ providerPaymentId }): Promise<string> {
+      if (!input.apiSecret) throw new ArcPayPaymentLookupError();
       let response: Response;
       try {
         response = await fetchImpl(

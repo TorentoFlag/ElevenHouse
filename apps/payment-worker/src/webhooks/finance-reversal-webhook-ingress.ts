@@ -61,7 +61,6 @@ export function createFinanceWebhookIngress(
     privateObjectStorage: FinancePrivateObjectStoragePort;
     artifactRegistry: Pick<FinanceArtifactRegistry, "registerSealedArtifact">;
     ingressStorage: WebhookIngressStorageUnitOfWork;
-    environment: "sandbox" | "live";
     webhookSigningKeyVersionId: string;
     webhookArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     now?: () => Date;
@@ -137,7 +136,6 @@ export function createFinanceWebhookIngress(
         signature: request.signature,
         transport: request.transport,
         providerAccount,
-        expectedEnvironment: input.environment,
         sealedPayloadRef: artifactId,
         rawBody: request.rawBody,
         webhookSigningKeyVersionId: signingKeyVersionId,

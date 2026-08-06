@@ -12,7 +12,7 @@ import {
   createFinanceArtifactRegistry
 } from "@elevenhouse/db/finance";
 import { createClientOrderCheckoutCommandFactory } from "@elevenhouse/domain/finance-core";
-import { createS3FinancePrivateObjectStorage } from "@elevenhouse/finance-infrastructure";
+import { createFilesystemFinancePrivateObjectStorage } from "@elevenhouse/finance-infrastructure";
 import type { PublicApiRuntimeConfig } from "../../config/runtime-config.js";
 import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
@@ -48,7 +48,9 @@ import {
         const config =
           configService.getOrThrow<PublicApiRuntimeConfig>("publicApi").financeCheckout;
         if (!config) return null;
-        const privateStorage = createS3FinancePrivateObjectStorage(config.artifactStorage);
+        const privateStorage = createFilesystemFinancePrivateObjectStorage({
+          rootDirectory: config.artifactDirectory
+        });
         await privateStorage.checkReady();
         return privateStorage;
       },
@@ -60,7 +62,7 @@ import {
         postgresRuntime: PostgresRuntimeService,
         configService: ConfigService,
         clock: SystemClock,
-        privateStorage: ReturnType<typeof createS3FinancePrivateObjectStorage> | null
+        privateStorage: ReturnType<typeof createFilesystemFinancePrivateObjectStorage> | null
       ) => {
         const config =
           configService.getOrThrow<PublicApiRuntimeConfig>("publicApi").financeCheckout;
@@ -81,7 +83,6 @@ import {
           createFinanceArtifactRegistry(postgresRuntime.database),
           createDrizzleClientOrderCheckoutPreparationUnitOfWork(postgresRuntime.database),
           {
-            environment: config.environment,
             paymentMethods: config.paymentMethods,
             requestArtifactRetention: config.requestArtifactRetention,
             clock
@@ -99,7 +100,7 @@ import {
       provide: PAYMENTS_CHECKOUT_ACTION_SERVICE,
       useFactory: (
         postgresRuntime: PostgresRuntimeService,
-        privateStorage: ReturnType<typeof createS3FinancePrivateObjectStorage> | null
+        privateStorage: ReturnType<typeof createFilesystemFinancePrivateObjectStorage> | null
       ) => {
         if (!privateStorage) return null;
         return new ClientCheckoutActionService(

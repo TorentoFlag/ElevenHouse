@@ -9,7 +9,7 @@ import type { ArcPayWebhookSignatureInspection } from "../arc-pay/arc-pay-signat
 import type { ArcPayWebhookTransportEnvelope } from "../arc-pay/arc-pay-webhook";
 
 export class VerifiedArcPayWebhookIngressEvidenceError extends Error {
-  constructor(readonly reason: "invalid_signature" | "correlation" | "environment" | "invalid_input") {
+  constructor(readonly reason: "invalid_signature" | "correlation" | "invalid_input") {
     super("Verified ArcPay webhook ingress evidence could not be issued");
     this.name = "VerifiedArcPayWebhookIngressEvidenceError";
   }
@@ -24,7 +24,6 @@ export function createVerifiedArcPayWebhookIngressEvidence(input: Readonly<{
   signature: ArcPayWebhookSignatureInspection;
   transport: ArcPayWebhookTransportEnvelope;
   providerAccount: FinanceProviderAccountIdentity;
-  expectedEnvironment: "sandbox" | "live";
   sealedPayloadRef: string;
   /** Exact transport bytes that were HMAC-verified and sealed; never a reparsed payload. */
   rawBody: Uint8Array;
@@ -33,12 +32,7 @@ export function createVerifiedArcPayWebhookIngressEvidence(input: Readonly<{
   receivedAt: string;
 }>): VerifiedWebhookIngressEvidence {
   if (input.signature.kind !== "verified") fail("invalid_signature");
-  if (
-    input.signature.webhookId !== input.transport.providerWebhookId ||
-    input.transport.environment !== input.expectedEnvironment
-  ) {
-    fail(input.transport.environment === input.expectedEnvironment ? "correlation" : "environment");
-  }
+  if (input.signature.webhookId !== input.transport.providerWebhookId) fail("correlation");
   const sealedPayloadRef = identifier(input.sealedPayloadRef);
   const webhookSigningKeyVersionId = identifier(input.webhookSigningKeyVersionId);
   const verifiedAt = isoInstant(input.verifiedAt);
@@ -50,7 +44,7 @@ export function createVerifiedArcPayWebhookIngressEvidence(input: Readonly<{
     kind: "verified_webhook_ingress_evidence",
     provider: "arc_pay",
     providerAccount: input.providerAccount,
-    receivingEnvironment: input.expectedEnvironment,
+    receivingEnvironment: input.transport.environment,
     webhookId: input.signature.webhookId,
     providerEventType,
     rawBodyDigest: digest(input.rawBody),

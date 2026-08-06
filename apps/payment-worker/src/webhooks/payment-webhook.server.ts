@@ -31,6 +31,8 @@ export function createPaymentWebhookHandler(input: {
   readonly timestampToleranceSeconds: number;
   readonly now?: () => Date;
   readonly processor: PaymentWebhookProcessor;
+  /** Receives names only: never values, the body, or the signing secret. */
+  readonly onSignatureRejected?: (input: Readonly<{ headerNames: readonly string[] }>) => void;
   /**
    * Captures, partial/full refunds and chargebacks are acknowledged only after durable ingress. Their
    * canonical workers apply V2 accounting effects later; this boundary must never run a legacy
@@ -52,6 +54,7 @@ export function createPaymentWebhookHandler(input: {
         now
       });
       if (signature.kind !== "verified") {
+        input.onSignatureRejected?.({ headerNames: Object.keys(request.headers).sort() });
         return { statusCode: 401, body: { error: "invalid_webhook_signature" } };
       }
 
@@ -61,6 +64,9 @@ export function createPaymentWebhookHandler(input: {
           webhookId: signature.webhookId,
           rawBody
         });
+        if (transport.providerEventType === "webhook.test") {
+          return { statusCode: 200, body: { accepted: true, test: true } };
+        }
         if (
           transport.providerEventType === "payment.captured" ||
           transport.providerEventType === "payment.refunded" ||

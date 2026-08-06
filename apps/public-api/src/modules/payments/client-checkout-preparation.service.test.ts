@@ -44,7 +44,7 @@ describe("ClientCheckoutPreparationService", () => {
       })
     } as unknown as ClientOrderCheckoutPreparationUnitOfWork;
     const service = new ClientCheckoutPreparationService(factory, storage, registry, uow, {
-      environment: "sandbox", paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
       requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" }, clock: { now: () => new Date("2026-08-04T10:00:00.000Z") }
     });
 

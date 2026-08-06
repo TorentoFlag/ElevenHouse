@@ -121,17 +121,10 @@ const publicApiRuntimeConfigSchema = z.object({
     .positive()
     .default(2500),
   PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: z.enum(["true", "false"]).default("false"),
-  PUBLIC_API_FINANCE_CHECKOUT_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
   PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY: z.string().trim().min(1).default(".local/finance-artifacts"),
+  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-request"),
+  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).default("1"),
 });
 
 const financeCheckoutPaymentMethodSchema = z.object({
@@ -207,17 +200,8 @@ export type PublicApiRuntimeConfig = {
     };
   };
   readonly financeCheckout: Readonly<{
-    environment: "sandbox" | "live";
     paymentMethods: readonly FinanceCheckoutPaymentMethod[];
-    artifactStorage: Readonly<{
-      endpoint: string;
-      region: string;
-      bucket: string;
-      accessKeyId: string;
-      secretAccessKey: string;
-      forcePathStyle: boolean;
-      kmsKeyArn: string;
-    }>;
+    artifactDirectory: string;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
   }> | null;
 };
@@ -373,32 +357,11 @@ export function createPublicApiRuntimeConfig(
 
 function resolveFinanceCheckout(config: z.infer<typeof publicApiRuntimeConfigSchema>): PublicApiRuntimeConfig["financeCheckout"] {
   if (config.PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED === "false") return null;
-  const endpoint = requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT);
-  if (new URL(endpoint).protocol !== "https:") {
-    throw new Error("PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
-  }
-  const forcePathStyle = config.PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
-  if (forcePathStyle === undefined) {
-    throw new Error("PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when checkout preparation is enabled");
-  }
-  const kmsKeyArn = requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error("PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
-  }
   return Object.freeze({
-    environment: config.PUBLIC_API_FINANCE_CHECKOUT_ENVIRONMENT,
     paymentMethods: parseFinanceCheckoutPaymentMethods(
       requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS)
     ),
-    artifactStorage: Object.freeze({
-      endpoint,
-      region: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_S3_REGION),
-      bucket: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET),
-      accessKeyId: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
-      secretAccessKey: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
-      forcePathStyle: forcePathStyle === "true",
-      kmsKeyArn
-    }),
+    artifactDirectory: config.PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY,
     requestArtifactRetention: Object.freeze({
       policyId: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID),
       policyVersion: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION)
@@ -416,7 +379,7 @@ function parseFinanceCheckoutPaymentMethods(value: string): readonly FinanceChec
 }
 
 function requiredFinanceCheckoutConfig(value: string | undefined): string {
-  if (!value) throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires private artifact storage and retention policy configuration");
+  if (!value) throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires payment methods");
   return value;
 }
 
