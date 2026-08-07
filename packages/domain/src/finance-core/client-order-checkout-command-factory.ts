@@ -49,7 +49,6 @@ export type ClientOrderCheckoutCommandFactory = Readonly<{
     input: Readonly<{
       order: FinanceOrder;
       clientUserId: string;
-      environment: "sandbox" | "live";
       buyerContact?: FiscalBuyerContact;
       paymentMethods: readonly ArcPayPaymentMethod[];
       successUrl: string;
@@ -85,10 +84,7 @@ export function createClientOrderCheckoutCommandFactory(
       if (input.order.clientUserId !== input.clientUserId) fail("order_owner_mismatch");
       if (input.order.status !== "pending_payment") fail("order_not_payable");
       const [providerAccount, policy, captureAuthority, fiscalProfile] = await Promise.all([
-        dependencies.providerAccounts.findActiveProviderAccount({
-          provider: "arc_pay",
-          environment: input.environment
-        }),
+        dependencies.providerAccounts.findActiveProviderAccount({ provider: "arc_pay" }),
         dependencies.operationPolicies.findPublishedForOperation({
           operationKind: "client_checkout_prepare"
         }),

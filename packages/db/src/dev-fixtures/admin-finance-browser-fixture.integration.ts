@@ -103,6 +103,19 @@ describe("admin finance browser fixture", () => {
       }
     ]);
 
+    const browserClient = await runtime.pool.query<{
+      readonly relationship_status: string;
+      readonly birth_date: string | null;
+    }>(
+      `select relationships.status as relationship_status, birth.birth_date
+       from client_astrologer_relationships relationships
+       inner join client_birth_data birth on birth.client_user_id = relationships.client_user_id
+       where relationships.astrologer_user_id = $1
+       order by relationships.client_user_id`,
+      [first.astrologerUserId]
+    );
+    expect(browserClient.rows).toEqual([{ relationship_status: "active", birth_date: "1990-03-14" }]);
+
     const policies = await runtime.pool.query<{ readonly count: string }>(
       "select count(*)::text from finance_policies where is_active = true and risk_tier = 'manual_review'"
     );
@@ -177,6 +190,14 @@ describe("admin finance browser fixture", () => {
         published_commission_bps: 800
       }
     ]);
+
+    const capabilities = await runtime.pool.query<{ readonly capability: string }>(
+      `select capability
+       from platform_tariff_version_capabilities
+       where tariff_series_id = 'dev-finance-pro' and tariff_version = 1
+       order by capability`
+    );
+    expect(capabilities.rows).toEqual([{ capability: "funnels" }, { capability: "products" }]);
 
     const ledgerStore = createDrizzleLedgerStore(runtime.database);
     await expect(

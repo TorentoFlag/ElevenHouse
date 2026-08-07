@@ -43,7 +43,6 @@ describe("client order checkout command factory", () => {
     const result = await factory.prepare({
       order,
       clientUserId: "client-1",
-      environment: "sandbox",
       buyerContact: { kind: "email", value: "client@example.test" },
       paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
       successUrl: "https://client.elevenhouse.test/payments/success",
@@ -123,7 +122,6 @@ function input() {
   return {
     order,
     clientUserId: "client-1",
-    environment: "sandbox" as const,
     buyerContact: { kind: "email" as const, value: "client@example.test" },
     paymentMethods: [{ method: "bank_card" as const, paymentMode: "redirect" as const }],
     successUrl: "https://client.elevenhouse.test/payments/success",

@@ -136,9 +136,12 @@ const fixtureTariff = publishPlatformTariffDraft(
     automationLimit: null,
     isPopular: false,
     displayOrder: 0,
-    // The shared acceptance product must be sale-enabled so the related client journey can
-    // exercise real entitlement enforcement instead of a browser-only imitation.
-    features: ["products"]
+    // The shared acceptance fixture is also used by the authenticated astrologer browser
+    // surfaces. Keep its enabled capabilities explicit so those surfaces exercise the
+    // real entitlement guard instead of a browser-only bypass.
+    // Tariff authority reads the persisted capability set in lexical order; the
+    // canonical digest must bind that exact order.
+    features: ["funnels", "products"]
   })
 );
 
@@ -324,6 +327,49 @@ async function seedUsersAndAdminSession(client: Queryable): Promise<void> {
          assigned_at = excluded.assigned_at`,
     [fixture.adminUserId, fixture.astrologerUserId, fixture.clientUserId, now]
   );
+  await query(
+    client,
+    `insert into client_profiles (user_id, display_name_snapshot, preferred_locale, timezone, created_at, updated_at)
+     values ($1, 'Dev Finance Client', 'ru', 'Europe/Moscow', $2, $2)
+     on conflict (user_id) do update
+     set display_name_snapshot = excluded.display_name_snapshot,
+         preferred_locale = excluded.preferred_locale,
+         timezone = excluded.timezone,
+         updated_at = excluded.updated_at`,
+    [fixture.clientUserId, now]
+  );
+  await query(
+    client,
+    `insert into client_birth_data
+       (client_user_id, label, birth_date, birth_time, birth_time_precision,
+        source, revision, last_edited_by_user_id, last_edited_by_role, created_at, updated_at)
+     values ($1, 'Local Flow acceptance', '1990-03-14', null, 'unknown',
+       'manual', 1, $2, 'astrologer', $3, $3)
+     on conflict (client_user_id) do update
+     set label = excluded.label,
+         birth_date = excluded.birth_date,
+         birth_time = excluded.birth_time,
+         birth_time_precision = excluded.birth_time_precision,
+         source = excluded.source,
+         last_edited_by_user_id = excluded.last_edited_by_user_id,
+         last_edited_by_role = excluded.last_edited_by_role,
+         updated_at = excluded.updated_at`,
+    [fixture.clientUserId, fixture.astrologerUserId, now]
+  );
+  await query(
+    client,
+    `insert into client_astrologer_relationships
+       (client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at, created_at, updated_at)
+     values ($1, $2, 'manual', 'active', $3, $3, $3, $3)
+     on conflict (client_user_id, astrologer_user_id) do update
+     set source = excluded.source,
+         status = 'active',
+         last_linked_at = excluded.last_linked_at,
+         archived_at = null,
+         blocked_at = null,
+         updated_at = excluded.updated_at`,
+    [fixture.clientUserId, fixture.astrologerUserId, now]
+  );
 
   const sessionTokenHash = hashSessionToken(fixture.sessionToken);
   const astrologerSessionTokenHash = hashSessionToken(fixture.astrologerSessionToken);
@@ -493,7 +539,8 @@ async function seedFinancePolicy(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into platform_tariff_version_capabilities (tariff_series_id, tariff_version, capability)
-     values ($1, $2, 'products')
+     values ($1, $2, 'products'),
+            ($1, $2, 'funnels')
      on conflict (tariff_series_id, tariff_version, capability) do nothing`,
     [fixtureTariff.tariffSeriesId, fixtureTariff.version]
   );
@@ -587,9 +634,9 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into payment_attempts
-       (id, order_id, provider, environment, status, amount_minor, currency,
+       (id, order_id, provider, status, amount_minor, currency,
         provider_payment_id, provider_checkout_id, idempotency_key, metadata, created_at, updated_at)
-     values ($1, $2, 'arc_pay', 'sandbox', 'chargeback', $4, 'RUB',
+     values ($1, $2, 'arc_pay', 'chargeback', $4, 'RUB',
        'arc-dev-chargeback-payment', 'arc-dev-checkout-chargeback', 'dev-admin-finance-chargeback',
        jsonb_build_object('source', 'seed-dev-admin-finance'), $3, $3)
      on conflict (id) do update
@@ -602,9 +649,9 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into payment_provider_events
-       (id, payment_attempt_id, provider, environment, provider_webhook_id,
+       (id, payment_attempt_id, provider, provider_webhook_id,
         provider_payment_id, type, occurred_at, received_at, payload)
-     values ($1, $2, 'arc_pay', 'sandbox', 'wh_dev_chargeback_1',
+     values ($1, $2, 'arc_pay', 'wh_dev_chargeback_1',
        'arc-dev-chargeback-payment', 'payment.chargeback', $3, $3,
        jsonb_build_object('source', 'seed-dev-admin-finance'))
      on conflict (id) do update
@@ -660,9 +707,9 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
     await query(
       client,
       `insert into payment_attempts
-         (id, order_id, provider, environment, status, amount_minor, currency,
+         (id, order_id, provider, status, amount_minor, currency,
           provider_payment_id, provider_checkout_id, idempotency_key, metadata, created_at, updated_at)
-       values ($1, $2, 'arc_pay', 'sandbox', 'captured', $3, 'RUB',
+       values ($1, $2, 'arc_pay', 'captured', $3, 'RUB',
          $4, $5, $6, jsonb_build_object('source', 'seed-dev-admin-finance', 'productTitle', $7::text),
          $8, $8)
        on conflict (id) do update
@@ -686,9 +733,9 @@ async function seedProductsAndPayments(client: Queryable): Promise<void> {
     await query(
       client,
       `insert into payment_provider_events
-         (id, payment_attempt_id, provider, environment, provider_webhook_id,
+         (id, payment_attempt_id, provider, provider_webhook_id,
           provider_payment_id, type, occurred_at, received_at, payload)
-       values ($1, $2, 'arc_pay', 'sandbox', $3, $4, 'payment.captured', $5, $6,
+       values ($1, $2, 'arc_pay', $3, $4, 'payment.captured', $5, $6,
          jsonb_build_object('source', 'seed-dev-admin-finance', 'productTitle', $7::text))
        on conflict (id) do update
        set payment_attempt_id = excluded.payment_attempt_id,
@@ -892,7 +939,6 @@ async function seedLedger(client: Queryable): Promise<void> {
         providerEventId: sale.providerEventId,
         paymentAttemptId: sale.paymentAttemptId,
         provider: "arc_pay",
-        environment: "sandbox",
         providerPaymentId: sale.providerPaymentId,
         holdDurationHours: 48,
         holdReleaseAt: sale.holdReleaseAt,
@@ -1055,7 +1101,6 @@ async function seedLedger(client: Queryable): Promise<void> {
       providerEventId: fixture.chargebackProviderEventId,
       paymentAttemptId: fixture.chargebackPaymentAttemptId,
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: "arc-dev-chargeback-payment",
       reversalGrossAmountMinor: chargebackGrossAmountMinor,
       platformFeeReversalAmountMinor: chargebackPlatformFeeAmountMinor,
@@ -1080,10 +1125,10 @@ async function seedReconciliationException(client: Queryable): Promise<void> {
   await query(
     client,
     `insert into reconciliation_records
-       (id, provider, environment, provider_payment_id, provider_payout_id,
+       (id, provider, provider_payment_id, provider_payout_id,
         provider_settlement_id, provider_event_id, status, exception_code,
         exception_message, provider_occurred_at, checked_at, resolved_at, payload)
-     values ($1, 'arc_pay', 'sandbox', 'arc-dev-chargeback-payment', null,
+     values ($1, 'arc_pay', 'arc-dev-chargeback-payment', null,
        'settlement-dev-2026-07-28', $2, 'exception', 'chargeback_settlement_review',
        'Chargeback event requires settlement follow-up before closing finance review',
        $3, $3, null, jsonb_build_object('source', 'seed-dev-admin-finance'))
