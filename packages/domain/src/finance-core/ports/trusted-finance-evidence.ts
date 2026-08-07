@@ -61,7 +61,6 @@ export type VerifiedWebhookIngressEvidence = Readonly<{
   kind: "verified_webhook_ingress_evidence";
   provider: "arc_pay";
   providerAccount: FinanceProviderAccountIdentity;
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
   providerEventType: string;
   rawBodyDigest: FinanceDigest;

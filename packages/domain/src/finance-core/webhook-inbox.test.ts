@@ -25,7 +25,6 @@ describe("durable webhook ingress", () => {
       item: {
         transportIdentity: {
           provider: "arc_pay",
-          receivingEnvironment: "live",
           webhookId: "arc-webhook-1"
         },
         providerEventType: "payment.captured",
@@ -142,7 +141,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
     const secondTransport = validItem({
       transportIdentity: {
         provider: "arc_pay",
-        receivingEnvironment: "live",
         webhookId: "arc-webhook-2"
       }
     });
@@ -204,7 +202,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
     ["provider", { provider: "another-provider" }],
     ["provider_account", { providerAccountId: "arc-account-other" }],
     ["tenant", { merchantTenantId: "wrong-tenant" }],
-    ["environment", { environment: "sandbox" }],
     ["environment", { livemode: false }],
     ["payment", { providerPaymentId: "arc-payment-other" }],
     ["source", { logicalSource: { kind: "order", id: "order-other" } }],
@@ -224,6 +221,17 @@ describe("webhook dedupe and canonical semantic processing", () => {
       mismatches: [mismatch],
       businessEffect: null
     });
+  });
+
+  it("does not select or persist an ArcPay key environment when correlating a webhook", () => {
+    const decision = decideWebhookProcessing({
+      item: activeItem(),
+      expectedFacts,
+      observedFacts: { ...observedFacts, environment: "sandbox", livemode: false },
+      committedSemanticRecords: []
+    });
+
+    expect(decision.kind).toBe("apply_once");
   });
 
   it.each([
@@ -414,7 +422,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
         item: activeItem({
           transportIdentity: {
             provider: "arc_pay",
-            receivingEnvironment: "live",
             webhookId: "arc-webhook-refund-replay"
           },
           providerEventType: "payment.refunded"
@@ -893,7 +900,6 @@ const providerAccount = {
   identityVersion: 3,
   provider: "arc_pay",
   merchantTenantId: "elevenhouse-live",
-  environment: "live",
   terminalScope: "primary-payins",
   settlementScope: "merchant-ledger-primary"
 } as const;
@@ -1061,7 +1067,6 @@ function validIngress(overrides: Record<string, unknown> = {}) {
 function validIngressInput() {
   return {
     provider: "arc_pay",
-    receivingEnvironment: "live",
     webhookId: "arc-webhook-1",
     providerEventType: "payment.captured",
     rawBodyDigest,

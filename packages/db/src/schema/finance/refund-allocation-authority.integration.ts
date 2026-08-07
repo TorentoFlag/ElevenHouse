@@ -135,7 +135,6 @@ describe.sequential("refund allocation authority PostgreSQL boundary", () => {
       identityVersion: 1,
       provider: "arc_pay",
       merchantTenantId: "elevenhouse-test",
-      environment: "sandbox",
       terminalScope: "test-payins",
       settlementScope: "test-settlement"
     }, "arc-payment-position-1");

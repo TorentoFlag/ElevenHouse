@@ -261,7 +261,6 @@ const providerAccountKeys = [
   "identityVersion",
   "provider",
   "merchantTenantId",
-  "environment",
   "terminalScope",
   "settlementScope"
 ] as const;
@@ -737,7 +736,6 @@ function normalizeProviderAccount(value: unknown): ArcProviderAccountIdentity {
   const fields = readExactOwnDataObject(value, providerAccountKeys);
   if (
     fields.provider !== "arc_pay" ||
-    (fields.environment !== "sandbox" && fields.environment !== "live") ||
     !Number.isSafeInteger(fields.identityVersion) ||
     Number(fields.identityVersion) < 1
   ) {
@@ -748,7 +746,6 @@ function normalizeProviderAccount(value: unknown): ArcProviderAccountIdentity {
     identityVersion: Number(fields.identityVersion),
     provider: fields.provider,
     merchantTenantId: normalizeOpaqueValue(fields.merchantTenantId, 160),
-    environment: fields.environment,
     terminalScope: normalizeOpaqueValue(fields.terminalScope, 160),
     settlementScope: normalizeOpaqueValue(fields.settlementScope, 160)
   });
@@ -1100,7 +1097,6 @@ function providerAccountsEqual(
     left.identityVersion === right.identityVersion &&
     left.provider === right.provider &&
     left.merchantTenantId === right.merchantTenantId &&
-    left.environment === right.environment &&
     left.terminalScope === right.terminalScope &&
     left.settlementScope === right.settlementScope
   );

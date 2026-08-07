@@ -11,7 +11,6 @@ import { readStrictOwnDataRecord } from "./strict-own-data";
 
 export type WebhookTransportIdentity = Readonly<{
   provider: "arc_pay";
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
 }>;
 
@@ -311,7 +310,6 @@ const supportedEventTypes = new Set([
 
 const ingressKeys = [
   "provider",
-  "receivingEnvironment",
   "webhookId",
   "providerEventType",
   "rawBodyDigest",
@@ -320,7 +318,7 @@ const ingressKeys = [
   "transportValidation"
 ] as const;
 const transportValidationKeys = ["envelope", "signature", "timestamp"] as const;
-const transportIdentityKeys = ["provider", "receivingEnvironment", "webhookId"] as const;
+const transportIdentityKeys = ["provider", "webhookId"] as const;
 const inboxItemKeys = [
   "transportIdentity",
   "providerEventType",
@@ -416,7 +414,6 @@ const providerAccountKeys = [
   "identityVersion",
   "provider",
   "merchantTenantId",
-  "environment",
   "terminalScope",
   "settlementScope"
 ] as const;
@@ -471,7 +468,6 @@ export function prepareWebhookIngress(input: unknown): WebhookIngressDecision {
     item: freezeInboxItem({
       transportIdentity: normalizeTransportIdentity({
         provider: fields.provider,
-        receivingEnvironment: fields.receivingEnvironment,
         webhookId: fields.webhookId
       }),
       providerEventType: normalizeOpaqueValue(fields.providerEventType, 240),
@@ -851,12 +847,8 @@ function normalizeInboxItem(value: unknown): WebhookInboxItem {
 function normalizeTransportIdentity(value: unknown): WebhookTransportIdentity {
   const fields = readExactOwnDataObject(value, transportIdentityKeys);
   if (fields.provider !== "arc_pay") throw integrityError();
-  if (fields.receivingEnvironment !== "sandbox" && fields.receivingEnvironment !== "live") {
-    throw integrityError();
-  }
   return Object.freeze({
     provider: fields.provider,
-    receivingEnvironment: fields.receivingEnvironment,
     webhookId: normalizeOpaqueValue(fields.webhookId, 240)
   });
 }
@@ -998,7 +990,6 @@ function normalizeProviderAccount(value: unknown): ArcProviderAccountIdentity {
   const fields = readExactOwnDataObject(value, providerAccountKeys);
   if (
     fields.provider !== "arc_pay" ||
-    (fields.environment !== "sandbox" && fields.environment !== "live") ||
     !Number.isSafeInteger(fields.identityVersion) ||
     Number(fields.identityVersion) < 1
   ) {
@@ -1009,7 +1000,6 @@ function normalizeProviderAccount(value: unknown): ArcProviderAccountIdentity {
     identityVersion: Number(fields.identityVersion),
     provider: fields.provider,
     merchantTenantId: normalizeOpaqueValue(fields.merchantTenantId, 160),
-    environment: fields.environment,
     terminalScope: normalizeOpaqueValue(fields.terminalScope, 160),
     settlementScope: normalizeOpaqueValue(fields.settlementScope, 160)
   });
@@ -1234,14 +1224,8 @@ function correlationMismatches(
   if (observed.merchantTenantId !== expected.providerAccount.merchantTenantId) {
     addMismatch(mismatches, "tenant");
   }
-  const expectedLivemode = expected.providerAccount.environment === "live";
   if (
-    observed.environment !== expected.providerAccount.environment ||
-    item.transportIdentity.receivingEnvironment !== expected.providerAccount.environment ||
-    item.transportIdentity.receivingEnvironment !== observed.environment ||
-    observed.livemode !== expectedLivemode ||
-    observed.livemode !== (observed.environment === "live") ||
-    observed.livemode !== (item.transportIdentity.receivingEnvironment === "live")
+    observed.livemode !== (observed.environment === "live")
   ) {
     addMismatch(mismatches, "environment");
   }
@@ -1640,7 +1624,6 @@ function sameTransportIdentity(
 ): boolean {
   return (
     left.provider === right.provider &&
-    left.receivingEnvironment === right.receivingEnvironment &&
     left.webhookId === right.webhookId
   );
 }

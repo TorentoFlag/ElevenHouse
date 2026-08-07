@@ -11,20 +11,40 @@ const accountInput = () => ({
   identityVersion: 1,
   provider: "arc_pay" as const,
   merchantTenantId: "merchant-elevenhouse",
-  environment: "sandbox" as const,
   terminalScope: "hosted-checkout",
   settlementScope: "merchant-settlement"
 });
 
 describe("ArcPay provider-account identity", () => {
-  it("creates a frozen identity from provider, tenant, environment, terminal and settlement scope", () => {
+  it("does not make the API-key environment part of the stored merchant identity", () => {
+    const account = createArcProviderAccountIdentity({
+      providerAccountId: "arc-account-primary",
+      identityVersion: 1,
+      provider: "arc_pay",
+      merchantTenantId: "merchant-elevenhouse",
+      terminalScope: "hosted-checkout",
+      settlementScope: "merchant-settlement"
+    });
+
+    expect(account).toEqual({
+      providerAccountId: "arc-account-primary",
+      identityVersion: 1,
+      provider: "arc_pay",
+      merchantTenantId: "merchant-elevenhouse",
+      terminalScope: "hosted-checkout",
+      settlementScope: "merchant-settlement"
+    });
+    expect(account).not.toHaveProperty("environment");
+  });
+
+  it("creates a frozen identity from provider, tenant, terminal and settlement scope", () => {
     const account = createArcProviderAccountIdentity(accountInput());
 
     expect(account).toEqual(accountInput());
     expect(Object.isFrozen(account)).toBe(true);
     expect(account).not.toHaveProperty("currency");
     expect(() => {
-      (account as unknown as { environment: string }).environment = "live";
+      (account as unknown as { terminalScope: string }).terminalScope = "saved-card";
     }).toThrow(TypeError);
   });
 
@@ -134,7 +154,7 @@ describe("ArcPay provider-account identity", () => {
 
   it.each([
     [{ ...accountInput(), provider: "another_provider" }, "invalid_field"],
-    [{ ...accountInput(), environment: "test" }, "invalid_field"],
+    [{ ...accountInput(), environment: "sandbox" }, "unknown_field"],
     [{ ...accountInput(), identityVersion: 0 }, "invalid_field"],
     [{ ...accountInput(), merchantTenantId: " " }, "invalid_field"],
     [{ ...accountInput(), currency: "RUB" }, "unknown_field"]
@@ -151,16 +171,14 @@ describe("ArcPay provider-account identity", () => {
       replacement: {
         ...accountInput(),
         providerAccountId: "arc-account-live",
-        identityVersion: 2,
-        environment: "live"
+        identityVersion: 2
       }
     });
 
     expect(replacement).toEqual({
       ...accountInput(),
       providerAccountId: "arc-account-live",
-      identityVersion: 2,
-      environment: "live"
+      identityVersion: 2
     });
     expect(current).toEqual(accountInput());
     expect(Object.isFrozen(replacement)).toBe(true);
@@ -177,8 +195,7 @@ describe("ArcPay provider-account identity", () => {
           replacement: {
             ...accountInput(),
             providerAccountId: "arc-account-live",
-            identityVersion: 2,
-            environment: "live"
+            identityVersion: 2
           }
         }),
       "stale_identity_version"
@@ -188,7 +205,7 @@ describe("ArcPay provider-account identity", () => {
         replaceArcProviderAccountIdentity({
           current,
           expectedIdentityVersion: 1,
-          replacement: { ...accountInput(), identityVersion: 2, environment: "live" }
+          replacement: { ...accountInput(), identityVersion: 2 }
         }),
       "identity_id_reused"
     );
@@ -200,8 +217,7 @@ describe("ArcPay provider-account identity", () => {
           replacement: {
             ...accountInput(),
             providerAccountId: "arc-account-live",
-            identityVersion: 1,
-            environment: "live"
+            identityVersion: 1
           }
         }),
       "replacement_version_invalid"

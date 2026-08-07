@@ -22,7 +22,6 @@ export type StoredWebhookReceipt = Readonly<{
   inboxItemId: string;
   inboxVersion: number;
   provider: "arc_pay";
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
   providerAccount: FinanceProviderAccountIdentity;
   dedupeResult: "stored_new" | "transport_replay";

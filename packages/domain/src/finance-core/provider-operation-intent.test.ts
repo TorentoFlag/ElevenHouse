@@ -643,7 +643,6 @@ const providerAccount = {
   identityVersion: 3,
   provider: "arc_pay",
   merchantTenantId: "elevenhouse-live",
-  environment: "live",
   terminalScope: "primary-payins",
   settlementScope: "merchant-ledger-primary"
 } as const;

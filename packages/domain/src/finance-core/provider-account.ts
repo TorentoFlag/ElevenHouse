@@ -1,17 +1,14 @@
 import { readStrictOwnDataRecord, type StrictOwnDataFailureReason } from "./strict-own-data";
 
 export const arcProviderAccountProviderValues = ["arc_pay"] as const;
-export const arcProviderAccountEnvironmentValues = ["sandbox", "live"] as const;
 
 export type ArcProviderAccountProvider = (typeof arcProviderAccountProviderValues)[number];
-export type ArcProviderAccountEnvironment = (typeof arcProviderAccountEnvironmentValues)[number];
 
 export type ArcProviderAccountIdentity = Readonly<{
   providerAccountId: string;
   identityVersion: number;
   provider: ArcProviderAccountProvider;
   merchantTenantId: string;
-  environment: ArcProviderAccountEnvironment;
   terminalScope: string;
   settlementScope: string;
 }>;
@@ -38,7 +35,6 @@ const identityKeyValues = [
   "identityVersion",
   "provider",
   "merchantTenantId",
-  "environment",
   "terminalScope",
   "settlementScope"
 ] as const;
@@ -57,16 +53,12 @@ export function createArcProviderAccountIdentity(input: unknown): ArcProviderAcc
   if (fields.provider !== "arc_pay") {
     throw new ArcProviderAccountIntegrityError("invalid_field");
   }
-  if (fields.environment !== "sandbox" && fields.environment !== "live") {
-    throw new ArcProviderAccountIntegrityError("invalid_field");
-  }
 
   return Object.freeze({
     providerAccountId,
     identityVersion: Number(fields.identityVersion),
     provider: fields.provider,
     merchantTenantId,
-    environment: fields.environment,
     terminalScope,
     settlementScope
   });
@@ -103,7 +95,6 @@ export function sameArcProviderAccountIdentity(
     validatedLeft.identityVersion === validatedRight.identityVersion &&
     validatedLeft.provider === validatedRight.provider &&
     validatedLeft.merchantTenantId === validatedRight.merchantTenantId &&
-    validatedLeft.environment === validatedRight.environment &&
     validatedLeft.terminalScope === validatedRight.terminalScope &&
     validatedLeft.settlementScope === validatedRight.settlementScope
   );
