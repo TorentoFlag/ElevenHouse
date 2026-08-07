@@ -23,7 +23,6 @@ import {
   type BeginFinanceAuthorizationResponse,
   type FinanceAuthorizationCanonicalPayload,
   financePaymentProviderSchema,
-  paymentProviderEnvironmentSchema,
   reconciliationRecordResponseSchema,
   resolveReconciliationExceptionRequestSchema,
   type AdminPaymentReversalCase,
@@ -536,11 +535,9 @@ export class FinancePoliciesService {
 
   async listReconciliationExceptions(query: {
     readonly provider?: string;
-    readonly environment?: string;
     readonly evidence?: string;
   }): Promise<AdminReconciliationExceptionQueueResponse> {
     const provider = parseOptionalQuery(financePaymentProviderSchema, query.provider);
-    const environment = parseOptionalQuery(paymentProviderEnvironmentSchema, query.environment);
     const evidence = parseOptionalQuery(
       adminReconciliationExceptionEvidenceFilterSchema,
       query.evidence
@@ -548,7 +545,6 @@ export class FinancePoliciesService {
     const exceptions = await this.unitOfWork.execute(({ reconciliationStore }) =>
       reconciliationStore.listOpenExceptions({
         ...(provider ? { provider } : {}),
-        ...(environment ? { environment } : {}),
         evidence: evidence ?? "all",
         limit: 50
       })
@@ -1074,7 +1070,6 @@ async function reviewPaymentReversalCaseInContext(
       adminNote: input.request.adminNote,
       type: reviewed.type,
       provider: reviewed.provider,
-      environment: reviewed.environment,
       providerWebhookId: reviewed.providerWebhookId,
       providerPaymentId: reviewed.providerPaymentId,
       providerRefundId: reviewed.providerRefundId,

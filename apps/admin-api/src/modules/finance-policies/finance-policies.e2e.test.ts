@@ -1562,7 +1562,6 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
       type: "chargeback",
       severity: "critical",
       provider: "arc_pay",
-      environment: "sandbox",
       providerWebhookId: "wh_chargeback_1",
       providerPaymentId: "provider-payment-2",
       providerRefundId: null,
@@ -1594,7 +1593,6 @@ function createReversalCaseStore(): AdminPaymentReversalCaseStore {
       type: "refund",
       severity: "attention",
       provider: "arc_pay",
-      environment: "sandbox",
       providerWebhookId: "wh_refund_1",
       providerPaymentId: "provider-payment-1",
       providerRefundId: "provider-refund-1",
@@ -1662,7 +1660,6 @@ function createReconciliationStore(): ReconciliationStore {
     {
       id: "12121212-1212-4121-8121-121212121212",
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: "provider-payment-reconciliation-1",
       providerPayoutId: null,
       providerSettlementId: "settlement-2026-07-25",
@@ -1683,7 +1680,6 @@ function createReconciliationStore(): ReconciliationStore {
     listOpenExceptions: vi.fn(async (input) =>
       records
         .filter((record) => (input.provider ? record.provider === input.provider : true))
-        .filter((record) => (input.environment ? record.environment === input.environment : true))
         .filter((record) => {
           switch (input.evidence ?? "all") {
             case "payment":

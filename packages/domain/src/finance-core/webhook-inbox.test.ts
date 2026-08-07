@@ -202,7 +202,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
     ["provider", { provider: "another-provider" }],
     ["provider_account", { providerAccountId: "arc-account-other" }],
     ["tenant", { merchantTenantId: "wrong-tenant" }],
-    ["environment", { livemode: false }],
     ["payment", { providerPaymentId: "arc-payment-other" }],
     ["source", { logicalSource: { kind: "order", id: "order-other" } }],
     ["amount", { amount: { amountMinor: 20_000, currency: "RUB" } }],
@@ -221,17 +220,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
       mismatches: [mismatch],
       businessEffect: null
     });
-  });
-
-  it("does not select or persist an ArcPay key environment when correlating a webhook", () => {
-    const decision = decideWebhookProcessing({
-      item: activeItem(),
-      expectedFacts,
-      observedFacts: { ...observedFacts, environment: "sandbox", livemode: false },
-      committedSemanticRecords: []
-    });
-
-    expect(decision.kind).toBe("apply_once");
   });
 
   it.each([
@@ -572,8 +560,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
       provider: "arc_pay",
       providerAccountId: "arc-account-live-primary",
       merchantTenantId: "elevenhouse-live",
-      environment: "live",
-      livemode: true,
       providerPaymentId: "arc-payment-1",
       logicalSource: { kind: "order", id: "order-1" },
       chargebackSource,
@@ -618,8 +604,6 @@ describe("webhook dedupe and canonical semantic processing", () => {
       provider: "arc_pay",
       providerAccountId: "arc-account-live-primary",
       merchantTenantId: "elevenhouse-live",
-      environment: "live",
-      livemode: true,
       providerPaymentId: "arc-payment-1",
       logicalSource: { kind: "order", id: "order-1" },
       chargebackSource,
@@ -924,8 +908,6 @@ const observedFacts = {
   provider: "arc_pay",
   providerAccountId: "arc-account-live-primary",
   merchantTenantId: "elevenhouse-live",
-  environment: "live",
-  livemode: true,
   providerPaymentId: "arc-payment-1",
   logicalSource: { kind: "order", id: "order-1" },
   amount: { amountMinor: 10_000, currency: "RUB" }
@@ -965,8 +947,6 @@ const observedRefundFacts = {
   provider: "arc_pay",
   providerAccountId: "arc-account-live-primary",
   merchantTenantId: "elevenhouse-live",
-  environment: "live",
-  livemode: true,
   providerPaymentId: "arc-payment-1",
   logicalSource: { kind: "order", id: "order-1" },
   providerRefundId: "arc-refund-1",
@@ -1013,8 +993,6 @@ const observedChargebackFacts = {
   provider: "arc_pay",
   providerAccountId: "arc-account-live-primary",
   merchantTenantId: "elevenhouse-live",
-  environment: "live",
-  livemode: true,
   providerPaymentId: "arc-payment-1",
   logicalSource: { kind: "order", id: "order-1" },
   chargebackSource: {

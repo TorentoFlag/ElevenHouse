@@ -50,7 +50,6 @@ describe("payments checkout public HTTP flow", () => {
   beforeEach(async () => {
     provider = {
       provider: "arc_pay",
-      environment: "sandbox",
       openCheckout: vi.fn(async () => ({
         providerCheckoutId: "arc-checkout-1",
         checkoutUrl: "https://checkout.arcpay.space/session/arc-checkout-1"
@@ -209,11 +208,10 @@ function paymentStore() {
     executeCreateCheckout: vi.fn(async (_command, createInput) => {
       if (persisted) return { kind: "replayed" as const, value: persisted };
       const input = await createInput();
-      persisted = {
+      const created: PaymentAttempt = {
         id: paymentAttemptId,
         orderId: input.orderId,
         provider: input.provider,
-        environment: input.environment,
         status: "created",
         amount: input.amount,
         providerPaymentId: null,
@@ -223,7 +221,8 @@ function paymentStore() {
         createdAt: input.now,
         updatedAt: input.now
       };
-      return { kind: "created" as const, value: persisted };
+      persisted = created;
+      return { kind: "created" as const, value: created };
     }),
     markAttemptCheckoutOpened: vi.fn(async (input) => {
       if (!persisted) return null;

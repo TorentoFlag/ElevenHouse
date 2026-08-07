@@ -42,14 +42,10 @@ export function readRefundProviderAccount(input: unknown) {
     "identityVersion",
     "provider",
     "merchantTenantId",
-    "environment",
     "terminalScope",
     "settlementScope"
   ]);
-  if (
-    fields.provider !== "arc_pay" ||
-    (fields.environment !== "sandbox" && fields.environment !== "live")
-  ) {
+  if (fields.provider !== "arc_pay") {
     fail("scope_mismatch");
   }
   return Object.freeze({
@@ -57,7 +53,6 @@ export function readRefundProviderAccount(input: unknown) {
     identityVersion: readFinancePostingVersion(fields.identityVersion),
     provider: "arc_pay" as const,
     merchantTenantId: readFinancePostingIdentifier(fields.merchantTenantId),
-    environment: fields.environment,
     terminalScope: readFinancePostingIdentifier(fields.terminalScope),
     settlementScope: readFinancePostingIdentifier(fields.settlementScope)
   });

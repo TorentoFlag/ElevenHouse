@@ -23,7 +23,6 @@ export type ClaimedCapturedClientOrderWebhook = Readonly<{
   expectedCheckpointSequence: number;
   leaseFence: number;
   providerAccount: FinanceProviderAccountIdentity;
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
   providerEventType: "payment.captured";
   /** The claim implementation has already authenticated artifact registry metadata and binding. */
@@ -233,8 +232,7 @@ function parseClaimedCapturedWebhook(
   }
   if (
     event.type !== "payment.captured" ||
-    event.providerWebhookId !== claim.webhookId ||
-    event.environment !== claim.receivingEnvironment
+    event.providerWebhookId !== claim.webhookId
   ) {
     fail("claimed_webhook_invalid");
   }

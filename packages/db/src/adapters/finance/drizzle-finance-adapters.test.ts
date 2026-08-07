@@ -143,11 +143,11 @@ describe("finance adapter guardrails", () => {
     ).toThrow(LedgerAccountShapeError);
   });
 
-  it("copies refund provider context from the linked attempt and rejects mismatches", () => {
-    const attempt = { provider: "arc_pay" as const, environment: "live" as const };
+  it("copies refund provider context from the linked attempt and rejects provider mismatches", () => {
+    const attempt = { provider: "arc_pay" as const };
     expect(resolveFinanceRefundProviderContext({}, attempt)).toEqual(attempt);
     expect(() =>
-      resolveFinanceRefundProviderContext({ environment: "sandbox" }, attempt)
+      resolveFinanceRefundProviderContext({ provider: "other" as never }, attempt)
     ).toThrow(FinanceProviderContextMismatchError);
   });
 

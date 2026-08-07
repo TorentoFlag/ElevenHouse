@@ -106,10 +106,9 @@ export class FinancePoliciesController {
   @Get("reconciliation/exceptions")
   listReconciliationExceptions(
     @Query("provider") provider?: string,
-    @Query("environment") environment?: string,
     @Query("evidence") evidence?: string
   ): Promise<AdminReconciliationExceptionQueueResponse> {
-    return this.service.listReconciliationExceptions({ provider, environment, evidence });
+    return this.service.listReconciliationExceptions({ provider, evidence });
   }
 
   @Put("reconciliation/exceptions/:reconciliationRecordId")

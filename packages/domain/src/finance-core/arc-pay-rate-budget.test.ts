@@ -11,23 +11,12 @@ import {
 const now = "2026-08-03T10:00:00.000Z";
 
 describe("ArcPay distributed rate budget boundary", () => {
-  it("shares a budget by merchant tenant and environment, not terminal", () => {
-    const first = createArcPayRateBudgetKey({
-      merchantTenantId: "tenant-1",
-      environment: "sandbox"
-    });
-    const sameTenant = createArcPayRateBudgetKey({
-      merchantTenantId: "tenant-1",
-      environment: "sandbox"
-    });
-    const live = createArcPayRateBudgetKey({
-      merchantTenantId: "tenant-1",
-      environment: "live"
-    });
+  it("shares a budget by merchant tenant only", () => {
+    const first = createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" });
+    const sameTenant = createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" });
 
     expect(serializeArcPayRateBudgetKey(first)).toBe(serializeArcPayRateBudgetKey(sameTenant));
-    expect(serializeArcPayRateBudgetKey(first)).not.toBe(serializeArcPayRateBudgetKey(live));
-    expect(first).toEqual({ merchantTenantId: "tenant-1", environment: "sandbox" });
+    expect(first).toEqual({ merchantTenantId: "tenant-1" });
   });
 
   it("requires the explicit current ArcPay 10 RPS and burst 20 config", () => {
@@ -50,10 +39,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     await expect(
       acquireArcPayRateBudget({
         port,
-        key: createArcPayRateBudgetKey({
-          merchantTenantId: "tenant-1",
-          environment: "live"
-        }),
+        key: createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" }),
         config: createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 }),
         now,
         providerRetryAfterAt: "2026-08-03T10:00:05.000Z"
@@ -69,10 +55,7 @@ describe("ArcPay distributed rate budget boundary", () => {
   it("delegates one token to the distributed port and validates its decision", async () => {
     const take = vi.fn().mockResolvedValue({ kind: "granted" });
     const port: ArcPayRateBudgetPort = { take };
-    const key = createArcPayRateBudgetKey({
-      merchantTenantId: "tenant-1",
-      environment: "sandbox"
-    });
+    const key = createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" });
     const config = createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 });
 
     await expect(
@@ -93,10 +76,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     await expect(
       acquireArcPayRateBudget({
         port,
-        key: createArcPayRateBudgetKey({
-          merchantTenantId: "tenant-1",
-          environment: "sandbox"
-        }),
+        key: createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" }),
         config: createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 }),
         now,
         providerRetryAfterAt: null
@@ -119,10 +99,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     await expect(
       acquireArcPayRateBudget({
         port,
-        key: createArcPayRateBudgetKey({
-          merchantTenantId: "tenant-1",
-          environment: "sandbox"
-        }),
+        key: createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" }),
         config: createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 }),
         now,
         providerRetryAfterAt: null
@@ -132,7 +109,7 @@ describe("ArcPay distributed rate budget boundary", () => {
 
   it("rejects accessor-backed keys and configs without invoking their getters", () => {
     let getterCalls = 0;
-    const key = { merchantTenantId: "tenant-1", environment: "live" } as Record<string, unknown>;
+    const key = { merchantTenantId: "tenant-1" } as Record<string, unknown>;
     Object.defineProperty(key, "merchantTenantId", {
       enumerable: true,
       get() {
@@ -173,10 +150,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     await expect(
       acquireArcPayRateBudget({
         port,
-        key: createArcPayRateBudgetKey({
-          merchantTenantId: "tenant-1",
-          environment: "sandbox"
-        }),
+        key: createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" }),
         config: createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 }),
         now,
         providerRetryAfterAt: null
@@ -189,10 +163,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     let getterCalls = 0;
     const input = {
       port: { take: vi.fn().mockResolvedValue({ kind: "granted" }) },
-      key: createArcPayRateBudgetKey({
-        merchantTenantId: "tenant-1",
-        environment: "sandbox"
-      }),
+      key: createArcPayRateBudgetKey({ merchantTenantId: "tenant-1" }),
       config: createArcPayRateBudgetConfig({ requestsPerSecond: 10, burst: 20 }),
       now,
       providerRetryAfterAt: null
@@ -214,7 +185,7 @@ describe("ArcPay distributed rate budget boundary", () => {
   it("projects Proxy descriptor values without invoking get traps", async () => {
     let getCalls = 0;
     const key = new Proxy(
-      { merchantTenantId: "tenant-1", environment: "sandbox" as const },
+      { merchantTenantId: "tenant-1" },
       {
         get() {
           getCalls += 1;
@@ -234,10 +205,7 @@ describe("ArcPay distributed rate budget boundary", () => {
     );
     const port: ArcPayRateBudgetPort = { take: vi.fn().mockResolvedValue(decision) };
 
-    expect(createArcPayRateBudgetKey(key)).toEqual({
-      merchantTenantId: "tenant-1",
-      environment: "sandbox"
-    });
+    expect(createArcPayRateBudgetKey(key)).toEqual({ merchantTenantId: "tenant-1" });
     await expect(
       acquireArcPayRateBudget({
         port,

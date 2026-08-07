@@ -37,23 +37,22 @@ describe("createArcPaySettlementLedgerClient", () => {
     const client = createArcPaySettlementLedgerClient({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: "arc-pay-secret",
-      environment: "sandbox",
       fetchImpl: fetchImpl as typeof fetch
     });
 
-    await expect(
-      client.listSettlementLedger({
+    const page = await client.listSettlementLedger(
+      {
         from: "2026-07-27T00:00:00.000Z",
         to: "2026-07-27T08:00:00.000Z",
         limit: 100,
         cursor: "cursor-1",
         currency: "RUB"
-      })
-    ).resolves.toEqual({
+      }
+    );
+    expect(page).toEqual({
       entries: [
         {
           provider: "arc_pay",
-          environment: "sandbox",
           providerLedgerEntryId: "ledger-entry-1",
           providerPaymentId: "payment-1",
           amount: { amountMinor: 50_000, currency: "RUB" },
@@ -70,6 +69,7 @@ describe("createArcPaySettlementLedgerClient", () => {
       nextCursor: "cursor-2",
       totalCount: 2
     });
+    expect(page.entries[0]).not.toHaveProperty("environment");
 
     const calledUrl = calls[0]?.url;
     expect(calledUrl).toEqual(
@@ -86,7 +86,6 @@ describe("createArcPaySettlementLedgerClient", () => {
     const noSecretClient = createArcPaySettlementLedgerClient({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: null,
-      environment: "sandbox",
       fetchImpl: vi.fn() as typeof fetch
     });
 
@@ -101,7 +100,6 @@ describe("createArcPaySettlementLedgerClient", () => {
     const malformedClient = createArcPaySettlementLedgerClient({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: "arc-pay-secret",
-      environment: "sandbox",
       fetchImpl: vi.fn(
         async () => new Response(JSON.stringify({ entries: [{}] }), { status: 200 })
       ) as typeof fetch

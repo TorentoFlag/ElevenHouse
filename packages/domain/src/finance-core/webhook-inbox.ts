@@ -116,8 +116,6 @@ type WebhookObservedCommonFacts = Readonly<{
   provider: string;
   providerAccountId: string;
   merchantTenantId: string;
-  environment: "sandbox" | "live";
-  livemode: boolean;
   providerPaymentId: string;
   logicalSource: WebhookLogicalSource;
 }>;
@@ -212,7 +210,6 @@ export type WebhookSemanticMismatch =
   | "provider"
   | "provider_account"
   | "tenant"
-  | "environment"
   | "payment"
   | "source"
   | "amount"
@@ -376,8 +373,6 @@ const observedPaymentTransitionFactsKeys = [
   "provider",
   "providerAccountId",
   "merchantTenantId",
-  "environment",
-  "livemode",
   "providerPaymentId",
   "logicalSource",
   "amount"
@@ -387,8 +382,6 @@ const observedRefundFactsKeys = [
   "provider",
   "providerAccountId",
   "merchantTenantId",
-  "environment",
-  "livemode",
   "providerPaymentId",
   "logicalSource",
   "providerRefundId",
@@ -401,8 +394,6 @@ const observedChargebackFactsKeys = [
   "provider",
   "providerAccountId",
   "merchantTenantId",
-  "environment",
-  "livemode",
   "providerPaymentId",
   "logicalSource",
   "chargebackSource",
@@ -965,22 +956,14 @@ function normalizeObservedCommonFacts(
     provider: unknown;
     providerAccountId: unknown;
     merchantTenantId: unknown;
-    environment: unknown;
-    livemode: unknown;
     providerPaymentId: unknown;
     logicalSource: unknown;
   }>
 ): WebhookObservedCommonFacts {
-  if (fields.environment !== "sandbox" && fields.environment !== "live") {
-    throw integrityError();
-  }
-  if (typeof fields.livemode !== "boolean") throw integrityError();
   return Object.freeze({
     provider: normalizeOpaqueValue(fields.provider, 80),
     providerAccountId: normalizeOpaqueValue(fields.providerAccountId, 160),
     merchantTenantId: normalizeOpaqueValue(fields.merchantTenantId, 160),
-    environment: fields.environment,
-    livemode: fields.livemode,
     providerPaymentId: normalizeOpaqueValue(fields.providerPaymentId, 240),
     logicalSource: normalizeLogicalSource(fields.logicalSource)
   });
@@ -1223,11 +1206,6 @@ function correlationMismatches(
   }
   if (observed.merchantTenantId !== expected.providerAccount.merchantTenantId) {
     addMismatch(mismatches, "tenant");
-  }
-  if (
-    observed.livemode !== (observed.environment === "live")
-  ) {
-    addMismatch(mismatches, "environment");
   }
   if (observed.providerPaymentId !== expected.providerPaymentId) {
     addMismatch(mismatches, "payment");

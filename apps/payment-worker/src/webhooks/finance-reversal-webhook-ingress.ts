@@ -74,8 +74,7 @@ export function createFinanceWebhookIngress(
     async store(request) {
       if (request.signature.kind !== "verified") fail("invalid_input");
       const providerContext = await input.providerAccounts.findActiveWebhookContext({
-        provider: "arc_pay",
-        environment: request.transport.environment
+        provider: "arc_pay"
       });
       if (!providerContext) fail("provider_account_unavailable");
       if (providerContext.merchantTenantId !== request.transport.merchantTenantId) {

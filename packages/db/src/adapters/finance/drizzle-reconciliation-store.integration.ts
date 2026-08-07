@@ -36,7 +36,6 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
     await expect(
       store.findAttemptByProviderPaymentId({
         provider: "arc_pay",
-        environment: "sandbox",
         providerPaymentId: fixture.providerPaymentId
       })
     ).resolves.toMatchObject({
@@ -46,7 +45,6 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
 
     const matched = await store.createRecord({
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: fixture.providerPaymentId,
       providerPayoutId: null,
       providerSettlementId: "settlement-2026-07-27",
@@ -69,7 +67,6 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
 
     const ledgerMatched = await store.createRecord({
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: fixture.providerPaymentId,
       providerPayoutId: null,
       providerSettlementId: "ledger-entry-2026-07-27-1",
@@ -83,7 +80,6 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
     });
     const replayedLedgerMatched = await store.createRecord({
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: fixture.providerPaymentId,
       providerPayoutId: null,
       providerSettlementId: "ledger-entry-2026-07-27-1",
@@ -102,7 +98,6 @@ describe("reconciliation Drizzle/PostgreSQL integration", () => {
 
     const exception = await store.createRecord({
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId: fixture.providerPaymentId,
       providerPayoutId: null,
       providerSettlementId: "settlement-2026-07-27",
@@ -195,19 +190,19 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into payment_attempts
-      (id, order_id, provider, environment, status, amount_minor, currency,
+      (id, order_id, provider, status, amount_minor, currency,
        provider_payment_id, provider_checkout_id, idempotency_key, metadata)
-     values ($1, $2, 'arc_pay', 'sandbox', 'settled', 50000, 'RUB', $3, $4, $5, '{}'::jsonb)`,
+     values ($1, $2, 'arc_pay', 'settled', 50000, 'RUB', $3, $4, $5, '{}'::jsonb)`,
     [paymentAttemptId, orderId, providerPaymentId, randomUUID(), `checkout:${paymentAttemptId}`]
   );
   await runtime.pool.query(
     `insert into payment_provider_events
-      (id, payment_attempt_id, provider, environment, provider_webhook_id,
+      (id, payment_attempt_id, provider, provider_webhook_id,
        provider_payment_id, type, occurred_at, received_at, payload)
      values
-      ($1, $2, 'arc_pay', 'sandbox', 'wh_settled_1', $3, 'payment.settled',
+      ($1, $2, 'arc_pay', 'wh_settled_1', $3, 'payment.settled',
        '2026-07-27T07:30:00.000Z', '2026-07-27T08:00:00.000Z', '{}'::jsonb),
-      ($4, $2, 'arc_pay', 'sandbox', 'wh_reconciliation_exception_1', $3, 'reconciliation.exception',
+      ($4, $2, 'arc_pay', 'wh_reconciliation_exception_1', $3, 'reconciliation.exception',
        '2026-07-27T07:35:00.000Z', '2026-07-27T08:05:00.000Z', '{}'::jsonb)`,
     [settledEventId, paymentAttemptId, providerPaymentId, exceptionEventId]
   );

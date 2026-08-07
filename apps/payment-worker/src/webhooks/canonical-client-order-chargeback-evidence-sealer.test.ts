@@ -38,7 +38,7 @@ describe("canonical client-order chargeback evidence sealer", () => {
 
 function input() {
   return {
-    claim: { inboxItemId: "inbox-1", inboxVersion: 2, expectedCheckpointSequence: 1, leaseFence: 1, providerAccount, receivingEnvironment: "sandbox" as const, webhookId, providerEventType: "payment.chargeback" as const, sealedWebhookArtifact: { artifactId: "webhook:1", sha256Digest, byteLength: bytes.byteLength, contentType: "application/json" as const } },
+    claim: { inboxItemId: "inbox-1", inboxVersion: 2, expectedCheckpointSequence: 1, leaseFence: 1, providerAccount, webhookId, providerEventType: "payment.chargeback" as const, sealedWebhookArtifact: { artifactId: "webhook:1", sha256Digest, byteLength: bytes.byteLength, contentType: "application/json" as const } },
     economicPaymentIntentId: "economic-payment-1", providerPaymentId, disputedPrincipalMinor: 5_000,
     observedAt: "2026-08-05T12:01:00.000Z", rawCanonicalResponseBytes: bytes
   };

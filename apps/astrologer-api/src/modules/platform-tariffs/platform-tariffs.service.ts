@@ -303,7 +303,6 @@ export class AstrologerTariffsService {
             disclosureDigest: disclosure.canonicalDigest,
             noticeLocale: parsed.noticeLocale,
             buyerContact: parsed.buyerContact,
-            providerEnvironment: billing.arcPayEnvironment,
             now: now.toISOString()
           });
           const value = initiateSavedCardSetupResponseSchema.parse({

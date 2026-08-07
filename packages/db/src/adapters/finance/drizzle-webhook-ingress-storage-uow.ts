@@ -63,7 +63,6 @@ type NormalizedIngress = Readonly<{
     providerAccountId: string;
     identityVersion: number;
   }>;
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
   providerEventType: string;
   rawBodyDigest: `sha256:${string}`;
@@ -90,7 +89,6 @@ async function storeInTransaction<TSchema extends Record<string, unknown>>(
       providerAccountId: ingress.providerAccount.providerAccountId,
       providerIdentityVersion: ingress.providerAccount.identityVersion,
       provider: "arc_pay",
-      receivingEnvironment: ingress.receivingEnvironment,
       transportEventId: ingress.webhookId,
       providerEventType: ingress.providerEventType,
       artifactId: ingress.sealedPayloadRef,
@@ -139,7 +137,6 @@ async function storeInTransaction<TSchema extends Record<string, unknown>>(
         providerAccountId: ingress.providerAccount.providerAccountId,
         providerIdentityVersion: ingress.providerAccount.identityVersion,
         provider: "arc_pay",
-        receivingEnvironment: ingress.receivingEnvironment,
         transportEventId: ingress.webhookId,
         providerEventType: ingress.providerEventType,
         artifactId: ingress.sealedPayloadRef,
@@ -193,7 +190,6 @@ function normalize(command: StoreWebhookBeforeAcknowledgementCommand): Normalize
       "kind",
       "provider",
       "providerAccount",
-      "receivingEnvironment",
       "webhookId",
       "providerEventType",
       "rawBodyDigest",
@@ -220,7 +216,6 @@ function normalize(command: StoreWebhookBeforeAcknowledgementCommand): Normalize
         providerAccountId: identifier(providerAccount.providerAccountId),
         identityVersion: positiveInteger(providerAccount.identityVersion)
       }),
-      receivingEnvironment: environment(ingress.receivingEnvironment),
       webhookId: identifier(ingress.webhookId),
       providerEventType: identifier(ingress.providerEventType),
       rawBodyDigest: digest(ingress.rawBodyDigest),
@@ -250,7 +245,6 @@ function matchesIngress(
   // same provider transport ID is a conflict and must never be acknowledged.
   return (
     existing.provider === "arc_pay" &&
-    existing.receivingEnvironment === ingress.receivingEnvironment &&
     existing.transportEventId === ingress.webhookId &&
     existing.providerEventType === ingress.providerEventType &&
     existing.rawBodyDigest === ingress.rawBodyDigest
@@ -263,7 +257,6 @@ function mapReceipt(
 ): StoredWebhookReceipt {
   if (
     receipt.provider !== "arc_pay" ||
-    (receipt.receivingEnvironment !== "sandbox" && receipt.receivingEnvironment !== "live") ||
     receipt.inboxVersion !== "1" ||
     !receipt.persistenceTransactionBoundaryRef ||
     !receipt.storedAt
@@ -275,7 +268,6 @@ function mapReceipt(
     inboxItemId: receipt.inboxItemId,
     inboxVersion: 1,
     provider: "arc_pay",
-    receivingEnvironment: receipt.receivingEnvironment,
     webhookId: receipt.transportEventId,
     providerAccount: Object.freeze({
       seriesId: receipt.seriesId,
@@ -326,11 +318,6 @@ function positiveInteger(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     fail("invalid_command");
   }
-  return value;
-}
-
-function environment(value: unknown): "sandbox" | "live" {
-  if (value !== "sandbox" && value !== "live") fail("invalid_command");
   return value;
 }
 

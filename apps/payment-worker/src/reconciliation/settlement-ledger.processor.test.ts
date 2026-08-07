@@ -43,7 +43,6 @@ describe("settlement ledger reconciliation processor", () => {
       client,
       store,
       provider: "arc_pay",
-      environment: "sandbox",
       lookbackMs: 48 * 60 * 60 * 1000,
       pageLimit: 100,
       currency: "RUB",
@@ -89,7 +88,6 @@ function createProcessorStore(): ReconciliationStore {
       const existing = records.find(
         (record) =>
           record.provider === input.provider &&
-          record.environment === input.environment &&
           record.providerSettlementId === input.providerSettlementId &&
           record.status === input.status
       );
@@ -97,7 +95,6 @@ function createProcessorStore(): ReconciliationStore {
       const record: ReconciliationRecord = {
         id: `record-${records.length + 1}`,
         provider: input.provider,
-        environment: input.environment,
         providerPaymentId: input.providerPaymentId,
         providerPayoutId: input.providerPayoutId,
         providerSettlementId: input.providerSettlementId,
@@ -123,7 +120,6 @@ function paymentAttempt(id: string, providerPaymentId: string) {
     id,
     orderId: `order-${id}`,
     provider: "arc_pay" as const,
-    environment: "sandbox" as const,
     status: "settled" as const,
     amount: { amountMinor: 50_000, currency: "RUB" as const },
     providerPaymentId,
@@ -144,7 +140,6 @@ function settlementEntry(
 ): ProviderSettlementLedgerEntry {
   return {
     provider: "arc_pay",
-    environment: "sandbox",
     providerLedgerEntryId,
     providerPaymentId,
     amount: { amountMinor, currency: "RUB" },

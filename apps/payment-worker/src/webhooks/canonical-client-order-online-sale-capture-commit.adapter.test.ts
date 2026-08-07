@@ -37,7 +37,6 @@ describe("canonical client-order online-sale capture commit adapter", () => {
           expectedCheckpointSequence: 7,
           leaseFence: 2,
           providerAccount,
-          receivingEnvironment: "sandbox",
           webhookId: "webhook-1",
           providerEventType: "payment.captured",
           sealedWebhookArtifact: {

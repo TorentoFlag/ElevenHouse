@@ -1,9 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
-import type { PaymentProviderEnvironment } from "@elevenhouse/contracts";
 
 export type ArcPayRateBudgetKey = {
   readonly merchantTenantId: string;
-  readonly environment: PaymentProviderEnvironment;
 };
 
 export type ArcPayRateBudgetConfig = {
@@ -38,25 +36,23 @@ export class FinanceArcPayRateBudgetIntegrityError extends Error {
 }
 
 export function createArcPayRateBudgetKey(input: unknown): ArcPayRateBudgetKey {
-  const candidate = exactRecord(input, ["merchantTenantId", "environment"]);
+  const candidate = exactRecord(input, ["merchantTenantId"]);
   if (
     typeof candidate.merchantTenantId !== "string" ||
     candidate.merchantTenantId.trim() !== candidate.merchantTenantId ||
     candidate.merchantTenantId.length === 0 ||
-    candidate.merchantTenantId.length > 200 ||
-    (candidate.environment !== "sandbox" && candidate.environment !== "live")
+    candidate.merchantTenantId.length > 200
   ) {
     throw new FinanceArcPayRateBudgetIntegrityError();
   }
   return Object.freeze({
-    merchantTenantId: candidate.merchantTenantId,
-    environment: candidate.environment
+    merchantTenantId: candidate.merchantTenantId
   });
 }
 
 export function serializeArcPayRateBudgetKey(key: ArcPayRateBudgetKey): string {
   const safe = createArcPayRateBudgetKey(key);
-  return JSON.stringify([safe.merchantTenantId, safe.environment]);
+  return JSON.stringify([safe.merchantTenantId]);
 }
 
 export function createArcPayRateBudgetConfig(input: unknown): ArcPayRateBudgetConfig {

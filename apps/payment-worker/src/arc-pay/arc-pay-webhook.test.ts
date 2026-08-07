@@ -26,7 +26,6 @@ describe("ArcPay webhook transport envelope", () => {
       providerWebhookId: webhookId,
       providerEventType: "payment.future_provider_event",
       merchantTenantId: "22222222-2222-4222-8222-222222222222",
-      environment: "sandbox",
       occurredAt: "2026-08-04T12:00:00.000Z"
     });
   });

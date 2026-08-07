@@ -59,13 +59,12 @@ describe("finance reversal webhook ingress", () => {
     }));
     const registerSealedArtifact = vi.fn(async ({ artifact }: { artifact: unknown }) => artifact);
     const storeBeforeAcknowledgement = vi.fn(async () => ({ dedupeResult: "stored_new" }));
-    const ingress = createFinanceReversalWebhookIngress({
-      providerAccounts: {
-        findActiveWebhookContext: vi.fn(async () => ({
+    const findActiveWebhookContext = vi.fn(async () => ({
           providerAccount,
           merchantTenantId: "22222222-2222-4222-8222-222222222222"
-        }))
-      },
+        }));
+    const ingress = createFinanceReversalWebhookIngress({
+      providerAccounts: { findActiveWebhookContext },
       privateObjectStorage: { writeImmutable } as never,
       artifactRegistry: { registerSealedArtifact } as never,
       ingressStorage: { storeBeforeAcknowledgement } as never,
@@ -75,6 +74,8 @@ describe("finance reversal webhook ingress", () => {
     });
 
     await expect(ingress.store(request())).resolves.toEqual({ duplicate: false });
+
+    expect(findActiveWebhookContext).toHaveBeenCalledWith({ provider: "arc_pay" });
 
     expect(writeImmutable).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -164,7 +165,6 @@ function request() {
       providerWebhookId: "11111111-1111-4111-8111-111111111111",
       providerEventType: "payment.refunded",
       merchantTenantId: "22222222-2222-4222-8222-222222222222",
-      environment: "sandbox" as const,
       occurredAt: "2026-08-05T11:59:58.000Z"
     },
     rawBody

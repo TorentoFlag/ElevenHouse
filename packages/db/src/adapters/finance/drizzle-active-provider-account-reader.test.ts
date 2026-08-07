@@ -6,7 +6,7 @@ import {
 } from "./drizzle-active-provider-account-reader";
 
 describe("Drizzle active provider account reader", () => {
-  it("returns only the exact active ArcPay identity for the configured environment", () => {
+  it("returns the exact active ArcPay identity", () => {
     expect(
       mapActiveProviderAccount(
         {
@@ -18,10 +18,8 @@ describe("Drizzle active provider account reader", () => {
           seriesId: "elevenhouse-arcpay-sandbox",
           providerAccountId: "arcpay-tenant-sandbox-v2",
           identityVersion: 2,
-          provider: "arc_pay",
-          environment: "sandbox"
-        } as never,
-        "sandbox"
+          provider: "arc_pay"
+        } as never
       )
     ).toEqual({
       seriesId: "elevenhouse-arcpay-sandbox",
@@ -42,10 +40,8 @@ describe("Drizzle active provider account reader", () => {
           seriesId: "elevenhouse-arcpay-sandbox",
           providerAccountId: "arcpay-tenant-sandbox-v1",
           identityVersion: 1,
-          provider: "arc_pay",
-          environment: "sandbox"
-        } as never,
-        "sandbox"
+          provider: "arc_pay"
+        } as never
       )
     ).toThrow(ActiveProviderAccountReaderPersistenceError);
   });

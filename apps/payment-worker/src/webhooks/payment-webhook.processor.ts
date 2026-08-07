@@ -35,7 +35,6 @@ export function createPaymentWebhookProcessor(input: {
   readonly reconciliationStore: ReconciliationStore;
   readonly resolvePaymentAttemptId: (input: {
     readonly providerPaymentId: string;
-    readonly environment: "sandbox" | "live";
   }) => Promise<string>;
   readonly now?: () => Date;
 }): PaymentWebhookProcessor {
@@ -43,19 +42,16 @@ export function createPaymentWebhookProcessor(input: {
     async process(event) {
       const replayed = await input.paymentStore.findProviderEventByWebhookId({
         provider: "arc_pay",
-        environment: event.environment,
         providerWebhookId: event.providerWebhookId
       });
       if (replayed) return { duplicate: true };
 
       const paymentAttemptId = await input.resolvePaymentAttemptId({
-        providerPaymentId: event.providerPaymentId,
-        environment: event.environment
+        providerPaymentId: event.providerPaymentId
       });
       const request = {
         paymentAttemptId,
         provider: "arc_pay" as const,
-        environment: event.environment,
         providerWebhookId: event.providerWebhookId,
         providerPaymentId: event.providerPaymentId,
         type: event.type,

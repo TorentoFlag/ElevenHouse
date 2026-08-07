@@ -306,7 +306,6 @@ function providerAccount() {
     identityVersion: 3,
     provider: "arc_pay" as const,
     merchantTenantId: "elevenhouse-live",
-    environment: "live" as const,
     terminalScope: "primary-payins",
     settlementScope: "merchant-ledger-primary"
   });

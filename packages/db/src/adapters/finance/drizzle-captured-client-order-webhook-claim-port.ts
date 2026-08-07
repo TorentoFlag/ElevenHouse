@@ -26,7 +26,6 @@ export type ClaimedClientOrderWebhook = Readonly<{
   expectedCheckpointSequence: number;
   leaseFence: number;
   providerAccount: FinanceProviderAccountIdentity;
-  receivingEnvironment: "sandbox" | "live";
   webhookId: string;
   providerEventType: ClientOrderWebhookEventType;
   sealedWebhookArtifact: Readonly<{
@@ -116,7 +115,6 @@ type ClaimRow = Readonly<{
   seriesId: unknown;
   providerAccountId: unknown;
   providerIdentityVersion: unknown;
-  receivingEnvironment: unknown;
   webhookId: unknown;
   providerEventType: unknown;
   provider: unknown;
@@ -235,7 +233,6 @@ function createDrizzleClientOrderWebhookClaimPort(
                      inbox.series_id,
                      inbox.provider_account_id,
                      inbox.provider_identity_version,
-                     inbox.receiving_environment,
                      inbox.transport_event_id,
                      inbox.provider_event_type,
                      inbox.provider,
@@ -300,7 +297,6 @@ function createDrizzleClientOrderWebhookClaimPort(
                    candidate.series_id as "seriesId",
                    candidate.provider_account_id as "providerAccountId",
                    candidate.provider_identity_version as "providerIdentityVersion",
-                   candidate.receiving_environment as "receivingEnvironment",
                    candidate.transport_event_id as "webhookId",
                    candidate.provider_event_type as "providerEventType",
                    candidate.provider as "provider",
@@ -452,7 +448,6 @@ export function mapClaimedClientOrderWebhook(
       row.provider !== "arc_pay" ||
       row.signatureStatus !== "verified" ||
       row.providerEventType !== expectedProviderEventType ||
-      (row.receivingEnvironment !== "sandbox" && row.receivingEnvironment !== "live") ||
       row.contentType !== "application/json" ||
       !artifactMatchesProvider
     ) {
@@ -472,7 +467,6 @@ export function mapClaimedClientOrderWebhook(
       expectedCheckpointSequence,
       leaseFence,
       providerAccount,
-      receivingEnvironment: row.receivingEnvironment,
       webhookId: identifier(row.webhookId, "claimed_row_integrity_conflict"),
       providerEventType: expectedProviderEventType,
       sealedWebhookArtifact: Object.freeze({

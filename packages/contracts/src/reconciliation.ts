@@ -1,5 +1,5 @@
 import { z } from "@elevenhouse/validation";
-import { financePaymentProviderSchema, paymentProviderEnvironmentSchema } from "./payments";
+import { financePaymentProviderSchema } from "./payments";
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
@@ -35,7 +35,6 @@ export const reconciliationRecordResponseSchema = z
   .object({
     id: uuidSchema,
     provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
     providerPaymentId: providerIdentifierSchema.nullable(),
     providerPayoutId: providerIdentifierSchema.nullable(),
     providerSettlementId: providerIdentifierSchema.nullable(),
@@ -55,7 +54,6 @@ export const adminReconciliationExceptionSchema = z
   .object({
     id: uuidSchema,
     provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
     providerPaymentId: providerIdentifierSchema.nullable(),
     providerPayoutId: providerIdentifierSchema.nullable(),
     providerSettlementId: providerIdentifierSchema.nullable(),

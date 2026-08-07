@@ -88,7 +88,6 @@ const defaultSecurityConfig = {
   },
   billing: {
     arcPayConfigured: false,
-    arcPayEnvironment: "sandbox",
     arcPayBrowserTokenization: null,
     financeArtifactStorage: null,
     savedCardDisclosureSeriesId: null

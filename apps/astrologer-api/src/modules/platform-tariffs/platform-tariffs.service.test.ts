@@ -411,7 +411,6 @@ function createHarness(
       {
         getOrThrow: vi.fn(() => ({
           arcPayConfigured: true,
-          arcPayEnvironment: "sandbox" as const,
           arcPayBrowserTokenization: {
             apiBaseUrl: "https://api.arcpay.space",
             publishableKey: "pk_test_example"

@@ -478,7 +478,6 @@ function createHarness(
     id: paymentAttemptId,
     orderId,
     provider: "arc_pay",
-    environment: "sandbox",
     status: "checkout_opened",
     amount: { amountMinor: 50_000, currency: "RUB" },
     providerPaymentId: null,
@@ -546,13 +545,11 @@ function createHarness(
     findAttemptByProviderPaymentId: vi.fn(
       async (input: {
         readonly provider: "arc_pay";
-        readonly environment: "sandbox" | "live";
         readonly providerPaymentId: string;
       }) => {
         if (
           options.attemptMissing ||
           input.provider !== attempt.provider ||
-          input.environment !== attempt.environment ||
           input.providerPaymentId !== attempt.providerPaymentId
         ) {
           return null;
@@ -571,7 +568,6 @@ function createHarness(
         id: `provider-event-${createdEvents.length + 1}`,
         paymentAttemptId: input.paymentAttemptId,
         provider: input.provider,
-        environment: input.environment,
         providerWebhookId: input.providerWebhookId,
         providerPaymentId: input.providerPaymentId,
         type: input.type,
@@ -592,7 +588,6 @@ function createHarness(
         paymentAttemptId: input.paymentAttemptId,
         providerEventId: input.providerEventId,
         provider: input.provider ?? attempt.provider,
-        environment: input.environment ?? attempt.environment,
         status: input.status ?? "requested",
         amount: input.amount,
         reason: input.reason,
@@ -713,7 +708,6 @@ function createHarness(
       const existing = reconciliationRecords.find(
         (record) =>
           record.provider === input.provider &&
-          record.environment === input.environment &&
           record.providerPaymentId === input.providerPaymentId &&
           record.status === input.status
       );
@@ -721,7 +715,6 @@ function createHarness(
       const record: ReconciliationRecord = {
         id: `reconciliation-${reconciliationRecords.length + 1}`,
         provider: input.provider,
-        environment: input.environment,
         providerPaymentId: input.providerPaymentId,
         providerPayoutId: input.providerPayoutId,
         providerSettlementId: input.providerSettlementId,

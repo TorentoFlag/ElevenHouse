@@ -221,7 +221,6 @@ function parseClaimedRefundedWebhook(
   if (
     event.type !== "payment.refunded" ||
     event.providerWebhookId !== claim.webhookId ||
-    event.environment !== claim.receivingEnvironment ||
     event.moneyFacts.kind !== "bounded"
   ) {
     fail("claimed_webhook_invalid");

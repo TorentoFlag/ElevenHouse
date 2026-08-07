@@ -17,7 +17,6 @@ export type InitiateSavedCardSetupCommand = Readonly<{
   noticeLocale: "ru" | "en";
   /** Explicit contact for fiscal receipts, verified against the authenticated owner in the UoW. */
   buyerContact: FiscalBuyerContact;
-  providerEnvironment: "sandbox" | "live";
   now: string;
 }>;
 

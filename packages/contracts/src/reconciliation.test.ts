@@ -17,7 +17,6 @@ describe("reconciliation contracts", () => {
           {
             id: "11111111-1111-4111-8111-111111111111",
             provider: "arc_pay",
-            environment: "sandbox",
             providerPaymentId: "provider-payment-1",
             providerPayoutId: null,
             providerSettlementId: "settlement-2026-07-27",

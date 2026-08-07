@@ -18,7 +18,6 @@ describe("captured client-order webhook claim port", () => {
         seriesId: "series-live-1",
         providerAccountId: "arc-live-1",
         providerIdentityVersion: 1,
-        receivingEnvironment: "live",
         webhookId: "webhook-1",
         providerEventType: "payment.captured",
         provider: "arc_pay",
@@ -43,7 +42,6 @@ describe("captured client-order webhook claim port", () => {
         providerAccountId: "arc-live-1",
         identityVersion: 1
       },
-      receivingEnvironment: "live",
       webhookId: "webhook-1",
       providerEventType: "payment.captured",
       sealedWebhookArtifact: {
@@ -65,7 +63,6 @@ describe("captured client-order webhook claim port", () => {
         seriesId: "series-live-1",
         providerAccountId: "arc-live-1",
         providerIdentityVersion: 1,
-        receivingEnvironment: "live",
         webhookId: "webhook-1",
         providerEventType: "payment.captured",
         provider: "arc_pay",
@@ -94,7 +91,6 @@ describe("captured client-order webhook claim port", () => {
           seriesId: "series-live-1",
           providerAccountId: "arc-live-1",
           providerIdentityVersion: 1,
-          receivingEnvironment: "live",
           webhookId: "webhook-refund-1",
           providerEventType: "payment.refunded",
           provider: "arc_pay",

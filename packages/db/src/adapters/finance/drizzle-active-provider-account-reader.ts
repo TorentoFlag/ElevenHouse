@@ -26,7 +26,6 @@ export function createDrizzleActiveProviderAccountReader(
 ): ActiveProviderAccountReaderPort {
   return Object.freeze({
     async findActiveProviderAccount(input) {
-      const environment = environmentValue(input.environment);
       if (input.provider !== "arc_pay") fail("invalid_query");
       try {
         const rows = await database
@@ -44,15 +43,12 @@ export function createDrizzleActiveProviderAccountReader(
             )
           )
           .where(
-            and(
-              eq(financeProviderAccountSeries.provider, "arc_pay"),
-              eq(financeProviderAccounts.environment, environment)
-            )
+            eq(financeProviderAccountSeries.provider, "arc_pay")
           )
           .limit(2);
         if (rows.length > 1) fail("identity_integrity_conflict");
         const row = rows[0];
-        return row ? mapActiveProviderAccount(row.series, row.account, environment) : null;
+        return row ? mapActiveProviderAccount(row.series, row.account) : null;
       } catch (error) {
         if (error instanceof ActiveProviderAccountReaderPersistenceError) throw error;
         throw new ActiveProviderAccountReaderPersistenceError("persistence_failure");
@@ -71,7 +67,6 @@ export function createDrizzleActiveProviderAccountWebhookContextReader(
 ): ActiveProviderAccountWebhookContextReaderPort {
   return Object.freeze({
     async findActiveWebhookContext(input) {
-      const environment = environmentValue(input.environment);
       if (input.provider !== "arc_pay") fail("invalid_query");
       try {
         const rows = await database
@@ -88,18 +83,13 @@ export function createDrizzleActiveProviderAccountWebhookContextReader(
               eq(financeProviderAccounts.provider, financeProviderAccountSeries.provider)
             )
           )
-          .where(
-            and(
-              eq(financeProviderAccountSeries.provider, "arc_pay"),
-              eq(financeProviderAccounts.environment, environment)
-            )
-          )
+          .where(eq(financeProviderAccountSeries.provider, "arc_pay"))
           .limit(2);
         if (rows.length > 1) fail("identity_integrity_conflict");
         const row = rows[0];
         if (!row) return null;
         return Object.freeze({
-          providerAccount: mapActiveProviderAccount(row.series, row.account, environment),
+          providerAccount: mapActiveProviderAccount(row.series, row.account),
           merchantTenantId: tenantId(row.account.merchantTenantId)
         });
       } catch (error) {
@@ -112,14 +102,12 @@ export function createDrizzleActiveProviderAccountWebhookContextReader(
 
 export function mapActiveProviderAccount(
   series: typeof financeProviderAccountSeries.$inferSelect,
-  account: typeof financeProviderAccounts.$inferSelect,
-  environment: "sandbox" | "live"
+  account: typeof financeProviderAccounts.$inferSelect
 ): FinanceProviderAccountIdentity {
   try {
     if (
       series.provider !== "arc_pay" ||
       account.provider !== "arc_pay" ||
-      account.environment !== environment ||
       account.seriesId !== series.seriesId ||
       account.identityVersion !== series.activeIdentityVersion
     ) {
@@ -134,11 +122,6 @@ export function mapActiveProviderAccount(
     if (error instanceof ActiveProviderAccountReaderPersistenceError) throw error;
     fail("identity_integrity_conflict");
   }
-}
-
-function environmentValue(value: unknown): "sandbox" | "live" {
-  if (value === "sandbox" || value === "live") return value;
-  fail("invalid_query");
 }
 
 function tenantId(value: unknown): string {

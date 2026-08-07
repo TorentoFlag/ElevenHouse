@@ -24,7 +24,6 @@ export class ArcPaySettlementLedgerError extends Error {
 export function createArcPaySettlementLedgerClient(input: {
   readonly apiBaseUrl: string;
   readonly apiSecret: string | null;
-  readonly environment: "sandbox" | "live";
   readonly fetchImpl?: typeof fetch;
 }): ArcPaySettlementLedgerClient {
   const fetchImpl = input.fetchImpl ?? fetch;
@@ -54,14 +53,13 @@ export function createArcPaySettlementLedgerClient(input: {
       } catch {
         throw new ArcPaySettlementLedgerError();
       }
-      return parseLedgerPage(payload, input.environment);
+      return parseLedgerPage(payload);
     }
   };
 }
 
 function parseLedgerPage(
-  payload: unknown,
-  environment: "sandbox" | "live"
+  payload: unknown
 ): Awaited<ReturnType<ArcPaySettlementLedgerClient["listSettlementLedger"]>> {
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     throw new ArcPaySettlementLedgerError();
@@ -72,16 +70,13 @@ function parseLedgerPage(
   const totalCount =
     page.total_count === undefined ? null : readNonNegativeInteger(page.total_count);
   return {
-    entries: page.entries.map((entry) => parseLedgerEntry(entry, environment)),
+    entries: page.entries.map((entry) => parseLedgerEntry(entry)),
     nextCursor,
     totalCount
   };
 }
 
-function parseLedgerEntry(
-  value: unknown,
-  environment: "sandbox" | "live"
-): ProviderSettlementLedgerEntry {
+function parseLedgerEntry(value: unknown): ProviderSettlementLedgerEntry {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ArcPaySettlementLedgerError();
   }
@@ -90,7 +85,6 @@ function parseLedgerEntry(
   const referenceId = readOptionalString(entry.reference_id);
   return {
     provider: "arc_pay",
-    environment,
     providerLedgerEntryId: readRequiredString(entry.entry_id),
     providerPaymentId: referenceType === "payment" ? referenceId : null,
     amount: {

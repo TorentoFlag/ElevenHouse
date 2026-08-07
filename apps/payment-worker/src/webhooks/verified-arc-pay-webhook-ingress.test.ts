@@ -25,7 +25,6 @@ describe("verified ArcPay webhook ingress evidence", () => {
         providerWebhookId: "11111111-1111-4111-8111-111111111111",
         providerEventType: "payment.captured",
         merchantTenantId: "22222222-2222-4222-8222-222222222222",
-        environment: "sandbox",
         occurredAt: "2026-08-04T12:00:00.000Z"
       },
       providerAccount,
@@ -40,7 +39,6 @@ describe("verified ArcPay webhook ingress evidence", () => {
       kind: "verified_webhook_ingress_evidence",
       provider: "arc_pay",
       providerAccount,
-      receivingEnvironment: "sandbox",
       webhookId: "11111111-1111-4111-8111-111111111111",
       providerEventType: "payment.captured",
       rawBodyDigest: "sha256:c82dfac6eb8bdab58339d62b86501e62027251bcbdf9e1ba5e4f7951f8e17fb3",
@@ -51,6 +49,7 @@ describe("verified ArcPay webhook ingress evidence", () => {
       signedTimestamp: "2026-08-04T12:00:00.000Z",
       signatureEvidenceDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     });
+    expect(evidence).not.toHaveProperty("receivingEnvironment");
   });
 
   it("refuses to issue evidence when the signed webhook identity is cross-wired", () => {
@@ -66,7 +65,6 @@ describe("verified ArcPay webhook ingress evidence", () => {
           providerWebhookId: "22222222-2222-4222-8222-222222222222",
           providerEventType: "payment.captured",
           merchantTenantId: "22222222-2222-4222-8222-222222222222",
-          environment: "sandbox",
           occurredAt: "2026-08-04T12:00:00.000Z"
         },
         providerAccount,

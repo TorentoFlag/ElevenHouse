@@ -44,7 +44,6 @@ export function createVerifiedArcPayWebhookIngressEvidence(input: Readonly<{
     kind: "verified_webhook_ingress_evidence",
     provider: "arc_pay",
     providerAccount: input.providerAccount,
-    receivingEnvironment: input.transport.environment,
     webhookId: input.signature.webhookId,
     providerEventType,
     rawBodyDigest: digest(input.rawBody),

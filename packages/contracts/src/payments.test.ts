@@ -7,7 +7,6 @@ import {
   createCheckoutRequestSchema,
   paymentAttemptResponseSchema,
   paymentAttemptStatusSchema,
-  paymentProviderEnvironmentSchema,
   paymentProviderEventSchema
 } from "./payments";
 
@@ -17,7 +16,6 @@ describe("payment contracts", () => {
       id: "11111111-1111-4111-8111-111111111111",
       orderId: "22222222-2222-4222-8222-222222222222",
       provider: "arc_pay",
-      environment: "sandbox",
       status: "captured",
       amount: { amountMinor: 500_00, currency: "RUB" },
       providerPaymentId: "arc-payment-1",
@@ -70,11 +68,10 @@ describe("payment contracts", () => {
     expect(() => paymentAttemptStatusSchema.parse("success_url_returned")).toThrow();
   });
 
-  it("requires webhook events to carry provider ids, environment and raw metadata", () => {
+  it("requires webhook events to carry provider ids and raw metadata", () => {
     const event = {
       id: "11111111-1111-4111-8111-111111111111",
       provider: "arc_pay",
-      environment: "live",
       providerWebhookId: "wh_1",
       providerPaymentId: "pay_1",
       type: "payment.captured",
@@ -93,7 +90,6 @@ describe("payment contracts", () => {
       type: "payment.expired"
     });
     expect(() => paymentProviderEventSchema.parse({ ...event, type: "payment.success" })).toThrow();
-    expect(() => paymentProviderEnvironmentSchema.parse("staging")).toThrow();
   });
 
   it("exposes admin refund and chargeback queue cases with wallet risk evidence", () => {
@@ -102,7 +98,6 @@ describe("payment contracts", () => {
       type: "chargeback",
       severity: "critical",
       provider: "arc_pay",
-      environment: "sandbox",
       providerWebhookId: "wh_chargeback_1",
       providerPaymentId: "arc-payment-1",
       providerRefundId: null,
@@ -160,7 +155,6 @@ describe("payment contracts", () => {
         type: "refund",
         severity: "attention",
         provider: "arc_pay",
-        environment: "sandbox",
         providerWebhookId: "wh_refund_1",
         providerPaymentId: "arc-payment-1",
         providerRefundId: null,

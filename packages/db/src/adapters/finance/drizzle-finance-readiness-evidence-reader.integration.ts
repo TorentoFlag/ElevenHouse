@@ -23,13 +23,12 @@ describe.sequential("Drizzle finance readiness evidence reader", () => {
     await pool.query(schemaSql);
     await pool.query(
       `insert into finance_readiness_evidence_versions
-       (evidence_id, evidence_version, requirement_code, environment, transaction_category, scope_key, is_current, status, effective_at, expires_at, safe_digest)
+       (evidence_id, evidence_version, requirement_code, transaction_category, scope_key, is_current, status, effective_at, expires_at, safe_digest)
        values
-       ('legal-platform', 3, 'legal_accounting_platform_subscription', null, 'platform_subscription', 'legal_accounting_platform_subscription:global:platform_subscription', true, 'active', '2026-01-01T00:00:00Z', null, $1),
-       ('commercial', 2, 'commercial_tariff', null, null, 'commercial_tariff:global:global', true, 'active', '2026-01-01T00:00:00Z', null, $2),
-       ('arc-sandbox', 4, 'arc_pay_environment', 'sandbox', null, 'arc_pay_environment:sandbox:global', true, 'active', '2026-01-01T00:00:00Z', null, $3),
-       ('expired', 1, 'commercial_tariff', null, null, 'commercial_tariff:global:global:old', false, 'revoked', '2025-01-01T00:00:00Z', '2025-02-01T00:00:00Z', $4)`,
-      [digest("a"), digest("b"), digest("c"), digest("d")]
+       ('legal-platform', 3, 'legal_accounting_platform_subscription', 'platform_subscription', 'legal_accounting_platform_subscription:platform_subscription', true, 'active', '2026-01-01T00:00:00Z', null, $1),
+       ('commercial', 2, 'commercial_tariff', null, 'commercial_tariff:global', true, 'active', '2026-01-01T00:00:00Z', null, $2),
+       ('expired', 1, 'commercial_tariff', null, 'commercial_tariff:global:old', false, 'revoked', '2025-01-01T00:00:00Z', '2025-02-01T00:00:00Z', $3)`,
+      [digest("a"), digest("b"), digest("c")]
     );
   }, 30_000);
 
@@ -48,33 +47,22 @@ describe.sequential("Drizzle finance readiness evidence reader", () => {
       operationKind: "platform_invoice_charge",
       requirementCodes: [
         "legal_accounting_platform_subscription",
-        "commercial_tariff",
-        "arc_pay_environment"
+        "commercial_tariff"
       ],
-      environment: "sandbox",
       transactionCategory: "platform_subscription"
     });
 
     expect(evidence).toEqual([
       expect.objectContaining({
-        id: "arc-sandbox",
-        version: 4,
-        requirementCode: "arc_pay_environment",
-        environment: "sandbox",
-        transactionCategory: null
-      }),
-      expect.objectContaining({
         id: "commercial",
         version: 2,
         requirementCode: "commercial_tariff",
-        environment: null,
         transactionCategory: null
       }),
       expect.objectContaining({
         id: "legal-platform",
         version: 3,
         requirementCode: "legal_accounting_platform_subscription",
-        environment: null,
         transactionCategory: "platform_subscription"
       })
     ]);
@@ -86,7 +74,6 @@ create table finance_readiness_evidence_versions (
   evidence_id varchar(160) not null,
   evidence_version numeric(38, 0) not null,
   requirement_code text not null,
-  environment text,
   transaction_category text,
   scope_key varchar(240) not null,
   is_current boolean not null default true,

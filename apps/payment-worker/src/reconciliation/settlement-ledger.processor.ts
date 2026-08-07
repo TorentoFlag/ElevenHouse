@@ -1,7 +1,6 @@
 import {
   reconcileProviderSettlementLedgerBatch,
   type FinancePaymentProvider,
-  type PaymentProviderEnvironment,
   type ProviderSettlementLedgerBatchResult,
   type ReconciliationStore
 } from "@elevenhouse/domain";
@@ -19,7 +18,6 @@ export function createSettlementLedgerReconciliationProcessor(input: {
   readonly client: ArcPaySettlementLedgerClient;
   readonly store: ReconciliationStore;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly lookbackMs: number;
   readonly pageLimit: number;
   readonly currency?: "RUB";
@@ -51,7 +49,6 @@ export function createSettlementLedgerReconciliationProcessor(input: {
         const batchResult = await reconcileProviderSettlementLedgerBatch({
           store: input.store,
           provider: input.provider,
-          environment: input.environment,
           entries: page.entries,
           checkedAt
         });

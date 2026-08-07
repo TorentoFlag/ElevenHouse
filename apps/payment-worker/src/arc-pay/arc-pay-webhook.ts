@@ -22,7 +22,6 @@ export type ArcPayWebhookEvent = {
   readonly providerWebhookId: string;
   readonly providerPaymentId: string;
   readonly type: PaymentProviderEventType;
-  readonly environment: "sandbox" | "live";
   readonly occurredAt: string;
   readonly payload: Record<string, unknown>;
   readonly moneyFacts: PaymentWebhookMoneyFacts;
@@ -36,7 +35,6 @@ export type ArcPayWebhookTransportEnvelope = Readonly<{
   providerWebhookId: string;
   providerEventType: string;
   merchantTenantId: string;
-  environment: "sandbox" | "live";
   occurredAt: string;
 }>;
 
@@ -62,7 +60,6 @@ export function parseArcPayWebhook(input: {
     providerWebhookId: transport.providerWebhookId,
     providerPaymentId,
     type,
-    environment: transport.environment,
     occurredAt: transport.occurredAt,
     payload,
     moneyFacts: parseMoneyFacts(type, data)
@@ -97,7 +94,6 @@ function parseTransportPayload(
     providerWebhookId: eventId,
     providerEventType: providerEventType(payload.event_type),
     merchantTenantId,
-    environment,
     occurredAt: isoDateTime(payload.created_at)
   });
 }

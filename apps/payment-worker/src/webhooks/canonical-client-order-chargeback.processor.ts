@@ -162,7 +162,6 @@ function parseClaimedChargebackWebhook(
   if (
     event.type !== "payment.chargeback" ||
     event.providerWebhookId !== claim.webhookId ||
-    event.environment !== claim.receivingEnvironment ||
     event.moneyFacts.kind !== "bounded" ||
     !principal ||
     principal.currency !== "RUB"

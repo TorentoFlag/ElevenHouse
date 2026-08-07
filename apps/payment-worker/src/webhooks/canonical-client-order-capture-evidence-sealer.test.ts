@@ -83,7 +83,6 @@ function input() {
       expectedCheckpointSequence: 1,
       leaseFence: 1,
       providerAccount,
-      receivingEnvironment: "sandbox" as const,
       webhookId,
       providerEventType: "payment.captured" as const,
       sealedWebhookArtifact: {

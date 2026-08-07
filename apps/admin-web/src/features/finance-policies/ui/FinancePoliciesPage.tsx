@@ -1360,7 +1360,6 @@ function DisputesPanel(props: {
             <div className="adminFinanceDisputeEvidence">
               <span>Evidence:</span>
               <Chip label={paymentReversalCase.provider} type="button" />
-              <Chip label={paymentReversalCase.environment} type="button" />
               <Chip label={paymentReversalCase.orderStatus} type="button" />
               {paymentReversalCase.refundStatus ? (
                 <Chip label={paymentReversalCase.refundStatus} type="button" />

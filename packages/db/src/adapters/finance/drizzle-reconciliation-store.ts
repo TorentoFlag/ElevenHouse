@@ -4,7 +4,6 @@ import type {
   FinancePaymentProvider,
   Money,
   PaymentAttempt,
-  PaymentProviderEnvironment,
   ReconciliationExceptionEvidenceFilter,
   ReconciliationRecord,
   ReconciliationStore
@@ -33,7 +32,6 @@ async function findPaymentAttemptByProviderPaymentId(
   database: ElevenHouseDatabase | FinanceDatabase,
   input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerPaymentId: string;
   }
 ): Promise<PaymentAttempt | null> {
@@ -43,7 +41,6 @@ async function findPaymentAttemptByProviderPaymentId(
     .where(
       and(
         eq(paymentAttempts.provider, input.provider),
-        eq(paymentAttempts.environment, input.environment),
         eq(paymentAttempts.providerPaymentId, input.providerPaymentId)
       )
     )
@@ -62,7 +59,6 @@ async function createReconciliationRecord(
     .insert(reconciliationRecords)
     .values({
       provider: input.provider,
-      environment: input.environment,
       providerPaymentId: input.providerPaymentId,
       providerPayoutId: input.providerPayoutId,
       providerSettlementId: input.providerSettlementId,
@@ -89,7 +85,6 @@ async function findDuplicateRecord(
 ): Promise<ReconciliationRecord | null> {
   const predicates = [
     eq(reconciliationRecords.provider, input.provider),
-    eq(reconciliationRecords.environment, input.environment),
     eq(reconciliationRecords.status, input.status)
   ];
   if (input.providerPaymentId) {
@@ -120,7 +115,6 @@ async function listOpenReconciliationExceptions(
     eq(reconciliationRecords.status, "exception"),
     isNull(reconciliationRecords.resolvedAt),
     input.provider ? eq(reconciliationRecords.provider, input.provider) : undefined,
-    input.environment ? eq(reconciliationRecords.environment, input.environment) : undefined,
     evidencePredicate(input.evidence ?? "all")
   ].filter((predicate): predicate is NonNullable<typeof predicate> => Boolean(predicate));
   const rows = await database
@@ -187,7 +181,6 @@ function toReconciliationRecord(row: ReconciliationRecordRow): ReconciliationRec
   return {
     id: row.id,
     provider: row.provider as ReconciliationRecord["provider"],
-    environment: row.environment as ReconciliationRecord["environment"],
     providerPaymentId: row.providerPaymentId,
     providerPayoutId: row.providerPayoutId,
     providerSettlementId: row.providerSettlementId,
@@ -207,7 +200,6 @@ function toPaymentAttempt(row: typeof paymentAttempts.$inferSelect): PaymentAtte
     id: row.id,
     orderId: row.orderId,
     provider: row.provider as FinancePaymentProvider,
-    environment: row.environment as PaymentProviderEnvironment,
     status: row.status as PaymentAttempt["status"],
     amount: money(row.amountMinor, row.currency),
     providerPaymentId: row.providerPaymentId,

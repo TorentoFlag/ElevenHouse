@@ -48,8 +48,7 @@ export function createPlatformTariffInvoiceChargePreparer(input: Readonly<{
         subscription: candidate.subscription,
         tariff,
         savedCardCredential: candidate.savedCardCredential,
-        buyerContact: candidate.buyerContact,
-        environment: candidate.environment
+        buyerContact: candidate.buyerContact
       });
       const bytes = new TextEncoder().encode(JSON.stringify(command.dispatchEnvelope));
       if (bytes.byteLength > command.operationEnvelope.maximumArtifactBytes) {

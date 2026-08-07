@@ -20,7 +20,6 @@ const claim = {
     providerAccountId: "merchant-sandbox",
     identityVersion: 1
   }),
-  receivingEnvironment: "sandbox" as const,
   webhookId: "11111111-1111-4111-8111-111111111111",
   providerEventType: "payment.captured" as const,
   sealedWebhookArtifact: {

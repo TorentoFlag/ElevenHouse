@@ -114,10 +114,7 @@ async function initiateInTransaction<TSchema extends Record<string, unknown>>(
         eq(financeProviderAccounts.provider, financeProviderAccountSeries.provider)
       )
     )
-    .where(and(
-      eq(financeProviderAccountSeries.provider, "arc_pay"),
-      eq(financeProviderAccounts.environment, command.providerEnvironment)
-    ))
+    .where(eq(financeProviderAccountSeries.provider, "arc_pay"))
     .limit(1)
     .for("update");
   if (!provider || provider.identityVersion !== provider.activeIdentityVersion) fail("provider_account_not_configured");
@@ -227,7 +224,6 @@ function normalize(input: InitiateSavedCardSetupCommand): Command {
     !positiveInteger(input.expectedSubscriptionVersion) || !identifier(input.disclosureSeriesId) ||
     !positiveInteger(input.disclosureVersion) || !digest(input.disclosureDigest) ||
     (input.noticeLocale !== "ru" && input.noticeLocale !== "en") ||
-    (input.providerEnvironment !== "sandbox" && input.providerEnvironment !== "live") ||
     Number.isNaN(Date.parse(input.now))
   ) fail("invalid_command");
   try {

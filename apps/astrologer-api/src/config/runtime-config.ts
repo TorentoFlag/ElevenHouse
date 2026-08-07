@@ -178,7 +178,6 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-  ASTROLOGER_BILLING_ARC_PAY_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
   ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: z.string().trim().min(1).max(512).optional(),
   ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID: z.string().trim().min(1).max(160).optional(),
@@ -378,7 +377,6 @@ export type AstrologerApiRuntimeConfig = {
   };
   readonly billing: {
     readonly arcPayConfigured: boolean;
-    readonly arcPayEnvironment: "sandbox" | "live";
     readonly arcPayBrowserTokenization: Readonly<{ apiBaseUrl: string; publishableKey: string }> | null;
     /** KMS-backed shared finance storage; card tokens are sealed here before a DB reference is written. */
     readonly financeArtifactStorage: Readonly<{
@@ -678,7 +676,6 @@ export function createAstrologerApiRuntimeConfig(
     },
     billing: {
       arcPayConfigured: config.ASTROLOGER_BILLING_ARC_PAY_ENABLED,
-      arcPayEnvironment: config.ASTROLOGER_BILLING_ARC_PAY_ENVIRONMENT,
       arcPayBrowserTokenization,
       financeArtifactStorage,
       savedCardDisclosureSeriesId: config.ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID ?? null

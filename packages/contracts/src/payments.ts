@@ -26,10 +26,6 @@ export const financePaymentProviderValues = ["arc_pay"] as const;
 export const financePaymentProviderSchema = z.enum(financePaymentProviderValues);
 export type FinancePaymentProvider = z.infer<typeof financePaymentProviderSchema>;
 
-export const paymentProviderEnvironmentValues = ["sandbox", "live"] as const;
-export const paymentProviderEnvironmentSchema = z.enum(paymentProviderEnvironmentValues);
-export type PaymentProviderEnvironment = z.infer<typeof paymentProviderEnvironmentSchema>;
-
 export const paymentAttemptStatusValues = [
   "created",
   "checkout_opened",
@@ -77,7 +73,6 @@ export const paymentAttemptResponseSchema = z
     id: uuidSchema,
     orderId: uuidSchema,
     provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
     status: paymentAttemptStatusSchema,
     amount: moneySchema,
     providerPaymentId: z.string().min(1).max(160).nullable(),
@@ -94,7 +89,6 @@ export const paymentProviderEventSchema = z
   .object({
     id: uuidSchema,
     provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
     providerWebhookId: z.string().min(1).max(160),
     providerPaymentId: z.string().min(1).max(160).nullable(),
     type: paymentProviderEventTypeSchema,
@@ -196,7 +190,6 @@ export const adminPaymentReversalCaseSchema = z
     type: adminPaymentReversalCaseTypeSchema,
     severity: adminPaymentReversalCaseSeveritySchema,
     provider: financePaymentProviderSchema,
-    environment: paymentProviderEnvironmentSchema,
     providerWebhookId: z.string().min(1).max(160),
     providerPaymentId: z.string().min(1).max(160).nullable(),
     providerRefundId: z.string().min(1).max(160).nullable(),

@@ -62,7 +62,7 @@ describe("refund terminal composite evidence", () => {
 
   const mismatchMutations: readonly [string, (value: Record<string, unknown>) => void, string][] = [
     [
-      "provider environment",
+      "deprecated provider environment field",
       (value) => {
         const intent = providerIntent(value);
         intent.providerAccount = {
@@ -70,7 +70,7 @@ describe("refund terminal composite evidence", () => {
           environment: "sandbox"
         };
       },
-      "scope_mismatch"
+      "invalid_shape"
     ],
     [
       "provider payment",

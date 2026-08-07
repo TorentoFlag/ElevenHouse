@@ -61,7 +61,6 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
         identityVersion: providerAccount.identityVersion,
         provider: "arc_pay",
         merchantTenantId: "merchant-webhook-main",
-        environment: "sandbox",
         terminalScope: "hosted-and-saved-card",
         settlementScope: "company-settlement",
         predecessorProviderAccountId: null,
@@ -144,17 +143,17 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
     const reader = createDrizzleActiveProviderAccountWebhookContextReader(runtime.database);
 
     await expect(
-      reader.findActiveWebhookContext({ provider: "arc_pay", environment: "sandbox" })
+      reader.findActiveWebhookContext({ provider: "arc_pay" })
     ).resolves.toEqual({
       providerAccount,
       merchantTenantId: "merchant-webhook-main"
     });
     await expect(
-      reader.findActiveWebhookContext({ provider: "arc_pay", environment: "live" })
-    ).resolves.toBeNull();
+      reader.findActiveWebhookContext({ provider: "other" as never })
+    ).rejects.toMatchObject({ reason: "invalid_query" });
   });
 
-  it("fails closed when more than one active provider identity is configured for an environment", async () => {
+  it("fails closed when more than one active provider identity is configured", async () => {
     await runtime.database.transaction(async (transaction) => {
       await transaction.insert(financeProviderAccountSeries).values({
         seriesId: "arc-webhook-duplicate",
@@ -168,7 +167,6 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
         identityVersion: 1,
         provider: "arc_pay",
         merchantTenantId: "merchant-webhook-duplicate",
-        environment: "sandbox",
         terminalScope: "hosted-and-saved-card",
         settlementScope: "company-settlement",
         predecessorProviderAccountId: null,
@@ -178,7 +176,7 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
     const reader = createDrizzleActiveProviderAccountWebhookContextReader(runtime.database);
 
     await expect(
-      reader.findActiveWebhookContext({ provider: "arc_pay", environment: "sandbox" })
+      reader.findActiveWebhookContext({ provider: "arc_pay" })
     ).rejects.toMatchObject({ reason: "identity_integrity_conflict" });
   });
 
@@ -220,7 +218,6 @@ function command(input: Readonly<{
       kind: "verified_webhook_ingress_evidence",
       provider: "arc_pay",
       providerAccount,
-      receivingEnvironment: "sandbox",
       webhookId: input.webhookId,
       providerEventType: "payment.captured",
       rawBodyDigest: digest(input.body),
