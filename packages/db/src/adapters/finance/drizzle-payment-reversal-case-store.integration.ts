@@ -187,11 +187,11 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into payment_attempts
-      (id, order_id, provider, environment, status, amount_minor, currency,
+      (id, order_id, provider, status, amount_minor, currency,
        provider_payment_id, provider_checkout_id, idempotency_key, metadata)
      values
-      ($1, $2, 'arc_pay', 'sandbox', 'refunded', 50000, 'RUB', $3, $4, $5, '{}'::jsonb),
-      ($6, $7, 'arc_pay', 'sandbox', 'chargeback', 50000, 'RUB', $8, $9, $10, '{}'::jsonb)`,
+      ($1, $2, 'arc_pay', 'refunded', 50000, 'RUB', $3, $4, $5, '{}'::jsonb),
+      ($6, $7, 'arc_pay', 'chargeback', 50000, 'RUB', $8, $9, $10, '{}'::jsonb)`,
     [
       refundAttemptId,
       refundOrderId,
@@ -207,13 +207,13 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into payment_provider_events
-      (id, payment_attempt_id, provider, environment, provider_webhook_id,
+      (id, payment_attempt_id, provider, provider_webhook_id,
        provider_payment_id, type, occurred_at, received_at, payload)
      values
-      ($1, $2, 'arc_pay', 'sandbox', 'wh_refund_1', $3, 'payment.refunded',
+      ($1, $2, 'arc_pay', 'wh_refund_1', $3, 'payment.refunded',
        '2026-07-26T10:00:00.000Z', '2026-07-26T10:01:00.000Z',
        jsonb_build_object('data', jsonb_build_object('refund_id', $4::text))),
-      ($5, $6, 'arc_pay', 'sandbox', 'wh_chargeback_1', $7, 'payment.chargeback',
+      ($5, $6, 'arc_pay', 'wh_chargeback_1', $7, 'payment.chargeback',
        '2026-07-26T10:02:00.000Z', '2026-07-26T10:03:00.000Z',
        jsonb_build_object('data', jsonb_build_object('payment_id', $7::text)))`,
     [
@@ -228,9 +228,9 @@ async function createFixture(): Promise<{
   );
   await runtime.pool.query(
     `insert into refunds
-      (order_id, payment_attempt_id, provider_event_id, provider, environment,
+      (order_id, payment_attempt_id, provider_event_id, provider,
        status, amount_minor, currency, reason, provider_refund_id)
-     values ($1, $2, $3, 'arc_pay', 'sandbox', 'succeeded', 50000, 'RUB',
+     values ($1, $2, $3, 'arc_pay', 'succeeded', 50000, 'RUB',
        'provider_refund', $4)`,
     [refundOrderId, refundAttemptId, refundProviderEventId, providerRefundId]
   );

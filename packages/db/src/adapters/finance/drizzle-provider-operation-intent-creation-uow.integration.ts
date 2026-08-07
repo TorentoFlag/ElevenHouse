@@ -51,8 +51,8 @@ describe.sequential("provider operation intent PostgreSQL integration", () => {
     await pool.query(
       `insert into finance_provider_accounts
          (series_id, provider_account_id, identity_version, provider,
-          merchant_tenant_id, environment, terminal_scope, settlement_scope)
-       values ($1, $2, $3, 'arc_pay', 'merchant-main', 'sandbox', 'terminal-main', 'settlement-main')`,
+          merchant_tenant_id, terminal_scope, settlement_scope)
+       values ($1, $2, $3, 'arc_pay', 'merchant-main', 'terminal-main', 'settlement-main')`,
       [providerAccount.seriesId, providerAccount.providerAccountId, providerAccount.identityVersion]
     );
   }, 30_000);
@@ -620,7 +620,7 @@ create table finance_provider_accounts (
   id uuid primary key default gen_random_uuid(), series_id varchar(160) not null,
   provider_account_id varchar(160) not null, identity_version integer not null,
   provider text not null, merchant_tenant_id varchar(160) not null,
-  environment text not null, terminal_scope varchar(160) not null,
+  terminal_scope varchar(160) not null,
   settlement_scope varchar(160) not null, predecessor_provider_account_id varchar(160),
   predecessor_identity_version integer, created_at timestamptz not null default now(),
   unique(series_id, provider_account_id, identity_version)

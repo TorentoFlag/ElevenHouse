@@ -434,10 +434,10 @@ describe.sequential("refund terminal result PostgreSQL integration", () => {
     await pool.query(
       `insert into finance_provider_accounts (
         series_id, provider_account_id, identity_version, provider, merchant_tenant_id,
-        environment, terminal_scope, settlement_scope, predecessor_provider_account_id,
+        terminal_scope, settlement_scope, predecessor_provider_account_id,
         predecessor_identity_version
       ) values ('arc-series-live-primary', $1, $2, 'arc_pay', 'elevenhouse-live',
-        'live', 'primary-payins', 'merchant-ledger-primary', $3, $4)`,
+        'primary-payins', 'merchant-ledger-primary', $3, $4)`,
       [accountId, version, predecessorAccountId, predecessorVersion]
     );
   }
