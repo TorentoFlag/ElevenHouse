@@ -6,10 +6,12 @@ import type {
   FinanceOrderStore,
   UpdateFinanceOrderStatusInput
 } from "@elevenhouse/domain";
+import { createOrderEconomicsSnapshot } from "@elevenhouse/domain/finance-core";
 import { OrderBookingHoldNotClaimableError as OrderBookingHoldNotClaimable } from "@elevenhouse/domain";
 import type { Money } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { bookings, orders, scheduleReservations } from "../../schema";
+import { financeOrderEconomicsSnapshots } from "../../schema/finance/capture-authorities.schema";
 import {
   executeIdempotentFinanceCommand,
   type FinanceDatabase,
@@ -94,9 +96,24 @@ async function insertOrder(
       financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
       createdAt: timestamp,
       updatedAt: timestamp
-    })
+  })
     .returning();
   if (!row) throw new Error("Expected finance order insert to return a row");
+  const economics = createOrderEconomicsSnapshotForPersistence({ ...input, id: row.id });
+  await database.insert(financeOrderEconomicsSnapshots).values({
+    orderId: economics.orderId,
+    astrologerUserId: economics.astrologerUserId,
+    planId: economics.planId,
+    planVersionId: economics.planVersionId,
+    grossAmountMinor: String(economics.gross.amountMinor),
+    grossCurrency: economics.gross.currency,
+    commissionAmountMinor: String(economics.commission.amountMinor),
+    commissionCurrency: economics.commission.currency,
+    payableAmountMinor: String(economics.payable.amountMinor),
+    payableCurrency: economics.payable.currency,
+    commissionBps: economics.commissionBps,
+    allocationRevision: economics.allocationRevision
+  });
   if (input.bookingId) {
     await claimPaidBookingHoldForOrder(database, {
       bookingId: input.bookingId,
@@ -108,6 +125,27 @@ async function insertOrder(
     });
   }
   return toFinanceOrder(row);
+}
+
+/**
+ * An order's financial split is captured exactly once, in the same transaction as the order.
+ * Later provider callbacks therefore use the accepted price and commission, never current tariff
+ * settings.
+ */
+export function createOrderEconomicsSnapshotForPersistence(input: CreateFinanceOrderRecordInput) {
+  const orderId = input.id;
+  if (!orderId) throw new Error("Expected a persisted finance order identifier");
+  return createOrderEconomicsSnapshot({
+    orderId,
+    astrologerUserId: input.astrologerUserId,
+    planId: input.tariffSeriesId,
+    planVersionId: `${input.tariffSeriesId}@${input.tariffVersion}`,
+    gross: input.grossAmount,
+    commission: input.platformFee,
+    payable: input.astrologerNetAmount,
+    commissionBps: input.tariffCommissionBps,
+    allocationRevision: "bps_half_up_v1"
+  });
 }
 
 async function claimPaidBookingHoldForOrder(

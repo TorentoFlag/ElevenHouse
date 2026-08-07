@@ -527,7 +527,7 @@ async function resolveAuthority(
       (receipt.riskPolicy.exceptionAuthority
         ? String(receipt.riskPolicy.exceptionAuthority.version)
         : null) ||
-    risk.effectiveAt !== receipt.riskPolicy.effectiveAt ||
+    !sameFinanceInstant(risk.effectiveAt, receipt.riskPolicy.effectiveAt) ||
     fulfillment.holdAnchor !== receipt.fulfillment.holdAnchor ||
     fulfillment.terminalEvidenceOwner !== receipt.fulfillment.terminalEvidence.owner ||
     fulfillment.terminalEvidenceStatus !== receipt.fulfillment.terminalEvidence.status ||
@@ -806,6 +806,16 @@ function instant(value: string): Date {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) conflict("invalid_command");
   return date;
+}
+
+/**
+ * Risk policy snapshots are stored as RFC 3339 text, while the domain receipt canonicalizes
+ * redundant zero milliseconds. Compare the instant, not its equivalent text representation.
+ */
+export function sameFinanceInstant(left: string, right: string): boolean {
+  const leftTime = new Date(left).getTime();
+  const rightTime = new Date(right).getTime();
+  return Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime === rightTime;
 }
 
 function conflict(reason: OnlineSaleCaptureCommitPersistenceReason): never {

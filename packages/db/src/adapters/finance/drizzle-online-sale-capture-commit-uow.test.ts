@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyOnlineSaleCapturePostgresFailure,
   createDrizzleOnlineSaleCaptureCommitUnitOfWork,
-  OnlineSaleCaptureCommitPersistenceError
+  OnlineSaleCaptureCommitPersistenceError,
+  sameFinanceInstant
 } from "./drizzle-online-sale-capture-commit-uow";
 
 describe("v2 online sale-capture commit admission", () => {
@@ -33,5 +34,10 @@ describe("v2 online sale-capture commit admission", () => {
 
   it("does not mislabel an unclassified driver failure as a replay", () => {
     expect(classifyOnlineSaleCapturePostgresFailure(new Error("connection reset"))).toBeNull();
+  });
+
+  it("accepts equivalent risk-policy timestamps with and without zero milliseconds", () => {
+    expect(sameFinanceInstant("2026-07-28T10:00:00.000Z", "2026-07-28T10:00:00Z")).toBe(true);
+    expect(sameFinanceInstant("2026-07-28T10:00:00.001Z", "2026-07-28T10:00:00Z")).toBe(false);
   });
 });
