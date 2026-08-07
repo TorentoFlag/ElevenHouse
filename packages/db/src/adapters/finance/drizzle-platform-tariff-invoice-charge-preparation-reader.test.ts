@@ -14,7 +14,6 @@ describe("platform tariff invoice charge preparation reader mapping", () => {
       recurringConsentId: "consent-1",
       recurringConsentVersion: 1,
       buyerContact: { kind: "email", value: "astro@example.test" },
-      environment: "sandbox",
       savedCardCredential: {
         kind: "restricted_saved_card_credential_ref",
         schemaVersion: 1,
@@ -70,14 +69,14 @@ function row(): any {
       tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", commissionBpsSnapshot: 1_000, billingCycle: "month", state: "awaiting_initial_payment", version: 1, startsAt: null, endsAt: null
     },
     credential: {
-      credentialId: "credential-1", credentialVersion: "1", consentId: "consent-1", consentVersion: "1", seriesId: "arcpay-sandbox", providerAccountId: "merchant-sandbox", providerIdentityVersion: 1, providerCustomerId: "provider-customer-1", restrictedTokenHandleRef: "vault://restricted-token-1"
+      credentialId: "credential-1", credentialVersion: "1", consentId: "consent-1", consentVersion: "1", seriesId: "arcpay-primary", providerAccountId: "merchant-primary", providerIdentityVersion: 1, providerCustomerId: "provider-customer-1", restrictedTokenHandleRef: "vault://restricted-token-1"
     },
     credentialHead: { currentLifecycle: "active", currentCredentialId: "credential-1", currentCredentialVersion: "1" },
     consent: {
       consentId: "consent-1", consentVersion: "1", subscriptionId: "20000000-0000-4000-8000-000000000002", ownerUserId: "30000000-0000-4000-8000-000000000003", tariffSeriesId: "pro", tariffVersion: 1,
-      tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", seriesId: "arcpay-sandbox", providerAccountId: "merchant-sandbox", providerIdentityVersion: 1, providerCustomerId: "provider-customer-1", buyerContactKind: "email", buyerContactValue: "astro@example.test"
+      tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", seriesId: "arcpay-primary", providerAccountId: "merchant-primary", providerIdentityVersion: 1, providerCustomerId: "provider-customer-1", buyerContactKind: "email", buyerContactValue: "astro@example.test"
     },
     consentHead: { currentLifecycle: "granted" },
-    providerAccount: { provider: "arc_pay", seriesId: "arcpay-sandbox", providerAccountId: "merchant-sandbox", identityVersion: 1, environment: "sandbox" }
+    providerAccount: { provider: "arc_pay", seriesId: "arcpay-primary", providerAccountId: "merchant-primary", identityVersion: 1 }
   };
 }
