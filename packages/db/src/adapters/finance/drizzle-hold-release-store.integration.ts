@@ -448,7 +448,6 @@ function saleCapturedTransaction(input: {
       providerEventId: "provider-event-1",
       paymentAttemptId: "11111111-1111-4111-8111-111111111111",
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId,
       holdDurationHours: 48,
       holdReleaseAt: input.holdReleaseAt,
@@ -474,7 +473,6 @@ function saleCapturedTransaction(input: {
           orderId: input.orderId,
           providerEventId: "provider-event-1",
           provider: "arc_pay",
-          environment: "sandbox",
           providerPaymentId,
           holdDurationHours: 48,
           holdReleaseAt: input.holdReleaseAt,
@@ -532,8 +530,8 @@ async function insertReconciliationRecord(input: {
 }): Promise<void> {
   await runtime.pool.query(
     `insert into reconciliation_records
-      (provider, environment, provider_payment_id, status, exception_code, exception_message, checked_at, payload)
-     values ('arc_pay', 'sandbox', $1, $2, $3, $4, $5, '{}'::jsonb)`,
+      (provider, provider_payment_id, status, exception_code, exception_message, checked_at, payload)
+     values ('arc_pay', $1, $2, $3, $4, $5, '{}'::jsonb)`,
     [
       input.providerPaymentId,
       input.status,
