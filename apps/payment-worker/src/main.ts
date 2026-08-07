@@ -64,11 +64,16 @@ import { createArcPayCardSetupClient } from "./arc-pay/arc-pay-card-setup-client
 import { createArcPayRefundClient } from "./arc-pay/arc-pay-refund-client";
 import { createArcPaySavedCardChargeClient } from "./arc-pay/arc-pay-saved-card-charge-client";
 import { createArcPayPaymentAttemptResolver } from "./arc-pay/arc-pay-payment-reader";
+import { createArcPaySettlementBalanceClient } from "./arc-pay/arc-pay-settlement-balance-client";
 import {
   createOnlineWalletHoldReleaseProcessor,
   startOnlineWalletHoldReleaseInterval
 } from "./holds/online-wallet-hold-release.processor";
 import { createPaymentWorkerRuntimeConfig } from "./runtime-config";
+import {
+  createSettlementBalanceObservationProcessor,
+  startSettlementBalanceObservationInterval
+} from "./reconciliation/settlement-balance-observation.processor";
 import { createHostedCheckoutSessionDispatcher } from "./provider-operations/hosted-checkout-session-dispatcher";
 import { createArcPayOperationDispatcher } from "./provider-operations/arc-pay-operation-dispatcher";
 import {
@@ -559,6 +564,19 @@ async function startPaymentWorker(): Promise<void> {
       logger.error("online wallet holds release tick failed", { error: serializeError(error) });
     }
   });
+  if (config.arcPay.apiSecret) {
+    startSettlementBalanceObservationInterval({
+      processor: createSettlementBalanceObservationProcessor({
+        client: createArcPaySettlementBalanceClient(config.arcPay)
+      }),
+      intervalMs: config.reconciliation.intervalMs,
+      onResult: (result) => logger.info("ArcPay settlement balance observed", result),
+      onError: (error) =>
+        logger.error("ArcPay settlement balance observation failed", {
+          error: serializeError(error)
+        })
+    });
+  }
 
   logger.info("payment worker ready", {
     ...createReadinessResponse(service),
