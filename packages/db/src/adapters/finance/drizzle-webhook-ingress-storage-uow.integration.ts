@@ -131,12 +131,11 @@ describe.sequential("Drizzle webhook ingress storage UOW", () => {
       })
     );
 
-    await expect(
-      runtime.database.select().from(financeWebhookInbox)
-    ).resolves.toHaveLength(1);
-    await expect(
-      runtime.database.select().from(financeWebhookStoredReceipts)
-    ).resolves.toHaveLength(1);
+    const inbox = await runtime.database.select().from(financeWebhookInbox);
+    const receipts = await runtime.database.select().from(financeWebhookStoredReceipts);
+    expect(inbox).toHaveLength(1);
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]?.storedAt.getTime()).toBeGreaterThanOrEqual(inbox[0]?.receivedAt.getTime() ?? 0);
   });
 
   it("binds the signed webhook tenant to the active immutable provider identity", async () => {

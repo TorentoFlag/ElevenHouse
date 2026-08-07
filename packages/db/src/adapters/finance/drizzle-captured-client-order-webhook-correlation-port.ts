@@ -107,10 +107,10 @@ export function createDrizzleCapturedClientOrderWebhookCorrelationPort(
             select ${externalId} as "externalId",
                    ${providerPaymentId} as "providerPaymentId",
                    order_row.id as "orderId",
-                   authorization.order_id as "authorizationOrderId",
-                   authorization.economic_payment_intent_id as "authorizationEconomicPaymentIntentId",
-                   authorization.economic_payment_session_id as "authorizationEconomicPaymentSessionId",
-                   authorization.provider_operation_intent_id as "authorizationProviderOperationIntentId",
+                   checkout_authorization.order_id as "authorizationOrderId",
+                   checkout_authorization.economic_payment_intent_id as "authorizationEconomicPaymentIntentId",
+                   checkout_authorization.economic_payment_session_id as "authorizationEconomicPaymentSessionId",
+                   checkout_authorization.provider_operation_intent_id as "authorizationProviderOperationIntentId",
                    intent.id as "economicPaymentIntentId",
                    session.id as "economicPaymentSessionId",
                    intent.purpose as "intentPurpose",
@@ -140,21 +140,21 @@ export function createDrizzleCapturedClientOrderWebhookCorrelationPort(
                    policy.canonical_digest as "policyCanonicalDigest",
                    policy.published_at as "policyPublishedAt",
                    policy.retired_at as "policyRetiredAt"
-              from finance_client_checkout_authorizations authorization
-              join orders order_row on order_row.id = authorization.order_id
+              from finance_client_checkout_authorizations checkout_authorization
+              join orders order_row on order_row.id = checkout_authorization.order_id
               join finance_economic_payment_intents intent
-                on intent.id = authorization.economic_payment_intent_id
+                on intent.id = checkout_authorization.economic_payment_intent_id
               join finance_economic_payment_sessions session
-                on session.id = authorization.economic_payment_session_id
+                on session.id = checkout_authorization.economic_payment_session_id
               join finance_provider_operation_intents operation
-                on operation.id = authorization.provider_operation_intent_id
+                on operation.id = checkout_authorization.provider_operation_intent_id
               join finance_operation_resource_policy_versions policy
                 on policy.operation_kind = 'client_order_capture'
                and policy.lifecycle = 'published'
-             where authorization.order_id = ${externalId}::uuid
-               and authorization.economic_payment_intent_id = intent.id
-               and authorization.economic_payment_session_id = session.id
-               and authorization.provider_operation_intent_id = operation.id
+             where checkout_authorization.order_id = ${externalId}::uuid
+               and checkout_authorization.economic_payment_intent_id = intent.id
+               and checkout_authorization.economic_payment_session_id = session.id
+               and checkout_authorization.provider_operation_intent_id = operation.id
                and intent.purpose = 'client_order'
                and intent.source_id = ${externalId}
                and intent.series_id = ${providerAccount.seriesId}
@@ -170,7 +170,7 @@ export function createDrizzleCapturedClientOrderWebhookCorrelationPort(
                and operation.series_id = intent.series_id
                and operation.provider_account_id = intent.provider_account_id
                and operation.provider_identity_version = intent.provider_identity_version
-             for update of authorization, intent, session, operation
+             for update of checkout_authorization, intent, session, operation
           `);
           const rows = result.rows as unknown as readonly CorrelationRow[];
           if (rows.length === 0) fail("checkout_authority_not_found");

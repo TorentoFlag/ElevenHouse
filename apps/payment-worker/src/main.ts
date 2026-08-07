@@ -191,7 +191,7 @@ async function startPaymentWorker(): Promise<void> {
       evidence: createCanonicalClientOrderCaptureEvidenceSealer({
         privateObjectStorage: privateStorage,
         artifactRegistry,
-        retention: config.financeProviderDispatch.responseArtifactRetention
+        retention: config.financeProviderDispatch.canonicalReadArtifactRetention
       }),
       commit: createCanonicalClientOrderOnlineSaleCaptureCommitAdapter({
         processorVersion: 1,
@@ -215,7 +215,7 @@ async function startPaymentWorker(): Promise<void> {
     });
     const canonicalClientOrderRefund = createCanonicalClientOrderRefundProcessor({
       claims: createDrizzleRefundedClientOrderWebhookClaimPort({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund`, leaseDurationSeconds: config.canonicalClientOrderCapture.leaseDurationSeconds, retryPolicy: { maximumAttempts: config.canonicalClientOrderCapture.maximumAttempts, baseDelayMilliseconds: config.canonicalClientOrderCapture.retryBaseDelayMilliseconds, maximumDelayMilliseconds: config.canonicalClientOrderCapture.retryMaximumDelayMilliseconds } }),
-      webhookArtifacts: createClaimedWebhookArtifactResolver({ artifactRegistry, privateObjectStorage: privateStorage }), canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay), correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database), positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database), policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database), evidence: createCanonicalClientOrderRefundEvidenceSealer({ privateObjectStorage: privateStorage, artifactRegistry, retention: config.financeProviderDispatch.responseArtifactRetention }), application: createDrizzleOnlineWalletRefundApplicationUnitOfWork({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund` }), processorVersion: 1
+      webhookArtifacts: createClaimedWebhookArtifactResolver({ artifactRegistry, privateObjectStorage: privateStorage }), canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay), correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database), positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database), policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database), evidence: createCanonicalClientOrderRefundEvidenceSealer({ privateObjectStorage: privateStorage, artifactRegistry, retention: config.financeProviderDispatch.canonicalReadArtifactRetention }), application: createDrizzleOnlineWalletRefundApplicationUnitOfWork({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund` }), processorVersion: 1
     });
     startCanonicalClientOrderRefundInterval({
       processor: canonicalClientOrderRefund,
@@ -251,7 +251,7 @@ async function startPaymentWorker(): Promise<void> {
       evidence: createCanonicalClientOrderChargebackEvidenceSealer({
         privateObjectStorage: privateStorage,
         artifactRegistry,
-        retention: config.financeProviderDispatch.responseArtifactRetention
+        retention: config.financeProviderDispatch.canonicalReadArtifactRetention
       }),
       application: createDrizzleOnlineWalletChargebackCaseUnitOfWork({
         database: postgresRuntime.database,
@@ -477,7 +477,7 @@ async function startPaymentWorker(): Promise<void> {
           tariffActivation: createDrizzlePlatformTariffCredentialActivationUnitOfWork({
             database: postgresRuntime.database
           }),
-          responseArtifactRetention: config.financeProviderDispatch.responseArtifactRetention
+          responseArtifactRetention: config.financeProviderDispatch.canonicalReadArtifactRetention
         }),
         batchSize: config.financeProviderDispatch.batchSize
       }),
@@ -509,7 +509,7 @@ async function startPaymentWorker(): Promise<void> {
           customerAction: createDrizzlePlatformTariffInvoiceCustomerActionUnitOfWork({
             database: postgresRuntime.database
           }),
-          responseArtifactRetention: config.financeProviderDispatch.responseArtifactRetention
+          responseArtifactRetention: config.financeProviderDispatch.canonicalReadArtifactRetention
         }),
         batchSize: config.financeProviderDispatch.batchSize
       }),

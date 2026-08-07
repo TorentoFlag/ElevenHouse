@@ -31,7 +31,7 @@ export function createClaimedWebhookArtifactResolver(
       try {
         resolved = await input.artifactRegistry.resolvePrivateArtifact({
           artifactId: claim.sealedWebhookArtifact.artifactId,
-          serviceIdentity: "payment_processing",
+          serviceIdentity: "provider_ingress",
           purpose: "provider_webhook_verification",
           requestId: requestId(claim)
         });

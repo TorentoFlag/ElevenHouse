@@ -62,7 +62,7 @@ describe("claimed webhook artifact resolver", () => {
     await expect(resolver.loadClaimedWebhookBytes(claim)).resolves.toEqual(bytes);
     expect(resolvePrivateArtifact).toHaveBeenCalledWith({
       artifactId: "arc-webhook:1",
-      serviceIdentity: "payment_processing",
+      serviceIdentity: "provider_ingress",
       purpose: "provider_webhook_verification",
       requestId: "webhook-processing:finance-webhook-inbox-1:2:1"
     });

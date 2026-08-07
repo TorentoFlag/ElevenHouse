@@ -90,6 +90,15 @@ const runtimeConfigSchema = z.object({
     .string()
     .regex(/^[1-9][0-9]*$/)
     .default("1"),
+  PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .default("provider-canonical-read"),
+  PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .default("1"),
   PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-request"),
   PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).default("1"),
   PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-webhook"),
@@ -130,6 +139,7 @@ export type PaymentWorkerRuntimeConfig = {
     publishingLockTimeoutMs: number;
     artifactDirectory: string;
     responseArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    canonicalReadArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     webhookArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     webhookSigningKeyVersionId: string;
@@ -218,6 +228,12 @@ function resolveFinanceProviderDispatch(
       policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_ID),
       policyVersion: required(
         config.PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_VERSION
+      )
+    }),
+    canonicalReadArtifactRetention: Object.freeze({
+      policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_ID),
+      policyVersion: required(
+        config.PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_VERSION
       )
     }),
     requestArtifactRetention: Object.freeze({
