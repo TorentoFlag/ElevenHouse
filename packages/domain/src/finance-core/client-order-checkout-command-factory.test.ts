@@ -103,6 +103,20 @@ describe("client order checkout command factory", () => {
       createClientOrderCheckoutCommandFactory(dependencies).prepare(input())
     ).rejects.toBe(databaseFailure);
   });
+
+  it("prepares an ordinary checkout without a fiscal profile", async () => {
+    const dependencies = dependenciesFor({ contact: null });
+    dependencies.fiscalProfiles.findPublishedProfile.mockResolvedValueOnce(null);
+
+    const result = await createClientOrderCheckoutCommandFactory(dependencies).prepare(input());
+
+    expect(result.dispatchEnvelope).toMatchObject({
+      kind: "checkout_session_create",
+      orderId: order.id,
+      fiscalSnapshot: null
+    });
+    expect(dependencies.buyerContacts.findVerifiedFiscalBuyerContact).not.toHaveBeenCalled();
+  });
 });
 
 function input() {
@@ -159,7 +173,9 @@ function dependenciesFor(
         identityVersion: 1
       }))
     },
-    fiscalProfiles: { findPublishedProfile: vi.fn(async () => profile) },
+    fiscalProfiles: {
+      findPublishedProfile: vi.fn(async (): Promise<typeof profile | null> => profile)
+    },
     buyerContacts: {
       findVerifiedFiscalBuyerContact: vi.fn(async () =>
         options.contact === undefined

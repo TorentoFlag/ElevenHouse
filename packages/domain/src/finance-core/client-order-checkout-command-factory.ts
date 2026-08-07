@@ -5,10 +5,6 @@ import {
   type ProviderDispatchEnvelope
 } from "./provider-dispatch-envelope";
 import {
-  FiscalChargePreparationError,
-  prepareFiscalChargeSnapshot
-} from "./fiscal-charge-preparation";
-import {
   resolveFinanceOperationEnvelope,
   type FinanceOperationResourcePolicyVersion
 } from "./finance-operation-resource-policy";
@@ -20,7 +16,11 @@ import type {
   ClientOrderCheckoutCaptureAuthorityReader
 } from "./ports/client-order-checkout-capture-authority-reader";
 import type { VerifiedFiscalBuyerContactReaderPort } from "./ports/verified-fiscal-buyer-contact-reader";
-import type { FiscalBuyerContact } from "./fiscal-profile";
+import {
+  createFiscalChargeSnapshot,
+  type FiscalBuyerContact,
+  type FiscalChargeSnapshot
+} from "./fiscal-profile";
 import type {
   FinanceProviderAccountIdentity,
   ResolvedFinanceOperationEnvelope
@@ -37,7 +37,6 @@ export class ClientOrderCheckoutCommandFactoryError extends Error {
       | "provider_account_missing"
       | "operation_policy_missing"
       | "capture_authority_missing"
-      | "fiscal_profile_missing"
       | "invalid_preparation"
   ) {
     super("Client checkout cannot be prepared from authoritative finance facts");
@@ -51,7 +50,7 @@ export type ClientOrderCheckoutCommandFactory = Readonly<{
       order: FinanceOrder;
       clientUserId: string;
       environment: "sandbox" | "live";
-      buyerContact: FiscalBuyerContact;
+      buyerContact?: FiscalBuyerContact;
       paymentMethods: readonly ArcPayPaymentMethod[];
       successUrl: string;
       failureUrl: string;
@@ -85,43 +84,28 @@ export function createClientOrderCheckoutCommandFactory(
     async prepare(input) {
       if (input.order.clientUserId !== input.clientUserId) fail("order_owner_mismatch");
       if (input.order.status !== "pending_payment") fail("order_not_payable");
-      const [providerAccount, verifiedContact, policy, captureAuthority] = await Promise.all([
+      const [providerAccount, policy, captureAuthority, fiscalProfile] = await Promise.all([
         dependencies.providerAccounts.findActiveProviderAccount({
           provider: "arc_pay",
           environment: input.environment
         }),
-        dependencies.buyerContacts.findVerifiedFiscalBuyerContact({
-          clientUserId: input.clientUserId,
-          candidate: input.buyerContact
-        }),
         dependencies.operationPolicies.findPublishedForOperation({
           operationKind: "client_checkout_prepare"
         }),
-        dependencies.captureAuthorities.findForCheckout({ orderId: input.order.id })
+        dependencies.captureAuthorities.findForCheckout({ orderId: input.order.id }),
+        dependencies.fiscalProfiles.findPublishedProfile({ transactionCategory: "client_purchase" })
       ]);
       if (!providerAccount) fail("provider_account_missing");
-      if (!verifiedContact) fail("buyer_contact_unverified");
       if (!policy) fail("operation_policy_missing");
       if (!captureAuthority) fail("capture_authority_missing");
       const operationEnvelope = resolvePolicy(policy);
-      let fiscalSnapshot;
-      try {
-        fiscalSnapshot = await prepareFiscalChargeSnapshot({
-          reader: dependencies.fiscalProfiles,
-          transactionCategory: "client_purchase",
-          buyerContact: verifiedContact,
-          lines: [
-            {
-              sourceLineId: input.order.id,
-              name: input.order.productTitleSnapshot,
-              amountMinor: input.order.grossAmount.amountMinor
-            }
-          ]
-        });
-      } catch (error) {
-        if (error instanceof FiscalChargePreparationError) fail("fiscal_profile_missing");
-        throw error;
-      }
+      const fiscalSnapshot = await resolveFiscalSnapshot({
+        fiscalProfile,
+        buyerContacts: dependencies.buyerContacts,
+        clientUserId: input.clientUserId,
+        buyerContact: input.buyerContact,
+        order: input.order
+      });
       try {
         const dispatchEnvelope = createProviderDispatchEnvelope({
           kind: "checkout_session_create",
@@ -148,6 +132,33 @@ export function createClientOrderCheckoutCommandFactory(
         fail("invalid_preparation");
       }
     }
+  });
+}
+
+async function resolveFiscalSnapshot(input: Readonly<{
+  fiscalProfile: Awaited<ReturnType<FiscalProfileReaderPort["findPublishedProfile"]>>;
+  buyerContacts: VerifiedFiscalBuyerContactReaderPort;
+  clientUserId: string;
+  buyerContact: FiscalBuyerContact | undefined;
+  order: FinanceOrder;
+}>): Promise<FiscalChargeSnapshot | null> {
+  if (!input.fiscalProfile) return null;
+  if (!input.buyerContact) fail("buyer_contact_unverified");
+  const verifiedContact = await input.buyerContacts.findVerifiedFiscalBuyerContact({
+    clientUserId: input.clientUserId,
+    candidate: input.buyerContact
+  });
+  if (!verifiedContact) fail("buyer_contact_unverified");
+  return createFiscalChargeSnapshot({
+    profile: input.fiscalProfile,
+    buyerContact: verifiedContact,
+    lines: [
+      {
+        sourceLineId: input.order.id,
+        name: input.order.productTitleSnapshot,
+        amountMinor: input.order.grossAmount.amountMinor
+      }
+    ]
   });
 }
 

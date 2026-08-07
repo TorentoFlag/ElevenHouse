@@ -108,7 +108,8 @@ export type PaymentProviderEvent = z.infer<typeof paymentProviderEventSchema>;
 export const createCheckoutRequestSchema = z
   .object({
     orderId: uuidSchema,
-    buyerContact: fiscalBuyerContactSchema,
+    /** Required only when the active checkout configuration creates a fiscal receipt. */
+    buyerContact: fiscalBuyerContactSchema.optional(),
     successUrl: httpsUrlSchema,
     failureUrl: httpsUrlSchema,
     cancelUrl: httpsUrlSchema

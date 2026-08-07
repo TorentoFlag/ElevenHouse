@@ -45,7 +45,8 @@ export type ProviderDispatchEnvelope =
       cancelUrl: string;
       externalId: string;
       orderId: string;
-      fiscalSnapshot: FiscalChargeSnapshot;
+      /** `null` means no fiscal receipt was configured for this checkout. */
+      fiscalSnapshot: FiscalChargeSnapshot | null;
     }>
   | Readonly<{
       kind: "card_setup";
@@ -206,9 +207,8 @@ export function createProviderDispatchEnvelope(input: unknown): ProviderDispatch
       cancelUrl: httpsUrl(fields.cancelUrl),
       externalId: opaqueId(fields.externalId),
       orderId: opaqueId(fields.orderId),
-      fiscalSnapshot: fiscalSnapshotForCharge(
+      fiscalSnapshot: fiscalSnapshotForCheckout(
         fields.fiscalSnapshot,
-        "client_purchase",
         amount.amountMinor
       )
     };
@@ -332,6 +332,14 @@ function fiscalSnapshotForCharge(
     throw integrityError();
   }
   return snapshot;
+}
+
+function fiscalSnapshotForCheckout(
+  input: unknown,
+  amountMinor: number
+): FiscalChargeSnapshot | null {
+  if (input === null) return null;
+  return fiscalSnapshotForCharge(input, "client_purchase", amountMinor);
 }
 
 function money(value: unknown): Money {

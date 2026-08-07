@@ -88,10 +88,25 @@ function checkoutEnvelope(value: HostedCheckoutEnvelope): HostedCheckoutEnvelope
 }
 
 function checkoutRequestBody(envelope: HostedCheckoutEnvelope) {
-  const buyer =
-    envelope.fiscalSnapshot.buyerContact.kind === "email"
-      ? { customer_email: envelope.fiscalSnapshot.buyerContact.value }
-      : { customer_phone: envelope.fiscalSnapshot.buyerContact.value };
+  const fiscalSnapshot = envelope.fiscalSnapshot;
+  const fiscal =
+    fiscalSnapshot === null
+      ? {}
+      : {
+          ...(fiscalSnapshot.buyerContact.kind === "email"
+            ? { customer_email: fiscalSnapshot.buyerContact.value }
+            : { customer_phone: fiscalSnapshot.buyerContact.value }),
+          fiscal_items: fiscalSnapshot.lines.map((line) => ({
+            name: line.name,
+            quantity: line.quantity,
+            unit_price: line.unitPriceMinor,
+            vat_rate: line.vatRate,
+            payment_object: line.paymentObject,
+            payment_method: line.paymentMethod,
+            measure: line.measure,
+            item_code: line.itemCode
+          }))
+        };
   return {
     amount: envelope.amount.amountMinor,
     currency: envelope.amount.currency,
@@ -104,21 +119,14 @@ function checkoutRequestBody(envelope: HostedCheckoutEnvelope) {
     fail_url: envelope.failureUrl,
     cancel_url: envelope.cancelUrl,
     external_id: envelope.externalId,
-    ...buyer,
-    fiscal_items: envelope.fiscalSnapshot.lines.map((line) => ({
-      name: line.name,
-      quantity: line.quantity,
-      unit_price: line.unitPriceMinor,
-      vat_rate: line.vatRate,
-      payment_object: line.paymentObject,
-      payment_method: line.paymentMethod,
-      measure: line.measure,
-      item_code: line.itemCode
-    })),
-    metadata: {
-      order_id: envelope.orderId,
-      fiscal_profile: `${envelope.fiscalSnapshot.profileSeriesId}:${envelope.fiscalSnapshot.profileVersion}`
-    }
+    ...fiscal,
+    metadata:
+      fiscalSnapshot === null
+        ? { order_id: envelope.orderId }
+        : {
+            order_id: envelope.orderId,
+            fiscal_profile: `${fiscalSnapshot.profileSeriesId}:${fiscalSnapshot.profileVersion}`
+          }
   };
 }
 

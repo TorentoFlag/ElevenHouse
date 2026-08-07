@@ -88,6 +88,34 @@ describe("ArcPay hosted checkout session client", () => {
     expect(body).not.toHaveProperty("merchant_inn");
   });
 
+  it("creates an ordinary checkout without fiscal fields when no receipt profile is configured", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) => {
+      void _url;
+      void _options;
+      return new Response(
+        JSON.stringify({ id: "22222222-2222-4222-8222-222222222222", url: "https://checkout.arcpay.space/session-1" }),
+        { status: 201 }
+      );
+    });
+    const client = createArcPayCheckoutSessionClient(config(), fetchImpl as typeof fetch);
+
+    await client.createHostedCheckout({
+      envelope: { ...checkoutEnvelope(), fiscalSnapshot: null },
+      idempotencyKey
+    });
+
+    const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({
+      amount: 12_000,
+      external_id: "payment-command-1",
+      metadata: { order_id: "order-1" }
+    });
+    expect(body).not.toHaveProperty("customer_email");
+    expect(body).not.toHaveProperty("customer_phone");
+    expect(body).not.toHaveProperty("fiscal_items");
+    expect(body.metadata).not.toHaveProperty("fiscal_profile");
+  });
+
   it("fails closed without a secret or a schema-valid provider session", async () => {
     const fetchImpl = vi.fn();
     const unconfigured = createArcPayCheckoutSessionClient(
