@@ -613,4 +613,54 @@ describe("readCanonicalFinancialInventorySnapshot", () => {
       ])
     );
   });
+
+  it("reports non-zero current finance state as blocked instead of throwing away its reconciliation evidence", async () => {
+    const queryable = new RecordingQueryable({
+      canonical_provider_accounts: [{ row_count: "1", ids: ["arc-pay-merchant"] }],
+      canonical_journal_accounts: [
+        {
+          account_id: "provider-clearing-rub",
+          account_type: "arc_provider_clearing",
+          astrologer_user_id: null,
+          balance_bucket: null,
+          currency: "RUB",
+          debit_amount_minor: "50000",
+          credit_amount_minor: "0"
+        },
+        {
+          account_id: "astrologer-pending-rub",
+          account_type: "astrologer_pending",
+          astrologer_user_id: "astrologer-1",
+          balance_bucket: null,
+          currency: "RUB",
+          debit_amount_minor: "0",
+          credit_amount_minor: "50000"
+        }
+      ],
+      canonical_journal_transactions: [{ row_count: "1", ids: ["sale-captured-1"] }],
+      canonical_journal_entries: [
+        {
+          currency: "RUB",
+          row_count: "2",
+          ids: ["journal-entry-1", "journal-entry-2"],
+          amount_minor: "100000",
+          debit_amount_minor: "50000",
+          credit_amount_minor: "50000"
+        }
+      ]
+    });
+
+    const snapshot = await readCanonicalFinancialInventorySnapshot(queryable, {
+      generatedAt: "2026-08-07T13:00:00.000Z",
+      targetIdentityDigest
+    });
+
+    const report = buildFinancialInventoryReport(snapshot);
+    expect(report.status).toBe("blocked");
+    expect(report.discrepancies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "provider_control_missing" })
+      ])
+    );
+  });
 });

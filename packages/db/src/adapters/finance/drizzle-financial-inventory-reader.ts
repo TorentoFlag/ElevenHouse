@@ -385,21 +385,6 @@ export async function readCanonicalFinancialInventorySnapshot(
       bank_cash_pools: countDataset(bankCashPools.rows, "scoped")
     };
 
-    assertCanonicalInventoryHasNoUncontrolledMoney({
-      invoices: invoices.rows,
-      refunds: refunds.rows,
-      ledgerAccounts: ledgerAccounts.rows,
-      ledgerTransactions: ledgerTransactions.rows,
-      ledgerEntries: ledgerEntries.rows,
-      walletRows,
-      sourceLotRows,
-      openPayouts: openPayouts.rows,
-      settlementEntries: settlementEntries.rows,
-      bankCashSnapshots: bankCashSnapshots.rows,
-      bankStatements: bankStatements.rows,
-      bankExposures: bankExposures.rows
-    });
-
     const snapshot: FinancialInventorySnapshot = {
       generatedAt: input.generatedAt,
       targetIdentityDigest: input.targetIdentityDigest,
@@ -642,57 +627,6 @@ function canonicalZeroMonetaryControls(): readonly FinancialInventoryMonetaryCon
     expectedAmountMinor: "0",
     observedAmountMinor: "0"
   }));
-}
-
-function assertCanonicalInventoryHasNoUncontrolledMoney(input: {
-  readonly invoices: readonly MonetaryAggregateRow[];
-  readonly refunds: readonly MonetaryAggregateRow[];
-  readonly ledgerAccounts: readonly OpeningAccountRow[];
-  readonly ledgerTransactions: readonly CountAggregateRow[];
-  readonly ledgerEntries: readonly LedgerEntryAggregateRow[];
-  readonly walletRows: readonly FinancialInventoryWalletBalance[];
-  readonly sourceLotRows: readonly FinancialInventoryWalletBalance[];
-  readonly openPayouts: readonly MonetaryAggregateRow[];
-  readonly settlementEntries: readonly CountAggregateRow[];
-  readonly bankCashSnapshots: readonly CountAggregateRow[];
-  readonly bankStatements: readonly CountAggregateRow[];
-  readonly bankExposures: readonly CountAggregateRow[];
-}): void {
-  const nonEmpty = [
-    ["invoices", hasRows(input.invoices)],
-    ["refunds", hasRows(input.refunds)],
-    ["ledgerAccounts", hasNonZeroAccountBalance(input.ledgerAccounts)],
-    ["ledgerTransactions", hasRows(input.ledgerTransactions)],
-    ["ledgerEntries", hasRows(input.ledgerEntries)],
-    ["walletRows", hasNonZeroWalletBalance(input.walletRows)],
-    ["sourceLotRows", hasNonZeroWalletBalance(input.sourceLotRows)],
-    ["openPayouts", hasRows(input.openPayouts)],
-    ["settlementEntries", hasRows(input.settlementEntries)],
-    ["bankCashSnapshots", hasRows(input.bankCashSnapshots)],
-    ["bankStatements", hasRows(input.bankStatements)],
-    ["bankExposures", hasRows(input.bankExposures)]
-  ]
-    .filter(([, nonEmpty]) => nonEmpty)
-    .map(([name]) => name);
-  if (nonEmpty.length > 0) {
-    throw new Error(
-      `Current canonical finance inventory requires operational reconciliation controls before it can certify non-zero state: ${nonEmpty.join(", ")}`
-    );
-  }
-}
-
-function hasRows(rows: readonly { readonly row_count: string }[]): boolean {
-  return rows.some((row) => row.row_count !== "0");
-}
-
-function hasNonZeroAccountBalance(rows: readonly OpeningAccountRow[]): boolean {
-  return rows.some(
-    (row) => row.debit_amount_minor !== "0" || row.credit_amount_minor !== "0"
-  );
-}
-
-function hasNonZeroWalletBalance(rows: readonly FinancialInventoryWalletBalance[]): boolean {
-  return rows.some((row) => row.amountMinor !== "0");
 }
 
 function toWalletBalance(row: WalletProjectionRow): FinancialInventoryWalletBalance {
