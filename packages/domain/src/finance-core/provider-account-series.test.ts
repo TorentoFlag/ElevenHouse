@@ -13,7 +13,6 @@ const identity = (overrides: Record<string, unknown> = {}) =>
     identityVersion: 1,
     provider: "arc_pay",
     merchantTenantId: "merchant-elevenhouse",
-    environment: "sandbox",
     terminalScope: "primary-terminal",
     settlementScope: "merchant-settlement",
     ...overrides
@@ -47,8 +46,7 @@ describe("ArcPay provider-account series", () => {
       expectedCurrentProviderAccountId: "arc-account-sandbox",
       replacement: identity({
         providerAccountId: "arc-account-live",
-        identityVersion: 2,
-        environment: "live"
+        identityVersion: 2
       })
     });
 
@@ -57,8 +55,7 @@ describe("ArcPay provider-account series", () => {
       version: 2,
       current: identity({
         providerAccountId: "arc-account-live",
-        identityVersion: 2,
-        environment: "live"
+        identityVersion: 2
       }),
       predecessorProviderAccountId: "arc-account-sandbox"
     });
@@ -96,8 +93,7 @@ describe("ArcPay provider-account series", () => {
         ...authority,
         replacement: identity({
           providerAccountId: "arc-account-live",
-          identityVersion: 2,
-          environment: "live"
+          identityVersion: 2
         })
       })
     ).toThrow(ArcProviderAccountSeriesIntegrityError);
