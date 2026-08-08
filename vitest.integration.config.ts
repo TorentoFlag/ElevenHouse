@@ -55,6 +55,11 @@ export default defineConfig({
   test: {
     include: ["{apps,packages}/**/*.integration.{ts,tsx}"],
     passWithNoTests: false,
-    testTimeout: 30000
+    testTimeout: 30000,
+    // Integration suites create and reset isolated PostgreSQL databases. Running the
+    // DDL-heavy files concurrently exhausts local PostgreSQL shared memory and
+    // turns one environmental failure into a misleading cascade of skipped tests.
+    fileParallelism: false,
+    maxWorkers: 1
   }
 });

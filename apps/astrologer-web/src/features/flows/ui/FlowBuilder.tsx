@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Modal } from "@elevenhouse/design-system/components/Modal";
+import "@elevenhouse/design-system/components/Modal.css";
 import {
   updateFlowDefinitionDraftV2RequestSchema,
   type FlowDefinitionDetailV3,
@@ -19,6 +21,7 @@ import { buildFlowRuntimePresentation } from "../model/flowRuntimePresentation";
 import { buildFlowValidationIssuePresentation } from "../model/flowValidationPresentation";
 import { FlowBuilderCanvas, type FlowConnectionSource } from "./FlowBuilderCanvas";
 import { FlowBuilderInspector } from "./FlowBuilderInspector";
+import { FlowMobileDagProjection } from "./FlowMobileDagProjection";
 import { FlowNodePalette } from "./FlowNodePalette";
 
 export type CurrentFlowDefinitionDetail = Extract<
@@ -114,6 +117,8 @@ export function FlowBuilder({
   const [isReloadingServer, setIsReloadingServer] = useState(false);
   const [reloadError, setReloadError] = useState<Error | null>(null);
   const [exitConfirmationVisible, setExitConfirmationVisible] = useState(false);
+  const [mobilePaletteOpen, setMobilePaletteOpen] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [visibleValidationIssues, setVisibleValidationIssues] = useState(validationIssues);
   const currentFlowId = useRef(flow.id);
   const isMobileViewport = useIsMobileFlowViewport();
@@ -139,8 +144,7 @@ export function FlowBuilder({
           expectedRevision: draftBaseRevision,
           currentRevision: observedServerRevision
         });
-  const structuralEditingEnabled =
-    editable && !isMobileViewport && !interactionLocked && !effectiveConflict;
+  const structuralEditingEnabled = editable && !interactionLocked && !effectiveConflict;
   const presentedValidationIssues = buildFlowValidationIssuePresentation(
     visibleValidationIssues,
     locale
@@ -153,6 +157,8 @@ export function FlowBuilder({
   useEffect(() => {
     setReloadError(null);
     setExitConfirmationVisible(false);
+    setMobilePaletteOpen(false);
+    setMobileInspectorOpen(false);
   }, [flow.id]);
 
   useEffect(() => {
@@ -452,13 +458,83 @@ export function FlowBuilder({
 
       <section
         className={`${classNames?.builder ?? ""} ${
-          isMobileViewport ? (classNames?.builderMobileReadOnly ?? "") : ""
+          isMobileViewport ? (classNames?.builderMobile ?? "") : ""
         }`.trim()}
       >
         {isMobileViewport ? (
-          <p className={classNames?.builderMobileNotice ?? ""} role="status">
-            {copy.desktopEditingOnly}
-          </p>
+          <>
+            <div className={classNames?.builderMobileActions ?? ""}>
+              <button
+                type="button"
+                disabled={!structuralEditingEnabled || connectionSource === null}
+                onClick={() => setMobilePaletteOpen(true)}
+              >
+                {copy.addStep}
+              </button>
+              {selectedNode ? (
+                <button type="button" onClick={() => setMobileInspectorOpen(true)}>
+                  {copy.configureStep}
+                </button>
+              ) : null}
+            </div>
+            <FlowMobileDagProjection
+              graph={draftGraph}
+              locale={locale}
+              selectedNodeId={selectedNodeId}
+              connectionSource={connectionSource}
+              editable={structuralEditingEnabled}
+              onEditNode={(nodeId) => {
+                selectNode(nodeId);
+                setMobileInspectorOpen(true);
+              }}
+              onSelectSourceHandle={(nodeId, handle) => {
+                setSelectedNodeId(nodeId);
+                setConnectionSource({ nodeId, handle });
+              }}
+            />
+            {!runtime.executionAvailable ? (
+              <div className={classNames?.runtimeNotice ?? ""}>{runtime.unavailableReason}</div>
+            ) : null}
+            <Modal
+              title={copy.addStep}
+              closeLabel={copy.closeSheet}
+              open={mobilePaletteOpen}
+              className={classNames?.builderMobileDialog}
+              contentClassName={classNames?.builderMobileDialogContent}
+              onClose={() => setMobilePaletteOpen(false)}
+            >
+              <FlowNodePalette
+                locale={locale}
+                connectionLabel={connectionLabel(draftGraph, connectionSource, locale)}
+                onAddNode={(nodeId) => {
+                  addPaletteNode(nodeId);
+                  setMobilePaletteOpen(false);
+                }}
+                isDisabled={!structuralEditingEnabled}
+                classNames={classNames}
+              />
+            </Modal>
+            <Modal
+              title={copy.configureStep}
+              closeLabel={copy.closeSheet}
+              open={mobileInspectorOpen}
+              className={classNames?.builderMobileDialog}
+              contentClassName={classNames?.builderMobileDialogContent}
+              onClose={() => setMobileInspectorOpen(false)}
+            >
+              <FlowBuilderInspector
+                graph={draftGraph}
+                selectedNode={selectedNode}
+                locale={locale}
+                editable={structuralEditingEnabled}
+                onChangeNode={(node) => {
+                  setDraftGraph((current) => replaceFlowNode(current, node));
+                  markDraftDirty();
+                }}
+                classNames={classNames}
+              />
+            </Modal>
+          </>
         ) : (
           <FlowNodePalette
             locale={locale}
@@ -468,24 +544,26 @@ export function FlowBuilder({
             classNames={classNames}
           />
         )}
-        <FlowBuilderCanvas
-          graph={draftGraph}
-          presentation={draftPresentation}
-          locale={locale}
-          editable={structuralEditingEnabled}
-          selectedNodeId={selectedNodeId}
-          connectionSource={connectionSource}
-          onSelectNode={selectNode}
-          onSelectSourceHandle={(nodeId, handle) => {
-            setSelectedNodeId(nodeId);
-            setConnectionSource({ nodeId, handle });
-          }}
-          onMoveNode={(nodeId, position) => {
-            setDraftPresentation((current) => moveFlowNodePresentation(current, nodeId, position));
-            markDraftDirty();
-          }}
-          classNames={classNames}
-        />
+        {!isMobileViewport ? (
+          <FlowBuilderCanvas
+            graph={draftGraph}
+            presentation={draftPresentation}
+            locale={locale}
+            editable={structuralEditingEnabled}
+            selectedNodeId={selectedNodeId}
+            connectionSource={connectionSource}
+            onSelectNode={selectNode}
+            onSelectSourceHandle={(nodeId, handle) => {
+              setSelectedNodeId(nodeId);
+              setConnectionSource({ nodeId, handle });
+            }}
+            onMoveNode={(nodeId, position) => {
+              setDraftPresentation((current) => moveFlowNodePresentation(current, nodeId, position));
+              markDraftDirty();
+            }}
+            classNames={classNames}
+          />
+        ) : null}
         {!isMobileViewport ? (
           <aside className={classNames?.builderInspector ?? ""}>
             <FlowBuilderInspector
@@ -606,7 +684,9 @@ const builderCopy = {
     retryOverRevision: "Повторить поверх редакции {revision}",
     validation: "Проверка схемы",
     showIssueNode: "Показать узел с проблемой",
-    desktopEditingOnly: "Редактирование схемы доступно на компьютере."
+    addStep: "Добавить шаг",
+    configureStep: "Настроить узел",
+    closeSheet: "Закрыть"
   },
   en: {
     builder: "Flow builder",
@@ -638,6 +718,8 @@ const builderCopy = {
     retryOverRevision: "Retry over revision {revision}",
     validation: "Graph validation",
     showIssueNode: "Show affected node",
-    desktopEditingOnly: "Graph editing is available on desktop."
+    addStep: "Add step",
+    configureStep: "Configure node",
+    closeSheet: "Close"
   }
 } as const;

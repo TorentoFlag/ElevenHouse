@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { Children, isValidElement, type JSXElementConstructor, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { AstrologerNavigationDrawer } from "../AstrologerNavigationDrawer";
+import { AstrologerMobileNavigation } from "../AstrologerMobileNavigation";
 import { AstrologerAppLayout } from "./AstrologerAppLayout";
 import styles from "./AstrologerAppLayout.module.css";
 
@@ -20,8 +21,17 @@ describe("AstrologerAppLayout", () => {
 
     const [navigationDrawer, workspace] = Children.toArray(layout.props.children);
 
-    expect(isValidElement(navigationDrawer) && navigationDrawer.type).toBe(
-      AstrologerNavigationDrawer
+    expect(isValidElement(navigationDrawer) && navigationDrawer.type).toBe("div");
+    if (!isValidElement(navigationDrawer)) {
+      throw new Error("Expected desktop navigation region");
+    }
+    const desktopNavigationElement = navigationDrawer as ReactElement<{
+      className: string;
+      children: ReactElement;
+    }>;
+    expect(desktopNavigationElement.props.className).toBe(styles.desktopNavigation);
+    expect(getElementTypeName(desktopNavigationElement.props.children)).toBe(
+      "AstrologerNavigationDrawer"
     );
     expect(isValidElement(workspace) && workspace.type).toBe("div");
     if (!isValidElement(workspace)) {
@@ -33,7 +43,7 @@ describe("AstrologerAppLayout", () => {
     }>;
     expect(workspaceElement.props.className).toBe(styles.workspace);
 
-    const [header, main] = Children.toArray(workspaceElement.props.children);
+    const [header, main, mobileNavigation] = Children.toArray(workspaceElement.props.children);
 
     expect(isValidElement(header) && getElementTypeName(header)).toBe("AstrologerHeader");
 
@@ -50,6 +60,18 @@ describe("AstrologerAppLayout", () => {
     expect(mainElement.props.className).toBe(styles.main);
     expect(mainElement.props["aria-label"]).toBe("Astrologer workspace");
     expect(getElementTypeName(mainElement.props.children)).toBe("AstrologerRouteOutlet");
+    expect(isValidElement(mobileNavigation) && mobileNavigation.type).toBe("div");
+    if (!isValidElement(mobileNavigation)) {
+      throw new Error("Expected mobile navigation region");
+    }
+    const mobileNavigationElement = mobileNavigation as ReactElement<{
+      className: string;
+      children: ReactElement;
+    }>;
+    expect(mobileNavigationElement.props.className).toBe(styles.mobileNavigation);
+    expect(getElementTypeName(mobileNavigationElement.props.children)).toBe(
+      "AstrologerMobileNavigation"
+    );
   });
 
   it("keeps the application shell within the viewport while main content scrolls", () => {
@@ -68,10 +90,13 @@ describe("AstrologerAppLayout", () => {
     expect(appLayoutCss).not.toContain("min-height: 100dvh;");
   });
 
-  it("keeps mobile workspaces usable beside the collapsed navigation rail", () => {
+  it("replaces the desktop rail with a full-width workspace and bottom navigation on mobile", () => {
     expect(appLayoutCss).toContain("@media (max-width: 700px)");
-    expect(appLayoutCss).toContain("grid-template-columns: 72px minmax(0, 1fr);");
-    expect(appLayoutCss).toContain("padding: 16px;");
+    expect(appLayoutCss).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(appLayoutCss).toContain("grid-template-rows: 60px minmax(0, 1fr) auto;");
+    expect(appLayoutCss).toContain(".desktopNavigation {\n    display: none;");
+    expect(appLayoutCss).toContain(".mobileNavigation {\n    display: block;");
+    expect(appLayoutCss).toContain("padding: 16px 14px calc(76px + env(safe-area-inset-bottom));");
   });
 });
 

@@ -22,6 +22,15 @@
   overflow: hidden;
 }
 
+.desktopNavigation,
+.mobileNavigation {
+  min-width: 0;
+}
+
+.mobileNavigation {
+  display: none;
+}
+
 .main {
   min-height: 0;
   min-width: 0;
@@ -38,10 +47,23 @@
 
 @media (max-width: 700px) {
   .shell {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    --astrologer-app-header-height: 60px;
+  }
+
+  .desktopNavigation {
+    display: none;
+  }
+
+  .workspace {
+    grid-template-rows: 60px minmax(0, 1fr) auto;
+  }
+
+  .mobileNavigation {
+    display: block;
   }
 
   .main {
-    padding: 16px;
+    padding: 16px 14px calc(76px + env(safe-area-inset-bottom));
   }
 }

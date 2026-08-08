@@ -1,0 +1,147 @@
+.projection {
+  min-width: 0;
+  padding: 12px 14px 20px;
+  background:
+    linear-gradient(rgb(13 12 32 / 0.82), rgb(13 12 32 / 0.94)),
+    radial-gradient(rgb(216 212 236 / 0.09) 1px, transparent 1px);
+  background-size: auto, 18px 18px;
+}
+
+.nodes {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node {
+  position: relative;
+  border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--flows-surface-strong, rgb(30 27 62 / 0.92));
+}
+
+.node[data-selected="true"] {
+  border-color: var(--flows-gold-line, rgb(244 196 48 / 0.42));
+  box-shadow: 0 0 0 1px var(--flows-gold-line, rgb(244 196 48 / 0.42));
+}
+
+.nodeHeader {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.nodeSelect {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 5px;
+  border: 0;
+  padding: 14px;
+  background: transparent;
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.nodeSelect span {
+  color: var(--flows-gold, var(--eh-color-gold));
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nodeSelect strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeEdit {
+  align-self: center;
+  flex: 0 0 auto;
+  min-height: 32px;
+  margin-right: 12px;
+  border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
+  border-radius: 8px;
+  padding: 0 9px;
+  background: rgb(13 12 32 / 0.68);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: 700 11px / 1 var(--eh-font-sans);
+}
+
+.handles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--flows-line, rgb(216 212 236 / 0.14));
+  padding: 9px 12px;
+}
+
+.handles button {
+  min-height: 30px;
+  flex: 1 1 92px;
+  border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
+  border-radius: 8px;
+  padding: 0 8px;
+  background: rgb(13 12 32 / 0.68);
+  color: var(--eh-color-moon-500);
+  cursor: pointer;
+  font: 750 11px / 1 var(--eh-font-sans);
+}
+
+.handles button[data-selected="true"] {
+  border-color: var(--flows-gold-line, rgb(244 196 48 / 0.42));
+  background: var(--flows-gold-soft, rgb(244 196 48 / 0.14));
+  color: var(--flows-gold, var(--eh-color-gold));
+}
+
+.handles button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.connections {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  border-top: 1px solid var(--flows-line, rgb(216 212 236 / 0.14));
+  padding: 9px 12px 12px;
+  list-style: none;
+}
+
+.connections li {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  color: var(--eh-color-moon-120);
+  font-size: 12px;
+}
+
+.connections span {
+  color: var(--flows-muted, var(--eh-color-moon-500));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.connections strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeSelect:focus-visible,
+.nodeEdit:focus-visible,
+.handles button:focus-visible {
+  outline: 2px solid var(--flows-gold, var(--eh-color-gold));
+  outline-offset: -2px;
+}

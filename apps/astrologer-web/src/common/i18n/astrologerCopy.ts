@@ -389,6 +389,12 @@ export type AppShellNavigationCopy = {
   };
   items: AppShellNavigationItemCopy[];
   footerItems: AppShellNavigationItemCopy[];
+  mobile: {
+    ariaLabel: string;
+    moreLabel: string;
+    moreDialogTitle: string;
+    closeLabel: string;
+  };
 };
 
 type ReferenceEntryModalCommonCopy = {
@@ -547,7 +553,13 @@ export const astrologerCopyByLocale = {
           { id: "reference", title: "Справочники", href: "/reference" },
           { id: "inbox", title: "Сообщения", href: "/inbox" }
         ],
-        footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }]
+        footerItems: [{ id: "settings", title: "Настройки", href: "/settings" }],
+        mobile: {
+          ariaLabel: "Основная навигация кабинета астролога",
+          moreLabel: "Ещё",
+          moreDialogTitle: "Все разделы",
+          closeLabel: "Закрыть навигацию"
+        }
       }
     },
     dashboard: {
@@ -996,7 +1008,13 @@ export const astrologerCopyByLocale = {
           { id: "reference", title: "References", href: "/reference" },
           { id: "inbox", title: "Messages", href: "/inbox" }
         ],
-        footerItems: [{ id: "settings", title: "Settings", href: "/settings" }]
+        footerItems: [{ id: "settings", title: "Settings", href: "/settings" }],
+        mobile: {
+          ariaLabel: "Primary astrologer workspace navigation",
+          moreLabel: "More",
+          moreDialogTitle: "All sections",
+          closeLabel: "Close navigation"
+        }
       }
     },
     dashboard: {

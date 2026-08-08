@@ -176,7 +176,7 @@ describe("FlowBuilder", () => {
     expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
   });
 
-  it("renders the graph read-only on a mobile viewport", () => {
+  it("edits the DAG through mobile sheets without exposing a linear reorder control", () => {
     const originalMatchMedia = window.matchMedia;
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -195,11 +195,28 @@ describe("FlowBuilder", () => {
     try {
       renderBuilder();
 
-      expect(screen.getByText("Редактирование схемы доступно на компьютере.")).toBeTruthy();
-      expect(screen.queryByRole("button", { name: /Добавить узел/ })).toBeNull();
+      expect(screen.getByRole("region", { name: "Мобильная схема воронки" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Добавить шаг" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })).toBeTruthy();
       expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
       expect(screen.queryByLabelText("Название узла")).toBeNull();
-      expect(screen.getByRole("region", { name: "Схема воронки" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Добавить шаг" }));
+      expect(screen.getByRole("dialog", { name: "Добавить шаг" })).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Добавить узел: Данные рождения заполнены?" })
+      ).toBeTruthy();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Добавить узел: Данные рождения заполнены?" })
+      );
+      expect(screen.queryByRole("dialog", { name: "Добавить шаг" })).toBeNull();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })
+      );
+      expect(screen.getByRole("dialog", { name: "Настроить узел" })).toBeTruthy();
+      expect(screen.getByLabelText("Название узла")).toBeTruthy();
     } finally {
       Object.defineProperty(window, "matchMedia", {
         configurable: true,
