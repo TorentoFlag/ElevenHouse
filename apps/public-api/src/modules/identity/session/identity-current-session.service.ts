@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { hashSessionToken } from "@elevenhouse/auth";
+import { customerPlatformRoles } from "@elevenhouse/auth/roles";
 import {
   resolveAuthenticatedSession,
   type AuthSessionAuthenticationStore
@@ -11,6 +12,8 @@ import {
 } from "@elevenhouse/contracts";
 import { SystemClock } from "../../../common/system-clock.js";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "../auth/identity-auth.tokens";
+
+const customerPlatformRoleSet = new Set<string>(customerPlatformRoles);
 
 export type PublicSessionRequest = {
   readonly headers: {
@@ -56,7 +59,9 @@ export class IdentityCurrentSessionService {
       account: {
         id: context.user.id,
         status: context.user.status,
-        roles: context.roleAssignments.map((assignment) => assignment.role)
+        roles: context.roleAssignments
+          .map((assignment) => assignment.role)
+          .filter((role) => customerPlatformRoleSet.has(role))
       }
     });
   }

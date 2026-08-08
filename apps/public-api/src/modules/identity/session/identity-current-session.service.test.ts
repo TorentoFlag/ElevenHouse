@@ -74,6 +74,54 @@ describe("IdentityCurrentSessionService", () => {
     expect(store.findByTokenHash).toHaveBeenCalledWith(hashSessionToken("raw-session-token"));
   });
 
+  it("does not leak internal roles into the customer-facing session contract", async () => {
+    const authenticatedContext = {
+      session: {
+        id: "session_1",
+        userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        tokenHash: hashSessionToken("raw-session-token"),
+        status: "active",
+        createdAt: "2026-06-15T10:00:00.000Z",
+        expiresAt: "2026-06-22T10:00:00.000Z"
+      },
+      user: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        createdAt: "2026-06-15T10:00:00.000Z",
+        updatedAt: "2026-06-15T10:00:00.000Z"
+      },
+      roleAssignments: [
+        {
+          id: "role_client",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          role: "client",
+          assignedAt: "2026-06-15T10:00:00.000Z"
+        },
+        {
+          id: "role_super_admin",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          role: "super_admin",
+          assignedAt: "2026-06-15T10:00:00.000Z"
+        }
+      ]
+    } satisfies AuthenticatedSessionContext;
+    const store: AuthSessionAuthenticationStore = {
+      findByTokenHash: vi.fn(async () => authenticatedContext)
+    };
+
+    await expect(
+      createService(store).resolveCurrentCustomerAccount({
+        headers: { cookie: "elevenhouse_public_session=raw-session-token" }
+      })
+    ).resolves.toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["client"]
+      }
+    });
+  });
+
   it("returns null without querying the store when the request has no public session cookie", async () => {
     const store: AuthSessionAuthenticationStore = {
       findByTokenHash: vi.fn()
