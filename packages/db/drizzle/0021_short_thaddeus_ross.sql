@@ -1,0 +1,2 @@
+ALTER TABLE "flow_run_events" DROP CONSTRAINT "flow_run_events_type_check";--> statement-breakpoint
+ALTER TABLE "flow_run_events" ADD CONSTRAINT "flow_run_events_type_check" CHECK ("flow_run_events"."event_type" in ('run_enrolled', 'token_advanced', 'token_waiting', 'token_signaled', 'work_item_available', 'approval_available', 'approval_expired', 'booking_rescheduled', 'token_retry_scheduled', 'token_lease_expired', 'run_completed', 'run_failed', 'run_suppressed', 'run_canceled'));
