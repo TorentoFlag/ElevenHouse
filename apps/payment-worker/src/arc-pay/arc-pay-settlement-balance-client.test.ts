@@ -9,9 +9,11 @@ import {
 
 describe("createArcPaySettlementBalanceClient", () => {
   it("reads the documented balance endpoint without losing int64 minor units", async () => {
+    const rawBody =
+      '{"balances":[{"available":9223372036854775807,"currency":"RUB","pending":-7,"reserved":0,"updated_at":"2026-08-07T12:36:42.14332Z"}]}' as const;
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(
-        '{"balances":[{"available":9223372036854775807,"currency":"RUB","pending":-7,"reserved":0,"updated_at":"2026-08-07T12:36:42.14332Z"}]}'
+        rawBody
       )
     );
     const client = createArcPaySettlementBalanceClient({
@@ -30,10 +32,9 @@ describe("createArcPaySettlementBalanceClient", () => {
           updatedAt: "2026-08-07T12:36:42.14332Z"
         }
       ],
+      rawBody: new TextEncoder().encode(rawBody),
       rawDigest: `sha256:${createHash("sha256")
-        .update(
-          '{"balances":[{"available":9223372036854775807,"currency":"RUB","pending":-7,"reserved":0,"updated_at":"2026-08-07T12:36:42.14332Z"}]}'
-        )
+        .update(rawBody)
         .digest("hex")}`,
       rawByteLength: 133
     });

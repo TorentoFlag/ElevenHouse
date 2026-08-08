@@ -78,6 +78,7 @@ import {
   createSettlementBalanceObservationProcessor,
   startSettlementBalanceObservationInterval
 } from "./reconciliation/settlement-balance-observation.processor";
+import { createSettlementBalanceEvidenceSealer } from "./reconciliation/settlement-balance-evidence-sealer";
 import {
   createSettlementLedgerIngestionProcessor,
   startSettlementLedgerIngestionInterval
@@ -573,6 +574,25 @@ async function startPaymentWorker(): Promise<void> {
           error: serializeError(error)
         })
     });
+    startSettlementBalanceObservationInterval({
+      processor: createSettlementBalanceObservationProcessor({
+        client: createArcPaySettlementBalanceClient(config.arcPay),
+        providerAccounts: createDrizzleActiveProviderAccountReader(postgresRuntime.database),
+        evidence: createSettlementBalanceEvidenceSealer({
+          privateObjectStorage: privateStorage,
+          artifactRegistry,
+          retention: config.financeProviderDispatch.canonicalReadArtifactRetention
+        })
+      }),
+      intervalMs: config.reconciliation.intervalMs,
+      onResult: (result) => {
+        if (result.kind === "observed") logger.info("ArcPay settlement balance observed", result);
+      },
+      onError: (error) =>
+        logger.error("ArcPay settlement balance observation failed", {
+          error: serializeError(error)
+        })
+    });
   }
 
   const webhookServer = createPaymentWebhookServer({
@@ -609,20 +629,6 @@ async function startPaymentWorker(): Promise<void> {
       logger.error("online wallet holds release tick failed", { error: serializeError(error) });
     }
   });
-  if (config.arcPay.apiSecret) {
-    startSettlementBalanceObservationInterval({
-      processor: createSettlementBalanceObservationProcessor({
-        client: createArcPaySettlementBalanceClient(config.arcPay)
-      }),
-      intervalMs: config.reconciliation.intervalMs,
-      onResult: (result) => logger.info("ArcPay settlement balance observed", result),
-      onError: (error) =>
-        logger.error("ArcPay settlement balance observation failed", {
-          error: serializeError(error)
-        })
-    });
-  }
-
   logger.info("payment worker ready", {
     ...createReadinessResponse(service),
     healthHost: config.healthHost,
@@ -631,7 +637,7 @@ async function startPaymentWorker(): Promise<void> {
     webhookPort: config.webhookPort,
     onlineWalletHoldReleaseIntervalMs: config.onlineWalletHoldRelease.intervalMs,
     onlineWalletHoldReleaseBatchSize: config.onlineWalletHoldRelease.batchSize,
-    reconciliationIntervalMs: config.arcPay.apiSecret ? config.reconciliation.intervalMs : 0,
+    reconciliationIntervalMs: config.financeProviderDispatch ? config.reconciliation.intervalMs : 0,
     reconciliationLookbackMs: config.reconciliation.lookbackMs,
     financeProviderDispatchIntervalMs: config.financeProviderDispatch?.intervalMs ?? 0,
     canonicalClientOrderCaptureIntervalMs: config.financeProviderDispatch?.intervalMs ?? 0

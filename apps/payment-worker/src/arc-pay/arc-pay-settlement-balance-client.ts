@@ -8,6 +8,7 @@ const signedInt64Pattern = /^(?:0|-?[1-9][0-9]*)$/;
 export type ArcPaySettlementBalanceClient = Readonly<{
   readSettlementBalance(): Promise<Readonly<{
     balances: readonly ArcPaySettlementBalance[];
+    rawBody: Uint8Array;
     rawDigest: `sha256:${string}`;
     rawByteLength: number;
   }>>;
@@ -62,6 +63,7 @@ export function createArcPaySettlementBalanceClient(input: Readonly<{
         });
         return Object.freeze({
           balances: parseBalances(decoded.value),
+          rawBody,
           rawDigest: decoded.rawDigest,
           rawByteLength: decoded.byteLength
         });
