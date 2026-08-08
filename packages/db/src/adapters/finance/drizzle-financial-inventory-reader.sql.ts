@@ -326,6 +326,76 @@ export const canonicalJournalEntriesSql = `
   FROM finance_journal_entries GROUP BY currency ORDER BY currency
 `;
 
+/**
+ * Provider control joins the account balance recorded by the sealed journal to
+ * the most recent immutable ArcPay ledger position for the same provider
+ * identity and currency. A provider account without a `balance_after` fact is
+ * intentionally absent: the domain inventory gate then reports it as missing
+ * rather than treating a configured account as a zero-balance control.
+ */
+export const canonicalProviderControlsSql = `
+  /* finance_inventory:canonical_provider_controls */
+  WITH latest_provider_evidence AS (
+    SELECT DISTINCT ON (
+      provider_account_series_id,
+      provider_account_id,
+      provider_identity_version,
+      currency
+    )
+      provider_account_series_id,
+      provider_account_id,
+      provider_identity_version,
+      currency,
+      balance_after_minor
+    FROM finance_settlement_ledger_entries
+    WHERE balance_after_minor IS NOT NULL
+    ORDER BY
+      provider_account_series_id,
+      provider_account_id,
+      provider_identity_version,
+      currency,
+      occurred_at::timestamptz DESC NULLS LAST,
+      first_seen_at DESC,
+      provider_entry_id DESC
+  ), internal_clearing AS (
+    SELECT
+      accounts.provider_account_series_id,
+      accounts.provider_account_id,
+      accounts.provider_identity_version,
+      accounts.currency,
+      coalesce(
+        sum(
+          CASE entries.side
+            WHEN 'debit' THEN entries.amount_minor::numeric
+            WHEN 'credit' THEN -entries.amount_minor::numeric
+          END
+        ),
+        0
+      )::text AS internal_amount_minor
+    FROM finance_accounts accounts
+    LEFT JOIN finance_journal_entries entries ON entries.account_id = accounts.id
+    WHERE accounts.code = 'arc_provider_clearing'
+      AND accounts.scope_kind = 'arc_provider_account'
+    GROUP BY
+      accounts.provider_account_series_id,
+      accounts.provider_account_id,
+      accounts.provider_identity_version,
+      accounts.currency
+  )
+  SELECT
+    evidence.provider_account_id,
+    evidence.currency,
+    coalesce(internal_clearing.internal_amount_minor, '0') AS internal_amount_minor,
+    evidence.balance_after_minor::text AS provider_evidence_amount_minor
+  FROM latest_provider_evidence evidence
+  LEFT JOIN internal_clearing
+    ON internal_clearing.provider_account_series_id = evidence.provider_account_series_id
+   AND internal_clearing.provider_account_id = evidence.provider_account_id
+   AND internal_clearing.provider_identity_version = evidence.provider_identity_version
+   AND internal_clearing.currency = evidence.currency
+  ORDER BY evidence.provider_account_id, evidence.currency
+`;
+
 export const canonicalUnbalancedJournalsSql = `
   /* finance_inventory:canonical_unbalanced_journals */
   SELECT id AS transaction_id, currency,

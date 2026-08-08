@@ -17,6 +17,7 @@ import {
   canonicalOpenPayoutsSql,
   canonicalPaidInvoicesSql,
   canonicalPlansSql,
+  canonicalProviderControlsSql,
   canonicalRefundsSql,
   canonicalSourceLotsSql,
   canonicalSubscriptionsSql,
@@ -159,6 +160,13 @@ type MonetaryControlRow = {
   readonly currency: string;
   readonly expected_amount_minor: string;
   readonly observed_amount_minor: string;
+};
+
+type ProviderControlRow = {
+  readonly provider_account_id: string;
+  readonly currency: string;
+  readonly internal_amount_minor: string;
+  readonly provider_evidence_amount_minor: string;
 };
 
 export async function readLegacyFinancialInventorySnapshot(
@@ -349,6 +357,9 @@ export async function readCanonicalFinancialInventorySnapshot(
     const providerAccounts = await queryable.query<CountAggregateRow>(
       canonicalCountSql.providerAccounts
     );
+    const providerControls = await queryable.query<ProviderControlRow>(
+      canonicalProviderControlsSql
+    );
     const bankCashPools = await queryable.query<CountAggregateRow>(
       canonicalCountSql.bankCashPools
     );
@@ -422,7 +433,12 @@ export async function readCanonicalFinancialInventorySnapshot(
       })),
       walletProjections: walletRows,
       sourceLotBalances: sourceLotRows,
-      providerControls: [],
+      providerControls: providerControls.rows.map((row) => ({
+        arcProviderAccountId: row.provider_account_id,
+        currency: row.currency,
+        internalAmountMinor: row.internal_amount_minor,
+        providerEvidenceAmountMinor: row.provider_evidence_amount_minor
+      })),
       bankControls: [],
       monetaryControls: canonicalZeroMonetaryControls()
     };

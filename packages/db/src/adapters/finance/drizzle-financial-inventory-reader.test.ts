@@ -647,6 +647,14 @@ describe("readCanonicalFinancialInventorySnapshot", () => {
           debit_amount_minor: "50000",
           credit_amount_minor: "50000"
         }
+      ],
+      canonical_provider_controls: [
+        {
+          provider_account_id: "arc-pay-merchant",
+          currency: "RUB",
+          internal_amount_minor: "50000",
+          provider_evidence_amount_minor: "100000"
+        }
       ]
     });
 
@@ -657,9 +665,21 @@ describe("readCanonicalFinancialInventorySnapshot", () => {
 
     const report = buildFinancialInventoryReport(snapshot);
     expect(report.status).toBe("blocked");
+    expect(snapshot.providerControls).toEqual([
+      {
+        arcProviderAccountId: "arc-pay-merchant",
+        currency: "RUB",
+        internalAmountMinor: "50000",
+        providerEvidenceAmountMinor: "100000"
+      }
+    ]);
     expect(report.discrepancies).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "provider_control_missing" })
+        expect.objectContaining({
+          code: "provider_control_mismatch",
+          expectedAmountMinor: "50000",
+          observedAmountMinor: "100000"
+        })
       ])
     );
   });
