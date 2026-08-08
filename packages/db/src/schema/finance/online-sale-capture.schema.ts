@@ -462,11 +462,6 @@ export const financeOnlineWalletCommitments = pgTable(
       columns: [table.journalProofId],
       foreignColumns: [financeOnlineSaleCaptureJournalProofs.proofId]
     }).onDelete("restrict"),
-    foreignKey({
-      name: "finance_online_wallet_commitments_previous_fk",
-      columns: [table.previousCommitmentId, table.walletId, table.previousCommitmentDigest],
-      foreignColumns: [table.id, table.walletId, table.commitmentDigest]
-    }).onDelete("restrict"),
     unique("finance_online_wallet_commitments_receipt_unique").on(table.receiptId),
     unique("finance_online_wallet_commitments_proof_unique").on(table.journalProofId),
     unique("finance_online_wallet_commitments_wallet_revision_unique").on(
@@ -771,6 +766,38 @@ $$;
 create trigger finance_online_wallet_heads_protected_mutation
 before insert or update or delete on finance_online_wallet_heads
 for each row execute function finance_protect_online_wallet_head_mutation();
+
+create or replace function finance_validate_online_wallet_commitment_predecessor()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+begin
+  if new.wallet_revision = 1 then
+    return new;
+  end if;
+  if exists (
+    select 1
+    from finance_online_wallet_commitments capture_commitment
+    where capture_commitment.id = new.previous_commitment_id
+      and capture_commitment.wallet_id = new.wallet_id
+      and capture_commitment.wallet_revision = new.wallet_revision - 1
+      and capture_commitment.commitment_digest = new.previous_commitment_digest
+  ) or exists (
+    select 1
+    from finance_online_wallet_mutations mutation
+    where mutation.mutation_id = new.previous_commitment_id
+      and mutation.wallet_id = new.wallet_id
+      and mutation.next_wallet_revision = new.wallet_revision - 1
+      and mutation.commitment_digest = new.previous_commitment_digest
+  ) then
+    return new;
+  end if;
+  raise exception 'online wallet commitment predecessor is not the exact prior wallet state'
+    using errcode = '23514';
+end;
+$$;
+
+create trigger finance_online_wallet_commitments_predecessor_guard
+before insert on finance_online_wallet_commitments
+for each row execute function finance_validate_online_wallet_commitment_predecessor();
 
 create trigger finance_online_sale_capture_receipts_immutable
 before update or delete on finance_online_sale_capture_receipts

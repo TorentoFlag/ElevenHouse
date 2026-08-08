@@ -8,6 +8,7 @@ import {
   financeOnlineSaleCaptureJournalProofs,
   financeOnlineSaleCaptureReceipts,
   financeOnlineSaleCaptureRootLots,
+  financeOnlineSaleCaptureIntegritySql,
   financeOnlineWalletCommitments,
   financeOnlineWalletHeads
 } from "./online-sale-capture.schema";
@@ -35,7 +36,10 @@ describe("online client-sale capture v2 persistence graph", () => {
       getTableConfig(financeOnlineWalletCommitments).foreignKeys.map((candidate) =>
         candidate.getName()
       )
-    ).toEqual(expect.arrayContaining(["finance_online_wallet_commitments_previous_fk"]));
+    ).not.toEqual(expect.arrayContaining(["finance_online_wallet_commitments_previous_fk"]));
+    expect(financeOnlineSaleCaptureIntegritySql).toContain(
+      "finance_validate_online_wallet_commitment_predecessor"
+    );
     expect(
       getTableConfig(financeOnlineWalletCommitments).uniqueConstraints.map(
         (candidate) => candidate.name
