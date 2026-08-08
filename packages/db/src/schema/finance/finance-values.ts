@@ -21,7 +21,6 @@ export function financeRevisionString(name: string) {
 }
 
 export const financePaymentProviderValues = ["arc_pay"] as const;
-export const financePaymentProviderEnvironmentValues = ["sandbox", "live"] as const;
 export const financeTransactionCategoryValues = ["client_purchase", "platform_subscription"] as const;
 export const financeReadinessEvidenceStatusValues = ["active", "revoked"] as const;
 export const financeReadinessEvidenceRequirementValues = [
@@ -33,7 +32,6 @@ export const financeReadinessEvidenceRequirementValues = [
   "risk_policy",
   "product_fulfillment",
   "refund_chargeback_principal_policy",
-  "arc_pay_environment",
   "finance_step_up",
   "payout_recipient_policy",
   "bank_liquidity_policy"

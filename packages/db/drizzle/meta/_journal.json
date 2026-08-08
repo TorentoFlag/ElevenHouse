@@ -232,6 +232,13 @@
       "when": 1786068714668,
       "tag": "0032_absurd_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786095174865,
+      "tag": "0033_high_rictor",
+      "breakpoints": true
     }
   ]
 }
