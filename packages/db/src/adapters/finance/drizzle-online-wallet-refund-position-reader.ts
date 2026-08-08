@@ -1,9 +1,13 @@
-import type { OnlineWalletRefundPositionReader } from "@elevenhouse/domain/finance-core";
+import type {
+  ApprovedOnlineWalletRefundCaseReader,
+  OnlineWalletRefundPositionReader
+} from "@elevenhouse/domain/finance-core";
 import { and, desc, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import { financeOnlineSaleCaptureApplications } from "../../schema/finance/online-sale-capture.schema";
 import { financeOnlineWalletRefundApplications } from "../../schema/finance/online-wallet-refund-applications.schema";
+import { financeOnlineWalletRefundCases } from "../../schema/finance/online-wallet-refund-cases.schema";
 
 /**
  * V2-only prior cumulative position. It includes terminal blocked refund outcomes because ArcPay
@@ -64,6 +68,51 @@ export function createDrizzleOnlineWalletRefundPositionReader(
       });
     }
   } satisfies OnlineWalletRefundPositionReader);
+}
+
+/** Reads the one approved case whose frozen cumulative position matches a canonical refund. */
+export function createDrizzleApprovedOnlineWalletRefundCaseReader(
+  database: ElevenHouseDatabase
+): ApprovedOnlineWalletRefundCaseReader {
+  return Object.freeze({
+    async findApprovedRefundCase(input) {
+      const [refundCase] = await database
+        .select({ refundCaseId: financeOnlineWalletRefundCases.refundCaseId })
+        .from(financeOnlineWalletRefundCases)
+        .where(
+          and(
+            eq(
+              financeOnlineWalletRefundCases.providerAccountSeriesId,
+              input.providerAccount.seriesId
+            ),
+            eq(
+              financeOnlineWalletRefundCases.providerAccountId,
+              input.providerAccount.providerAccountId
+            ),
+            eq(
+              financeOnlineWalletRefundCases.providerIdentityVersion,
+              input.providerAccount.identityVersion
+            ),
+            eq(
+              financeOnlineWalletRefundCases.economicPaymentIntentId,
+              input.economicPaymentIntentId
+            ),
+            eq(financeOnlineWalletRefundCases.providerPaymentId, input.providerPaymentId),
+            eq(
+              financeOnlineWalletRefundCases.previousCumulativeRefundedMinor,
+              input.previousCumulativeRefundedMinor
+            ),
+            eq(
+              financeOnlineWalletRefundCases.approvedCumulativeRefundedMinor,
+              input.cumulativeRefundedMinor
+            ),
+            eq(financeOnlineWalletRefundCases.status, "approved")
+          )
+        )
+        .limit(2);
+      return refundCase ? Object.freeze(refundCase) : null;
+    }
+  } satisfies ApprovedOnlineWalletRefundCaseReader);
 }
 
 function identifier(value: unknown): string {

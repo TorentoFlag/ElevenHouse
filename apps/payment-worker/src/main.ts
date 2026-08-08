@@ -44,7 +44,8 @@ import {
   createDrizzleFiscalProfileReader,
   createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork,
   createDrizzleOnlineWalletHoldReleaseUnitOfWork,
-  createDrizzleOnlineWalletRefundApplicationUnitOfWork,
+  createDrizzleOnlineWalletRefundTerminalUnitOfWork,
+  createDrizzleApprovedOnlineWalletRefundCaseReader,
   createDrizzleOnlineWalletRefundPositionReader,
   createDrizzleOnlineWalletChargebackCaseUnitOfWork,
   createDrizzleOnlineSaleCapturePersistenceResolver,
@@ -229,7 +230,7 @@ async function startPaymentWorker(): Promise<void> {
     });
     const canonicalClientOrderRefund = createCanonicalClientOrderRefundProcessor({
       claims: createDrizzleRefundedClientOrderWebhookClaimPort({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund`, leaseDurationSeconds: config.canonicalClientOrderCapture.leaseDurationSeconds, retryPolicy: { maximumAttempts: config.canonicalClientOrderCapture.maximumAttempts, baseDelayMilliseconds: config.canonicalClientOrderCapture.retryBaseDelayMilliseconds, maximumDelayMilliseconds: config.canonicalClientOrderCapture.retryMaximumDelayMilliseconds } }),
-      webhookArtifacts: createClaimedWebhookArtifactResolver({ artifactRegistry, privateObjectStorage: privateStorage }), canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay), correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database), positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database), policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database), evidence: createCanonicalClientOrderRefundEvidenceSealer({ privateObjectStorage: privateStorage, artifactRegistry, retention: config.financeProviderDispatch.canonicalReadArtifactRetention }), application: createDrizzleOnlineWalletRefundApplicationUnitOfWork({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund` }), processorVersion: 1
+      webhookArtifacts: createClaimedWebhookArtifactResolver({ artifactRegistry, privateObjectStorage: privateStorage }), canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay), correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database), positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database), refundCases: createDrizzleApprovedOnlineWalletRefundCaseReader(postgresRuntime.database), policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database), evidence: createCanonicalClientOrderRefundEvidenceSealer({ privateObjectStorage: privateStorage, artifactRegistry, retention: config.financeProviderDispatch.canonicalReadArtifactRetention }), terminal: createDrizzleOnlineWalletRefundTerminalUnitOfWork({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund` }), processorVersion: 1
     });
     startCanonicalClientOrderRefundInterval({
       processor: canonicalClientOrderRefund,

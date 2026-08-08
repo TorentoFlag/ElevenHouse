@@ -99,7 +99,8 @@ function workItem(): any {
       economicPaymentIntentId: "40000000-0000-4000-8000-000000000004",
       economicPaymentVersion: 2,
       economicPaymentSessionId: null,
-      sourceId: "refund:refund-1",
+      // The provider-operation source is the order; ArcPay's external ID is the frozen refund case.
+      sourceId: "order:order-1",
       purpose: "client_order",
       amountMinor: "4000",
       currency: "RUB",

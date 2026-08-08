@@ -53,7 +53,7 @@ const refundExecutePolicy = publishFinanceOperationResourcePolicyDraft(
 );
 
 describe("canonical client-order refund inbox processor", () => {
-  it("uses canonical ArcPay refund evidence and commits exactly one correlated V2 refund", async () => {
+  it("settles the exact approved refund case rather than re-planning live wallet sources", async () => {
     const calls: string[] = [];
     const harness = createHarness(calls);
     const processor = createCanonicalClientOrderRefundProcessor(harness as never);
@@ -68,19 +68,18 @@ describe("canonical client-order refund inbox processor", () => {
       "read-untrusted",
       "resolve-correlation",
       "position",
+      "approved-case",
       "policy",
       "read-correlated",
       "seal",
-      "apply"
+      "terminal"
     ]);
-    expect(harness.applied).toMatchObject({
-      refund: {
-        providerPaymentId,
-        providerRefundId,
-        refundDeltaMinor: "5000",
-        previousCumulativeRefundedMinor: "0",
-        cumulativeRefundedMinor: "5000"
-      },
+    expect(harness.terminalCommand).toMatchObject({
+      refundCaseId: "online-wallet-refund:case-1",
+      providerPaymentId,
+      providerRefundId,
+      previousCumulativeRefundedMinor: "0",
+      cumulativeRefundedMinor: "5000",
       semanticFact: {
         inboxItemId: "finance-webhook-inbox-1",
         semanticEvidence: {
@@ -107,7 +106,7 @@ describe("canonical client-order refund inbox processor", () => {
     expect(harness.failure).toMatchObject({
       errorClass: "canonical_provider_read_unavailable"
     });
-    expect(harness.applied).toBeUndefined();
+    expect(harness.terminalCommand).toBeUndefined();
   });
 
   it("retries a provider refund that is still in flight without sealing evidence or applying money", async () => {
@@ -125,6 +124,7 @@ describe("canonical client-order refund inbox processor", () => {
       "read-untrusted",
       "resolve-correlation",
       "position",
+      "approved-case",
       "policy",
       "read-correlated",
       "record-failure"
@@ -132,7 +132,7 @@ describe("canonical client-order refund inbox processor", () => {
     expect(harness.failure).toMatchObject({
       errorClass: "canonical_provider_read_unavailable"
     });
-    expect(harness.applied).toBeUndefined();
+    expect(harness.terminalCommand).toBeUndefined();
   });
 });
 
@@ -143,7 +143,7 @@ function createHarness(
     refundStatus?: "succeeded" | "failed" | "in_flight" | "unknown";
   }> = {}
 ) {
-  let applied: unknown;
+  let terminalCommand: unknown;
   let failure: unknown;
   const claim = {
     inboxItemId: "finance-webhook-inbox-1",
@@ -237,6 +237,12 @@ function createHarness(
         return { economicPaymentIntentId: "economic-payment-1", previousCumulativeRefundedMinor: "0" };
       }
     },
+    refundCases: {
+      async findApprovedRefundCase() {
+        calls.push("approved-case");
+        return { refundCaseId: "online-wallet-refund:case-1" };
+      }
+    },
     policies: {
       async findPublishedForOperation() {
         calls.push("policy");
@@ -268,15 +274,15 @@ function createHarness(
         } as never;
       }
     },
-    application: {
-      async applyCanonicalOnlineWalletRefund(value: unknown) {
-        calls.push("apply");
-        applied = value;
+    terminal: {
+      async applyCanonicalApprovedOnlineWalletRefund(value: unknown) {
+        calls.push("terminal");
+        terminalCommand = value;
         return { effect: "applied_once" as const };
       }
     },
-    get applied() {
-      return applied;
+    get terminalCommand() {
+      return terminalCommand;
     },
     get failure() {
       return failure;

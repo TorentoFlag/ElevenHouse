@@ -4,7 +4,8 @@ import type {
   FinanceDigest,
   FinanceProviderAccountIdentity,
   FinanceOperationResourcePolicyReader,
-  OnlineWalletRefundApplicationUnitOfWork,
+  ApprovedOnlineWalletRefundCaseReader,
+  OnlineWalletRefundTerminalUnitOfWork,
   OnlineWalletRefundPositionReader,
   VerifiedWebhookSemanticEvidence,
   WebhookProcessingErrorClass
@@ -86,9 +87,10 @@ export function createCanonicalClientOrderRefundProcessor(
     >;
     correlations: CapturedClientOrderCorrelationPort;
     positions: OnlineWalletRefundPositionReader;
+    refundCases: ApprovedOnlineWalletRefundCaseReader;
     policies: FinanceOperationResourcePolicyReader;
     evidence: CanonicalRefundEvidenceSealer;
-    application: OnlineWalletRefundApplicationUnitOfWork;
+    terminal: OnlineWalletRefundTerminalUnitOfWork;
     processorVersion: number;
   }>
 ): CanonicalClientOrderRefundProcessor {
@@ -119,6 +121,14 @@ export function createCanonicalClientOrderRefundProcessor(
         ) {
           fail("canonical_correlation_invalid");
         }
+        const refundCase = await input.refundCases.findApprovedRefundCase({
+          providerAccount: claim.providerAccount,
+          economicPaymentIntentId: correlation.economicPaymentIntentId,
+          providerPaymentId: webhook.providerPaymentId,
+          previousCumulativeRefundedMinor: position.previousCumulativeRefundedMinor,
+          cumulativeRefundedMinor: String(webhook.cumulativeRefundedMinor)
+        });
+        if (!refundCase) fail("canonical_correlation_invalid");
         const policy = await input.policies.findPublishedForOperation({
           operationKind: "refund_execute"
         });
@@ -155,7 +165,7 @@ export function createCanonicalClientOrderRefundProcessor(
           rawCanonicalResponseBytes: canonical.rawResponseBytes
         });
         assertSemanticEvidence(semanticEvidence, claim, position.economicPaymentIntentId, canonical.refund);
-        const receipt = await input.application.applyCanonicalOnlineWalletRefund({
+        const receipt = await input.terminal.applyCanonicalApprovedOnlineWalletRefund({
           semanticFact: {
             inboxItemId: claim.inboxItemId,
             expectedInboxVersion: claim.inboxVersion,
@@ -164,14 +174,12 @@ export function createCanonicalClientOrderRefundProcessor(
             semanticEvidence,
             operationEnvelope
           },
-          refund: {
-            providerPaymentId: webhook.providerPaymentId,
-            providerRefundId: webhook.providerRefundId,
-            refundDeltaMinor: String(canonical.refund.amountMinor),
-            previousCumulativeRefundedMinor: position.previousCumulativeRefundedMinor,
-            cumulativeRefundedMinor: String(canonical.refund.cumulativeRefundedMinor),
-            occurredAt: canonical.refund.observedAt
-          }
+          refundCaseId: refundCase.refundCaseId,
+          providerPaymentId: webhook.providerPaymentId,
+          providerRefundId: webhook.providerRefundId,
+          previousCumulativeRefundedMinor: position.previousCumulativeRefundedMinor,
+          cumulativeRefundedMinor: String(canonical.refund.cumulativeRefundedMinor),
+          occurredAt: canonical.refund.observedAt
         });
         return Object.freeze({
           kind: "committed" as const,

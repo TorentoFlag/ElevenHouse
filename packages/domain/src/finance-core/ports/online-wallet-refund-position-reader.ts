@@ -18,3 +18,20 @@ export type OnlineWalletRefundPositionReader = Readonly<{
     | null
   >;
 }>;
+
+/**
+ * Resolves the exact V2 refund case that was approved before ArcPay received the request.
+ * The canonical webhook must settle that frozen case, never reconstruct a refund from current
+ * wallet positions.
+ */
+export type ApprovedOnlineWalletRefundCaseReader = Readonly<{
+  findApprovedRefundCase(
+    input: Readonly<{
+      providerAccount: ProviderAccountIdentityBinding;
+      economicPaymentIntentId: string;
+      providerPaymentId: string;
+      previousCumulativeRefundedMinor: string;
+      cumulativeRefundedMinor: string;
+    }>
+  ): Promise<Readonly<{ refundCaseId: string }> | null>;
+}>;

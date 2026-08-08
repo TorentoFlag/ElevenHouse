@@ -131,7 +131,6 @@ async function loadEnvelope(
   if (
     envelope.kind !== "refund" ||
     digestFinanceCanonicalValueV1(envelope) !== workItem.dispatch.canonicalRequestDigest ||
-    envelope.externalId !== workItem.dispatch.sourceId ||
     String(envelope.amount.amountMinor) !== workItem.dispatch.amountMinor ||
     envelope.amount.currency !== workItem.dispatch.currency
   ) {
