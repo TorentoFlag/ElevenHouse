@@ -88,6 +88,14 @@ export function createPaymentWebhookHandler(input: {
           });
           return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
         }
+        if (transport.providerEventType === "payment.created" && input.financeIngress) {
+          const result = await input.financeIngress.store({
+            signature,
+            transport,
+            rawBody: exactRawBytes(request.rawBody)
+          });
+          return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
+        }
         const event = parseArcPayWebhook({
           webhookId: signature.webhookId,
           rawBody

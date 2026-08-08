@@ -71,6 +71,32 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.createdEvents).toEqual([]);
   });
 
+  it("stores a verified payment.created event through canonical ingress without invoking the legacy projector", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => ({ duplicate: false }))
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress, attemptMissing: true });
+    const request = signedRequest({
+      ...basePayload(eventId(98)),
+      event_type: "payment.created",
+      data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: false }
+    });
+
+    expect(financeIngress.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transport: expect.objectContaining({ providerEventType: "payment.created" }),
+        rawBody: new TextEncoder().encode(request.rawBody)
+      })
+    );
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+    expect(harness.createdEvents).toEqual([]);
+  });
+
   it("fails closed for a captured event until v2 canonical ingress is configured", async () => {
     const harness = createHarness();
     const request = signedRequest(capturedPayload({ eventId: eventId(2) }));
