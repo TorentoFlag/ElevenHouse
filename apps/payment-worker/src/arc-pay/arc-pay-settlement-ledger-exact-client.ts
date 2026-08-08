@@ -211,7 +211,7 @@ function parseLedgerEntry(
     referenceType: identifier(entry.reference_type, 500),
     referenceId: identifier(entry.reference_id, 500),
     feeAmountMinor: null,
-    balanceAfterMinor: nullableInt64(entry.balance_after),
+    balanceAfterMinor: optionalInt64(entry.balance_after),
     occurredAt: timestamp(entry.occurred_at),
     organizationId,
     terminalId: nullableIdentifier(entry.terminal_id, 500),
@@ -279,6 +279,10 @@ function int64(value: unknown): string {
 
 function nullableInt64(value: unknown): string | null {
   return value === null ? null : int64(value);
+}
+
+function optionalInt64(value: unknown): string | null {
+  return value === undefined ? null : nullableInt64(value);
 }
 
 function timestamp(value: unknown): string | null {

@@ -22,7 +22,7 @@ const providerAccount = Object.freeze({
 
 describe("createArcPayExactSettlementLedgerClient", () => {
   it("seals and losslessly decodes one documented ledger page", async () => {
-    const responseBody = `{"entries":[{"entry_id":"entry-1","amount":9007199254740993,"currency":"RUB","direction":"credit","entry_type":"payment","reference_type":"payment","reference_id":"payment-1","occurred_at":"2026-08-08T08:00:00.000Z","organization_id":"${providerAccount.providerAccountId}","terminal_id":"terminal-1","bank_terminal_id":"bank-terminal-1","settlement_status":"pending","balance_after":9007199254740994}],"total_count":1}`;
+    const responseBody = `{"entries":[{"entry_id":"entry-1","amount":9007199254740993,"currency":"RUB","direction":"credit","entry_type":"payment","reference_type":"payment","reference_id":"payment-1","occurred_at":"2026-08-08T08:00:00.000Z","organization_id":"${providerAccount.providerAccountId}","terminal_id":"terminal-1","bank_terminal_id":"bank-terminal-1","settlement_status":"pending","balance_after":9007199254740994},{"entry_id":"entry-2","amount":50000,"currency":"RUB","direction":"credit","entry_type":"payment","reference_type":"payment","reference_id":"payment-2","occurred_at":"2026-08-08T08:01:00.000Z","organization_id":"${providerAccount.providerAccountId}","terminal_id":"terminal-1","bank_terminal_id":"bank-terminal-1","bank_code":"bank-1","settlement_status":"pending"}],"total_count":2}`;
     const bytes = new TextEncoder().encode(responseBody);
     const digest = sha256(bytes);
     const writeImmutable = vi.fn(async () => ({
@@ -81,7 +81,7 @@ describe("createArcPayExactSettlementLedgerClient", () => {
       stream: "settlement_ledger",
       rawArtifact: { sha256Digest: digest, byteLength: bytes.byteLength },
       normalizedEntries: {
-        returnedCount: 1,
+        returnedCount: 2,
         nextCursor: null,
         rows: [
           {
@@ -89,6 +89,12 @@ describe("createArcPayExactSettlementLedgerClient", () => {
             balanceAfterMinor: "9007199254740994",
             organizationId: providerAccount.providerAccountId,
             key: { providerAccount, providerEntryId: "entry-1" }
+          },
+          {
+            amountMinor: "50000",
+            balanceAfterMinor: null,
+            bankCode: "bank-1",
+            key: { providerAccount, providerEntryId: "entry-2" }
           }
         ]
       }
