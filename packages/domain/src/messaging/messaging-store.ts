@@ -19,6 +19,7 @@ export type CreateOutboundMessageStoreInput = {
   readonly text: string;
   readonly idempotencyKey: string;
   readonly requestHash: `sha256:${string}`;
+  readonly flowTerminalSignal?: true;
   readonly now: string;
   readonly deliveryRequestedEvent: MessagingMessageDeliveryRequestedEvent;
 };

@@ -93,7 +93,12 @@ describe("chart AI draft durable command Drizzle/PostgreSQL integration", () => 
 
   it("removes an expired terminal tombstone and permits a new request identity", async () => {
     const key = `chart-ai:${randomUUID()}`;
-    const firstInput = commandInput({ key, requestHash: requestHashFor(calculationId) });
+    const firstInput = commandInput({
+      key,
+      requestHash: requestHashFor(calculationId),
+      now: "2000-01-01T12:00:00.000Z",
+      expiresAt: "2000-01-02T12:00:00.000Z"
+    });
     const first = await store.acquire(firstInput);
     if (first.kind !== "acquired") throw new Error("Expected acquired command");
     await store.completeKnownFailure({
@@ -104,15 +109,15 @@ describe("chart AI draft durable command Drizzle/PostgreSQL integration", () => 
         code: "AI_PROVIDER_REFUSED",
         message: "AI generation was refused for this input"
       },
-      now: "2026-08-03T12:01:00.000Z"
+      now: "2000-01-01T12:01:00.000Z"
     });
 
     const next = await store.acquire(
       commandInput({
         key,
         requestHash: requestHashFor(randomUUID()),
-        now: "2026-08-04T12:00:00.000Z",
-        expiresAt: "2026-08-05T12:00:00.000Z"
+        now: "2099-01-03T12:00:00.000Z",
+        expiresAt: "2099-01-04T12:00:00.000Z"
       })
     );
 
@@ -123,13 +128,20 @@ describe("chart AI draft durable command Drizzle/PostgreSQL integration", () => 
   it("terminalizes an expired processing command as unknown instead of repeating provider cost", async () => {
     const key = `chart-ai:${randomUUID()}`;
     const requestHash = requestHashFor(calculationId);
-    const first = await store.acquire(commandInput({ key, requestHash }));
+    const first = await store.acquire(
+      commandInput({
+        key,
+        requestHash,
+        now: "2000-01-01T12:00:00.000Z",
+        expiresAt: "2000-01-02T12:00:00.000Z"
+      })
+    );
     if (first.kind !== "acquired") throw new Error("Expected acquired command");
     const renewedInput = commandInput({
       key,
       requestHash,
-      now: "2026-08-04T12:00:00.000Z",
-      expiresAt: "2026-08-05T12:00:00.000Z"
+      now: "2000-01-03T12:00:00.000Z",
+      expiresAt: "2000-01-04T12:00:00.000Z"
     });
 
     const outcomes = await Promise.all([store.acquire(renewedInput), store.acquire(renewedInput)]);
@@ -180,7 +192,7 @@ describe("chart AI draft durable command Drizzle/PostgreSQL integration", () => 
         actorUserId,
         calculationId,
         expectedResultChecksum,
-        now: "2026-08-03T12:02:00.000Z"
+        now: "2099-08-03T12:02:00.000Z"
       })
     ).resolves.toMatchObject({
       kind: "success",
@@ -246,8 +258,8 @@ function commandInput(input: {
     actorUserId,
     key: input.key,
     requestHash: input.requestHash,
-    now: input.now ?? "2026-08-03T12:00:00.000Z",
-    expiresAt: input.expiresAt ?? "2026-08-04T12:00:00.000Z"
+    now: input.now ?? "2099-08-03T12:00:00.000Z",
+    expiresAt: input.expiresAt ?? "2099-08-04T12:00:00.000Z"
   };
 }
 

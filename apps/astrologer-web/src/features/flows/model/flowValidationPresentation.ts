@@ -40,7 +40,11 @@ const issueMessagesRu = {
   unreachable_node: "Этот узел недостижим из стартового узла.",
   unterminated_path: "Каждая ветка должна завершаться итоговым узлом.",
   work_item_due_policy_requires_booking_trigger:
-    "Срок относительно записи доступен только в воронке, которая начинается с подтверждения записи."
+    "Срок относительно записи доступен только в воронке, которая начинается с подтверждения записи.",
+  manual_trigger_booking_context_unsupported:
+    "Ручной запуск по клиенту не поддерживает узлы, которым нужна контекстная запись.",
+  chart_ai_draft_source_invalid:
+    "AI-черновик должен непосредственно следовать за указанным узлом расчёта натальной карты."
 } satisfies Record<FlowDefinitionValidationIssueCode, string>;
 
 function nodeIdFromPath(path: string): string | null {

@@ -3,6 +3,8 @@ import {
   CHART_CALCULATION_TERMINAL_EVENT,
   CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  messagingMessageDeliveryTerminalEventType,
+  messagingMessageDeliveryTerminalPayloadSchema,
   FlowExecutionIntegrityError,
   FlowBookingEnrollmentDeferredError,
   FlowBookingEnrollmentIntegrityError,
@@ -37,6 +39,14 @@ export type FlowChartTerminalSignalDispatcher = (
   input: ChartCalculationTerminalPayload & { readonly sourceEventId: string }
 ) => Promise<unknown>;
 
+export type FlowMessagingTerminalSignalDispatcher = (input: {
+  readonly sourceEventId: string;
+  readonly messageId: string;
+  readonly ownerUserId: string;
+  readonly outcome: "succeeded" | "failed";
+  readonly occurredAt: string;
+}) => Promise<unknown>;
+
 export type FlowBirthProfileRecheckDispatcher = (input: {
   readonly sourceOutboxEventId: string;
   readonly event: ClientBirthProfileUpdatedEvent;
@@ -47,6 +57,7 @@ type FlowRuntimeOutboxRelayInput = {
   readonly enrollBookingConfirmed: FlowBookingEnrollmentDispatcher;
   readonly processBookingLifecycleEvent: FlowBookingLifecycleDispatcher;
   readonly deliverChartTerminalSignal: FlowChartTerminalSignalDispatcher;
+  readonly deliverMessagingTerminalSignal: FlowMessagingTerminalSignalDispatcher;
   readonly recheckBirthProfile: FlowBirthProfileRecheckDispatcher;
   readonly now: Date;
   readonly batchSize: number;
@@ -92,6 +103,10 @@ export async function relayPendingFlowRuntimeDispatchEvents(
       await relayChartTerminalSignal(input, event);
       continue;
     }
+    if (event.eventType === messagingMessageDeliveryTerminalEventType) {
+      await relayMessagingTerminalSignal(input, event);
+      continue;
+    }
     if (event.eventType === CLIENT_BIRTH_PROFILE_UPDATED_EVENT) {
       await relayBirthProfileRecheck(input, event);
       continue;
@@ -100,6 +115,34 @@ export async function relayPendingFlowRuntimeDispatchEvents(
   }
 
   return batch.claimed.length + batch.quarantined.length;
+}
+
+async function relayMessagingTerminalSignal(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = messagingMessageDeliveryTerminalPayloadSchema.safeParse(event.payload);
+  if (!parsedPayload.success) {
+    await quarantine(input, event, "FLOW_MESSAGING_DELIVERY_TERMINAL_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.data.messageId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_MESSAGING_DELIVERY_TERMINAL_AGGREGATE_MISMATCH");
+    return;
+  }
+  try {
+    await input.deliverMessagingTerminalSignal({ ...parsedPayload.data, sourceEventId: event.id });
+  } catch {
+    await handleTransientFailure(input, event);
+    return;
+  }
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow messaging terminal signal outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    outcome: parsedPayload.data.outcome
+  });
 }
 
 async function relayBirthProfileRecheck(

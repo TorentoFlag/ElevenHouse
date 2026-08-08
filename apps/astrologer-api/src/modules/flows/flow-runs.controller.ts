@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Headers,
   HttpCode,
   HttpStatus,
@@ -21,6 +22,7 @@ export class FlowRunsController {
   constructor(private readonly service: FlowsService) {}
 
   @Get(":runId")
+  @Header("Cache-Control", "no-store")
   getFlowRun(@Param("runId") runId: string, @Req() request: AstrologerSessionRequest) {
     return this.service.getFlowRun(runId, request);
   }

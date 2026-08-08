@@ -3,7 +3,8 @@ import {
   messageDeliveryAttempts,
   messagingChannelConnections,
   messagingMessages,
-  messagingRealtimeEvents
+  messagingRealtimeEvents,
+  outboxEvents
 } from "../../schema";
 import { createDrizzleMessagingDeliveryProcessingStore } from "./drizzle-messaging-delivery-processing-store";
 
@@ -46,7 +47,8 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       channelConnectionId,
       businessConnectionId: "business-1",
       providerChatId: "chat-1",
-      text: "Message text from DB"
+      text: "Message text from DB",
+      reconciliation: false
     });
   });
 
@@ -80,7 +82,8 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       mode: "telegram_mtproto_account",
       channelConnectionId,
       peerId: "777000",
-      text: "Message text from DB"
+      text: "Message text from DB",
+      reconciliation: false
     });
   });
 
@@ -220,6 +223,63 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
     });
   });
 
+  it("emits one terminal Flow signal only for a Flow-originated final delivery result", async () => {
+    const fake = createRecordingDatabase({
+      deliveryRequestPayload: { flowTerminalSignal: "flow_delivery_terminal.v1" }
+    });
+
+    await createDrizzleMessagingDeliveryProcessingStore(fake.database as never).recordFinalFailure({
+      messageId,
+      attemptNumber: 3,
+      provider: "telegram",
+      errorCode: "TELEGRAM_MT_PROTO_REJECTED",
+      errorMessage: "delivery rejected",
+      attemptedAt: now
+    });
+
+    expect(fake.inserts).toContainEqual({
+      table: outboxEvents,
+      value: expect.objectContaining({
+        eventType: "messaging.message.delivery_terminal.v1",
+        aggregateId: messageId,
+        payload: {
+          schemaVersion: "messaging-message-delivery-terminal.v1",
+          messageId,
+          ownerUserId: astrologerUserId,
+          outcome: "failed",
+          occurredAt: now.toISOString()
+        }
+      })
+    });
+  });
+
+  it("requests one durable MTProto reconciliation after an unknown Flow delivery", async () => {
+    const fake = createRecordingDatabase({
+      deliveryRequestPayload: { flowTerminalSignal: "flow_delivery_terminal.v1" }
+    });
+
+    await createDrizzleMessagingDeliveryProcessingStore(fake.database as never).recordFinalUnknown({
+      messageId,
+      attemptNumber: 3,
+      provider: "telegram",
+      errorCode: "TELEGRAM_MTPROTO_TRANSPORT_UNKNOWN",
+      errorMessage: "transport did not confirm delivery",
+      attemptedAt: now
+    });
+
+    expect(fake.inserts).toContainEqual({
+      table: outboxEvents,
+      value: expect.objectContaining({
+        eventType: "messaging.message.delivery_reconciliation_requested.v1",
+        aggregateId: messageId,
+        payload: {
+          schemaVersion: "messaging-message-delivery-reconciliation-request.v1",
+          messageId
+        }
+      })
+    });
+  });
+
   it("marks the channel connection reauthorization-required on final provider connection rejection", async () => {
     const fake = createRecordingDatabase({
       updatedMessage: {
@@ -263,15 +323,20 @@ function createFindDatabase(row: Record<string, unknown>) {
   };
 }
 
-function createRecordingDatabase(input: { readonly updatedMessage?: Record<string, unknown> | null } = {}) {
+function createRecordingDatabase(input: {
+  readonly updatedMessage?: Record<string, unknown> | null;
+  readonly deliveryRequestPayload?: Record<string, unknown>;
+} = {}) {
   const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   let transactionCount = 0;
+  let selectCount = 0;
   const database = {
     insert: (table: unknown) => ({
       values: (value: Record<string, unknown>) => {
         inserts.push({ table, value });
-        return { then: (resolve: (value: undefined) => unknown) => resolve(undefined) };
+        const result = { then: (resolve: (value: undefined) => unknown) => resolve(undefined) };
+        return { ...result, onConflictDoNothing: () => result };
       }
     }),
     update: (table: unknown) => ({
@@ -292,7 +357,13 @@ function createRecordingDatabase(input: { readonly updatedMessage?: Record<strin
         })
       })
     }),
-    select: () => selectChain([{ astrologerUserId }]),
+    select: () => {
+      selectCount += 1;
+      if (selectCount === 2) {
+        return selectChain([{ payload: input.deliveryRequestPayload ?? {} }]);
+      }
+      return selectChain([{ astrologerUserId }]);
+    },
     transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
       transactionCount += 1;
       return callback(database);

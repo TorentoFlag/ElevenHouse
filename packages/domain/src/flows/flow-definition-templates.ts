@@ -79,14 +79,14 @@ const templateDefinitions: readonly TemplateDefinition[] = [
   {
     schemaVersion: "flow-definition-template.v2",
     key: "booking-natal-preparation",
-    version: 2,
+    version: 3,
     name: {
       ru: "Подготовка натальной консультации",
       en: "Natal consultation preparation"
     },
     description: {
-      ru: "После подтверждённой записи собирает данные рождения и ставит расчёт натальной карты.",
-      en: "After a confirmed booking, collects birth data and requests a natal chart calculation."
+      ru: "После подтверждённой записи собирает данные рождения, рассчитывает карту и отдаёт AI-черновик на проверку астрологу.",
+      en: "After a confirmed booking, collects birth data, calculates a natal chart, and routes the AI draft to the astrologer for review."
     },
     category: "service_delivery",
     availability: "available",
@@ -103,6 +103,7 @@ const templateDefinitions: readonly TemplateDefinition[] = [
     requiredCapabilities: [
       "bookings.events.booking_confirmed",
       "charts.calculate.natal.booking_context",
+      "charts.interpret.natal.ai_draft",
       "clients.birth_data.read.service_preparation",
       "products.read"
     ],
@@ -117,7 +118,7 @@ export function getFlowDefinitionTemplateCatalogV2(
 ): ListFlowDefinitionTemplatesV2Response {
   return listFlowDefinitionTemplatesV2ResponseSchema.parse({
     schemaVersion: "flow-definition-template-catalog.v2",
-    catalogVersion: 3,
+    catalogVersion: 4,
     locale,
     templates: templateDefinitions.map((template) => ({
       schemaVersion: template.schemaVersion,
@@ -354,12 +355,55 @@ function createBookingNatalPreparationTemplate(
         }
       },
       {
+        id: "natal-ai-draft-review",
+        kind: "natal_chart_ai_draft",
+        displayTitle: locale === "ru" ? "Проверить AI-черновик" : "Review AI draft",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          chartRequestNodeId: "natal-chart-request",
+          locale,
+          approvalTitle: locale === "ru" ? "Проверить AI-черновик натальной карты" : "Review natal chart AI draft",
+          expiresAfterMinutes: 1_440
+        }
+      },
+      {
+        id: "natal-preparation-work-item",
+        kind: "astrologer_work_item",
+        displayTitle: locale === "ru" ? "Подготовить консультацию" : "Prepare consultation",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          taskKind: "consultation_preparation",
+          taskTitle: locale === "ru" ? "Подготовить консультацию" : "Prepare consultation",
+          instructions: locale === "ru" ? "Используйте одобренный AI-черновик как материал подготовки." : "Use the approved AI draft as preparation material.",
+          priority: "high",
+          completionRequirements: { resultSummary: "required" }
+        }
+      },
+      {
         id: "natal-preparation-completed",
         kind: "completed",
         displayTitle: locale === "ru" ? "Натальная карта рассчитана" : "Natal chart calculated",
         configSchemaVersion: 1,
         executorContractVersion: 1,
         config: { goalKey: "natal_chart_calculated" }
+      },
+      {
+        id: "natal-ai-draft-rejected",
+        kind: "failed",
+        displayTitle: locale === "ru" ? "Черновик отклонён" : "Draft rejected",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { errorCode: "natal_ai_draft_rejected" }
+      },
+      {
+        id: "natal-ai-draft-timed-out",
+        kind: "failed",
+        displayTitle: locale === "ru" ? "Время проверки истекло" : "Draft review expired",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { errorCode: "natal_ai_draft_timed_out" }
       }
     ],
     edges: [
@@ -388,10 +432,34 @@ function createBookingNatalPreparationTemplate(
         sourceHandle: "success"
       },
       {
-        id: "chart-request-to-completed",
+        id: "chart-request-to-ai-draft",
         sourceNodeId: "natal-chart-request",
-        targetNodeId: "natal-preparation-completed",
+        targetNodeId: "natal-ai-draft-review",
         sourceHandle: "next"
+      },
+      {
+        id: "ai-draft-approved-to-work-item",
+        sourceNodeId: "natal-ai-draft-review",
+        targetNodeId: "natal-preparation-work-item",
+        sourceHandle: "approved"
+      },
+      {
+        id: "ai-draft-rejected-to-failed",
+        sourceNodeId: "natal-ai-draft-review",
+        targetNodeId: "natal-ai-draft-rejected",
+        sourceHandle: "rejected"
+      },
+      {
+        id: "ai-draft-timeout-to-failed",
+        sourceNodeId: "natal-ai-draft-review",
+        targetNodeId: "natal-ai-draft-timed-out",
+        sourceHandle: "timeout"
+      },
+      {
+        id: "natal-work-item-to-completed",
+        sourceNodeId: "natal-preparation-work-item",
+        targetNodeId: "natal-preparation-completed",
+        sourceHandle: "success"
       }
     ]
   });
@@ -404,7 +472,11 @@ function createBookingNatalPreparationTemplate(
         { nodeId: "birth-data-ready", position: { x: 360, y: 220 } },
         { nodeId: "birth-data-request", position: { x: 640, y: 390 } },
         { nodeId: "natal-chart-request", position: { x: 640, y: 120 } },
-        { nodeId: "natal-preparation-completed", position: { x: 920, y: 120 } }
+        { nodeId: "natal-ai-draft-review", position: { x: 920, y: 120 } },
+        { nodeId: "natal-preparation-work-item", position: { x: 1200, y: 120 } },
+        { nodeId: "natal-preparation-completed", position: { x: 1480, y: 120 } },
+        { nodeId: "natal-ai-draft-rejected", position: { x: 1200, y: 330 } },
+        { nodeId: "natal-ai-draft-timed-out", position: { x: 1200, y: 500 } }
       ],
       viewport: { x: 0, y: 0, zoom: 1 }
     })

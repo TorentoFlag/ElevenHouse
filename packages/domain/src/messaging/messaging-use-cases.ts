@@ -46,6 +46,24 @@ export function normalizeSendMessageInput(input: {
   };
 }
 
+/**
+ * Messaging owns channel routing. Callers choose neither a provider nor a
+ * connection mode: the sole active conversation whose channel permits sends
+ * is safe to use; ambiguity remains fail-closed.
+ */
+export type SendableMessagingConversation = {
+  readonly threadId: string;
+  readonly channelConnectionId: string;
+  readonly canSend: boolean;
+};
+
+export function selectSingleSendableMessagingConversation(
+  candidates: readonly SendableMessagingConversation[]
+): SendableMessagingConversation | null {
+  const sendable = candidates.filter((candidate) => candidate.canSend);
+  return sendable.length === 1 ? sendable[0] ?? null : null;
+}
+
 export async function createOutboundMessage(input: {
   readonly store: MessagingStore;
   readonly astrologerUserId: string;
@@ -53,6 +71,7 @@ export async function createOutboundMessage(input: {
   readonly channelConnectionId?: string | null;
   readonly text: string;
   readonly idempotencyKey: string;
+  readonly flowTerminalSignal?: true;
   readonly idGenerator?: () => string;
   readonly now: Date;
 }): Promise<{ readonly message: MessagingMessage; readonly replayed: boolean }> {
@@ -78,6 +97,9 @@ export async function createOutboundMessage(input: {
     threadId: thread.id,
     channelConnectionId,
     astrologerUserId,
+    ...(input.flowTerminalSignal
+      ? { flowTerminalSignal: "flow_delivery_terminal.v1" as const }
+      : {}),
     occurredAt: now
   });
   const message = await input.store.createOutboundMessage({
@@ -617,6 +639,7 @@ function createDeliveryRequestedEvent(input: {
   readonly threadId: string;
   readonly channelConnectionId: string;
   readonly astrologerUserId: string;
+  readonly flowTerminalSignal?: "flow_delivery_terminal.v1";
   readonly occurredAt: string;
 }): MessagingMessageDeliveryRequestedEvent {
   return {
@@ -627,7 +650,8 @@ function createDeliveryRequestedEvent(input: {
       messageId: input.messageId,
       threadId: input.threadId,
       channelConnectionId: input.channelConnectionId,
-      astrologerUserId: input.astrologerUserId
+      astrologerUserId: input.astrologerUserId,
+      ...(input.flowTerminalSignal ? { flowTerminalSignal: input.flowTerminalSignal } : {})
     }
   };
 }

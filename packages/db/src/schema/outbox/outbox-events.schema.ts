@@ -21,6 +21,8 @@ import type {
   BookingLifecycleDispatchRequestedPayload,
   ClientBirthProfileUpdatedEvent,
   FlowBookingConfirmedEnrollmentRequestedPayloadV1,
+  MessagingMessageDeliveryTerminalPayload,
+  MessagingMessageDeliveryReconciliationRequestedPayload,
   MessagingMessageDeliveryRequestedPayload,
   RedactedAuthCodeDeliveryRequestedPayload
 } from "@elevenhouse/domain";
@@ -53,6 +55,8 @@ export type OutboxEventPayload =
   | FinanceSavedCardSetupPreparationRequestedPayload
   | FinancePlatformTariffInvoiceChargePreparationRequestedPayload
   | FlowBookingConfirmedEnrollmentRequestedPayloadV1
+  | MessagingMessageDeliveryTerminalPayload
+  | MessagingMessageDeliveryReconciliationRequestedPayload
   | MessagingMessageDeliveryRequestedPayload;
 
 export const outboxEvents = pgTable(
@@ -126,6 +130,21 @@ export const outboxEvents = pgTable(
           'schemaVersion', 'booking-lifecycle-event-dispatch-request.v1',
           'lifecycleEventId', ${table.aggregateId}::text
         )
+      )`
+    ),
+    check(
+      "outbox_events_messaging_delivery_terminal_payload_check",
+      sql`${table.eventType} <> 'messaging.message.delivery_terminal.v1' or (
+        ${table.payload}->>'messageId' = ${table.aggregateId}::text
+        and ${table.payload}->>'schemaVersion' = 'messaging-message-delivery-terminal.v1'
+        and ${table.payload}->>'outcome' in ('succeeded', 'failed')
+      )`
+    ),
+    check(
+      "outbox_events_messaging_delivery_reconciliation_payload_check",
+      sql`${table.eventType} <> 'messaging.message.delivery_reconciliation_requested.v1' or (
+        ${table.payload}->>'messageId' = ${table.aggregateId}::text
+        and ${table.payload}->>'schemaVersion' = 'messaging-message-delivery-reconciliation-request.v1'
       )`
     ),
     check(

@@ -3,13 +3,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   activateFlowMutationOptions,
   completeFlowWorkItemMutationOptions,
+  cancelFlowRunMutationOptions,
   createNextFlowDraftMutationOptions,
   createFlowMutationOptions,
   createManualFlowRunMutationOptions,
   decideFlowApprovalMutationOptions,
   flowApprovalsQueryOptions,
   flowDefinitionQueryOptions,
+  flowOperatorQueueRefreshInterval,
+  flowRunRefreshInterval,
+  flowRunQueryOptions,
   flowListQueryOptions,
+  flowRunsRefreshInterval,
   flowRunsQueryOptions,
   flowTemplatesQueryOptions,
   flowWorkItemsQueryOptions,
@@ -17,7 +22,6 @@ import {
   publishFlowMutationOptions,
   snoozeFlowWorkItemMutationOptions,
   startFlowWorkItemMutationOptions,
-  simulateFlowRunMutationOptions,
   updateFlowDraftMutationOptions,
   validateFlowDefinitionMutationOptions
 } from "./flowsQueryOptions";
@@ -25,10 +29,13 @@ import { useActivateFlowMutation } from "./useActivateFlowMutation";
 import { useCreateNextFlowDraftMutation } from "./useCreateNextFlowDraftMutation";
 import { useCreateFlowMutation } from "./useCreateFlowMutation";
 import { useFlowDefinitionQuery } from "./useFlowDefinitionQuery";
+import { useFlowApprovalsQuery } from "./useFlowApprovalsQuery";
 import { useFlowListQuery } from "./useFlowListQuery";
 import { useFlowTemplatesQuery } from "./useFlowTemplatesQuery";
 import { useFlowWorkItemsQuery } from "./useFlowWorkItemsQuery";
 import { useCompleteFlowWorkItemMutation } from "./useCompleteFlowWorkItemMutation";
+import { useCancelFlowRunMutation } from "./useCancelFlowRunMutation";
+import { useFlowRunQuery } from "./useFlowRunQuery";
 import { usePublishFlowMutation } from "./usePublishFlowMutation";
 import { useUpdateFlowDraftMutation } from "./useUpdateFlowDraftMutation";
 import { useValidateFlowDefinitionMutation } from "./useValidateFlowDefinitionMutation";
@@ -57,6 +64,11 @@ describe("flows query options", () => {
       "detail",
       "11111111-1111-4111-8111-111111111111"
     ]);
+    expect(flowsQueryKeys.run("11111111-1111-4111-8111-111111111111")).toEqual([
+      "flows",
+      "run",
+      "11111111-1111-4111-8111-111111111111"
+    ]);
     expect(flowsQueryKeys.templates("ru")).toEqual(["flows", "templates", "ru"]);
     expect(flowsQueryKeys.runs("11111111-1111-4111-8111-111111111111", runQuery)).toEqual([
       "flows",
@@ -81,6 +93,11 @@ describe("flows query options", () => {
       "11111111-1111-4111-8111-111111111111"
     ]);
     expect(flowTemplatesQueryOptions("ru").queryKey).toEqual(["flows", "templates", "ru"]);
+    expect(flowRunQueryOptions("11111111-1111-4111-8111-111111111111").queryKey).toEqual([
+      "flows",
+      "run",
+      "11111111-1111-4111-8111-111111111111"
+    ]);
     expect(flowRunsQueryOptions("11111111-1111-4111-8111-111111111111", runQuery).queryKey).toEqual(
       ["flows", "runs", "11111111-1111-4111-8111-111111111111", runQuery]
     );
@@ -111,8 +128,9 @@ describe("flows query options", () => {
     await startFlowWorkItemMutationOptions(queryClient).onSuccess();
     await snoozeFlowWorkItemMutationOptions(queryClient).onSuccess();
     await completeFlowWorkItemMutationOptions(queryClient).onSuccess();
+    await cancelFlowRunMutationOptions(queryClient).onSuccess();
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(10);
+    expect(invalidateQueries).toHaveBeenCalledTimes(11);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: flowsQueryKeys.all() });
   });
 
@@ -120,9 +138,9 @@ describe("flows query options", () => {
     const invalidateQueries = vi.fn(async () => undefined);
     const queryClient = { invalidateQueries } satisfies Pick<QueryClient, "invalidateQueries">;
 
-    expect(simulateFlowRunMutationOptions().mutationFn).toBeTypeOf("function");
     expect(invalidateQueries).not.toHaveBeenCalled();
     expect(createManualFlowRunMutationOptions(queryClient).mutationFn).toBeTypeOf("function");
+    expect(cancelFlowRunMutationOptions(queryClient).mutationFn).toBeTypeOf("function");
     expect(decideFlowApprovalMutationOptions(queryClient).mutationFn).toBeTypeOf("function");
     expect(validateFlowDefinitionMutationOptions().mutationFn).toBeTypeOf("function");
   });
@@ -135,9 +153,13 @@ describe("flows query options", () => {
       "queryFn"
     );
     expect(useFlowTemplatesQuery("ru")).toHaveProperty("queryFn");
+    expect(useFlowApprovalsQuery({ status: "pending", limit: 5, offset: 0 })).toHaveProperty(
+      "queryFn"
+    );
     expect(useFlowWorkItemsQuery({ status: "pending", limit: 5, offset: 0 })).toHaveProperty(
       "queryFn"
     );
+    expect(useFlowRunQuery("11111111-1111-4111-8111-111111111111")).toHaveProperty("queryFn");
     expect(useCreateFlowMutation()).toHaveProperty("mutationFn");
     expect(useUpdateFlowDraftMutation()).toHaveProperty("mutationFn");
     expect(usePublishFlowMutation()).toHaveProperty("mutationFn");
@@ -147,6 +169,7 @@ describe("flows query options", () => {
     expect(useStartFlowWorkItemMutation()).toHaveProperty("mutationFn");
     expect(useSnoozeFlowWorkItemMutation()).toHaveProperty("mutationFn");
     expect(useCompleteFlowWorkItemMutation()).toHaveProperty("mutationFn");
+    expect(useCancelFlowRunMutation()).toHaveProperty("mutationFn");
     expect(useQueryClient).toHaveBeenCalled();
     expect(useMutation).toHaveBeenCalled();
     expect(useQuery).toHaveBeenCalled();
@@ -154,5 +177,27 @@ describe("flows query options", () => {
 
   it("does not retry the operator work queue behind a failed authoritative response", () => {
     expect(flowWorkItemsQueryOptions({ status: "active", limit: 50, offset: 0 }).retry).toBe(false);
+  });
+
+  it("refreshes flow history only while an asynchronous run can still transition", () => {
+    expect(flowRunsRefreshInterval({ runs: [{ status: "waiting" }] } as never)).toBe(5_000);
+    expect(flowRunsRefreshInterval({ runs: [{ status: "approval_required" }] } as never)).toBe(
+      5_000
+    );
+    expect(flowRunsRefreshInterval({ runs: [{ status: "completed" }] } as never)).toBe(false);
+    expect(flowRunsRefreshInterval({ runs: [{ status: "canceled" }] } as never)).toBe(false);
+  });
+
+  it("refreshes an opened run only while it can still transition", () => {
+    expect(flowRunRefreshInterval({ status: "waiting" } as never)).toBe(5_000);
+    expect(flowRunRefreshInterval({ status: "failed_retryable" } as never)).toBe(5_000);
+    expect(flowRunRefreshInterval({ status: "failed" } as never)).toBe(false);
+    expect(flowRunRefreshInterval(undefined)).toBe(false);
+  });
+
+  it("keeps a successful operator queue fresh without retrying an error in the background", () => {
+    expect(flowOperatorQueueRefreshInterval("success")).toBe(5_000);
+    expect(flowOperatorQueueRefreshInterval("pending")).toBe(false);
+    expect(flowOperatorQueueRefreshInterval("error")).toBe(false);
   });
 });

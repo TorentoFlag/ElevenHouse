@@ -173,6 +173,20 @@ export const flowWorkItemCompletedTraceSummarySchema = z
   })
   .strict();
 
+export const flowApprovalDecidedTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("advanced"),
+    nodeKind: z.enum(["astrologer_approval", "natal_chart_ai_draft"]),
+    reasonCode: z.literal("FLOW_APPROVAL_DECIDED"),
+    resultCode: z.literal("FLOW_TOKEN_ADVANCED"),
+    sourceHandle: z.union([z.literal("approved"), z.literal("rejected"), z.literal("timeout")]),
+    selectedEdgeId: flowRuntimeStableIdSchema,
+    targetNodeId: flowRuntimeStableIdSchema,
+    targetNodeKind: flowExecutableNodeKindV2Schema
+  })
+  .strict();
+
 /**
  * A profile revision can satisfy a pending collection task without claiming a
  * human astrologer performed the completion. The receipt table is the durable
@@ -227,6 +241,60 @@ export const flowSignalWaitingTraceSummarySchema = z
   })
   .strict();
 
+export const flowApprovalWaitingTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("waiting"),
+    nodeKind: z.literal("astrologer_approval"),
+    reasonCode: z.literal("FLOW_APPROVAL_CREATED"),
+    resultCode: z.literal("FLOW_WAITING_APPROVAL")
+  })
+  .strict();
+
+export const flowNatalChartAiDraftApprovalWaitingTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("waiting"),
+    nodeKind: z.literal("natal_chart_ai_draft"),
+    reasonCode: z.literal("FLOW_APPROVAL_CREATED"),
+    resultCode: z.literal("FLOW_WAITING_APPROVAL")
+  })
+  .strict();
+
+export const flowMessagingDeliveryWaitingTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("waiting"),
+    nodeKind: z.literal("send_message"),
+    reasonCode: z.literal("FLOW_MESSAGING_DELIVERY_REQUESTED"),
+    resultCode: z.literal("FLOW_WAITING_EXTERNAL")
+  })
+  .strict();
+
+export const flowApprovalAvailableTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("available"),
+    nodeKind: z.enum(["astrologer_approval", "natal_chart_ai_draft"]),
+    reasonCode: z.literal("FLOW_APPROVAL_SNOOZE_ELAPSED"),
+    resultCode: z.literal("FLOW_APPROVAL_AVAILABLE")
+  })
+  .strict();
+
+export const flowApprovalExpiredTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("advanced"),
+    nodeKind: z.enum(["astrologer_approval", "natal_chart_ai_draft"]),
+    reasonCode: z.literal("FLOW_APPROVAL_EXPIRED"),
+    resultCode: z.literal("FLOW_TOKEN_ADVANCED"),
+    sourceHandle: z.literal("timeout"),
+    selectedEdgeId: flowRuntimeStableIdSchema,
+    targetNodeId: flowRuntimeStableIdSchema,
+    targetNodeKind: flowExecutableNodeKindV2Schema
+  })
+  .strict();
+
 export const flowChartCalculationCompletedTraceSummarySchema = z
   .object({
     schemaVersion: z.literal("flow-runtime-trace.v1"),
@@ -235,6 +303,20 @@ export const flowChartCalculationCompletedTraceSummarySchema = z
     reasonCode: z.literal("FLOW_CHART_CALCULATION_COMPLETED"),
     resultCode: z.literal("FLOW_TOKEN_ADVANCED"),
     sourceHandle: z.literal("next"),
+    selectedEdgeId: flowRuntimeStableIdSchema,
+    targetNodeId: flowRuntimeStableIdSchema,
+    targetNodeKind: flowExecutableNodeKindV2Schema
+  })
+  .strict();
+
+export const flowMessagingDeliveryCompletedTraceSummarySchema = z
+  .object({
+    schemaVersion: z.literal("flow-runtime-trace.v1"),
+    outcome: z.literal("advanced"),
+    nodeKind: z.literal("send_message"),
+    reasonCode: z.literal("FLOW_MESSAGING_DELIVERY_COMPLETED"),
+    resultCode: z.literal("FLOW_TOKEN_ADVANCED"),
+    sourceHandle: z.union([z.literal("success"), z.literal("error")]),
     selectedEdgeId: flowRuntimeStableIdSchema,
     targetNodeId: flowRuntimeStableIdSchema,
     targetNodeKind: flowExecutableNodeKindV2Schema
@@ -443,10 +525,17 @@ export const flowFailedTraceSummarySchema = z
 export const flowRuntimeTraceSummarySchema = z.union([
   flowAdvancedTraceSummarySchema,
   flowWorkItemCompletedTraceSummarySchema,
+  flowApprovalDecidedTraceSummarySchema,
   flowBirthProfileRecheckReadyTraceSummarySchema,
   flowWorkItemWaitingTraceSummarySchema,
   flowSignalWaitingTraceSummarySchema,
+  flowMessagingDeliveryWaitingTraceSummarySchema,
+  flowApprovalWaitingTraceSummarySchema,
+  flowNatalChartAiDraftApprovalWaitingTraceSummarySchema,
+  flowApprovalAvailableTraceSummarySchema,
+  flowApprovalExpiredTraceSummarySchema,
   flowChartCalculationCompletedTraceSummarySchema,
+  flowMessagingDeliveryCompletedTraceSummarySchema,
   flowWorkItemAvailableTraceSummarySchema,
   flowBookingRescheduledTraceSummarySchema,
   flowTerminalTraceSummarySchema,
@@ -531,10 +620,58 @@ const flowExecutionSignalWaitDecisionSchema = z
       .object({
         signalType: z.literal("chart.calculation.terminal.v1"),
         correlationId: z.string().uuid(),
-        successHandle: z.literal("next")
+        successHandle: z.literal("next"),
+        replayExistingResult: z.boolean().optional()
       })
       .strict(),
     trace: flowSignalWaitingTraceSummarySchema
+  })
+  .strict();
+
+const flowExecutionExternalWaitDecisionSchema = z
+  .object({
+    kind: z.literal("wait_external"),
+    sourceNodeId: flowRuntimeStableIdSchema,
+    resultCode: z.literal("FLOW_WAITING_EXTERNAL"),
+    wait: z
+      .object({
+        signalType: z.literal("messaging.message.delivery.terminal.v1"),
+        correlationId: z.string().uuid(),
+        successHandle: z.literal("success"),
+        failureHandle: z.literal("error")
+      })
+      .strict(),
+    trace: flowMessagingDeliveryWaitingTraceSummarySchema
+  })
+  .strict();
+
+const flowExecutionApprovalWaitDecisionSchema = z
+  .object({
+    kind: z.literal("wait_approval"),
+    sourceNodeId: flowRuntimeStableIdSchema,
+    resultCode: z.literal("FLOW_WAITING_APPROVAL"),
+    approval: z
+      .object({
+        kind: z.enum(["ai_output", "manual_task"]),
+        title: z.string().trim().min(1).max(180),
+        preview: z.string().trim().min(1).max(1_000),
+        artifact: z
+          .object({
+            calculationId: z.string().uuid(),
+            interpretationId: z.string().uuid(),
+            sourceChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+            contentChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+            outputText: z.string().trim().min(1).max(26_000)
+          })
+          .strict()
+          .nullable(),
+        expiresAfterMinutes: z.number().int().min(1).max(525_600).nullable()
+      })
+      .strict(),
+    trace: z.union([
+      flowApprovalWaitingTraceSummarySchema,
+      flowNatalChartAiDraftApprovalWaitingTraceSummarySchema
+    ])
   })
   .strict();
 
@@ -542,6 +679,8 @@ const flowExecutionDecisionSchema = z.discriminatedUnion("kind", [
   flowExecutionAdvanceDecisionSchema,
   flowExecutionWorkItemWaitDecisionSchema,
   flowExecutionSignalWaitDecisionSchema,
+  flowExecutionExternalWaitDecisionSchema,
+  flowExecutionApprovalWaitDecisionSchema,
   flowExecutionTerminalDecisionSchema
 ]);
 
@@ -550,6 +689,8 @@ export type FlowNodeExecutorDecision =
   | z.infer<typeof flowExecutionAdvanceSelectionSchema>
   | z.infer<typeof flowExecutionWorkItemWaitDecisionSchema>
   | z.infer<typeof flowExecutionSignalWaitDecisionSchema>
+  | z.infer<typeof flowExecutionExternalWaitDecisionSchema>
+  | z.infer<typeof flowExecutionApprovalWaitDecisionSchema>
   | z.infer<typeof flowExecutionTerminalDecisionSchema>;
 
 export type FlowNodeExecutor = {
@@ -558,7 +699,13 @@ export type FlowNodeExecutor = {
   readonly executorContractVersion: number;
   readonly evaluate: (
     node: FlowExecutableNodeV2,
-    context: { readonly ownerUserId: string; readonly effectiveRunSnapshot: unknown }
+    context: {
+      readonly ownerUserId: string;
+      readonly runId: string;
+      readonly tokenId: string;
+      readonly nodeActivationSequence: bigint;
+      readonly effectiveRunSnapshot: unknown;
+    }
   ) => Promise<FlowNodeExecutorDecision>;
 };
 
@@ -673,16 +820,25 @@ export function createFlowNodeExecutorRegistry(
 export function createBuiltInFlowNodeExecutorRegistry(input: {
   readonly birthDataReadinessReader?: FlowBirthDataReadinessReader;
   readonly natalChartRequester?: FlowNatalChartRequester;
+  readonly natalChartAiDraftRequester?: FlowNatalChartAiDraftRequester;
+  readonly messagingRequester?: FlowMessagingRequester;
 } = {}): FlowNodeExecutorRegistry {
   return createFlowNodeExecutorRegistry([
     astrologerWorkItemNodeExecutor,
+    astrologerApprovalNodeExecutor,
     completedNodeExecutor,
+    suppressedNodeExecutor,
+    failedNodeExecutor,
     ...(input.birthDataReadinessReader
       ? [createFlowBirthDataReadinessNodeExecutor(input.birthDataReadinessReader)]
       : []),
     ...(input.natalChartRequester
       ? [createFlowNatalChartRequestNodeExecutor(input.natalChartRequester)]
-      : [])
+      : []),
+    ...(input.natalChartAiDraftRequester
+      ? [createFlowNatalChartAiDraftNodeExecutor(input.natalChartAiDraftRequester)]
+      : []),
+    ...(input.messagingRequester ? [createFlowSendMessageNodeExecutor(input.messagingRequester)] : [])
   ]);
 }
 
@@ -704,7 +860,41 @@ export type FlowNatalChartRequester = {
   }) => Promise<{ readonly kind: "active_job"; readonly jobId: string } | {
     readonly kind: "existing_result";
     readonly calculationId: string;
+    readonly jobId: string;
   }>;
+};
+
+export type FlowNatalChartAiDraftRequester = {
+  readonly prepare: (input: {
+    readonly ownerUserId: string;
+    readonly runId: string;
+    readonly tokenId: string;
+    readonly nodeActivationSequence: bigint;
+    readonly chartRequestNodeId: string;
+    readonly locale: "ru" | "en";
+  }) => Promise<{
+    readonly calculationId: string;
+    readonly interpretationId: string;
+    readonly sourceChecksum: `sha256:${string}`;
+    readonly contentChecksum: `sha256:${string}`;
+    readonly outputText: string;
+    readonly preview: string;
+  }>;
+};
+
+/** Messaging owns recipient resolution, semantic idempotency and provider delivery. */
+export type FlowMessagingRequester = {
+  readonly prepare: (input: {
+    readonly ownerUserId: string;
+    readonly clientUserId: string;
+    readonly runId: string;
+    readonly tokenId: string;
+    readonly nodeActivationSequence: bigint;
+    readonly textTemplate: string;
+  }) => Promise<
+    | { readonly kind: "queued"; readonly messageId: string }
+    | { readonly kind: "rejected" }
+  >;
 };
 
 export function createFlowBirthDataReadinessNodeExecutor(
@@ -722,7 +912,7 @@ export function createFlowBirthDataReadinessNodeExecutor(
         );
       }
       const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
-      if (!snapshot.success) {
+      if (!snapshot.success || snapshot.data.subject.type !== "booking") {
         throw new FlowExecutionIntegrityError(
           "FLOW_TOKEN_RUNTIME_STATE_INVALID",
           "Birth-data readiness requires a pinned booking run snapshot"
@@ -757,7 +947,7 @@ export function createFlowNatalChartRequestNodeExecutor(
         );
       }
       const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
-      if (!snapshot.success) {
+      if (!snapshot.success || snapshot.data.subject.type !== "booking") {
         throw new FlowExecutionIntegrityError(
           "FLOW_TOKEN_RUNTIME_STATE_INVALID",
           "Natal-chart request requires a pinned booking run snapshot"
@@ -789,7 +979,135 @@ export function createFlowNatalChartRequestNodeExecutor(
           }
         };
       }
-      return { kind: "advance", sourceNodeId: node.id, sourceHandle: "next" };
+      return {
+        kind: "wait_signal",
+        sourceNodeId: node.id,
+        resultCode: "FLOW_WAITING_SIGNAL",
+        wait: {
+          signalType: "chart.calculation.terminal.v1",
+          correlationId: outcome.jobId,
+          successHandle: "next",
+          replayExistingResult: true
+        },
+        trace: {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: "natal_chart_request",
+          reasonCode: "FLOW_CHART_CALCULATION_REQUESTED",
+          resultCode: "FLOW_WAITING_SIGNAL"
+        }
+      };
+    }
+  };
+}
+
+export function createFlowNatalChartAiDraftNodeExecutor(
+  requester: FlowNatalChartAiDraftRequester
+): FlowNodeExecutor {
+  return {
+    kind: "natal_chart_ai_draft",
+    configSchemaVersion: 1,
+    executorContractVersion: 1,
+    evaluate: async (node, context) => {
+      if (node.kind !== "natal_chart_ai_draft") {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+          "Natal chart AI-draft executor received a different node kind"
+        );
+      }
+      const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
+      if (!snapshot.success || snapshot.data.subject.type !== "booking") {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+          "Natal chart AI draft requires a pinned booking run snapshot"
+        );
+      }
+      const artifact = await requester.prepare({
+        ownerUserId: context.ownerUserId,
+        runId: context.runId,
+        tokenId: context.tokenId,
+        nodeActivationSequence: context.nodeActivationSequence,
+        chartRequestNodeId: node.config.chartRequestNodeId,
+        locale: node.config.locale
+      });
+      return {
+        kind: "wait_approval",
+        sourceNodeId: node.id,
+        resultCode: "FLOW_WAITING_APPROVAL",
+        approval: {
+          kind: "ai_output",
+          title: node.config.approvalTitle,
+          preview: artifact.preview,
+          artifact: {
+            calculationId: artifact.calculationId,
+            interpretationId: artifact.interpretationId,
+            sourceChecksum: artifact.sourceChecksum,
+            contentChecksum: artifact.contentChecksum,
+            outputText: artifact.outputText
+          },
+          expiresAfterMinutes: node.config.expiresAfterMinutes ?? null
+        },
+        trace: {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: "natal_chart_ai_draft",
+          reasonCode: "FLOW_APPROVAL_CREATED",
+          resultCode: "FLOW_WAITING_APPROVAL"
+        }
+      };
+    }
+  };
+}
+
+export function createFlowSendMessageNodeExecutor(requester: FlowMessagingRequester): FlowNodeExecutor {
+  return {
+    kind: "send_message",
+    configSchemaVersion: 1,
+    executorContractVersion: 1,
+    evaluate: async (node, context) => {
+      if (node.kind !== "send_message") {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+          "Messaging executor received a different node kind"
+        );
+      }
+      const snapshot = flowRunSnapshotV2Schema.safeParse(context.effectiveRunSnapshot);
+      if (!snapshot.success) {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+          "Messaging delivery requires a pinned client subject"
+        );
+      }
+      const clientUserId = snapshot.data.subject.clientUserId;
+      const message = await requester.prepare({
+        ownerUserId: context.ownerUserId,
+        clientUserId,
+        runId: context.runId,
+        tokenId: context.tokenId,
+        nodeActivationSequence: context.nodeActivationSequence,
+        textTemplate: node.config.textTemplate
+      });
+      if (message.kind === "rejected") {
+        return { kind: "advance", sourceNodeId: node.id, sourceHandle: "error" };
+      }
+      return {
+        kind: "wait_external",
+        sourceNodeId: node.id,
+        resultCode: "FLOW_WAITING_EXTERNAL",
+        wait: {
+          signalType: "messaging.message.delivery.terminal.v1",
+          correlationId: message.messageId,
+          successHandle: "success",
+          failureHandle: "error"
+        },
+        trace: {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: "send_message",
+          reasonCode: "FLOW_MESSAGING_DELIVERY_REQUESTED",
+          resultCode: "FLOW_WAITING_EXTERNAL"
+        }
+      };
     }
   };
 }
@@ -803,6 +1121,9 @@ export async function interpretFlowExecutionClaim(input: {
   const executor = input.registry.require(node);
   const executorDecision = await executor.evaluate(node, {
     ownerUserId: input.claim.ownerUserId,
+    runId: input.claim.runId,
+    tokenId: input.claim.tokenId,
+    nodeActivationSequence: input.claim.nodeActivationSequence,
     effectiveRunSnapshot: input.claim.effectiveRunSnapshot
   });
   if (executorDecision.kind !== "advance") {
@@ -986,7 +1307,11 @@ function validateFlowExecutionDecision(
   }
   if (
     decision.kind === "terminal" &&
-    (node.kind !== "completed" || decision.resultCode !== node.config.goalKey)
+    !(
+      (node.kind === "completed" && decision.resultCode === node.config.goalKey) ||
+      (node.kind === "suppressed" && decision.resultCode === node.config.reasonCode) ||
+      (node.kind === "failed" && decision.resultCode === node.config.errorCode)
+    )
   ) {
     throw new FlowRuntimeTraceValidationError();
   }
@@ -1002,6 +1327,33 @@ function validateFlowExecutionDecision(
     (node.kind !== "natal_chart_request" ||
       decision.wait.signalType !== "chart.calculation.terminal.v1" ||
       decision.wait.successHandle !== "next")
+  ) {
+    throw new FlowRuntimeTraceValidationError();
+  }
+  if (
+    decision.kind === "wait_external" &&
+    (node.kind !== "send_message" ||
+      decision.wait.signalType !== "messaging.message.delivery.terminal.v1" ||
+      decision.wait.successHandle !== "success" ||
+      decision.wait.failureHandle !== "error")
+  ) {
+    throw new FlowRuntimeTraceValidationError();
+  }
+  if (
+    decision.kind === "wait_approval" &&
+    !(
+      (node.kind === "astrologer_approval" &&
+        decision.approval.kind === node.config.approvalKind &&
+        decision.approval.title === node.config.approvalTitle &&
+        decision.approval.preview === node.displayTitle &&
+        decision.approval.artifact === null &&
+        decision.approval.expiresAfterMinutes === (node.config.expiresAfterMinutes ?? null)) ||
+      (node.kind === "natal_chart_ai_draft" &&
+        decision.approval.kind === "ai_output" &&
+        decision.approval.title === node.config.approvalTitle &&
+        decision.approval.artifact !== null &&
+        decision.approval.expiresAfterMinutes === (node.config.expiresAfterMinutes ?? null))
+    )
   ) {
     throw new FlowRuntimeTraceValidationError();
   }
@@ -1045,6 +1397,40 @@ const astrologerWorkItemNodeExecutor: FlowNodeExecutor = {
   }
 };
 
+const astrologerApprovalNodeExecutor: FlowNodeExecutor = {
+  kind: "astrologer_approval",
+  configSchemaVersion: 1,
+  executorContractVersion: 1,
+  evaluate: async (node) => {
+    if (node.kind !== "astrologer_approval") {
+      throw new FlowExecutionIntegrityError(
+        "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+        "Astrologer approval executor received a different node kind"
+      );
+    }
+
+    return {
+      kind: "wait_approval",
+      sourceNodeId: node.id,
+      resultCode: "FLOW_WAITING_APPROVAL",
+      approval: {
+        kind: node.config.approvalKind,
+        title: node.config.approvalTitle,
+        preview: node.displayTitle,
+        artifact: null,
+        expiresAfterMinutes: node.config.expiresAfterMinutes ?? null
+      },
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "waiting",
+        nodeKind: "astrologer_approval",
+        reasonCode: "FLOW_APPROVAL_CREATED",
+        resultCode: "FLOW_WAITING_APPROVAL"
+      }
+    };
+  }
+};
+
 export function resolveFlowWorkItemNodePolicy(
   node: Extract<FlowExecutableNodeV2, { readonly kind: "astrologer_work_item" }>
 ): {
@@ -1063,7 +1449,7 @@ export function resolveFlowWorkItemDueAt(
 ): string | null {
   if (duePolicy.kind === "none") return null;
   const snapshot = flowRunSnapshotV2Schema.safeParse(runSnapshot);
-  if (!snapshot.success) {
+  if (!snapshot.success || snapshot.data.subject.type !== "booking") {
     throw new FlowExecutionIntegrityError(
       "FLOW_TOKEN_RUNTIME_STATE_INVALID",
       "A booking-relative work-item deadline requires a pinned booking snapshot"
@@ -1121,6 +1507,57 @@ const completedNodeExecutor: FlowNodeExecutor = {
     };
   }
 };
+
+const suppressedNodeExecutor: FlowNodeExecutor = {
+  kind: "suppressed",
+  configSchemaVersion: 1,
+  executorContractVersion: 1,
+  evaluate: async (node) => {
+    if (node.kind !== "suppressed") {
+      throw new FlowExecutionIntegrityError(
+        "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+        "Suppressed executor received a different node kind"
+      );
+    }
+
+    return terminalFlowDecision(node, node.config.reasonCode);
+  }
+};
+
+const failedNodeExecutor: FlowNodeExecutor = {
+  kind: "failed",
+  configSchemaVersion: 1,
+  executorContractVersion: 1,
+  evaluate: async (node) => {
+    if (node.kind !== "failed") {
+      throw new FlowExecutionIntegrityError(
+        "FLOW_TOKEN_NODE_METADATA_MISMATCH",
+        "Failed executor received a different node kind"
+      );
+    }
+
+    return terminalFlowDecision(node, node.config.errorCode);
+  }
+};
+
+function terminalFlowDecision(
+  node: Extract<FlowExecutableNodeV2, { readonly kind: "suppressed" | "failed" }>,
+  resultCode: string
+): FlowNodeExecutorDecision {
+  return {
+    kind: "terminal",
+    sourceNodeId: node.id,
+    terminalStatus: "completed",
+    resultCode,
+    trace: {
+      schemaVersion: "flow-runtime-trace.v1",
+      outcome: "terminal",
+      nodeKind: node.kind,
+      reasonCode: "FLOW_GOAL_REACHED",
+      resultCode
+    }
+  };
+}
 
 function parsePinnedGraph(value: unknown): FlowGraphV2 {
   const result = flowGraphV2Schema.safeParse(value);

@@ -56,8 +56,8 @@ describe("platform capability manifest round-three review contract", () => {
       ])
     );
 
-    expect(operations).toHaveLength(129);
-    expect(Object.keys(actual)).toHaveLength(129);
+    expect(operations).toHaveLength(130);
+    expect(Object.keys(actual)).toHaveLength(130);
     expect(actual).toEqual(expectedPlatformCapabilityOperationContracts);
   });
 

@@ -1,5 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
+  messagingMessageDeliveryReconciliationRequestedEventType,
+  messagingMessageDeliveryTerminalEventType,
   messagingMessageDeliveryRequestedEventType,
   type MessagingChannelMode,
   type MessagingChannelStatus,
@@ -31,6 +33,7 @@ export type TelegramBusinessDeliveryWorkItem = {
   readonly businessConnectionId: string;
   readonly providerChatId: string;
   readonly text: string;
+  readonly reconciliation?: boolean;
 };
 
 export type TelegramMtprotoDeliveryWorkItem = {
@@ -42,6 +45,7 @@ export type TelegramMtprotoDeliveryWorkItem = {
   readonly channelConnectionId: string;
   readonly peerId: string;
   readonly text: string;
+  readonly reconciliation?: boolean;
 };
 
 export type MessagingDeliveryWorkItem =
@@ -114,6 +118,7 @@ async function findByOutboxEventId(
   const [row] = await database
     .select({
       outboxEventId: outboxEvents.id,
+      eventType: outboxEvents.eventType,
       payload: outboxEvents.payload,
       messageId: messagingMessages.id,
       messageStatus: messagingMessages.status,
@@ -126,7 +131,6 @@ async function findByOutboxEventId(
       providerChatId: messagingExternalIdentities.providerChatId
     })
     .from(outboxEvents)
-    .innerJoin(messagingMessages, eq(messagingMessages.id, outboxEvents.aggregateId))
     .innerJoin(messagingThreads, eq(messagingThreads.id, messagingMessages.threadId))
     .innerJoin(
       messagingChannelConnections,
@@ -149,7 +153,10 @@ async function findByOutboxEventId(
     .where(
       and(
         eq(outboxEvents.id, outboxEventId),
-        eq(outboxEvents.eventType, messagingMessageDeliveryRequestedEventType)
+        inArray(outboxEvents.eventType, [
+          messagingMessageDeliveryRequestedEventType,
+          messagingMessageDeliveryReconciliationRequestedEventType
+        ])
       )
     )
     .limit(1);
@@ -197,7 +204,7 @@ async function recordDeliveryAttempt(
         and(
           eq(messagingMessages.id, input.messageId),
           eq(messagingMessages.direction, "outbound"),
-          eq(messagingMessages.status, "queued")
+          inArray(messagingMessages.status, ["queued", "unknown"])
         )
       )
       .returning();
@@ -225,6 +232,86 @@ async function recordDeliveryAttempt(
       externalIdentityId: message.externalIdentityId,
       createdAt: input.attemptedAt
     });
+
+    if (options.messageStatus === "sent" || options.messageStatus === "failed") {
+      const [deliveryRequest] = await transaction
+        .select({ payload: outboxEvents.payload })
+        .from(outboxEvents)
+        .where(
+          and(
+            eq(outboxEvents.eventType, messagingMessageDeliveryRequestedEventType),
+            eq(outboxEvents.aggregateId, message.id)
+          )
+        )
+        .limit(1);
+      if (
+        deliveryRequest?.payload &&
+        "flowTerminalSignal" in deliveryRequest.payload &&
+        deliveryRequest.payload.flowTerminalSignal === "flow_delivery_terminal.v1"
+      ) {
+        const ownerUserId = await findMessageAstrologerUserId(transaction, message.threadId);
+        await transaction
+          .insert(outboxEvents)
+          .values({
+            eventType: messagingMessageDeliveryTerminalEventType,
+            aggregateId: message.id,
+            payload: {
+              schemaVersion: "messaging-message-delivery-terminal.v1",
+              messageId: message.id,
+              ownerUserId,
+              outcome: options.messageStatus === "sent" ? "succeeded" : "failed",
+              occurredAt: input.attemptedAt.toISOString()
+            },
+            status: "pending",
+            attempts: 0,
+            availableAt: input.attemptedAt,
+            lockedAt: null,
+            publishedAt: null,
+            lastError: null,
+            createdAt: input.attemptedAt,
+            updatedAt: input.attemptedAt
+          })
+          .onConflictDoNothing();
+      }
+    }
+
+    if (options.messageStatus === "unknown") {
+      const [deliveryRequest] = await transaction
+        .select({ payload: outboxEvents.payload })
+        .from(outboxEvents)
+        .where(
+          and(
+            eq(outboxEvents.eventType, messagingMessageDeliveryRequestedEventType),
+            eq(outboxEvents.aggregateId, message.id)
+          )
+        )
+        .limit(1);
+      if (
+        deliveryRequest?.payload &&
+        "flowTerminalSignal" in deliveryRequest.payload &&
+        deliveryRequest.payload.flowTerminalSignal === "flow_delivery_terminal.v1"
+      ) {
+        await transaction
+          .insert(outboxEvents)
+          .values({
+            eventType: messagingMessageDeliveryReconciliationRequestedEventType,
+            aggregateId: message.id,
+            payload: {
+              schemaVersion: "messaging-message-delivery-reconciliation-request.v1",
+              messageId: message.id
+            },
+            status: "pending",
+            attempts: 0,
+            availableAt: input.attemptedAt,
+            lockedAt: null,
+            publishedAt: null,
+            lastError: null,
+            createdAt: input.attemptedAt,
+            updatedAt: input.attemptedAt
+          })
+          .onConflictDoNothing();
+      }
+    }
   });
 }
 
@@ -243,6 +330,7 @@ async function findMessageAstrologerUserId(
 
 function toMessagingDeliveryWorkItem(input: {
   readonly outboxEventId: string;
+  readonly eventType: string;
   readonly payload: OutboxEventPayload;
   readonly messageId: string;
   readonly messageStatus: string;
@@ -254,13 +342,17 @@ function toMessagingDeliveryWorkItem(input: {
   readonly businessConnectionId: string | null;
   readonly providerChatId: string;
 }): MessagingDeliveryWorkItem {
+  if (!("messageId" in input.payload) || input.payload.messageId !== input.messageId) {
+    throw new Error(`Outbox event ${input.outboxEventId} does not match messaging aggregate`);
+  }
+  const reconciliation =
+    input.eventType === messagingMessageDeliveryReconciliationRequestedEventType;
   if (
-    !("messageId" in input.payload) ||
-    !("threadId" in input.payload) ||
-    !("channelConnectionId" in input.payload) ||
-    input.payload.messageId !== input.messageId ||
-    input.payload.threadId !== input.threadId ||
-    input.payload.channelConnectionId !== input.channelConnectionId
+    !reconciliation &&
+    (!("threadId" in input.payload) ||
+      !("channelConnectionId" in input.payload) ||
+      input.payload.threadId !== input.threadId ||
+      input.payload.channelConnectionId !== input.channelConnectionId)
   ) {
     throw new Error(`Outbox event ${input.outboxEventId} does not match messaging aggregate`);
   }
@@ -283,7 +375,8 @@ function toMessagingDeliveryWorkItem(input: {
       channelConnectionId: input.channelConnectionId,
       businessConnectionId: input.businessConnectionId,
       providerChatId: input.providerChatId,
-      text: input.text
+      text: input.text,
+      reconciliation
     };
   }
 
@@ -296,7 +389,8 @@ function toMessagingDeliveryWorkItem(input: {
       mode: "telegram_mtproto_account",
       channelConnectionId: input.channelConnectionId,
       peerId: input.providerChatId,
-      text: input.text
+      text: input.text,
+      reconciliation
     };
   }
 

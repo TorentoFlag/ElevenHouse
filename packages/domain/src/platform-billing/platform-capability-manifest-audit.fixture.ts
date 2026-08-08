@@ -834,6 +834,14 @@ const expectedAuditedSurfaces: readonly AuditedSurface[] = [
   audited(
     "funnels",
     "mutationOperations",
+    "funnels.manual-client-run.create",
+    "astrologer-api.FlowsModule",
+    "apps/astrologer-api/src/modules/flows/flow-manual-client-runs.controller.ts",
+    "POST /flows/:flowId/manual-runs"
+  ),
+  audited(
+    "funnels",
+    "mutationOperations",
     "funnels.pause",
     "astrologer-api.FlowsModule",
     "apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts",
@@ -1988,9 +1996,10 @@ const expectedClassifications = {
     "horar",
     "astrocal",
     "products",
+    "funnels",
     "refs"
   ],
-  partial: ["pdf", "child", "calendar", "crm", "funnels", "ai", "inbox"],
+  partial: ["pdf", "child", "calendar", "crm", "ai", "inbox"],
   absent: [
     "vedic",
     "page",

@@ -3,6 +3,7 @@
 import type {
   FlowWorkItem,
   FlowWorkItemBookingContext,
+  FlowWorkItemManualClientContext,
   FlowWorkItemQueueEntry
 } from "@elevenhouse/contracts";
 import { act, renderHook } from "@testing-library/react";
@@ -97,6 +98,34 @@ describe("useFlowWorkItemQueueController", () => {
       status: "pending",
       operation: "start"
     });
+  });
+
+  it("starts a manual-client work item without invented booking lifecycle evidence", () => {
+    const manualEntry = manualClientQueueEntry();
+    mocks.useFlowWorkItemsQuery.mockReturnValue({
+      data: {
+        schemaVersion: "flow-work-item-list.v1",
+        items: [manualEntry],
+        total: 1,
+        asOf: "2026-08-05T08:00:00.000Z"
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch
+    });
+    const { result } = renderHook(() => useFlowWorkItemQueueController({ locale: "ru" }));
+
+    act(() => result.current.start(manualEntry));
+
+    expect(start).toHaveBeenCalledWith(
+      {
+        workItemId: manualEntry.workItem.id,
+        body: { expectedRevision: manualEntry.workItem.revision },
+        idempotencyKey: expect.stringMatching(/^flows:work-item:start:/)
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
   });
 
   it("uses the compact dashboard page size without changing queue semantics", () => {
@@ -292,6 +321,22 @@ function queueEntry(
         id: "99999999-9999-4999-8999-999999999999",
         titleSnapshot: "Натальная консультация"
       }
+    }
+  };
+}
+
+function manualClientQueueEntry(
+  overrides: Partial<FlowWorkItem> = {}
+): FlowWorkItemQueueEntry & { readonly context: FlowWorkItemManualClientContext } {
+  const bookingEntry = queueEntry(overrides);
+  return {
+    ...bookingEntry,
+    context: {
+      status: "available",
+      subjectType: "client",
+      completionRequirements: { resultSummary: "optional" },
+      flow: bookingEntry.context.flow,
+      client: bookingEntry.context.client
     }
   };
 }

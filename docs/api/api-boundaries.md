@@ -6,9 +6,10 @@
 реализованы health, identity/passwordless/session, direct-link client join,
 related-astrologer read, cabinet overview, client birth-profile routes and the
 relationship-scoped purchase-option and slot reads, booking/order/payment
-commands and client checkout-state reads. Full public profile read model,
-materials, feed, client recurring subscriptions, journal and client-visible
-calculation delivery remain incomplete contours on this surface.
+commands, client checkout-state reads and owner-scoped dispute-candidate
+submission/read for paid orders. Full public profile read model, materials,
+feed, client recurring subscriptions, journal and client-visible calculation
+delivery remain incomplete contours on this surface.
 
 Ответственности:
 
@@ -23,7 +24,12 @@ calculation delivery remain incomplete contours on this surface.
   relationships. This must not become astrologer discovery, recommendation,
   search or catalog API.
 
-Примеры routes:
+Ниже — current operational route index, а не полная schema reference: request/
+response fields, error codes and versioning остаются shared contracts и
+контроллерными contract tests. Список фиксирует реализованные HTTP surfaces;
+не добавляй в него будущие product routes как будто они уже существуют.
+
+Public routes:
 
 ```text
 POST /identity/passwordless/request-code
@@ -49,6 +55,8 @@ GET  /payments/checkout-preparations/:checkoutPreparationId
 GET  /payments/checkout-preparations/:checkoutPreparationId/action
 GET  /me/orders
 GET  /me/bookings
+POST /client/orders/:orderId/disputes
+GET  /client/orders/:orderId/disputes
 ```
 
 Passwordless login verification is login-only. If the verified identifier is not linked
@@ -122,10 +130,10 @@ calculations with private notes and a versioned interpretation catalog, Human
 Design individual/compatibility/transit/AI/PDF contours, provider-neutral
 Messaging commands/webhook/SSE freshness and provider-neutral AI generation
 through OpenAI, and the Flows templates/draft CRUD/immutable publish,
-owner-scoped definition validation, definition-only runtime read surface and
-durable cancellation of existing v2 terminal-token runs. New Flows execution
-and enrollment remain fail-closed until the complete durable `flow-graph.v2`
-interpreter and rollout authority are implemented.
+owner-scoped definition validation, durable enrollment/activation, manual-client
+run admission, approval decisions, operational work-item and runtime reads.
+Runtime admission remains fail-closed until the current owner, rollout policy
+and matching live executor lease are all proven.
 Messaging architecture is recorded in
 `docs/decisions/0010-messaging-channel-architecture.md`.
 
@@ -139,9 +147,9 @@ Messaging architecture is recorded in
 - Messaging commands, provider webhook ingestion and realtime freshness.
 - Sessions и materials.
 - Wallet/finance views.
-- Flows templates, draft CRUD, owner-scoped read-only definition validation,
-  immutable publish, definition-only runtime history/availability projection
-  and durable owner-scoped cancellation of eligible existing v2 runs.
+- Flows templates, draft CRUD, owner-scoped definition validation, immutable
+  publish, durable enrollment/activation, manual-client run admission,
+  approval/work-item commands and operational runtime projections.
 - Analytics.
 - Verification submission and current verification status for the signed-in
   astrologer.
@@ -265,7 +273,6 @@ POST /flows/:flowId/publish
 POST /flows/:flowId/activate
 POST /flows/:flowId/pause-enrollment
 POST /flows/:flowId/pause
-POST /flows/:flowId/simulate
 POST /flows/:flowId/manual-runs
 GET /flows/:flowId/runs
 GET /flow-runs/:runId
@@ -274,13 +281,33 @@ GET /flow-approvals
 POST /flow-approvals/:approvalId/decision
 ```
 
+The internal, super-admin-only Flow runtime control surface is deliberately
+separate from astrologer routes:
+
+```text
+GET /admin/flows/runtime-control
+PUT /admin/flows/runtime-control
+```
+
+`GET` returns the verified immutable current rollout policy. `PUT` requires an
+admin session with `super_admin`, CSRF and `Idempotency-Key`; it performs a
+compare-and-swap replacement using `expectedRevision`, persists a new immutable
+policy revision with the operator reason and actor subject, and returns a typed
+`409 FLOW_RUNTIME_CONTROL_REVISION_CONFLICT` if another operator already
+advanced the policy. It does not start workers, create enrollments, activate a
+flow, or bypass activation readiness. An executable policy remains insufficient
+until the exact owner/version activation review observes matching live worker
+leases, capabilities, entitlement and product readiness.
+
 `GET /flows`, run reads and approval reads include server-backed runtime
-metadata. The current value is `mode=definition_only`,
-`executionAvailable=false`, reason
-`FLOW_RUNTIME_EXECUTION_UNAVAILABLE` and
-`historySemantics=legacy_preview`. This metadata is the frontend authority for
-disabled execution controls and for excluding legacy traversal rows from
-business completion metrics.
+metadata. Availability is evaluated for the requesting owner from the verified
+current rollout policy, the persisted rollout-subject mapping and a live,
+matching executor lease. It is `executionAvailable=false` with
+`FLOW_RUNTIME_EXECUTION_UNAVAILABLE` when any of those proofs is absent; an
+enabled policy alone is never enough. This metadata is the frontend authority
+for disabled execution controls. `historySemantics=durable_execution` means
+the returned operational history is the durable runtime record, not a browser
+preview.
 
 `POST /flows/:flowId/validate` is an owner-scoped, CSRF-protected read-only
 operation. It accepts readable v1 or strict v2 graphs through shared contracts,
@@ -349,10 +376,10 @@ returns typed `500` instead of a guessed state.
 Activation opens one immutable effective-time epoch and atomically closes a
 previous epoch as `version_switch`; pause closes the exact current epoch as
 `pause_enrollment`. Pausing stops only future enrollment. Existing accepted runs
-continue under their pinned version and runtime policy. The current persisted
-runtime mode remains `definition_only`, so a valid activation is rejected as
-`409 FLOW_ACTIVATION_BLOCKED` with explicit readiness blockers and creates no
-epoch.
+continue under their pinned version and runtime policy. A valid activation is
+accepted only when its own transaction re-proves all readiness requirements;
+otherwise it is rejected as `409 FLOW_ACTIVATION_BLOCKED` with explicit
+blockers and creates no epoch.
 
 `POST /flows/:flowId/pause` remains only as a transitional drain for a
 historical `flows.status=active` definition that has no active enrollment
@@ -360,10 +387,18 @@ authority. It serializes on the same flow row as activation, is idempotent after
 the legacy status is paused and returns
 `409 FLOW_LEGACY_PAUSE_NOT_APPLICABLE` if authoritative enrollment is active.
 It is never an alias for `pause-enrollment` and never fabricates an activation
-epoch. Create/edit/publish and read-only history remain available. Simulation,
-manual run creation and approval decision still fail with typed
-`409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE` while the static legacy runtime surface
-remains disabled.
+epoch. Create/edit/publish and read-only history remain available. Simulation
+is not an HTTP surface. `POST /flows/:flowId/manual-runs` is an authenticated,
+owner-scoped, CSRF-protected and idempotent command for a `manual_client`
+trigger only. Its body contains only `clientUserId`; PostgreSQL locks and proves
+the existing client--astrologer relationship, resolves the active enrollment
+epoch and pins the immutable definition/manifest snapshot. The browser cannot
+supply booking, relationship, occurrence or executor context. Reusing a key
+with a different client returns typed `409`; an unavailable or foreign client
+returns non-enumerating `404`; a manual run while runtime admission is absent
+returns `409 FLOW_RUNTIME_EXECUTION_UNAVAILABLE`. Approval decision is likewise
+a durable, idempotent command and is available only while the owner passes the
+same live runtime-admission check.
 
 `POST /flow-runs/:runId/cancel` is an independent operational control for
 existing durable v2 terminal-token runs; it does not enable activation,
@@ -614,8 +649,11 @@ and must not know provider keys, prompt ids or provider internals.
 
 `admin-api` является отдельной поверхностью authenticated workflows
 администраторов, супер-администраторов и модераторов. В текущем коде app
-содержит health, internal identity/session foundation и первый finance policy
-контур для настройки risk/hold/reserve.
+содержит health и internal finance contour: risk/hold/reserve policies,
+versioned fiscal profiles, platform tariffs, payout evidence, recurring-card
+disclosures, refund-candidate review, super-admin refund approval и step-up
+finance authorizations. Это не означает, что broader user, verification,
+moderation, payment-support и platform-settings workflows уже реализованы.
 
 Ответственности администратора/супер-администратора/модератора:
 
@@ -627,7 +665,7 @@ and must not know provider keys, prompt ids or provider internals.
 - Platform settings.
 - Audit trail.
 
-Примеры routes:
+Current admin routes in this implemented contour:
 
 ```text
 POST /identity/admin/passwordless/request-code
@@ -649,11 +687,43 @@ GET  /admin/finance/reversal-cases?type=all|refund|chargeback
 PUT  /admin/finance/reversal-cases/:reversalCaseId/review
 GET  /admin/finance/reconciliation/exceptions?evidence=all|payment|settlement|payout|provider_event
 PUT  /admin/finance/reconciliation/exceptions/:reconciliationRecordId
+GET  /admin/finance/fiscal-profiles
+POST /admin/finance/fiscal-profiles
+PUT  /admin/finance/fiscal-profiles/:profileSeriesId/:version
+POST /admin/finance/fiscal-profiles/:profileSeriesId/:version/publish
+POST /admin/finance/fiscal-profiles/:profileSeriesId/:version/retire
+GET  /admin/tariffs
+POST /admin/tariffs
+PUT  /admin/tariffs/:tariffSeriesId/:version
+POST /admin/tariffs/:tariffSeriesId/:version/publish
+POST /admin/finance/payout-evidence
+GET  /admin/finance/saved-card-disclosures
+POST /admin/finance/saved-card-disclosures
+PUT  /admin/finance/saved-card-disclosures
+POST /admin/finance/saved-card-disclosures/:seriesId/:version/:locale/publish
+POST /admin/finance/saved-card-disclosures/:seriesId/:version/:locale/retire
+GET  /admin/finance/refund-candidates
+PUT  /admin/finance/refund-candidates/:candidateId/review
+POST /admin/finance/refund-candidates/:candidateId/approval/authorization
+POST /admin/finance/refund-candidates/:candidateId/approval
+POST /admin/finance/authorizations/begin
+POST /admin/finance/authorizations/verify
+POST /admin/finance/authorizations/passkeys/registration-options
+POST /admin/finance/authorizations/passkeys/verify-registration
 ```
 
 Новые admin/moderator/super_admin workflows не должны добавляться в `public-api`
 или `astrologer-api`. Они должны жить в `admin-api` и вызывать domain use cases
 с audit logging.
+
+`POST /admin/finance/refund-candidates/:candidateId/approval/authorization` и
+`POST /admin/finance/refund-candidates/:candidateId/approval` доступны только
+`super_admin` с session, CSRF и одноразовым WebAuthn grant. Клиент передаёт
+только сумму возврата; candidate, review, capture, wallet, provider payment и
+refund position повторно читаются и блокируются на сервере. Успешный approval
+атомарно резервирует V2 payable position, пишет sealed immutable provider request
+и durable outbox. Он не утверждает provider refund: фактический ArcPay outcome
+подтверждает только canonical payment-worker processing.
 
 Order-level finance policy changes are never implicit. New orders store the
 effective risk/hold/reserve policy snapshot at creation time; applying the

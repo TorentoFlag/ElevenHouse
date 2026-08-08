@@ -554,6 +554,10 @@ export const expectedPlatformCapabilityOperationContracts = {
     semanticKind: "mutation",
     requirement: { kind: "all_of", capabilities: ["funnels"] }
   },
+  "funnels.manual-client-run.create": {
+    semanticKind: "mutation",
+    requirement: { kind: "all_of", capabilities: ["funnels"] }
+  },
   "funnels.pause": {
     semanticKind: "mutation",
     requirement: {
@@ -640,8 +644,8 @@ export const expectedPlatformCapabilityOperationContracts = {
       persistedOwnerSelector:
         "persisted Booking.ownerUserId resolved server-side from the claimed booking-confirmed enrollment event",
       queuePayloadPolicy: "untrusted_reference_only",
-      availability: "unwired",
-      publicationBlocker: true
+      availability: "ready",
+      publicationBlocker: false
     }
   },
   "funnels.booking-lifecycle-dispatch": {
@@ -663,8 +667,8 @@ export const expectedPlatformCapabilityOperationContracts = {
       persistedOwnerSelector:
         "persisted BookingLifecycleEvent.ownerUserId resolved server-side from the claimed lifecycle event",
       queuePayloadPolicy: "untrusted_reference_only",
-      availability: "unwired",
-      publicationBlocker: true
+      availability: "ready",
+      publicationBlocker: false
     }
   },
   "ai.chart.draft": {

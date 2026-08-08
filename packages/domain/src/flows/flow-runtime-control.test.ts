@@ -47,13 +47,19 @@ describe("Flow persisted runtime control", () => {
     expect(createFlowExecutionRequirementKeys(manifest())).toEqual(expected);
   });
 
-  it("derives exact deployed worker requirements from the real executor registry keys", () => {
-    expect(createFlowExecutionWorkerRequirementKeys(["completed:1:1"])).toEqual([
+  it("derives exact deployed worker requirements from the real executor registry and capabilities", () => {
+    expect(
+      createFlowExecutionWorkerRequirementKeys(["completed:1:1"], ["products.read"])
+    ).toEqual([
+      "capability:products.read",
       "executor:completed:1:1",
       "runtime:flow-interpreter.v1"
     ]);
     expect(() =>
       createFlowExecutionWorkerRequirementKeys(["completed:1:1", "completed:1:1"])
+    ).toThrow(FlowRuntimeControlIntegrityError);
+    expect(() =>
+      createFlowExecutionWorkerRequirementKeys(["completed:1:1"], ["products.read", "products.read"])
     ).toThrow(FlowRuntimeControlIntegrityError);
   });
 

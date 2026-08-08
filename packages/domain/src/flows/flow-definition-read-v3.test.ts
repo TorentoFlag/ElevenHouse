@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type {
   FlowDefinitionDetailV3,
   FlowDefinitionSummaryV3,
-  FlowEnrollmentControl
+  FlowEnrollmentControl,
+  FlowRuntimeAvailability
 } from "@elevenhouse/contracts";
 
 import { FlowDefinitionIntegrityError } from "./flow-definition-control-plane";
@@ -35,9 +36,10 @@ describe("flow definition V3 reads", () => {
       listFlowDefinitionsV3({
         store,
         ownerUserId,
-        query: { state: "all", enrollmentState: "inactive", limit: "10", offset: "0" }
+        query: { state: "all", enrollmentState: "inactive", limit: "10", offset: "0" },
+        runtime: definitionOnlyRuntime
       })
-    ).resolves.toEqual({ flows: [item], total: 1 });
+    ).resolves.toEqual({ flows: [item], total: 1, runtime: definitionOnlyRuntime });
     expect(store.listByOwner).toHaveBeenCalledWith({
       ownerUserId,
       query: { state: "all", enrollmentState: "inactive", limit: 10, offset: 0 }
@@ -64,17 +66,25 @@ describe("flow definition V3 reads", () => {
       listByOwner: vi.fn(async () => ({ flows: [summary(), summary()], total: 2 }))
     });
     await expect(
-      listFlowDefinitionsV3({ store: corruptPage, ownerUserId, query: {} })
+      listFlowDefinitionsV3({
+        store: corruptPage,
+        ownerUserId,
+        query: {},
+        runtime: definitionOnlyRuntime
+      })
     ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
 
     const corruptDetail = createStore({
-      getByOwner: vi.fn<FlowDefinitionReadV3Store["getByOwner"]>(async () => ({
-        ...detail(),
-        enrollment: {
-          authority: "enrollment_v1",
-          control: { ...inactiveEnrollmentControl(), definitionRevision: 99 }
-        }
-      } as never))
+      getByOwner: vi.fn<FlowDefinitionReadV3Store["getByOwner"]>(
+        async () =>
+          ({
+            ...detail(),
+            enrollment: {
+              authority: "enrollment_v1",
+              control: { ...inactiveEnrollmentControl(), definitionRevision: 99 }
+            }
+          }) as never
+      )
     });
     await expect(
       getFlowDefinitionV3({ store: corruptDetail, ownerUserId, flowId })
@@ -82,7 +92,16 @@ describe("flow definition V3 reads", () => {
   });
 });
 
-function createStore(overrides: Partial<FlowDefinitionReadV3Store> = {}): FlowDefinitionReadV3Store {
+const definitionOnlyRuntime = {
+  mode: "definition_only",
+  executionAvailable: false,
+  reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+  historySemantics: "durable_execution"
+} satisfies FlowRuntimeAvailability;
+
+function createStore(
+  overrides: Partial<FlowDefinitionReadV3Store> = {}
+): FlowDefinitionReadV3Store {
   return {
     listByOwner: vi.fn(async () => ({ flows: [], total: 0 })),
     getByOwner: vi.fn(async () => null),

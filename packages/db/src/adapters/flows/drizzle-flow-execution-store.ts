@@ -12,7 +12,7 @@ import {
   sql,
   type SQL
 } from "drizzle-orm";
-import type { FlowWorkItemTaskKind } from "@elevenhouse/contracts";
+import type { FlowApprovalKind, FlowWorkItemTaskKind } from "@elevenhouse/contracts";
 import {
   flowExecutionFailureReasonCodeValues,
   flowExecutionPermanentFailureReasonCodeValues,
@@ -22,6 +22,7 @@ import {
   flowExecutionRetryPolicyV1,
   FlowExecutionIntegrityError,
   FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+  FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL,
   FlowBookingExecutionContextIntegrityError,
   FlowRuntimeControlIntegrityError,
   FlowWorkerReadinessLeaseLostError,
@@ -60,6 +61,7 @@ import {
   flowExecutionSignalInbox,
   flowExecutionSignalWaits,
   flowExecutionTokens,
+  flowApprovals,
   flowRuntimeOwnerSubjects,
   flowRuntimeEvents,
   flowRunEvents,
@@ -203,6 +205,7 @@ export function createDrizzleFlowExecutionSignalStore(
             ownerUserId: flowExecutionSignalInbox.ownerUserId,
             signalType: flowExecutionSignalInbox.signalType,
             correlationId: flowExecutionSignalInbox.correlationId,
+            sourceEventId: flowExecutionSignalInbox.sourceEventId,
             outcome: flowExecutionSignalInbox.outcome
           });
         if (!signal) return { status: "replayed" } as const;
@@ -936,30 +939,63 @@ async function finalize(
       readonly dueBookingLifecycleRevision: number | null;
     } | null = null;
     let signalWait: {
-      readonly signalType: "chart.calculation.terminal.v1";
+      readonly signalType:
+        | "chart.calculation.terminal.v1"
+        | "messaging.message.delivery.terminal.v1";
       readonly correlationId: string;
-      readonly successHandle: "next";
+      readonly successHandle: "next" | "success";
+      readonly failureHandle?: "error";
+      readonly replayExistingResult?: boolean;
+      readonly expectedSourceEventId?: string;
+    } | null = null;
+    let approvalWait: {
+      readonly kind: FlowApprovalKind;
+      readonly title: string;
+      readonly preview: string;
+      readonly artifact: {
+        readonly calculationId: string;
+        readonly interpretationId: string;
+        readonly sourceChecksum: string;
+        readonly contentChecksum: string;
+        readonly outputText: string;
+      } | null;
+      readonly expiresAfterMinutes: number | null;
     } | null = null;
     let transitionResultCode = decision.resultCode;
     let transitionTrace = decision.trace;
 
     switch (decision.kind) {
       case "terminal":
-        if (
-          persistedNode.kind !== "completed" ||
-          decision.resultCode !== persistedNode.config.goalKey
-        ) {
+        if (persistedNode.kind === "completed") {
+          if (decision.resultCode !== persistedNode.config.goalKey) {
+            throw new Error(
+              "FLOW_RUNTIME_TRACE_INVALID: terminal decision does not match persisted terminal node"
+            );
+          }
+        } else if (persistedNode.kind === "suppressed") {
+          if (decision.resultCode !== persistedNode.config.reasonCode) {
+            throw new Error(
+              "FLOW_RUNTIME_TRACE_INVALID: terminal decision does not match persisted terminal node"
+            );
+          }
+        } else if (persistedNode.kind === "failed") {
+          if (decision.resultCode !== persistedNode.config.errorCode) {
+            throw new Error(
+              "FLOW_RUNTIME_TRACE_INVALID: terminal decision does not match persisted terminal node"
+            );
+          }
+        } else {
           throw new Error(
-            "FLOW_RUNTIME_TRACE_INVALID: terminal decision does not match persisted completed node"
+            "FLOW_RUNTIME_TRACE_INVALID: terminal decision does not match persisted terminal node"
           );
         }
-        transitionResultCode = persistedNode.config.goalKey;
+        transitionResultCode = decision.resultCode;
         transitionTrace = {
           schemaVersion: "flow-runtime-trace.v1",
           outcome: "terminal",
           nodeKind: persistedNode.kind,
           reasonCode: "FLOW_GOAL_REACHED",
-          resultCode: persistedNode.config.goalKey
+          resultCode: decision.resultCode
         };
         break;
       case "advance":
@@ -1043,7 +1079,12 @@ async function finalize(
           definition: persistedDefinition,
           sourceHandle: decision.wait.successHandle
         });
-        signalWait = decision.wait;
+        signalWait = {
+          ...decision.wait,
+          ...(decision.wait.replayExistingResult === true
+            ? { expectedSourceEventId: input.claim.tokenId }
+            : {})
+        };
         transitionResultCode = "FLOW_WAITING_SIGNAL";
         transitionTrace = {
           schemaVersion: "flow-runtime-trace.v1",
@@ -1051,6 +1092,81 @@ async function finalize(
           nodeKind: "natal_chart_request",
           reasonCode: "FLOW_CHART_CALCULATION_REQUESTED",
           resultCode: "FLOW_WAITING_SIGNAL"
+        };
+        break;
+      case "wait_external":
+        if (
+          persistedNode.kind !== "send_message" ||
+          decision.wait.signalType !== FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL ||
+          decision.wait.successHandle !== "success" ||
+          decision.wait.failureHandle !== "error"
+        ) {
+          throw new Error(
+            "FLOW_RUNTIME_TRACE_INVALID: external-wait decision does not match persisted node"
+          );
+        }
+        resolvePinnedFlowExecutionAdvanceTarget({
+          definition: persistedDefinition,
+          sourceHandle: decision.wait.successHandle
+        });
+        resolvePinnedFlowExecutionAdvanceTarget({
+          definition: persistedDefinition,
+          sourceHandle: decision.wait.failureHandle
+        });
+        signalWait = decision.wait;
+        transitionResultCode = "FLOW_WAITING_EXTERNAL";
+        transitionTrace = {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: "send_message",
+          reasonCode: "FLOW_MESSAGING_DELIVERY_REQUESTED",
+          resultCode: "FLOW_WAITING_EXTERNAL"
+        };
+        break;
+      case "wait_approval":
+        if (
+          !(
+            (persistedNode.kind === "astrologer_approval" &&
+              decision.approval.kind === persistedNode.config.approvalKind &&
+              decision.approval.title === persistedNode.config.approvalTitle &&
+              decision.approval.preview === persistedNode.displayTitle &&
+              decision.approval.artifact === null &&
+              decision.approval.expiresAfterMinutes ===
+                (persistedNode.config.expiresAfterMinutes ?? null)) ||
+            (persistedNode.kind === "natal_chart_ai_draft" &&
+              decision.approval.kind === "ai_output" &&
+              decision.approval.title === persistedNode.config.approvalTitle &&
+              decision.approval.artifact !== null &&
+              decision.approval.expiresAfterMinutes ===
+                (persistedNode.config.expiresAfterMinutes ?? null))
+          )
+        ) {
+          throw new Error(
+            "FLOW_RUNTIME_TRACE_INVALID: approval-wait decision does not match persisted node"
+          );
+        }
+        resolvePinnedFlowExecutionAdvanceTarget({
+          definition: persistedDefinition,
+          sourceHandle: "approved"
+        });
+        resolvePinnedFlowExecutionAdvanceTarget({
+          definition: persistedDefinition,
+          sourceHandle: "rejected"
+        });
+        if (persistedNode.config.expiresAfterMinutes !== undefined) {
+          resolvePinnedFlowExecutionAdvanceTarget({
+            definition: persistedDefinition,
+            sourceHandle: "timeout"
+          });
+        }
+        approvalWait = decision.approval;
+        transitionResultCode = "FLOW_WAITING_APPROVAL";
+        transitionTrace = {
+          schemaVersion: "flow-runtime-trace.v1",
+          outcome: "waiting",
+          nodeKind: persistedNode.kind,
+          reasonCode: "FLOW_APPROVAL_CREATED",
+          resultCode: "FLOW_WAITING_APPROVAL"
         };
         break;
       default:
@@ -1093,7 +1209,31 @@ async function finalize(
                   quarantinedAt: null,
                   updatedAt: transitionAt
                 }
-            : {
+              : decision.kind === "wait_external"
+                ? {
+                    state: "waiting_external",
+                    claimedAt: null,
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                    failureDisposition: null,
+                    failureReasonCode: null,
+                    terminalAt: null,
+                    quarantinedAt: null,
+                    updatedAt: transitionAt
+                  }
+              : decision.kind === "wait_approval"
+                ? {
+                    state: "waiting_approval",
+                    claimedAt: null,
+                    leaseOwner: null,
+                    leaseExpiresAt: null,
+                    failureDisposition: null,
+                    failureReasonCode: null,
+                    terminalAt: null,
+                    quarantinedAt: null,
+                    updatedAt: transitionAt
+                  }
+              : {
                 nodeId: advanceTarget?.node.id,
                 nodeKind: advanceTarget?.node.kind,
                 configSchemaVersion: advanceTarget?.node.configSchemaVersion,
@@ -1172,11 +1312,71 @@ async function finalize(
           signalType: signalWait.signalType,
           correlationId: signalWait.correlationId,
           successHandle: signalWait.successHandle,
+          failureHandle: signalWait.failureHandle ?? null,
+          expectedSourceEventId: signalWait.expectedSourceEventId ?? null,
           state: "waiting",
           createdAt: transitionAt
         })
         .returning({ id: flowExecutionSignalWaits.id });
       if (!createdSignalWait) throw new Error("Flow signal wait was not persisted");
+      if (signalWait.replayExistingResult === true) {
+        const [replayedSignal] = await transaction
+          .insert(flowExecutionSignalInbox)
+          .values({
+            sourceEventId: input.claim.tokenId,
+            ownerUserId: input.claim.ownerUserId,
+            signalType: signalWait.signalType,
+            correlationId: signalWait.correlationId,
+            outcome: "succeeded",
+            occurredAt: sql`transaction_timestamp()`
+          })
+          .onConflictDoNothing()
+          .returning({
+            id: flowExecutionSignalInbox.id,
+            ownerUserId: flowExecutionSignalInbox.ownerUserId,
+            signalType: flowExecutionSignalInbox.signalType,
+            correlationId: flowExecutionSignalInbox.correlationId,
+            sourceEventId: flowExecutionSignalInbox.sourceEventId,
+            outcome: flowExecutionSignalInbox.outcome
+          });
+        if (!replayedSignal) {
+          throw new Error("FLOW_RUNTIME_REPLAY_SIGNAL_CONFLICT");
+        }
+      }
+    }
+    if (approvalWait) {
+      const [createdApproval] = await transaction
+        .insert(flowApprovals)
+        .values({
+          ownerUserId: input.claim.ownerUserId,
+          flowRunId: input.claim.runId,
+          flowStepRunId: null,
+          executionTokenId: input.claim.tokenId,
+          nodeActivationSequence: token.nodeActivationSequence,
+          status: "pending",
+          kind: approvalWait.kind,
+          title: approvalWait.title,
+          preview: approvalWait.preview,
+          aiCalculationId: approvalWait.artifact?.calculationId ?? null,
+          aiInterpretationId: approvalWait.artifact?.interpretationId ?? null,
+          aiSourceChecksum: approvalWait.artifact?.sourceChecksum ?? null,
+          aiContentChecksum: approvalWait.artifact?.contentChecksum ?? null,
+          aiOutputText: approvalWait.artifact?.outputText ?? null,
+          decisionNote: null,
+          decidedByUserId: null,
+          snoozedUntil: null,
+          expiresAt:
+            approvalWait.expiresAfterMinutes === null
+              ? null
+              : new Date(transitionAt.getTime() + approvalWait.expiresAfterMinutes * 60_000),
+          revision: 1,
+          lastCommandId: null,
+          lastRunEventId: null,
+          createdAt: transitionAt,
+          decidedAt: null
+        })
+        .returning({ id: flowApprovals.id });
+      if (!createdApproval) throw new Error("Flow approval was not persisted");
     }
 
     const [run] = await transaction
@@ -1185,7 +1385,10 @@ async function finalize(
         status:
           decision.kind === "terminal"
             ? "completed"
-            : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
+            : decision.kind === "wait_work_item" ||
+                decision.kind === "wait_signal" ||
+                decision.kind === "wait_external" ||
+                decision.kind === "wait_approval"
               ? "waiting"
               : "running",
         currentNodeId: decision.kind === "advance" ? advanceTarget?.node.id : input.claim.nodeId,
@@ -1226,7 +1429,10 @@ async function finalize(
         outcome:
           decision.kind === "terminal"
             ? "completed"
-            : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
+            : decision.kind === "wait_work_item" ||
+                decision.kind === "wait_signal" ||
+                decision.kind === "wait_external" ||
+                decision.kind === "wait_approval"
               ? "waiting"
               : "advanced",
         resultCode: transitionResultCode,
@@ -1246,7 +1452,10 @@ async function finalize(
       eventType:
         decision.kind === "terminal"
           ? "run_completed"
-          : decision.kind === "wait_work_item" || decision.kind === "wait_signal"
+          : decision.kind === "wait_work_item" ||
+              decision.kind === "wait_signal" ||
+              decision.kind === "wait_external" ||
+              decision.kind === "wait_approval"
             ? "token_waiting"
             : "token_advanced",
       nodeId: input.claim.nodeId,
@@ -1262,6 +1471,7 @@ async function finalize(
           ownerUserId: flowExecutionSignalInbox.ownerUserId,
           signalType: flowExecutionSignalInbox.signalType,
           correlationId: flowExecutionSignalInbox.correlationId,
+          sourceEventId: flowExecutionSignalInbox.sourceEventId,
           outcome: flowExecutionSignalInbox.outcome
         })
         .from(flowExecutionSignalInbox)
@@ -1270,6 +1480,9 @@ async function finalize(
             eq(flowExecutionSignalInbox.ownerUserId, input.claim.ownerUserId),
             eq(flowExecutionSignalInbox.signalType, signalWait.signalType),
             eq(flowExecutionSignalInbox.correlationId, signalWait.correlationId),
+            ...(signalWait.expectedSourceEventId
+              ? [eq(flowExecutionSignalInbox.sourceEventId, signalWait.expectedSourceEventId)]
+              : []),
             sql`${flowExecutionSignalInbox.consumedAt} is null`
           )
         )
@@ -1294,6 +1507,7 @@ async function consumeFlowExecutionSignal(
     readonly ownerUserId: string;
     readonly signalType: string;
     readonly correlationId: string;
+    readonly sourceEventId: string;
     readonly outcome: string;
   }
 ): Promise<FlowExecutionSignalIngestResult> {
@@ -1302,7 +1516,9 @@ async function consumeFlowExecutionSignal(
       waitId: flowExecutionSignalWaits.id,
       waitNodeId: flowExecutionSignalWaits.nodeId,
       waitSuccessHandle: flowExecutionSignalWaits.successHandle,
+      waitFailureHandle: flowExecutionSignalWaits.failureHandle,
       tokenId: flowExecutionTokens.id,
+      tokenNodeKind: flowExecutionTokens.nodeKind,
       tokenNodeActivationSequence: flowExecutionTokens.nodeActivationSequence,
       tokenConfigSchemaVersion: flowExecutionTokens.configSchemaVersion,
       tokenExecutorContractVersion: flowExecutionTokens.executorContractVersion,
@@ -1340,8 +1556,12 @@ async function consumeFlowExecutionSignal(
         eq(flowExecutionSignalWaits.ownerUserId, signal.ownerUserId),
         eq(flowExecutionSignalWaits.signalType, signal.signalType),
         eq(flowExecutionSignalWaits.correlationId, signal.correlationId),
+        or(
+          sql`${flowExecutionSignalWaits.expectedSourceEventId} is null`,
+          eq(flowExecutionSignalWaits.expectedSourceEventId, signal.sourceEventId)
+        ),
         eq(flowExecutionSignalWaits.state, "waiting"),
-        eq(flowExecutionTokens.state, "waiting_signal"),
+        inArray(flowExecutionTokens.state, ["waiting_signal", "waiting_external"]),
         eq(flowRuns.status, "waiting")
       )
     )
@@ -1353,21 +1573,36 @@ async function consumeFlowExecutionSignal(
   const persistedDefinition = {
     flowVersionId: wait.flowVersionId,
     nodeId: wait.waitNodeId,
-    nodeKind: "natal_chart_request" as const,
+    nodeKind: wait.tokenNodeKind as FlowExecutionClaim["nodeKind"],
     configSchemaVersion: wait.tokenConfigSchemaVersion,
     executorContractVersion: wait.tokenExecutorContractVersion,
     graph: wait.graph,
     capabilityManifest: wait.capabilityManifest
   };
   const persistedNode = resolvePinnedFlowExecutionNode(persistedDefinition);
-  if (persistedNode.kind !== "natal_chart_request" || wait.waitSuccessHandle !== "next") {
-    throw new Error("FLOW_RUNTIME_TRACE_INVALID: signal wait does not match a pinned natal node");
+  const isChartWait =
+    persistedNode.kind === "natal_chart_request" &&
+    signal.signalType === FLOW_CHART_CALCULATION_TERMINAL_SIGNAL &&
+    wait.waitSuccessHandle === "next" &&
+    wait.waitFailureHandle === null;
+  const isMessagingWait =
+    persistedNode.kind === "send_message" &&
+    signal.signalType === FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL &&
+    wait.waitSuccessHandle === "success" &&
+    wait.waitFailureHandle === "error";
+  if (!isChartWait && !isMessagingWait) {
+    throw new Error("FLOW_RUNTIME_TRACE_INVALID: signal wait does not match its pinned node");
   }
   const transitionAt = await readPostLockDatabaseInstant(transaction);
-  const terminalFailure = signal.outcome === "failed";
+  const terminalFailure = isChartWait && signal.outcome === "failed";
+  const sourceHandle = isChartWait
+    ? "next"
+    : signal.outcome === "succeeded"
+      ? "success"
+      : "error";
   const target = terminalFailure
     ? null
-    : resolvePinnedFlowExecutionAdvanceTarget({ definition: persistedDefinition, sourceHandle: "next" });
+    : resolvePinnedFlowExecutionAdvanceTarget({ definition: persistedDefinition, sourceHandle });
   const [transitionedToken] = await transaction
     .update(flowExecutionTokens)
     .set(
@@ -1406,7 +1641,7 @@ async function consumeFlowExecutionSignal(
     .where(
       and(
         eq(flowExecutionTokens.id, wait.tokenId),
-        eq(flowExecutionTokens.state, "waiting_signal"),
+        inArray(flowExecutionTokens.state, ["waiting_signal", "waiting_external"]),
         eq(flowExecutionTokens.nodeActivationSequence, wait.tokenNodeActivationSequence)
       )
     )
@@ -1454,7 +1689,8 @@ async function consumeFlowExecutionSignal(
         reasonCode: "FLOW_CHART_CALCULATION_FAILED" as const,
         resultCode: "FLOW_EXECUTION_FAILED_TERMINAL" as const
       }
-    : {
+    : isChartWait
+      ? {
         schemaVersion: "flow-runtime-trace.v1" as const,
         outcome: "advanced" as const,
         nodeKind: "natal_chart_request" as const,
@@ -1464,7 +1700,18 @@ async function consumeFlowExecutionSignal(
         selectedEdgeId: target!.edgeId,
         targetNodeId: target!.node.id,
         targetNodeKind: target!.node.kind
-      };
+      }
+      : {
+          schemaVersion: "flow-runtime-trace.v1" as const,
+          outcome: "advanced" as const,
+          nodeKind: "send_message" as const,
+          reasonCode: "FLOW_MESSAGING_DELIVERY_COMPLETED" as const,
+          resultCode: "FLOW_TOKEN_ADVANCED" as const,
+          sourceHandle,
+          selectedEdgeId: target!.edgeId,
+          targetNodeId: target!.node.id,
+          targetNodeKind: target!.node.kind
+        };
   await transaction.insert(flowRunEvents).values({
     ownerUserId: signal.ownerUserId,
     flowRunId: wait.runId,
@@ -1484,7 +1731,8 @@ function validateFlowExecutionSignalInput(
     !UUID_PATTERN.test(input.sourceEventId) ||
     !UUID_PATTERN.test(input.ownerUserId) ||
     !UUID_PATTERN.test(input.correlationId) ||
-    input.signalType !== FLOW_CHART_CALCULATION_TERMINAL_SIGNAL ||
+    (input.signalType !== FLOW_CHART_CALCULATION_TERMINAL_SIGNAL &&
+      input.signalType !== FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL) ||
     (input.outcome !== "succeeded" && input.outcome !== "failed") ||
     Number.isNaN(Date.parse(input.occurredAt))
   ) {

@@ -98,17 +98,17 @@
 .createButton,
 .mobileOpenButton {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 37px;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   border: 1px solid transparent;
-  border-radius: 9px;
-  padding: 0 13px;
+  border-radius: 14px;
+  padding: 10px 16px;
   background: var(--flows-gold);
   color: #2a1b0b;
   cursor: pointer;
-  font: 700 13px / 1 var(--eh-font-sans);
+  font: 600 13px / 1 var(--eh-font-sans);
 }
 
 .createButton:focus-visible,
@@ -1825,12 +1825,217 @@
   overflow-wrap: anywhere;
 }
 
+.approvalArtifact {
+  border-left: 2px solid var(--flows-gold-line);
+  padding-left: 8px;
+  color: var(--eh-color-moon-120) !important;
+}
+
 .runtimeNotice {
   border-left: 2px solid var(--flows-gold-line);
   padding: 8px 10px;
   border-radius: 0 8px 8px 0;
   background: var(--flows-gold-soft);
   color: var(--eh-color-moon-120);
+}
+
+.runHistory {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--flows-line);
+  margin-top: 14px;
+  padding: 14px;
+  background: rgb(12 11 29 / 0.62);
+}
+
+.runHistoryHeader,
+.runTraceHeader,
+.runHistoryRow,
+.runTraceList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runHistoryEyebrow,
+.runHistoryHeader h2,
+.runTraceHeader h3,
+.runHistoryState,
+.runHistoryError p,
+.runTraceList,
+.runTraceList small,
+.runTraceList time {
+  margin: 0;
+}
+
+.runHistoryEyebrow {
+  color: var(--flows-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.runHistoryHeader h2,
+.runTraceHeader h3 {
+  color: var(--eh-color-moon-120);
+  font-size: 14px;
+}
+
+.runHistoryCount,
+.runTraceSequence {
+  display: inline-grid;
+  min-width: 22px;
+  min-height: 22px;
+  place-items: center;
+  border: 1px solid var(--flows-line-strong);
+  border-radius: 999px;
+  color: var(--flows-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.runHistoryList,
+.runTraceList {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.runHistoryRow {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--flows-line);
+  border-radius: 9px;
+  padding: 8px 9px;
+  background: rgb(19 17 43 / 0.72);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.runHistoryRow:hover,
+.runHistoryRow[aria-pressed="true"] {
+  border-color: var(--flows-gold-line);
+}
+
+.runHistoryRow span:first-child,
+.runTraceList li div {
+  display: grid;
+  gap: 3px;
+}
+
+.runHistoryRow small,
+.runHistoryNode,
+.runHistoryState,
+.runHistoryError,
+.runTraceList small,
+.runTraceList time {
+  color: var(--flows-muted);
+  font-size: 11px;
+}
+
+.runHistoryNode {
+  max-width: 122px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runTrace {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--flows-line);
+  padding-top: 12px;
+}
+
+.runTraceList li {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.runTraceList time {
+  display: block;
+  margin-top: 2px;
+}
+
+.runCancelButton,
+.runHistoryError button {
+  min-height: 28px;
+  border: 1px solid rgb(255 159 159 / 0.46);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--eh-color-danger-300, #ff9f9f);
+  cursor: pointer;
+  font: 700 11px / 1 var(--eh-font-sans);
+}
+
+.builderMobileHistory {
+  border-top: 1px solid var(--flows-line);
+  background: var(--flows-surface);
+}
+
+:global(.flowRunCancelBackdrop) {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(4 4 13 / 0.66);
+}
+
+:global(.flowRunCancelDialog) {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 14px;
+  border: 1px solid var(--flows-line-strong);
+  border-radius: 16px;
+  padding: 20px;
+  background: var(--eh-color-night-950);
+  box-shadow: 0 22px 60px rgb(0 0 0 / 0.42);
+}
+
+:global(.flowRunCancelDialog h2),
+:global(.flowRunCancelDialog p) {
+  margin: 0;
+}
+
+:global(.flowRunCancelDialog h2) {
+  color: var(--eh-color-moon-120);
+  font-size: 18px;
+}
+
+:global(.flowRunCancelDialog p) {
+  color: var(--flows-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+:global(.flowRunCancelDialog div) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+:global(.flowRunCancelDialog button) {
+  min-height: 34px;
+  border: 1px solid var(--flows-line-strong);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--flows-surface-strong);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: 700 12px / 1 var(--eh-font-sans);
+}
+
+:global(.flowRunCancelDialog button:last-child) {
+  border-color: rgb(255 159 159 / 0.5);
+  color: var(--eh-color-danger-300, #ff9f9f);
 }
 
 .runtimeWarnings li {
@@ -1885,12 +2090,11 @@
   }
 
   .mobileHeader .createButton {
-    width: 36px;
-    height: 36px;
-    min-height: 36px;
-    flex: 0 0 36px;
-    border-radius: 10px;
-    padding: 0;
+    width: auto;
+    min-height: 37px;
+    flex: 0 0 auto;
+    border-radius: 14px;
+    padding: 10px 16px;
   }
 
   .mobileCard {

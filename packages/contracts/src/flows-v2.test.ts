@@ -307,6 +307,19 @@ describe("flow graph v2 contracts", () => {
         }
       },
       {
+        id: "natal-ai-draft",
+        kind: "natal_chart_ai_draft",
+        displayTitle: "Подготовить черновик трактовки",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          chartRequestNodeId: "natal-chart",
+          locale: "ru",
+          approvalTitle: "Проверить черновик трактовки",
+          expiresAfterMinutes: 1_440
+        }
+      },
+      {
         id: "work-item",
         kind: "astrologer_work_item",
         displayTitle: "Подготовить консультацию",

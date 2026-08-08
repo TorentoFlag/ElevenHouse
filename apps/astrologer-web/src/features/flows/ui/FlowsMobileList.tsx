@@ -67,6 +67,7 @@ export function FlowsMobileList({
           disabled={!onCreateFlow || isCreating}
         >
           <Icon iconName="plus" width={18} height={18} aria-hidden="true" />
+          <span>{copy.create}</span>
         </button>
       </header>
       {cards.length === 0 && emptyMessage ? (
@@ -159,22 +160,22 @@ const mobileCopy = {
     title: "Воронки",
     count: "Воронок",
     active: "активны",
-    create: "Создать воронку",
+    create: "Новая воронка",
     open: "Открыть схему",
     schema: "Схема",
     revision: "Редакция",
     version: "Версия",
-    state: "Состояние",
+    state: "Состояние"
   },
   en: {
     title: "Flows",
     count: "Flows",
     active: "active",
-    create: "Create flow",
+    create: "New flow",
     open: "Open flow",
     schema: "Graph",
     revision: "Revision",
     version: "Version",
-    state: "State",
+    state: "State"
   }
 } as const;

@@ -148,7 +148,9 @@ describe("platform capability manifest", () => {
         expect(entry.expiryFallback).toBe(
           featureCode === "child" || availability === "absent" ? "unavailable" : "read_only"
         );
-        expect(entry.enforcement).toBe(featureCode === "products" ? "ready" : "unwired");
+        expect(entry.enforcement).toBe(
+          featureCode === "products" || featureCode === "funnels" ? "ready" : "unwired"
+        );
         if (availability !== "live") expect(entry.unavailableReason).toMatch(/\S/);
       }
     }
@@ -384,28 +386,6 @@ describe("platform capability manifest", () => {
   });
 
   it("derives readiness only from exact UI, operation-requirement, worker, and quota attestations", () => {
-    const tariffGuardedOperationIds = new Set([
-      "products.list",
-      "products.summary",
-      "products.templates",
-      "products.read",
-      "products.template-draft.create",
-      "products.create",
-      "products.update",
-      "products.publish",
-      "products.move-to-draft",
-      "products.archive",
-      "products.duplicate",
-      "funnels.templates.read",
-      "funnels.list",
-      "funnels.read",
-      "funnels.create",
-      "funnels.validate",
-      "funnels.draft.update",
-      "funnels.publish",
-      "funnels.next-draft.create",
-      "funnels.activate"
-    ]);
     const productDeclarations = guardDeclarationsFor(platformCapabilityManifest.products);
     const productDirectDeclarations = productDeclarations.filter(
       (item) =>
@@ -419,16 +399,11 @@ describe("platform capability manifest", () => {
         item.surfaceId === "media.upload-intent.create" ||
         item.surfaceId === "media.upload.complete"
     );
-    const funnelOperationDeclarations = guardDeclarationsFor(
-      platformCapabilityManifest.funnels
-    ).filter((item) => item.kind === "operation" && tariffGuardedOperationIds.has(item.surfaceId));
+    const funnelDeclarations = guardDeclarationsFor(platformCapabilityManifest.funnels);
     expect(platformCapabilityGuardDeclarations).toEqual([
       ...productDirectDeclarations,
-      ...funnelOperationDeclarations,
-      ...productPublicOrderAndMediaDeclarations,
-      guardDeclarationsFor(platformCapabilityManifest.funnels).find(
-        (item) => item.kind === "usage_counter" && item.surfaceId === "counter.funnels.automations"
-      )
+      ...funnelDeclarations,
+      ...productPublicOrderAndMediaDeclarations
     ]);
     for (const entry of Object.values(platformCapabilityManifest)) {
       expect(derivePlatformCapabilityEnforcement(entry, [])).toBe("unwired");

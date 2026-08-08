@@ -1,4 +1,4 @@
-import type { FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
+import type { FlowApprovalWakeSweepResult, FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
 import type { Logger } from "@elevenhouse/observability";
 
 type FlowExecutionDeploymentCeiling =
@@ -12,11 +12,13 @@ type FlowExecutionRunSummary =
   | { readonly status: "processed"; readonly processedCount: number };
 type FlowRecoveryRunSummary = { readonly status: "disabled" } | FlowExecutionTickResult;
 type FlowWorkItemWakeRunSummary = { readonly status: "disabled" } | FlowWorkItemWakeSweepResult;
+type FlowApprovalWakeRunSummary = { readonly status: "disabled" } | FlowApprovalWakeSweepResult;
 type FlowExecutionLifecycle = "idle" | "running" | "stopping" | "stopped";
 
 const FLOW_EXECUTION_POLL_DEADLINE_EXCEEDED = "FLOW_EXECUTION_POLL_DEADLINE_EXCEEDED";
 const FLOW_EXECUTION_RECOVERY_DEADLINE_EXCEEDED = "FLOW_EXECUTION_RECOVERY_DEADLINE_EXCEEDED";
 const FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED = "FLOW_WORK_ITEM_WAKE_DEADLINE_EXCEEDED";
+const FLOW_APPROVAL_WAKE_DEADLINE_EXCEEDED = "FLOW_APPROVAL_WAKE_DEADLINE_EXCEEDED";
 const FLOW_EXECUTION_DRAIN_DEADLINE_EXCEEDED = "FLOW_EXECUTION_DRAIN_DEADLINE_EXCEEDED";
 
 export function createFlowExecutionRuntime(input: {
@@ -25,6 +27,7 @@ export function createFlowExecutionRuntime(input: {
   readonly pollBatchSize: number;
   readonly recoveryIntervalMs: number;
   readonly workItemWakeIntervalMs: number;
+  readonly approvalWakeIntervalMs: number;
   readonly operationTimeoutMs: number;
   readonly drainTimeoutMs: number;
   readonly errorBackoffMaxMs: number;
@@ -32,6 +35,7 @@ export function createFlowExecutionRuntime(input: {
   readonly processNext: () => Promise<FlowExecutionTickResult>;
   readonly recoverExpired: () => Promise<FlowExecutionTickResult>;
   readonly wakeDueWorkItems: () => Promise<FlowWorkItemWakeSweepResult>;
+  readonly wakeDueApprovals: () => Promise<FlowApprovalWakeSweepResult>;
   readonly logger: Pick<Logger, "info" | "warn" | "error">;
 }) {
   if (
@@ -45,24 +49,31 @@ export function createFlowExecutionRuntime(input: {
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
   let workItemWakeTimer: ReturnType<typeof setTimeout> | undefined;
+  let approvalWakeTimer: ReturnType<typeof setTimeout> | undefined;
   let executionInFlight: Promise<FlowExecutionRunSummary> | null = null;
   let recoveryInFlight: Promise<FlowRecoveryRunSummary> | null = null;
   let workItemWakeInFlight: Promise<FlowWorkItemWakeSweepResult> | null = null;
+  let approvalWakeInFlight: Promise<FlowApprovalWakeSweepResult> | null = null;
   let executionDeadlineLogged = false;
   let recoveryDeadlineLogged = false;
   let workItemWakeDeadlineLogged = false;
+  let approvalWakeDeadlineLogged = false;
   let executionLastSucceededAt: number | null = null;
   let recoveryLastSucceededAt: number | null = null;
   let workItemWakeLastSucceededAt: number | null = null;
+  let approvalWakeLastSucceededAt: number | null = null;
   let executionLastFailedAt: number | null = null;
   let recoveryLastFailedAt: number | null = null;
   let workItemWakeLastFailedAt: number | null = null;
+  let approvalWakeLastFailedAt: number | null = null;
   let executionLastErrorCode: string | null = null;
   let recoveryLastErrorCode: string | null = null;
   let workItemWakeLastErrorCode: string | null = null;
+  let approvalWakeLastErrorCode: string | null = null;
   let executionScheduleFailures = 0;
   let recoveryScheduleFailures = 0;
   let workItemWakeScheduleFailures = 0;
+  let approvalWakeScheduleFailures = 0;
 
   const claimingEnabled = input.deploymentCeiling.mode === "canary";
 
@@ -200,12 +211,61 @@ export function createFlowExecutionRuntime(input: {
     });
   };
 
+  const startApprovalWakeOperation = (): Promise<FlowApprovalWakeSweepResult> => {
+    const operation = input.wakeDueApprovals();
+    approvalWakeDeadlineLogged = false;
+    const tracked = operation.then(
+      (result) => {
+        if (approvalWakeInFlight === tracked) approvalWakeInFlight = null;
+        const completedAt = Date.now();
+        approvalWakeLastSucceededAt = completedAt;
+        if (result.integrityFailureCount > 0) {
+          approvalWakeLastFailedAt = completedAt;
+          approvalWakeLastErrorCode = "flow_approval_wake_integrity_failure";
+        } else {
+          approvalWakeLastFailedAt = null;
+          approvalWakeLastErrorCode = null;
+        }
+        return result;
+      },
+      (error: unknown) => {
+        if (approvalWakeInFlight === tracked) approvalWakeInFlight = null;
+        approvalWakeLastFailedAt = Date.now();
+        approvalWakeLastErrorCode = "flow_approval_wake_failed";
+        input.logger.error("flow approval wake failed", {
+          errorCode: "flow_approval_wake_failed"
+        });
+        throw error;
+      }
+    );
+    approvalWakeInFlight = tracked;
+    void tracked.catch(() => undefined);
+    return tracked;
+  };
+
+  const runApprovalWakeOnce = (): Promise<FlowApprovalWakeRunSummary> => {
+    if (!accepting) return Promise.resolve({ status: "disabled" });
+    const operation = approvalWakeInFlight ?? startApprovalWakeOperation();
+    return observeDeadline(operation, input.operationTimeoutMs, () => {
+      if (!approvalWakeDeadlineLogged) {
+        approvalWakeDeadlineLogged = true;
+        approvalWakeLastFailedAt = Date.now();
+        approvalWakeLastErrorCode = "flow_approval_wake_deadline_exceeded";
+        input.logger.error("flow approval wake failed", {
+          errorCode: "flow_approval_wake_deadline_exceeded"
+        });
+      }
+      return new Error(FLOW_APPROVAL_WAKE_DEADLINE_EXCEEDED);
+    });
+  };
+
   const runInitial = async () => {
     if (!accepting) return { status: "disabled" } as const;
     const recovery = await runRecoveryOnce();
     const workItemWake = await runWorkItemWakeOnce();
+    const approvalWake = await runApprovalWakeOnce();
     const execution = await runExecutionOnce();
-    return { status: "completed", recovery, workItemWake, execution } as const;
+    return { status: "completed", recovery, workItemWake, approvalWake, execution } as const;
   };
 
   const scheduleExecution = (delayMs: number): void => {
@@ -277,6 +337,29 @@ export function createFlowExecutionRuntime(input: {
     workItemWakeTimer.unref();
   };
 
+  const scheduleApprovalWake = (delayMs: number): void => {
+    approvalWakeTimer = setTimeout(async () => {
+      approvalWakeTimer = undefined;
+      try {
+        await runApprovalWakeOnce();
+        approvalWakeScheduleFailures = 0;
+      } catch {
+        approvalWakeScheduleFailures += 1;
+      }
+      if (accepting && lifecycle === "running") {
+        scheduleApprovalWake(
+          nextScheduleDelay(
+            input.approvalWakeIntervalMs,
+            approvalWakeScheduleFailures,
+            input.errorBackoffMaxMs,
+            input.errorJitter
+          )
+        );
+      }
+    }, delayMs);
+    approvalWakeTimer.unref();
+  };
+
   const getOperationalReadiness = () => {
     if (lifecycle !== "running") {
       return {
@@ -321,6 +404,23 @@ export function createFlowExecutionRuntime(input: {
         errorCode: workItemWakeError
       };
     }
+    const approvalWakeError = laneReadinessError({
+      now,
+      intervalMs: input.approvalWakeIntervalMs,
+      operationTimeoutMs: input.operationTimeoutMs,
+      lastSucceededAt: approvalWakeLastSucceededAt,
+      lastFailedAt: approvalWakeLastFailedAt,
+      lastErrorCode: approvalWakeLastErrorCode,
+      prefix: "flow_approval_wake"
+    });
+    if (approvalWakeError) {
+      return {
+        status: "unready" as const,
+        mode: input.deploymentCeiling.mode,
+        lifecycle,
+        errorCode: approvalWakeError
+      };
+    }
     if (claimingEnabled) {
       const executionError = laneReadinessError({
         now,
@@ -353,6 +453,7 @@ export function createFlowExecutionRuntime(input: {
     runExecutionOnce,
     runRecoveryOnce,
     runWorkItemWakeOnce,
+    runApprovalWakeOnce,
     start: () => {
       if (lifecycle !== "idle" || !accepting) return;
       lifecycle = "running";
@@ -361,6 +462,7 @@ export function createFlowExecutionRuntime(input: {
       }
       scheduleRecovery(input.recoveryIntervalMs);
       scheduleWorkItemWake(input.workItemWakeIntervalMs);
+      scheduleApprovalWake(input.approvalWakeIntervalMs);
     },
     stop: async () => {
       if (lifecycle === "stopped") return;
@@ -369,13 +471,16 @@ export function createFlowExecutionRuntime(input: {
       if (pollTimer) clearTimeout(pollTimer);
       if (recoveryTimer) clearTimeout(recoveryTimer);
       if (workItemWakeTimer) clearTimeout(workItemWakeTimer);
+      if (approvalWakeTimer) clearTimeout(approvalWakeTimer);
       pollTimer = undefined;
       recoveryTimer = undefined;
       workItemWakeTimer = undefined;
+      approvalWakeTimer = undefined;
       const operations: Promise<unknown>[] = [];
       if (executionInFlight) operations.push(executionInFlight);
       if (recoveryInFlight) operations.push(recoveryInFlight);
       if (workItemWakeInFlight) operations.push(workItemWakeInFlight);
+      if (approvalWakeInFlight) operations.push(approvalWakeInFlight);
       try {
         await drainWithinDeadline(operations, input.drainTimeoutMs);
       } catch {
@@ -465,7 +570,11 @@ function laneReadinessError(input: {
   readonly lastSucceededAt: number | null;
   readonly lastFailedAt: number | null;
   readonly lastErrorCode: string | null;
-  readonly prefix: "flow_execution_poll" | "flow_execution_recovery" | "flow_work_item_wake";
+  readonly prefix:
+    | "flow_execution_poll"
+    | "flow_execution_recovery"
+    | "flow_work_item_wake"
+    | "flow_approval_wake";
 }): string | null {
   if (input.lastSucceededAt === null) return `${input.prefix}_not_initialized`;
   if (input.lastFailedAt !== null && input.lastFailedAt >= input.lastSucceededAt) {

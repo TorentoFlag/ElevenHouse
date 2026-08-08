@@ -38,6 +38,12 @@ describe("FlowWorkItemQueuePanel", () => {
     expect(screen.getByText("Активных задач нет")).toBeTruthy();
   });
 
+  it("can stay out of the gallery surface after a successful empty read", () => {
+    render(<FlowWorkItemQueuePanel locale="ru" hideWhenEmpty />);
+
+    expect(screen.queryByRole("region", { name: "Задачи из воронок" })).toBeNull();
+  });
+
   it("composes a compact dashboard projection without duplicating queue behavior", () => {
     render(
       <FlowWorkItemQueuePanel

@@ -25,6 +25,7 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
+import { calculationInterpretations } from "../calculations/calculation-interpretations.schema";
 import { bookingLifecycleEvents } from "../scheduling/booking-lifecycle-events.schema";
 import { flowActivationEpochs } from "./flow-enrollment-control.schema";
 import { flowVersions } from "./flow-versions.schema";
@@ -497,7 +498,7 @@ export const flowExecutionTokens = pgTable(
     ),
     check(
       "flow_execution_tokens_completed_node_check",
-      sql`${table.state} <> 'completed' or ${table.nodeKind} = 'completed'`
+      sql`${table.state} <> 'completed' or ${table.nodeKind} in ('completed', 'suppressed', 'failed')`
     )
   ]
 );
@@ -659,7 +660,6 @@ export const flowExecutionAttempts = pgTable(
           (
             ${table.outcome} = 'advanced'
             and ${table.traceSummary}->>'outcome' = 'advanced'
-            and ${table.traceSummary}->>'reasonCode' = 'FLOW_EDGE_SELECTED'
             and ${table.traceSummary}->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
             and ${table.traceSummary}->>'sourceHandle' in ${sql.raw(
               formatFlowSqlValues(flowSourceHandleV2Values)
@@ -671,6 +671,14 @@ export const flowExecutionAttempts = pgTable(
             and ${table.traceSummary}->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
             and length(${table.traceSummary}->>'targetNodeId') between 1 and 160
             and ${table.traceSummary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and (
+              ${table.traceSummary}->>'reasonCode' = 'FLOW_EDGE_SELECTED'
+              or (
+                ${table.traceSummary}->>'nodeKind' = 'send_message'
+                and ${table.traceSummary}->>'reasonCode' = 'FLOW_MESSAGING_DELIVERY_COMPLETED'
+                and ${table.traceSummary}->>'sourceHandle' in ('success', 'error')
+              )
+            )
           )
           or
           (
@@ -690,8 +698,24 @@ export const flowExecutionAttempts = pgTable(
           )
           or
           (
+            ${table.outcome} = 'waiting'
+            and ${table.traceSummary}->>'nodeKind' = 'send_message'
+            and ${table.traceSummary}->>'outcome' = 'waiting'
+            and ${table.traceSummary}->>'reasonCode' = 'FLOW_MESSAGING_DELIVERY_REQUESTED'
+            and ${table.traceSummary}->>'resultCode' = 'FLOW_WAITING_EXTERNAL'
+          )
+          or
+          (
+            ${table.outcome} = 'waiting'
+            and ${table.traceSummary}->>'nodeKind' in ('astrologer_approval', 'natal_chart_ai_draft')
+            and ${table.traceSummary}->>'outcome' = 'waiting'
+            and ${table.traceSummary}->>'reasonCode' = 'FLOW_APPROVAL_CREATED'
+            and ${table.traceSummary}->>'resultCode' = 'FLOW_WAITING_APPROVAL'
+          )
+          or
+          (
             ${table.outcome} = 'completed'
-            and ${table.traceSummary}->>'nodeKind' = 'completed'
+            and ${table.traceSummary}->>'nodeKind' in ('completed', 'suppressed', 'failed')
             and ${table.traceSummary}->>'outcome' = 'terminal'
             and ${table.traceSummary}->>'reasonCode' = 'FLOW_GOAL_REACHED'
           )
@@ -793,11 +817,7 @@ export const flowRunEvents = pgTable(
       foreignColumns: [bookingLifecycleEvents.id, bookingLifecycleEvents.ownerUserId],
       name: "flow_run_events_booking_lifecycle_event_owner_fk"
     }).onDelete("restrict"),
-    unique("flow_run_events_id_run_owner_unique").on(
-      table.id,
-      table.flowRunId,
-      table.ownerUserId
-    ),
+    unique("flow_run_events_id_run_owner_unique").on(table.id, table.flowRunId, table.ownerUserId),
     uniqueIndex("flow_run_events_run_sequence_unique").on(table.flowRunId, table.sequence),
     uniqueIndex("flow_run_events_attempt_unique")
       .on(table.attemptId)
@@ -866,7 +886,9 @@ export const flowRunEvents = pgTable(
         and ${table.summary}->>'outcome' = 'enrolled'
         and ${table.summary}->>'reasonCode' = 'FLOW_TRIGGER_MATCHED'
         and ${table.summary}->>'resultCode' = 'FLOW_RUN_ENROLLED'
-        and ${table.summary}->>'eventKind' = 'booking_confirmed'
+        and ${table.summary}->>'eventKind' in ${sql.raw(
+          formatFlowSqlValues(flowRuntimeEventKindValues)
+        )}
         and ${table.summary}->>'triggerNodeId' = ${table.nodeId}
         and length(${table.summary}->>'triggerNodeId') between 1 and 160
         and ${table.summary}->>'triggerNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
@@ -966,6 +988,20 @@ export const flowRunEvents = pgTable(
             and (${table.summary}->>'toRevision')::numeric =
               (${table.summary}->>'fromRevision')::numeric + 1
             and length(${table.summary}->>'scheduledFor') between 20 and 35
+          )
+          or (
+            ${table.eventType} = 'approval_expired'
+            and ${table.summary} ?& array[
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[]
+            and ${table.summary} - array[
+              'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode',
+              'sourceHandle', 'selectedEdgeId', 'targetNodeId', 'targetNodeKind'
+            ]::text[] = '{}'::jsonb
+            and jsonb_typeof(${table.summary}->'sourceHandle') = 'string'
+            and jsonb_typeof(${table.summary}->'selectedEdgeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeId') = 'string'
+            and jsonb_typeof(${table.summary}->'targetNodeKind') = 'string'
           )
           or (
             ${table.eventType} = 'booking_rescheduled'
@@ -1091,7 +1127,8 @@ export const flowRunEvents = pgTable(
           )
           or (
             ${table.eventType} not in (
-              'token_advanced', 'token_signaled', 'work_item_available', 'booking_rescheduled'
+              'token_advanced', 'token_signaled', 'work_item_available', 'approval_expired',
+              'booking_rescheduled'
             )
             and ${table.summary} - array[
               'schemaVersion', 'outcome', 'nodeKind', 'reasonCode', 'resultCode'
@@ -1138,6 +1175,12 @@ export const flowRunEvents = pgTable(
                 and ${table.summary}->>'sourceHandle' = 'success'
               ) or (
                 ${table.attemptId} is null
+                and ${table.commandId} is not null
+                and ${table.summary}->>'nodeKind' in ('astrologer_approval', 'natal_chart_ai_draft')
+                and ${table.summary}->>'reasonCode' = 'FLOW_APPROVAL_DECIDED'
+                and ${table.summary}->>'sourceHandle' in ('approved', 'rejected')
+              ) or (
+                ${table.attemptId} is null
                 and ${table.commandId} is null
                 and ${table.summary}->>'nodeKind' = 'astrologer_work_item'
                 and ${table.summary}->>'reasonCode' = 'FLOW_BIRTH_PROFILE_RECHECK_READY'
@@ -1151,11 +1194,8 @@ export const flowRunEvents = pgTable(
             and ${table.nodeId} is not null
             and ${table.attemptId} is null
             and ${table.commandId} is null
-            and ${table.summary}->>'nodeKind' = 'natal_chart_request'
             and ${table.summary}->>'outcome' = 'advanced'
-            and ${table.summary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_COMPLETED'
             and ${table.summary}->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
-            and ${table.summary}->>'sourceHandle' = 'next'
             and ${table.summary}->>'targetNodeKind' in ${sql.raw(
               formatFlowSqlValues(flowExecutableNodeKindV2Values)
             )}
@@ -1163,6 +1203,17 @@ export const flowRunEvents = pgTable(
             and ${table.summary}->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
             and length(${table.summary}->>'targetNodeId') between 1 and 160
             and ${table.summary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and (
+              (
+                ${table.summary}->>'nodeKind' = 'natal_chart_request'
+                and ${table.summary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_COMPLETED'
+                and ${table.summary}->>'sourceHandle' = 'next'
+              ) or (
+                ${table.summary}->>'nodeKind' = 'send_message'
+                and ${table.summary}->>'reasonCode' = 'FLOW_MESSAGING_DELIVERY_COMPLETED'
+                and ${table.summary}->>'sourceHandle' in ('success', 'error')
+              )
+            )
           )
           or
           (
@@ -1174,6 +1225,36 @@ export const flowRunEvents = pgTable(
             and ${table.summary}->>'outcome' = 'available'
             and ${table.summary}->>'reasonCode' = 'FLOW_WORK_ITEM_SNOOZE_ELAPSED'
             and ${table.summary}->>'resultCode' = 'FLOW_WORK_ITEM_AVAILABLE'
+          )
+          or
+          (
+            ${table.eventType} = 'approval_available'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is null
+            and ${table.commandId} is null
+            and ${table.summary}->>'nodeKind' in ('astrologer_approval', 'natal_chart_ai_draft')
+            and ${table.summary}->>'outcome' = 'available'
+            and ${table.summary}->>'reasonCode' = 'FLOW_APPROVAL_SNOOZE_ELAPSED'
+            and ${table.summary}->>'resultCode' = 'FLOW_APPROVAL_AVAILABLE'
+          )
+          or
+          (
+            ${table.eventType} = 'approval_expired'
+            and ${table.nodeId} is not null
+            and ${table.attemptId} is null
+            and ${table.commandId} is null
+            and ${table.summary}->>'nodeKind' in ('astrologer_approval', 'natal_chart_ai_draft')
+            and ${table.summary}->>'outcome' = 'advanced'
+            and ${table.summary}->>'reasonCode' = 'FLOW_APPROVAL_EXPIRED'
+            and ${table.summary}->>'resultCode' = 'FLOW_TOKEN_ADVANCED'
+            and ${table.summary}->>'sourceHandle' = 'timeout'
+            and ${table.summary}->>'targetNodeKind' in ${sql.raw(
+              formatFlowSqlValues(flowExecutableNodeKindV2Values)
+            )}
+            and length(${table.summary}->>'selectedEdgeId') between 1 and 160
+            and ${table.summary}->>'selectedEdgeId' ~ '^[a-z0-9][a-z0-9_-]*$'
+            and length(${table.summary}->>'targetNodeId') between 1 and 160
+            and ${table.summary}->>'targetNodeId' ~ '^[a-z0-9][a-z0-9_-]*$'
           )
           or
           (
@@ -1202,6 +1283,14 @@ export const flowRunEvents = pgTable(
                 ${table.summary}->>'nodeKind' = 'natal_chart_request'
                 and ${table.summary}->>'reasonCode' = 'FLOW_CHART_CALCULATION_REQUESTED'
                 and ${table.summary}->>'resultCode' = 'FLOW_WAITING_SIGNAL'
+              ) or (
+                ${table.summary}->>'nodeKind' = 'send_message'
+                and ${table.summary}->>'reasonCode' = 'FLOW_MESSAGING_DELIVERY_REQUESTED'
+                and ${table.summary}->>'resultCode' = 'FLOW_WAITING_EXTERNAL'
+              ) or (
+                ${table.summary}->>'nodeKind' in ('astrologer_approval', 'natal_chart_ai_draft')
+                and ${table.summary}->>'reasonCode' = 'FLOW_APPROVAL_CREATED'
+                and ${table.summary}->>'resultCode' = 'FLOW_WAITING_APPROVAL'
               )
             )
           )
@@ -1210,7 +1299,7 @@ export const flowRunEvents = pgTable(
             ${table.eventType} = 'run_completed'
             and ${table.attemptId} is not null
             and ${table.commandId} is null
-            and ${table.summary}->>'nodeKind' = 'completed'
+            and ${table.summary}->>'nodeKind' in ('completed', 'suppressed', 'failed')
             and ${table.summary}->>'outcome' = 'terminal'
             and ${table.summary}->>'reasonCode' = 'FLOW_GOAL_REACHED'
           )
@@ -1343,15 +1432,26 @@ export const flowApprovals = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     flowRunId: uuid("flow_run_id").notNull(),
     flowStepRunId: uuid("flow_step_run_id"),
+    executionTokenId: uuid("execution_token_id"),
+    nodeActivationSequence: bigint("node_activation_sequence", { mode: "bigint" }),
     status: text("status").notNull().default("pending"),
     kind: text("kind").notNull(),
     title: text("title").notNull(),
     preview: text("preview").notNull(),
+    aiCalculationId: uuid("ai_calculation_id"),
+    aiInterpretationId: uuid("ai_interpretation_id"),
+    aiSourceChecksum: varchar("ai_source_checksum", { length: 71 }),
+    aiContentChecksum: varchar("ai_content_checksum", { length: 71 }),
+    aiOutputText: text("ai_output_text"),
     decisionNote: text("decision_note"),
     decidedByUserId: uuid("decided_by_user_id").references(() => users.id, {
       onDelete: "set null"
     }),
     snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revision: integer("revision").notNull().default(1),
+    lastCommandId: uuid("last_command_id"),
+    lastRunEventId: uuid("last_run_event_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     decidedAt: timestamp("decided_at", { withTimezone: true })
   },
@@ -1366,10 +1466,49 @@ export const flowApprovals = pgTable(
       foreignColumns: [flowStepRuns.id, flowStepRuns.flowRunId, flowStepRuns.ownerUserId],
       name: "flow_approvals_step_run_owner_fk"
     }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.executionTokenId, table.flowRunId, table.ownerUserId],
+      foreignColumns: [
+        flowExecutionTokens.id,
+        flowExecutionTokens.flowRunId,
+        flowExecutionTokens.ownerUserId
+      ],
+      name: "flow_approvals_token_run_owner_fk"
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.lastCommandId, table.flowRunId, table.ownerUserId],
+      foreignColumns: [
+        flowRuntimeCommands.id,
+        flowRuntimeCommands.flowRunId,
+        flowRuntimeCommands.ownerUserId
+      ],
+      name: "flow_approvals_last_command_run_owner_fk"
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.lastRunEventId, table.flowRunId, table.ownerUserId],
+      foreignColumns: [flowRunEvents.id, flowRunEvents.flowRunId, flowRunEvents.ownerUserId],
+      name: "flow_approvals_last_run_event_run_owner_fk"
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.aiInterpretationId, table.aiCalculationId],
+      foreignColumns: [calculationInterpretations.id, calculationInterpretations.calculationId],
+      name: "flow_approvals_ai_interpretation_calculation_fk"
+    }).onDelete("restrict"),
+    uniqueIndex("flow_approvals_token_activation_unique").on(
+      table.executionTokenId,
+      table.nodeActivationSequence
+    ),
+    uniqueIndex("flow_approvals_ai_interpretation_unique").on(table.aiInterpretationId),
     index("flow_approvals_owner_status_created_idx").on(
       table.ownerUserId,
       table.status,
       table.createdAt
+    ),
+    index("flow_approvals_pending_expiry_idx").on(
+      table.status,
+      table.expiresAt,
+      table.createdAt,
+      table.id
     ),
     index("flow_approvals_run_created_idx").on(table.flowRunId, table.createdAt),
     check(
@@ -1386,6 +1525,22 @@ export const flowApprovals = pgTable(
       sql`length(trim(${table.preview})) between 1 and 1000`
     ),
     check(
+      "flow_approvals_ai_artifact_provenance_check",
+      sql`(
+        ${table.aiCalculationId} is null
+        and ${table.aiInterpretationId} is null
+        and ${table.aiSourceChecksum} is null
+        and ${table.aiContentChecksum} is null
+        and ${table.aiOutputText} is null
+      ) or (
+        ${table.aiCalculationId} is not null
+        and ${table.aiInterpretationId} is not null
+        and ${table.aiSourceChecksum} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.aiContentChecksum} ~ '^sha256:[a-f0-9]{64}$'
+        and length(${table.aiOutputText}) between 1 and 26000
+      )`
+    ),
+    check(
       "flow_approvals_decision_note_length_check",
       sql`${table.decisionNote} is null or length(trim(${table.decisionNote})) between 1 and 1000`
     ),
@@ -1400,6 +1555,33 @@ export const flowApprovals = pgTable(
     check(
       "flow_approvals_snoozed_until_check",
       sql`${table.status} <> 'snoozed' or ${table.snoozedUntil} is not null`
+    ),
+    check("flow_approvals_revision_check", sql`${table.revision} > 0`),
+    check(
+      "flow_approvals_runtime_provenance_check",
+      sql`(
+        ${table.executionTokenId} is null
+        and ${table.nodeActivationSequence} is null
+        and ${table.expiresAt} is null
+        and ${table.revision} = 1
+        and ${table.lastCommandId} is null
+        and ${table.lastRunEventId} is null
+      ) or (
+        ${table.executionTokenId} is not null
+        and ${table.nodeActivationSequence} > 0
+        and (
+          (${table.revision} = 1
+            and ${table.status} = 'pending'
+            and ${table.lastCommandId} is null
+            and ${table.lastRunEventId} is null)
+          or (${table.revision} > 1
+            and (${table.lastCommandId} is null) <> (${table.lastRunEventId} is null))
+        )
+      )`
+    ),
+    check(
+      "flow_approvals_runtime_expiry_check",
+      sql`${table.executionTokenId} is null or ${table.expiresAt} is null or ${table.expiresAt} >= ${table.createdAt}`
     )
   ]
 );

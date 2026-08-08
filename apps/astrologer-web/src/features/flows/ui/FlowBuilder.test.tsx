@@ -81,7 +81,7 @@ describe("FlowBuilder", () => {
     expect(screen.getByRole("heading", { name: "Работа астролога" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Результаты" })).toBeTruthy();
     expect(screen.queryByText("AI-узлы")).toBeNull();
-    expect(screen.queryByText("Отправить сообщение")).toBeNull();
+    expect(screen.getByText("Отправить сообщение")).toBeTruthy();
     expect(screen.queryByText("birth_data_available")).toBeNull();
     expect(screen.queryByLabelText("Конфигурация")).toBeNull();
     expect(screen.getByLabelText("Название узла")).toBeTruthy();
@@ -378,16 +378,61 @@ describe("FlowBuilder", () => {
     expect(screen.queryByRole("button", { name: "Создать новую версию" })).toBeNull();
   });
 
-  it("keeps test execution disabled from server runtime evidence", () => {
-    const onSimulate = vi.fn();
-    renderBuilder({ runtimeAvailability: definitionOnlyRuntime, onSimulate });
+  it("offers a real manual run only for the active published manual version", () => {
+    const onCreateManualRun = vi.fn();
+    const activeManual = activeManualVersion();
+    const runtime = {
+      mode: "enabled",
+      executionAvailable: true,
+      reasonCode: null,
+      historySemantics: "durable_execution"
+    } satisfies FlowRuntimeAvailability;
 
-    const testRun = screen.getByRole("button", { name: "Тестовый прогон" });
-    expect(testRun).toHaveProperty("disabled", true);
-    fireEvent.click(testRun);
-    expect(onSimulate).not.toHaveBeenCalled();
+    renderBuilder({ flow: activeManual, runtimeAvailability: runtime, onCreateManualRun });
+
+    fireEvent.click(screen.getByRole("button", { name: "Запустить для клиента" }));
+    expect(onCreateManualRun).toHaveBeenCalledWith(flow.id);
+    expect(screen.queryByRole("button", { name: "Тестовый прогон" })).toBeNull();
+  });
+
+  it("does not enable a manual run when runtime evidence is fail-closed", () => {
+    const onCreateManualRun = vi.fn();
+
+    renderBuilder({
+      flow: activeManualVersion(),
+      runtimeAvailability: definitionOnlyRuntime,
+      onCreateManualRun
+    });
+
+    const run = screen.getByRole("button", { name: "Запустить для клиента" });
+    expect(run).toHaveProperty("disabled", true);
+    fireEvent.click(run);
+    expect(onCreateManualRun).not.toHaveBeenCalled();
   });
 });
+
+function activeManualVersion(): FlowDefinitionDetailV3 {
+  return {
+    ...flow,
+    state: "versioned",
+    revision: 5,
+    latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
+    latestPublishedVersion: 1,
+    publishedAt: "2026-07-28T08:30:00.000Z",
+    enrollment: {
+      ...flow.enrollment,
+      control: {
+        ...flow.enrollment.control,
+        state: "active",
+        definitionRevision: 5,
+        enrollmentRevision: 1,
+        activeVersionId: "33333333-3333-4333-8333-333333333333",
+        activeActivationEpochId: "44444444-4444-4444-8444-444444444444",
+        activeSince: "2026-07-28T08:30:00.000Z"
+      }
+    }
+  };
+}
 
 function renderBuilder(overrides: Partial<Parameters<typeof FlowBuilder>[0]> = {}) {
   return render(

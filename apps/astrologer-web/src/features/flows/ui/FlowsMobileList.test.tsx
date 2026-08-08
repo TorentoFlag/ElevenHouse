@@ -35,7 +35,9 @@ describe("FlowsMobileList", () => {
     expect(screen.getByText("Редакция 2")).toBeTruthy();
     expect(screen.getByText("Схема V2")).toBeTruthy();
     expect(screen.queryByText("Конверсия")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Создать воронку" }));
+    const createButton = screen.getByRole("button", { name: "Новая воронка" });
+    expect(createButton.textContent).toContain("Новая воронка");
+    fireEvent.click(createButton);
     expect(onCreateFlow).toHaveBeenCalledOnce();
   });
 

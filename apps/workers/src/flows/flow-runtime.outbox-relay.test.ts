@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   relayPendingFlowRuntimeDispatchEvents,
   type FlowChartTerminalSignalDispatcher,
+  type FlowMessagingTerminalSignalDispatcher,
   type FlowBookingEnrollmentDispatcher,
   type FlowBookingLifecycleDispatcher,
   type FlowBirthProfileRecheckDispatcher
@@ -89,6 +90,34 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
     expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
     expect(store.markRetry).not.toHaveBeenCalled();
     expect(store.markQuarantined).not.toHaveBeenCalled();
+  });
+
+  it("delivers a validated messaging terminal signal before publishing its outbox event", async () => {
+    const messageId = "00000000-0000-4000-8000-000000000009";
+    const payload = {
+      schemaVersion: "messaging-message-delivery-terminal.v1" as const,
+      messageId,
+      ownerUserId,
+      outcome: "failed" as const,
+      occurredAt: "2026-08-05T00:00:00.000Z"
+    };
+    const store = createStore({
+      id: eventId,
+      eventType: "messaging.message.delivery_terminal.v1",
+      aggregateId: messageId,
+      payload,
+      attempts: 1,
+      claimFence
+    });
+    const deliverMessagingTerminalSignal = vi.fn(async () => ({ status: "consumed" as const }));
+
+    await relayPendingFlowRuntimeDispatchEvents(
+      relayInput({ store, deliverMessagingTerminalSignal })
+    );
+
+    expect(deliverMessagingTerminalSignal).toHaveBeenCalledWith({ ...payload, sourceEventId: eventId });
+    expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
+    expect(store.markRetry).not.toHaveBeenCalled();
   });
 
   it("quarantines an invalid chart terminal payload before durable signal delivery", async () => {
@@ -330,6 +359,7 @@ function relayInput(input: {
   readonly enrollBookingConfirmed?: FlowBookingEnrollmentDispatcher;
   readonly processBookingLifecycleEvent?: FlowBookingLifecycleDispatcher;
   readonly deliverChartTerminalSignal?: FlowChartTerminalSignalDispatcher;
+  readonly deliverMessagingTerminalSignal?: FlowMessagingTerminalSignalDispatcher;
   readonly recheckBirthProfile?: FlowBirthProfileRecheckDispatcher;
 }) {
   return {
@@ -338,6 +368,8 @@ function relayInput(input: {
     processBookingLifecycleEvent:
       input.processBookingLifecycleEvent ?? (async () => lifecycleResult()),
     deliverChartTerminalSignal: input.deliverChartTerminalSignal ?? (async () => ({ status: "stored" })),
+    deliverMessagingTerminalSignal:
+      input.deliverMessagingTerminalSignal ?? (async () => ({ status: "stored" })),
     recheckBirthProfile:
       input.recheckBirthProfile ??
       (async ({ sourceOutboxEventId, event }) => ({

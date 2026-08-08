@@ -54,6 +54,10 @@ const sharedOutboxConstraintExtensions = [
   {
     constraintNamePrefix: "outbox_events_booking_lifecycle_",
     eventTypePrefix: "bookings."
+  },
+  {
+    constraintNamePrefix: "outbox_events_messaging_delivery_",
+    eventTypePrefix: "messaging.message.delivery_"
   }
 ] as const;
 

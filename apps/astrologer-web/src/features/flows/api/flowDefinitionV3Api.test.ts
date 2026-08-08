@@ -65,7 +65,13 @@ describe("flow definition V3 API", () => {
       .mockResolvedValueOnce({
         schemaVersion: "flow-definition-list.v3",
         flows: [summary],
-        total: 1
+        total: 1,
+        runtime: {
+          mode: "definition_only",
+          executionAvailable: false,
+          reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+          historySemantics: "durable_execution"
+        }
       })
       .mockResolvedValueOnce(detail);
 
@@ -204,9 +210,7 @@ function capabilityManifest(): FlowCapabilityManifestV2 {
       matcherContractVersion: 1,
       eventSchemaVersion: 1
     },
-    nodeExecutors: [
-      { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }
-    ],
+    nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
     requiredCapabilities: []
   };
 }

@@ -22,12 +22,14 @@ const mocks = vi.hoisted(() => ({
   useFlowListQuery: vi.fn(),
   useFlowTemplatesQuery: vi.fn(),
   useProductListQuery: vi.fn(),
+  useAstrologerTariffEntitlementsQuery: vi.fn(),
   useFlowDefinitionQuery: vi.fn(),
   useFlowActivationReviewQuery: vi.fn(),
   useFlowEnrollmentQuery: vi.fn(),
   useActivateFlowMutation: vi.fn(),
   usePauseFlowEnrollmentMutation: vi.fn(),
   useCreateFlowMutation: vi.fn(),
+  useCreateManualFlowRunMutation: vi.fn(),
   useCreateNextFlowDraftMutation: vi.fn(),
   useUpdateFlowDraftMutation: vi.fn(),
   usePublishFlowMutation: vi.fn(),
@@ -48,6 +50,9 @@ vi.mock("../../features/flows/model/useFlowTemplatesQuery", () => ({
 vi.mock("../../features/products/model/useProductListQuery", () => ({
   useProductListQuery: mocks.useProductListQuery
 }));
+vi.mock("../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery", () => ({
+  useAstrologerTariffEntitlementsQuery: mocks.useAstrologerTariffEntitlementsQuery
+}));
 vi.mock("../../features/flows/model/useFlowDefinitionQuery", () => ({
   useFlowDefinitionQuery: mocks.useFlowDefinitionQuery
 }));
@@ -66,6 +71,9 @@ vi.mock("../../features/flows/model/usePauseFlowEnrollmentMutation", () => ({
 vi.mock("../../features/flows/model/useCreateFlowMutation", () => ({
   useCreateFlowMutation: mocks.useCreateFlowMutation
 }));
+vi.mock("../../features/flows/model/useCreateManualFlowRunMutation", () => ({
+  useCreateManualFlowRunMutation: mocks.useCreateManualFlowRunMutation
+}));
 vi.mock("../../features/flows/model/useCreateNextFlowDraftMutation", () => ({
   useCreateNextFlowDraftMutation: mocks.useCreateNextFlowDraftMutation
 }));
@@ -83,6 +91,11 @@ vi.mock("../../features/flows/ui/FlowWorkItemQueuePanel", () => ({
     <div data-testid="flow-work-item-queue-panel">{locale}</div>
   )
 }));
+vi.mock("../../features/flows/ui/FlowApprovalQueuePanel", () => ({
+  FlowApprovalQueuePanel: ({ locale }: { locale: "ru" | "en" }) => (
+    <div data-testid="flow-approval-queue-panel">{locale}</div>
+  )
+}));
 
 describe("FlowsPage enrollment controller", () => {
   beforeEach(() => {
@@ -95,6 +108,11 @@ describe("FlowsPage enrollment controller", () => {
     });
     mocks.useProductListQuery.mockReturnValue({
       data: { products: [], total: 0 },
+      isLoading: false,
+      error: null
+    });
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
+      data: { products: { read: "allow", mutation: "allow" } },
       isLoading: false,
       error: null
     });
@@ -126,6 +144,7 @@ describe("FlowsPage enrollment controller", () => {
       mocks.useActivateFlowMutation,
       mocks.usePauseFlowEnrollmentMutation,
       mocks.useCreateFlowMutation,
+      mocks.useCreateManualFlowRunMutation,
       mocks.useCreateNextFlowDraftMutation,
       mocks.useUpdateFlowDraftMutation,
       mocks.usePublishFlowMutation,
@@ -223,7 +242,6 @@ describe("FlowsPage enrollment controller", () => {
       expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
     );
   });
-
 });
 
 function openAutomation(accessibleName: string) {
@@ -232,7 +250,17 @@ function openAutomation(accessibleName: string) {
 
 function setList(flows: readonly FlowDefinitionSummaryV3[]) {
   mocks.useFlowListQuery.mockReturnValue({
-    data: { schemaVersion: "flow-definition-list.v3", flows, total: flows.length },
+    data: {
+      schemaVersion: "flow-definition-list.v3",
+      flows,
+      total: flows.length,
+      runtime: {
+        mode: "definition_only",
+        executionAvailable: false,
+        reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+        historySemantics: "durable_execution"
+      }
+    },
     isLoading: false,
     isError: false,
     error: null,
@@ -243,6 +271,7 @@ function setList(flows: readonly FlowDefinitionSummaryV3[]) {
 function mutation(mutate = vi.fn()) {
   return {
     mutate,
+    mutateAsync: vi.fn(),
     isPending: false,
     error: null,
     reset: vi.fn()

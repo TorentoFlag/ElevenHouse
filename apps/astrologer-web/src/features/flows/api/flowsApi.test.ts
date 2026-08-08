@@ -10,6 +10,7 @@ import {
   type FlowDefinitionV2,
   flowGraphV2Schema,
   type FlowRunResponse,
+  type GetFlowRunResponse,
   type FlowRuntimeAvailability,
   type FlowApproval,
   type FlowGraphV2,
@@ -17,7 +18,7 @@ import {
   type ListFlowDefinitionTemplatesV2Response,
   type ListFlowDefinitionsV3Response,
   type ListFlowRunsResponse,
-  type ManualFlowRunResponse,
+  type CreateManualClientFlowRunResponse,
   type PublishFlowDefinitionV3Response,
   type ValidateFlowDefinitionResponseV2
 } from "@elevenhouse/contracts";
@@ -27,13 +28,14 @@ import { createFlow } from "./createFlow";
 import { createManualFlowRun } from "./createManualFlowRun";
 import { decideFlowApproval } from "./decideFlowApproval";
 import { createNextFlowDraft } from "./createNextFlowDraft";
+import { cancelFlowRun } from "./cancelFlowRun";
 import { getFlowDefinition } from "./getFlowDefinition";
+import { getFlowRun } from "./getFlowRun";
 import { listFlowApprovals } from "./listFlowApprovals";
 import { listFlowRuns } from "./listFlowRuns";
 import { listFlowTemplates } from "./listFlowTemplates";
 import { listFlows } from "./listFlows";
 import { publishFlow } from "./publishFlow";
-import { simulateFlowRun } from "./simulateFlowRun";
 import { updateFlowDraft } from "./updateFlowDraft";
 import { validateFlowDefinition } from "./validateFlowDefinition";
 
@@ -196,6 +198,10 @@ const approval = {
   kind: "ai_output",
   title: "Проверить AI-черновик",
   preview: "Сообщение клиенту ожидает подтверждения.",
+  artifact: null,
+  revision: 1,
+  snoozedUntil: null,
+  expiresAt: null,
   createdAt: "2026-07-28T08:01:00.000Z",
   decidedAt: null
 } satisfies FlowApproval;
@@ -223,7 +229,8 @@ describe("flows API", () => {
     const response = {
       schemaVersion: "flow-definition-list.v3",
       flows: [definitionSummary],
-      total: 1
+      total: 1,
+      runtime: definitionOnlyRuntime
     } satisfies ListFlowDefinitionsV3Response;
     const get = vi
       .spyOn(application.http, "get")
@@ -439,51 +446,37 @@ describe("flows API", () => {
     );
   });
 
-  it("runs simulation and manual run commands through CSRF-protected endpoints", async () => {
-    const request = {
-      source: "manual",
-      subjectType: "manual",
-      subjectId: flowId,
-      occurredAt: "2026-07-28T08:00:00.000Z",
-      timeZone: "Europe/Moscow",
-      payload: {}
+  it("runs owner-scoped manual client enrollment through a CSRF-protected endpoint", async () => {
+    const manualRequest = {
+      clientUserId: "99999999-9999-4999-8999-999999999999"
     } as const;
-    const simulationResponse = {
-      flowId,
-      flowVersionId: run.flowVersionId,
-      plannedSteps: [{ nodeId: "draft-reply", status: "approval_required", reason: null }],
-      warnings: []
-    };
     const manualResponse = {
-      status: "created",
-      event: {
-        id: "66666666-6666-4666-8666-666666666666",
-        ownerUserId,
-        source: "manual",
-        sourceEventId: "manual:test",
-        dedupeKey: "manual:test",
-        subjectType: "manual",
-        subjectId: flowId,
-        occurredAt: "2026-07-28T08:00:00.000Z",
-        payload: {}
-      },
-      run,
-      stepRuns: [],
-      approvals: [approval]
-    } satisfies ManualFlowRunResponse;
-    const post = vi
-      .spyOn(application.http, "post")
-      .mockResolvedValueOnce(simulationResponse)
-      .mockResolvedValueOnce(manualResponse);
+      status: "enrolled",
+      replayed: false,
+      eventId: "66666666-6666-4666-8666-666666666666",
+      runs: [
+        {
+          runId: run.id,
+          tokenId: "77777777-7777-4777-8777-777777777777",
+          flowId,
+          flowVersionId: run.flowVersionId,
+          activationEpochId: "88888888-8888-4888-8888-888888888888"
+        }
+      ]
+    } satisfies CreateManualClientFlowRunResponse;
+    const post = vi.spyOn(application.http, "post").mockResolvedValue(manualResponse);
 
-    await expect(simulateFlowRun({ flowId, body: request })).resolves.toEqual(simulationResponse);
-    await expect(createManualFlowRun({ flowId, body: request })).resolves.toEqual(manualResponse);
+    await expect(
+      createManualFlowRun({
+        flowId,
+        body: manualRequest,
+        idempotencyKey: "manual-client-run-test"
+      })
+    ).resolves.toEqual(manualResponse);
 
-    expect(post).toHaveBeenNthCalledWith(1, `/flows/${flowId}/simulate`, request, {
-      csrf: true
-    });
-    expect(post).toHaveBeenNthCalledWith(2, `/flows/${flowId}/manual-runs`, request, {
-      csrf: true
+    expect(post).toHaveBeenCalledWith(`/flows/${flowId}/manual-runs`, manualRequest, {
+      csrf: true,
+      headers: { "idempotency-key": "manual-client-run-test" }
     });
   });
 
@@ -514,6 +507,36 @@ describe("flows API", () => {
     expect(get).toHaveBeenNthCalledWith(2, "/flow-approvals?status=pending&limit=50&offset=0");
   });
 
+  it("reads a durable run trace and cancels through the owner-safe commands", async () => {
+    const detail = {
+      run,
+      trace: [
+        {
+          sequence: "1",
+          eventType: "run_enrolled",
+          nodeId: "manual",
+          summary: { source: "manual" },
+          occurredAt: "2026-07-28T08:00:00.000Z"
+        }
+      ],
+      runtime: definitionOnlyRuntime
+    } satisfies GetFlowRunResponse;
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(detail);
+    const post = vi.spyOn(application.http, "post").mockResolvedValue({ run });
+
+    await expect(getFlowRun(run.id)).resolves.toEqual(detail);
+    await expect(
+      cancelFlowRun({ runId: run.id, idempotencyKey: "flow-run-cancel-test" })
+    ).resolves.toEqual({ run });
+
+    expect(get).toHaveBeenCalledWith(`/flow-runs/${run.id}`);
+    expect(post).toHaveBeenCalledWith(
+      `/flow-runs/${run.id}/cancel`,
+      {},
+      { csrf: true, headers: { "idempotency-key": "flow-run-cancel-test" } }
+    );
+  });
+
   it("posts approval decisions with CSRF and validates the response", async () => {
     const response = {
       approval: { ...approval, status: "approved", decidedAt: "2026-07-28T08:02:00.000Z" }
@@ -523,14 +546,15 @@ describe("flows API", () => {
     await expect(
       decideFlowApproval({
         approvalId: approval.id,
-        body: { decision: "approved", note: "Проверено" }
+        body: { expectedRevision: 1, decision: "approved", note: "Проверено" },
+        idempotencyKey: "flow-approval-decision-1"
       })
     ).resolves.toEqual(response);
 
     expect(post).toHaveBeenCalledWith(
       `/flow-approvals/${approval.id}/decision`,
-      { decision: "approved", note: "Проверено" },
-      { csrf: true }
+      { expectedRevision: 1, decision: "approved", note: "Проверено" },
+      { csrf: true, headers: { "idempotency-key": "flow-approval-decision-1" } }
     );
   });
 });

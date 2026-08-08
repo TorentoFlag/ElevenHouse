@@ -9,6 +9,7 @@ import {
   createFlowRuntimeRequirementKeys,
   FlowEnrollmentAuthorityIntegrityError,
   FlowEnrollmentCommandBusyError,
+  FlowDefinitionIntegrityError,
   pauseFlowEnrollment,
   replaceFlowRuntimeRolloutPolicy,
   type FlowRuntimeRolloutPolicy,
@@ -222,12 +223,7 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
     await runtime.pool.query("UPDATE flows SET status = 'active' WHERE id = $1", [fixture.flowId]);
     await expect(
       definitionReadStore.getByOwner({ ownerUserId: fixture.ownerUserId, flowId: fixture.flowId })
-    ).resolves.toMatchObject({
-      enrollment: {
-        authority: "enrollment_v1",
-        control: { state: "paused", enrollmentRevision: 2 }
-      }
-    });
+    ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
   });
 
   it("reviews activation in a read-only snapshot with complete command CAS evidence", async () => {

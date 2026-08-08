@@ -1,7 +1,7 @@
 import { z } from "@elevenhouse/validation";
 
 import { flowEnrollmentControlSchema } from "./flow-enrollment-control";
-import { flowApprovalModeSchema } from "./flows";
+import { flowApprovalModeSchema, flowRuntimeAvailabilitySchema } from "./flows";
 import {
   flowDefinitionOriginV1Schema,
   flowDefinitionStateSchema,
@@ -69,7 +69,10 @@ export const flowDefinitionDetailV3Schema = z
   .strict()
   .superRefine((definition, context) => {
     refineDefinitionRead(definition, context);
-    if (definition.draftPresentation && !presentationMatchesGraph(definition.draftGraph, definition.draftPresentation)) {
+    if (
+      definition.draftPresentation &&
+      !presentationMatchesGraph(definition.draftGraph, definition.draftPresentation)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["draftPresentation", "nodes"],
@@ -107,7 +110,8 @@ export const listFlowDefinitionsV3ResponseSchema = z
   .object({
     schemaVersion: z.literal("flow-definition-list.v3"),
     flows: z.array(flowDefinitionSummaryV3Schema).max(100),
-    total: z.number().int().min(0)
+    total: z.number().int().min(0),
+    runtime: flowRuntimeAvailabilitySchema
   })
   .strict()
   .superRefine((response, context) => {

@@ -1,11 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
-import {
-  completeAiUsageAttempt,
-  failAiUsageAttempt,
-  reconcileStaleAiUsageAttempts,
-  startAiUsageAttempt,
-  type AiUsageStore
-} from "@elevenhouse/domain";
+import { createDrizzleAiUsageRecorder } from "@elevenhouse/db";
+import type { AiUsageStore } from "@elevenhouse/domain";
 import { AI_USAGE_STORE } from "./ai.tokens";
 import type {
   AiUsageCompletionRecord,
@@ -16,43 +11,22 @@ import type {
 
 @Injectable()
 export class DrizzleAiUsageRecorder implements AiUsageRecorderPort {
-  constructor(@Inject(AI_USAGE_STORE) private readonly store: AiUsageStore) {}
+  private readonly recorder: ReturnType<typeof createDrizzleAiUsageRecorder>;
+
+  constructor(@Inject(AI_USAGE_STORE) store: AiUsageStore) {
+    this.recorder = createDrizzleAiUsageRecorder(store);
+  }
 
   async start(record: AiUsageStartRecord): Promise<string> {
-    const attempt = await startAiUsageAttempt({
-      store: this.store,
-      idGenerator: () => record.attemptId,
-      feature: record.feature,
-      promptId: record.promptId,
-      promptVersion: record.promptVersion,
-      provider: record.provider,
-      ownerSafetyId: record.ownerSafetyId,
-      resourceEvidence: record.resourceEvidence,
-      now: record.startedAt
-    });
-    return attempt.id;
+    return this.recorder.start(record);
   }
 
   async complete(record: AiUsageCompletionRecord): Promise<void> {
-    await completeAiUsageAttempt({
-      store: this.store,
-      attemptId: record.attemptId,
-      model: record.model,
-      finishReason: record.finishReason,
-      durationMs: record.durationMs,
-      ...(record.usage ? { usage: record.usage } : {}),
-      now: record.completedAt
-    });
+    await this.recorder.complete(record);
   }
 
   async fail(record: AiUsageFailureRecord): Promise<void> {
-    await failAiUsageAttempt({
-      store: this.store,
-      attemptId: record.attemptId,
-      safeErrorCode: record.safeErrorCode,
-      durationMs: record.durationMs,
-      now: record.completedAt
-    });
+    await this.recorder.fail(record);
   }
 
   async reconcileStale(record: {
@@ -60,11 +34,6 @@ export class DrizzleAiUsageRecorder implements AiUsageRecorderPort {
     readonly reconciledAt: Date;
     readonly limit: number;
   }) {
-    return reconcileStaleAiUsageAttempts({
-      store: this.store,
-      startedBefore: record.startedBefore,
-      now: record.reconciledAt,
-      limit: record.limit
-    });
+    return this.recorder.reconcileStale(record);
   }
 }

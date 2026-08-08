@@ -9,6 +9,8 @@
 | Full verification                 | `pnpm verify`                                                                                                                                                                                                                                           | No service startup; shared-layer completion gate                                                             |
 | Agent documentation verification  | `pnpm docs:check`                                                                                                                                                                                                                                       | Read-only; validates canonical docs, repo skills, links and known contradictions                             |
 | Agent documentation checker tests | `pnpm docs:check:test`                                                                                                                                                                                                                                  | Read-only; deterministic Node test fixtures, no services                                                     |
+| Generate current implementation state | `node scripts/agent-docs/generate-current-state.mjs`                                                                                                                                                                                                 | Regenerates committed current app/module/worker-port inventory; no services                                  |
+| Generate API route inventory | `node scripts/agent-docs/generate-route-inventory.mjs`                                                                                                                                                                                               | Regenerates committed Nest-controller route inventory; no services                                           |
 | Numerology domain tests           | `pnpm test packages/domain/src/numerology`                                                                                                                                                                                                              | No long-running process                                                                                      |
 | Calculation integration tests     | `INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/calculations/drizzle-calculation-pdf-job-store.integration.ts packages/db/src/adapters/calculations/drizzle-calculation-store.integration.ts`                  | Load root `.env` first; both URLs must point to existing local PostgreSQL                                    |
 | Chart Engine Python tests         | `(cd apps/chart-engine && .venv/bin/python -m pytest -q)`                                                                                                                                                                                               | Existing project virtualenv; no service startup                                                              |
@@ -16,7 +18,7 @@
 | Chart worker typecheck/build      | `pnpm --filter @elevenhouse/chart-worker typecheck && pnpm --filter @elevenhouse/chart-worker build`                                                                                                                                                    | No service startup                                                                                           |
 | Domain typecheck                  | `pnpm --filter @elevenhouse/domain typecheck`                                                                                                                                                                                                           | No long-running process                                                                                      |
 | Domain build                      | `pnpm --filter @elevenhouse/domain build`                                                                                                                                                                                                               | No long-running process                                                                                      |
-| Generate migration                | `pnpm db:generate`                                                                                                                                                                                                                                      | Rebuild current baseline after schema changes                                                                |
+| Generate migration                | `pnpm db:generate`                                                                                                                                                                                                                                      | Validate committed lineage and append the next focused migration                                              |
 | Reset local DB                    | `pnpm db:reset`                                                                                                                                                                                                                                         | Explicitly required task; local DB only; destructive; `DATABASE_URL` must identify the active ElevenHouse DB |
 
 ## Runnable now
@@ -126,7 +128,8 @@ backup и schema mutation.
 `Deploy Production` workflow с `prelaunch_reset=true`. После writer quiesce,
 zero-client-session fence и backup workflow запускает
 `db:reset-production-prelaunch` с exact target `postgres:5432/elevenhouse` и
-release-bound confirmation. Затем `db-migrator` применяет fresh baseline, а
+release-bound confirmation. Затем `db-migrator` применяет всю committed
+migration lineage, а
 `db-seeder` вставляет только reviewed system data. Push-driven deploy не может
 включить reset; локальный `pnpm db:reset` никогда не используется против
 production.
@@ -171,15 +174,17 @@ pnpm --filter @elevenhouse/domain build
 
 ### Database schema workflow
 
-После изменения Drizzle schema пересобери текущую baseline migration:
+После изменения Drizzle schema добавь следующую focused forward migration:
 
 ```bash
 pnpm db:generate
 ```
 
-Не создавай incremental `ALTER`-цепочку. `pnpm db:reset` разрушителен и
+Не переписывай, не переименовывай и не меняй порядок уже committed SQL,
+journal или snapshot artifacts. Проверь, что diff содержит только новый
+module-owned migration и его meta artifacts. `pnpm db:reset` разрушителен и
 выполняется только когда задача явно требует DB workflow и цель подтверждена как
-локальная ElevenHouse DB.
+локальная ElevenHouse DB; он применяет всю committed lineage к чистой БД.
 
 Parallel compose override может отображать ElevenHouse PostgreSQL не на
 `5432`. Перед разрушительной командой проверь реальный контейнер и порт:

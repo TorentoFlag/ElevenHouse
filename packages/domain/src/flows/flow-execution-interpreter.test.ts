@@ -4,7 +4,7 @@ import {
   type FlowNodeKindV2,
   type FlowSourceHandleV2
 } from "@elevenhouse/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   classifyFlowExecutionFailure,
@@ -55,6 +55,111 @@ describe("flow execution interpreter", () => {
         reasonCode: "FLOW_WORK_ITEM_CREATED",
         resultCode: "FLOW_WAITING_WORK_ITEM"
       }
+    });
+  });
+
+  it("creates a typed approval wait with bounded expiry from the pinned node config", async () => {
+    const graph = approvalGraph();
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({ graph, nodeId: "review-material", nodeKind: "astrologer_approval" }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).resolves.toEqual({
+      kind: "wait_approval",
+      sourceNodeId: "review-material",
+      resultCode: "FLOW_WAITING_APPROVAL",
+      approval: {
+        kind: "ai_output",
+        title: "Подтвердить материал",
+        preview: "Проверить материал перед отправкой",
+        artifact: null,
+        expiresAfterMinutes: 1_440
+      },
+      trace: {
+        schemaVersion: "flow-runtime-trace.v1",
+        outcome: "waiting",
+        nodeKind: "astrologer_approval",
+        reasonCode: "FLOW_APPROVAL_CREATED",
+        resultCode: "FLOW_WAITING_APPROVAL"
+      }
+    });
+  });
+
+  it("binds a natal AI approval to the exact durable interpretation artifact", async () => {
+    const natalGraph = natalChartGraph();
+    const graph = flowGraphV2Schema.parse({
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        ...natalGraph.nodes.filter((node) => node.id !== "completed"),
+        {
+          id: "natal-ai-draft",
+          kind: "natal_chart_ai_draft",
+          displayTitle: "Подготовить черновик",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: {
+            chartRequestNodeId: "natal-chart",
+            locale: "ru",
+            approvalTitle: "Проверить черновик",
+            expiresAfterMinutes: 60
+          }
+        },
+        completedNode(),
+        {
+          id: "rejected",
+          kind: "suppressed",
+          displayTitle: "Черновик отклонён",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { reasonCode: "natal_draft_rejected" }
+        },
+        {
+          id: "timed-out",
+          kind: "failed",
+          displayTitle: "Срок проверки истёк",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { errorCode: "natal_draft_approval_timed_out" }
+        }
+      ],
+      edges: [
+        { id: "booking-natal-chart", sourceNodeId: "booking", targetNodeId: "natal-chart", sourceHandle: "next" },
+        { id: "chart-to-ai", sourceNodeId: "natal-chart", targetNodeId: "natal-ai-draft", sourceHandle: "next" },
+        { id: "ai-approved", sourceNodeId: "natal-ai-draft", targetNodeId: "completed", sourceHandle: "approved" },
+        { id: "ai-rejected", sourceNodeId: "natal-ai-draft", targetNodeId: "rejected", sourceHandle: "rejected" },
+        { id: "ai-timeout", sourceNodeId: "natal-ai-draft", targetNodeId: "timed-out", sourceHandle: "timeout" }
+      ]
+    });
+
+    const result = await interpretFlowExecutionClaim({
+      claim: claim({ graph, nodeId: "natal-ai-draft", nodeKind: "natal_chart_ai_draft" }),
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartAiDraftRequester: {
+          prepare: async () => ({
+            calculationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            interpretationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            sourceChecksum: `sha256:${"a".repeat(64)}`,
+            contentChecksum: `sha256:${"b".repeat(64)}`,
+            outputText: "Полный неизменяемый текст черновика трактовки.",
+            preview: "Ключевые темы: ответственность и устойчивость."
+          })
+        }
+      })
+    });
+
+    expect(result).toMatchObject({
+      kind: "wait_approval",
+      approval: {
+        kind: "ai_output",
+        title: "Проверить черновик",
+        artifact: {
+          calculationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          interpretationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        }
+      },
+      trace: { nodeKind: "natal_chart_ai_draft" }
     });
   });
 
@@ -264,6 +369,44 @@ describe("flow execution interpreter", () => {
         nodeKind: node.kind,
         reasonCode: "FLOW_GOAL_REACHED",
         resultCode: "consultation_prepared"
+      }
+    });
+  });
+
+  it("executes explicit suppressed and failed terminal paths without an unavailable executor", async () => {
+    const graph = approvalGraph();
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({ graph, nodeId: "suppressed", nodeKind: "suppressed" }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).resolves.toMatchObject({
+      kind: "terminal",
+      sourceNodeId: "suppressed",
+      terminalStatus: "completed",
+      resultCode: "approval_rejected",
+      trace: {
+        outcome: "terminal",
+        nodeKind: "suppressed",
+        reasonCode: "FLOW_GOAL_REACHED"
+      }
+    });
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({ graph, nodeId: "failed", nodeKind: "failed" }),
+        registry: createBuiltInFlowNodeExecutorRegistry()
+      })
+    ).resolves.toMatchObject({
+      kind: "terminal",
+      sourceNodeId: "failed",
+      terminalStatus: "completed",
+      resultCode: "approval_timeout",
+      trace: {
+        outcome: "terminal",
+        nodeKind: "failed",
+        reasonCode: "FLOW_GOAL_REACHED"
       }
     });
   });
@@ -699,6 +842,99 @@ describe("flow execution interpreter", () => {
     });
   });
 
+  it("requests Messaging once and waits for its durable terminal delivery signal", async () => {
+    const prepare = vi.fn(async () => ({
+      kind: "queued" as const,
+      messageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    }));
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph: sendMessageGraph(),
+          nodeId: "send-message",
+          nodeKind: "send_message"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry({ messagingRequester: { prepare } })
+      })
+    ).resolves.toMatchObject({
+      kind: "wait_external",
+      sourceNodeId: "send-message",
+      wait: {
+        signalType: "messaging.message.delivery.terminal.v1",
+        correlationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        successHandle: "success",
+        failureHandle: "error"
+      },
+      trace: { resultCode: "FLOW_WAITING_EXTERNAL" }
+    });
+    expect(prepare).toHaveBeenCalledWith({
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      clientUserId: "99999999-9999-4999-8999-999999999999",
+      runId: "33333333-3333-4333-8333-333333333333",
+      tokenId: "11111111-1111-4111-8111-111111111111",
+      nodeActivationSequence: 1n,
+      textTemplate: "Напомните клиенту о консультации."
+    });
+  });
+
+  it("takes the error edge when Messaging rejects recipient resolution before creating a message", async () => {
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph: sendMessageGraph(),
+          nodeId: "send-message",
+          nodeKind: "send_message"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry({
+          messagingRequester: {
+            prepare: async () => ({ kind: "rejected" as const })
+          }
+        })
+      })
+    ).resolves.toMatchObject({
+      kind: "advance",
+      sourceNodeId: "send-message",
+      sourceHandle: "error",
+      targetNodeId: "delivery-failed",
+      targetNodeKind: "failed",
+      trace: {
+        outcome: "advanced",
+        reasonCode: "FLOW_EDGE_SELECTED"
+      }
+    });
+  });
+
+  it("replays durable terminal evidence when an identical natal chart is reused", async () => {
+    const requester = {
+      request: async () => ({
+        kind: "existing_result" as const,
+        calculationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        jobId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      })
+    };
+
+    await expect(
+      interpretFlowExecutionClaim({
+        claim: claim({
+          graph: natalChartGraph(),
+          nodeId: "natal-chart",
+          nodeKind: "natal_chart_request"
+        }),
+        registry: createBuiltInFlowNodeExecutorRegistry({ natalChartRequester: requester })
+      })
+    ).resolves.toMatchObject({
+      kind: "wait_signal",
+      sourceNodeId: "natal-chart",
+      wait: {
+        signalType: "chart.calculation.terminal.v1",
+        correlationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        successHandle: "next",
+        replayExistingResult: true
+      }
+    });
+  });
+
   it("fails closed before persistence when an executor returns a malformed decision", async () => {
     const node = completedNode();
     const graph = terminalGraph(node);
@@ -882,9 +1118,12 @@ describe("flow execution interpreter", () => {
     });
 
     expect(registry.executorKeys).toEqual([
+      "astrologer_approval:1:1",
       "astrologer_work_item:1:1",
       "birth_data_available:1:1",
-      "completed:1:1"
+      "completed:1:1",
+      "failed:1:1",
+      "suppressed:1:1"
     ]);
     expect(
       formatFlowNodeExecutorKey({
@@ -1129,6 +1368,44 @@ function completedNode() {
   };
 }
 
+function sendMessageGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "booking",
+        kind: "booking_confirmed",
+        displayTitle: "Запись подтверждена",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
+      },
+      {
+        id: "send-message",
+        kind: "send_message",
+        displayTitle: "Отправить напоминание",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { textTemplate: "Напомните клиенту о консультации." }
+      },
+      completedNode(),
+      {
+        id: "delivery-failed",
+        kind: "failed",
+        displayTitle: "Доставка не удалась",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { errorCode: "message_delivery_failed" }
+      }
+    ],
+    edges: [
+      { id: "booking-message", sourceNodeId: "booking", targetNodeId: "send-message", sourceHandle: "next" },
+      { id: "message-success", sourceNodeId: "send-message", targetNodeId: "completed", sourceHandle: "success" },
+      { id: "message-error", sourceNodeId: "send-message", targetNodeId: "delivery-failed", sourceHandle: "error" }
+    ]
+  });
+}
+
 function workItemGraph(instructions = "Проверьте карту и вопросы клиента"): FlowGraphV2 {
   return flowGraphV2Schema.parse({
     schemaVersion: "flow-graph.v2",
@@ -1171,6 +1448,57 @@ function workItemGraph(instructions = "Проверьте карту и вопр
         targetNodeId: "completed",
         sourceHandle: "success"
       }
+    ]
+  });
+}
+
+function approvalGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "manual",
+        kind: "manual_client",
+        displayTitle: "Клиент выбран вручную",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      },
+      {
+        id: "review-material",
+        kind: "astrologer_approval",
+        displayTitle: "Проверить материал перед отправкой",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          approvalKind: "ai_output",
+          approvalTitle: "Подтвердить материал",
+          expiresAfterMinutes: 1_440
+        }
+      },
+      completedNode(),
+      {
+        id: "suppressed",
+        kind: "suppressed",
+        displayTitle: "Материал отклонён",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { reasonCode: "approval_rejected" }
+      },
+      {
+        id: "failed",
+        kind: "failed",
+        displayTitle: "Истекло время ожидания",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { errorCode: "approval_timeout" }
+      }
+    ],
+    edges: [
+      { id: "manual-approval", sourceNodeId: "manual", targetNodeId: "review-material", sourceHandle: "next" },
+      { id: "approval-approved", sourceNodeId: "review-material", targetNodeId: "completed", sourceHandle: "approved" },
+      { id: "approval-rejected", sourceNodeId: "review-material", targetNodeId: "suppressed", sourceHandle: "rejected" },
+      { id: "approval-timeout", sourceNodeId: "review-material", targetNodeId: "failed", sourceHandle: "timeout" }
     ]
   });
 }
@@ -1228,12 +1556,12 @@ function birthDataConditionGraph(): FlowGraphV2 {
     schemaVersion: "flow-graph.v2",
     nodes: [
       {
-        id: "manual",
-        kind: "manual_client",
-        displayTitle: "Клиент выбран вручную",
+        id: "booking",
+        kind: "booking_confirmed",
+        displayTitle: "Запись подтверждена",
         configSchemaVersion: 1,
         executorContractVersion: 1,
-        config: {}
+        config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
       },
       {
         id: "birth-data",
@@ -1262,8 +1590,8 @@ function birthDataConditionGraph(): FlowGraphV2 {
     ],
     edges: [
       {
-        id: "manual-birth",
-        sourceNodeId: "manual",
+        id: "booking-birth",
+        sourceNodeId: "booking",
         targetNodeId: "birth-data",
         sourceHandle: "next"
       },

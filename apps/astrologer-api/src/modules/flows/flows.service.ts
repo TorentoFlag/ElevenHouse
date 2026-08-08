@@ -49,7 +49,6 @@ import {
   createFlowDefinitionV2,
   createNextFlowDraftV2,
   decideFlowApproval as decideFlowApprovalUseCase,
-  FLOW_RUNTIME_AVAILABILITY,
   FlowDefinitionDraftMutationInvalidError,
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
@@ -82,6 +81,7 @@ import {
   type FlowDefinitionReadV3Store,
   type FlowRunCancellationRejectionResponse,
   type FlowRunCancellationStore,
+  type FlowRuntimeAvailabilityReader,
   type FlowRuntimeStore
 } from "@elevenhouse/domain";
 import { z, type ZodType } from "@elevenhouse/validation";
@@ -91,6 +91,7 @@ import {
   FLOW_DEFINITION_CONTROL_STORE,
   FLOW_DEFINITION_READ_V3_STORE,
   FLOW_RUN_CANCELLATION_STORE,
+  FLOW_RUNTIME_AVAILABILITY_READER,
   FLOW_RUNTIME_STORE
 } from "./flows.tokens";
 
@@ -104,6 +105,8 @@ export class FlowsService {
     @Inject(FLOW_DEFINITION_READ_V3_STORE)
     private readonly definitionReadV3Store: FlowDefinitionReadV3Store,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
+    @Inject(FLOW_RUNTIME_AVAILABILITY_READER)
+    private readonly runtimeAvailabilityReader: FlowRuntimeAvailabilityReader,
     @Inject(FLOW_RUN_CANCELLATION_STORE)
     private readonly cancellationStore: FlowRunCancellationStore,
     private readonly clock: SystemClock
@@ -122,16 +125,19 @@ export class FlowsService {
   ): Promise<ListFlowDefinitionsV3Response> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedQuery = parseContract(listFlowDefinitionsV3QuerySchema, query ?? {});
+    const runtime = await this.runtimeAvailabilityReader.readForOwner({ ownerUserId });
     return mapFlowDefinitionErrors(async () => {
       const result = await listFlowDefinitionsV3UseCase({
         store: this.definitionReadV3Store,
         ownerUserId,
-        query: parsedQuery
+        query: parsedQuery,
+        runtime
       });
       return listFlowDefinitionsV3ResponseSchema.parse({
         schemaVersion: "flow-definition-list.v3",
         flows: result.flows,
-        total: result.total
+        total: result.total,
+        runtime: result.runtime
       });
     });
   }
@@ -190,9 +196,10 @@ export class FlowsService {
     if (!flow) throw flowNotFound();
 
     const parsedBody = parseContract(validateFlowDefinitionRequestSchema, body);
-    const activationBlockers = FLOW_RUNTIME_AVAILABILITY.executionAvailable
+    const runtime = await this.runtimeAvailabilityReader.readForOwner({ ownerUserId });
+    const activationBlockers = runtime.executionAvailable
       ? []
-      : [FLOW_RUNTIME_AVAILABILITY.reasonCode];
+      : (["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"] as const);
     return validateFlowDefinitionResponseV2Schema.parse(
       validateFlowDefinitionUseCase({ graph: parsedBody.graph, activationBlockers })
     );
@@ -283,6 +290,7 @@ export class FlowsService {
     });
     if (!definition) throw flowDefinitionNotFound();
     const parsedQuery = parseContract(listFlowRunsQuerySchema, query ?? {});
+    const runtime = await this.runtimeAvailabilityReader.readForOwner({ ownerUserId });
     const result = await listFlowRuns({
       runtimeStore: this.runtimeStore,
       ownerUserId,
@@ -292,17 +300,20 @@ export class FlowsService {
 
     return listFlowRunsResponseSchema.parse({
       ...result,
-      runtime: FLOW_RUNTIME_AVAILABILITY
+      runtime
     });
   }
 
   async getFlowRun(runId: string, request: AstrologerSessionRequest): Promise<GetFlowRunResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedRunId = parseContract(flowIdParamSchema, runId);
-    const run = await this.runtimeStore.findRunById({ ownerUserId, runId: parsedRunId });
-    if (!run) throw flowNotFound();
+    const history = await this.runtimeStore.getRunHistory({ ownerUserId, runId: parsedRunId });
+    if (!history) throw flowNotFound();
 
-    return getFlowRunResponseSchema.parse({ run, runtime: FLOW_RUNTIME_AVAILABILITY });
+    return getFlowRunResponseSchema.parse({
+      ...history,
+      runtime: await this.runtimeAvailabilityReader.readForOwner({ ownerUserId })
+    });
   }
 
   async cancelFlowRun(
@@ -337,6 +348,7 @@ export class FlowsService {
   ): Promise<ListFlowApprovalsResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedQuery = parseContract(listFlowApprovalsQuerySchema, query ?? {});
+    const runtime = await this.runtimeAvailabilityReader.readForOwner({ ownerUserId });
     const result = await listFlowApprovals({
       runtimeStore: this.runtimeStore,
       ownerUserId,
@@ -345,7 +357,7 @@ export class FlowsService {
 
     return listFlowApprovalsResponseSchema.parse({
       ...result,
-      runtime: FLOW_RUNTIME_AVAILABILITY
+      runtime
     });
   }
 

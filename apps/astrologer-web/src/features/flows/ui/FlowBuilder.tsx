@@ -60,11 +60,11 @@ export type FlowBuilderProps = {
   readonly onPublish: (input: FlowPublishCommandPayload) => void;
   readonly onCreateNextDraft?: (input: FlowNextDraftCommandPayload) => void;
   readonly runtimeAvailability?: Parameters<typeof buildFlowRuntimePresentation>[0];
-  readonly onSimulate?: (flowId: string) => void;
+  readonly onCreateManualRun?: (flowId: string) => void;
   readonly isSaving?: boolean;
   readonly isPublishing?: boolean;
   readonly isCreatingNextDraft?: boolean;
-  readonly isSimulating?: boolean;
+  readonly isCreatingManualRun?: boolean;
   readonly isValidating?: boolean;
   readonly saveError?: Error | null;
   readonly publishError?: Error | null;
@@ -73,6 +73,7 @@ export type FlowBuilderProps = {
   readonly onReloadServer?: () => Promise<CurrentFlowDefinitionDetail | null>;
   readonly validationIssues?: readonly FlowDefinitionValidationIssue[];
   readonly validationError?: Error | null;
+  readonly runHistory?: ReactNode;
   readonly classNames?: Readonly<Record<string, string>>;
 };
 
@@ -84,11 +85,11 @@ export function FlowBuilder({
   onPublish,
   onCreateNextDraft,
   runtimeAvailability = null,
-  onSimulate,
+  onCreateManualRun,
   isSaving = false,
   isPublishing = false,
   isCreatingNextDraft = false,
-  isSimulating = false,
+  isCreatingManualRun = false,
   isValidating = false,
   saveError = null,
   publishError = null,
@@ -97,6 +98,7 @@ export function FlowBuilder({
   onReloadServer,
   validationIssues = emptyValidationIssues,
   validationError = null,
+  runHistory = null,
   classNames
 }: FlowBuilderProps) {
   const initialPresentation = useMemo(
@@ -127,8 +129,14 @@ export function FlowBuilder({
     isSaving || isPublishing || isCreatingNextDraft || isReloadingServer || isValidating;
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const runtime = buildFlowRuntimePresentation(runtimeAvailability, locale);
-  const canRunPublishedVersion =
-    flow.latestPublishedVersionId !== null && runtime.executionAvailable && Boolean(onSimulate);
+  const hasActiveManualClientTrigger =
+    flow.state === "versioned" &&
+    flow.latestPublishedVersionId !== null &&
+    flow.enrollment.control.state === "active" &&
+    flow.enrollment.control.activeVersionId === flow.latestPublishedVersionId &&
+    flow.draftGraph.nodes.some((node) => node.kind === "manual_client");
+  const canCreateManualRun =
+    hasActiveManualClientTrigger && runtime.executionAvailable && Boolean(onCreateManualRun);
   const transportValidation = updateFlowDefinitionDraftV2RequestSchema.safeParse({
     expectedRevision: draftBaseRevision,
     graph: draftGraph,
@@ -303,17 +311,19 @@ export function FlowBuilder({
           <h1>{flow.name}</h1>
         </div>
         <div className={classNames?.builderActions ?? ""}>
-          <button
-            className={classNames?.builderTestRunButton ?? ""}
-            type="button"
-            disabled={!canRunPublishedVersion || isSimulating}
-            title={runtime.unavailableReason ?? undefined}
-            onClick={() => {
-              if (canRunPublishedVersion) onSimulate?.(flow.id);
-            }}
-          >
-            {isSimulating ? copy.simulating : copy.testRun}
-          </button>
+          {hasActiveManualClientTrigger ? (
+            <button
+              className={classNames?.builderTestRunButton ?? ""}
+              type="button"
+              disabled={!canCreateManualRun || isCreatingManualRun}
+              title={runtime.unavailableReason ?? undefined}
+              onClick={() => {
+                if (canCreateManualRun) onCreateManualRun?.(flow.id);
+              }}
+            >
+              {isCreatingManualRun ? copy.creatingManualRun : copy.createManualRun}
+            </button>
+          ) : null}
           {editable ? (
             <>
               <button
@@ -580,9 +590,13 @@ export function FlowBuilder({
             {!runtime.executionAvailable ? (
               <div className={classNames?.runtimeNotice ?? ""}>{runtime.unavailableReason}</div>
             ) : null}
+            {runHistory}
           </aside>
         ) : null}
       </section>
+      {isMobileViewport && runHistory ? (
+        <div className={classNames?.builderMobileHistory ?? ""}>{runHistory}</div>
+      ) : null}
     </section>
   );
 }
@@ -659,8 +673,8 @@ const builderCopy = {
     allFlows: "Все воронки",
     revision: "редакция",
     version: "версия",
-    testRun: "Тестовый прогон",
-    simulating: "Проверяем",
+    createManualRun: "Запустить для клиента",
+    creatingManualRun: "Создаём…",
     save: "Сохранить",
     saving: "Сохраняем",
     publish: "Опубликовать",
@@ -693,8 +707,8 @@ const builderCopy = {
     allFlows: "All flows",
     revision: "revision",
     version: "version",
-    testRun: "Test run",
-    simulating: "Checking",
+    createManualRun: "Run for client",
+    creatingManualRun: "Creating…",
     save: "Save",
     saving: "Saving",
     publish: "Publish",

@@ -22,6 +22,7 @@ export const flowRuntimeCommandStateValues = ["processing", "succeeded", "failed
 
 export const flowRuntimeCommandScopeValues = [
   "flows.runtime.cancel.v1",
+  "flows.approvals.decide.v1",
   "flows.work-items.start.v1",
   "flows.work-items.snooze.v1",
   "flows.work-items.complete.v1"
@@ -29,6 +30,7 @@ export const flowRuntimeCommandScopeValues = [
 
 export const flowRuntimeCommandRouteTemplateValues = [
   "/flow-runs/:runId/cancel",
+  "/flow-approvals/:approvalId/decision",
   "/flow-work-items/:workItemId/start",
   "/flow-work-items/:workItemId/snooze",
   "/flow-work-items/:workItemId/complete"
@@ -52,7 +54,7 @@ export const flowRuntimeEventSourceValues = [
   "manual"
 ] as const;
 
-export const flowRuntimeEventKindValues = ["booking_confirmed"] as const;
+export const flowRuntimeEventKindValues = ["booking_confirmed", "manual_client"] as const;
 
 export const flowRuntimeEventClassificationValues = ["personal"] as const;
 
@@ -123,7 +125,10 @@ export const flowExecutionTokenStateValues = [
   "canceled"
 ] as const;
 
-export const flowExecutionSignalTypeValues = ["chart.calculation.terminal.v1"] as const;
+export const flowExecutionSignalTypeValues = [
+  "chart.calculation.terminal.v1",
+  "messaging.message.delivery.terminal.v1"
+] as const;
 
 export const flowExecutionSignalOutcomeValues = ["succeeded", "failed"] as const;
 
@@ -151,6 +156,8 @@ export const flowRunEventTypeValues = [
   "token_waiting",
   "token_signaled",
   "work_item_available",
+  "approval_available",
+  "approval_expired",
   "booking_rescheduled",
   "token_retry_scheduled",
   "token_lease_expired",

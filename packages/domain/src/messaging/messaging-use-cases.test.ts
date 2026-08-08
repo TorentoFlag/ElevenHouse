@@ -55,6 +55,7 @@ import {
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   requireTelegramMtprotoLoginSession,
+  selectSingleSendableMessagingConversation,
   completeInstagramGraphConnection,
   startInstagramGraphConnection,
   startTelegramBusinessConnection,
@@ -65,6 +66,22 @@ const now = new Date("2026-07-21T10:00:00.000Z");
 const astrologerUserId = "astrologer-1";
 
 describe("Messaging use cases", () => {
+  it("selects the sole send-capable conversation without inspecting its provider", () => {
+    expect(
+      selectSingleSendableMessagingConversation([
+        { threadId: "thread-read-only", channelConnectionId: "connection-read-only", canSend: false },
+        { threadId: "thread-sendable", channelConnectionId: "connection-sendable", canSend: true }
+      ])
+    ).toEqual({ threadId: "thread-sendable", channelConnectionId: "connection-sendable", canSend: true });
+
+    expect(
+      selectSingleSendableMessagingConversation([
+        { threadId: "thread-1", channelConnectionId: "connection-1", canSend: true },
+        { threadId: "thread-2", channelConnectionId: "connection-2", canSend: true }
+      ])
+    ).toBeNull();
+  });
+
   it("normalizes an opaque persisted realtime cursor as eventId", () => {
     expect(
       normalizeRealtimeEvent({

@@ -91,4 +91,102 @@ describe("FlowBuilderInspector", () => {
     expect(screen.getByLabelText("Node title")).toHaveProperty("disabled", true);
     expect(screen.getByLabelText("Priority")).toHaveProperty("disabled", true);
   });
+
+  it("uses a Chrome v-flag compatible pattern for terminal result codes", () => {
+    const terminalNode: FlowGraphV2["nodes"][number] = {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Готово",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_ready" }
+    };
+    render(
+      <FlowBuilderInspector
+        graph={{ ...graph, nodes: [...graph.nodes, terminalNode] }}
+        selectedNode={terminalNode}
+        locale="ru"
+        editable
+        onChangeNode={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("Ключ результата").getAttribute("pattern")).toBe(
+      "[a-z0-9][a-z0-9_\\-]*"
+    );
+  });
+
+  it("edits the explicit source and approval fields of a natal AI draft", () => {
+    const onChangeNode = vi.fn();
+    const chartNode: FlowGraphV2["nodes"][number] = {
+      id: "natal-chart",
+      kind: "natal_chart_request",
+      displayTitle: "Натальная карта",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        interpretationMode: "adult_natal",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }
+    };
+    const aiNode: FlowGraphV2["nodes"][number] = {
+      id: "natal-ai-draft",
+      kind: "natal_chart_ai_draft",
+      displayTitle: "Проверить AI-черновик",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        chartRequestNodeId: "natal-chart",
+        locale: "ru",
+        approvalTitle: "Проверить AI-черновик"
+      }
+    };
+    const graphWithAi: FlowGraphV2 = {
+      ...graph,
+      nodes: [graph.nodes[0]!, chartNode, aiNode],
+      edges: [
+        {
+          id: "manual-next-to-chart",
+          sourceNodeId: "manual-client",
+          targetNodeId: "natal-chart",
+          sourceHandle: "next"
+        },
+        {
+          id: "chart-next-to-ai",
+          sourceNodeId: "natal-chart",
+          targetNodeId: "natal-ai-draft",
+          sourceHandle: "next"
+        }
+      ]
+    };
+    render(
+      <FlowBuilderInspector
+        graph={graphWithAi}
+        selectedNode={aiNode}
+        locale="ru"
+        editable
+        onChangeNode={onChangeNode}
+      />
+    );
+
+    expect(screen.getByLabelText("Источник натальной карты")).toHaveProperty(
+      "value",
+      "natal-chart"
+    );
+    fireEvent.change(screen.getByLabelText("Название решения"), {
+      target: { value: "Проверить трактовку" }
+    });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "natal_chart_ai_draft",
+        config: expect.objectContaining({ approvalTitle: "Проверить трактовку" })
+      })
+    );
+  });
 });

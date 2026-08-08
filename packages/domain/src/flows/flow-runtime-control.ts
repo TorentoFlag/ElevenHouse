@@ -200,7 +200,8 @@ export function createFlowExecutionRequirementKeys(
 }
 
 export function createFlowExecutionWorkerRequirementKeys(
-  executorKeys: readonly string[]
+  executorKeys: readonly string[],
+  supportedCapabilities: readonly string[] = []
 ): readonly string[] {
   if (
     executorKeys.length < 1 ||
@@ -208,13 +209,21 @@ export function createFlowExecutionWorkerRequirementKeys(
     new Set(executorKeys).size !== executorKeys.length ||
     executorKeys.some(
       (executorKey) => !/^[a-z][a-z0-9_]*:[1-9][0-9]*:[1-9][0-9]*$/.test(executorKey)
-    )
+    ) ||
+    supportedCapabilities.length > 200 ||
+    new Set(supportedCapabilities).size !== supportedCapabilities.length ||
+    supportedCapabilities.some(
+      (capability) =>
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(capability)
+    ) ||
+    executorKeys.length + supportedCapabilities.length + 1 > MAX_REQUIREMENTS
   ) {
     failIntegrity();
   }
   return [
     `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
-    ...executorKeys.map((executorKey) => `executor:${executorKey}`)
+    ...executorKeys.map((executorKey) => `executor:${executorKey}`),
+    ...supportedCapabilities.map((capability) => `capability:${capability}`)
   ].sort(compareStableText);
 }
 
@@ -222,6 +231,13 @@ export function createFlowBookingEnrollmentWorkerRequirementKeys(): readonly str
   return [
     `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
     "trigger:booking_confirmed:1:1:1"
+  ];
+}
+
+export function createFlowManualClientEnrollmentWorkerRequirementKeys(): readonly string[] {
+  return [
+    `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
+    "trigger:manual_client:1:1:1"
   ];
 }
 

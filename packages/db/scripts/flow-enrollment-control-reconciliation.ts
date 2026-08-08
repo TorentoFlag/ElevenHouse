@@ -90,7 +90,7 @@ const generatedBaselineCatalog = {
 } as const satisfies CatalogFingerprint;
 
 const currentRuntimeExtensionCatalog = {
-  hash: "f31e53a1f527c893efdf87fe4b8d0e3c3d73d9eed42609bc07547f4f81ba5a0c",
+  hash: "58364e10edcf4d8147fba70c186590c3789647ff2944b9dcfbaf2c05cc5de030",
   columns: 16,
   constraints: 4,
   indexes: 2,
@@ -549,7 +549,7 @@ ALTER TABLE flow_runtime_events
       AND ingestion_outcome IS NULL
       AND processed_at IS NULL
     ) OR (
-      event_kind IN ('booking_confirmed')
+      event_kind IN ('booking_confirmed', 'manual_client')
       AND length(trim(occurrence_key)) BETWEEN 1 AND 180
       AND payload_schema_version = 1
       AND payload_digest ~ '^sha256:[a-f0-9]{64}$'

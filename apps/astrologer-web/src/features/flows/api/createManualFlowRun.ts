@@ -1,24 +1,26 @@
 import {
-  manualFlowRunResponseSchema,
-  simulateFlowRunRequestSchema,
-  type ManualFlowRunResponse,
-  type SimulateFlowRunRequest
+  createManualClientFlowRunRequestSchema,
+  createManualClientFlowRunResponseSchema,
+  type CreateManualClientFlowRunRequest,
+  type CreateManualClientFlowRunResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
 export type CreateManualFlowRunInput = {
   readonly flowId: string;
-  readonly body: SimulateFlowRunRequest;
+  readonly body: CreateManualClientFlowRunRequest;
+  readonly idempotencyKey: string;
 };
 
 export async function createManualFlowRun(
   input: CreateManualFlowRunInput
-): Promise<ManualFlowRunResponse> {
-  const normalizedBody = simulateFlowRunRequestSchema.parse(input.body);
+): Promise<CreateManualClientFlowRunResponse> {
+  const normalizedBody = createManualClientFlowRunRequestSchema.parse(input.body);
 
-  return manualFlowRunResponseSchema.parse(
+  return createManualClientFlowRunResponseSchema.parse(
     await application.http.post(`/flows/${input.flowId}/manual-runs`, normalizedBody, {
-      csrf: true
+      csrf: true,
+      headers: { "idempotency-key": input.idempotencyKey }
     })
   );
 }

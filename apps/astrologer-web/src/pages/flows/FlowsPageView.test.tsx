@@ -80,6 +80,15 @@ describe("FlowsPageView", () => {
     expect(markup.indexOf("Очередь задач")).toBeLessThan(markup.indexOf("Подготовка консультации"));
   });
 
+  it("places pending approvals before the definition gallery", () => {
+    const markup = render({
+      flows: [flow],
+      approvalQueue: <div data-testid="approval-queue">Подтверждения</div>
+    });
+
+    expect(markup.indexOf("Подтверждения")).toBeLessThan(markup.indexOf("Подготовка консультации"));
+  });
+
   it("keeps the independent work queue visible when the definition catalog fails", () => {
     const markup = render({
       isError: true,

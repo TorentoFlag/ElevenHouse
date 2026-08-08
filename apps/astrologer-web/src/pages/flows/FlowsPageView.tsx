@@ -55,13 +55,13 @@ export type FlowsPageViewProps = {
     action: "review_activation" | "pause_enrollment"
   ) => void;
   readonly runtimeAvailability?: FlowRuntimeAvailability | null;
-  readonly onSimulate?: (flowId: string) => void;
+  readonly onCreateManualRun?: (flowId: string) => void;
   readonly isCreating?: boolean;
   readonly isSaving?: boolean;
   readonly isPublishing?: boolean;
   readonly isCreatingNextDraft?: boolean;
   readonly isTogglingAutomation?: boolean;
-  readonly isSimulating?: boolean;
+  readonly isCreatingManualRun?: boolean;
   readonly isValidating?: boolean;
   readonly createError?: Error | null;
   readonly saveError?: Error | null;
@@ -70,6 +70,8 @@ export type FlowsPageViewProps = {
   readonly revisionConflict?: FlowRevisionConflict | null;
   readonly validationIssues?: readonly FlowDefinitionValidationIssue[];
   readonly validationError?: Error | null;
+  readonly runHistory?: ReactNode;
+  readonly approvalQueue?: ReactNode;
   readonly workItemQueue?: ReactNode;
 };
 
@@ -102,13 +104,13 @@ export function FlowsPageView({
   onCreateNextDraft,
   onAutomationAction,
   runtimeAvailability = null,
-  onSimulate,
+  onCreateManualRun,
   isCreating = false,
   isSaving = false,
   isPublishing = false,
   isCreatingNextDraft = false,
   isTogglingAutomation = false,
-  isSimulating = false,
+  isCreatingManualRun = false,
   isValidating = false,
   createError = null,
   saveError = null,
@@ -117,6 +119,8 @@ export function FlowsPageView({
   revisionConflict = null,
   validationIssues = [],
   validationError = null,
+  runHistory = null,
+  approvalQueue = null,
   workItemQueue = null
 }: FlowsPageViewProps) {
   const copy = pageCopy[locale];
@@ -153,11 +157,11 @@ export function FlowsPageView({
         onPublish={onPublish}
         onCreateNextDraft={onCreateNextDraft}
         runtimeAvailability={runtimeAvailability}
-        onSimulate={onSimulate}
+        onCreateManualRun={onCreateManualRun}
         isSaving={isSaving}
         isPublishing={isPublishing}
         isCreatingNextDraft={isCreatingNextDraft}
-        isSimulating={isSimulating}
+        isCreatingManualRun={isCreatingManualRun}
         isValidating={isValidating}
         saveError={saveError}
         publishError={publishError}
@@ -166,6 +170,7 @@ export function FlowsPageView({
         onReloadServer={onReloadSelectedFlow}
         validationIssues={validationIssues}
         validationError={validationError}
+        runHistory={runHistory}
         classNames={styles}
       />
     );
@@ -173,6 +178,7 @@ export function FlowsPageView({
 
   return (
     <section className={styles.page} aria-labelledby="flows-title">
+      {approvalQueue}
       {workItemQueue}
       {isLoading ? <p className={styles.state}>{copy.loading}</p> : null}
       {!isLoading && isError ? (

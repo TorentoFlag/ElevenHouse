@@ -13,10 +13,10 @@ import {
   type ChartCalculationCommandStore,
   type FlowNatalChartRequester
 } from "@elevenhouse/domain";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
-import { bookings, clientBirthData } from "../../schema";
+import { bookings, chartCalculationJobs, clientBirthData } from "../../schema";
 
 export function createDrizzleFlowNatalChartRequester(
   database: ElevenHouseDatabase,
@@ -115,7 +115,7 @@ export function createDrizzleFlowNatalChartRequester(
         participants
       });
 
-      return createNatalChartJobAndRequestCalculation({
+      const outcome = await createNatalChartJobAndRequestCalculation({
         store: input.commandStore,
         now: now(),
         ownerUserId: request.ownerUserId,
@@ -131,6 +131,28 @@ export function createDrizzleFlowNatalChartRequester(
         expectedSourceChecksum: null,
         inputFingerprint
       });
+      if (outcome.kind === "active_job") return outcome;
+
+      const [sourceJob] = await database
+        .select({ id: chartCalculationJobs.id })
+        .from(chartCalculationJobs)
+        .where(
+          and(
+            eq(chartCalculationJobs.ownerUserId, request.ownerUserId),
+            eq(chartCalculationJobs.method, "natal"),
+            eq(chartCalculationJobs.status, "succeeded"),
+            eq(chartCalculationJobs.resultCalculationId, outcome.calculationId)
+          )
+        )
+        .orderBy(desc(chartCalculationJobs.finishedAt), desc(chartCalculationJobs.id))
+        .limit(1);
+      if (!sourceJob) {
+        throw new FlowExecutionIntegrityError(
+          "FLOW_TOKEN_RUNTIME_STATE_INVALID",
+          "Reused natal chart result is missing its succeeded source job"
+        );
+      }
+      return { kind: "existing_result", calculationId: outcome.calculationId, jobId: sourceJob.id };
     }
   };
 }

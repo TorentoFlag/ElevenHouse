@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { FlowActivationReviewController } from "../flows/flow-activation-review.controller";
 import { FlowApprovalsController } from "../flows/flow-approvals.controller";
 import { FlowEnrollmentController } from "../flows/flow-enrollment.controller";
+import { FlowManualClientRunsController } from "../flows/flow-manual-client-runs.controller";
 import { FlowRunsController } from "../flows/flow-runs.controller";
 import { FlowWorkItemsController } from "../flows/flow-work-items.controller";
 import { FlowTemplatesController, FlowsController } from "../flows/flows.controller";
@@ -44,7 +45,8 @@ const guardedHandlers = [
   [FlowsController, "updateFlowDraft", "funnels.draft.update"],
   [FlowsController, "publishFlow", "funnels.publish"],
   [FlowsController, "createNextFlowDraft", "funnels.next-draft.create"],
-  [FlowEnrollmentController, "activateFlowVersion", "funnels.activate"]
+  [FlowEnrollmentController, "activateFlowVersion", "funnels.activate"],
+  [FlowManualClientRunsController, "createManualClientRun", "funnels.manual-client-run.create"]
 ] as const satisfies readonly (readonly [ControllerClass, string, string])[];
 
 const historicalAndSafetyHandlers = [

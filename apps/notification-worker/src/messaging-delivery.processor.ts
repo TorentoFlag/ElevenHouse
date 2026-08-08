@@ -32,7 +32,11 @@ export async function processMessagingDeliveryJob(input: {
   });
 
   const workItem = await input.store.findByOutboxEventId(input.job.data.outboxEventId);
-  if (!workItem || workItem.messageStatus !== "queued") {
+  const reconciliationEligible =
+    workItem?.reconciliation === true &&
+    workItem.mode === "telegram_mtproto_account" &&
+    workItem.messageStatus === "unknown";
+  if (!workItem || (workItem.messageStatus !== "queued" && !reconciliationEligible)) {
     input.logger?.info("messaging delivery job skipped", {
       outboxEventId: input.job.data.outboxEventId,
       messageStatus: workItem?.messageStatus ?? "missing"

@@ -195,6 +195,27 @@ export const flowWorkItemBookingContextSchema = z
   .strict();
 export type FlowWorkItemBookingContext = z.infer<typeof flowWorkItemBookingContextSchema>;
 
+export const flowWorkItemManualClientContextSchema = z
+  .object({
+    status: z.literal("available"),
+    subjectType: z.literal("client"),
+    completionRequirements: flowWorkItemCompletionRequirementsV2Schema,
+    flow: z
+      .object({
+        id: uuidSchema,
+        currentName: z.string().trim().min(1).max(180)
+      })
+      .strict(),
+    client: z
+      .object({
+        userId: uuidSchema,
+        currentDisplayName: z.string().trim().min(1).max(200).nullable()
+      })
+      .strict()
+  })
+  .strict();
+export type FlowWorkItemManualClientContext = z.infer<typeof flowWorkItemManualClientContextSchema>;
+
 const bookingContextPendingShape = {
   code: z.literal("FLOW_WORK_ITEM_BOOKING_CONTEXT_PENDING"),
   bookingId: uuidSchema,
@@ -226,8 +247,9 @@ export type FlowWorkItemContextIntegrityError = z.infer<
 export const flowWorkItemQueueEntrySchema = z
   .object({
     workItem: flowWorkItemSchema,
-    context: z.discriminatedUnion("status", [
+    context: z.union([
       flowWorkItemBookingContextSchema,
+      flowWorkItemManualClientContextSchema,
       flowWorkItemBookingContextPendingSchema,
       flowWorkItemContextIntegrityErrorSchema
     ])

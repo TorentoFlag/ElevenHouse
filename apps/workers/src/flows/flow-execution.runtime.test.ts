@@ -1,4 +1,4 @@
-import type { FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
+import type { FlowApprovalWakeSweepResult, FlowWorkItemWakeSweepResult } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFlowExecutionRuntime } from "./flow-execution.runtime";
@@ -7,23 +7,27 @@ describe("createFlowExecutionRuntime", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("keeps claims inert but runs recovery and work-item wake in definition-only mode", async () => {
+  it("keeps claims inert but runs recovery, work-item wake, and approval wake in definition-only mode", async () => {
     const processNext = vi.fn();
     const recoverExpired = vi.fn(async () => ({ status: "idle" }));
     const workItemWake = wakeResult();
     const wakeDueWorkItems = vi.fn(async () => workItemWake);
+    const approvalWake = approvalWakeResult();
+    const wakeDueApprovals = vi.fn(async () => approvalWake);
     const runtime = createRuntime({
       deploymentCeiling: { mode: "definition_only" },
       processNext,
       recoverExpired,
-      wakeDueWorkItems
+      wakeDueWorkItems,
+      wakeDueApprovals
     });
 
     await expect(runtime.runInitial()).resolves.toEqual({
       status: "completed",
       execution: { status: "disabled", processedCount: 0 },
       recovery: { status: "idle" },
-      workItemWake
+      workItemWake,
+      approvalWake
     });
     runtime.start();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -32,6 +36,7 @@ describe("createFlowExecutionRuntime", () => {
     expect(processNext).not.toHaveBeenCalled();
     expect(recoverExpired).toHaveBeenCalledTimes(13);
     expect(wakeDueWorkItems).toHaveBeenCalledTimes(13);
+    expect(wakeDueApprovals).toHaveBeenCalledTimes(13);
     expect(runtime.getState()).toEqual({ lifecycle: "stopped", mode: "definition_only" });
   });
 
@@ -180,6 +185,35 @@ describe("createFlowExecutionRuntime", () => {
       status: "ready",
       errorCode: null
     });
+    await runtime.stop();
+  });
+
+  it("deduplicates approval sweeps and requires a clean sweep after an integrity failure", async () => {
+    const pending = deferred<FlowApprovalWakeSweepResult>();
+    const clean = approvalWakeResult();
+    const wakeDueApprovals = vi
+      .fn<() => Promise<FlowApprovalWakeSweepResult>>()
+      .mockResolvedValueOnce(approvalWakeResult({ integrityFailureCount: 1 }))
+      .mockImplementationOnce(() => pending.promise)
+      .mockResolvedValue(clean);
+    const runtime = createRuntime({
+      deploymentCeiling: { mode: "definition_only" },
+      wakeDueApprovals
+    });
+
+    await runtime.runInitial();
+    runtime.start();
+    expect(runtime.getOperationalReadiness()).toMatchObject({
+      status: "unready",
+      errorCode: "flow_approval_wake_integrity_failure"
+    });
+
+    const first = runtime.runApprovalWakeOnce();
+    const second = runtime.runApprovalWakeOnce();
+    expect(wakeDueApprovals).toHaveBeenCalledTimes(2);
+    pending.resolve(clean);
+    await expect(Promise.all([first, second])).resolves.toEqual([clean, clean]);
+    expect(runtime.getOperationalReadiness()).toMatchObject({ status: "ready", errorCode: null });
     await runtime.stop();
   });
 
@@ -397,6 +431,7 @@ function createRuntime(overrides: Partial<Parameters<typeof createFlowExecutionR
     pollBatchSize: 10,
     recoveryIntervalMs: 5_000,
     workItemWakeIntervalMs: 5_000,
+    approvalWakeIntervalMs: 5_000,
     operationTimeoutMs: 10_000,
     drainTimeoutMs: 20_000,
     errorBackoffMaxMs: 30_000,
@@ -404,9 +439,24 @@ function createRuntime(overrides: Partial<Parameters<typeof createFlowExecutionR
     processNext: vi.fn(async () => ({ status: "idle" })),
     recoverExpired: vi.fn(async () => ({ status: "idle" })),
     wakeDueWorkItems: vi.fn(async () => wakeResult()),
+    wakeDueApprovals: vi.fn(async () => approvalWakeResult()),
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     ...overrides
   });
+}
+
+function approvalWakeResult(
+  overrides: Partial<FlowApprovalWakeSweepResult> = {}
+): FlowApprovalWakeSweepResult {
+  return {
+    asOf: "2026-08-06T20:00:00.000Z",
+    wokenCount: 0,
+    expiredCount: 0,
+    staleCount: 0,
+    integrityFailureCount: 0,
+    hasMore: false,
+    ...overrides
+  };
 }
 
 function wakeResult(

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, notInArray, sql, type SQL } from "drizzle-orm";
 import type {
   FlowApproval,
   FlowApprovalKind,
@@ -7,6 +7,7 @@ import type {
   FlowRuntimeEventSource,
   FlowRunResponse,
   FlowRunSnapshot,
+  FlowRunTraceEventResponse,
   FlowRunStatus,
   FlowRunSubjectType,
   FlowStepRunResponse,
@@ -26,6 +27,7 @@ import {
   flowApprovals,
   flowDeliveryAttempts,
   flowRuntimeEvents,
+  flowRunEvents,
   flowRuns,
   flowStepRuns,
   flowSuppressions
@@ -33,6 +35,7 @@ import {
 
 type FlowRuntimeEventRow = typeof flowRuntimeEvents.$inferSelect;
 type FlowRunRow = typeof flowRuns.$inferSelect;
+type FlowRunEventRow = typeof flowRunEvents.$inferSelect;
 type FlowStepRunRow = typeof flowStepRuns.$inferSelect;
 type FlowApprovalRow = typeof flowApprovals.$inferSelect;
 type FlowSuppressionRow = typeof flowSuppressions.$inferSelect;
@@ -82,6 +85,25 @@ export function createDrizzleFlowRuntimeStore(database: ElevenHouseDatabase): Fl
       const row = await findRunSelectionById(database, input);
       return row ? toRunRecord(row) : null;
     },
+    getRunHistory: async (input) =>
+      database.transaction(
+        async (transaction) => {
+          const run = await findRunSelectionById(transaction, input);
+          if (!run) return null;
+          const trace = await transaction
+            .select()
+            .from(flowRunEvents)
+            .where(
+              and(
+                eq(flowRunEvents.ownerUserId, input.ownerUserId),
+                eq(flowRunEvents.flowRunId, input.runId)
+              )
+            )
+            .orderBy(asc(flowRunEvents.sequence), asc(flowRunEvents.id));
+          return { run: toRunRecord(run), trace: trace.map(toRunTraceEventRecord) };
+        },
+        { isolationLevel: "repeatable read", accessMode: "read only" }
+      ),
     cancelRun: async (input) =>
       database.transaction(async (transaction) => {
         const now = new Date(input.now);
@@ -624,6 +646,16 @@ function toRunRecord(row: FlowRunSelection): FlowRunResponse {
   };
 }
 
+function toRunTraceEventRecord(row: FlowRunEventRow): FlowRunTraceEventResponse {
+  return {
+    sequence: row.sequence.toString(),
+    eventType: row.eventType,
+    nodeId: row.nodeId,
+    summary: row.summary,
+    occurredAt: row.occurredAt.toISOString()
+  };
+}
+
 function toStepRunRecord(row: FlowStepRunRow): FlowStepRunResponse {
   return {
     id: row.id,
@@ -649,6 +681,19 @@ function toApprovalRecord(row: FlowApprovalRow): FlowApproval {
     kind: row.kind as FlowApprovalKind,
     title: row.title,
     preview: row.preview,
+    artifact:
+      row.aiCalculationId === null
+        ? null
+        : {
+            calculationId: row.aiCalculationId,
+            interpretationId: row.aiInterpretationId!,
+            sourceChecksum: row.aiSourceChecksum!,
+            contentChecksum: row.aiContentChecksum!,
+            outputText: row.aiOutputText!
+          },
+    revision: row.revision,
+    snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     decidedAt: row.decidedAt?.toISOString() ?? null
   };

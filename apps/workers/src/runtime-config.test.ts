@@ -17,6 +17,20 @@ describe("createWorkersRuntimeConfig", () => {
         futureSkewToleranceMs: 300_000,
         deferDelayMs: 30_000
       },
+      flowChartAi: {
+        enabled: false,
+        openAiApiKey: undefined,
+        openAiBaseUrl: "https://api.openai.com/v1",
+        qualityDraftModel: "gpt-5.4-mini",
+        timeoutMs: 90_000,
+        maxOutputTokens: 5_000,
+        rateLimitRedisKeyPrefix: "elevenhouse:flow-chart-ai",
+        rateLimits: {
+          userPerMinute: { limit: 3, windowSeconds: 60 },
+          userPerHour: { limit: 30, windowSeconds: 3600 },
+          userPerDay: { limit: 150, windowSeconds: 86400 }
+        }
+      },
       flowExecution: {
         deploymentCeiling: { mode: "definition_only" },
         instanceId: "flows-worker-local",
@@ -26,6 +40,8 @@ describe("createWorkersRuntimeConfig", () => {
         recoveryBatchSize: 25,
         workItemWakeIntervalMs: 5_000,
         workItemWakeBatchSize: 25,
+        approvalWakeIntervalMs: 5_000,
+        approvalWakeBatchSize: 25,
         operationTimeoutMs: 10_000,
         drainTimeoutMs: 45_000,
         errorBackoffMaxMs: 30_000,
@@ -114,6 +130,30 @@ describe("createWorkersRuntimeConfig", () => {
     expect(() =>
       createWorkersRuntimeConfig({ WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: "101" })
     ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS: "999" })
+    ).toThrow();
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE: "101" })
+    ).toThrow();
+  });
+
+  it("requires an explicit provider credential before enabling Flow chart AI", () => {
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_CHART_AI_ENABLED: "true" })
+    ).toThrow("WORKERS_FLOW_CHART_AI_OPENAI_API_KEY");
+
+    expect(
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_CHART_AI_ENABLED: "true",
+        WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-secret",
+        WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: "5"
+      }).flowChartAi
+    ).toMatchObject({
+      enabled: true,
+      openAiApiKey: "worker-ai-secret",
+      rateLimits: { userPerMinute: { limit: 5, windowSeconds: 60 } }
+    });
   });
 
   it("parses an explicit bounded flow execution canary owner allowlist", () => {
@@ -141,6 +181,8 @@ describe("createWorkersRuntimeConfig", () => {
       recoveryBatchSize: 50,
       workItemWakeIntervalMs: 5_000,
       workItemWakeBatchSize: 25,
+      approvalWakeIntervalMs: 5_000,
+      approvalWakeBatchSize: 25,
       operationTimeoutMs: 10_000,
       drainTimeoutMs: 45_000,
       errorBackoffMaxMs: 30_000,
@@ -165,9 +207,9 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "00000000-0000-4000-8000-000000000001"
       })
     ).toThrow("definition_only");
-    expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" })).toThrow(
-      "WORKERS_FLOW_EXECUTION_MAX_MODE"
-    );
+    expect(() =>
+      createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" })
+    ).toThrow("WORKERS_FLOW_EXECUTION_MAX_MODE");
     expect(() =>
       createWorkersRuntimeConfig({
         WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
@@ -203,6 +245,12 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: undefined
       })
     ).toThrow("WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS");
+    expect(() =>
+      createWorkersRuntimeConfig({
+        ...productionConfig(),
+        WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS: undefined
+      })
+    ).toThrow("WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS");
   });
 
   it("rejects local object-storage defaults and insecure endpoints in production", () => {
@@ -253,6 +301,8 @@ describe("createWorkersRuntimeConfig", () => {
         recoveryBatchSize: 25,
         workItemWakeIntervalMs: 5_000,
         workItemWakeBatchSize: 25,
+        approvalWakeIntervalMs: 5_000,
+        approvalWakeBatchSize: 25,
         operationTimeoutMs: 10_000,
         drainTimeoutMs: 45_000,
         errorBackoffMaxMs: 30_000,
@@ -284,8 +334,7 @@ describe("createWorkersRuntimeConfig", () => {
       createWorkersRuntimeConfig({
         ...productionConfig(),
         WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",
-        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS:
-          "00000000-0000-4000-8000-000000000001"
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "00000000-0000-4000-8000-000000000001"
       }).flowExecution.deploymentCeiling
     ).toEqual({
       mode: "canary",
@@ -335,6 +384,8 @@ function productionConfig(): Record<string, string | undefined> {
     WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE: "25",
     WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS: "5000",
     WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: "25",
+    WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS: "5000",
+    WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE: "25",
     WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: "10000",
     WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS: "45000",
     WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS: "30000",

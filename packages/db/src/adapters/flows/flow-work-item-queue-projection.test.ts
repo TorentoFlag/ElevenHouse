@@ -27,6 +27,19 @@ describe("projectFlowWorkItemQueueEntry", () => {
     });
   });
 
+  it("projects a manual-client task without inventing a booking or product", () => {
+    expect(projectFlowWorkItemQueueEntry(manualClientEvidence())).toEqual({
+      workItem: { ...workItem, nodeId: "prepare-manual", dueAt: null },
+      context: {
+        status: "available",
+        subjectType: "client",
+        completionRequirements: { resultSummary: "optional" },
+        flow: { id: flowId, currentName: "Ручная подготовка" },
+        client: { userId: clientUserId, currentDisplayName: "Мария" }
+      }
+    });
+  });
+
   it("returns a typed pending context while the Booking aggregate is ahead of Flow projection", () => {
     expect(
       projectFlowWorkItemQueueEntry(
@@ -261,4 +274,80 @@ function evidence(
 
 function raise(message: string): never {
   throw new Error(message);
+}
+
+function manualClientEvidence() {
+  const manualGraph = flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "manual-client",
+        kind: "manual_client",
+        displayTitle: "Клиент выбран вручную",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      },
+      {
+        id: "prepare-manual",
+        kind: "astrologer_work_item",
+        displayTitle: "Подготовить вручную",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          taskKind: "consultation_preparation",
+          taskTitle: "Подготовить вручную",
+          priority: "normal",
+          completionRequirements: { resultSummary: "optional" }
+        }
+      },
+      {
+        id: "completed-manual",
+        kind: "completed",
+        displayTitle: "Готово",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "manual_prepared" }
+      }
+    ],
+    edges: [
+      { id: "manual-to-work", sourceNodeId: "manual-client", sourceHandle: "next", targetNodeId: "prepare-manual" },
+      { id: "work-to-completed", sourceNodeId: "prepare-manual", sourceHandle: "success", targetNodeId: "completed-manual" }
+    ]
+  });
+  const manualManifest = compileFlowGraphV2(manualGraph).capabilityManifest ?? raise("Expected manual manifest");
+  return {
+    workItem: { ...workItem, nodeId: "prepare-manual", dueAt: null },
+    flow: { id: flowId, currentName: "Ручная подготовка" },
+    definition: {
+      flowVersionId: workItem.flowVersionId,
+      nodeId: "prepare-manual",
+      nodeKind: "astrologer_work_item",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      executorKey: "astrologer_work_item:1:1",
+      graph: manualGraph,
+      capabilityManifest: manualManifest
+    },
+    runSnapshot: {
+      schemaVersion: "flow-run-snapshot.v2",
+      enrollment: {
+        activationEpochId: "30000000-0000-4000-8000-000000000001",
+        triggerNodeId: "manual-client",
+        occurrenceKey: "sha256:1234567890123456789012345678901234567890123456789012345678901234",
+        policyKey: "once_per_occurrence",
+        policyRevision: 1,
+        rolloutPolicyRevision: 1,
+        eventOccurredAt: "2026-08-05T06:00:00.000Z",
+        enrolledAt: "2026-08-05T06:01:00.000Z"
+      },
+      subject: { type: "client", clientUserId, relationshipId: "30000000-0000-4000-8000-000000000099" },
+      executionAuthority: { basis: "current_entitlement", referenceId: "30000000-0000-4000-8000-000000000003" }
+    },
+    event: { subjectType: "client", subjectId: clientUserId },
+    deadlineBasis: { duePolicyKind: "none", dueLeadTimeMinutes: null, dueBookingLifecycleRevision: null },
+    booking: null,
+    bookingLifecycleHead: null,
+    clientCurrentDisplayName: "Мария"
+  };
 }

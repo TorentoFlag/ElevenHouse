@@ -6,6 +6,7 @@ import type {
   FlowDefinitionTemplateDescriptorV2,
   PublishFlowDefinitionV3Response
 } from "@elevenhouse/contracts";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FlowsPage } from "./FlowsPage";
@@ -16,11 +17,13 @@ const mocks = vi.hoisted(() => ({
   useFlowListQuery: vi.fn(),
   useFlowTemplatesQuery: vi.fn(),
   useProductListQuery: vi.fn(),
+  useAstrologerTariffEntitlementsQuery: vi.fn(),
   useFlowDefinitionQuery: vi.fn(),
   useFlowActivationReviewQuery: vi.fn(),
   useFlowEnrollmentQuery: vi.fn(),
   useActivateFlowMutation: vi.fn(),
   useCreateFlowMutation: vi.fn(),
+  useCreateManualFlowRunMutation: vi.fn(),
   useCreateNextFlowDraftMutation: vi.fn(),
   usePauseFlowEnrollmentMutation: vi.fn(),
   useUpdateFlowDraftMutation: vi.fn(),
@@ -46,6 +49,9 @@ vi.mock("../../features/flows/model/useFlowTemplatesQuery", () => ({
 vi.mock("../../features/products/model/useProductListQuery", () => ({
   useProductListQuery: mocks.useProductListQuery
 }));
+vi.mock("../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery", () => ({
+  useAstrologerTariffEntitlementsQuery: mocks.useAstrologerTariffEntitlementsQuery
+}));
 vi.mock("../../features/flows/model/useFlowDefinitionQuery", () => ({
   useFlowDefinitionQuery: mocks.useFlowDefinitionQuery
 }));
@@ -60,6 +66,9 @@ vi.mock("../../features/flows/model/useActivateFlowMutation", () => ({
 }));
 vi.mock("../../features/flows/model/useCreateFlowMutation", () => ({
   useCreateFlowMutation: mocks.useCreateFlowMutation
+}));
+vi.mock("../../features/flows/model/useCreateManualFlowRunMutation", () => ({
+  useCreateManualFlowRunMutation: mocks.useCreateManualFlowRunMutation
 }));
 vi.mock("../../features/flows/model/useCreateNextFlowDraftMutation", () => ({
   useCreateNextFlowDraftMutation: mocks.useCreateNextFlowDraftMutation
@@ -79,6 +88,16 @@ vi.mock("../../features/flows/model/useValidateFlowDefinitionMutation", () => ({
 vi.mock("../../features/flows/ui/FlowWorkItemQueuePanel", () => ({
   FlowWorkItemQueuePanel: ({ locale }: { locale: "ru" | "en" }) => (
     <div data-testid="flow-work-item-queue-panel">{locale}</div>
+  )
+}));
+vi.mock("../../features/flows/ui/FlowApprovalQueuePanel", () => ({
+  FlowApprovalQueuePanel: ({ locale }: { locale: "ru" | "en" }) => (
+    <div data-testid="flow-approval-queue-panel">{locale}</div>
+  )
+}));
+vi.mock("../../features/flows/ui/FlowManualClientRunDialog", () => ({
+  FlowManualClientRunDialog: ({ flowName }: { flowName: string }) => (
+    <div role="dialog">Ручной запуск: {flowName}</div>
   )
 }));
 
@@ -152,7 +171,13 @@ describe("FlowsPage", () => {
       data: {
         schemaVersion: "flow-definition-list.v3",
         flows: [flow],
-        total: 1
+        total: 1,
+        runtime: {
+          mode: "definition_only",
+          executionAvailable: false,
+          reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+          historySemantics: "durable_execution"
+        }
       },
       isLoading: false,
       isError: false,
@@ -176,6 +201,11 @@ describe("FlowsPage", () => {
       isError: false,
       error: null
     });
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
+      data: { products: { read: "allow", mutation: "allow" } },
+      isLoading: false,
+      isError: false
+    });
     mocks.useFlowDefinitionQuery.mockImplementation((flowId: string | null) => ({
       data: flowId ? detailResponses.get(flowId) : undefined,
       isLoading: false,
@@ -195,6 +225,10 @@ describe("FlowsPage", () => {
       refetch: vi.fn()
     });
     mocks.useCreateFlowMutation.mockReturnValue(mutation());
+    mocks.useCreateManualFlowRunMutation.mockReturnValue({
+      ...mutation(),
+      mutateAsync: vi.fn()
+    });
     mocks.useCreateNextFlowDraftMutation.mockReturnValue(mutation());
     mocks.useActivateFlowMutation.mockReturnValue(mutation());
     mocks.usePauseFlowEnrollmentMutation.mockReturnValue(mutation());
@@ -208,7 +242,7 @@ describe("FlowsPage", () => {
   afterEach(() => cleanup());
 
   it("loads the V3 list and localized template catalog", () => {
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     expect(mocks.useDocumentTitle).toHaveBeenCalledWith("Воронки");
     expect(mocks.useFlowListQuery).toHaveBeenCalledWith({
@@ -218,15 +252,106 @@ describe("FlowsPage", () => {
       offset: 0
     });
     expect(mocks.useFlowTemplatesQuery).toHaveBeenCalledWith("ru");
+    expect(mocks.useProductListQuery).toHaveBeenCalledWith(
+      { status: "active", limit: 100, offset: 0 },
+      { enabled: true }
+    );
     expect(screen.getAllByText(flow.name)).toHaveLength(2);
   });
 
+  it("does not request products when the server entitlement denies product reads", () => {
+    mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
+      data: { products: { read: "deny", mutation: "deny" } },
+      isLoading: false,
+      isError: false
+    });
+
+    renderFlowsPage();
+
+    expect(mocks.useProductListQuery).toHaveBeenCalledWith(
+      { status: "active", limit: 100, offset: 0 },
+      { enabled: false }
+    );
+  });
+
   it("shows the work-item queue on the flow list and removes it inside the builder", () => {
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     expect(screen.getByTestId("flow-work-item-queue-panel").textContent).toBe("ru");
     openFlow(flow.name);
     expect(screen.queryByTestId("flow-work-item-queue-panel")).toBeNull();
+  });
+
+  it("uses the server-confirmed runtime availability inside the builder", () => {
+    renderFlowsPage();
+
+    openFlow(flow.name);
+
+    expect(
+      screen.getByText(
+        "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать."
+      )
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("Доступность исполнения этой версии не подтверждена сервером.")
+    ).toBeNull();
+  });
+
+  it("opens the real manual-client command only for an active published version", () => {
+    const active = {
+      ...flowDetail,
+      state: "versioned" as const,
+      revision: 5,
+      latestPublishedVersionId: "44444444-4444-4444-8444-444444444444",
+      latestPublishedVersion: 1,
+      publishedAt: "2026-07-30T14:45:00.000Z",
+      enrollment: {
+        ...flowDetail.enrollment,
+        control: {
+          ...flowDetail.enrollment.control,
+          state: "active" as const,
+          definitionRevision: 5,
+          enrollmentRevision: 1,
+          activeVersionId: "44444444-4444-4444-8444-444444444444",
+          activeActivationEpochId: "55555555-5555-4555-8555-555555555555",
+          activeSince: "2026-07-30T14:45:00.000Z"
+        }
+      }
+    };
+    detailResponses.set(flow.id, active);
+    mocks.useFlowListQuery.mockReturnValue({
+      data: {
+        schemaVersion: "flow-definition-list.v3",
+        flows: [
+          {
+            ...flow,
+            state: "versioned",
+            revision: active.revision,
+            latestPublishedVersionId: active.latestPublishedVersionId,
+            latestPublishedVersion: active.latestPublishedVersion,
+            publishedAt: active.publishedAt,
+            enrollment: active.enrollment
+          }
+        ],
+        total: 1,
+        runtime: {
+          mode: "enabled",
+          executionAvailable: true,
+          reasonCode: null,
+          historySemantics: "durable_execution"
+        }
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn()
+    });
+    renderFlowsPage();
+
+    openFlow(flow.name);
+    fireEvent.click(screen.getByRole("button", { name: "Запустить для клиента" }));
+
+    expect(screen.getByRole("dialog").textContent).toContain(`Ручной запуск: ${flow.name}`);
   });
 
   it("creates a server-backed template definition and opens its returned detail", () => {
@@ -238,7 +363,7 @@ describe("FlowsPage", () => {
     detailResponses.set(createdDetail.id, createdDetail);
     const mutate = vi.fn((_input, options) => options?.onSuccess(createdDetail));
     mocks.useCreateFlowMutation.mockReturnValue(mutation(mutate));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Новая воронка" })[0]!);
     fireEvent.click(screen.getByRole("button", { name: new RegExp(availableTemplate.name) }));
@@ -267,7 +392,7 @@ describe("FlowsPage", () => {
   it("reuses each unresolved create key across alternating template and blank attempts", () => {
     const mutate = vi.fn();
     mocks.useCreateFlowMutation.mockReturnValue(mutation(mutate));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Новая воронка" })[0]!);
     const templateButton = screen.getByRole("button", {
@@ -291,7 +416,7 @@ describe("FlowsPage", () => {
     mocks.useUpdateFlowDraftMutation.mockReturnValue(mutation(updateDraft));
     mocks.usePublishFlowMutation.mockReturnValue(mutation(publish));
     mocks.useActivateFlowMutation.mockReturnValue(mutation(activate));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     openFlow(flow.name);
     fireEvent.change(screen.getByLabelText("Название узла"), {
@@ -352,7 +477,7 @@ describe("FlowsPage", () => {
     listFlows([versioned]);
     const mutate = vi.fn();
     mocks.useCreateNextFlowDraftMutation.mockReturnValue(mutation(mutate));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     openFlow(versioned.name);
     fireEvent.click(screen.getByRole("button", { name: "Создать новую версию" }));
@@ -393,7 +518,7 @@ describe("FlowsPage", () => {
     const publish = vi.fn();
     mocks.useValidateFlowDefinitionMutation.mockReturnValue(mutation(validate));
     mocks.usePublishFlowMutation.mockReturnValue(mutation(publish));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     openFlow(flow.name);
     fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
@@ -435,7 +560,7 @@ describe("FlowsPage", () => {
     );
     const create = vi.fn();
     mocks.useCreateFlowMutation.mockReturnValue(mutation(create));
-    render(<FlowsPage />);
+    renderFlowsPage();
 
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(screen.getByText(/запрошенный интеграцией, пока нельзя создать/)).toBeTruthy();
@@ -446,15 +571,32 @@ describe("FlowsPage", () => {
   });
 
   it("opens the exact flow when an operational deep link changes on the mounted route", async () => {
-    const page = render(<FlowsPage />);
+    const page = renderFlowsPage();
 
     window.history.replaceState(null, "", `/flows?flowId=${flow.id}`);
-    page.rerender(<FlowsPage />);
+    page.rerender();
 
     await waitFor(() => expect(mocks.useFlowDefinitionQuery).toHaveBeenCalledWith(flow.id));
     expect(screen.getByText(flowDetail.name)).toBeTruthy();
   });
 });
+
+function renderFlowsPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  const view = () => (
+    <QueryClientProvider client={queryClient}>
+      <FlowsPage />
+    </QueryClientProvider>
+  );
+  const rendered = render(view());
+
+  return {
+    ...rendered,
+    rerender: () => rendered.rerender(view())
+  };
+}
 
 function mutation(mutate = vi.fn()) {
   return { mutate, isPending: false, error: null, reset: vi.fn() };
@@ -529,7 +671,13 @@ function listFlows(flows: readonly FlowDefinitionSummaryV3[]) {
     data: {
       schemaVersion: "flow-definition-list.v3",
       flows,
-      total: flows.length
+      total: flows.length,
+      runtime: {
+        mode: "definition_only",
+        executionAvailable: false,
+        reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+        historySemantics: "durable_execution"
+      }
     },
     isLoading: false,
     isError: false,

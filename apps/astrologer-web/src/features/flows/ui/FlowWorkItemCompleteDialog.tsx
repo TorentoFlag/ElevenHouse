@@ -86,7 +86,9 @@ export function FlowWorkItemCompleteDialog({
           </div>
 
           <div className={styles.contextLine}>
-            <span>{availableContext.product.titleSnapshot}</span>
+            {availableContext.subjectType === "booking" ? (
+              <span>{availableContext.product.titleSnapshot}</span>
+            ) : null}
             {availableContext.client.currentDisplayName ? (
               <>
                 <span aria-hidden="true">·</span>
@@ -104,17 +106,19 @@ export function FlowWorkItemCompleteDialog({
               <Icon iconName="flow" width={13} height={13} aria-hidden="true" />
               <span>{copy.openFlow}</span>
             </Link>
-            <Link
-              to={buildBookingCalendarPath({
-                bookingId: availableContext.booking.id,
-                startAt: availableContext.booking.currentStartAt
-              })}
-              aria-disabled={pending || undefined}
-              onClick={handleContextNavigation}
-            >
-              <Icon iconName="calendar" width={13} height={13} aria-hidden="true" />
-              <span>{copy.openBooking}</span>
-            </Link>
+            {availableContext.subjectType === "booking" ? (
+              <Link
+                to={buildBookingCalendarPath({
+                  bookingId: availableContext.booking.id,
+                  startAt: availableContext.booking.currentStartAt
+                })}
+                aria-disabled={pending || undefined}
+                onClick={handleContextNavigation}
+              >
+                <Icon iconName="calendar" width={13} height={13} aria-hidden="true" />
+                <span>{copy.openBooking}</span>
+              </Link>
+            ) : null}
           </nav>
 
           {workItem.instructions ? (

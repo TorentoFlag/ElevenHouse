@@ -33,6 +33,7 @@ import { createDrizzlePlatformTariffAuthorityStore } from "../platform-billing/d
 import { createDrizzleAvailabilityStore } from "../scheduling/drizzle-availability-store";
 import { createDrizzleBookingCommandStore } from "../scheduling/drizzle-booking-command-store";
 import { createDrizzleFlowBookingEnrollmentStore } from "./drizzle-flow-booking-enrollment-store";
+import { createDrizzleFlowManualClientEnrollmentStore } from "./drizzle-flow-manual-client-enrollment-store";
 import { createDrizzleFlowBookingLifecycleStore } from "./drizzle-flow-booking-lifecycle-store";
 import { createDrizzleFlowEnrollmentControlStore } from "./drizzle-flow-enrollment-control-store";
 import { createDrizzleFlowExecutionStore } from "./drizzle-flow-execution-store";
@@ -196,6 +197,109 @@ describe.sequential("Flow booking enrollment Drizzle/PostgreSQL integration", ()
       runs: 1,
       tokens: 1
     });
+  });
+
+  it("persists a manual client enrollment with server-side relationship provenance and exact replay", async () => {
+    const fixture = await createFixture({ automationLimit: 2 });
+    const graph = manualClientGraph();
+    const compiled = compileFlowGraphV2(graph);
+    const capabilityManifest = compiled.capabilityManifest ?? raise("Expected manual client manifest");
+    const requirementKeys = createFlowRuntimeRequirementKeys(capabilityManifest);
+    await replaceFlowRuntimeRolloutPolicy({
+      store: createDrizzleFlowRuntimeControlCommandStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      idempotencyKey: `enable-manual-client-flow-${randomUUID()}`,
+      expectedRevision: 2,
+      policy: canaryPolicy(fixture.ownerSubjectId, requirementKeys),
+      reason: "Manual client enrollment integration"
+    });
+    await createDrizzleFlowWorkerReadinessStore(runtime.database).register(
+      workerRegistration(fixture.ownerSubjectId, requirementKeys)
+    );
+    const { flowId, versionId } = await createPublishedFlow({
+      ownerUserId: fixture.ownerUserId,
+      graph,
+      capabilityManifest
+    });
+    const activation = await activateFlowVersionEnrollment({
+      store: createDrizzleFlowEnrollmentControlStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      flowId,
+      idempotencyKey: `activate-manual-flow-${randomUUID()}`,
+      request: {
+        schemaVersion: "flow-activation-command.v1",
+        versionId,
+        expectedRevision: 1,
+        expectedEnrollmentRevision: 0,
+        expectedActiveVersionId: null
+      }
+    });
+    if (activation.outcome.kind !== "succeeded") raise("Expected manual Flow activation");
+    await runtime.pool.query(
+      `INSERT INTO client_astrologer_relationships (
+        client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at
+      ) VALUES ($1, $2, 'manual', 'active', clock_timestamp(), clock_timestamp())`,
+      [fixture.clientUserId, fixture.ownerUserId]
+    );
+    const store = createDrizzleFlowManualClientEnrollmentStore(runtime.database);
+    const input = {
+      ownerUserId: fixture.ownerUserId,
+      flowId,
+      clientUserId: fixture.clientUserId,
+      idempotencyKey: "manual-client-enrollment-integration"
+    };
+
+    const first = await store.enrollManualClient(input);
+    expect(first).toMatchObject({
+      status: "enrolled",
+      replayed: false,
+      runs: [
+        {
+          flowId,
+          flowVersionId: versionId,
+          activationEpochId: activation.outcome.response.body.activationEpoch.id
+        }
+      ]
+    });
+    const persisted = await runtime.pool.query<{
+      event_kind: string;
+      subject_type: string;
+      subject_id: string;
+      payload: Record<string, string>;
+      ingestion_outcome: string;
+      snapshot: { subject: Record<string, string> };
+    }>(
+      `SELECT event.event_kind, event.subject_type, event.subject_id, event.payload,
+              event.ingestion_outcome, run.snapshot
+         FROM flow_runtime_events event
+         JOIN flow_runs run ON run.runtime_event_id = event.id
+        WHERE event.id = $1`,
+      [first.eventId]
+    );
+    expect(persisted.rows).toEqual([
+      expect.objectContaining({
+        event_kind: "manual_client",
+        subject_type: "client",
+        subject_id: fixture.clientUserId,
+        ingestion_outcome: "enrolled",
+        payload: expect.objectContaining({ clientUserId: fixture.clientUserId }),
+        snapshot: expect.objectContaining({
+          subject: expect.objectContaining({ type: "client", clientUserId: fixture.clientUserId })
+        })
+      })
+    ]);
+    await expect(store.enrollManualClient(input)).resolves.toEqual({ ...first, replayed: true });
+    const otherClientUserId = await createUser();
+    await runtime.pool.query(
+      `INSERT INTO client_astrologer_relationships (
+        client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at
+      ) VALUES ($1, $2, 'manual', 'active', clock_timestamp(), clock_timestamp())`,
+      [otherClientUserId, fixture.ownerUserId]
+    );
+    await expect(
+      store.enrollManualClient({ ...input, clientUserId: otherClientUserId })
+    ).rejects.toMatchObject({ code: "FLOW_MANUAL_CLIENT_ENROLLMENT_IDEMPOTENCY_CONFLICT" });
   });
 
   it("applies a canonical confirmation once and replays its lifecycle receipt without mutation", async () => {
@@ -1617,6 +1721,7 @@ async function createFixture(
     readonly flowMatchesBooking?: boolean;
     readonly occurredAtOffsetMs?: number;
     readonly targetKind?: "completed" | "work_item";
+    readonly automationLimit?: number;
   } = {}
 ) {
   const ownerUserId = await createUser();
@@ -1647,7 +1752,7 @@ async function createFixture(
   });
   const registration = workerRegistration(ownerSubjectId, requirementKeys);
   await createDrizzleFlowWorkerReadinessStore(runtime.database).register(registration);
-  const subscriptionId = await createActiveTariff(ownerUserId);
+  const subscriptionId = await createActiveTariff(ownerUserId, options.automationLimit ?? 1);
   const { flowId, versionId } = await createPublishedFlow({
     ownerUserId,
     graph,
@@ -1865,6 +1970,38 @@ function bookingGraph(productId: string, completedNodeId = "done"): FlowGraphV2 
   });
 }
 
+function manualClientGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "trigger-manual-client",
+        kind: "manual_client",
+        displayTitle: "Client selected manually",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "consultation_prepared" }
+      }
+    ],
+    edges: [
+      {
+        id: "manual-client-done",
+        sourceNodeId: "trigger-manual-client",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  });
+}
+
 function bookingWorkItemGraph(productId: string): FlowGraphV2 {
   return flowGraphV2Schema.parse({
     schemaVersion: "flow-graph.v2",
@@ -2013,7 +2150,7 @@ async function createPublishedFlow(input: {
   });
 }
 
-async function createActiveTariff(ownerUserId: string): Promise<string> {
+async function createActiveTariff(ownerUserId: string, automationLimit: number): Promise<string> {
   const tariffSeriesId = `flows-${randomUUID()}`;
   const store = createDrizzlePlatformTariffAuthorityStore({ database: runtime.database });
   const draft = await store.createDraft({
@@ -2029,7 +2166,7 @@ async function createActiveTariff(ownerUserId: string): Promise<string> {
     seatsLimit: 1,
     bookingsLimit: null,
     aiRequestsLimit: null,
-    automationLimit: 1,
+    automationLimit,
     isPopular: false,
     displayOrder: 0,
     features: ["funnels"]

@@ -176,8 +176,12 @@ export function FlowWorkItemQueue({
                       <>
                         <div className={styles.contextLine}>
                           <span>{availableContext.flow.currentName}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{availableContext.product.titleSnapshot}</span>
+                          {availableContext.subjectType === "booking" ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span>{availableContext.product.titleSnapshot}</span>
+                            </>
+                          ) : null}
                           {availableContext.client.currentDisplayName ? (
                             <>
                               <span aria-hidden="true">·</span>

@@ -18,6 +18,7 @@ export type FlowWorkItemSnoozeDialogProps = {
   readonly locale: "ru" | "en";
   readonly timeZone: string;
   readonly workItemTitle: string;
+  readonly subjectLabel?: string;
   readonly pending: boolean;
   readonly error?: string | null;
   readonly now?: Date;
@@ -30,6 +31,7 @@ export function FlowWorkItemSnoozeDialog({
   locale,
   timeZone,
   workItemTitle,
+  subjectLabel,
   pending,
   error = null,
   now,
@@ -94,7 +96,7 @@ export function FlowWorkItemSnoozeDialog({
             <Icon iconName="flow" width={15} height={15} />
           </span>
           <span className={styles.taskCopy}>
-            <span>{copy.task}</span>
+            <span>{subjectLabel ?? copy.task}</span>
             <strong>{workItemTitle}</strong>
           </span>
         </div>

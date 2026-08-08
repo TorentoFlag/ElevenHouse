@@ -180,6 +180,26 @@ const api = (
 ): PlatformCapabilityNonWorkerOperationSurface =>
   operation(id, ownerModule, sourcePath, identifier, semanticKind, requirement);
 
+type WorkerEntitlementSubjectAuthorityState =
+  | {
+      readonly availability: "unwired";
+      readonly publicationBlocker: true;
+    }
+  | {
+      readonly availability: "ready";
+      readonly publicationBlocker: false;
+    };
+
+const unwiredWorkerEntitlementSubjectAuthority: WorkerEntitlementSubjectAuthorityState = {
+  availability: "unwired",
+  publicationBlocker: true
+};
+
+const readyWorkerEntitlementSubjectAuthority: WorkerEntitlementSubjectAuthorityState = {
+  availability: "ready",
+  publicationBlocker: false
+};
+
 const job = (
   id: string,
   ownerModule: string,
@@ -187,7 +207,9 @@ const job = (
   identifier: string,
   requirement: PlatformCapabilityRequirement,
   processor: PlatformCapabilityWorkerOperationSurface["processor"],
-  persistedOwnerSelector: string
+  persistedOwnerSelector: string,
+  entitlementSubjectAuthority: WorkerEntitlementSubjectAuthorityState =
+    unwiredWorkerEntitlementSubjectAuthority
 ): PlatformCapabilityWorkerOperationSurface => ({
   ...surface(id, ownerModule, sourcePath, identifier),
   semanticKind: "worker",
@@ -196,8 +218,7 @@ const job = (
   entitlementSubjectAuthority: {
     persistedOwnerSelector,
     queuePayloadPolicy: "untrusted_reference_only",
-    availability: "unwired",
-    publicationBlocker: true
+    ...entitlementSubjectAuthority
   }
 });
 
@@ -1312,9 +1333,7 @@ export const rawPlatformCapabilityManifest = {
       implementedOwner(owners.flows, "apps/astrologer-api/src/modules/flows/flows.controller.ts"),
       "read_only"
     ),
-    availability: "partial",
-    unavailableReason:
-      "Flow runtime is definition_only; execution operations are present but unavailable.",
+    availability: "live",
     navigation: [nav("nav.funnels", "funnels", "/flows")],
     frontendRoutes: [route("route.funnels", "/flows")],
     readOperations: [
@@ -1468,6 +1487,14 @@ export const rawPlatformCapabilityManifest = {
         direct("funnels")
       ),
       api(
+        "funnels.manual-client-run.create",
+        owners.flows,
+        "apps/astrologer-api/src/modules/flows/flow-manual-client-runs.controller.ts",
+        "POST /flows/:flowId/manual-runs",
+        "mutation",
+        direct("funnels")
+      ),
+      api(
         "funnels.pause",
         owners.flows,
         "apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts",
@@ -1555,7 +1582,8 @@ export const rawPlatformCapabilityManifest = {
           sourcePath: "apps/workers/src/flows/flow-runtime.outbox-relay.ts",
           identifier: "relayPendingFlowRuntimeDispatchEvents"
         },
-        "persisted Booking.ownerUserId resolved server-side from the claimed booking-confirmed enrollment event"
+        "persisted Booking.ownerUserId resolved server-side from the claimed booking-confirmed enrollment event",
+        readyWorkerEntitlementSubjectAuthority
       ),
       job(
         "funnels.booking-lifecycle-dispatch",
@@ -1571,7 +1599,8 @@ export const rawPlatformCapabilityManifest = {
           sourcePath: "apps/workers/src/flows/flow-runtime.outbox-relay.ts",
           identifier: "relayPendingFlowRuntimeDispatchEvents"
         },
-        "persisted BookingLifecycleEvent.ownerUserId resolved server-side from the claimed lifecycle event"
+        "persisted BookingLifecycleEvent.ownerUserId resolved server-side from the claimed lifecycle event",
+        readyWorkerEntitlementSubjectAuthority
       )
     ],
     usageCounters: [automationCounter]
@@ -1943,7 +1972,8 @@ export const platformTariffGuardedOperationSurfaceIds = [
   "funnels.draft.update",
   "funnels.publish",
   "funnels.next-draft.create",
-  "funnels.activate"
+  "funnels.activate",
+  "funnels.manual-client-run.create"
 ] as const;
 
 const platformTariffGuardedOperationSurfaceIdSet = new Set<string>(
@@ -1951,10 +1981,44 @@ const platformTariffGuardedOperationSurfaceIdSet = new Set<string>(
 );
 const platformTariffGuardedOperations = [
   ...rawPlatformCapabilityManifest.products.readOperations,
-  ...rawPlatformCapabilityManifest.products.mutationOperations,
-  ...rawPlatformCapabilityManifest.funnels.readOperations,
-  ...rawPlatformCapabilityManifest.funnels.mutationOperations
+  ...rawPlatformCapabilityManifest.products.mutationOperations
 ].filter((operation) => platformTariffGuardedOperationSurfaceIdSet.has(operation.id));
+
+const platformFlowCapabilityGuardDeclarations = [
+  ...rawPlatformCapabilityManifest.funnels.navigation.map((item) => ({
+    kind: "navigation" as const,
+    surfaceId: item.id,
+    ownerModule: item.ownerModule,
+    surfaceFingerprint: platformCapabilitySurfaceFingerprint(item),
+    capability: "funnels" as const
+  })),
+  ...rawPlatformCapabilityManifest.funnels.frontendRoutes.map((item) => ({
+    kind: "frontend_route" as const,
+    surfaceId: item.id,
+    ownerModule: item.ownerModule,
+    surfaceFingerprint: platformCapabilitySurfaceFingerprint(item),
+    capability: "funnels" as const
+  })),
+  ...[
+    ...rawPlatformCapabilityManifest.funnels.readOperations,
+    ...rawPlatformCapabilityManifest.funnels.mutationOperations,
+    ...rawPlatformCapabilityManifest.funnels.workerJobs
+  ].map((operation) => ({
+    kind: "operation" as const,
+    surfaceId: operation.id,
+    ownerModule: operation.ownerModule,
+    surfaceFingerprint: platformCapabilitySurfaceFingerprint(operation),
+    semanticKind: operation.semanticKind,
+    requirementFingerprint: platformCapabilityRequirementFingerprint(operation.requirement)
+  })),
+  {
+    kind: "usage_counter" as const,
+    surfaceId: "counter.funnels.automations",
+    ownerModule: rawPlatformCapabilityManifest.funnels.owner.module,
+    capability: "funnels" as const,
+    counterFingerprint: platformCapabilityCounterFingerprint(persistedAutomationCounter)
+  }
+] as const satisfies readonly PlatformCapabilityGuardDeclaration[];
 
 export const platformCapabilityGuardDeclarations = [
   ...rawPlatformCapabilityManifest.products.navigation.map((item) => ({
@@ -1979,6 +2043,7 @@ export const platformCapabilityGuardDeclarations = [
     semanticKind: operation.semanticKind,
     requirementFingerprint: platformCapabilityRequirementFingerprint(operation.requirement)
   })),
+  ...platformFlowCapabilityGuardDeclarations,
   ...rawPlatformCapabilityManifest.products.mutationOperations
     .filter((operation) => operation.id === "products.public-order.create")
     .map((operation) => ({
@@ -1999,11 +2064,4 @@ export const platformCapabilityGuardDeclarations = [
       semanticKind: operation.semanticKind,
       requirementFingerprint: platformCapabilityRequirementFingerprint(operation.requirement)
     })),
-  {
-    kind: "usage_counter",
-    surfaceId: "counter.funnels.automations",
-    ownerModule: rawPlatformCapabilityManifest.funnels.owner.module,
-    capability: "funnels",
-    counterFingerprint: platformCapabilityCounterFingerprint(persistedAutomationCounter)
-  }
 ] as const satisfies readonly PlatformCapabilityGuardDeclaration[];

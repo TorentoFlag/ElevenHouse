@@ -8,8 +8,10 @@ import {
   completeFlowWorkItem,
   createBookingLifecycleEvent,
   createBuiltInFlowNodeExecutorRegistry,
+  decideDurableFlowApproval,
   createFlowNodeExecutorRegistry,
   FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
+  FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL,
   interpretFlowExecutionClaim,
   listOwnerFlowWorkItems,
   normalizeBookingConfirmedFlowLifecycleEvent,
@@ -36,6 +38,8 @@ import { createDrizzleFlowBookingLifecycleStore } from "./drizzle-flow-booking-l
 import { createDrizzleFlowRunCancellationStore } from "./drizzle-flow-run-cancellation-store";
 import { createDrizzleFlowWorkItemWakeStore } from "./drizzle-flow-work-item-wake-store";
 import { createDrizzleFlowWorkItemStore } from "./drizzle-flow-work-item-store";
+import { createDrizzleFlowApprovalStore } from "./drizzle-flow-approval-store";
+import { createDrizzleFlowApprovalWakeStore } from "./drizzle-flow-approval-wake-store";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
 import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 
@@ -87,12 +91,12 @@ const advancingGraph = flowGraphV2Schema.parse({
   schemaVersion: "flow-graph.v2",
   nodes: [
     {
-      id: "manual",
-      kind: "manual_client",
-      displayTitle: "Клиент выбран вручную",
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
       configSchemaVersion: 1,
       executorContractVersion: 1,
-      config: {}
+      config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
     },
     {
       id: "birth-data",
@@ -121,8 +125,8 @@ const advancingGraph = flowGraphV2Schema.parse({
   ],
   edges: [
     {
-      id: "manual-birth",
-      sourceNodeId: "manual",
+      id: "booking-birth",
+      sourceNodeId: "booking",
       targetNodeId: "birth-data",
       sourceHandle: "next"
     },
@@ -190,6 +194,157 @@ const workItemGraph = flowGraphV2Schema.parse({
   ]
 });
 
+const approvalGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "manual",
+      kind: "manual_client",
+      displayTitle: "Клиент выбран вручную",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {}
+    },
+    {
+      id: "review-material",
+      kind: "astrologer_approval",
+      displayTitle: "Проверить материал перед отправкой",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        approvalKind: "ai_output",
+        approvalTitle: "Подтвердить материал",
+        expiresAfterMinutes: 1_440
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    },
+    {
+      id: "suppressed",
+      kind: "suppressed",
+      displayTitle: "Материал отклонён",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { reasonCode: "approval_rejected" }
+    },
+    {
+      id: "failed",
+      kind: "failed",
+      displayTitle: "Время подтверждения истекло",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { errorCode: "approval_timeout" }
+    }
+  ],
+  edges: [
+    {
+      id: "manual-approval",
+      sourceNodeId: "manual",
+      targetNodeId: "review-material",
+      sourceHandle: "next"
+    },
+    {
+      id: "approval-approved",
+      sourceNodeId: "review-material",
+      targetNodeId: "completed",
+      sourceHandle: "approved"
+    },
+    {
+      id: "approval-rejected",
+      sourceNodeId: "review-material",
+      targetNodeId: "suppressed",
+      sourceHandle: "rejected"
+    },
+    {
+      id: "approval-timeout",
+      sourceNodeId: "review-material",
+      targetNodeId: "failed",
+      sourceHandle: "timeout"
+    }
+  ]
+});
+
+const natalAiApprovalGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { productIds: ["10000000-0000-4000-8000-000000000001"] }
+    },
+    {
+      id: "natal-chart",
+      kind: "natal_chart_request",
+      displayTitle: "Рассчитать натальную карту",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        interpretationMode: "adult_natal",
+        settings: {
+          zodiac: "tropical",
+          houseSystem: "placidus",
+          nodeType: "true",
+          aspectPreset: "major",
+          orbMultiplier: 1
+        }
+      }
+    },
+    {
+      id: "review-natal-ai",
+      kind: "natal_chart_ai_draft",
+      displayTitle: "Проверить AI-черновик натальной карты",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        chartRequestNodeId: "natal-chart",
+        locale: "ru",
+        approvalTitle: "Проверить AI-черновик натальной карты",
+        expiresAfterMinutes: 60
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    },
+    {
+      id: "suppressed",
+      kind: "suppressed",
+      displayTitle: "Черновик отклонён",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { reasonCode: "natal_draft_rejected" }
+    },
+    {
+      id: "failed",
+      kind: "failed",
+      displayTitle: "Срок проверки истёк",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { errorCode: "natal_draft_approval_timed_out" }
+    }
+  ],
+  edges: [
+    { id: "booking-chart", sourceNodeId: "booking", targetNodeId: "natal-chart", sourceHandle: "next" },
+    { id: "chart-ai", sourceNodeId: "natal-chart", targetNodeId: "review-natal-ai", sourceHandle: "next" },
+    { id: "ai-approved", sourceNodeId: "review-natal-ai", targetNodeId: "completed", sourceHandle: "approved" },
+    { id: "ai-rejected", sourceNodeId: "review-natal-ai", targetNodeId: "suppressed", sourceHandle: "rejected" },
+    { id: "ai-timeout", sourceNodeId: "review-natal-ai", targetNodeId: "failed", sourceHandle: "timeout" }
+  ]
+});
+
 const chartWaitGraph = flowGraphV2Schema.parse({
   schemaVersion: "flow-graph.v2",
   nodes: [
@@ -240,6 +395,49 @@ const chartWaitGraph = flowGraphV2Schema.parse({
       targetNodeId: "completed",
       sourceHandle: "next"
     }
+  ]
+});
+
+const messagingWaitGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { productIds: ["10000000-0000-4000-8000-000000000001"] }
+    },
+    {
+      id: "send-message",
+      kind: "send_message",
+      displayTitle: "Отправить напоминание",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { textTemplate: "Напомните клиенту о консультации." }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    },
+    {
+      id: "delivery-failed",
+      kind: "failed",
+      displayTitle: "Доставка не удалась",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { errorCode: "message_delivery_failed" }
+    }
+  ],
+  edges: [
+    { id: "booking-message", sourceNodeId: "booking", targetNodeId: "send-message", sourceHandle: "next" },
+    { id: "message-success", sourceNodeId: "send-message", targetNodeId: "completed", sourceHandle: "success" },
+    { id: "message-error", sourceNodeId: "send-message", targetNodeId: "delivery-failed", sourceHandle: "error" }
   ]
 });
 
@@ -303,7 +501,10 @@ function requireCapabilityManifest(input: FlowGraphV2) {
 const capabilityManifest = requireCapabilityManifest(graph);
 const advancingCapabilityManifest = requireCapabilityManifest(advancingGraph);
 const workItemCapabilityManifest = requireCapabilityManifest(workItemGraph);
+const approvalCapabilityManifest = requireCapabilityManifest(approvalGraph);
+const natalAiApprovalCapabilityManifest = requireCapabilityManifest(natalAiApprovalGraph);
 const chartWaitCapabilityManifest = requireCapabilityManifest(chartWaitGraph);
+const messagingWaitCapabilityManifest = requireCapabilityManifest(messagingWaitGraph);
 const bookingWorkItemCapabilityManifest = requireCapabilityManifest(bookingWorkItemGraph);
 
 function createBirthDataRegistry() {
@@ -331,7 +532,13 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       database: drizzle(pool) as unknown as ElevenHouseDatabase,
       close: () => pool.end()
     };
-    await runtime.pool.query(integrationMigrationPaths.length ? integrationMigrationPaths.map((migrationPath) => readFileSync(migrationPath, "utf8")).join("\n") : readCurrentMigrationSql());
+    await runtime.pool.query(
+      integrationMigrationPaths.length
+        ? integrationMigrationPaths
+            .map((migrationPath) => readFileSync(migrationPath, "utf8"))
+            .join("\n")
+        : readCurrentMigrationSql()
+    );
     const reconciliationClient = new Client({ connectionString: isolatedDatabaseUrl });
     await reconciliationClient.connect();
     try {
@@ -773,6 +980,441 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     ).resolves.toMatchObject({ rows: [{ count: "1" }] });
   });
 
+  it("atomically creates a token-bound approval and suspends the claimed token", async () => {
+    const fixture = await createApprovalFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-approval",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_approval:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied",
+      traceSequence: 1n
+    });
+
+    const [persisted, approvals] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_approvals where flow_run_id = $1", [fixture.runId])
+    ]);
+    expect(persisted.run).toMatchObject({
+      status: "waiting",
+      current_node_id: "review-material",
+      trace_sequence: "1"
+    });
+    expect(persisted.token).toMatchObject({
+      id: fixture.tokenId,
+      state: "waiting_approval",
+      node_id: "review-material",
+      node_activation_sequence: "1"
+    });
+    expect(approvals.rows).toMatchObject([
+      {
+        owner_user_id: fixture.ownerUserId,
+        flow_run_id: fixture.runId,
+        execution_token_id: fixture.tokenId,
+        node_activation_sequence: "1",
+        status: "pending",
+        kind: "ai_output",
+        title: "Подтвердить материал",
+        preview: "Проверить материал перед отправкой",
+        revision: 1,
+        last_command_id: null,
+        last_run_event_id: null
+      }
+    ]);
+    expect(approvals.rows[0]?.expires_at).not.toBeNull();
+    expect(persisted.attempts).toMatchObject([
+      {
+        outcome: "waiting",
+        result_code: "FLOW_WAITING_APPROVAL",
+        trace_summary: decision.trace
+      }
+    ]);
+    expect(persisted.events).toMatchObject([
+      {
+        event_type: "token_waiting",
+        node_id: "review-material",
+        summary: decision.trace
+      }
+    ]);
+  });
+
+  it("decides a token-bound approval exactly once and resumes its pinned token", async () => {
+    const fixture = await createApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-approval-decision",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_approval:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject(
+      {
+        status: "applied"
+      }
+    );
+    const approval = await runtime.pool.query<{ id: string }>(
+      "select id from flow_approvals where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const approvalId = approval.rows[0]?.id ?? raise("Expected persisted approval");
+    const approvalStore = createDrizzleFlowApprovalStore(runtime.database);
+    const result = await decideDurableFlowApproval({
+      store: approvalStore,
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      approvalId,
+      idempotencyKey: "flow-approval-decision-1",
+      request: { expectedRevision: 1, decision: "approved", note: "Checked" }
+    });
+    expect(result).toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: { body: { approval: { id: approvalId, status: "approved", revision: 2 } } }
+      }
+    });
+    await expect(
+      decideDurableFlowApproval({
+        store: approvalStore,
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        approvalId,
+        idempotencyKey: "flow-approval-decision-1",
+        request: { expectedRevision: 1, decision: "approved", note: "Checked" }
+      })
+    ).resolves.toMatchObject({ kind: "replayed" });
+    const persisted = await selectExecution(fixture.runId);
+    expect(persisted.run).toMatchObject({
+      status: "running",
+      current_node_id: "completed",
+      trace_sequence: "2"
+    });
+    expect(persisted.token).toMatchObject({
+      state: "runnable",
+      node_id: "completed",
+      node_activation_sequence: "2"
+    });
+    expect(persisted.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "token_advanced",
+        node_id: "review-material",
+        summary: expect.objectContaining({
+          reasonCode: "FLOW_APPROVAL_DECIDED",
+          sourceHandle: "approved"
+        })
+      })
+    );
+  });
+
+  it("records an AI-draft approval decision through its matching runtime command", async () => {
+    const fixture = await createNatalAiApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-natal-ai-approval-decision",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_ai_draft:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createNatalAiDraftRegistry(fixture)
+    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject({
+      status: "applied"
+    });
+    const approval = await runtime.pool.query<{ id: string }>(
+      "select id from flow_approvals where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const approvalId = approval.rows[0]?.id ?? raise("Expected persisted natal AI approval");
+
+    await expect(
+      decideDurableFlowApproval({
+        store: createDrizzleFlowApprovalStore(runtime.database),
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        approvalId,
+        idempotencyKey: "natal-ai-approval-decision-1",
+        request: { expectedRevision: 1, decision: "approved", note: "Проверено" }
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "succeeded",
+        response: { body: { approval: { id: approvalId, status: "approved", revision: 2 } } }
+      }
+    });
+    const persisted = await selectExecution(fixture.runId);
+    expect(persisted.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "token_advanced",
+        node_id: "review-natal-ai",
+        summary: expect.objectContaining({
+          nodeKind: "natal_chart_ai_draft",
+          reasonCode: "FLOW_APPROVAL_DECIDED",
+          sourceHandle: "approved"
+        })
+      })
+    );
+  });
+
+  it("expires an AI-draft approval and completes its failed terminal node", async () => {
+    const fixture = await createNatalAiApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const waitClaim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-natal-ai-approval-timeout",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_ai_draft:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim: waitClaim,
+      registry: createNatalAiDraftRegistry(fixture)
+    });
+    await executionStore.finalize({ claim: waitClaim, decision: waitDecision });
+    await runtime.pool.query(
+      "update flow_approvals set created_at = clock_timestamp() - interval '2 seconds', expires_at = clock_timestamp() - interval '1 second' where flow_run_id = $1",
+      [fixture.runId]
+    );
+
+    await expect(createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 })).resolves.toMatchObject({
+      expiredCount: 1
+    });
+    const terminalClaim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-natal-ai-failed-terminal",
+      leaseDurationMs: 30_000,
+      executorKeys: ["failed:1:1"]
+    });
+    const terminalDecision = await interpretFlowExecutionClaim({
+      claim: terminalClaim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(executionStore.finalize({ claim: terminalClaim, decision: terminalDecision })).resolves.toMatchObject({
+      status: "applied"
+    });
+    const persisted = await selectExecution(fixture.runId);
+    expect(persisted.run).toMatchObject({ status: "completed", current_node_id: "failed" });
+    expect(persisted.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "run_completed",
+        node_id: "failed",
+        summary: expect.objectContaining({
+          nodeKind: "failed",
+          resultCode: "natal_draft_approval_timed_out"
+        })
+      })
+    );
+  });
+
+  it("expires a token-bound approval exactly once and resumes its pinned timeout edge", async () => {
+    const fixture = await createApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-approval-timeout",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_approval:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject(
+      {
+        status: "applied"
+      }
+    );
+    await runtime.pool.query(
+      "update flow_approvals set created_at = clock_timestamp() - interval '2 seconds', expires_at = clock_timestamp() - interval '1 second' where flow_run_id = $1",
+      [fixture.runId]
+    );
+
+    const wakeStore = createDrizzleFlowApprovalWakeStore(runtime.database);
+    const outcomes = await Promise.all([
+      wakeStore.wakeDue({ limit: 10 }),
+      wakeStore.wakeDue({ limit: 10 })
+    ]);
+    expect(outcomes.reduce((total, outcome) => total + outcome.expiredCount, 0)).toBe(1);
+
+    const [execution, approval] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_approvals where flow_run_id = $1", [fixture.runId])
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "running",
+      current_node_id: "failed",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "runnable",
+      node_id: "failed",
+      node_activation_sequence: "2"
+    });
+    expect(execution.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "approval_expired",
+        node_id: "review-material",
+        attempt_id: null,
+        command_id: null,
+        summary: expect.objectContaining({
+          reasonCode: "FLOW_APPROVAL_EXPIRED",
+          sourceHandle: "timeout",
+          selectedEdgeId: "approval-timeout",
+          targetNodeId: "failed"
+        })
+      })
+    );
+    expect(approval.rows).toMatchObject([
+      {
+        status: "expired",
+        revision: 2,
+        last_command_id: null,
+        last_run_event_id: expect.any(String)
+      }
+    ]);
+  });
+
+  it("rejects a human decision racing an expired approval without taking a second edge", async () => {
+    const fixture = await createApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-approval-timeout-race",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_approval:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject(
+      {
+        status: "applied"
+      }
+    );
+    const approval = await runtime.pool.query<{ id: string }>(
+      "select id from flow_approvals where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const approvalId = approval.rows[0]?.id ?? raise("Expected persisted approval");
+    await runtime.pool.query(
+      "update flow_approvals set created_at = clock_timestamp() - interval '2 seconds', expires_at = clock_timestamp() - interval '1 second' where id = $1",
+      [approvalId]
+    );
+
+    const [decision, wake] = await Promise.all([
+      decideDurableFlowApproval({
+        store: createDrizzleFlowApprovalStore(runtime.database),
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        approvalId,
+        idempotencyKey: "flow-approval-expired-race-decision",
+        request: { expectedRevision: 1, decision: "approved", note: "Too late" }
+      }),
+      createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 })
+    ]);
+
+    expect(decision).toMatchObject({
+      kind: "created",
+      outcome: { kind: "rejected", response: { statusCode: 409 } }
+    });
+    if (decision.kind !== "created" || decision.outcome.kind !== "rejected") {
+      throw new Error("Expected the expired approval decision to be rejected");
+    }
+    expect(["FLOW_APPROVAL_TRANSITION_NOT_ALLOWED", "FLOW_APPROVAL_REVISION_CONFLICT"]).toContain(
+      decision.outcome.response.body.code
+    );
+    expect(wake.expiredCount).toBe(1);
+
+    const [execution, persistedApproval] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_approvals where id = $1", [approvalId])
+    ]);
+    expect(execution.run).toMatchObject({ status: "running", current_node_id: "failed" });
+    expect(execution.token).toMatchObject({ state: "runnable", node_id: "failed" });
+    expect(
+      execution.events.filter((event) => event.event_type === "approval_expired")
+    ).toHaveLength(1);
+    expect(execution.events.filter((event) => event.event_type === "token_advanced")).toHaveLength(
+      0
+    );
+    expect(persistedApproval.rows).toMatchObject([{ status: "expired", revision: 2 }]);
+  });
+
+  it("wakes a snoozed approval without advancing its token", async () => {
+    const fixture = await createApprovalFixture();
+    const executionStore = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(executionStore, {
+      leaseOwner: "flows-worker-approval-snooze",
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_approval:1:1"]
+    });
+    const waitDecision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject(
+      {
+        status: "applied"
+      }
+    );
+    const approval = await runtime.pool.query<{ id: string }>(
+      "select id from flow_approvals where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const approvalId = approval.rows[0]?.id ?? raise("Expected persisted approval");
+    const scheduledFor = new Date(Date.now() + 100).toISOString();
+    await expect(
+      decideDurableFlowApproval({
+        store: createDrizzleFlowApprovalStore(runtime.database),
+        actorUserId: fixture.ownerUserId,
+        ownerUserId: fixture.ownerUserId,
+        approvalId,
+        idempotencyKey: "flow-approval-snooze-1",
+        request: { expectedRevision: 1, decision: "snoozed", snoozedUntil: scheduledFor }
+      })
+    ).resolves.toMatchObject({
+      outcome: { kind: "succeeded", response: { body: { approval: { status: "snoozed" } } } }
+    });
+    await runtime.pool.query("select pg_sleep(0.2)");
+
+    const outcomes = await Promise.all([
+      createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 }),
+      createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 })
+    ]);
+    expect(outcomes.reduce((total, outcome) => total + outcome.wokenCount, 0)).toBe(1);
+
+    const [execution, persistedApproval] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_approvals where id = $1", [approvalId])
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "waiting",
+      current_node_id: "review-material",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "waiting_approval",
+      node_id: "review-material",
+      node_activation_sequence: "1"
+    });
+    expect(execution.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "approval_available",
+        summary: expect.objectContaining({ reasonCode: "FLOW_APPROVAL_SNOOZE_ELAPSED" })
+      })
+    );
+    expect(persistedApproval.rows).toMatchObject([
+      { status: "pending", revision: 3, snoozed_until: null, last_run_event_id: expect.any(String) }
+    ]);
+  });
+
   it("persists a chart terminal-signal wait without advancing the token", async () => {
     const fixture = await createChartWaitFixture();
     const store = createDrizzleFlowExecutionStore(runtime.database);
@@ -833,6 +1475,72 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         state: "waiting",
         consumed_signal_id: null
       }
+    ]);
+  });
+
+  it("replays a reused chart result as run-scoped durable terminal evidence", async () => {
+    const fixture = await createChartWaitFixture();
+    await createDrizzleFlowExecutionSignalStore(runtime.database).ingest({
+      sourceEventId: randomUUID(),
+      ownerUserId: fixture.ownerUserId,
+      signalType: "chart.calculation.terminal.v1",
+      correlationId: fixture.chartJobId,
+      outcome: "succeeded",
+      occurredAt: "2026-08-03T00:00:00.000Z"
+    });
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-chart-reuse",
+      leaseDurationMs: 30_000,
+      executorKeys: ["natal_chart_request:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        natalChartRequester: {
+          request: async () => ({
+            kind: "existing_result",
+            calculationId: randomUUID(),
+            jobId: fixture.chartJobId
+          })
+        }
+      })
+    });
+
+    await expect(store.finalize({ claim, decision })).resolves.toMatchObject({
+      status: "applied",
+      traceSequence: 2n
+    });
+
+    const [execution, waits, inbox] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query("select * from flow_execution_signal_waits where token_id = $1", [
+        fixture.tokenId
+      ]),
+      runtime.pool.query("select * from flow_execution_signal_inbox where source_event_id = $1", [
+        fixture.tokenId
+      ])
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "running",
+      current_node_id: "completed",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "runnable",
+      node_id: "completed",
+      node_activation_sequence: "2"
+    });
+    expect(waits.rows).toMatchObject([
+      {
+        state: "consumed",
+        correlation_id: fixture.chartJobId,
+        expected_source_event_id: fixture.tokenId,
+        consumed_signal_id: inbox.rows[0]?.id
+      }
+    ]);
+    expect(inbox.rows).toMatchObject([
+      { source_event_id: fixture.tokenId, correlation_id: fixture.chartJobId, outcome: "succeeded" }
     ]);
   });
 
@@ -910,7 +1618,9 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         }
       }
     ]);
-    expect(waits.rows).toMatchObject([{ state: "consumed", consumed_signal_id: inbox.rows[0]?.id }]);
+    expect(waits.rows).toMatchObject([
+      { state: "consumed", consumed_signal_id: inbox.rows[0]?.id }
+    ]);
     expect(inbox.rows).toMatchObject([{ source_event_id: sourceEventId, outcome: "succeeded" }]);
     expect(inbox.rows[0]?.consumed_at).not.toBeNull();
   });
@@ -965,6 +1675,60 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         summary: {
           reasonCode: "FLOW_CHART_CALCULATION_FAILED",
           resultCode: "FLOW_EXECUTION_FAILED_TERMINAL"
+        }
+      }
+    ]);
+  });
+
+  it("routes a durable messaging delivery terminal signal through success or error", async () => {
+    const fixture = await createMessagingWaitFixture();
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const signalStore = createDrizzleFlowExecutionSignalStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: "flows-worker-messaging-signal",
+      leaseDurationMs: 30_000,
+      executorKeys: ["send_message:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry({
+        messagingRequester: { prepare: async () => ({ kind: "queued", messageId: fixture.messageId }) }
+      })
+    });
+    await store.finalize({ claim, decision });
+
+    await expect(
+      signalStore.ingest({
+        sourceEventId: randomUUID(),
+        ownerUserId: fixture.ownerUserId,
+        signalType: FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL,
+        correlationId: fixture.messageId,
+        outcome: "failed",
+        occurredAt: "2026-08-05T00:00:00.000Z"
+      })
+    ).resolves.toEqual({ status: "consumed", runId: fixture.runId, traceSequence: 2n });
+
+    const execution = await selectExecution(fixture.runId);
+    expect(execution.run).toMatchObject({
+      status: "running",
+      current_node_id: "delivery-failed",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "runnable",
+      node_id: "delivery-failed",
+      node_kind: "failed"
+    });
+    expect(execution.events).toMatchObject([
+      { sequence: "1", event_type: "token_waiting", node_id: "send-message" },
+      {
+        sequence: "2",
+        event_type: "token_signaled",
+        node_id: "send-message",
+        summary: {
+          reasonCode: "FLOW_MESSAGING_DELIVERY_COMPLETED",
+          sourceHandle: "error",
+          targetNodeId: "delivery-failed"
         }
       }
     ]);
@@ -4165,6 +4929,77 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     });
   }
 
+  async function createApprovalFixture(ownerUserId?: string) {
+    return createTerminalFixture({
+      ownerUserId,
+      graph: approvalGraph,
+      initialNode: {
+        id: "review-material",
+        kind: "astrologer_approval",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: approvalCapabilityManifest
+    });
+  }
+
+  async function createNatalAiApprovalFixture(ownerUserId?: string) {
+    const fixture = await createTerminalFixture({
+      ownerUserId,
+      graph: natalAiApprovalGraph,
+      initialNode: {
+        id: "review-natal-ai",
+        kind: "natal_chart_ai_draft",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: natalAiApprovalCapabilityManifest
+    });
+    const calculationId = randomUUID();
+    const interpretationId = randomUUID();
+    await runtime.pool.query(
+      `insert into calculation_records
+        (id, owner_user_id, module, mode, interpretation_mode, method_code, title, status,
+         request_fingerprint, input_data, result_data, result_summary, result_checksum,
+         created_at, updated_at)
+       values ($1, $2, 'chart', 'individual', 'adult_natal', 'natal', 'Fixture natal chart', 'calculated',
+         $3, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, $4, now(), now())`,
+      [
+        calculationId,
+        fixture.ownerUserId,
+        `sha256:${"a".repeat(64)}`,
+        `sha256:${"b".repeat(64)}`
+      ]
+    );
+    await runtime.pool.query(
+      `insert into calculation_interpretations
+        (id, calculation_id, source, status, text, model_id, prompt_version,
+         approved_at, created_at, updated_at)
+       values ($1, $2, 'ai', 'draft', 'Полный неизменяемый текст черновика трактовки.', 'gpt-test',
+         'chart.interpretationDraft@3', null, now(), now())`,
+      [interpretationId, calculationId]
+    );
+    return { ...fixture, calculationId, interpretationId };
+  }
+
+  function createNatalAiDraftRegistry(input: {
+    readonly calculationId: string;
+    readonly interpretationId: string;
+  }) {
+    return createBuiltInFlowNodeExecutorRegistry({
+      natalChartAiDraftRequester: {
+        prepare: async () => ({
+          calculationId: input.calculationId,
+          interpretationId: input.interpretationId,
+          sourceChecksum: `sha256:${"a".repeat(64)}`,
+          contentChecksum: `sha256:${"b".repeat(64)}`,
+          outputText: "Полный неизменяемый текст черновика трактовки.",
+          preview: "Ключевые темы: ответственность и устойчивость."
+        })
+      }
+    });
+  }
+
   async function createChartWaitFixture(ownerUserId?: string) {
     const fixture = await createTerminalFixture({
       ownerUserId,
@@ -4178,6 +5013,44 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       capabilityManifest: chartWaitCapabilityManifest
     });
     return { ...fixture, chartJobId: randomUUID() };
+  }
+
+  async function createMessagingWaitFixture(ownerUserId?: string) {
+    const clientUserId = await createUser();
+    const fixture = await createTerminalFixture({
+      ownerUserId,
+      graph: messagingWaitGraph,
+      initialNode: {
+        id: "send-message",
+        kind: "send_message",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: messagingWaitCapabilityManifest,
+      createRunSnapshot: ({ flowVersionId, sourceEventId, subjectId, occurredAt }) => ({
+        schemaVersion: "flow-run-snapshot.v2",
+        enrollment: {
+          activationEpochId: randomUUID(),
+          triggerNodeId: "booking",
+          occurrenceKey: randomUUID(),
+          policyKey: "once_per_occurrence",
+          policyRevision: 1,
+          rolloutPolicyRevision: 1,
+          eventOccurredAt: occurredAt,
+          enrolledAt: occurredAt
+        },
+        subject: {
+          type: "booking",
+          bookingId: subjectId,
+          clientUserId,
+          productId: randomUUID(),
+          startAt: occurredAt,
+          endAt: occurredAt
+        },
+        executionAuthority: { basis: "current_entitlement", referenceId: flowVersionId }
+      })
+    });
+    return { ...fixture, clientUserId, messageId: randomUUID() };
   }
 
   async function createBookingWorkItemFixture(ownerUserId?: string) {

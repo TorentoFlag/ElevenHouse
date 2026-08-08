@@ -1,6 +1,7 @@
 import type {
   FlowWorkItem,
   FlowWorkItemBookingContext,
+  FlowWorkItemManualClientContext,
   FlowWorkItemQueueEntry
 } from "@elevenhouse/contracts";
 import { useRef, useState } from "react";
@@ -21,13 +22,19 @@ import { useStartFlowWorkItemMutation } from "./useStartFlowWorkItemMutation";
 export type FlowWorkItemQueueProfileState = "loading" | "error" | "profile_required" | "ready";
 
 type AvailableFlowWorkItemQueueEntry = FlowWorkItemQueueEntry & {
-  readonly context: FlowWorkItemBookingContext;
+  readonly context: FlowWorkItemBookingContext | FlowWorkItemManualClientContext;
 };
 
-function hasAvailableBookingContext(
+function hasAvailableContext(
   entry: FlowWorkItemQueueEntry
 ): entry is AvailableFlowWorkItemQueueEntry {
   return entry.context.status === "available";
+}
+
+function bookingLifecycleEvidence(entry: AvailableFlowWorkItemQueueEntry) {
+  return entry.context.subjectType === "booking"
+    ? { expectedBookingLifecycleRevision: entry.context.booking.lifecycleRevision }
+    : {};
 }
 
 export function useFlowWorkItemQueueController(input: {
@@ -125,11 +132,11 @@ export function useFlowWorkItemQueueController(input: {
   };
 
   const start = (entry: FlowWorkItemQueueEntry) => {
-    if (!hasAvailableBookingContext(entry)) return;
+    if (!hasAvailableContext(entry)) return;
     const { workItem } = entry;
     const body = {
       expectedRevision: workItem.revision,
-      expectedBookingLifecycleRevision: entry.context.booking.lifecycleRevision
+      ...bookingLifecycleEvidence(entry)
     };
     const idempotencyKey = beginAttempt("start", workItem, body);
     if (!idempotencyKey) return;
@@ -143,7 +150,7 @@ export function useFlowWorkItemQueueController(input: {
   };
 
   const openSnooze = (entry: FlowWorkItemQueueEntry) => {
-    if (!hasAvailableBookingContext(entry)) return;
+    if (!hasAvailableContext(entry)) return;
     const { workItem } = entry;
     const state = commandStateByWorkItemId[workItem.id];
     if (state?.status === "pending" || (state?.status === "error" && state.refetchRequired)) {
@@ -165,7 +172,7 @@ export function useFlowWorkItemQueueController(input: {
     const { workItem } = snoozeTarget;
     const body = {
       expectedRevision: workItem.revision,
-      expectedBookingLifecycleRevision: snoozeTarget.context.booking.lifecycleRevision,
+      ...bookingLifecycleEvidence(snoozeTarget),
       snoozedUntil
     };
     const idempotencyKey = beginAttempt("snooze", workItem, body);
@@ -183,7 +190,7 @@ export function useFlowWorkItemQueueController(input: {
     const workItem = entry.workItem;
     const state = commandStateByWorkItemId[workItem.id];
     if (
-      !hasAvailableBookingContext(entry) ||
+      !hasAvailableContext(entry) ||
       workItem.status !== "in_progress" ||
       state?.status === "pending" ||
       (state?.status === "error" && state.refetchRequired)
@@ -209,7 +216,7 @@ export function useFlowWorkItemQueueController(input: {
     const workItem = completionTarget.workItem;
     const body = {
       expectedRevision: workItem.revision,
-      expectedBookingLifecycleRevision: completionTarget.context.booking.lifecycleRevision,
+      ...bookingLifecycleEvidence(completionTarget),
       ...(resultSummary === undefined ? {} : { resultSummary })
     };
     const idempotencyKey = beginAttempt("complete", workItem, body);

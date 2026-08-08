@@ -17,7 +17,7 @@ describe("flow definition V2 server-owned templates", () => {
     expect(listFlowDefinitionTemplatesV2ResponseSchema.parse(catalog)).toEqual(catalog);
     expect(catalog).toMatchObject({
       schemaVersion: "flow-definition-template-catalog.v2",
-      catalogVersion: 3,
+      catalogVersion: 4,
       locale: "ru"
     });
     expect(catalog.templates).toEqual(
@@ -30,7 +30,7 @@ describe("flow definition V2 server-owned templates", () => {
         }),
         expect.objectContaining({
           key: "booking-natal-preparation",
-          version: 2,
+          version: 3,
           availability: "available",
           parameters: [
             {
@@ -122,7 +122,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 2,
+          templateVersion: 3,
           parameters: { product_ids: ["11111111-1111-4111-8111-111111111111"] }
         }
       })
@@ -137,6 +137,10 @@ describe("flow definition V2 server-owned templates", () => {
               config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
             }),
             expect.objectContaining({ kind: "natal_chart_request" }),
+            expect.objectContaining({
+              kind: "natal_chart_ai_draft",
+              config: expect.objectContaining({ chartRequestNodeId: "natal-chart-request" })
+            }),
             expect.objectContaining({
               id: "natal-preparation-completed",
               displayTitle: "Natal chart calculated",
@@ -201,7 +205,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 2,
+          templateVersion: 3,
           parameters: {}
         }
       })
@@ -222,7 +226,7 @@ describe("flow definition V2 server-owned templates", () => {
         source: {
           type: "template",
           templateKey: "booking-natal-preparation",
-          templateVersion: 2,
+          templateVersion: 3,
           parameters: { product_id: "33333333-3333-4333-8333-333333333333" }
         }
       })

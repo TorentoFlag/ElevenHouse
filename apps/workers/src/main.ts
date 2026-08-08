@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createClient } from "redis";
 
 import { createLogger } from "@elevenhouse/observability";
 import {
@@ -6,18 +7,26 @@ import {
   createDrizzleFlowBirthDataReadinessReader,
   createDrizzleFlowBirthProfileRecheckStore,
   createDrizzleFlowBookingLifecycleStore,
+  createDrizzleFlowNatalChartAiDraftRequester,
   createDrizzleFlowNatalChartRequester,
+  createDrizzleFlowMessagingRequester,
   createDrizzleFlowRuntimeOwnerSubjectStore,
   createDrizzleFlowRuntimeDispatchOutboxStore,
   createDrizzleFlowExecutionSignalStore,
+  createDrizzleFlowApprovalWakeStore,
   createDrizzleFlowWorkItemWakeStore,
   createDrizzleFlowWorkerExecutionStore,
   createDrizzleFlowWorkerReadinessStore,
   runFlowEnrollmentControlOutcomeRetention,
   runFlowRuntimeControlOutcomeRetention,
-  runFlowWorkerRegistrationRetention
+  runFlowWorkerRegistrationRetention,
+  createDrizzleAiUsageRecorder,
+  createDrizzleAiUsageStore
 } from "@elevenhouse/db";
-import { createDrizzleChartCalculationCommandStore } from "@elevenhouse/db/charts";
+import {
+  createDrizzleChartAiDraftCommandStore,
+  createDrizzleChartCalculationCommandStore
+} from "@elevenhouse/db/charts";
 import {
   createDrizzleCalculationPdfCleanupStore,
   createDrizzleCalculationPdfJobStore,
@@ -31,9 +40,13 @@ import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import {
   createBuiltInFlowNodeExecutorRegistry,
   createFlowBookingEnrollmentWorkerRequirementKeys,
+  createFlowManualClientEnrollmentWorkerRequirementKeys,
   createFlowExecutionWorkerRequirementKeys,
+  type AiUsageResourceEvidence,
+  type AiUsageSafeErrorCode,
   resolveChartExecutionProfile
 } from "@elevenhouse/domain";
+import { getNatalChartAiDictionaryCodes } from "@elevenhouse/ai";
 import { UnrecoverableError } from "bullmq";
 import { processCalculationPdfCleanup } from "./calculation-pdf/calculation-pdf.cleanup";
 import {
@@ -61,6 +74,8 @@ import { createNumerologyPdfSource } from "./calculation-pdf/numerology-pdf.sour
 import { processNextFlowExecution } from "./flows/flow-execution.processor";
 import { recoverExpiredFlowExecutions } from "./flows/flow-execution.recovery";
 import { createFlowExecutionRuntime } from "./flows/flow-execution.runtime";
+import { createFlowChartAiGenerator } from "./flows/flow-chart-ai-generator";
+import { wakeDueFlowApprovals } from "./flows/flow-approval-wake";
 import { wakeDueFlowWorkItems } from "./flows/flow-work-item-wake";
 import { createFlowRuntimeControlMaintenance } from "./flows/flow-runtime-control.maintenance";
 import { createFlowWorkerControl } from "./flows/flow-worker-control";
@@ -84,9 +99,7 @@ const flowExecutionStore = createDrizzleFlowWorkerExecutionStore(
   postgres.database,
   flowWorkerIdentity
 );
-const flowRuntimeOwnerSubjectStore = createDrizzleFlowRuntimeOwnerSubjectStore(
-  postgres.database
-);
+const flowRuntimeOwnerSubjectStore = createDrizzleFlowRuntimeOwnerSubjectStore(postgres.database);
 const flowWorkerReadinessStore = createDrizzleFlowWorkerReadinessStore(postgres.database);
 const flowRuntimeDispatchOutboxStore = createDrizzleFlowRuntimeDispatchOutboxStore(
   postgres.database
@@ -107,7 +120,40 @@ const flowNatalChartRequester = createDrizzleFlowNatalChartRequester(postgres.da
   commandStore: createDrizzleChartCalculationCommandStore(postgres.database),
   executionProfile: chartExecutionProfile
 });
+const flowMessagingRequester = createDrizzleFlowMessagingRequester(postgres.database);
+const flowChartAiRedis = config.flowChartAi.enabled ? createClient({ url: config.redisUrl }) : null;
+const flowChartAiRedisReady = flowChartAiRedis?.connect() ?? Promise.resolve();
+const flowChartAiGenerator = flowChartAiRedis
+  ? createFlowChartAiGenerator({
+      config: config.flowChartAi,
+      redis: {
+        eval: (script, options) =>
+          flowChartAiRedisReady.then(() => flowChartAiRedis.eval(script, options))
+      },
+      usageRecorder: createDrizzleAiUsageRecorder(
+        createDrizzleAiUsageStore(postgres.database)
+      ) as import("@elevenhouse/ai").AiGenerationUsageRecorder<
+        AiUsageResourceEvidence,
+        AiUsageSafeErrorCode
+      >
+    })
+  : null;
+const flowNatalChartAiDraftRequester = flowChartAiGenerator
+  ? createDrizzleFlowNatalChartAiDraftRequester(postgres.database, {
+      calculationStore,
+      dictionaryStore: createDrizzleDictionaryStore(postgres.database),
+      commandStore: createDrizzleChartAiDraftCommandStore(postgres.database),
+      executionProfile: chartExecutionProfile,
+      getDictionaryCodes: getNatalChartAiDictionaryCodes,
+      generate: ({ dictionaryCodes, ...request }) => {
+        // Dictionary retrieval is Flow-owned preparation; the provider contract must not receive it.
+        void dictionaryCodes;
+        return flowChartAiGenerator.generate(request);
+      }
+    })
+  : undefined;
 const flowWorkItemWakeStore = createDrizzleFlowWorkItemWakeStore(postgres.database);
+const flowApprovalWakeStore = createDrizzleFlowApprovalWakeStore(postgres.database);
 const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
 const pdfJobStore = createDrizzleCalculationPdfJobStore(postgres.database);
 const pdfCleanupStore = createDrizzleCalculationPdfCleanupStore(postgres.database);
@@ -117,11 +163,7 @@ const matrixSource = createMatrixPdfSource(calculationStore, matrixReportStore);
 const matrixRenderer = createMatrixPdfRenderer();
 const numerologySource = createNumerologyPdfSource(calculationStore);
 const numerologyRenderer = createNumerologyPdfRenderer();
-const chartSource = createChartPdfSource(
-  calculationStore,
-  dictionaryStore,
-  chartExecutionProfile
-);
+const chartSource = createChartPdfSource(calculationStore, dictionaryStore, chartExecutionProfile);
 const chartRenderer = createChartPdfRenderer();
 const humanDesignSource = createHumanDesignPdfSource(calculationStore);
 const humanDesignRenderer = createHumanDesignPdfRenderer();
@@ -180,9 +222,19 @@ const worker = createCalculationPdfWorker(
   config.calculationPdfConcurrency
 );
 const stopWorkerObservation = observeCalculationPdfWorker(worker, logger);
+const flowExecutorSupportedCapabilities = [
+  "bookings.events.booking_confirmed",
+  "products.read",
+  "clients.birth_data.read.service_preparation",
+  "charts.calculate.natal.booking_context",
+  "charts.interpret.natal.ai_draft",
+  "messaging.outbound.send.existing_thread"
+] as const;
 const flowNodeExecutorRegistry = createBuiltInFlowNodeExecutorRegistry({
   birthDataReadinessReader: flowBirthDataReadinessReader,
-  natalChartRequester: flowNatalChartRequester
+  natalChartRequester: flowNatalChartRequester,
+  natalChartAiDraftRequester: flowNatalChartAiDraftRequester,
+  messagingRequester: flowMessagingRequester
 });
 let flowWorkerControl: ReturnType<typeof createFlowWorkerControl> | null = null;
 let flowWorkerFatalShutdownStarted = false;
@@ -192,6 +244,7 @@ const flowExecutionRuntime = createFlowExecutionRuntime({
   pollBatchSize: config.flowExecution.pollBatchSize,
   recoveryIntervalMs: config.flowExecution.recoveryIntervalMs,
   workItemWakeIntervalMs: config.flowExecution.workItemWakeIntervalMs,
+  approvalWakeIntervalMs: config.flowExecution.approvalWakeIntervalMs,
   operationTimeoutMs: config.flowExecution.operationTimeoutMs,
   drainTimeoutMs: config.flowExecution.drainTimeoutMs,
   errorBackoffMaxMs: config.flowExecution.errorBackoffMaxMs,
@@ -216,6 +269,12 @@ const flowExecutionRuntime = createFlowExecutionRuntime({
       limit: config.flowExecution.workItemWakeBatchSize,
       logger
     }),
+  wakeDueApprovals: () =>
+    wakeDueFlowApprovals({
+      store: flowApprovalWakeStore,
+      limit: config.flowExecution.approvalWakeBatchSize,
+      logger
+    }),
   logger
 });
 const readinessChecks = {
@@ -229,6 +288,9 @@ const readinessChecks = {
     await worker.waitUntilReady();
   },
   privateObjectStorage: async () => storage.checkReady(),
+  flowChartAi: async () => {
+    if (flowChartAiRedis) await flowChartAiRedisReady;
+  },
   flowExecutionRuntime: async () => {
     const readiness = flowExecutionRuntime.getOperationalReadiness();
     if (readiness.status !== "ready") throw new Error(readiness.errorCode);
@@ -267,15 +329,13 @@ const relay = createCalculationPdfOutboxRelay({
         flowBookingEnrollmentStore.enrollBookingConfirmed({
           request,
           latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
-          futureSkewToleranceMs:
-            config.flowBookingEnrollment.futureSkewToleranceMs
+          futureSkewToleranceMs: config.flowBookingEnrollment.futureSkewToleranceMs
         }),
       processBookingLifecycleEvent: (lifecycleEventId) =>
         flowBookingLifecycleStore.processBookingLifecycleEvent({
           lifecycleEventId,
           latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
-          futureSkewToleranceMs:
-            config.flowBookingEnrollment.futureSkewToleranceMs
+          futureSkewToleranceMs: config.flowBookingEnrollment.futureSkewToleranceMs
         }),
       deliverChartTerminalSignal: (signal) =>
         flowExecutionSignalStore.ingest({
@@ -283,6 +343,15 @@ const relay = createCalculationPdfOutboxRelay({
           ownerUserId: signal.ownerUserId,
           signalType: "chart.calculation.terminal.v1",
           correlationId: signal.jobId,
+          outcome: signal.outcome,
+          occurredAt: signal.occurredAt
+        }),
+      deliverMessagingTerminalSignal: (signal) =>
+        flowExecutionSignalStore.ingest({
+          sourceEventId: signal.sourceEventId,
+          ownerUserId: signal.ownerUserId,
+          signalType: "messaging.message.delivery.terminal.v1",
+          correlationId: signal.messageId,
           outcome: signal.outcome,
           occurredAt: signal.occurredAt
         }),
@@ -300,10 +369,12 @@ const relay = createCalculationPdfOutboxRelay({
 const flowRuntimeControlMaintenance = createFlowRuntimeControlMaintenance({
   intervalMs: config.flowRuntimeControl.maintenanceIntervalMs,
   runOnce: async () => {
-    const enrollmentOutcomeRetention =
-      await runFlowEnrollmentControlOutcomeRetention(postgres.database, {
+    const enrollmentOutcomeRetention = await runFlowEnrollmentControlOutcomeRetention(
+      postgres.database,
+      {
         batchSize: config.flowRuntimeControl.retentionBatchSize
-      });
+      }
+    );
     const outcomeRetention = await runFlowRuntimeControlOutcomeRetention(postgres.database, {
       batchSize: config.flowRuntimeControl.retentionBatchSize
     });
@@ -333,13 +404,15 @@ async function startup(): Promise<void> {
     readinessChecks.postgres(),
     readinessChecks.calculationPdfQueue(),
     readinessChecks.calculationPdfWorker(),
-    readinessChecks.privateObjectStorage()
+    readinessChecks.privateObjectStorage(),
+    readinessChecks.flowChartAi()
   ]);
   await flowExecutionRuntime.runRecoveryOnce();
   await flowRuntimeControlMaintenance.runOnce();
   flowWorkerControl = await initializeFlowWorkerControl();
   flowWorkerControl.start();
   await flowExecutionRuntime.runWorkItemWakeOnce();
+  await flowExecutionRuntime.runApprovalWakeOnce();
   await flowExecutionRuntime.runExecutionOnce();
   flowExecutionRuntime.start();
   const readiness = await createWorkerReadiness({ service, checks: readinessChecks });
@@ -382,7 +455,11 @@ async function initializeFlowWorkerControl() {
       requirementKeys: [
         ...new Set([
           ...createFlowBookingEnrollmentWorkerRequirementKeys(),
-          ...createFlowExecutionWorkerRequirementKeys(flowNodeExecutorRegistry.executorKeys)
+          ...createFlowManualClientEnrollmentWorkerRequirementKeys(),
+          ...createFlowExecutionWorkerRequirementKeys(
+            flowNodeExecutorRegistry.executorKeys,
+            flowExecutorSupportedCapabilities
+          )
         ])
       ].sort(),
       deploymentId: config.flowRuntimeControl.deploymentId,
@@ -422,7 +499,8 @@ async function shutdownOnce(): Promise<void> {
       () => flowExecutionRuntime.stop(),
       () => flowWorkerControl?.stop() ?? Promise.resolve(),
       () => flowRuntimeControlMaintenance.stop(),
-      () => relay.stop()
+      () => relay.stop(),
+      () => flowChartAiRedis?.close() ?? Promise.resolve()
     ],
     closeHealthServer: () =>
       healthServer.listening

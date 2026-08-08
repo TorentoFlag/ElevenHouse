@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createFlowBookingEnrollmentWorkerRequirementKeys,
+  createFlowManualClientEnrollmentWorkerRequirementKeys,
   evaluateFlowRuntimeEnrollmentAdmission,
   type FlowRuntimeRolloutPolicy,
   type FlowWorkerReadinessLease
@@ -21,6 +22,13 @@ describe("evaluateFlowRuntimeEnrollmentAdmission", () => {
     expect(createFlowBookingEnrollmentWorkerRequirementKeys()).toEqual([
       "runtime:flow-interpreter.v1",
       "trigger:booking_confirmed:1:1:1"
+    ]);
+  });
+
+  it("declares the exact worker protocol requirements for manual-client enrollment", () => {
+    expect(createFlowManualClientEnrollmentWorkerRequirementKeys()).toEqual([
+      "runtime:flow-interpreter.v1",
+      "trigger:manual_client:1:1:1"
     ]);
   });
 

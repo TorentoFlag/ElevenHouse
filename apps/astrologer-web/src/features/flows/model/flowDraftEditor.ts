@@ -18,6 +18,20 @@ export type FlowPaletteNodeDefinition = {
 
 export const flowPaletteNodeGroups = [
   {
+    id: "messaging",
+    label: { ru: "Коммуникации", en: "Messaging" },
+    nodes: [
+      {
+        id: "send_message",
+        label: { ru: "Отправить сообщение", en: "Send message" },
+        description: {
+          ru: "Отправить текст в единственный подходящий подключённый диалог клиента",
+          en: "Send text to the client's single eligible connected conversation"
+        }
+      }
+    ]
+  },
+  {
     id: "logic",
     label: { ru: "Логика", en: "Logic" },
     nodes: [
@@ -27,6 +41,28 @@ export const flowPaletteNodeGroups = [
         description: {
           ru: "Выбрать ветку по данным для подготовки услуги",
           en: "Choose a branch using service preparation data"
+        }
+      }
+    ]
+  },
+  {
+    id: "chart_ai",
+    label: { ru: "Карта и AI", en: "Chart and AI" },
+    nodes: [
+      {
+        id: "natal_chart_request",
+        label: { ru: "Рассчитать натальную карту", en: "Calculate natal chart" },
+        description: {
+          ru: "Выполнить расчёт натальной карты для подготовки услуги",
+          en: "Calculate a natal chart for service preparation"
+        }
+      },
+      {
+        id: "natal_chart_ai_draft",
+        label: { ru: "AI-черновик трактовки", en: "AI interpretation draft" },
+        description: {
+          ru: "Создать черновик по натальной карте и запросить решение астролога",
+          en: "Create a natal-chart draft and request an astrologer decision"
         }
       }
     ]
@@ -136,6 +172,10 @@ export function getRequiredSourceHandles(node: FlowNodeV2): readonly FlowSourceH
   if (node.kind === "booking_confirmed" || node.kind === "manual_client") return ["next"];
   if (node.kind === "birth_data_available") return ["true", "false"];
   if (node.kind === "natal_chart_request") return ["next"];
+  if (node.kind === "send_message") return ["success", "error"];
+  if (node.kind === "natal_chart_ai_draft") {
+    return node.config.expiresAfterMinutes ? ["approved", "rejected", "timeout"] : ["approved", "rejected"];
+  }
   if (node.kind === "astrologer_work_item") return ["success"];
   if (node.kind === "astrologer_approval") {
     return node.config.expiresAfterMinutes
@@ -188,7 +228,7 @@ export function appendFlowNodeFromPalette(
 
   const existingNodeIds = input.existingNodeIds ?? new Set(graph.nodes.map((node) => node.id));
   const nodeId = uniqueNodeId(nodeIdBase[input.paletteNodeId], existingNodeIds);
-  const node = createPaletteNode(input.paletteNodeId, nodeId, input.locale);
+  const node = createPaletteNode(input.paletteNodeId, nodeId, input.locale, sourceNode);
   const sourcePosition =
     presentation.nodes.find((item) => item.nodeId === input.sourceNodeId)?.position ??
     fallbackPosition(graph.nodes.findIndex((candidate) => candidate.id === input.sourceNodeId));
@@ -241,7 +281,8 @@ function updateFlowNode(
 function createPaletteNode(
   kind: FlowPaletteNodeId,
   id: string,
-  locale: FlowEditorLocale
+  locale: FlowEditorLocale,
+  sourceNode: FlowNodeV2
 ): FlowNodeV2 {
   const title = paletteText[kind][locale];
   const base = {
@@ -267,6 +308,30 @@ function createPaletteNode(
           aspectPreset: "major",
           orbMultiplier: 1
         }
+      }
+    };
+  }
+  if (kind === "natal_chart_ai_draft") {
+    if (sourceNode.kind !== "natal_chart_request") {
+      throw new Error("FLOW_CHART_AI_DRAFT_REQUIRES_CHART_REQUEST");
+    }
+    return {
+      ...base,
+      kind,
+      config: {
+        chartRequestNodeId: sourceNode.id,
+        locale,
+        approvalTitle: locale === "ru" ? "Проверить AI-черновик" : "Review AI draft"
+      }
+    };
+  }
+  if (kind === "send_message") {
+    return {
+      ...base,
+      kind,
+      config: {
+        textTemplate:
+          locale === "ru" ? "Здравствуйте! Напоминаем о вашем следующем шаге." : "Hello! Here is your next step."
       }
     };
   }
@@ -303,6 +368,8 @@ function createPaletteNode(
 const paletteText = {
   birth_data_available: { ru: "Данные рождения заполнены?", en: "Birth data available?" },
   natal_chart_request: { ru: "Рассчитать натальную карту", en: "Calculate natal chart" },
+  natal_chart_ai_draft: { ru: "AI-черновик трактовки", en: "AI interpretation draft" },
+  send_message: { ru: "Отправить сообщение", en: "Send message" },
   astrologer_work_item: { ru: "Задача астрологу", en: "Astrologer task" },
   astrologer_approval: { ru: "Решение астролога", en: "Astrologer approval" },
   completed: { ru: "Завершено", en: "Completed" },
@@ -313,6 +380,8 @@ const paletteText = {
 const nodeIdBase = {
   birth_data_available: "birth-data-available",
   natal_chart_request: "natal-chart-request",
+  natal_chart_ai_draft: "natal-chart-ai-draft",
+  send_message: "send-message",
   astrologer_work_item: "astrologer-work-item",
   astrologer_approval: "astrologer-approval",
   completed: "completed",

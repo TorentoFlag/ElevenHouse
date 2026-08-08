@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { messagingMessageDeliveryRequestedEventType } from "@elevenhouse/domain";
+import {
+  messagingMessageDeliveryReconciliationRequestedEventType,
+  messagingMessageDeliveryRequestedEventType
+} from "@elevenhouse/domain";
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createLogger, type LogRecord } from "@elevenhouse/observability";
 import { relayPendingMessagingOutboxEvents } from "./messaging-delivery.outbox-relay";
@@ -45,7 +48,10 @@ describe("relayPendingMessagingOutboxEvents", () => {
     ).resolves.toBe(1);
 
     expect(store.claimPending).toHaveBeenCalledWith({
-      eventTypes: [messagingMessageDeliveryRequestedEventType],
+      eventTypes: [
+        messagingMessageDeliveryRequestedEventType,
+        messagingMessageDeliveryReconciliationRequestedEventType
+      ],
       limit: 10,
       now,
       stalePublishingBefore: new Date("2026-07-22T09:59:00.000Z")

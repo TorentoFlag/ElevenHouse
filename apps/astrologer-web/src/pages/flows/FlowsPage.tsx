@@ -25,6 +25,7 @@ import {
 } from "../../features/flows/model/flowEnrollmentCommandModel";
 import { useActivateFlowMutation } from "../../features/flows/model/useActivateFlowMutation";
 import { useCreateFlowMutation } from "../../features/flows/model/useCreateFlowMutation";
+import { useCreateManualFlowRunMutation } from "../../features/flows/model/useCreateManualFlowRunMutation";
 import { useCreateNextFlowDraftMutation } from "../../features/flows/model/useCreateNextFlowDraftMutation";
 import { useFlowDefinitionQuery } from "../../features/flows/model/useFlowDefinitionQuery";
 import { useFlowActivationReviewQuery } from "../../features/flows/model/useFlowActivationReviewQuery";
@@ -32,6 +33,7 @@ import { useFlowEnrollmentQuery } from "../../features/flows/model/useFlowEnroll
 import { useFlowListQuery } from "../../features/flows/model/useFlowListQuery";
 import { useFlowTemplatesQuery } from "../../features/flows/model/useFlowTemplatesQuery";
 import { useProductListQuery } from "../../features/products/model/useProductListQuery";
+import { useAstrologerTariffEntitlementsQuery } from "../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery";
 import { usePauseFlowEnrollmentMutation } from "../../features/flows/model/usePauseFlowEnrollmentMutation";
 import { usePublishFlowMutation } from "../../features/flows/model/usePublishFlowMutation";
 import { useUpdateFlowDraftMutation } from "../../features/flows/model/useUpdateFlowDraftMutation";
@@ -42,7 +44,10 @@ import type {
   FlowPublishCommandPayload
 } from "../../features/flows/ui/FlowBuilder";
 import { FlowActivationReviewDialog } from "../../features/flows/ui/FlowActivationReviewDialog";
+import { FlowApprovalQueuePanel } from "../../features/flows/ui/FlowApprovalQueuePanel";
+import { FlowManualClientRunDialog } from "../../features/flows/ui/FlowManualClientRunDialog";
 import { FlowPauseConfirmationDialog } from "../../features/flows/ui/FlowPauseConfirmationDialog";
+import { FlowRunHistoryPanel } from "../../features/flows/ui/FlowRunHistoryPanel";
 import { FlowWorkItemQueuePanel } from "../../features/flows/ui/FlowWorkItemQueuePanel";
 import { FlowsPageView } from "./FlowsPageView";
 import styles from "./FlowsPage.module.css";
@@ -64,6 +69,11 @@ type FlowAutomationTarget =
 type FlowAutomationCommandFeedback = {
   readonly error: Error;
   readonly classification: FlowEnrollmentCommandErrorClassification;
+};
+
+type FlowManualRunTarget = {
+  readonly flowId: string;
+  readonly flowName: string;
 };
 
 export function FlowsPage() {
@@ -89,6 +99,7 @@ export function FlowsPage() {
   const [automationTarget, setAutomationTarget] = useState<FlowAutomationTarget | null>(null);
   const [automationFeedback, setAutomationFeedback] =
     useState<FlowAutomationCommandFeedback | null>(null);
+  const [manualRunTarget, setManualRunTarget] = useState<FlowManualRunTarget | null>(null);
   const commandAttempts = useRef(createFlowCommandAttemptRegistry()).current;
   const enrollmentCommandAttempts = useRef(createFlowEnrollmentCommandAttemptRegistry()).current;
 
@@ -99,7 +110,11 @@ export function FlowsPage() {
     offset: 0
   });
   const templatesQuery = useFlowTemplatesQuery(locale);
-  const productsQuery = useProductListQuery({ status: "active", limit: 100, offset: 0 });
+  const entitlementsQuery = useAstrologerTariffEntitlementsQuery();
+  const productsQuery = useProductListQuery(
+    { status: "active", limit: 100, offset: 0 },
+    { enabled: entitlementsQuery.data?.products.read === "allow" }
+  );
   const selectedFlowQuery = useFlowDefinitionQuery(selectedFlowId);
   const activationReviewQuery = useFlowActivationReviewQuery(
     automationTarget?.action === "review_activation" ? automationTarget.flowId : null,
@@ -114,6 +129,7 @@ export function FlowsPage() {
   const nextDraftMutation = useCreateNextFlowDraftMutation();
   const activateMutation = useActivateFlowMutation();
   const pauseEnrollmentMutation = usePauseFlowEnrollmentMutation();
+  const manualRunMutation = useCreateManualFlowRunMutation();
   const validationMutation = useValidateFlowDefinitionMutation();
   const saveConflict = getFlowDefinitionRevisionConflict(updateMutation.error);
   const publishConflict = getFlowDefinitionRevisionConflict(publishMutation.error);
@@ -464,16 +480,20 @@ export function FlowsPage() {
         onPublish={publishDraft}
         onCreateNextDraft={createNextDraft}
         onAutomationAction={requestAutomationAction}
-        runtimeAvailability={null}
+        onCreateManualRun={(flowId) => {
+          const flow = selectedFlowQuery.data;
+          if (!flow || flow.id !== flowId) return;
+          manualRunMutation.reset();
+          setManualRunTarget({ flowId, flowName: flow.name });
+        }}
+        runtimeAvailability={flowsQuery.data?.runtime ?? null}
         isCreating={createMutation.isPending}
         isSaving={updateMutation.isPending}
         isPublishing={publishMutation.isPending}
         isValidating={validationMutation.isPending}
         isCreatingNextDraft={nextDraftMutation.isPending}
-        isTogglingAutomation={
-          activateMutation.isPending ||
-          pauseEnrollmentMutation.isPending
-        }
+        isTogglingAutomation={activateMutation.isPending || pauseEnrollmentMutation.isPending}
+        isCreatingManualRun={manualRunMutation.isPending}
         createError={asLocalizedError(createMutation.error, locale)}
         saveError={asLocalizedError(updateMutation.error, locale)}
         publishError={asLocalizedError(publishMutation.error, locale)}
@@ -485,8 +505,34 @@ export function FlowsPage() {
             : (validationResult?.issues ?? [])
         }
         validationError={asLocalizedError(validationMutation.error, locale)}
-        workItemQueue={<FlowWorkItemQueuePanel locale={locale} />}
+        runHistory={
+          selectedFlowId ? (
+            <FlowRunHistoryPanel flowId={selectedFlowId} locale={locale} classNames={styles} />
+          ) : null
+        }
+        approvalQueue={<FlowApprovalQueuePanel locale={locale} classNames={styles} hideWhenEmpty />}
+        workItemQueue={<FlowWorkItemQueuePanel locale={locale} hideWhenEmpty />}
       />
+      {manualRunTarget ? (
+        <FlowManualClientRunDialog
+          flowName={manualRunTarget.flowName}
+          locale={locale}
+          pending={manualRunMutation.isPending}
+          error={asLocalizedError(manualRunMutation.error, locale)}
+          onClose={() => {
+            if (manualRunMutation.isPending) return;
+            manualRunMutation.reset();
+            setManualRunTarget(null);
+          }}
+          onSubmit={({ clientUserId, idempotencyKey }) =>
+            manualRunMutation.mutateAsync({
+              flowId: manualRunTarget.flowId,
+              body: { clientUserId },
+              idempotencyKey
+            })
+          }
+        />
+      ) : null}
       <FlowActivationReviewDialog
         open={automationTarget?.action === "review_activation"}
         locale={locale}

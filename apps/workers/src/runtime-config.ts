@@ -35,9 +35,7 @@ const schema = z.object({
     .min(1_000)
     .max(86_400_000)
     .default(30_000),
-  WORKERS_FLOW_EXECUTION_MAX_MODE: z
-    .enum(["definition_only", "canary"])
-    .default("definition_only"),
+  WORKERS_FLOW_EXECUTION_MAX_MODE: z.enum(["definition_only", "canary"]).default("definition_only"),
   WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: z.string().default(""),
   WORKERS_FLOW_EXECUTION_INSTANCE_ID: z
     .string()
@@ -67,6 +65,30 @@ const schema = z.object({
     .max(300_000)
     .default(5_000),
   WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
+  WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(300_000)
+    .default(5_000),
+  WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
+  WORKERS_FLOW_CHART_AI_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: z.string().trim().min(1).optional(),
+  WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
+  WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL: z
+    .enum(["gpt-5.4-mini", "gpt-5.5"])
+    .default("gpt-5.4-mini"),
+  WORKERS_FLOW_CHART_AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(180_000).default(90_000),
+  WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(256).max(8_000).default(5_000),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_REDIS_KEY_PREFIX: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .default("elevenhouse:flow-chart-ai"),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().min(1).max(100).default(3),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce.number().int().min(1).max(1_000).default(30),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY: z.coerce.number().int().min(1).max(10_000).default(150),
   WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -157,6 +179,8 @@ const productionRequiredKeys = [
   "WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE",
   "WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS",
   "WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE",
+  "WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS",
+  "WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE",
   "WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS",
   "WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS",
   "WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS",
@@ -184,6 +208,7 @@ export function createWorkersRuntimeConfig(
   const isProduction = source.NODE_ENV?.trim() === "production";
   if (isProduction) requireExplicitProductionSettings(source);
   const value = schema.parse(source);
+  assertFlowChartAiConfig(value, isProduction);
   const flowExecution = createFlowExecutionConfig(value);
   if (isProduction) assertProductionSafety(value);
   return {
@@ -196,16 +221,27 @@ export function createWorkersRuntimeConfig(
     flowRuntimeOutboxMaxAttempts: value.WORKERS_FLOW_RUNTIME_OUTBOX_MAX_ATTEMPTS,
     flowBookingEnrollment: {
       latenessHorizonMs: value.WORKERS_FLOW_BOOKING_ENROLLMENT_LATENESS_HORIZON_MS,
-      futureSkewToleranceMs:
-        value.WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS,
+      futureSkewToleranceMs: value.WORKERS_FLOW_BOOKING_ENROLLMENT_FUTURE_SKEW_TOLERANCE_MS,
       deferDelayMs: value.WORKERS_FLOW_BOOKING_ENROLLMENT_DEFER_DELAY_MS
     },
     flowExecution,
+    flowChartAi: {
+      enabled: value.WORKERS_FLOW_CHART_AI_ENABLED,
+      openAiApiKey: value.WORKERS_FLOW_CHART_AI_OPENAI_API_KEY,
+      openAiBaseUrl: value.WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL,
+      qualityDraftModel: value.WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL,
+      timeoutMs: value.WORKERS_FLOW_CHART_AI_TIMEOUT_MS,
+      maxOutputTokens: value.WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS,
+      rateLimitRedisKeyPrefix: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_REDIS_KEY_PREFIX,
+      rateLimits: {
+        userPerMinute: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE, windowSeconds: 60 },
+        userPerHour: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR, windowSeconds: 3600 },
+        userPerDay: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY, windowSeconds: 86400 }
+      }
+    },
     flowRuntimeControl: {
-      heartbeatIntervalMaxMs:
-        value.WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS,
-      maintenanceIntervalMs:
-        value.WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS,
+      heartbeatIntervalMaxMs: value.WORKERS_FLOW_RUNTIME_CONTROL_HEARTBEAT_INTERVAL_MAX_MS,
+      maintenanceIntervalMs: value.WORKERS_FLOW_RUNTIME_CONTROL_MAINTENANCE_INTERVAL_MS,
       retentionBatchSize: value.WORKERS_FLOW_RUNTIME_CONTROL_RETENTION_BATCH_SIZE,
       deploymentId: value.WORKERS_DEPLOYMENT_ID,
       buildId: value.WORKERS_BUILD_ID
@@ -235,9 +271,7 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
     );
   }
   if (value.WORKERS_FLOW_EXECUTION_MAX_MODE === "canary" && ownerUserIds.length === 0) {
-    throw new Error(
-      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS is required in canary mode"
-    );
+    throw new Error("WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS is required in canary mode");
   }
   if (
     value.WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS >=
@@ -252,7 +286,8 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
     Math.max(
       value.WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS,
       value.WORKERS_FLOW_EXECUTION_RECOVERY_INTERVAL_MS,
-      value.WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS
+      value.WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS,
+      value.WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS
     )
   ) {
     throw new Error(
@@ -275,11 +310,23 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
     recoveryBatchSize: value.WORKERS_FLOW_EXECUTION_RECOVERY_BATCH_SIZE,
     workItemWakeIntervalMs: value.WORKERS_FLOW_WORK_ITEM_WAKE_INTERVAL_MS,
     workItemWakeBatchSize: value.WORKERS_FLOW_WORK_ITEM_WAKE_BATCH_SIZE,
+    approvalWakeIntervalMs: value.WORKERS_FLOW_APPROVAL_WAKE_INTERVAL_MS,
+    approvalWakeBatchSize: value.WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE,
     operationTimeoutMs: value.WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS,
     drainTimeoutMs: value.WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS,
     errorBackoffMaxMs: value.WORKERS_FLOW_EXECUTION_ERROR_BACKOFF_MAX_MS,
     errorJitter: value.WORKERS_FLOW_EXECUTION_ERROR_JITTER
   };
+}
+
+function assertFlowChartAiConfig(value: z.infer<typeof schema>, isProduction: boolean): void {
+  if (!value.WORKERS_FLOW_CHART_AI_ENABLED) return;
+  if (!value.WORKERS_FLOW_CHART_AI_OPENAI_API_KEY) {
+    throw new Error("WORKERS_FLOW_CHART_AI_OPENAI_API_KEY is required when WORKERS_FLOW_CHART_AI_ENABLED=true");
+  }
+  if (isProduction && new URL(value.WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL).protocol !== "https:") {
+    throw new Error("WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL must use HTTPS in production");
+  }
 }
 
 function parseCanaryOwnerUserIds(raw: string): readonly string[] {
@@ -294,14 +341,10 @@ function parseCanaryOwnerUserIds(raw: string): readonly string[] {
         )
     )
   ) {
-    throw new Error(
-      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain 1 to 100 UUIDs"
-    );
+    throw new Error("WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain 1 to 100 UUIDs");
   }
   if (new Set(ownerUserIds).size !== ownerUserIds.length) {
-    throw new Error(
-      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain unique UUIDs"
-    );
+    throw new Error("WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must contain unique UUIDs");
   }
   return [...ownerUserIds].sort();
 }

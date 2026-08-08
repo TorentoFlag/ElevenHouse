@@ -7,6 +7,7 @@ import type {
   FlowRuntimeEventSource,
   FlowRunResponse,
   FlowRunSnapshot,
+  FlowRunTraceEventResponse,
   FlowRunStatus,
   FlowRunSubjectType,
   FlowStepRunResponse,
@@ -17,6 +18,7 @@ import type { FlowSuppressionReason } from "./flow-eligibility";
 
 export type FlowRuntimeEventRecord = FlowRuntimeEvent;
 export type FlowRunRecord = FlowRunResponse;
+export type FlowRunTraceEventRecord = FlowRunTraceEventResponse;
 export type FlowStepRunRecord = FlowStepRunResponse;
 export type FlowApprovalRecord = FlowApproval;
 export type FlowDeliveryAttemptStatus = "pending" | "sent" | "failed" | "unknown";
@@ -180,6 +182,10 @@ export type FlowRuntimeStore = {
     input: FindFlowRunByEventAndFlowInput
   ) => Promise<FlowRunRecord | null>;
   readonly findRunById: (input: FindFlowRunByIdInput) => Promise<FlowRunRecord | null>;
+  readonly getRunHistory: (input: FindFlowRunByIdInput) => Promise<{
+    readonly run: FlowRunRecord;
+    readonly trace: readonly FlowRunTraceEventRecord[];
+  } | null>;
   readonly cancelRun: (input: CancelFlowRunStoreInput) => Promise<FlowRunRecord | null>;
   readonly createRun: (input: CreateFlowRunInput) => Promise<CreateFlowRunResult>;
   readonly createRunForEventDedupe: (

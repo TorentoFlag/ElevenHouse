@@ -42,7 +42,8 @@ export const flowExecutionSignalInbox = pgTable(
     uniqueIndex("flow_execution_signal_inbox_owner_identity_unique").on(
       table.ownerUserId,
       table.signalType,
-      table.correlationId
+      table.correlationId,
+      table.sourceEventId
     ),
     index("flow_execution_signal_inbox_pending_idx").on(
       table.ownerUserId,
@@ -77,6 +78,8 @@ export const flowExecutionSignalWaits = pgTable(
     signalType: text("signal_type").notNull(),
     correlationId: uuid("correlation_id").notNull(),
     successHandle: text("success_handle").notNull(),
+    failureHandle: text("failure_handle"),
+    expectedSourceEventId: uuid("expected_source_event_id"),
     state: text("state").notNull().default("waiting"),
     consumedSignalId: uuid("consumed_signal_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -119,6 +122,7 @@ export const flowExecutionSignalWaits = pgTable(
       table.ownerUserId,
       table.signalType,
       table.correlationId,
+      table.expectedSourceEventId,
       table.state
     ),
     check(
@@ -134,7 +138,15 @@ export const flowExecutionSignalWaits = pgTable(
       sql`${table.nodeActivationSequence} > 0
         and length(trim(${table.nodeId})) between 1 and 160
         and ${table.nodeId} ~ '^[a-z0-9][a-z0-9_-]*$'
-        and ${table.successHandle} = 'next'`
+        and (
+          (${table.signalType} = 'chart.calculation.terminal.v1'
+            and ${table.successHandle} = 'next'
+            and ${table.failureHandle} is null)
+          or
+          (${table.signalType} = 'messaging.message.delivery.terminal.v1'
+            and ${table.successHandle} = 'success'
+            and ${table.failureHandle} = 'error')
+        )`
     ),
     check(
       "flow_execution_signal_waits_lifecycle_check",

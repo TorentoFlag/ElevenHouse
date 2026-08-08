@@ -278,7 +278,13 @@ async function listPersistedWorkItems(
             eq(flowBookingLifecycleHeads.ownerUserId, flowWorkItems.ownerUserId)
           )
         )
-        .leftJoin(clientProfiles, eq(clientProfiles.userId, bookings.clientUserId))
+        .leftJoin(
+          clientProfiles,
+          sql`${clientProfiles.userId}::text = case
+            when ${flowRuntimeEvents.subjectType} = 'client' then ${flowRuntimeEvents.subjectId}
+            else ${bookings.clientUserId}::text
+          end`
+        )
         .where(predicate)
         .orderBy(
           workItemStatusRank,

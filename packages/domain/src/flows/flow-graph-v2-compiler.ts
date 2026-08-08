@@ -55,9 +55,10 @@ type NodeRule = {
 const noHandles = (): readonly FlowSourceHandleV2[] => [];
 const nextHandle = (): readonly FlowSourceHandleV2[] => ["next"];
 const successHandle = (): readonly FlowSourceHandleV2[] => ["success"];
+const deliveryHandles = (): readonly FlowSourceHandleV2[] => ["success", "error"];
 const conditionHandles = (): readonly FlowSourceHandleV2[] => ["true", "false"];
 const approvalHandles = (node: FlowNodeV2): readonly FlowSourceHandleV2[] => {
-  if (node.kind !== "astrologer_approval") return [];
+  if (node.kind !== "astrologer_approval" && node.kind !== "natal_chart_ai_draft") return [];
   return node.config.expiresAfterMinutes === undefined
     ? ["approved", "rejected"]
     : ["approved", "rejected", "timeout"];
@@ -93,6 +94,22 @@ const nodeRules = {
     requiredHandles: nextHandle,
     capabilities: ["charts.calculate.natal.booking_context"],
     branching: false,
+    terminal: false,
+    trigger: false
+  },
+  natal_chart_ai_draft: {
+    allowedHandles: approvalHandles,
+    requiredHandles: approvalHandles,
+    capabilities: ["charts.interpret.natal.ai_draft"],
+    branching: true,
+    terminal: false,
+    trigger: false
+  },
+  send_message: {
+    allowedHandles: deliveryHandles,
+    requiredHandles: deliveryHandles,
+    capabilities: ["messaging.outbound.send.existing_thread"],
+    branching: true,
     terminal: false,
     trigger: false
   },
@@ -211,6 +228,17 @@ export function compileFlowGraphV2(
           message: "A booking-relative work-item deadline requires a booking trigger."
         });
       }
+      if (
+        node.kind === "birth_data_available" ||
+        node.kind === "natal_chart_request" ||
+        node.kind === "natal_chart_ai_draft"
+      ) {
+        addIssue(issues, {
+          code: "manual_trigger_booking_context_unsupported",
+          path: `nodes.${node.id}`,
+          message: "A manual-client trigger cannot use a node that requires Booking context."
+        });
+      }
     }
   }
 
@@ -229,6 +257,24 @@ export function compileFlowGraphV2(
 
   const outgoingByNode = groupBy(structurallyValidEdges, (edge) => edge.sourceNodeId);
   const incomingByNode = groupBy(structurallyValidEdges, (edge) => edge.targetNodeId);
+
+  for (const node of nodesById.values()) {
+    if (node.kind !== "natal_chart_ai_draft") continue;
+    const source = nodesById.get(node.config.chartRequestNodeId);
+    const hasDirectSourceEdge = structurallyValidEdges.some(
+      (edge) =>
+        edge.sourceNodeId === node.config.chartRequestNodeId &&
+        edge.targetNodeId === node.id &&
+        edge.sourceHandle === "next"
+    );
+    if (source?.kind === "natal_chart_request" && hasDirectSourceEdge) continue;
+    addIssue(issues, {
+      code: "chart_ai_draft_source_invalid",
+      path: `nodes.${node.id}.config.chartRequestNodeId`,
+      message: "A natal AI draft must directly follow its declared natal-chart request node."
+    });
+  }
+
   const executableEdges = new Set<FlowGraphV2["edges"][number]>();
 
   for (const node of nodesById.values()) {

@@ -30,8 +30,9 @@ describe("Flow enrollment control worker wiring", () => {
   it("registers one worker session for enrollment and execution requirements", () => {
     expect(workerSource).toContain('roles: ["enrollment", "executor"]');
     expect(workerSource).toContain("createFlowBookingEnrollmentWorkerRequirementKeys()");
-    expect(workerSource).toContain(
-      "createFlowExecutionWorkerRequirementKeys(flowNodeExecutorRegistry.executorKeys)"
+    expect(workerSource).toContain("createFlowManualClientEnrollmentWorkerRequirementKeys()");
+    expect(workerSource).toMatch(
+      /createFlowExecutionWorkerRequirementKeys\(\s*flowNodeExecutorRegistry\.executorKeys,\s*flowExecutorSupportedCapabilities\s*\)/
     );
   });
 });

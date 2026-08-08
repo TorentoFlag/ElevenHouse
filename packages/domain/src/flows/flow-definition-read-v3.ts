@@ -5,7 +5,8 @@ import {
   type FlowDefinitionDetailV3,
   type FlowDefinitionSummaryV3,
   type ListFlowDefinitionsV3Query,
-  type ListFlowDefinitionsV3QueryInput
+  type ListFlowDefinitionsV3QueryInput,
+  type FlowRuntimeAvailability
 } from "@elevenhouse/contracts";
 
 import { FlowDefinitionIntegrityError } from "./flow-definition-control-plane";
@@ -13,6 +14,10 @@ import { FlowDefinitionIntegrityError } from "./flow-definition-control-plane";
 export type FlowDefinitionReadV3Page = {
   readonly flows: readonly FlowDefinitionSummaryV3[];
   readonly total: number;
+};
+
+export type FlowDefinitionReadV3Result = FlowDefinitionReadV3Page & {
+  readonly runtime: FlowRuntimeAvailability;
 };
 
 export type FlowDefinitionReadV3Store = {
@@ -30,7 +35,8 @@ export async function listFlowDefinitionsV3(input: {
   readonly store: FlowDefinitionReadV3Store;
   readonly ownerUserId: string;
   readonly query: ListFlowDefinitionsV3QueryInput;
-}): Promise<FlowDefinitionReadV3Page> {
+  readonly runtime: FlowRuntimeAvailability;
+}): Promise<FlowDefinitionReadV3Result> {
   const query = listFlowDefinitionsV3QuerySchema.parse(input.query);
   const page = await input.store.listByOwner({ ownerUserId: input.ownerUserId, query });
 
@@ -38,9 +44,10 @@ export async function listFlowDefinitionsV3(input: {
     const response = listFlowDefinitionsV3ResponseSchema.parse({
       schemaVersion: "flow-definition-list.v3",
       flows: page.flows,
-      total: page.total
+      total: page.total,
+      runtime: input.runtime
     });
-    return { flows: response.flows, total: response.total };
+    return { flows: response.flows, total: response.total, runtime: response.runtime };
   } catch (error) {
     if (error instanceof FlowDefinitionIntegrityError) throw error;
     throw new FlowDefinitionIntegrityError();

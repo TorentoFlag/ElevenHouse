@@ -50,7 +50,6 @@ const proIssues = [
   ["capability_absent", ["features", "page"]],
   ["capability_partial", ["features", "calendar"]],
   ["capability_partial", ["features", "crm"]],
-  ["capability_partial", ["features", "funnels"]],
   ["capability_absent", ["features", "group"]],
   ["capability_partial", ["features", "ai"]],
   ["capability_absent", ["features", "aicontent"]],
@@ -96,7 +95,6 @@ const studioIssues = [
   ["capability_absent", ["features", "page"]],
   ["capability_partial", ["features", "calendar"]],
   ["capability_partial", ["features", "crm"]],
-  ["capability_partial", ["features", "funnels"]],
   ["capability_absent", ["features", "group"]],
   ["capability_partial", ["features", "ai"]],
   ["capability_absent", ["features", "aicontent"]],
@@ -174,12 +172,12 @@ describe("platform plan publication", () => {
 
   it("reports the complete ordered literal issue set for the current Pro seed", () => {
     expect(projectIssues(platformPlanSeedData[1])).toEqual(proIssues);
-    expect(proIssues).toHaveLength(34);
+    expect(proIssues).toHaveLength(33);
   });
 
   it("reports the complete ordered literal issue set for the current Studio seed", () => {
     expect(projectIssues(platformPlanSeedData[2])).toEqual(studioIssues);
-    expect(studioIssues).toHaveLength(39);
+    expect(studioIssues).toHaveLength(38);
   });
 
   it("keeps issue order canonical when the candidate feature order is reversed", () => {
@@ -222,6 +220,13 @@ describe("platform plan publication", () => {
     ] satisfies readonly IssueProjection[]);
 
     expect(projectIssues(candidate({ features: ["products"] }))).toEqual([]);
+  });
+
+  it("permits Funnels when both delivery workers reload the persisted booking owner", () => {
+    const funnelPlan = candidate({ features: ["funnels"] });
+
+    expect(projectIssues(funnelPlan)).toEqual([]);
+    expect(() => assertPlatformPlanPublishable(funnelPlan)).not.toThrow();
   });
 
   it("checks finite counter-backed quotas and ignores unlimited quota counters", () => {

@@ -140,6 +140,56 @@ describe("flowDraftEditor V2", () => {
     });
   });
 
+  it("adds a natal AI draft with its direct natal-chart source", () => {
+    const chartGraph: FlowGraphV2 = {
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        graph.nodes[0]!,
+        {
+          id: "natal-chart",
+          kind: "natal_chart_request",
+          displayTitle: "Рассчитать натальную карту",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: {
+            interpretationMode: "adult_natal",
+            settings: {
+              zodiac: "tropical",
+              houseSystem: "placidus",
+              nodeType: "true",
+              aspectPreset: "major",
+              orbMultiplier: 1
+            }
+          }
+        }
+      ],
+      edges: [
+        {
+          id: "manual-next-to-natal-chart",
+          sourceNodeId: "manual-client",
+          targetNodeId: "natal-chart",
+          sourceHandle: "next"
+        }
+      ]
+    };
+
+    const updated = appendFlowNodeFromPalette(chartGraph, presentationFor(chartGraph), {
+      sourceNodeId: "natal-chart",
+      sourceHandle: "next",
+      paletteNodeId: "natal_chart_ai_draft",
+      locale: "ru"
+    });
+
+    expect(updated.graph.nodes.at(-1)).toMatchObject({
+      kind: "natal_chart_ai_draft",
+      config: {
+        chartRequestNodeId: "natal-chart",
+        locale: "ru",
+        approvalTitle: "Проверить AI-черновик"
+      }
+    });
+  });
+
   it("exposes missing branch handles and refuses an occupied handle", () => {
     const conditionGraph: FlowGraphV2 = {
       schemaVersion: "flow-graph.v2",
@@ -195,14 +245,17 @@ describe("flowDraftEditor V2", () => {
     );
 
     expect(paletteKinds).toEqual([
+      "send_message",
       "birth_data_available",
+      "natal_chart_request",
+      "natal_chart_ai_draft",
       "astrologer_work_item",
       "astrologer_approval",
       "completed",
       "suppressed",
       "failed"
     ]);
-    expect(paletteKinds).not.toContain("send_message");
+    expect(paletteKinds).toContain("send_message");
     expect(paletteKinds).not.toContain("reply_draft");
   });
 });

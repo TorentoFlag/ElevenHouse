@@ -15,13 +15,16 @@ export type FlowWorkItemQueuePanelProps = {
   readonly limit?: 5 | 50;
   readonly className?: string;
   readonly headerAction?: ReactNode;
+  /** Gallery surfaces keep a successful empty queue out of the primary workspace. */
+  readonly hideWhenEmpty?: boolean;
 };
 
 export function FlowWorkItemQueuePanel({
   locale,
   limit = 50,
   className,
-  headerAction
+  headerAction,
+  hideWhenEmpty = false
 }: FlowWorkItemQueuePanelProps) {
   const controller = useFlowWorkItemQueueController({ locale, limit });
   const copy = panelCopy[locale];
@@ -71,6 +74,17 @@ export function FlowWorkItemQueuePanel({
         )}
       </section>
     );
+  }
+
+  if (
+    hideWhenEmpty &&
+    !controller.isLoading &&
+    !controller.isError &&
+    controller.total === 0 &&
+    controller.snoozeTarget === null &&
+    controller.completionTarget === null
+  ) {
+    return null;
   }
 
   return (

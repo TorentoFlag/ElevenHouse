@@ -124,7 +124,7 @@ export const flowRunSnapshotV2Schema = z
       .object({
         activationEpochId: uuidSchema,
         triggerNodeId: stableIdSchema,
-        occurrenceKey: uuidSchema,
+        occurrenceKey: z.union([uuidSchema, z.string().regex(/^sha256:[a-f0-9]{64}$/)]),
         policyKey: z.literal("once_per_occurrence"),
         policyRevision: z.literal(1),
         rolloutPolicyRevision: z.number().int().positive(),
@@ -132,16 +132,25 @@ export const flowRunSnapshotV2Schema = z
         enrolledAt: instantSchema
       })
       .strict(),
-    subject: z
-      .object({
-        type: z.literal("booking"),
-        bookingId: uuidSchema,
-        clientUserId: uuidSchema,
-        productId: uuidSchema,
-        startAt: instantSchema,
-        endAt: instantSchema
-      })
-      .strict(),
+    subject: z.union([
+      z
+        .object({
+          type: z.literal("booking"),
+          bookingId: uuidSchema,
+          clientUserId: uuidSchema,
+          productId: uuidSchema,
+          startAt: instantSchema,
+          endAt: instantSchema
+        })
+        .strict(),
+      z
+        .object({
+          type: z.literal("client"),
+          clientUserId: uuidSchema,
+          relationshipId: uuidSchema
+        })
+        .strict()
+    ]),
     executionAuthority: z
       .object({
         basis: z.enum(["current_entitlement", "paid_order_obligation"]),
@@ -194,6 +203,19 @@ export const flowApprovalSchema = z
     kind: flowApprovalKindSchema,
     title: titleSchema,
     preview: descriptionSchema,
+    artifact: z
+      .object({
+        calculationId: uuidSchema,
+        interpretationId: uuidSchema,
+        sourceChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        contentChecksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+        outputText: z.string().trim().min(1).max(26_000)
+      })
+      .strict()
+      .nullable(),
+    revision: z.number().int().positive(),
+    snoozedUntil: instantSchema.nullable(),
+    expiresAt: instantSchema.nullable(),
     createdAt: instantSchema,
     decidedAt: instantSchema.nullable()
   })
@@ -234,6 +256,21 @@ export const flowRunResponseSchema = z
   .strict();
 export type FlowRunResponse = z.infer<typeof flowRunResponseSchema>;
 
+/**
+ * Owner-visible, append-only execution provenance. It deliberately excludes
+ * token, lease, attempt and command identifiers that belong to worker internals.
+ */
+export const flowRunTraceEventResponseSchema = z
+  .object({
+    sequence: z.string().regex(/^[1-9][0-9]*$/),
+    eventType: z.string().trim().min(1).max(120),
+    nodeId: stableIdSchema.nullable(),
+    summary: recordSchema,
+    occurredAt: instantSchema
+  })
+  .strict();
+export type FlowRunTraceEventResponse = z.infer<typeof flowRunTraceEventResponseSchema>;
+
 export const flowRuntimeAvailabilitySchema = z
   .object({
     mode: z.enum(["definition_only", "canary", "enabled"]),
@@ -260,27 +297,38 @@ export const flowRuntimeAvailabilitySchema = z
         message: "Flow runtime availability and reason code are inconsistent"
       });
     }
-    if (availability.mode === "enabled" && !availability.executionAvailable) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enabled flow runtime must be executable"
-      });
-    }
   });
 export type FlowRuntimeAvailability = z.infer<typeof flowRuntimeAvailabilitySchema>;
 
-export const simulateFlowRunRequestSchema = z
+/** A manual client enrollment never accepts subject provenance from the browser. */
+export const createManualClientFlowRunRequestSchema = z
+  .object({ clientUserId: uuidSchema })
+  .strict();
+export type CreateManualClientFlowRunRequest = z.infer<
+  typeof createManualClientFlowRunRequestSchema
+>;
+
+export const manualClientFlowRunResultSchema = z
   .object({
-    source: flowRuntimeEventSourceSchema,
-    subjectType: flowRunSubjectTypeSchema,
-    subjectId: z.string().trim().min(1).max(180),
-    occurredAt: instantSchema,
-    timeZone: z.string().trim().min(1).max(120),
-    payload: recordSchema.default({})
+    runId: uuidSchema,
+    tokenId: uuidSchema,
+    flowId: uuidSchema,
+    flowVersionId: uuidSchema,
+    activationEpochId: uuidSchema
   })
   .strict();
-export type SimulateFlowRunRequestInput = z.input<typeof simulateFlowRunRequestSchema>;
-export type SimulateFlowRunRequest = z.infer<typeof simulateFlowRunRequestSchema>;
+
+export const createManualClientFlowRunResponseSchema = z
+  .object({
+    status: z.enum(["enrolled", "no_match", "suppressed"]),
+    replayed: z.boolean(),
+    eventId: uuidSchema,
+    runs: z.array(manualClientFlowRunResultSchema).max(1)
+  })
+  .strict();
+export type CreateManualClientFlowRunResponse = z.infer<
+  typeof createManualClientFlowRunResponseSchema
+>;
 
 export const listFlowRunsQuerySchema = z
   .object({
@@ -307,6 +355,7 @@ export type ListFlowRunsResponse = z.infer<typeof listFlowRunsResponseSchema>;
 export const getFlowRunResponseSchema = z
   .object({
     run: flowRunResponseSchema,
+    trace: z.array(flowRunTraceEventResponseSchema).max(1_000),
     runtime: flowRuntimeAvailabilitySchema
   })
   .strict();
@@ -346,8 +395,26 @@ export type ListFlowApprovalsResponse = z.infer<typeof listFlowApprovalsResponse
 
 export const decideFlowApprovalRequestSchema = z
   .object({
+    expectedRevision: z.number().int().positive(),
     decision: flowApprovalDecisionSchema,
-    note: z.string().trim().min(1).max(1_000).optional()
+    note: z.string().trim().min(1).max(1_000).optional(),
+    snoozedUntil: instantSchema.optional()
+  })
+  .superRefine((value, context) => {
+    if (value.decision === "snoozed" && value.snoozedUntil === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["snoozedUntil"],
+        message: "snoozedUntil is required when decision is snoozed"
+      });
+    }
+    if (value.decision !== "snoozed" && value.snoozedUntil !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["snoozedUntil"],
+        message: "snoozedUntil is only valid when decision is snoozed"
+      });
+    }
   })
   .strict();
 export type DecideFlowApprovalRequest = z.infer<typeof decideFlowApprovalRequestSchema>;
@@ -358,42 +425,3 @@ export const decideFlowApprovalResponseSchema = z
   })
   .strict();
 export type DecideFlowApprovalResponse = z.infer<typeof decideFlowApprovalResponseSchema>;
-
-export const flowSimulationStepSchema = z
-  .object({
-    nodeId: stableIdSchema,
-    status: z.enum(["planned", "approval_required", "blocked"]),
-    reason: z.string().trim().min(1).max(240).nullable()
-  })
-  .strict();
-export type FlowSimulationStep = z.infer<typeof flowSimulationStepSchema>;
-
-export const simulateFlowRunResponseSchema = z
-  .object({
-    flowId: uuidSchema,
-    flowVersionId: uuidSchema,
-    plannedSteps: z.array(flowSimulationStepSchema).max(100),
-    warnings: z.array(z.string().trim().min(1).max(240)).max(100)
-  })
-  .strict();
-export type SimulateFlowRunResponse = z.infer<typeof simulateFlowRunResponseSchema>;
-
-export const manualFlowRunResponseSchema = z.discriminatedUnion("status", [
-  z
-    .object({
-      status: z.enum(["created", "duplicate"]),
-      event: flowRuntimeEventSchema,
-      run: flowRunResponseSchema,
-      stepRuns: z.array(flowStepRunResponseSchema).max(100),
-      approvals: z.array(flowApprovalSchema).max(100)
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal("suppressed"),
-      event: flowRuntimeEventSchema,
-      reason: z.string().trim().min(1).max(240)
-    })
-    .strict()
-]);
-export type ManualFlowRunResponse = z.infer<typeof manualFlowRunResponseSchema>;

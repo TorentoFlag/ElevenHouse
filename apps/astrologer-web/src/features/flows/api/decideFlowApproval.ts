@@ -9,6 +9,7 @@ import { application } from "../../../Application";
 export type DecideFlowApprovalInput = {
   readonly approvalId: string;
   readonly body: DecideFlowApprovalRequest;
+  readonly idempotencyKey: string;
 };
 
 export async function decideFlowApproval(
@@ -20,7 +21,7 @@ export async function decideFlowApproval(
     await application.http.post(
       `/flow-approvals/${input.approvalId}/decision`,
       normalizedBody,
-      { csrf: true }
+      { csrf: true, headers: { "idempotency-key": input.idempotencyKey } }
     )
   );
 }

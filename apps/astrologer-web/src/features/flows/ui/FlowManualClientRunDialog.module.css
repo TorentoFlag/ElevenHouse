@@ -1,0 +1,143 @@
+.dialog {
+  width: min(100% - 32px, 520px);
+  max-width: 520px;
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgb(216 212 236 / 0.2);
+  border-radius: 18px;
+  background: rgb(22 20 47 / 0.98);
+  color: var(--eh-color-moon-120);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+
+.dialog::backdrop {
+  background: rgb(5 4 18 / 68%);
+}
+
+.card {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--eh-color-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.description {
+  margin: 8px 0 0;
+  color: var(--eh-color-moon-500);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.closeButton,
+.secondaryButton,
+.primaryButton {
+  min-height: 38px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.closeButton {
+  width: 38px;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  background: transparent;
+  color: var(--eh-color-moon-500);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.secondaryButton {
+  border: 1px solid rgb(216 212 236 / 0.2);
+  background: rgb(30 27 62 / 0.92);
+  color: var(--eh-color-moon-120);
+  padding: 0 14px;
+}
+
+.primaryButton {
+  border: 1px solid rgb(244 196 48 / 0.42);
+  background: var(--eh-color-gold);
+  color: #2a1b0b;
+  padding: 0 16px;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.closeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.closeButton:focus-visible,
+.secondaryButton:focus-visible,
+.primaryButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.22);
+}
+
+.notice,
+.error {
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notice {
+  border: 1px solid rgb(78 200 160 / 34%);
+  background: rgb(78 200 160 / 0.12);
+  color: #8de6c5;
+}
+
+.error {
+  border: 1px solid rgb(244 122 122 / 34%);
+  background: rgb(244 99 99 / 12%);
+  color: #f7a3a3;
+}
+
+@media (max-width: 560px) {
+  .dialog {
+    width: min(100% - 20px, 520px);
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}

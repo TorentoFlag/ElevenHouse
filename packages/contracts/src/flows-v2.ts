@@ -43,6 +43,8 @@ export const flowNodeKindV2Values = [
   "manual_client",
   "birth_data_available",
   "natal_chart_request",
+  "natal_chart_ai_draft",
+  "send_message",
   "astrologer_work_item",
   "astrologer_approval",
   "completed",
@@ -59,6 +61,8 @@ export type FlowTriggerNodeKindV2 = z.infer<typeof flowTriggerNodeKindV2Schema>;
 export const flowExecutableNodeKindV2Values = [
   "birth_data_available",
   "natal_chart_request",
+  "natal_chart_ai_draft",
+  "send_message",
   "astrologer_work_item",
   "astrologer_approval",
   "completed",
@@ -147,6 +151,43 @@ export const flowNatalChartRequestNodeV2Schema = z
   })
   .strict();
 export type FlowNatalChartRequestNodeV2 = z.infer<typeof flowNatalChartRequestNodeV2Schema>;
+
+export const flowNatalChartAiDraftNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("natal_chart_ai_draft"),
+    config: z
+      .object({
+        /** Exact natal-chart request node whose completed job is the immutable source. */
+        chartRequestNodeId: stableIdSchema,
+        locale: flowLocaleSchema,
+        approvalTitle: displayTitleSchema,
+        expiresAfterMinutes: z.number().int().min(1).max(525_600).optional()
+      })
+      .strict()
+  })
+  .strict();
+export type FlowNatalChartAiDraftNodeV2 = z.infer<typeof flowNatalChartAiDraftNodeV2Schema>;
+
+/**
+ * Sends a pre-authored text template only to the Flow subject's unambiguous,
+ * already-connected Messaging thread. Template interpolation is deliberately
+ * not accepted by V2: any new personal-data placeholder needs its own
+ * provenance, consent and redaction contract before it can enter a durable
+ * outbound command.
+ */
+export const flowSendMessageNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("send_message"),
+    config: z
+      .object({
+        textTemplate: z.string().trim().min(1).max(4_000)
+      })
+      .strict()
+  })
+  .strict();
+export type FlowSendMessageNodeV2 = z.infer<typeof flowSendMessageNodeV2Schema>;
 
 export const flowAstrologerWorkItemTaskKindV2Values = [
   "consultation_preparation",
@@ -268,6 +309,8 @@ export const flowNodeV2Schema = z.discriminatedUnion("kind", [
   flowManualClientNodeV2Schema,
   flowBirthDataAvailableNodeV2Schema,
   flowNatalChartRequestNodeV2Schema,
+  flowNatalChartAiDraftNodeV2Schema,
+  flowSendMessageNodeV2Schema,
   flowAstrologerWorkItemNodeV2Schema,
   flowAstrologerApprovalNodeV2Schema,
   flowCompletedNodeV2Schema,
@@ -317,7 +360,9 @@ export const flowGraphV2CompileIssueCodeValues = [
   "cycle_detected",
   "unreachable_node",
   "unterminated_path",
-  "work_item_due_policy_requires_booking_trigger"
+  "work_item_due_policy_requires_booking_trigger",
+  "manual_trigger_booking_context_unsupported",
+  "chart_ai_draft_source_invalid"
 ] as const;
 export const flowGraphV2CompileIssueCodeSchema = z.enum(flowGraphV2CompileIssueCodeValues);
 export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssueCodeSchema>;
@@ -326,7 +371,9 @@ export const flowCapabilityRequirementValues = [
   "bookings.events.booking_confirmed",
   "clients.birth_data.read.service_preparation",
   "products.read",
-  "charts.calculate.natal.booking_context"
+  "charts.calculate.natal.booking_context",
+  "charts.interpret.natal.ai_draft",
+  "messaging.outbound.send.existing_thread"
 ] as const;
 export const flowCapabilityRequirementSchema = z.enum(flowCapabilityRequirementValues);
 export type FlowCapabilityRequirement = z.infer<typeof flowCapabilityRequirementSchema>;

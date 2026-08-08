@@ -1,4 +1,7 @@
-import { messagingMessageDeliveryRequestedEventType } from "@elevenhouse/domain";
+import {
+  messagingMessageDeliveryReconciliationRequestedEventType,
+  messagingMessageDeliveryRequestedEventType
+} from "@elevenhouse/domain";
 import type { OutboxRelayStore } from "@elevenhouse/db/outbox";
 import type { Logger } from "@elevenhouse/observability";
 import {
@@ -18,7 +21,10 @@ export async function relayPendingMessagingOutboxEvents(input: {
   readonly logger?: Logger;
 }): Promise<number> {
   const events = await input.store.claimPending({
-    eventTypes: [messagingMessageDeliveryRequestedEventType],
+    eventTypes: [
+      messagingMessageDeliveryRequestedEventType,
+      messagingMessageDeliveryReconciliationRequestedEventType
+    ],
     limit: input.batchSize,
     now: input.now,
     stalePublishingBefore: new Date(input.now.getTime() - input.publishingLockTimeoutMs)
@@ -36,7 +42,10 @@ export async function relayPendingMessagingOutboxEvents(input: {
         attempts: event.attempts
       });
 
-      if (event.eventType !== messagingMessageDeliveryRequestedEventType) {
+      if (
+        event.eventType !== messagingMessageDeliveryRequestedEventType &&
+        event.eventType !== messagingMessageDeliveryReconciliationRequestedEventType
+      ) {
         throw new Error(`Unsupported messaging outbox event type: ${event.eventType}`);
       }
 

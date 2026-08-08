@@ -2,6 +2,7 @@ import {
   flowExecutableNodeKindV2Schema,
   flowRunSnapshotV2Schema,
   flowWorkItemQueueEntrySchema,
+  type FlowRunSnapshotV2,
   type FlowWorkItem,
   type FlowWorkItemQueueEntry
 } from "@elevenhouse/contracts";
@@ -96,10 +97,14 @@ export function projectFlowWorkItemQueueEntry(
 ): FlowWorkItemQueueEntry {
   const snapshot = flowRunSnapshotV2Schema.safeParse(evidence.runSnapshot);
   const nodePolicy = resolveNodePolicy(evidence);
+  if (!snapshot.success || nodePolicy === null) return integrityError(evidence.workItem);
+
+  if (snapshot.data.subject.type === "client") {
+    return projectManualClientWorkItemQueueEntry(evidence, snapshot.data, nodePolicy);
+  }
+
   const booking = evidence.booking;
   if (
-    !snapshot.success ||
-    nodePolicy === null ||
     booking === null ||
     evidence.event.subjectType !== "booking" ||
     evidence.event.subjectId !== booking.id ||
@@ -153,6 +158,42 @@ export function projectFlowWorkItemQueueEntry(
       product: {
         id: booking.productId,
         titleSnapshot: booking.productTitleSnapshot
+      }
+    }
+  });
+  return projected.success ? projected.data : integrityError(evidence.workItem);
+}
+
+function projectManualClientWorkItemQueueEntry(
+  evidence: FlowWorkItemQueueProjectionEvidence,
+  snapshot: FlowRunSnapshotV2,
+  nodePolicy: ReturnType<typeof resolveNodePolicy>
+): FlowWorkItemQueueEntry {
+  if (
+    nodePolicy === null ||
+    snapshot.subject.type !== "client" ||
+    evidence.event.subjectType !== "client" ||
+    evidence.event.subjectId !== snapshot.subject.clientUserId ||
+    evidence.booking !== null ||
+    evidence.bookingLifecycleHead !== null ||
+    nodePolicy.duePolicy.kind !== "none" ||
+    evidence.deadlineBasis.duePolicyKind !== "none" ||
+    evidence.deadlineBasis.dueLeadTimeMinutes !== null ||
+    evidence.deadlineBasis.dueBookingLifecycleRevision !== null ||
+    evidence.workItem.dueAt !== null
+  ) {
+    return integrityError(evidence.workItem);
+  }
+  const projected = flowWorkItemQueueEntrySchema.safeParse({
+    workItem: evidence.workItem,
+    context: {
+      status: "available",
+      subjectType: "client",
+      completionRequirements: nodePolicy.completionRequirements,
+      flow: evidence.flow,
+      client: {
+        userId: snapshot.subject.clientUserId,
+        currentDisplayName: evidence.clientCurrentDisplayName
       }
     }
   });

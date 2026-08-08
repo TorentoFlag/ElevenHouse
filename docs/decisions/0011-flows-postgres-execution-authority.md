@@ -4,11 +4,19 @@ Date: 2026-08-02
 
 ## Status
 
-Accepted; terminal, retry/recovery, cancellation, single-token atomic advance,
-persisted runtime control and the worker lifecycle are implemented. The
-fail-closed bootstrap policy remains `definition_only`, and the current worker
-registers only `executor`; enrollment, timers, signals, approvals and
-external-effect execution remain unimplemented.
+Accepted; the definition compiler, immutable publish/activation/enrollment,
+single-token atomic execution, retry/recovery, cancellation, persisted runtime
+control and the worker lifecycle are implemented. Durable work-item and
+approval waits (including snooze/expiry wakes), terminal chart and Messaging
+signals, and owning-module ports for birth-data, chart, AI-draft and Messaging
+effects are implemented through the Flow dispatch outbox. The fail-closed
+bootstrap policy remains `definition_only`: deployment configuration may narrow
+the database policy but never widen it.
+
+The exposed V2 graph deliberately does not yet include a generic timer node or
+an internal-messaging channel. Provider delivery and reconciliation remain
+owned by Messaging; Flow persists a provider-neutral terminal-signal wait and
+does not choose a provider or transport mode.
 
 ## Context
 
@@ -22,10 +30,11 @@ events, runs, step runs, approvals, delivery attempts and suppressions in
 PostgreSQL. It also uses transactional outbox and BullMQ-backed workers for
 other asynchronous contours.
 
-The current runtime foundation is not yet an executor: it plans a traversal and
-can persist future steps as completed without executing their business effect.
-Before extending it, ElevenHouse needs one durable execution authority and
-formal graph semantics.
+At the time this decision was introduced, the runtime foundation was not yet an
+executor: it could plan a traversal and persist future steps as completed
+without executing their business effect. The decision established the durable
+execution authority and formal graph semantics required to replace that
+foundation.
 
 The evaluated options were:
 
@@ -331,19 +340,20 @@ then may be purged under retention policy because a success response can contain
 a run snapshot. The command tombstone and any command-linked redacted run trace
 remain. A command row alone is not fabricated proof that its target run exists.
 
-Immediate cancellation is defined for runnable, claimed or `retry_scheduled`
-terminal-token work, with run status `pending`, `running` or
-`failed_retryable`. The transaction locks the execution token before the run,
-so cancel, finalize and expired-lease recovery are serialized and the first
-committed terminal transition wins. Cancellation increments the fence, clears
-the lease and clears retry failure fields. A claimed token records a canceled
-attempt using the locked persisted claim identity; runnable and scheduled-retry
-tokens create no additional attempt. Every case appends one redacted
-`run_canceled` trace linked to the durable command. A deferred database guard
-requires that trace to reference a succeeded cancellation command, and replay
-of an already canceled run verifies the same provenance. Legacy, internally
-inconsistent and `waiting_external` work fails closed: stopping a run must not
-claim that an already dispatched provider effect was killed.
+Immediate cancellation is defined for runnable, claimed, `retry_scheduled`,
+`waiting_signal` or `waiting_work_item` token work, with run status `pending`,
+`running`, `waiting` or `failed_retryable`. The transaction locks the execution
+token before the run, so cancel, finalize and expired-lease recovery are
+serialized and the first committed terminal transition wins. Cancellation
+increments the fence, clears the lease and clears retry failure fields. A
+claimed token records a canceled attempt using the locked persisted claim
+identity; runnable, scheduled-retry and safe-wait tokens create no additional
+attempt. Every case appends one redacted `run_canceled` trace linked to the
+durable command. A deferred database guard requires that trace to reference a
+succeeded cancellation command, and replay of an already canceled run verifies
+the same provenance. Legacy, internally inconsistent and `waiting_external`
+work fails closed: stopping a run must not claim that an already dispatched
+provider effect was killed.
 
 Cancellation does not use the transaction-start clock for its business
 transition. After the token and run locks are acquired and the persisted state
@@ -410,18 +420,17 @@ same key.
   outbox and execution-safety transitions for every accepted history before it
   records or asserts the current ledger identity. Each transition accepts only
   its exact predecessor or current catalog, and current-schema verification
-  attests both safety catalogs independently of the broader mixed baseline.
+  attests both safety catalogs independently of the broader approved migration
+  lineage.
 - A fresh database has no relations during the pre-migration reconciliation
   pass. Production therefore runs the same reconciler again immediately after
   the Drizzle migrator and before seeding or service startup. That second pass
   installs and attests additive safety DDL not yet present in the generated
-  baseline; skipping it is a deployment failure, not an accepted fresh state.
-- Every generated single-baseline hash/journal pair is promoted as a new explicit
-  ledger identity only with an exact predecessor transition. Reconciliation
-  records the new timestamp before the standard Drizzle migrator runs, making
-  that migrator a no-op; a real deploy-order integration test guards this
-  contract. A ledger already claiming current is asserted, never silently
-  repaired from a predecessor shape.
+  lineage; skipping it is a deployment failure, not an accepted fresh state.
+- The deployment ledger is the exact ordered approved lineage. Reconciliation
+  may accept only its documented predecessor histories; `db:migrate` applies
+  missing committed entries in journal order. A ledger already claiming current
+  is asserted, never silently repaired from an unknown or divergent shape.
 - Old executor semantic versions remain deployable while non-terminal runs pin
   them, or move only through an explicit audited migration.
 
@@ -508,7 +517,7 @@ durable waits/recovery or coordinate idempotent side effects. It is prohibited.
 
 ## References
 
-- [Flows production module design](../superpowers/specs/2026-08-02-flows-production-module-design.md)
+- This accepted decision is the canonical record for the Flow execution model.
 - [PostgreSQL locking clauses](https://www.postgresql.org/docs/current/sql-select.html)
 - [Temporal workflow execution](https://docs.temporal.io/workflow-execution)
 - [Temporal workflow versioning](https://docs.temporal.io/develop/typescript/workflows/versioning)

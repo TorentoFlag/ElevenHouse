@@ -4,6 +4,7 @@ import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import {
   flowApprovals,
+  flowBirthProfileRecheckReceipts,
   flowDefinitionCommandOutcomes,
   flowDefinitionCommands,
   flowDefinitionCommandScopeValues,
@@ -287,6 +288,21 @@ describe("Flows persistence schema", () => {
     expect(getTableConfig(flowApprovals).foreignKeys.map((key) => key.getName())).toContain(
       "flow_approvals_run_owner_fk"
     );
+    expect(Object.keys(getTableColumns(flowApprovals))).toEqual(
+      expect.arrayContaining([
+        "aiCalculationId",
+        "aiInterpretationId",
+        "aiSourceChecksum",
+        "aiContentChecksum",
+        "aiOutputText"
+      ])
+    );
+    expect(getTableConfig(flowApprovals).foreignKeys.map((key) => key.getName())).toContain(
+      "flow_approvals_ai_interpretation_calculation_fk"
+    );
+    expect(getTableConfig(flowApprovals).checks.map((check) => check.name)).toContain(
+      "flow_approvals_ai_artifact_provenance_check"
+    );
   });
 
   it("retains runtime ingestion evidence as append-only data for the owner lifetime", () => {
@@ -355,12 +371,14 @@ describe("Flows persistence schema", () => {
     );
     expect(flowRuntimeCommandScopeValues).toEqual([
       "flows.runtime.cancel.v1",
+      "flows.approvals.decide.v1",
       "flows.work-items.start.v1",
       "flows.work-items.snooze.v1",
       "flows.work-items.complete.v1"
     ]);
     expect(flowRuntimeCommandRouteTemplateValues).toEqual([
       "/flow-runs/:runId/cancel",
+      "/flow-approvals/:approvalId/decision",
       "/flow-work-items/:workItemId/start",
       "/flow-work-items/:workItemId/snooze",
       "/flow-work-items/:workItemId/complete"
@@ -586,7 +604,13 @@ describe("Flows persistence schema", () => {
       "flow_step_runs_run_owner_fk"
     );
     expect(getTableConfig(flowApprovals).foreignKeys.map((key) => key.getName())).toEqual(
-      expect.arrayContaining(["flow_approvals_run_owner_fk", "flow_approvals_step_run_owner_fk"])
+      expect.arrayContaining([
+        "flow_approvals_run_owner_fk",
+        "flow_approvals_step_run_owner_fk",
+        "flow_approvals_token_run_owner_fk",
+        "flow_approvals_last_command_run_owner_fk",
+        "flow_approvals_last_run_event_run_owner_fk"
+      ])
     );
     expect(getTableConfig(flowDeliveryAttempts).foreignKeys.map((key) => key.getName())).toEqual(
       expect.arrayContaining([
@@ -603,11 +627,12 @@ describe("Flows persistence schema", () => {
     );
   });
 
-  it("keeps Flows DDL in the single current baseline", () => {
+  it("keeps Flows DDL in the module-owned migration", () => {
     const migration = baselineMigrationFile;
 
     expect(migration).toContain('CREATE TABLE "flows"');
     expect(migration).toContain('CREATE TABLE "flow_versions"');
+    expect(migration).toContain('CREATE TABLE "flow_birth_profile_recheck_receipts"');
     expect(migration).toContain('CREATE TABLE "flow_definition_commands"');
     expect(migration).toContain('CREATE TABLE "flow_definition_command_outcomes"');
     expect(migration).toContain("flows_status_check");
@@ -735,6 +760,40 @@ describe("Flows persistence schema", () => {
     expect(migration).toContain('CREATE CONSTRAINT TRIGGER "flow_run_event_command_consistency"');
     expect(migration).toContain("cancellation event requires a succeeded runtime command");
     expect(migration).toContain('"result_code" text NOT NULL');
+    expect(migration).toContain("FLOW_BIRTH_PROFILE_RECHECK_READY");
+    expect(migration).toContain("flow_birth_profile_recheck_receipts_source_run_unique");
+    expect(migration).toContain("flow_birth_profile_recheck_receipts_outbox_event_fk");
+    expect(migration).toContain("flow_birth_profile_recheck_receipts_history_fk");
+  });
+
+  it("exports a receipt keyed by the source event and waiting Flow run", () => {
+    expect(getTableName(flowBirthProfileRecheckReceipts)).toBe(
+      "flow_birth_profile_recheck_receipts"
+    );
+    const receiptConfig = getTableConfig(flowBirthProfileRecheckReceipts);
+    expect(Object.keys(getTableColumns(flowBirthProfileRecheckReceipts))).toEqual(
+      expect.arrayContaining([
+        "sourceOutboxEventId",
+        "birthDataHistoryId",
+        "ownerUserId",
+        "flowRunId",
+        "workItemId",
+        "birthDataRevision",
+        "outcome",
+        "processedAt"
+      ])
+    );
+    expect(receiptConfig.uniqueConstraints.map((constraint) => constraint.name)).toContain(
+      "flow_birth_profile_recheck_receipts_source_run_unique"
+    );
+    expect(receiptConfig.foreignKeys.map((key) => key.getName())).toEqual(
+      expect.arrayContaining([
+        "flow_birth_profile_recheck_receipts_outbox_event_fk",
+        "flow_birth_profile_recheck_receipts_history_fk",
+        "flow_birth_profile_recheck_receipts_run_owner_fk",
+        "flow_birth_profile_recheck_receipts_work_item_run_owner_fk"
+      ])
+    );
   });
 
   it("protects the immutable Flow enrollment snapshot and identity in PostgreSQL", () => {

@@ -6,9 +6,28 @@ import type {
   AiUsageAttemptStartInput,
   AiUsageStore
 } from "@elevenhouse/domain";
+import { createDrizzleAiUsageRecorder } from "@elevenhouse/db";
 import { DrizzleAiUsageRecorder } from "./drizzle-ai-usage-recorder";
 
 describe("DrizzleAiUsageRecorder", () => {
+  it("exports the same durable recorder for non-Nest runtimes", async () => {
+    const store = new RecordingAiUsageStore();
+    const recorder = createDrizzleAiUsageRecorder(store);
+
+    await recorder.start({
+      attemptId: "22222222-2222-4222-8222-222222222222",
+      feature: "chart.interpretationDraft",
+      promptId: "chart.interpretationDraft",
+      promptVersion: 3,
+      provider: "openai",
+      ownerSafetyId: `eh_${"b".repeat(61)}`,
+      resourceEvidence: null,
+      startedAt: new Date("2026-08-03T12:00:00.000Z")
+    });
+
+    expect(store.started[0]).toMatchObject({ id: "22222222-2222-4222-8222-222222222222" });
+  });
+
   it("bridges technical resource evidence to the durable domain store", async () => {
     const store = new RecordingAiUsageStore();
     const recorder = new DrizzleAiUsageRecorder(store);

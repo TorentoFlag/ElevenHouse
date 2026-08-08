@@ -42,6 +42,23 @@ const natalChartNode = node({
     }
   }
 });
+const natalAiDraftNode = node({
+  id: "natal-ai-draft",
+  kind: "natal_chart_ai_draft",
+  displayTitle: "Подготовить черновик трактовки",
+  config: {
+    chartRequestNodeId: "natal-chart",
+    locale: "ru",
+    approvalTitle: "Проверить черновик трактовки",
+    expiresAfterMinutes: 1_440
+  }
+});
+const sendMessageNode = node({
+  id: "send-message",
+  kind: "send_message",
+  displayTitle: "Напомнить клиенту",
+  config: { textTemplate: "Здравствуйте! Напоминаем о следующем шаге." }
+});
 const workItemNode = node({
   id: "work-item",
   kind: "astrologer_work_item",
@@ -249,6 +266,48 @@ describe("flow graph v2 compiler", () => {
     });
   });
 
+  it("requires the chart-AI capability for a checksum-bound natal draft approval", () => {
+    const approvedNode = node({
+      id: "approved",
+      kind: "completed",
+      displayTitle: "Черновик одобрен",
+      config: { goalKey: "natal_draft_approved" }
+    });
+    const rejectedNode = node({
+      id: "rejected",
+      kind: "suppressed",
+      displayTitle: "Черновик отклонён",
+      config: { reasonCode: "natal_draft_rejected" }
+    });
+    const timedOutNode = node({
+      id: "timed-out",
+      kind: "failed",
+      displayTitle: "Срок проверки истёк",
+      config: { errorCode: "natal_draft_approval_timed_out" }
+    });
+    const graph = graphV2(
+      [bookingNode, natalChartNode, natalAiDraftNode, approvedNode, rejectedNode, timedOutNode],
+      [
+        edge("booking-to-chart", "booking", "natal-chart", "next"),
+        edge("chart-to-ai", "natal-chart", "natal-ai-draft", "next"),
+        edge("ai-approved", "natal-ai-draft", "approved", "approved"),
+        edge("ai-rejected", "natal-ai-draft", "rejected", "rejected"),
+        edge("ai-timeout", "natal-ai-draft", "timed-out", "timeout")
+      ]
+    );
+
+    expect(compileFlowGraphV2(graph)).toMatchObject({
+      publishable: true,
+      issues: [],
+      capabilityManifest: {
+        requiredCapabilities: expect.arrayContaining(["charts.interpret.natal.ai_draft"]),
+        nodeExecutors: expect.arrayContaining([
+          expect.objectContaining({ kind: "natal_chart_ai_draft" })
+        ])
+      }
+    });
+  });
+
   it("rejects a booking-relative work-item deadline behind a manual trigger", () => {
     const bookingRelativeWorkItem = node({
       ...workItemNode,
@@ -267,6 +326,21 @@ describe("flow graph v2 compiler", () => {
 
     expect(issueCodes(compileFlowGraphV2(graph))).toContain(
       "work_item_due_policy_requires_booking_trigger"
+    );
+  });
+
+  it("rejects booking-context executors behind a manual trigger before a worker can claim an impossible token", () => {
+    const graph = graphV2(
+      [manualNode, birthDataNode, completedNode],
+      [
+        edge("manual-to-data", "manual", "birth-data", "next"),
+        edge("data-true", "birth-data", "completed", "true"),
+        edge("data-false", "birth-data", "completed", "false")
+      ]
+    );
+
+    expect(issueCodes(compileFlowGraphV2(graph))).toContain(
+      "manual_trigger_booking_context_unsupported"
     );
   });
 
@@ -428,9 +502,9 @@ describe("flow graph v2 compiler", () => {
       id: "birth-data-second"
     };
     const graph = graphV2(
-      [manualNode, birthDataNode, birthDataSecond, completedNode, completedSecond, failedNode],
+      [bookingNode, birthDataNode, birthDataSecond, completedNode, completedSecond, failedNode],
       [
-        edge("manual-to-data", "manual", "birth-data", "next"),
+        edge("booking-to-data", "booking", "birth-data", "next"),
         edge("data-true", "birth-data", "completed", "true"),
         edge("data-false", "birth-data", "birth-data-second", "false"),
         edge("second-data-true", "birth-data-second", "completed-second", "true"),
@@ -450,7 +524,9 @@ describe("flow graph v2 compiler", () => {
       )
     ).toHaveLength(1);
     expect(result.capabilityManifest?.requiredCapabilities).toEqual([
-      "clients.birth_data.read.service_preparation"
+      "bookings.events.booking_confirmed",
+      "clients.birth_data.read.service_preparation",
+      "products.read"
     ]);
   });
 
@@ -461,9 +537,9 @@ describe("flow graph v2 compiler", () => {
       config: { goalKey: "client_prepared" }
     };
     const graph = graphV2(
-      [manualNode, birthDataNode, completedNode, completedSecond],
+      [bookingNode, birthDataNode, completedNode, completedSecond],
       [
-        edge("manual-to-data", "manual", "birth-data", "next"),
+        edge("booking-to-data", "booking", "birth-data", "next"),
         edge("data-true", "birth-data", "completed", "true"),
         edge("data-false", "birth-data", "completed-second", "false")
       ]
@@ -502,6 +578,38 @@ describe("flow graph v2 compiler", () => {
     expect(issueCodes(compileFlowGraphV2(graph))).toEqual(
       expect.arrayContaining(["missing_required_source_handle", "unterminated_path"])
     );
+  });
+
+  it("requires explicit success and error paths for a durable messaging action", () => {
+    const graph = graphV2(
+      [manualNode, sendMessageNode, completedNode, failedNode],
+      [
+        edge("manual-to-message", "manual", "send-message", "next"),
+        edge("message-success", "send-message", "completed", "success"),
+        edge("message-error", "send-message", "failed", "error")
+      ]
+    );
+
+    expect(compileFlowGraphV2(graph)).toMatchObject({
+      publishable: true,
+      capabilityManifest: {
+        requiredCapabilities: ["messaging.outbound.send.existing_thread"],
+        nodeExecutors: expect.arrayContaining([
+          { kind: "send_message", configSchemaVersion: 1, executorContractVersion: 1 }
+        ])
+      }
+    });
+
+    expect(
+      issueCodes(
+        compileFlowGraphV2(
+          graphV2([manualNode, sendMessageNode, completedNode], [
+            edge("manual-to-message", "manual", "send-message", "next"),
+            edge("message-success", "send-message", "completed", "success")
+          ])
+        )
+      )
+    ).toContain("missing_required_source_handle");
   });
 
   it("rejects unreachable nodes and missing edge endpoints", () => {

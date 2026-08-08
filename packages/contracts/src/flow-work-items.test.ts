@@ -120,6 +120,27 @@ describe("flow work-item contracts", () => {
     ).toEqual({ items: [entry], total: 1, asOf: "2026-08-05T08:00:00.000Z" });
   });
 
+  it("exposes only the related client for a manual-client run without fabricating booking context", () => {
+    const entry = {
+      workItem: pendingWorkItem,
+      context: {
+        status: "available",
+        subjectType: "client",
+        completionRequirements: { resultSummary: "optional" },
+        flow: {
+          id: "10000000-0000-4000-8000-000000000005",
+          currentName: "Ручная подготовка"
+        },
+        client: {
+          userId: "10000000-0000-4000-8000-000000000007",
+          currentDisplayName: "Мария"
+        }
+      }
+    } as const;
+
+    expect(flowWorkItemQueueEntrySchema.parse(entry)).toEqual(entry);
+  });
+
   it("fails closed without client context fields when projection integrity is not proven", () => {
     expect(
       flowWorkItemQueueEntrySchema.parse({

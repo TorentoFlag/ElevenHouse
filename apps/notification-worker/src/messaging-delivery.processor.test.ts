@@ -115,6 +115,32 @@ describe("processMessagingDeliveryJob", () => {
     expect(JSON.stringify(logRecords)).not.toContain("Message text from DB");
   });
 
+  it("retries only an unknown Telegram Account delivery through its reconciliation work item", async () => {
+    const store = createStore({
+      workItem: {
+        ...createWorkItem(),
+        mode: "telegram_mtproto_account",
+        peerId: "777000",
+        messageStatus: "unknown",
+        reconciliation: true
+      }
+    });
+    const mtprotoProvider = createMtprotoProvider({
+      status: "sent",
+      providerMessageId: "telegram-mtproto-reconciled"
+    });
+
+    await processMessagingDeliveryJob({
+      job: createJob(),
+      store,
+      provider: { telegramBusiness: createBusinessProvider({ status: "sent" }), telegramMtproto: mtprotoProvider },
+      now: new Date("2026-07-22T10:00:00.000Z")
+    });
+
+    expect(mtprotoProvider.sendMessage).toHaveBeenCalledOnce();
+    expect(store.recordSent).toHaveBeenCalledOnce();
+  });
+
   it("records a retryable failure when Telegram Account delivery is not configured in this worker", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore({

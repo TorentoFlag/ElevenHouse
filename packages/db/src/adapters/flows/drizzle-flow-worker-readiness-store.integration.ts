@@ -18,6 +18,7 @@ import { reconcileFlowRuntimeControlAuthority } from "../../../scripts/flow-runt
 import { assertDevelopmentDatabaseUrl } from "../../connection";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { createDrizzleFlowRuntimeControlReader } from "./drizzle-flow-runtime-control-reader";
+import { createDrizzleFlowRuntimeAvailabilityReader } from "./drizzle-flow-runtime-availability-reader";
 import { createDrizzleFlowRuntimeControlCommandStore } from "./drizzle-flow-runtime-control-command-store";
 import { runFlowWorkerRegistrationRetention } from "./drizzle-flow-worker-registration-retention-store";
 import { createDrizzleFlowWorkerReadinessStore } from "./drizzle-flow-worker-readiness-store";
@@ -132,6 +133,29 @@ describe("Flow worker readiness store Drizzle/PostgreSQL integration", () => {
     await expect(reader.readCurrent()).rejects.toBeInstanceOf(FlowRuntimeControlIntegrityError);
   });
 
+  it("projects owner-level execution availability only for a live canary executor", async () => {
+    await activateCanaryPolicy();
+    const store = createDrizzleFlowWorkerReadinessStore(runtime.database);
+    const sessionId = randomUUID();
+    await store.register(registration(sessionId));
+    const reader = createDrizzleFlowRuntimeAvailabilityReader(runtime.database);
+
+    await expect(reader.readForOwner({ ownerUserId })).resolves.toEqual({
+      mode: "canary",
+      executionAvailable: true,
+      reasonCode: null,
+      historySemantics: "durable_execution"
+    });
+
+    await store.beginDrain({ instanceId: "flows-worker-a", sessionId });
+    await expect(reader.readForOwner({ ownerUserId })).resolves.toEqual({
+      mode: "canary",
+      executionAvailable: false,
+      reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+      historySemantics: "durable_execution"
+    });
+  });
+
   it("heartbeats, drains and permanently fences the superseded session", async () => {
     const store = createDrizzleFlowWorkerReadinessStore(runtime.database);
     const firstSession = randomUUID();
@@ -212,8 +236,11 @@ describe("Flow worker readiness store Drizzle/PostgreSQL integration", () => {
     );
     await runtime.pool.query(
       `UPDATE flow_worker_readiness_leases
-          SET heartbeat_at = clock_timestamp() - interval '25 hours 1 minute',
-              ready_until = clock_timestamp() - interval '25 hours'
+          SET heartbeat_at = stale.heartbeat_at,
+              ready_until = stale.heartbeat_at + interval '30 seconds'
+          FROM (
+            SELECT clock_timestamp() - interval '25 hours 1 minute' AS heartbeat_at
+          ) AS stale
         WHERE session_id = $1`,
       [sessionId]
     );
@@ -247,8 +274,11 @@ describe("Flow worker readiness store Drizzle/PostgreSQL integration", () => {
     );
     await runtime.pool.query(
       `UPDATE flow_worker_registration_tombstones
-          SET retired_at = clock_timestamp() - interval '31 days',
-              purge_after = clock_timestamp() - interval '1 day'`
+          SET retired_at = stale.retired_at,
+              purge_after = stale.retired_at + interval '30 days'
+          FROM (
+            SELECT clock_timestamp() - interval '31 days' AS retired_at
+          ) AS stale`
     );
     await runtime.pool.query(
       "ALTER TABLE flow_worker_registration_tombstones ENABLE TRIGGER flow_worker_registration_tombstones_immutable"
@@ -315,6 +345,30 @@ async function activateEnabledPolicy(): Promise<void> {
     expectedRevision: 1,
     policy,
     reason: "Integration enabled policy"
+  });
+}
+
+async function activateCanaryPolicy(): Promise<void> {
+  const policy: Omit<FlowRuntimeRolloutPolicy, "revision"> = {
+    schemaVersion: "flow-runtime-rollout-policy.v2",
+    mode: "canary",
+    canaryOwnerSubjectIds: [ownerSubjectId],
+    allowedRequirementKeys: ["executor:completed:1:1", "runtime:flow-interpreter.v1"],
+    killSwitches: {
+      enrollment: { global: false, ownerSubjectIds: [], capabilityKeys: [] },
+      claim: { global: false, ownerSubjectIds: [], capabilityKeys: [] },
+      externalDispatch: { global: true, ownerSubjectIds: [], capabilityKeys: [] }
+    },
+    readinessLeaseTtlMs: 30_000,
+    tokenLeaseDurationMs: 30_000
+  };
+  await replaceFlowRuntimeRolloutPolicy({
+    store: createDrizzleFlowRuntimeControlCommandStore(runtime.database),
+    actorUserId,
+    idempotencyKey: "runtime-policy-canary-0001",
+    expectedRevision: 1,
+    policy,
+    reason: "Integration canary policy"
   });
 }
 

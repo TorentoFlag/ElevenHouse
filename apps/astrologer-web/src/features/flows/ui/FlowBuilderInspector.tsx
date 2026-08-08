@@ -69,6 +69,7 @@ export function FlowBuilderInspector({
         />
       </label>
       <NodeConfigFields
+        graph={graph}
         node={selectedNode}
         locale={locale}
         editable={editable}
@@ -80,12 +81,14 @@ export function FlowBuilderInspector({
 }
 
 function NodeConfigFields({
+  graph,
   node,
   locale,
   editable,
   onChangeNode,
   className
 }: {
+  readonly graph: FlowGraphV2;
   readonly node: FlowNodeV2;
   readonly locale: "ru" | "en";
   readonly editable: boolean;
@@ -139,6 +142,102 @@ function NodeConfigFields({
             ? "Натальная карта ребёнка"
             : "Child natal chart"}
       </p>
+    );
+  }
+  if (node.kind === "send_message") {
+    return (
+      <label className={className}>
+        <span>{copy.messageTemplate}</span>
+        <textarea
+          value={node.config.textTemplate}
+          disabled={!editable}
+          maxLength={4000}
+          onChange={(event) =>
+            onChangeNode({ ...node, config: { ...node.config, textTemplate: event.target.value } })
+          }
+        />
+      </label>
+    );
+  }
+  if (node.kind === "natal_chart_ai_draft") {
+    const chartNodes = graph.nodes.filter(
+      (candidate): candidate is Extract<FlowNodeV2, { kind: "natal_chart_request" }> =>
+        candidate.kind === "natal_chart_request"
+    );
+    return (
+      <>
+        <label className={className}>
+          <span>{copy.chartSource}</span>
+          <select
+            value={node.config.chartRequestNodeId}
+            disabled={!editable}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: { ...node.config, chartRequestNodeId: event.target.value }
+              })
+            }
+          >
+            {chartNodes.map((chartNode) => (
+              <option key={chartNode.id} value={chartNode.id}>
+                {chartNode.displayTitle} ({chartNode.id})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={className}>
+          <span>{copy.draftLocale}</span>
+          <select
+            value={node.config.locale}
+            disabled={!editable}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: { ...node.config, locale: event.target.value as typeof node.config.locale }
+              })
+            }
+          >
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+          </select>
+        </label>
+        <label className={className}>
+          <span>{copy.approvalTitle}</span>
+          <input
+            value={node.config.approvalTitle}
+            disabled={!editable}
+            maxLength={180}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: { ...node.config, approvalTitle: event.target.value }
+              })
+            }
+          />
+        </label>
+        <label className={className}>
+          <span>{copy.expires}</span>
+          <input
+            type="number"
+            min={1}
+            max={525600}
+            value={node.config.expiresAfterMinutes ?? ""}
+            disabled={!editable}
+            onChange={(event) => {
+              const expiresAfterMinutes = event.target.value ? Number(event.target.value) : undefined;
+              const configWithoutExpiry = { ...node.config };
+              delete configWithoutExpiry.expiresAfterMinutes;
+              onChangeNode({
+                ...node,
+                config:
+                  expiresAfterMinutes === undefined
+                    ? configWithoutExpiry
+                    : { ...node.config, expiresAfterMinutes }
+              });
+            }}
+          />
+        </label>
+      </>
     );
   }
   if (node.kind === "astrologer_work_item") {
@@ -276,7 +375,7 @@ function NodeConfigFields({
       <input
         value={value}
         disabled={!editable}
-        pattern="[a-z0-9][a-z0-9_-]*"
+        pattern={"[a-z0-9][a-z0-9_\\-]*"}
         onChange={(event) => {
           const value = event.target.value;
           if (node.kind === "completed") onChangeNode({ ...node, config: { goalKey: value } });
@@ -312,6 +411,8 @@ const nodeInitial = {
   manual_client: "M",
   birth_data_available: "?",
   natal_chart_request: "N",
+  natal_chart_ai_draft: "AI",
+  send_message: "✉",
   astrologer_work_item: "T",
   astrologer_approval: "A",
   completed: "✓",
@@ -331,6 +432,9 @@ const inspectorCopy = {
     manualTrigger: "Ручной запуск получает выбранного астрологом клиента.",
     purpose: "Назначение данных",
     servicePreparation: "Подготовка услуги",
+    chartSource: "Источник натальной карты",
+    draftLocale: "Язык черновика",
+    messageTemplate: "Текст сообщения",
     taskTitle: "Название задачи",
     instructions: "Инструкции",
     priority: "Приоритет",
@@ -358,6 +462,9 @@ const inspectorCopy = {
     manualTrigger: "A manual start receives a client selected by the astrologer.",
     purpose: "Data purpose",
     servicePreparation: "Service preparation",
+    chartSource: "Natal chart source",
+    draftLocale: "Draft language",
+    messageTemplate: "Message text",
     taskTitle: "Task title",
     instructions: "Instructions",
     priority: "Priority",

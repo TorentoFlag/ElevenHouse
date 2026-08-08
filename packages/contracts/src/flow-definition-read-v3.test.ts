@@ -55,9 +55,9 @@ describe("flow definition V3 read contracts", () => {
     } as const;
 
     expect(flowDefinitionSummaryV3Schema.parse(response)).toEqual(response);
-    expect(flowDefinitionSummaryV3Schema.safeParse({ ...response, runtimeStatus: "published" }).success).toBe(
-      false
-    );
+    expect(
+      flowDefinitionSummaryV3Schema.safeParse({ ...response, runtimeStatus: "published" }).success
+    ).toBe(false);
   });
 
   it("accepts an active enrollment independently of the latest published version", () => {
@@ -176,10 +176,23 @@ describe("flow definition V3 read contracts", () => {
     const response = {
       schemaVersion: "flow-definition-list.v3",
       flows: [item],
-      total: 1
+      total: 1,
+      runtime: {
+        mode: "definition_only",
+        executionAvailable: false,
+        reasonCode: "FLOW_RUNTIME_EXECUTION_UNAVAILABLE",
+        historySemantics: "durable_execution"
+      }
     } as const;
 
     expect(listFlowDefinitionsV3ResponseSchema.parse(response)).toEqual(response);
+    expect(
+      listFlowDefinitionsV3ResponseSchema.safeParse({
+        schemaVersion: response.schemaVersion,
+        flows: response.flows,
+        total: response.total
+      }).success
+    ).toBe(false);
     expect(
       listFlowDefinitionsV3ResponseSchema.safeParse({ ...response, flows: [item, item] }).success
     ).toBe(false);

@@ -65,14 +65,15 @@ describe("Flow enrollment control production reconciliation integration", () => 
     await pool.query("INSERT INTO users (id) VALUES ($1)", [ownerUserId]);
     await pool.query(
       `INSERT INTO flows (
-         owner_user_id, name, status, definition_state, approval_mode, revision,
+         owner_user_id, name, origin, status, definition_state, approval_mode, revision,
          draft_graph, created_at, updated_at
        ) VALUES (
-         $1, 'Existing flow', 'draft', 'draft', 'manual_approve', 1,
-         $2, transaction_timestamp(), transaction_timestamp()
+         $1, 'Existing flow', $2, 'draft', 'draft', 'manual_approve', 1,
+         $3, transaction_timestamp(), transaction_timestamp()
        )`,
       [
         ownerUserId,
+        { schemaVersion: "flow-definition-origin.v1", type: "blank" },
         {
           schemaVersion: "flow-graph.v2",
           nodes: [
@@ -490,8 +491,8 @@ async function installLegacyRuntimeHistory(): Promise<void> {
       'Enrollment reconciliation fixture',
       '{"schemaVersion":"flow-definition-origin.v1","type":"blank"}',
       'draft', 'draft', 'manual_approve', 1,
-      '{"schemaVersion":"flow-graph.v2","nodes":[{"id":"completed","kind":"completed","displayTitle":"Completed","configSchemaVersion":1,"executorContractVersion":1,"config":{"goalKey":"done"}}],"edges":[]}',
-      '{"schemaVersion":"flow-presentation.v1","nodes":[{"nodeId":"completed","position":{"x":0,"y":0}}],"viewport":{"x":0,"y":0,"zoom":1}}',
+      '{"schemaVersion":"flow-graph.v2","nodes":[{"id":"manual-client","kind":"manual_client","displayTitle":"Manual client","configSchemaVersion":1,"executorContractVersion":1,"config":{}},{"id":"completed","kind":"completed","displayTitle":"Completed","configSchemaVersion":1,"executorContractVersion":1,"config":{"goalKey":"done"}}],"edges":[{"id":"manual-client-completed","sourceNodeId":"manual-client","targetNodeId":"completed","sourceHandle":"next"}]}',
+      '{"schemaVersion":"flow-presentation.v1","nodes":[{"nodeId":"manual-client","position":{"x":0,"y":0}},{"nodeId":"completed","position":{"x":240,"y":0}}],"viewport":{"x":0,"y":0,"zoom":1}}',
       '2026-08-03T10:00:00Z', '2026-08-03T10:00:00Z'
     );
 
@@ -503,9 +504,9 @@ async function installLegacyRuntimeHistory(): Promise<void> {
       'b2000000-0000-4000-8000-000000000001',
       'b1000000-0000-4000-8000-000000000001',
       1, 1, 'manual_approve', 'flow-graph.v2',
-      '{"schemaVersion":"flow-graph.v2","nodes":[{"id":"completed","kind":"completed","displayTitle":"Completed","configSchemaVersion":1,"executorContractVersion":1,"config":{"goalKey":"done"}}],"edges":[]}',
-      '{"schemaVersion":"flow-presentation.v1","nodes":[{"nodeId":"completed","position":{"x":0,"y":0}}],"viewport":{"x":0,"y":0,"zoom":1}}',
-      '{"schemaVersion":"flow-capability-manifest.v1","executionSemanticsVersion":"flow-interpreter.v1","nodeExecutors":[{"kind":"completed","configSchemaVersion":1,"executorContractVersion":1}],"requiredCapabilities":[]}',
+      '{"schemaVersion":"flow-graph.v2","nodes":[{"id":"manual-client","kind":"manual_client","displayTitle":"Manual client","configSchemaVersion":1,"executorContractVersion":1,"config":{}},{"id":"completed","kind":"completed","displayTitle":"Completed","configSchemaVersion":1,"executorContractVersion":1,"config":{"goalKey":"done"}}],"edges":[{"id":"manual-client-completed","sourceNodeId":"manual-client","targetNodeId":"completed","sourceHandle":"next"}]}',
+      '{"schemaVersion":"flow-presentation.v1","nodes":[{"nodeId":"manual-client","position":{"x":0,"y":0}},{"nodeId":"completed","position":{"x":240,"y":0}}],"viewport":{"x":0,"y":0,"zoom":1}}',
+      '{"schemaVersion":"flow-capability-manifest.v2","executionSemanticsVersion":"flow-interpreter.v1","triggerMatcher":{"kind":"manual_client","configSchemaVersion":1,"matcherContractVersion":1,"eventSchemaVersion":1},"nodeExecutors":[{"kind":"completed","configSchemaVersion":1,"executorContractVersion":1}],"requiredCapabilities":[]}',
       '2026-08-03T10:01:00Z'
     );
 

@@ -13,6 +13,16 @@ const pendingApproval = {
   kind: "ai_output",
   title: "Проверить AI-черновик",
   preview: "Сообщение клиенту ожидает подтверждения.",
+  artifact: {
+    calculationId: "77777777-7777-4777-8777-777777777777",
+    interpretationId: "88888888-8888-4888-8888-888888888888",
+    sourceChecksum: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    contentChecksum: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    outputText: "Натальная карта показывает сильную потребность в устойчивом ритме."
+  },
+  revision: 1,
+  snoozedUntil: null,
+  expiresAt: null,
   createdAt: "2026-07-28T08:01:00.000Z",
   decidedAt: null
 } satisfies FlowApproval;
@@ -43,11 +53,40 @@ describe("FlowApprovalQueue", () => {
   afterEach(() => cleanup());
 
   it("renders pending approval title and preview only in pending mode", () => {
-    render(<FlowApprovalQueue approvals={[pendingApproval, approvedApproval]} onDecision={vi.fn()} />);
+    render(
+      <FlowApprovalQueue approvals={[pendingApproval, approvedApproval]} onDecision={vi.fn()} />
+    );
 
     expect(screen.getByText("Проверить AI-черновик")).toBeTruthy();
     expect(screen.getByText("Сообщение клиенту ожидает подтверждения.")).toBeTruthy();
     expect(screen.queryByText("Уже утверждено")).toBeNull();
+  });
+
+  it("renders the durable AI draft before the astrologer makes a decision", () => {
+    render(<FlowApprovalQueue approvals={[pendingApproval]} onDecision={vi.fn()} />);
+
+    expect(
+      screen.getByText("Натальная карта показывает сильную потребность в устойчивом ритме.")
+    ).toBeTruthy();
+  });
+
+  it("localizes the operator approval controls", () => {
+    render(
+      <FlowApprovalQueue
+        approvals={[pendingApproval]}
+        locale="en"
+        runtimeAvailability={durableRuntime}
+        onDecision={vi.fn()}
+        onSnooze={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "Flow approvals" })).toBeTruthy();
+    expect(screen.getByText("Awaiting approval")).toBeTruthy();
+    expect(screen.getByText("AI draft")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Snooze" })).toBeTruthy();
   });
 
   it("keeps approval decisions read-only while execution is unavailable", () => {
@@ -82,11 +121,13 @@ describe("FlowApprovalQueue", () => {
 
   it("dispatches decisions only for durable execution history", () => {
     const onDecision = vi.fn();
+    const onSnooze = vi.fn();
     render(
       <FlowApprovalQueue
         approvals={[pendingApproval]}
         runtimeAvailability={durableRuntime}
         onDecision={onDecision}
+        onSnooze={onSnooze}
       />
     );
 
@@ -94,9 +135,9 @@ describe("FlowApprovalQueue", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отклонить" }));
     fireEvent.click(screen.getByRole("button", { name: "Отложить" }));
 
-    expect(onDecision).toHaveBeenNthCalledWith(1, pendingApproval.id, "approved");
-    expect(onDecision).toHaveBeenNthCalledWith(2, pendingApproval.id, "rejected");
-    expect(onDecision).toHaveBeenNthCalledWith(3, pendingApproval.id, "snoozed");
+    expect(onDecision).toHaveBeenNthCalledWith(1, pendingApproval, "approved");
+    expect(onDecision).toHaveBeenNthCalledWith(2, pendingApproval, "rejected");
+    expect(onSnooze).toHaveBeenCalledWith(pendingApproval);
   });
 
   it("does not expose provider-send success before the API confirms delivery", () => {

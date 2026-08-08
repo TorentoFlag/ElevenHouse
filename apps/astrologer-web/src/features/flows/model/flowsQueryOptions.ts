@@ -5,8 +5,10 @@ import type {
   ListFlowApprovalsQuery,
   ListFlowDefinitionsV3QueryInput,
   ListFlowRunsQuery,
+  ListFlowRunsResponse,
   ListFlowWorkItemsQuery,
-  ManualFlowRunResponse,
+  CreateManualClientFlowRunResponse,
+  CancelFlowRunResponse,
   PauseFlowEnrollmentResponse,
   PublishFlowDefinitionV3Response
 } from "@elevenhouse/contracts";
@@ -15,9 +17,11 @@ import { activateFlow, type ActivateFlowInput } from "../api/activateFlow";
 import { createFlow, type CreateFlowInput } from "../api/createFlow";
 import { createNextFlowDraft, type CreateNextFlowDraftInput } from "../api/createNextFlowDraft";
 import { createManualFlowRun, type CreateManualFlowRunInput } from "../api/createManualFlowRun";
+import { cancelFlowRun, type CancelFlowRunInput } from "../api/cancelFlowRun";
 import { completeFlowWorkItem, type CompleteFlowWorkItemInput } from "../api/completeFlowWorkItem";
 import { decideFlowApproval, type DecideFlowApprovalInput } from "../api/decideFlowApproval";
 import { getFlowDefinition } from "../api/getFlowDefinition";
+import { getFlowRun } from "../api/getFlowRun";
 import { getFlowActivationReview } from "../api/getFlowActivationReview";
 import { getFlowEnrollment } from "../api/getFlowEnrollment";
 import { listFlowApprovals } from "../api/listFlowApprovals";
@@ -29,7 +33,6 @@ import { pauseFlowEnrollment, type PauseFlowEnrollmentInput } from "../api/pause
 import { publishFlow, type PublishFlowInput } from "../api/publishFlow";
 import { snoozeFlowWorkItem, type SnoozeFlowWorkItemInput } from "../api/snoozeFlowWorkItem";
 import { startFlowWorkItem, type StartFlowWorkItemInput } from "../api/startFlowWorkItem";
-import { simulateFlowRun, type SimulateFlowRunInput } from "../api/simulateFlowRun";
 import { updateFlowDraft, type UpdateFlowDraftInput } from "../api/updateFlowDraft";
 import {
   validateFlowDefinition,
@@ -40,6 +43,7 @@ export const flowsQueryKeys = {
   all: () => ["flows"] as const,
   list: (query: ListFlowDefinitionsV3QueryInput) => ["flows", "list", query] as const,
   detail: (flowId: string | null) => ["flows", "detail", flowId] as const,
+  run: (runId: string | null) => ["flows", "run", runId] as const,
   activationReview: (flowId: string | null, versionId: string | null) =>
     ["flows", "activation-review", flowId, versionId] as const,
   enrollment: (flowId: string | null) => ["flows", "enrollment", flowId] as const,
@@ -94,6 +98,19 @@ export function flowDefinitionQueryOptions(flowId: string | null) {
   };
 }
 
+export function flowRunQueryOptions(runId: string | null) {
+  return {
+    queryKey: flowsQueryKeys.run(runId),
+    queryFn: () => {
+      if (!runId) throw new Error("FLOW_RUN_ID_REQUIRED");
+      return getFlowRun(runId);
+    },
+    enabled: runId !== null,
+    staleTime: 0,
+    retry: false
+  };
+}
+
 export function flowTemplatesQueryOptions(locale: "ru" | "en") {
   return {
     queryKey: flowsQueryKeys.templates(locale),
@@ -106,6 +123,43 @@ export function flowRunsQueryOptions(flowId: string, query: ListFlowRunsQuery) {
     queryKey: flowsQueryKeys.runs(flowId, query),
     queryFn: () => listFlowRuns({ flowId, query })
   };
+}
+
+const flowRunRefreshIntervalMs = 5_000;
+const flowOperatorQueueRefreshIntervalMs = 5_000;
+const asynchronouslyTransitioningRunStatuses = new Set([
+  "pending",
+  "running",
+  "waiting",
+  "approval_required",
+  "failed_retryable"
+]);
+
+type FlowRunWithStatus = Pick<ListFlowRunsResponse["runs"][number], "status">;
+
+export function flowRunRefreshInterval(run: FlowRunWithStatus | undefined): number | false {
+  return run && asynchronouslyTransitioningRunStatuses.has(run.status)
+    ? flowRunRefreshIntervalMs
+    : false;
+}
+
+export function flowRunsRefreshInterval(
+  data: Pick<ListFlowRunsResponse, "runs"> | undefined
+): number | false {
+  return data?.runs.some((run) => flowRunRefreshInterval(run) !== false)
+    ? flowRunRefreshIntervalMs
+    : false;
+}
+
+/**
+ * Approvals and work items may appear or change while their successful queue is
+ * empty, so the operator surface keeps a foreground read fresh. A failed read
+ * remains explicit and requires the existing manual retry instead of looping.
+ */
+export function flowOperatorQueueRefreshInterval(
+  queryStatus: "pending" | "error" | "success"
+): number | false {
+  return queryStatus === "success" ? flowOperatorQueueRefreshIntervalMs : false;
 }
 
 export function flowApprovalsQueryOptions(query: ListFlowApprovalsQuery) {
@@ -175,12 +229,6 @@ export function pauseFlowEnrollmentMutationOptions(
   };
 }
 
-export function simulateFlowRunMutationOptions() {
-  return {
-    mutationFn: (input: SimulateFlowRunInput) => simulateFlowRun(input)
-  };
-}
-
 export function validateFlowDefinitionMutationOptions() {
   return {
     mutationFn: (input: ValidateFlowDefinitionInput) => validateFlowDefinition(input)
@@ -193,6 +241,14 @@ export function createManualFlowRunMutationOptions(
   return {
     mutationFn: (input: CreateManualFlowRunInput) => createManualFlowRun(input),
     onSuccess: () => invalidateFlows(queryClient)
+  };
+}
+
+export function cancelFlowRunMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
+  return {
+    mutationFn: (input: CancelFlowRunInput) => cancelFlowRun(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
   };
 }
 
@@ -244,5 +300,6 @@ export type FlowMutationResult =
   | PauseFlowEnrollmentResponse
   | FlowDefinitionV2
   | PublishFlowDefinitionV3Response
-  | ManualFlowRunResponse
+  | CreateManualClientFlowRunResponse
+  | CancelFlowRunResponse
   | { readonly approval: { readonly status: DecideFlowApprovalRequest["decision"] } };

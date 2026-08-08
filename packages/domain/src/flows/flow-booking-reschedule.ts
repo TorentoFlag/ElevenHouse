@@ -37,6 +37,7 @@ export function projectCurrentBookingScheduleOntoFlowRunSnapshot(input: {
   assertSchedule(input.schedule, "current Booking schedule");
   if (
     !snapshot.success ||
+    snapshot.data.subject.type !== "booking" ||
     snapshot.data.subject.bookingId !== input.bookingId ||
     snapshot.data.enrollment.occurrenceKey !== input.bookingId
   ) {

@@ -272,7 +272,10 @@ async function createOutboundMessage(
           messageId: row.id,
           threadId: input.threadId,
           channelConnectionId: input.channelConnectionId,
-          astrologerUserId: input.astrologerUserId
+          astrologerUserId: input.astrologerUserId,
+          ...(input.deliveryRequestedEvent.payload.flowTerminalSignal
+            ? { flowTerminalSignal: "flow_delivery_terminal.v1" as const }
+            : {})
         },
         status: "pending",
         attempts: 0,

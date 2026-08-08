@@ -6,6 +6,7 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowApprovals,
   flowRuntimeEvents,
+  flowRunEvents,
   flowRuns,
   flowStepRuns,
   flowSuppressions
@@ -288,6 +289,63 @@ describe("createDrizzleFlowRuntimeStore", () => {
       sql: expect.stringContaining('"owner_user_id" = $1'),
       params: [ownerUserId, runId]
     });
+  });
+
+  it("reads an owner-scoped ordered trace in the same read transaction as its run", async () => {
+    const fake = createFakeDatabase({
+      selectRows: [
+        [{ ...runRow(), sourceEventId: "manual:client-1:flow-1" }],
+        [
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            ownerUserId,
+            flowRunId: runId,
+            sequence: 1n,
+            eventType: "run_enrolled",
+            nodeId: "manual-client",
+            attemptId: null,
+            commandId: null,
+            bookingLifecycleEventId: null,
+            summary: { source: "manual" },
+            occurredAt: now
+          },
+          {
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            ownerUserId,
+            flowRunId: runId,
+            sequence: 2n,
+            eventType: "run_completed",
+            nodeId: "completed",
+            attemptId: null,
+            commandId: null,
+            bookingLifecycleEventId: null,
+            summary: { terminal: true },
+            occurredAt: now
+          }
+        ]
+      ]
+    });
+
+    await expect(
+      createDrizzleFlowRuntimeStore(fake.database).getRunHistory({ ownerUserId, runId })
+    ).resolves.toMatchObject({
+      run: { id: runId, ownerUserId },
+      trace: [
+        { sequence: "1", eventType: "run_enrolled", nodeId: "manual-client" },
+        { sequence: "2", eventType: "run_completed", nodeId: "completed" }
+      ]
+    });
+
+    expect(fake.transactions).toBe(1);
+    expect(renderWhere(fake.wheres[0])).toMatchObject({
+      sql: expect.stringContaining('"owner_user_id" = $1'),
+      params: [ownerUserId, runId]
+    });
+    expect(renderWhere(fake.wheres[1])).toMatchObject({
+      sql: expect.stringContaining('"flow_run_id" = $2'),
+      params: [ownerUserId, runId]
+    });
+    expect(fake.inserts).not.toContainEqual(expect.objectContaining({ table: flowRunEvents }));
   });
 
   it("cancels a non-terminal run inside the owner scope", async () => {
@@ -578,17 +636,17 @@ function createFakeDatabase(input: FakeDatabaseInput) {
       selectIndex += 1;
       return Promise.resolve(rows);
     };
-    return {
-      orderBy: () => ({
-        limit: () => ({
-          offset: take
-        })
-      }),
-      limit: take,
+    const orderedResult = {
+      limit: () => ({ offset: take }),
       then: (
         resolve: (value: readonly Record<string, unknown>[]) => unknown,
         reject?: (reason: unknown) => unknown
       ) => take().then(resolve, reject)
+    };
+    return {
+      orderBy: () => orderedResult,
+      limit: take,
+      then: orderedResult.then
     };
   }
 
