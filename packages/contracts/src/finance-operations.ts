@@ -22,6 +22,7 @@ export const financeOperationKindValues = [
   "payout_confirm_paid",
   "bank_snapshot_attest",
   "bank_statement_match",
+  "settlement_ingestion",
   "ledger_correction"
 ] as const;
 export const financeOperationKindSchema = z.enum(financeOperationKindValues);

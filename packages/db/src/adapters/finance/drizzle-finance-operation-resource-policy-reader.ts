@@ -109,6 +109,7 @@ function operationKindValue(
     "payout_confirm_paid",
     "bank_snapshot_attest",
     "bank_statement_match",
+    "settlement_ingestion",
     "ledger_correction"
   ] as const;
   if ((values as readonly string[]).includes(value as string))

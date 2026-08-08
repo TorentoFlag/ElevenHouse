@@ -1,0 +1,13 @@
+ALTER TABLE "finance_operation_resource_policy_versions" DROP CONSTRAINT "finance_operation_resource_policy_versions_shape_check";--> statement-breakpoint
+ALTER TABLE "finance_operation_resource_policy_versions" ADD CONSTRAINT "finance_operation_resource_policy_versions_shape_check" CHECK ("finance_operation_resource_policy_versions"."lifecycle" in ('draft', 'published', 'retired')
+        and "finance_operation_resource_policy_versions"."operation_kind" in ('tariff_publish', 'fiscal_policy_publish', 'risk_policy_publish', 'client_checkout_prepare', 'client_order_capture', 'platform_card_setup_prepare', 'platform_card_setup_execute', 'platform_card_setup_complete_3ds_method', 'platform_invoice_complete_3ds_method', 'platform_invoice_charge', 'platform_renewal_schedule', 'refund_execute', 'chargeback_record_provisional', 'chargeback_principal_allocate', 'payout_destination_reveal', 'payout_destination_change', 'payout_approve', 'payout_start_processing', 'payout_confirm_paid', 'bank_snapshot_attest', 'bank_statement_match', 'settlement_ingestion', 'ledger_correction')
+        and length(trim("finance_operation_resource_policy_versions"."policy_id")) between 1 and 160
+        and "finance_operation_resource_policy_versions"."policy_id" = trim("finance_operation_resource_policy_versions"."policy_id") and "finance_operation_resource_policy_versions"."policy_id" !~ '[[:cntrl:]]'
+        and "finance_operation_resource_policy_versions"."version" >= 1 and "finance_operation_resource_policy_versions"."draft_revision" >= 1
+        and "finance_operation_resource_policy_versions"."maximum_rows" >= 1 and "finance_operation_resource_policy_versions"."maximum_decimal_digits" between 1 and 38
+        and "finance_operation_resource_policy_versions"."maximum_artifact_bytes" >= 1
+        and "finance_operation_resource_policy_versions"."canonical_digest" ~ '^sha256:[a-f0-9]{64}$'
+        and length("finance_operation_resource_policy_versions"."canonical_preimage") between 1 and 32000
+        and (("finance_operation_resource_policy_versions"."lifecycle" = 'draft' and "finance_operation_resource_policy_versions"."published_at" is null and "finance_operation_resource_policy_versions"."retired_at" is null)
+          or ("finance_operation_resource_policy_versions"."lifecycle" = 'published' and "finance_operation_resource_policy_versions"."published_at" is not null and "finance_operation_resource_policy_versions"."retired_at" is null)
+          or ("finance_operation_resource_policy_versions"."lifecycle" = 'retired' and "finance_operation_resource_policy_versions"."published_at" is not null and "finance_operation_resource_policy_versions"."retired_at" is not null)));

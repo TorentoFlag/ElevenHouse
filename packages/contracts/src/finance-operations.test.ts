@@ -30,6 +30,7 @@ describe("finance operation contracts", () => {
       "payout_confirm_paid",
       "bank_snapshot_attest",
       "bank_statement_match",
+      "settlement_ingestion",
       "ledger_correction"
     ]);
     for (const operationKind of financeOperationKindValues) {

@@ -239,6 +239,13 @@
       "when": 1786095174865,
       "tag": "0033_high_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786180979232,
+      "tag": "0034_daily_makkari",
+      "breakpoints": true
     }
   ]
 }
