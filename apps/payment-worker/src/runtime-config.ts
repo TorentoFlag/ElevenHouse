@@ -41,6 +41,24 @@ const runtimeConfigSchema = z.object({
     .max(100)
     .default(100),
   PAYMENT_WORKER_RECONCILIATION_CURRENCY: z.enum(["RUB"]).default("RUB"),
+  PAYMENT_WORKER_SETTLEMENT_INGESTION_CURSOR_OVERLAP_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(604_800)
+    .default(3600),
+  PAYMENT_WORKER_SETTLEMENT_INGESTION_LEASE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(86_400)
+    .default(120),
+  PAYMENT_WORKER_SETTLEMENT_INGESTION_MAXIMUM_PAGE_COUNT: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .default(100),
   PAYMENT_WORKER_CANONICAL_CAPTURE_LEASE_SECONDS: z.coerce
     .number()
     .int()
@@ -99,6 +117,15 @@ const runtimeConfigSchema = z.object({
     .string()
     .regex(/^[1-9][0-9]*$/)
     .default("1"),
+  PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .default("provider-settlement-page"),
+  PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .default("1"),
   PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-request"),
   PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).default("1"),
   PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-webhook"),
@@ -127,6 +154,11 @@ export type PaymentWorkerRuntimeConfig = {
     readonly pageLimit: number;
     readonly currency: "RUB";
   };
+  readonly settlementIngestion: {
+    readonly cursorOverlapSeconds: number;
+    readonly leaseDurationSeconds: number;
+    readonly maximumPageCount: number;
+  };
   readonly canonicalClientOrderCapture: {
     readonly leaseDurationSeconds: number;
     readonly maximumAttempts: number;
@@ -140,6 +172,7 @@ export type PaymentWorkerRuntimeConfig = {
     artifactDirectory: string;
     responseArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     canonicalReadArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
+    settlementPageArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     webhookArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     webhookSigningKeyVersionId: string;
@@ -193,6 +226,11 @@ export function createPaymentWorkerRuntimeConfig(
       pageLimit: config.PAYMENT_WORKER_RECONCILIATION_PAGE_LIMIT,
       currency: config.PAYMENT_WORKER_RECONCILIATION_CURRENCY
     },
+    settlementIngestion: {
+      cursorOverlapSeconds: config.PAYMENT_WORKER_SETTLEMENT_INGESTION_CURSOR_OVERLAP_SECONDS,
+      leaseDurationSeconds: config.PAYMENT_WORKER_SETTLEMENT_INGESTION_LEASE_SECONDS,
+      maximumPageCount: config.PAYMENT_WORKER_SETTLEMENT_INGESTION_MAXIMUM_PAGE_COUNT
+    },
     canonicalClientOrderCapture: Object.freeze({
       leaseDurationSeconds: config.PAYMENT_WORKER_CANONICAL_CAPTURE_LEASE_SECONDS,
       maximumAttempts: config.PAYMENT_WORKER_CANONICAL_CAPTURE_MAXIMUM_ATTEMPTS,
@@ -234,6 +272,12 @@ function resolveFinanceProviderDispatch(
       policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_ID),
       policyVersion: required(
         config.PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_VERSION
+      )
+    }),
+    settlementPageArtifactRetention: Object.freeze({
+      policyId: required(config.PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_ID),
+      policyVersion: required(
+        config.PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_VERSION
       )
     }),
     requestArtifactRetention: Object.freeze({

@@ -79,6 +79,43 @@ export type SettlementCursorLeaseUnitOfWork = Readonly<{
   releaseLease(command: ReleaseSettlementCursorLeaseCommand): Promise<SettlementCursorLeaseReceipt>;
 }>;
 
+/**
+ * The worker first persists an exact cursor, then claims one bounded page window. Network I/O is
+ * deliberately not part of this unit of work: the returned plan is consumed by a provider reader
+ * outside the database transaction.
+ */
+export type EnsureSettlementCursorCommand = Readonly<{
+  cursorKey: FinanceSettlementCursorKey;
+  initialBackfillStart: string;
+  overlapSeconds: number;
+}>;
+
+export type SettlementCursorProvisionReceipt = Readonly<{
+  cursorKey: FinanceSettlementCursorKey;
+  cursorVersion: number;
+  created: boolean;
+}>;
+
+export type AcquireSettlementPageCommand = Readonly<{
+  cursorKey: FinanceSettlementCursorKey;
+  leaseOwnerId: string;
+  leaseToken: string;
+  leaseDurationSeconds: number;
+  maximumPageCount: number;
+}>;
+
+export type AcquiredSettlementPage = Readonly<{
+  lease: SettlementCursorLeaseReceipt & Readonly<{ state: "active" }>;
+  checkpointIdentity: SettlementPageCheckpointIdentity;
+  windowStart: string;
+  windowEnd: string;
+}>;
+
+export type SettlementCursorWorkUnitOfWork = Readonly<{
+  ensureCursor(command: EnsureSettlementCursorCommand): Promise<SettlementCursorProvisionReceipt>;
+  acquireNextPage(command: AcquireSettlementPageCommand): Promise<AcquiredSettlementPage | null>;
+}>;
+
 export type FetchSettlementPageCommand = Readonly<{
   cursorKey: FinanceSettlementCursorKey;
   checkpointIdentity: SettlementPageCheckpointIdentity;

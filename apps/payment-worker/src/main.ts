@@ -38,6 +38,9 @@ import {
   createDrizzlePlatformTariffRenewalInvoiceIssuer,
   createDrizzleActiveProviderAccountReader,
   createDrizzleActiveProviderAccountWebhookContextReader,
+  createDrizzleSettlementBatchIngestionUnitOfWork,
+  createDrizzleSettlementCursorLeaseUnitOfWork,
+  createDrizzleSettlementCursorWorkUnitOfWork,
   createDrizzleFiscalProfileReader,
   createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork,
   createDrizzleOnlineWalletHoldReleaseUnitOfWork,
@@ -65,6 +68,7 @@ import { createArcPayRefundClient } from "./arc-pay/arc-pay-refund-client";
 import { createArcPaySavedCardChargeClient } from "./arc-pay/arc-pay-saved-card-charge-client";
 import { createArcPayPaymentAttemptResolver } from "./arc-pay/arc-pay-payment-reader";
 import { createArcPaySettlementBalanceClient } from "./arc-pay/arc-pay-settlement-balance-client";
+import { createArcPayExactSettlementLedgerClient } from "./arc-pay/arc-pay-settlement-ledger-exact-client";
 import {
   createOnlineWalletHoldReleaseProcessor,
   startOnlineWalletHoldReleaseInterval
@@ -74,6 +78,10 @@ import {
   createSettlementBalanceObservationProcessor,
   startSettlementBalanceObservationInterval
 } from "./reconciliation/settlement-balance-observation.processor";
+import {
+  createSettlementLedgerIngestionProcessor,
+  startSettlementLedgerIngestionInterval
+} from "./reconciliation/settlement-ledger-ingestion.processor";
 import { createHostedCheckoutSessionDispatcher } from "./provider-operations/hosted-checkout-session-dispatcher";
 import { createArcPayOperationDispatcher } from "./provider-operations/arc-pay-operation-dispatcher";
 import {
@@ -525,6 +533,43 @@ async function startPaymentWorker(): Promise<void> {
       },
       onError: (error) =>
         logger.error("platform tariff charge terminal reconciliation tick failed", {
+          error: serializeError(error)
+        })
+    });
+    startSettlementLedgerIngestionInterval({
+      processor: createSettlementLedgerIngestionProcessor({
+        providerAccounts: createDrizzleActiveProviderAccountReader(postgresRuntime.database),
+        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
+        cursors: createDrizzleSettlementCursorWorkUnitOfWork({
+          database: postgresRuntime.database
+        }),
+        leases: createDrizzleSettlementCursorLeaseUnitOfWork({
+          database: postgresRuntime.database
+        }),
+        provider: createArcPayExactSettlementLedgerClient({
+          ...config.arcPay,
+          privateObjectStorage: privateStorage,
+          artifactRegistry,
+          retention: config.financeProviderDispatch.settlementPageArtifactRetention
+        }),
+        ingestion: createDrizzleSettlementBatchIngestionUnitOfWork({
+          database: postgresRuntime.database
+        }),
+        workerId: `${canonicalCaptureWorkerId}:settlement-ledger`,
+        initialBackfillStart: () =>
+          new Date(Date.now() - config.reconciliation.lookbackMs).toISOString(),
+        overlapSeconds: config.settlementIngestion.cursorOverlapSeconds,
+        leaseDurationSeconds: config.settlementIngestion.leaseDurationSeconds,
+        maximumPageCount: config.settlementIngestion.maximumPageCount
+      }),
+      intervalMs: config.reconciliation.intervalMs,
+      onResult: (result) => {
+        if (result.kind === "ingested" || result.kind === "not_configured") {
+          logger.info("ArcPay settlement ledger ingestion tick completed", result);
+        }
+      },
+      onError: (error) =>
+        logger.error("ArcPay settlement ledger ingestion tick failed", {
           error: serializeError(error)
         })
     });

@@ -24,6 +24,11 @@ describe("payment worker runtime config", () => {
         pageLimit: 100,
         currency: "RUB"
       },
+      settlementIngestion: {
+        cursorOverlapSeconds: 3600,
+        leaseDurationSeconds: 120,
+        maximumPageCount: 100
+      },
       canonicalClientOrderCapture: {
         leaseDurationSeconds: 90,
         maximumAttempts: 8,
@@ -130,6 +135,8 @@ describe("payment worker runtime config", () => {
         PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_VERSION: "1",
         PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_ID: "provider-canonical-read",
         PAYMENT_WORKER_FINANCE_PROVIDER_CANONICAL_READ_RETENTION_POLICY_VERSION: "1",
+        PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_ID: "provider-settlement-page",
+        PAYMENT_WORKER_FINANCE_PROVIDER_SETTLEMENT_PAGE_RETENTION_POLICY_VERSION: "1",
         PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
         PAYMENT_WORKER_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: "1",
         PAYMENT_WORKER_FINANCE_PROVIDER_WEBHOOK_RETENTION_POLICY_ID: "provider-webhook",
@@ -146,6 +153,7 @@ describe("payment worker runtime config", () => {
       artifactDirectory: ".local/finance-artifacts",
       responseArtifactRetention: { policyId: "provider-response", policyVersion: "1" },
       canonicalReadArtifactRetention: { policyId: "provider-canonical-read", policyVersion: "1" },
+      settlementPageArtifactRetention: { policyId: "provider-settlement-page", policyVersion: "1" },
       requestArtifactRetention: { policyId: "provider-request", policyVersion: "1" },
       webhookArtifactRetention: { policyId: "provider-webhook", policyVersion: "1" },
       webhookSigningKeyVersionId: "arc-pay-webhook-key-2026-08",
