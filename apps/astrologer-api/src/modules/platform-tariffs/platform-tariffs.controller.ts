@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Headers, Inject, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Headers,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards
+} from "@nestjs/common";
 import type {
   AstrologerTariffCatalogResponse,
   AstrologerTariffEntitlementsResponse,
@@ -35,6 +47,8 @@ export class AstrologerTariffsController {
   }
 
   @Get("entitlements")
+  @Header("Cache-Control", "no-store")
+  @Header("ETag", '""')
   getEntitlements(
     @Req() request: AstrologerSessionRequest
   ): Promise<AstrologerTariffEntitlementsResponse> {
