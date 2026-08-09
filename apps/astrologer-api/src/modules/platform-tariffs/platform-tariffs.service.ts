@@ -123,7 +123,7 @@ export class AstrologerTariffsService {
   ): Promise<AstrologerTariffEntitlementsResponse> {
     const ownerUserId = requireAstrologerUserId(request);
     const now = this.clock.now().toISOString();
-    const [read, mutation] = await Promise.all([
+    const [productsRead, productsMutation, funnelsRead, funnelsMutation] = await Promise.all([
       resolvePlatformTariffCapability({
         store: this.store,
         ownerUserId,
@@ -137,10 +137,27 @@ export class AstrologerTariffsService {
         capability: "products",
         operation: "mutation",
         now
+      }),
+      resolvePlatformTariffCapability({
+        store: this.store,
+        ownerUserId,
+        capability: "funnels",
+        operation: "read",
+        now
+      }),
+      resolvePlatformTariffCapability({
+        store: this.store,
+        ownerUserId,
+        capability: "funnels",
+        operation: "mutation",
+        now
       })
     ]);
 
-    return astrologerTariffEntitlementsResponseSchema.parse({ products: { read, mutation } });
+    return astrologerTariffEntitlementsResponseSchema.parse({
+      products: { read: productsRead, mutation: productsMutation },
+      funnels: { read: funnelsRead, mutation: funnelsMutation }
+    });
   }
 
   async startSubscription(

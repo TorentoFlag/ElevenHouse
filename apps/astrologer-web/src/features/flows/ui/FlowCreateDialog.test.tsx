@@ -270,6 +270,20 @@ describe("FlowCreateDialog", () => {
     expect(screen.getByRole("button", { name: "Закрыть" })).toHaveProperty("disabled", false);
   });
 
+  it("fails closed when the server tariff entitlement does not permit funnel creation", () => {
+    render(<FlowCreateDialog {...defaultProps} creationAllowed={false} />);
+
+    expect(screen.getByText("Текущий тариф не позволяет создавать воронки.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: new RegExp(availableTemplate.name) })).toHaveProperty(
+      "disabled",
+      true
+    );
+    expect(screen.getByRole("button", { name: "Начать с пустого сценария" })).toHaveProperty(
+      "disabled",
+      true
+    );
+  });
+
   it("applies every stable class-name hook to its corresponding element", () => {
     const classNames = {
       createDialogBackdrop: "backdrop-hook",

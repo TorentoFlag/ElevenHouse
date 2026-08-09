@@ -7,6 +7,7 @@ export type FlowCreateDialogProps = {
   readonly products?: readonly ProductResponse[];
   readonly locale: "ru" | "en";
   readonly open: boolean;
+  readonly creationAllowed?: boolean;
   readonly pending: boolean;
   readonly loading?: boolean;
   readonly error?: Error | null;
@@ -29,6 +30,7 @@ const copyByLocale = {
     templatesTitle: "Готовые сценарии",
     blank: "Начать с пустого сценария",
     available: "Доступен к созданию",
+    tariffUnavailable: "Текущий тариф не позволяет создавать воронки.",
     recommended: "Рекомендовано интеграцией",
     capabilityUnavailable: "Необходимые возможности пока недоступны.",
     legacyReadOnly:
@@ -51,6 +53,7 @@ const copyByLocale = {
     templatesTitle: "Ready-made flows",
     blank: "Start with a blank flow",
     available: "Available to create",
+    tariffUnavailable: "Your current plan does not allow creating flows.",
     recommended: "Recommended by integration",
     capabilityUnavailable: "Required capabilities are not available yet.",
     legacyReadOnly: "This legacy flow is read-only until it is migrated to the current format.",
@@ -72,6 +75,7 @@ export function FlowCreateDialog({
   products = [],
   locale,
   open,
+  creationAllowed = true,
   pending,
   loading = false,
   error = null,
@@ -173,6 +177,12 @@ export function FlowCreateDialog({
           </p>
         ) : null}
 
+        {!creationAllowed ? (
+          <p className={className("createDialogNotice")} role="status">
+            {copy.tariffUnavailable}
+          </p>
+        ) : null}
+
         {error ? (
           <div className={className("createDialogError")} role="alert">
             <p>{error.message}</p>
@@ -194,7 +204,7 @@ export function FlowCreateDialog({
           ) : null}
           <ul className={className("createDialogList")}>
             {templates.map((template, index) => {
-              const available = template.availability === "available";
+              const available = template.availability === "available" && creationAllowed;
               const requiresProducts = template.parameters.some(
                 (parameter) => parameter.kind === "product_ids" && parameter.required
               );
@@ -243,7 +253,9 @@ export function FlowCreateDialog({
                   </button>
                   {requiresProducts ? (
                     eligibleProducts.length === 0 ? (
-                      <p className={className("createDialogProductHint")}>{copy.noEligibleProducts}</p>
+                      <p className={className("createDialogProductHint")}>
+                        {copy.noEligibleProducts}
+                      </p>
                     ) : (
                       <label className={className("createDialogProductSelect")}>
                         <span>{copy.selectProducts}</span>
@@ -252,7 +264,10 @@ export function FlowCreateDialog({
                           value={selected}
                           onChange={(event) =>
                             setSelectedProductIds(
-                              Array.from(event.currentTarget.selectedOptions, (option) => option.value)
+                              Array.from(
+                                event.currentTarget.selectedOptions,
+                                (option) => option.value
+                              )
                             )
                           }
                         >
@@ -273,7 +288,7 @@ export function FlowCreateDialog({
           <button
             className={className("createDialogBlank")}
             type="button"
-            disabled={pending}
+            disabled={pending || !creationAllowed}
             onClick={onCreateBlank}
           >
             <Icon iconName="plus" width={16} height={16} aria-hidden="true" />

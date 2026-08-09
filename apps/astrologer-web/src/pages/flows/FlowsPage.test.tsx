@@ -202,7 +202,10 @@ describe("FlowsPage", () => {
       error: null
     });
     mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
-      data: { products: { read: "allow", mutation: "allow" } },
+      data: {
+        products: { read: "allow", mutation: "allow" },
+        funnels: { read: "allow", mutation: "allow" }
+      },
       isLoading: false,
       isError: false
     });
@@ -261,7 +264,10 @@ describe("FlowsPage", () => {
 
   it("does not request products when the server entitlement denies product reads", () => {
     mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
-      data: { products: { read: "deny", mutation: "deny" } },
+      data: {
+        products: { read: "deny", mutation: "deny" },
+        funnels: { read: "deny", mutation: "deny" }
+      },
       isLoading: false,
       isError: false
     });

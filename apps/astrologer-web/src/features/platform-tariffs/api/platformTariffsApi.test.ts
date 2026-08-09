@@ -116,7 +116,8 @@ describe("platform tariffs API", () => {
 
   it("loads capability access from the server projection instead of inferring it from the catalog", async () => {
     const entitlements = {
-      products: { read: "deny", mutation: "deny" }
+      products: { read: "deny", mutation: "deny" },
+      funnels: { read: "deny", mutation: "deny" }
     } satisfies AstrologerTariffEntitlementsResponse;
     const get = vi.spyOn(application.http, "get").mockResolvedValue(entitlements);
 

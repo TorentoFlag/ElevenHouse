@@ -29,11 +29,15 @@ describe("AstrologerTariffsService", () => {
     });
   });
 
-  it("projects products access from the server-resolved immutable tariff snapshot", async () => {
-    const harness = createHarness({ features: ["products"] });
+  it("projects product and funnel access from the server-resolved immutable tariff snapshot", async () => {
+    const harness = createHarness({ features: ["products", "funnels"] });
 
     await expect(harness.service.getEntitlements(session())).resolves.toEqual({
       products: {
+        read: "allow",
+        mutation: "allow"
+      },
+      funnels: {
         read: "allow",
         mutation: "allow"
       }
@@ -246,7 +250,7 @@ describe("AstrologerTariffsService", () => {
 function createHarness(
   input: Readonly<{
     subscriptionState?: "active" | "incomplete_setup";
-    features?: readonly ["products"];
+    features?: readonly ("products" | "funnels")[];
   }> = {}
 ) {
   const auditLogStore = { createEntry: vi.fn(async () => undefined) } as unknown as AuditLogStore;

@@ -137,6 +137,12 @@ export const astrologerTariffEntitlementsResponseSchema = z
         read: astrologerTariffEntitlementDecisionSchema,
         mutation: astrologerTariffEntitlementDecisionSchema
       })
+      .strict(),
+    funnels: z
+      .object({
+        read: astrologerTariffEntitlementDecisionSchema,
+        mutation: astrologerTariffEntitlementDecisionSchema
+      })
       .strict()
   })
   .strict();

@@ -25,6 +25,7 @@ export type FlowsPageViewProps = {
   readonly flows: readonly FlowDefinitionSummaryV3[];
   readonly templates: readonly FlowDefinitionTemplateDescriptorV2[];
   readonly products?: readonly ProductResponse[];
+  readonly creationAllowed?: boolean;
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly templateError?: Error | null;
@@ -80,6 +81,7 @@ export function FlowsPageView({
   flows,
   templates,
   products = [],
+  creationAllowed = false,
   isLoading,
   isError,
   templateError = null,
@@ -223,6 +225,7 @@ export function FlowsPageView({
           <FlowCreateDialog
             templates={templates}
             products={products}
+            creationAllowed={creationAllowed}
             locale={locale}
             open={createDialogOpen}
             pending={isCreating}

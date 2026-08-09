@@ -442,6 +442,7 @@ export function FlowsPage() {
         flows={flowsQuery.data?.flows ?? []}
         templates={templatesQuery.data?.templates ?? []}
         products={productsQuery.data?.products ?? []}
+        creationAllowed={entitlementsQuery.data?.funnels?.mutation === "allow"}
         isLoading={flowsQuery.isLoading}
         isError={flowsQuery.isError}
         templateError={asLocalizedError(templatesQuery.error, locale)}

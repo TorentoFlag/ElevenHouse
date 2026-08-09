@@ -236,18 +236,23 @@ describe("astrologer tariff subscription contracts", () => {
     ).toEqual({ tariffs: [], currentSubscription: null });
   });
 
-  it("exposes product access as an explicit server-authoritative projection", () => {
+  it("exposes product and funnel access as explicit server-authoritative projections", () => {
     const response = {
       products: {
         read: "allow",
         mutation: "allow"
+      },
+      funnels: {
+        read: "allow",
+        mutation: "read_only"
       }
     } as const;
 
     expect(astrologerTariffEntitlementsResponseSchema.parse(response)).toEqual(response);
     expect(() =>
       astrologerTariffEntitlementsResponseSchema.parse({
-        products: { read: "allow", mutation: "allow", inferredFromCatalog: true }
+        products: { read: "allow", mutation: "allow", inferredFromCatalog: true },
+        funnels: { read: "allow", mutation: "read_only" }
       })
     ).toThrow();
   });
