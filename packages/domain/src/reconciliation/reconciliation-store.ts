@@ -1,7 +1,6 @@
 import type {
   FinancePaymentProvider,
-  PaymentAttempt,
-  PaymentProviderEnvironment
+  PaymentAttempt
 } from "../payments";
 import type { Money } from "../money";
 
@@ -10,7 +9,6 @@ export type ReconciliationStatus = "pending" | "matched" | "exception" | "ignore
 export type ReconciliationRecord = {
   readonly id: string;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerPaymentId: string | null;
   readonly providerPayoutId: string | null;
   readonly providerSettlementId: string | null;
@@ -26,7 +24,6 @@ export type ReconciliationRecord = {
 
 export type CreateReconciliationRecordInput = {
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerPaymentId: string | null;
   readonly providerPayoutId: string | null;
   readonly providerSettlementId: string | null;
@@ -50,7 +47,6 @@ export type ReconciliationExceptionEvidenceFilter =
 
 export type ProviderSettlementLedgerEntry = {
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerLedgerEntryId: string;
   readonly providerPaymentId: string | null;
   readonly amount: Money;
@@ -65,7 +61,6 @@ export type ReconciliationStore = {
   readonly findAttemptById: (paymentAttemptId: string) => Promise<PaymentAttempt | null>;
   readonly findAttemptByProviderPaymentId: (input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerPaymentId: string;
   }) => Promise<PaymentAttempt | null>;
   readonly createRecord: (
@@ -74,7 +69,6 @@ export type ReconciliationStore = {
   readonly listOpenExceptions: (input: {
     readonly limit: number;
     readonly provider?: FinancePaymentProvider;
-    readonly environment?: PaymentProviderEnvironment;
     readonly evidence?: ReconciliationExceptionEvidenceFilter;
   }) => Promise<readonly ReconciliationRecord[]>;
   readonly resolveException: (input: {

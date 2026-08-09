@@ -28,8 +28,7 @@ describe("platform tariff invoice saved-card charge command factory", () => {
         credentialId: "credential-1",
         credentialVersion: 1
       },
-      buyerContact: { kind: "email", value: "astro@example.test" },
-      environment: "sandbox"
+      buyerContact: { kind: "email", value: "astro@example.test" }
     });
 
     expect(result).toMatchObject({
@@ -64,7 +63,7 @@ function input() {
   return {
     invoice: invoice(), subscription: subscription(), tariff: tariff(),
     savedCardCredential: { kind: "restricted_saved_card_credential_ref" as const, schemaVersion: 1 as const, credentialId: "credential-1", credentialVersion: 1 },
-    buyerContact: { kind: "email" as const, value: "astro@example.test" }, environment: "sandbox" as const
+    buyerContact: { kind: "email" as const, value: "astro@example.test" }
   };
 }
 

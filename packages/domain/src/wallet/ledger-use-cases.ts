@@ -202,17 +202,13 @@ export async function capturePaymentProviderWebhook(
   return input.capturedSale.transact(async (store) => {
     const existing = await store.findProviderEventByWebhookId({
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId
     });
     if (existing) return { kind: "replayed", event: existing };
 
     const attempt = await store.findAttemptById(input.request.paymentAttemptId);
     if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
-    if (
-      attempt.provider !== input.request.provider ||
-      attempt.environment !== input.request.environment
-    ) {
+    if (attempt.provider !== input.request.provider) {
       throw new PaymentWebhookProviderContextMismatchError();
     }
 
@@ -225,7 +221,6 @@ export async function capturePaymentProviderWebhook(
     const linkedAttempt = await store.linkAttemptToProviderPayment({
       paymentAttemptId: attempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerPaymentId: input.request.providerPaymentId,
       now: input.request.receivedAt
     });
@@ -234,7 +229,6 @@ export async function capturePaymentProviderWebhook(
     const providerEvent = await store.recordProviderEvent({
       paymentAttemptId: linkedAttempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId,
       providerPaymentId: input.request.providerPaymentId,
       type: input.request.type,
@@ -278,17 +272,13 @@ export async function recordPaymentReversalProviderWebhook(
   return input.reversal.transact(async (store) => {
     const existing = await store.findProviderEventByWebhookId({
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId
     });
     if (existing) return { kind: "replayed", event: existing };
 
     const attempt = await store.findAttemptById(input.request.paymentAttemptId);
     if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
-    if (
-      attempt.provider !== input.request.provider ||
-      attempt.environment !== input.request.environment
-    ) {
+    if (attempt.provider !== input.request.provider) {
       throw new PaymentWebhookProviderContextMismatchError();
     }
 
@@ -301,7 +291,6 @@ export async function recordPaymentReversalProviderWebhook(
     const linkedAttempt = await store.linkAttemptToProviderPayment({
       paymentAttemptId: attempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerPaymentId: input.request.providerPaymentId,
       now: input.request.receivedAt
     });
@@ -310,7 +299,6 @@ export async function recordPaymentReversalProviderWebhook(
     const providerEvent = await store.recordProviderEvent({
       paymentAttemptId: linkedAttempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId,
       providerPaymentId: input.request.providerPaymentId,
       type: input.request.type,
@@ -332,7 +320,6 @@ export async function recordPaymentReversalProviderWebhook(
         paymentAttemptId: linkedAttempt.id,
         providerEventId: providerEvent.event.id,
         provider: input.request.provider,
-        environment: input.request.environment,
         status: "succeeded",
         amount: reversalAmount,
         reason: "provider_refund",
@@ -394,7 +381,6 @@ export function createCapturedSaleLedgerTransaction(
       providerEventId: providerEvent.id,
       paymentAttemptId: providerEvent.paymentAttemptId,
       provider: providerEvent.provider,
-      environment: providerEvent.environment,
       providerPaymentId: providerEvent.providerPaymentId,
       holdDurationHours: order.financePolicyHoldDurationHours,
       holdReleaseAt,

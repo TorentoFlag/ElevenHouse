@@ -87,8 +87,16 @@ export async function initiateSavedCardSetup(
 export async function getCurrentSavedCardSetupStatus(
   subscriptionId: string
 ): Promise<SavedCardSetupStatusResponse | null> {
+  const response = await application.http.get<unknown>(
+    `/tariffs/subscriptions/${subscriptionId}/saved-card-setup`
+  );
+
+  if (response === undefined) {
+    return null;
+  }
+
   return savedCardSetupStatusResponseSchema.nullable().parse(
-    await application.http.get(`/tariffs/subscriptions/${subscriptionId}/saved-card-setup`)
+    response
   );
 }
 
@@ -96,8 +104,16 @@ export async function getCurrentSavedCardSetupStatus(
 export async function getCurrentTariffInvoicePaymentStatus(
   subscriptionId: string
 ): Promise<TariffInvoicePaymentStatusResponse | null> {
+  const response = await application.http.get<unknown>(
+    `/tariffs/subscriptions/${subscriptionId}/payment-status`
+  );
+
+  if (response === undefined) {
+    return null;
+  }
+
   return tariffInvoicePaymentStatusResponseSchema.nullable().parse(
-    await application.http.get(`/tariffs/subscriptions/${subscriptionId}/payment-status`)
+    response
   );
 }
 

@@ -17,7 +17,7 @@ import {
 } from "@elevenhouse/db/finance";
 import {
   createFinanceTransientSecretVault,
-  createS3FinancePrivateObjectStorage
+  createFilesystemFinancePrivateObjectStorage
 } from "@elevenhouse/finance-infrastructure";
 import type {
   FinanceOperationResourcePolicyReader,
@@ -99,11 +99,16 @@ import type { AstrologerTariffUnitOfWork } from "./platform-tariffs.unit-of-work
     },
     {
       provide: ASTROLOGER_FINANCE_PRIVATE_OBJECT_STORAGE,
-      useFactory: (configService: ConfigService): FinancePrivateObjectStoragePort | null => {
+      useFactory: async (configService: ConfigService): Promise<FinancePrivateObjectStoragePort | null> => {
         const storage = configService.getOrThrow<AstrologerApiRuntimeConfig["billing"]["financeArtifactStorage"]>(
           "astrologerApi.billing.financeArtifactStorage"
         );
-        return storage ? createS3FinancePrivateObjectStorage(storage) : null;
+        if (!storage) return null;
+        const privateStorage = createFilesystemFinancePrivateObjectStorage({
+          rootDirectory: storage.artifactDirectory
+        });
+        await privateStorage.checkReady();
+        return privateStorage;
       },
       inject: [ConfigService]
     },

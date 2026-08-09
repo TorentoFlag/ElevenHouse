@@ -37,7 +37,6 @@ function evidence(
     version: 1,
     requirementCode,
     status: "active",
-    environment: requirementCode === "arc_pay_environment" ? "sandbox" : null,
     transactionCategory:
       requirementCode === "legal_accounting_client_purchase"
         ? "client_purchase"
@@ -72,62 +71,57 @@ const contextualRequirementCases = [
     requirements: ["finance_step_up"]
   },
   {
-    context: { operationKind: "client_checkout_prepare", environment: "sandbox" },
+    context: { operationKind: "client_checkout_prepare" },
     requirements: [
       "legal_accounting_client_purchase",
       "risk_policy",
-      "product_fulfillment",
-      "arc_pay_environment"
+      "product_fulfillment"
     ]
   },
   {
-    context: { operationKind: "client_order_capture", environment: "sandbox" },
+    context: { operationKind: "client_order_capture" },
     requirements: [
       "legal_accounting_client_purchase",
       "risk_policy",
-      "product_fulfillment",
-      "arc_pay_environment"
+      "product_fulfillment"
     ]
   },
   {
-    context: { operationKind: "platform_card_setup_prepare", environment: "sandbox" },
-    requirements: ["arc_pay_environment"]
+    context: { operationKind: "platform_card_setup_prepare" },
+    requirements: []
   },
   {
-    context: { operationKind: "platform_card_setup_execute", environment: "sandbox" },
-    requirements: ["arc_pay_environment"]
+    context: { operationKind: "platform_card_setup_execute" },
+    requirements: []
   },
   {
-    context: { operationKind: "platform_card_setup_complete_3ds_method", environment: "sandbox" },
-    requirements: ["arc_pay_environment"]
+    context: { operationKind: "platform_card_setup_complete_3ds_method" },
+    requirements: []
   },
   {
-    context: { operationKind: "platform_invoice_complete_3ds_method", environment: "sandbox" },
-    requirements: ["arc_pay_environment"]
+    context: { operationKind: "platform_invoice_complete_3ds_method" },
+    requirements: []
   },
   {
-    context: { operationKind: "platform_invoice_charge", environment: "sandbox" },
+    context: { operationKind: "platform_invoice_charge" },
     requirements: [
       "legal_accounting_platform_subscription",
-      "commercial_tariff",
-      "arc_pay_environment"
+      "commercial_tariff"
     ]
   },
   {
-    context: { operationKind: "platform_renewal_schedule", environment: "sandbox" },
+    context: { operationKind: "platform_renewal_schedule" },
     requirements: [
       "legal_accounting_platform_subscription",
       "commercial_tariff",
-      "arc_pay_environment",
       "billing_operations_policy"
     ]
   },
   {
-    context: { operationKind: "refund_execute", environment: "sandbox" },
+    context: { operationKind: "refund_execute" },
     requirements: [
       "legal_accounting_client_purchase",
       "refund_chargeback_principal_policy",
-      "arc_pay_environment",
       "finance_step_up"
     ]
   },
@@ -168,6 +162,10 @@ const contextualRequirementCases = [
     requirements: ["bank_liquidity_policy", "finance_step_up"]
   },
   {
+    context: { operationKind: "settlement_ingestion" },
+    requirements: []
+  },
+  {
     context: { operationKind: "ledger_correction", sourceTransactionCategory: "client_purchase" },
     requirements: ["finance_step_up", "legal_accounting_client_purchase"]
   },
@@ -194,7 +192,6 @@ describe("finance readiness", () => {
       "risk_policy",
       "product_fulfillment",
       "refund_chargeback_principal_policy",
-      "arc_pay_environment",
       "finance_step_up",
       "payout_recipient_policy",
       "bank_liquidity_policy"
@@ -202,7 +199,7 @@ describe("finance readiness", () => {
   });
 
   it("classifies every operation and contextual transaction category exactly once", () => {
-    expect(contextualRequirementCases).toHaveLength(24);
+    expect(contextualRequirementCases).toHaveLength(25);
     expect([
       ...new Set(contextualRequirementCases.map(({ context }) => context.operationKind))
     ]).toEqual(financeOperationKindValues);
@@ -212,10 +209,7 @@ describe("finance readiness", () => {
   });
 
   it("returns the exact matched versioned evidence refs in stable requirement order", async () => {
-    const context = {
-      operationKind: "platform_renewal_schedule",
-      environment: "sandbox"
-    } as const;
+    const context = { operationKind: "platform_renewal_schedule" } as const;
     const requirements = requiredFinanceReadinessRequirementsFor(context);
     const matchedEvidence = requirements.map((code, index) =>
       evidence(code, {
@@ -237,7 +231,6 @@ describe("finance readiness", () => {
       {
         operationKind: "platform_renewal_schedule",
         requirementCodes: requirements,
-        environment: "sandbox",
         transactionCategory: "platform_subscription"
       }
     ]);
@@ -261,14 +254,10 @@ describe("finance readiness", () => {
   });
 
   it("returns every absent, revoked, not-yet-effective, and expired requirement in stable order", async () => {
-    const context = {
-      operationKind: "platform_renewal_schedule",
-      environment: "sandbox"
-    } as const;
+    const context = { operationKind: "platform_renewal_schedule" } as const;
     const reader = new EvidenceReader([
       evidence("legal_accounting_platform_subscription", { status: "revoked" }),
-      evidence("commercial_tariff", { effectiveAt: "2026-08-04T00:00:00.000Z" }),
-      evidence("arc_pay_environment", { expiresAt: now })
+      evidence("commercial_tariff", { effectiveAt: "2026-08-04T00:00:00.000Z" })
     ]);
 
     await expect(resolveFinanceOperationReadiness({ context, reader, now })).resolves.toEqual({
@@ -277,32 +266,18 @@ describe("finance readiness", () => {
       requiredRequirements: [
         "legal_accounting_platform_subscription",
         "commercial_tariff",
-        "arc_pay_environment",
         "billing_operations_policy"
       ],
       missingRequirements: [
         "legal_accounting_platform_subscription",
         "commercial_tariff",
-        "arc_pay_environment",
         "billing_operations_policy"
       ],
       evidence: []
     });
   });
 
-  it("treats wrong provider environment and wrong transaction category as missing", async () => {
-    const refund = { operationKind: "refund_execute", environment: "live" } as const;
-    const refundRequirements = requiredFinanceReadinessRequirementsFor(refund);
-    const refundReader = new EvidenceReader(
-      refundRequirements.map((code) =>
-        evidence(code, code === "arc_pay_environment" ? { environment: "sandbox" } : {})
-      )
-    );
-    expect(
-      (await resolveFinanceOperationReadiness({ context: refund, reader: refundReader, now }))
-        .missingRequirements
-    ).toEqual(["arc_pay_environment"]);
-
+  it("treats evidence for the wrong transaction category as missing", async () => {
     const fiscal = {
       operationKind: "fiscal_policy_publish",
       transactionCategory: "client_purchase"
@@ -319,35 +294,11 @@ describe("finance readiness", () => {
     ).toEqual(["legal_accounting_client_purchase"]);
   });
 
-  it("does not treat evidence for another scope as a duplicate", async () => {
-    const context = { operationKind: "platform_card_setup_prepare", environment: "live" } as const;
-    const reader = new EvidenceReader([
-      evidence("arc_pay_environment", { id: "sandbox", environment: "sandbox" }),
-      evidence("arc_pay_environment", { id: "live", environment: "live" })
-    ]);
-
-    await expect(resolveFinanceOperationReadiness({ context, reader, now })).resolves.toMatchObject(
-      {
-        ready: true,
-        missingRequirements: [],
-        evidence: [
-          evidence("arc_pay_environment", {
-            id: "live",
-            environment: "live"
-          })
-        ]
-      }
-    );
-  });
-
   it("rejects duplicate evidence for the same requirement and scope", async () => {
-    const context = {
-      operationKind: "platform_card_setup_prepare",
-      environment: "sandbox"
-    } as const;
+    const context = { operationKind: "risk_policy_publish" } as const;
     const reader = new EvidenceReader([
-      evidence("arc_pay_environment", { id: "first" }),
-      evidence("arc_pay_environment", { id: "second", version: 2 })
+      evidence("finance_step_up", { id: "first" }),
+      evidence("finance_step_up", { id: "second", version: 2 })
     ]);
 
     await expect(resolveFinanceOperationReadiness({ context, reader, now })).rejects.toMatchObject({
@@ -383,7 +334,6 @@ describe("finance readiness", () => {
   });
 
   it.each([
-    { operationKind: "client_checkout_prepare" },
     { operationKind: "fiscal_policy_publish" },
     { operationKind: "ledger_correction" },
     { operationKind: "unknown_operation" }

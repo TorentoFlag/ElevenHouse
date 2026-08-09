@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalizeFinanceCommandPayload } from "@elevenhouse/domain";
 import {
   resolveFinanceOperationEnvelope,
   type FinanceOperationResourcePolicyReader,
@@ -18,7 +19,7 @@ export function createSavedCardSetupPreparer(input: Readonly<{ sessions: SavedCa
     if (!policy) throw new Error("Published platform_card_setup_prepare policy is required");
     const operationEnvelope = resolveFinanceOperationEnvelope({ policy, operationKind: "platform_card_setup_prepare" });
     const dispatchEnvelope = Object.freeze({ kind: "card_setup" as const, step: "create" as const, customerId: session.providerCustomerId, setupExternalId: session.setupSessionId, successUrl: `${origin}/settings/billing/card-setup/success`, failureUrl: `${origin}/settings/billing/card-setup/failure` });
-    const bytes = new TextEncoder().encode(JSON.stringify(dispatchEnvelope));
+    const bytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
     if (bytes.byteLength > operationEnvelope.maximumArtifactBytes) throw new Error("Card setup request exceeds published operation policy");
     const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}` as const;
     const artifactId = `arc-card-setup-request:${session.setupSessionId}`;

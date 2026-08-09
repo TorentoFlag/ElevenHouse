@@ -2,10 +2,8 @@ import { Temporal } from "@js-temporal/polyfill";
 import {
   financeTransactionCategoryValues,
   financeOperationKindValues,
-  paymentProviderEnvironmentValues,
   type FinanceOperationKind,
-  type FinanceTransactionCategory,
-  type PaymentProviderEnvironment
+  type FinanceTransactionCategory
 } from "@elevenhouse/contracts";
 
 export const financeReadinessRequirementCodeValues = [
@@ -17,7 +15,6 @@ export const financeReadinessRequirementCodeValues = [
   "risk_policy",
   "product_fulfillment",
   "refund_chargeback_principal_policy",
-  "arc_pay_environment",
   "finance_step_up",
   "payout_recipient_policy",
   "bank_liquidity_policy"
@@ -25,27 +22,12 @@ export const financeReadinessRequirementCodeValues = [
 export type FinanceReadinessRequirementCode =
   (typeof financeReadinessRequirementCodeValues)[number];
 
-type EnvironmentScopedOperationKind =
-  | "client_checkout_prepare"
-  | "client_order_capture"
-  | "platform_card_setup_prepare"
-  | "platform_card_setup_execute"
-  | "platform_card_setup_complete_3ds_method"
-  | "platform_invoice_complete_3ds_method"
-  | "platform_invoice_charge"
-  | "platform_renewal_schedule"
-  | "refund_execute";
-
-type GlobalOperationKind = Exclude<
+type ContextlessOperationKind = Exclude<
   FinanceOperationKind,
-  EnvironmentScopedOperationKind | "fiscal_policy_publish" | "ledger_correction"
+  "fiscal_policy_publish" | "ledger_correction"
 >;
 
 export type FinanceOperationContext =
-  | {
-      readonly operationKind: EnvironmentScopedOperationKind;
-      readonly environment: PaymentProviderEnvironment;
-    }
   | {
       readonly operationKind: "fiscal_policy_publish";
       readonly transactionCategory: FinanceTransactionCategory;
@@ -55,7 +37,7 @@ export type FinanceOperationContext =
       readonly sourceTransactionCategory: FinanceTransactionCategory;
     }
   | {
-      readonly operationKind: GlobalOperationKind;
+      readonly operationKind: ContextlessOperationKind;
     };
 
 export type FinanceReadinessEvidenceStatus = "active" | "revoked";
@@ -65,7 +47,6 @@ export type FinanceReadinessEvidenceRef = {
   readonly version: number;
   readonly requirementCode: FinanceReadinessRequirementCode;
   readonly status: FinanceReadinessEvidenceStatus;
-  readonly environment: PaymentProviderEnvironment | null;
   readonly transactionCategory: FinanceTransactionCategory | null;
   readonly effectiveAt: string;
   readonly expiresAt: string | null;
@@ -75,7 +56,6 @@ export type FinanceReadinessEvidenceRef = {
 export type FinanceReadinessEvidenceQuery = {
   readonly operationKind: FinanceOperationKind;
   readonly requirementCodes: readonly FinanceReadinessRequirementCode[];
-  readonly environment: PaymentProviderEnvironment | null;
   readonly transactionCategory: FinanceTransactionCategory | null;
 };
 
@@ -114,20 +94,8 @@ export class FinanceReadinessIntegrityError extends Error {
   }
 }
 
-const environmentScopedOperationKinds = new Set<FinanceOperationKind>([
-  "client_checkout_prepare",
-  "client_order_capture",
-  "platform_card_setup_prepare",
-  "platform_card_setup_execute",
-  "platform_card_setup_complete_3ds_method",
-  "platform_invoice_complete_3ds_method",
-  "platform_invoice_charge",
-  "platform_renewal_schedule",
-  "refund_execute"
-]);
 const readinessRequirementCodes = new Set<string>(financeReadinessRequirementCodeValues);
 const operationKinds = new Set<string>(financeOperationKindValues);
-const providerEnvironments = new Set<string>(paymentProviderEnvironmentValues);
 const transactionCategories = new Set<string>(financeTransactionCategoryValues);
 const evidenceStatuses = new Set<string>(["active", "revoked"]);
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
@@ -148,28 +116,25 @@ export function requiredFinanceReadinessRequirementsFor(
       return [
         "legal_accounting_client_purchase",
         "risk_policy",
-        "product_fulfillment",
-        "arc_pay_environment"
+        "product_fulfillment"
       ];
     case "platform_card_setup_prepare":
     case "platform_card_setup_execute":
     case "platform_card_setup_complete_3ds_method":
     case "platform_invoice_complete_3ds_method":
-      return ["arc_pay_environment"];
+      return [];
     case "platform_invoice_charge":
-      return ["legal_accounting_platform_subscription", "commercial_tariff", "arc_pay_environment"];
+      return ["legal_accounting_platform_subscription", "commercial_tariff"];
     case "platform_renewal_schedule":
       return [
         "legal_accounting_platform_subscription",
         "commercial_tariff",
-        "arc_pay_environment",
         "billing_operations_policy"
       ];
     case "refund_execute":
       return [
         "legal_accounting_client_purchase",
         "refund_chargeback_principal_policy",
-        "arc_pay_environment",
         "finance_step_up"
       ];
     case "chargeback_record_provisional":
@@ -186,6 +151,8 @@ export function requiredFinanceReadinessRequirementsFor(
     case "bank_snapshot_attest":
     case "bank_statement_match":
       return ["bank_liquidity_policy", "finance_step_up"];
+    case "settlement_ingestion":
+      return [];
     case "ledger_correction":
       return ["finance_step_up", legalRequirementFor(context.sourceTransactionCategory)];
   }
@@ -198,12 +165,10 @@ export async function resolveFinanceOperationReadiness(input: {
 }): Promise<FinanceOperationReadiness> {
   const now = parseInstant(input.now);
   const requiredRequirements = requiredFinanceReadinessRequirementsFor(input.context);
-  const environment = environmentFor(input.context);
   const transactionCategory = transactionCategoryFor(input.context);
   const evidence = await input.reader.listFinanceReadinessEvidence({
     operationKind: input.context.operationKind,
     requirementCodes: requiredRequirements,
-    environment,
     transactionCategory
   });
 
@@ -216,7 +181,7 @@ export async function resolveFinanceOperationReadiness(input: {
     const match = evidence.find(
       (item) =>
         item.requirementCode === requirementCode &&
-        evidenceScopeMatches(item, requirementCode, environment, transactionCategory) &&
+        evidenceScopeMatches(item, requirementCode, transactionCategory) &&
         evidenceIsEffective(item, now)
     );
     return match ? [toSafeEvidenceRef(match)] : [];
@@ -255,13 +220,6 @@ function legalRequirementFor(
     : "legal_accounting_platform_subscription";
 }
 
-function environmentFor(context: FinanceOperationContext): PaymentProviderEnvironment | null {
-  return environmentScopedOperationKinds.has(context.operationKind)
-    ? (context as Extract<FinanceOperationContext, { environment: PaymentProviderEnvironment }>)
-        .environment
-    : null;
-}
-
 function transactionCategoryFor(
   context: FinanceOperationContext
 ): FinanceTransactionCategory | null {
@@ -286,19 +244,15 @@ function transactionCategoryFor(
 function evidenceScopeMatches(
   evidence: FinanceReadinessEvidenceRef,
   requirementCode: FinanceReadinessRequirementCode,
-  environment: PaymentProviderEnvironment | null,
   transactionCategory: FinanceTransactionCategory | null
 ): boolean {
-  if (requirementCode === "arc_pay_environment") {
-    return evidence.environment === environment && evidence.transactionCategory === null;
-  }
   if (
     requirementCode === "legal_accounting_client_purchase" ||
     requirementCode === "legal_accounting_platform_subscription"
   ) {
-    return evidence.environment === null && evidence.transactionCategory === transactionCategory;
+    return evidence.transactionCategory === transactionCategory;
   }
-  return evidence.environment === null && evidence.transactionCategory === null;
+  return evidence.transactionCategory === null;
 }
 
 function evidenceIsEffective(
@@ -320,7 +274,6 @@ function toSafeEvidenceRef(evidence: FinanceReadinessEvidenceRef): FinanceReadin
     version: evidence.version,
     requirementCode: evidence.requirementCode,
     status: evidence.status,
-    environment: evidence.environment,
     transactionCategory: evidence.transactionCategory,
     effectiveAt: evidence.effectiveAt,
     expiresAt: evidence.expiresAt,
@@ -333,7 +286,6 @@ function assertNoDuplicateEvidence(evidence: readonly FinanceReadinessEvidenceRe
   for (const item of evidence) {
     const key = [
       item.requirementCode,
-      item.environment ?? "global-environment",
       item.transactionCategory ?? "global-category"
     ].join("|");
     if (scopes.has(key)) throw new FinanceReadinessIntegrityError();
@@ -355,7 +307,6 @@ function assertValidEvidence(
     !readinessRequirementCodes.has(evidence.requirementCode) ||
     !requiredRequirements.includes(evidence.requirementCode) ||
     !evidenceStatuses.has(evidence.status) ||
-    (evidence.environment !== null && !providerEnvironments.has(evidence.environment)) ||
     (evidence.transactionCategory !== null &&
       !transactionCategories.has(evidence.transactionCategory)) ||
     typeof evidence.safeDigest !== "string" ||
@@ -378,16 +329,6 @@ function assertValidOperationContext(context: FinanceOperationContext): void {
     !operationKinds.has((context as { readonly operationKind?: unknown }).operationKind as string)
   ) {
     throw new FinanceReadinessIntegrityError();
-  }
-  if (environmentScopedOperationKinds.has(context.operationKind)) {
-    if (!hasExactOwnKeys(context, ["operationKind", "environment"])) {
-      throw new FinanceReadinessIntegrityError();
-    }
-    const environment = (context as { readonly environment?: unknown }).environment;
-    if (typeof environment !== "string" || !providerEnvironments.has(environment)) {
-      throw new FinanceReadinessIntegrityError();
-    }
-    return;
   }
   if (context.operationKind === "fiscal_policy_publish") {
     if (

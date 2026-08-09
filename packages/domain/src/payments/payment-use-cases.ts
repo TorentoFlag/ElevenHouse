@@ -114,7 +114,6 @@ export type PaymentWebhookMoneyFacts =
 export type IngestPaymentProviderWebhookRequest = {
   readonly paymentAttemptId: string;
   readonly provider: "arc_pay";
-  readonly environment: "sandbox" | "live";
   readonly providerWebhookId: string;
   readonly providerPaymentId: string;
   readonly type: PaymentProviderEventType;
@@ -212,7 +211,6 @@ export async function createPaymentCheckout(
       id: (input.idGenerator ?? randomUUID)(),
       orderId: order.id,
       provider: input.provider.provider,
-      environment: input.provider.environment,
       status: "created",
       amount: order.grossAmount,
       providerPaymentId: null,
@@ -253,10 +251,7 @@ export async function ingestPaymentProviderWebhook(
 ): Promise<{ readonly kind: "created" | "replayed"; readonly event: PaymentProviderEvent }> {
   const attempt = await input.paymentStore.findAttemptById(input.request.paymentAttemptId);
   if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
-  if (
-    attempt.provider !== input.request.provider ||
-    attempt.environment !== input.request.environment
-  ) {
+  if (attempt.provider !== input.request.provider) {
     throw new PaymentWebhookProviderContextMismatchError();
   }
 
@@ -268,7 +263,6 @@ export async function ingestPaymentProviderWebhook(
   const linkedAttempt = await input.paymentStore.linkAttemptToProviderPayment({
     paymentAttemptId: attempt.id,
     provider: input.request.provider,
-    environment: input.request.environment,
     providerPaymentId: input.request.providerPaymentId,
     now: input.request.receivedAt
   });
@@ -277,7 +271,6 @@ export async function ingestPaymentProviderWebhook(
   return input.paymentStore.recordProviderEvent({
     paymentAttemptId: linkedAttempt.id,
     provider: input.request.provider,
-    environment: input.request.environment,
     providerWebhookId: input.request.providerWebhookId,
     providerPaymentId: input.request.providerPaymentId,
     type: input.request.type,
@@ -298,17 +291,13 @@ export async function releaseTerminalPaymentProviderWebhook(
   return input.terminalPayment.transact(async (store) => {
     const existing = await store.findProviderEventByWebhookId({
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId
     });
     if (existing) return { kind: "replayed", event: existing };
 
     const attempt = await store.findAttemptById(input.request.paymentAttemptId);
     if (!attempt) throw new PaymentWebhookAttemptNotFoundError();
-    if (
-      attempt.provider !== input.request.provider ||
-      attempt.environment !== input.request.environment
-    ) {
+    if (attempt.provider !== input.request.provider) {
       throw new PaymentWebhookProviderContextMismatchError();
     }
 
@@ -320,7 +309,6 @@ export async function releaseTerminalPaymentProviderWebhook(
     const linkedAttempt = await store.linkAttemptToProviderPayment({
       paymentAttemptId: attempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerPaymentId: input.request.providerPaymentId,
       now: input.request.receivedAt
     });
@@ -329,7 +317,6 @@ export async function releaseTerminalPaymentProviderWebhook(
     const providerEvent = await store.recordProviderEvent({
       paymentAttemptId: linkedAttempt.id,
       provider: input.request.provider,
-      environment: input.request.environment,
       providerWebhookId: input.request.providerWebhookId,
       providerPaymentId: input.request.providerPaymentId,
       type: input.request.type,

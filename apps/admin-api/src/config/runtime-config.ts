@@ -20,6 +20,8 @@ const adminApiRuntimeConfigSchema = z.object({
   ADMIN_API_FINANCE_WEBAUTHN_RP_ID: z.string().trim().min(1).max(253).optional(),
   ADMIN_API_FINANCE_WEBAUTHN_ORIGIN: z.string().url().optional(),
   ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED: z.enum(["true", "false"]).default("false"),
+  ADMIN_API_FINANCE_REFUND_DISPATCH_ENABLED: z.enum(["true", "false"]).default("false"),
+  ADMIN_API_FINANCE_REFUND_ARTIFACT_DIRECTORY: z.string().trim().min(1).default(".local/finance-artifacts"),
   ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
   ADMIN_API_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
   ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
@@ -37,7 +39,12 @@ const adminApiRuntimeConfigSchema = z.object({
     .string()
     .regex(/^[1-9][0-9]*$/)
     .optional(),
-  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES: z.coerce.number().int().min(1).max(25 * 1024 * 1024).default(10 * 1024 * 1024)
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES: z.coerce.number().int().min(1).max(25 * 1024 * 1024).default(10 * 1024 * 1024),
+  ADMIN_API_FINANCE_REFUND_DISPATCH_RETENTION_POLICY_ID: z.string().trim().min(1).max(160).optional(),
+  ADMIN_API_FINANCE_REFUND_DISPATCH_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .optional()
 });
 
 export type AdminApiRuntimeConfig = {
@@ -66,6 +73,10 @@ export type AdminApiRuntimeConfig = {
     retentionPolicy: Readonly<{ policyId: string; policyVersion: string }>;
     maxBytes: number;
   }> | null;
+  readonly financeRefundDispatch: Readonly<{
+    artifactDirectory: string;
+    retentionPolicy: Readonly<{ policyId: string; policyVersion: string }>;
+  }> | null;
 };
 
 export function createAdminApiRuntimeConfig(
@@ -81,6 +92,7 @@ export function createAdminApiRuntimeConfig(
     throw new Error("ADMIN_API_CSRF_SECRET is required in production");
   }
   const financePayoutEvidence = resolveFinancePayoutEvidence(config);
+  const financeRefundDispatch = resolveFinanceRefundDispatch(config);
   const financeWebAuthn = resolveFinanceWebAuthn(config);
 
   return {
@@ -96,7 +108,8 @@ export function createAdminApiRuntimeConfig(
     csrfTokenTtlSeconds: config.ADMIN_API_CSRF_TOKEN_TTL_SECONDS,
     allowedOrigins: allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:5175"],
     financeWebAuthn,
-    financePayoutEvidence
+    financePayoutEvidence,
+    financeRefundDispatch
   };
 }
 
@@ -171,6 +184,61 @@ function resolveFinancePayoutEvidence(
     }),
     maxBytes: config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES
   });
+}
+
+function resolveFinanceRefundDispatch(
+  config: z.infer<typeof adminApiRuntimeConfigSchema>
+): AdminApiRuntimeConfig["financeRefundDispatch"] {
+  if (config.ADMIN_API_FINANCE_REFUND_DISPATCH_ENABLED === "false") return null;
+  return Object.freeze({
+    artifactDirectory: config.ADMIN_API_FINANCE_REFUND_ARTIFACT_DIRECTORY,
+    retentionPolicy: Object.freeze({
+      policyId: requiredRefundDispatchConfig(
+        config.ADMIN_API_FINANCE_REFUND_DISPATCH_RETENTION_POLICY_ID
+      ),
+      policyVersion: requiredRefundDispatchConfig(
+        config.ADMIN_API_FINANCE_REFUND_DISPATCH_RETENTION_POLICY_VERSION
+      )
+    })
+  });
+}
+
+function resolveFinanceArtifactStorage(config: z.infer<typeof adminApiRuntimeConfigSchema>, scope: string) {
+  const endpoint = requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT, scope);
+  if (new URL(endpoint).protocol !== "https:") {
+    throw new Error(`ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS when ${scope} is enabled`);
+  }
+  const forcePathStyle = config.ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error(`ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when ${scope} is enabled`);
+  }
+  const kmsKeyArn = requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN, scope);
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
+  }
+  return Object.freeze({
+    endpoint,
+    region: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_REGION, scope),
+    bucket: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET, scope),
+    accessKeyId: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID, scope),
+    secretAccessKey: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY, scope),
+    forcePathStyle: forcePathStyle === "true",
+    kmsKeyArn
+  });
+}
+
+function requiredFinanceArtifactConfig(value: string | undefined, scope: string): string {
+  if (!value) {
+    throw new Error(`${scope} requires private artifact storage configuration`);
+  }
+  return value;
+}
+
+function requiredRefundDispatchConfig(value: string | undefined): string {
+  if (!value) {
+    throw new Error("ADMIN_API_FINANCE_REFUND_DISPATCH_ENABLED requires a provider-request retention policy");
+  }
+  return value;
 }
 
 function requiredPayoutEvidenceConfig(value: string | undefined): string {

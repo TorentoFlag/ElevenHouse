@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import {
-  financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
   formatFinanceSqlValues,
   reconciliationStatusValues
@@ -13,7 +12,6 @@ export const reconciliationRecords = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     provider: text("provider").notNull(),
-    environment: text("environment").notNull(),
     providerPaymentId: text("provider_payment_id"),
     providerPayoutId: text("provider_payout_id"),
     providerSettlementId: text("provider_settlement_id"),
@@ -34,12 +32,6 @@ export const reconciliationRecords = pgTable(
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}`
     ),
     check(
-      "reconciliation_records_environment_check",
-      sql`${table.environment} in ${sql.raw(
-        formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-      )}`
-    ),
-    check(
       "reconciliation_records_status_check",
       sql`${table.status} in ${sql.raw(formatFinanceSqlValues(reconciliationStatusValues))}`
     ),
@@ -52,16 +44,8 @@ export const reconciliationRecords = pgTable(
       sql`${table.status} <> 'exception' or (${table.exceptionCode} is not null and length(trim(${table.exceptionCode})) between 1 and 120 and ${table.exceptionMessage} is not null and length(trim(${table.exceptionMessage})) between 1 and 2000)`
     ),
     check("reconciliation_records_payload_check", sql`jsonb_typeof(${table.payload}) = 'object'`),
-    index("reconciliation_records_provider_payment_idx").on(
-      table.provider,
-      table.environment,
-      table.providerPaymentId
-    ),
-    index("reconciliation_records_provider_payout_idx").on(
-      table.provider,
-      table.environment,
-      table.providerPayoutId
-    ),
+    index("reconciliation_records_provider_payment_idx").on(table.provider, table.providerPaymentId),
+    index("reconciliation_records_provider_payout_idx").on(table.provider, table.providerPayoutId),
     index("reconciliation_records_status_checked_idx").on(table.status, table.checkedAt)
   ]
 );

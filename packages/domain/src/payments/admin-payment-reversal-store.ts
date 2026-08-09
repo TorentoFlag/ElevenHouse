@@ -1,8 +1,7 @@
 import type { Money } from "../money";
 import type {
   FinancePaymentProvider,
-  PaymentAttemptStatus,
-  PaymentProviderEnvironment
+  PaymentAttemptStatus
 } from "./payment-store";
 import type { WalletBalance } from "../wallet";
 
@@ -25,7 +24,6 @@ export type AdminPaymentReversalCaseRecord = {
   readonly type: AdminPaymentReversalCaseType;
   readonly severity: AdminPaymentReversalCaseSeverity;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerWebhookId: string;
   readonly providerPaymentId: string | null;
   readonly providerRefundId: string | null;

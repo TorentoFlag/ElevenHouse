@@ -52,18 +52,34 @@ type Source = Readonly<{ sourceKind: "root" | "allocation"; sourceId: string; ro
 export function createDrizzleOnlineWalletRefundApprovalUnitOfWork(input: Readonly<{ database: ElevenHouseDatabase }>): OnlineWalletRefundApprovalUnitOfWork {
   return Object.freeze({
     async approveOnlineWalletRefund(command) {
-      assertCommand(command);
-      try {
-        return await input.database.transaction((transaction) => persist(transaction, command));
-      } catch (error) {
-        if (error instanceof OnlineWalletRefundApprovalPersistenceError) throw error;
-        const code = postgresCode(error);
-        if (code === "40001" || code === "40P01") fail("retryable_concurrency_conflict");
-        if (code === "23505" || code === "23503" || code === "23514" || code === "55000") fail("persistence_write_incomplete");
-        throw error;
-      }
+      return input.database.transaction((transaction) =>
+        approveOnlineWalletRefundInTransaction(transaction, command)
+      );
     }
   } satisfies OnlineWalletRefundApprovalUnitOfWork);
+}
+
+/**
+ * Composes the V2 refund mutation with the WebAuthn-grant transaction.  A caller that has
+ * already opened a finance-authorization transaction must use this entry point so an approval
+ * failure rolls the one-time grant consumption back together with every wallet/provider write.
+ */
+export async function approveOnlineWalletRefundInTransaction(
+  transaction: FinanceTransaction,
+  command: ApproveOnlineWalletRefundCommand
+): Promise<OnlineWalletRefundApprovalCommitReceipt> {
+  assertCommand(command);
+  try {
+    return await persist(transaction, command);
+  } catch (error) {
+    if (error instanceof OnlineWalletRefundApprovalPersistenceError) throw error;
+    const code = postgresCode(error);
+    if (code === "40001" || code === "40P01") fail("retryable_concurrency_conflict");
+    if (code === "23505" || code === "23503" || code === "23514" || code === "55000") {
+      fail("persistence_write_incomplete");
+    }
+    throw error;
+  }
 }
 
 async function persist(transaction: FinanceTransaction, command: ApproveOnlineWalletRefundCommand): Promise<OnlineWalletRefundApprovalCommitReceipt> {

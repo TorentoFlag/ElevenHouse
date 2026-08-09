@@ -98,6 +98,14 @@ describe("platform tariffs API", () => {
     expect(get).toHaveBeenCalledWith(`/tariffs/subscriptions/${status.subscriptionId}/saved-card-setup`);
   });
 
+  it("treats the empty successful response before setup starts as no setup", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(undefined);
+
+    await expect(
+      getCurrentSavedCardSetupStatus(startResult.subscription.subscriptionId)
+    ).resolves.toBeNull();
+  });
+
   it("loads only the published tariff catalog through the shared contract", async () => {
     const get = vi.spyOn(application.http, "get").mockResolvedValue(catalog);
 
@@ -127,6 +135,14 @@ describe("platform tariffs API", () => {
     expect(get).toHaveBeenCalledWith(
       `/tariffs/subscriptions/${startResult.subscription.subscriptionId}/payment-status`
     );
+  });
+
+  it("treats the empty successful response before the first invoice as no pending invoice", async () => {
+    const get = vi.spyOn(application.http, "get").mockResolvedValue(undefined);
+
+    await expect(
+      getCurrentTariffInvoicePaymentStatus(startResult.subscription.subscriptionId)
+    ).resolves.toBeNull();
   });
 
   it("posts a 3DS Method outcome only to the owner-scoped invoice continuation route", async () => {

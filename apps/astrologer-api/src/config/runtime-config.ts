@@ -181,15 +181,20 @@ const astrologerApiRuntimeConfigSchema = z.object({
   ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: z.string().trim().url().optional(),
   ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: z.string().trim().min(1).max(512).optional(),
   ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID: z.string().trim().min(1).max(160).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().trim().url().optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
-  ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).optional(),
-  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).optional(),
+  ASTROLOGER_BILLING_FINANCE_ARTIFACT_DIRECTORY: z
+    .string()
+    .trim()
+    .min(1)
+    .default(".local/finance-artifacts"),
+  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .default("platform-provider-request"),
+  ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .default("1"),
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
   ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: z.string().trim().min(1).optional(),
   ASTROLOGER_API_PASSWORDLESS_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -378,15 +383,9 @@ export type AstrologerApiRuntimeConfig = {
   readonly billing: {
     readonly arcPayConfigured: boolean;
     readonly arcPayBrowserTokenization: Readonly<{ apiBaseUrl: string; publishableKey: string }> | null;
-    /** KMS-backed shared finance storage; card tokens are sealed here before a DB reference is written. */
+    /** Local immutable finance storage; card tokens are sealed here before a DB reference is written. */
     readonly financeArtifactStorage: Readonly<{
-      endpoint: string;
-      region: string;
-      bucket: string;
-      accessKeyId: string;
-      secretAccessKey: string;
-      forcePathStyle: boolean;
-      kmsKeyArn: string;
+      artifactDirectory: string;
       requestRetention: Readonly<{ policyId: string; policyVersion: string }>;
     }> | null;
     /** Legal authority is intentionally absent until an operator configures a published series. */
@@ -734,40 +733,11 @@ function resolveBillingFinanceArtifactStorage(
   config: z.infer<typeof astrologerApiRuntimeConfigSchema>
 ): AstrologerApiRuntimeConfig["billing"]["financeArtifactStorage"] {
   if (!config.ASTROLOGER_BILLING_ARC_PAY_ENABLED) return null;
-  const required = (value: string | undefined, name: string): string => {
-    if (!value) throw new Error(`${name} is required when ArcPay billing is enabled`);
-    return value;
-  };
-  const endpoint = required(
-    config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT,
-    "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT"
-  );
-  const endpointUrl = new URL(endpoint);
-  if (endpointUrl.protocol !== "https:" || endpointUrl.username || endpointUrl.password) {
-    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS without credentials");
-  }
-  const kmsKeyArn = required(
-    config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN,
-    "ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN"
-  );
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
-  }
-  const forcePathStyle = config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
-  if (forcePathStyle === undefined) {
-    throw new Error("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when ArcPay billing is enabled");
-  }
   return Object.freeze({
-    endpoint: stripTrailingSlashes(endpoint),
-    region: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION"),
-    bucket: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET"),
-    accessKeyId: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID"),
-    secretAccessKey: required(config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY, "ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY"),
-    forcePathStyle: forcePathStyle === "true",
-    kmsKeyArn,
+    artifactDirectory: config.ASTROLOGER_BILLING_FINANCE_ARTIFACT_DIRECTORY,
     requestRetention: Object.freeze({
-      policyId: required(config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID, "ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID"),
-      policyVersion: required(config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION, "ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION")
+      policyId: config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID,
+      policyVersion: config.ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION
     })
   });
 }

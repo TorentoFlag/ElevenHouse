@@ -177,7 +177,6 @@ function createHarness(
   };
   const provider = {
     provider: "arc_pay",
-    environment: "sandbox",
     openCheckout: vi.fn(async () => ({
       providerCheckoutId: "arc-checkout-1",
       checkoutUrl: "https://checkout.arcpay.space/session/arc-checkout-1"
@@ -226,7 +225,6 @@ function attempt(overrides: Partial<PaymentAttempt> = {}): PaymentAttempt {
     id: paymentAttemptId,
     orderId,
     provider: "arc_pay",
-    environment: "sandbox",
     status: "created",
     amount: { amountMinor: 500_00, currency: "RUB" },
     providerPaymentId: null,
@@ -299,7 +297,6 @@ function terminalWebhook(
     request: {
       paymentAttemptId,
       provider: "arc_pay" as const,
-      environment: "sandbox" as const,
       providerWebhookId: "arc-webhook-terminal-1",
       providerPaymentId: "arc-payment-1",
       type: overrides.type ?? "payment.expired",
@@ -319,7 +316,6 @@ function providerEvent(overrides: Partial<PaymentProviderEvent> = {}): PaymentPr
     id: "provider-event-1",
     paymentAttemptId,
     provider: "arc_pay",
-    environment: "sandbox",
     providerWebhookId: "arc-webhook-terminal-1",
     providerPaymentId: "arc-payment-1",
     type: "payment.expired",

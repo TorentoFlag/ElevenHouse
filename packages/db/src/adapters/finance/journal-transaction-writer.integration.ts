@@ -68,7 +68,6 @@ describe("sealed journal writer PostgreSQL integration", () => {
     pool = new Pool({ connectionString: isolatedDatabaseUrl });
     database = drizzle(pool, { schema });
     await pool.query(minimalJournalSchemaSql);
-    await pool.query(financeJournalIntegritySql);
     await pool.query(
       `insert into finance_provider_account_series
          (series_id, provider, active_identity_version, head_version)
@@ -95,6 +94,21 @@ describe("sealed journal writer PostgreSQL integration", () => {
                'merchant-2', 'test', 'terminal-2', 'settlement-2')`,
       [substitutedProviderAccountVersionId]
     );
+    await pool.query(
+      `insert into finance_accounts
+         (code, account_class, normal_side, scope_kind,
+          provider_account_version_id, provider_account_series_id,
+          provider_account_id, provider_identity_version, currency)
+       values ('arc_provider_clearing', 'asset', 'debit', 'arc_provider_account',
+               $1, 'arc-series-1', 'arc-account-1', 1, 'RUB')`,
+      [providerAccountVersionId]
+    );
+    await pool.query(
+      `insert into finance_accounts
+         (code, account_class, normal_side, scope_kind, currency)
+       values ('platform_subscription_deferred', 'liability', 'credit', 'platform', 'RUB')`
+    );
+    await pool.query(financeJournalIntegritySql);
   });
 
   afterAll(async () => {
@@ -1014,6 +1028,26 @@ create table finance_journal_transactions (
 create unique index finance_journal_transactions_reversal_unique
   on finance_journal_transactions(reverses_journal_transaction_id)
   where reverses_journal_transaction_id is not null;
+-- The current journal commit trigger checks for a v2 wallet mutation before
+-- applying its legacy-proof branch. Keep this isolated fixture shape-compatible
+-- with that trigger without modelling the unrelated wallet graph.
+create table finance_online_wallet_mutations (
+  mutation_id varchar(200) primary key,
+  journal_transaction_id varchar(200) not null unique references finance_journal_transactions(id)
+);
+create table finance_online_wallet_chargeback_cases (
+  id uuid primary key default gen_random_uuid(),
+  journal_transaction_id varchar(200) not null unique references finance_journal_transactions(id),
+  status text not null
+);
+create table finance_online_wallet_chargeback_resolutions (
+  id uuid primary key default gen_random_uuid(),
+  journal_transaction_id varchar(200) not null unique references finance_journal_transactions(id)
+);
+create table finance_online_sale_capture_journal_proofs (
+  proof_id varchar(200) primary key,
+  journal_transaction_id varchar(200) not null unique references finance_journal_transactions(id)
+);
 create table finance_journal_entries (
   id uuid primary key default gen_random_uuid(),
   journal_transaction_id varchar(200) not null,

@@ -14,7 +14,8 @@ describe("createAdminApiRuntimeConfig", () => {
       csrfTokenTtlSeconds: 604800,
       allowedOrigins: ["http://localhost:5175"],
       financeWebAuthn: null,
-      financePayoutEvidence: null
+      financePayoutEvidence: null,
+      financeRefundDispatch: null
     });
   });
 
@@ -42,7 +43,8 @@ describe("createAdminApiRuntimeConfig", () => {
       csrfTokenTtlSeconds: 900,
       allowedOrigins: ["https://admin.elevenhouse.com", "https://ops.elevenhouse.com"],
       financeWebAuthn: null,
-      financePayoutEvidence: null
+      financePayoutEvidence: null,
+      financeRefundDispatch: null
     });
   });
 

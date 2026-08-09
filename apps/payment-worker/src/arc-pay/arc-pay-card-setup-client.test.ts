@@ -50,6 +50,26 @@ describe("ArcPay card setup client", () => {
     );
   });
 
+  it("accepts the provider's RFC 3339 UTC timestamp with microsecond precision", async () => {
+    const client = createArcPayCardSetupClient(
+      config(),
+      vi.fn(async () => new Response(JSON.stringify({
+        id: "22222222-2222-4222-8222-222222222222",
+        amount: 0,
+        currency: "RUB",
+        payment_method: "bank_card",
+        status: "created",
+        created_at: "2026-08-08T15:36:04.497662Z",
+        updated_at: "2026-08-08T15:36:04.497662Z",
+        operations: []
+      }), { status: 201 })) as typeof fetch
+    );
+
+    await expect(client.createCardSetup({ envelope: setupEnvelope(), idempotencyKey })).resolves.toMatchObject({
+      providerSetupId: "22222222-2222-4222-8222-222222222222"
+    });
+  });
+
   it("does not issue a provider request without a worker secret", async () => {
     const fetchImpl = vi.fn();
     const client = createArcPayCardSetupClient(

@@ -8,7 +8,6 @@ import {
   astrologerRiskProfiles,
   financeCurrencyValues,
   financeIdempotencyCommands,
-  financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
   financeRefundAllocationAuthorities,
   financeRefundAllocationLinks,
@@ -115,7 +114,6 @@ describe("Finance persistence schema", () => {
     ]);
     expect(riskTierValues).toEqual(["low", "standard", "elevated", "high", "manual_review"]);
     expect(financePaymentProviderValues).toEqual(["arc_pay"]);
-    expect(financePaymentProviderEnvironmentValues).toEqual(["sandbox", "live"]);
     expect(paymentReversalCaseReviewResolutionValues).toEqual([
       "ledger_verified",
       "provider_follow_up_required",
@@ -167,11 +165,11 @@ describe("Finance persistence schema", () => {
       expect.arrayContaining([
         "payment_attempts_status_check",
         "payment_attempts_provider_check",
-        "payment_attempts_environment_check",
         "payment_attempts_currency_check",
         "payment_attempts_amount_check"
       ])
     );
+    expect(Object.keys(attemptColumns)).not.toContain("environment");
   });
 
   it("links live paid orders to at most one booking hold", () => {
@@ -191,22 +189,23 @@ describe("Finance persistence schema", () => {
     expect(tableCheckNames(paymentProviderEvents)).toEqual(
       expect.arrayContaining([
         "payment_provider_events_provider_check",
-        "payment_provider_events_environment_check",
         "payment_provider_events_type_check"
       ])
     );
+    expect(Object.keys(getTableColumns(paymentProviderEvents))).not.toContain("environment");
   });
 
-  it("deduplicates provider refunds by provider environment and refund id", () => {
+  it("deduplicates provider refunds by provider and refund id without persisting key mode", () => {
     expect(Object.keys(getTableColumns(refunds))).toEqual(
-      expect.arrayContaining(["provider", "environment", "providerRefundId"])
+      expect.arrayContaining(["provider", "providerRefundId"])
     );
     expect(tableCheckNames(refunds)).toEqual(
-      expect.arrayContaining(["refunds_provider_check", "refunds_environment_check"])
+      expect.arrayContaining(["refunds_provider_check"])
     );
     expect(tableIndexNames(refunds)).toEqual(
       expect.arrayContaining(["refunds_provider_refund_unique"])
     );
+    expect(Object.keys(getTableColumns(refunds))).not.toContain("environment");
   });
 
   it("keeps authoritative outbound refund cases separate from legacy webhook refund rows", () => {
@@ -445,11 +444,11 @@ describe("Finance persistence schema", () => {
     expect(tableCheckNames(reconciliationRecords)).toEqual(
       expect.arrayContaining([
         "reconciliation_records_provider_check",
-        "reconciliation_records_environment_check",
         "reconciliation_records_status_check",
         "reconciliation_records_provider_identifier_check"
       ])
     );
+    expect(Object.keys(getTableColumns(reconciliationRecords))).not.toContain("environment");
     expect(tableIndexNames(financeIdempotencyCommands)).toContain(
       "finance_idempotency_commands_scope_key_unique"
     );

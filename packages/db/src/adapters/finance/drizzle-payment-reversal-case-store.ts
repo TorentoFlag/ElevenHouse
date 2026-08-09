@@ -5,8 +5,7 @@ import type {
   AdminPaymentReversalCaseReviewResolution,
   AdminPaymentReversalCaseType,
   FinancePaymentProvider,
-  PaymentAttemptStatus,
-  PaymentProviderEnvironment
+  PaymentAttemptStatus
 } from "@elevenhouse/domain";
 import type { Money, WalletBalance } from "@elevenhouse/domain";
 import {
@@ -25,7 +24,6 @@ type ReversalCaseRow = {
   readonly type: "refund" | "chargeback";
   readonly severity: "info" | "attention" | "critical";
   readonly provider: string;
-  readonly environment: string;
   readonly provider_webhook_id: string;
   readonly provider_payment_id: string | null;
   readonly provider_refund_id: string | null;
@@ -133,7 +131,6 @@ async function readCases(
             else 'attention'
           end as severity,
           ${paymentProviderEvents.provider} as provider,
-          ${paymentProviderEvents.environment} as environment,
           ${paymentProviderEvents.providerWebhookId} as provider_webhook_id,
           ${paymentProviderEvents.providerPaymentId} as provider_payment_id,
           ${refunds.providerRefundId} as provider_refund_id,
@@ -209,7 +206,6 @@ function toReversalCase(row: ReversalCaseRow): AdminPaymentReversalCaseRecord {
     type: row.type,
     severity: row.severity,
     provider: row.provider as FinancePaymentProvider,
-    environment: row.environment as PaymentProviderEnvironment,
     providerWebhookId: row.provider_webhook_id,
     providerPaymentId: row.provider_payment_id,
     providerRefundId: row.provider_refund_id,

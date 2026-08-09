@@ -9,7 +9,10 @@ import {
 } from "@elevenhouse/db/finance";
 import type { FinanceTransaction } from "@elevenhouse/db/finance";
 import { createDrizzlePlatformTariffAuthorityStore } from "@elevenhouse/db/platform-billing";
-import { createFinancePayoutDestinationVault, createS3FinancePrivateObjectStorage } from "@elevenhouse/finance-infrastructure";
+import {
+  createFilesystemFinancePrivateObjectStorage,
+  createFinancePayoutDestinationVault
+} from "@elevenhouse/finance-infrastructure";
 import type { FinancePayoutDestinationVaultPort } from "@elevenhouse/domain/finance-core";
 import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
@@ -41,11 +44,16 @@ import type {
     },
     {
       provide: ASTROLOGER_PAYOUT_DESTINATION_VAULT,
-      useFactory: (configService: ConfigService): FinancePayoutDestinationVaultPort | null => {
+      useFactory: async (configService: ConfigService): Promise<FinancePayoutDestinationVaultPort | null> => {
         const storage = configService.getOrThrow<AstrologerApiRuntimeConfig["billing"]["financeArtifactStorage"]>(
           "astrologerApi.billing.financeArtifactStorage"
         );
-        return storage ? createFinancePayoutDestinationVault(createS3FinancePrivateObjectStorage(storage)) : null;
+        if (!storage) return null;
+        const privateStorage = createFilesystemFinancePrivateObjectStorage({
+          rootDirectory: storage.artifactDirectory
+        });
+        await privateStorage.checkReady();
+        return createFinancePayoutDestinationVault(privateStorage);
       },
       inject: [ConfigService]
     },

@@ -51,7 +51,6 @@ export type PlatformTariffInvoiceChargeCommandFactory = Readonly<{
     tariff: PlatformTariffVersion;
     savedCardCredential: RestrictedSavedCardCredentialRef;
     buyerContact: FiscalBuyerContact;
-    environment: "sandbox" | "live";
   }>): Promise<Readonly<{
     providerAccount: FinanceProviderAccountIdentity;
     operationEnvelope: ResolvedFinanceOperationEnvelope;
@@ -74,7 +73,7 @@ export function createPlatformTariffInvoiceChargeCommandFactory(dependencies: Re
       assertInvoiceAuthority(input);
       const recurringFrequencyDays = billingFrequency(input.subscription, input.tariff);
       const [providerAccount, verifiedContact, policy] = await Promise.all([
-        dependencies.providerAccounts.findActiveProviderAccount({ provider: "arc_pay", environment: input.environment }),
+        dependencies.providerAccounts.findActiveProviderAccount({ provider: "arc_pay" }),
         dependencies.buyerContacts.findVerifiedFiscalBuyerContact({
           clientUserId: input.subscription.ownerUserId,
           candidate: input.buyerContact

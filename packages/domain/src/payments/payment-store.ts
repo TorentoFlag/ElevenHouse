@@ -5,7 +5,6 @@ import type {
 } from "../finance/shared/idempotent-command";
 
 export type FinancePaymentProvider = "arc_pay";
-export type PaymentProviderEnvironment = "sandbox" | "live";
 
 export type PaymentAttemptStatus =
   | "created"
@@ -49,7 +48,6 @@ export type PaymentAttempt = {
   readonly id: string;
   readonly orderId: string;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly status: PaymentAttemptStatus;
   readonly amount: Money;
   readonly providerPaymentId: string | null;
@@ -64,7 +62,6 @@ export type PaymentProviderEvent = {
   readonly id: string;
   readonly paymentAttemptId: string | null;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerWebhookId: string;
   readonly providerPaymentId: string | null;
   readonly type: PaymentProviderEventType;
@@ -79,7 +76,6 @@ export type RefundRecord = {
   readonly paymentAttemptId: string;
   readonly providerEventId: string | null;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly status: RefundStatus;
   readonly amount: Money;
   readonly reason: string | null;
@@ -92,7 +88,6 @@ export type CreatePaymentAttemptInput = {
   readonly id?: string;
   readonly orderId: string;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly status?: PaymentAttemptStatus;
   readonly amount: Money;
   readonly providerPaymentId: string | null;
@@ -112,7 +107,6 @@ export type MarkPaymentAttemptCheckoutOpenedInput = {
 export type LinkPaymentAttemptToProviderPaymentInput = {
   readonly paymentAttemptId: string;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerPaymentId: string;
   readonly now: string;
 };
@@ -121,7 +115,6 @@ export type RecordPaymentProviderEventInput = {
   readonly id?: string;
   readonly paymentAttemptId: string | null;
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly providerWebhookId: string;
   readonly providerPaymentId: string | null;
   readonly type: PaymentProviderEventType;
@@ -136,7 +129,6 @@ export type CreateRefundInput = {
   readonly paymentAttemptId: string;
   readonly providerEventId: string | null;
   readonly provider?: FinancePaymentProvider;
-  readonly environment?: PaymentProviderEnvironment;
   readonly status?: RefundStatus;
   readonly amount: Money;
   readonly reason: string | null;
@@ -179,7 +171,6 @@ export type PaymentStore = {
   ) => Promise<{ readonly kind: "created" | "replayed"; readonly event: PaymentProviderEvent }>;
   readonly findProviderEventByWebhookId: (input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerWebhookId: string;
   }) => Promise<PaymentProviderEvent | null>;
   readonly createRefund: (
@@ -188,7 +179,6 @@ export type PaymentStore = {
   readonly findAttemptById: (paymentAttemptId: string) => Promise<PaymentAttempt | null>;
   readonly findAttemptByProviderPaymentId: (input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerPaymentId: string;
   }) => Promise<PaymentAttempt | null>;
 };

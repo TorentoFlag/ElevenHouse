@@ -20,7 +20,6 @@ export type PlatformTariffInvoiceChargePreparationCandidate = Readonly<{
   recurringConsentId: string;
   recurringConsentVersion: number;
   buyerContact: FiscalBuyerContact;
-  environment: "sandbox" | "live";
 }>;
 
 export type PlatformTariffInvoiceChargePreparationReaderPort = Readonly<{

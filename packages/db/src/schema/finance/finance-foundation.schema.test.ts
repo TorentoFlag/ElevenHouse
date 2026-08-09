@@ -70,7 +70,6 @@ describe("finance provider identity and private evidence schema", () => {
       "identityVersion",
       "provider",
       "merchantTenantId",
-      "environment",
       "terminalScope",
       "settlementScope",
       "predecessorProviderAccountId",
@@ -104,12 +103,12 @@ describe("finance provider identity and private evidence schema", () => {
     expect(accountConfig.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
         "finance_provider_accounts_provider_check",
-        "finance_provider_accounts_environment_check",
         "finance_provider_accounts_identifier_check",
         "finance_provider_accounts_identity_version_check",
         "finance_provider_accounts_predecessor_check"
       ])
     );
+    expect(Object.keys(getTableColumns(financeProviderAccounts))).not.toContain("environment");
     expect(seriesConfig.checks.map((check) => check.name)).toContain(
       "finance_provider_account_series_identifier_check"
     );

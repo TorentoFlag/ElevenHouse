@@ -21,7 +21,6 @@ import {
 import {
   financeCurrencyValues,
   financeNumeric38String,
-  financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
   financeRevisionString,
   formatFinanceSqlValues
@@ -52,7 +51,6 @@ export const financeWebhookInbox = pgTable(
     providerAccountId: varchar("provider_account_id", { length: 160 }).notNull(),
     providerIdentityVersion: integer("provider_identity_version").notNull(),
     provider: text("provider").notNull(),
-    receivingEnvironment: text("receiving_environment").notNull(),
     transportEventId: varchar("transport_event_id", { length: 160 }).notNull(),
     providerEventType: varchar("provider_event_type", { length: 160 }).notNull(),
     artifactId: varchar("artifact_id", { length: 160 }).notNull(),
@@ -156,9 +154,6 @@ export const financeWebhookInbox = pgTable(
     check(
       "finance_webhook_inbox_signature_check",
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}
-        and ${table.receivingEnvironment} in ${sql.raw(
-          formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-        )}
         and ${table.signatureStatus} = 'verified'
         and ${table.rawBodyDigest} ~ '^sha256:[a-f0-9]{64}$'
         and ${table.signatureEvidenceDigest} ~ '^sha256:[a-f0-9]{64}$'
@@ -235,7 +230,6 @@ export const financeWebhookStoredReceipts = pgTable(
     providerAccountId: varchar("provider_account_id", { length: 160 }).notNull(),
     providerIdentityVersion: integer("provider_identity_version").notNull(),
     provider: text("provider").notNull(),
-    receivingEnvironment: text("receiving_environment").notNull(),
     transportEventId: varchar("transport_event_id", { length: 160 }).notNull(),
     providerEventType: varchar("provider_event_type", { length: 160 }).notNull(),
     artifactId: varchar("artifact_id", { length: 160 }).notNull(),
@@ -294,9 +288,6 @@ export const financeWebhookStoredReceipts = pgTable(
       "finance_webhook_stored_receipts_shape_check",
       sql`${table.inboxVersion} = 1
         and ${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}
-        and ${table.receivingEnvironment} in ${sql.raw(
-          formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-        )}
         and ${table.signatureStatus} = 'verified'
         and ${table.rawBodyDigest} ~ '^sha256:[a-f0-9]{64}$'
         and ${table.signatureEvidenceDigest} ~ '^sha256:[a-f0-9]{64}$'
@@ -748,7 +739,6 @@ begin
   new.provider_account_id := inbox.provider_account_id;
   new.provider_identity_version := inbox.provider_identity_version;
   new.provider := inbox.provider;
-  new.receiving_environment := inbox.receiving_environment;
   new.transport_event_id := inbox.transport_event_id;
   new.provider_event_type := inbox.provider_event_type;
   new.artifact_id := inbox.artifact_id;
@@ -774,7 +764,6 @@ begin
     'providerAccountId', new.provider_account_id,
     'providerIdentityVersion', new.provider_identity_version,
     'provider', new.provider,
-    'receivingEnvironment', new.receiving_environment,
     'transportEventId', new.transport_event_id,
     'providerEventType', new.provider_event_type,
     'artifactId', new.artifact_id,
@@ -892,7 +881,6 @@ begin
      or new.provider_account_id <> old.provider_account_id
      or new.provider_identity_version <> old.provider_identity_version
      or new.provider <> old.provider
-     or new.receiving_environment <> old.receiving_environment
      or new.transport_event_id <> old.transport_event_id
      or new.provider_event_type <> old.provider_event_type
      or new.artifact_id <> old.artifact_id
@@ -981,8 +969,7 @@ begin
      or artifact.provider_account_id <> new.provider_account_id
      or artifact.provider_identity_version <> new.provider_identity_version
      or artifact.sha256_digest <> new.raw_body_digest
-     or provider_account.provider <> new.provider
-     or provider_account.environment <> new.receiving_environment then
+     or provider_account.provider <> new.provider then
     raise exception 'webhook artifact or transport scope mismatch' using errcode = '23514';
   end if;
   if not exists (
@@ -993,7 +980,6 @@ begin
       and receipt.provider_account_id = new.provider_account_id
       and receipt.provider_identity_version = new.provider_identity_version
       and receipt.provider = new.provider
-      and receipt.receiving_environment = new.receiving_environment
       and receipt.transport_event_id = new.transport_event_id
       and receipt.provider_event_type = new.provider_event_type
       and receipt.artifact_id = new.artifact_id
@@ -1027,7 +1013,6 @@ begin
   if inbox.version <> 1
      or inbox.processing_status <> 'stored'
      or inbox.provider <> new.provider
-     or inbox.receiving_environment <> new.receiving_environment
      or inbox.transport_event_id <> new.transport_event_id
      or inbox.provider_event_type <> new.provider_event_type
      or inbox.signature_status <> new.signature_status

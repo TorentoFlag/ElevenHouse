@@ -55,7 +55,6 @@ export async function recordProviderSettlementMatch(input: {
   );
   return input.store.createRecord({
     provider: input.providerEvent.provider,
-    environment: input.providerEvent.environment,
     providerPaymentId: input.providerEvent.providerPaymentId ?? attempt.providerPaymentId,
     providerPayoutId: null,
     providerSettlementId: readOptionalString(input.providerEvent.payload, [
@@ -94,7 +93,6 @@ export async function recordProviderReconciliationException(input: {
   ]);
   return input.store.createRecord({
     provider: input.providerEvent.provider,
-    environment: input.providerEvent.environment,
     providerPaymentId: input.providerEvent.providerPaymentId ?? attempt.providerPaymentId,
     providerPayoutId: null,
     providerSettlementId: readOptionalString(input.providerEvent.payload, [
@@ -143,13 +141,12 @@ export type ProviderSettlementLedgerBatchResult = {
 export async function reconcileProviderSettlementLedgerBatch(input: {
   readonly store: ReconciliationStore;
   readonly provider: PaymentProviderEvent["provider"];
-  readonly environment: PaymentProviderEvent["environment"];
   readonly entries: readonly ProviderSettlementLedgerEntry[];
   readonly checkedAt: Date;
 }): Promise<ProviderSettlementLedgerBatchResult> {
   const result = { processed: 0, matched: 0, exceptions: 0, skipped: 0, replayed: 0 };
   for (const entry of input.entries) {
-    if (entry.provider !== input.provider || entry.environment !== input.environment) {
+    if (entry.provider !== input.provider) {
       throw new ReconciliationProviderContextMismatchError();
     }
     if (entry.referenceType !== "payment") {
@@ -161,7 +158,6 @@ export async function reconcileProviderSettlementLedgerBatch(input: {
     const attempt = entry.providerPaymentId
       ? await input.store.findAttemptByProviderPaymentId({
           provider: input.provider,
-          environment: input.environment,
           providerPaymentId: entry.providerPaymentId
         })
       : null;
@@ -203,7 +199,7 @@ async function requireMatchingAttempt(
 ) {
   const attempt = await store.findAttemptById(paymentAttemptId);
   if (!attempt) throw new ReconciliationAttemptNotFoundError();
-  if (attempt.provider !== event.provider || attempt.environment !== event.environment) {
+  if (attempt.provider !== event.provider) {
     throw new ReconciliationProviderContextMismatchError();
   }
   if (
@@ -248,7 +244,6 @@ function readPath(payload: Record<string, unknown>, path: readonly string[]): un
 function createSettlementLedgerMatchRecordInput(
   input: {
     readonly provider: PaymentProviderEvent["provider"];
-    readonly environment: PaymentProviderEvent["environment"];
     readonly checkedAt: Date;
   },
   entry: ProviderSettlementLedgerEntry,
@@ -256,7 +251,6 @@ function createSettlementLedgerMatchRecordInput(
 ) {
   return {
     provider: input.provider,
-    environment: input.environment,
     providerPaymentId: entry.providerPaymentId ?? attempt.providerPaymentId,
     providerPayoutId: null,
     providerSettlementId: entry.providerLedgerEntryId,
@@ -273,7 +267,6 @@ function createSettlementLedgerMatchRecordInput(
 function createSettlementLedgerExceptionRecordInput(
   input: {
     readonly provider: PaymentProviderEvent["provider"];
-    readonly environment: PaymentProviderEvent["environment"];
     readonly checkedAt: Date;
   },
   entry: ProviderSettlementLedgerEntry,
@@ -282,7 +275,6 @@ function createSettlementLedgerExceptionRecordInput(
 ) {
   return {
     provider: input.provider,
-    environment: input.environment,
     providerPaymentId: entry.providerPaymentId,
     providerPayoutId: null,
     providerSettlementId: entry.providerLedgerEntryId,

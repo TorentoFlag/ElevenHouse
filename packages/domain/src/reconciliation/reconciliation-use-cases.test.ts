@@ -32,7 +32,6 @@ describe("provider reconciliation use cases", () => {
     expect(harness.records).toEqual([
       expect.objectContaining({
         provider: "arc_pay",
-        environment: "sandbox",
         providerPaymentId,
         providerEventId,
         status: "matched",
@@ -88,7 +87,6 @@ describe("provider reconciliation use cases", () => {
     const result = await reconcileProviderSettlementLedgerBatch({
       store: harness.store,
       provider: "arc_pay",
-      environment: "sandbox",
       checkedAt: now,
       entries: [
         settlementLedgerEntry({
@@ -124,7 +122,6 @@ describe("provider reconciliation use cases", () => {
     const result = await reconcileProviderSettlementLedgerBatch({
       store: harness.store,
       provider: "arc_pay",
-      environment: "sandbox",
       checkedAt: now,
       entries: [
         settlementLedgerEntry({
@@ -167,7 +164,6 @@ describe("provider reconciliation use cases", () => {
     harness.records.push({
       id: "existing-record-1",
       provider: "arc_pay",
-      environment: "sandbox",
       providerPaymentId,
       providerPayoutId: null,
       providerSettlementId: "ledger-entry-existing",
@@ -184,7 +180,6 @@ describe("provider reconciliation use cases", () => {
     const result = await reconcileProviderSettlementLedgerBatch({
       store: harness.store,
       provider: "arc_pay",
-      environment: "sandbox",
       checkedAt: now,
       entries: [
         settlementLedgerEntry({
@@ -215,7 +210,6 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
     id: paymentAttemptId,
     orderId: "55555555-5555-4555-8555-555555555555",
     provider: "arc_pay",
-    environment: "sandbox",
     status: "captured",
     amount: { amountMinor: 50_000, currency: "RUB" },
     providerPaymentId,
@@ -231,7 +225,6 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       if (
         options.attemptMissing ||
         input.provider !== attempt.provider ||
-        input.environment !== attempt.environment ||
         input.providerPaymentId !== attempt.providerPaymentId
       ) {
         return null;
@@ -242,7 +235,6 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       const existing = records.find(
         (record) =>
           record.provider === input.provider &&
-          record.environment === input.environment &&
           record.providerSettlementId === input.providerSettlementId &&
           record.providerEventId === input.providerEventId &&
           record.status === input.status
@@ -251,7 +243,6 @@ function createHarness(options: { readonly attemptMissing?: boolean } = {}) {
       const record: ReconciliationRecord = {
         id: `record-${records.length + 1}`,
         provider: input.provider,
-        environment: input.environment,
         providerPaymentId: input.providerPaymentId,
         providerPayoutId: input.providerPayoutId,
         providerSettlementId: input.providerSettlementId,
@@ -289,7 +280,6 @@ function settlementLedgerEntry(
   delete entryOverrides.amount;
   const entry = {
     provider: "arc_pay",
-    environment: "sandbox",
     providerLedgerEntryId,
     providerPaymentId,
     direction: "credit",
@@ -318,7 +308,6 @@ function settledEvent(): PaymentProviderEvent & { readonly type: "payment.settle
     id: providerEventId,
     paymentAttemptId,
     provider: "arc_pay",
-    environment: "sandbox",
     providerWebhookId,
     providerPaymentId,
     type: "payment.settled",

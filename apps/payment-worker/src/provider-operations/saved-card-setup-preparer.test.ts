@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
+import { canonicalizeFinanceCommandPayload } from "@elevenhouse/domain";
 import {
   createFinanceOperationResourcePolicyDraft,
   publishFinanceOperationResourcePolicyDraft,
@@ -58,7 +59,7 @@ describe("saved-card setup preparer", () => {
       successUrl: "https://astrologer.elevenhouse.test/settings/billing/card-setup/success",
       failureUrl: "https://astrologer.elevenhouse.test/settings/billing/card-setup/failure"
     };
-    const expectedBytes = new TextEncoder().encode(JSON.stringify(expectedEnvelope));
+    const expectedBytes = canonicalizeFinanceCommandPayload(expectedEnvelope);
     expect(writeImmutable).toHaveBeenCalledWith({
       artifactId: `arc-card-setup-request:${setupSessionId}`,
       contentType: "application/json",

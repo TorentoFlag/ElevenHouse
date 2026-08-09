@@ -787,29 +787,30 @@ describe("createAstrologerApiRuntimeConfig", () => {
 });
 
 describe("ArcPay browser tokenization config", () => {
-  it("requires public ArcPay and KMS-backed finance storage configuration when billing is enabled", () => {
+  it("uses local immutable finance artifacts when billing is enabled", () => {
     expect(() => createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true"
     })).toThrow(/ARC_PAY_API_BASE_URL/);
-    expect(() => createAstrologerApiRuntimeConfig({
+    expect(createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true",
       ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: "https://api.arcpay.space/",
       ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: "pk_test_example"
-    })).toThrow("ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT");
+    })).toMatchObject({
+      billing: {
+        financeArtifactStorage: {
+          artifactDirectory: ".local/finance-artifacts",
+          requestRetention: { policyId: "platform-provider-request", policyVersion: "1" }
+        }
+      }
+    });
     expect(createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
       ASTROLOGER_BILLING_ARC_PAY_ENABLED: "true",
       ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL: "https://api.arcpay.space/",
       ASTROLOGER_BILLING_ARC_PAY_PUBLISHABLE_KEY: "pk_test_example",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ENDPOINT: "https://s3.example.com/",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "access-key",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "secret-key",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
-      ASTROLOGER_BILLING_FINANCE_ARTIFACT_KMS_KEY_ARN: "arn:aws:kms:eu-central-1:123456789012:key/30000000-0000-4000-8000-000000000003",
+      ASTROLOGER_BILLING_FINANCE_ARTIFACT_DIRECTORY: "/tmp/elevenhouse-tariff-artifacts",
       ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: "provider-request",
       ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: "1"
     }).billing).toMatchObject({
@@ -818,8 +819,7 @@ describe("ArcPay browser tokenization config", () => {
       publishableKey: "pk_test_example"
       },
       financeArtifactStorage: {
-        endpoint: "https://s3.example.com",
-        bucket: "elevenhouse-finance",
+        artifactDirectory: "/tmp/elevenhouse-tariff-artifacts",
         requestRetention: { policyId: "provider-request", policyVersion: "1" }
       }
     });

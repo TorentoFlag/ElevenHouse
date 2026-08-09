@@ -1,5 +1,5 @@
 import type { Money } from "../money";
-import type { FinancePaymentProvider, PaymentProviderEnvironment } from "./payment-store";
+import type { FinancePaymentProvider } from "./payment-store";
 
 export type PaymentCheckoutRequest = {
   readonly paymentAttemptId: string;
@@ -17,6 +17,5 @@ export type PaymentCheckoutSession = {
 
 export type PaymentProviderPort = {
   readonly provider: FinancePaymentProvider;
-  readonly environment: PaymentProviderEnvironment;
   readonly openCheckout: (input: PaymentCheckoutRequest) => Promise<PaymentCheckoutSession>;
 };

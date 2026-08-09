@@ -14,7 +14,6 @@ import {
 } from "drizzle-orm/pg-core";
 
 import {
-  financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
   financeRevisionString,
   formatFinanceSqlValues
@@ -67,7 +66,6 @@ export const financeProviderAccounts = pgTable(
     identityVersion: integer("identity_version").notNull(),
     provider: text("provider").notNull(),
     merchantTenantId: varchar("merchant_tenant_id", { length: 160 }).notNull(),
-    environment: text("environment").notNull(),
     terminalScope: varchar("terminal_scope", { length: 160 }).notNull(),
     settlementScope: varchar("settlement_scope", { length: 160 }).notNull(),
     predecessorProviderAccountId: varchar("predecessor_provider_account_id", { length: 160 }),
@@ -113,12 +111,6 @@ export const financeProviderAccounts = pgTable(
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}`
     ),
     check(
-      "finance_provider_accounts_environment_check",
-      sql`${table.environment} in ${sql.raw(
-        formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-      )}`
-    ),
-    check(
       "finance_provider_accounts_identifier_check",
       sql`length(trim(${table.seriesId})) between 1 and 160
         and ${table.seriesId} = trim(${table.seriesId})
@@ -161,8 +153,7 @@ export const financeProviderAccounts = pgTable(
     index("finance_provider_accounts_readiness_lookup_idx").on(
       table.seriesId,
       table.providerAccountId,
-      table.identityVersion,
-      table.environment
+      table.identityVersion
     )
   ]
 );

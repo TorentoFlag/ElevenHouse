@@ -144,7 +144,6 @@ export function mapPlatformTariffInvoiceChargePreparationCandidate(
       credential.seriesId !== consent.seriesId || credential.providerAccountId !== consent.providerAccountId || credential.providerIdentityVersion !== consent.providerIdentityVersion || credential.providerCustomerId !== consent.providerCustomerId ||
       providerAccount.provider !== "arc_pay" ||
       providerAccount.seriesId !== credential.seriesId || providerAccount.providerAccountId !== credential.providerAccountId || providerAccount.identityVersion !== credential.providerIdentityVersion ||
-      (providerAccount.environment !== "sandbox" && providerAccount.environment !== "live") ||
       !integerAtLeastOne(request.attemptNumber) || !integerAtLeastOne(request.expectedInvoiceVersion) || !integerAtLeastOne(request.expectedSubscriptionVersion) ||
       !integerAtLeastOne(invoice.version) || !integerAtLeastOne(subscription.version) ||
       !integerAtLeastOne(credential.credentialVersion) || !integerAtLeastOne(consent.consentVersion) ||
@@ -182,7 +181,6 @@ export function mapPlatformTariffInvoiceChargePreparationCandidate(
       recurringConsentId: consent.consentId,
       recurringConsentVersion: Number(consent.consentVersion),
       buyerContact: Object.freeze({ kind: consent.buyerContactKind, value: consent.buyerContactValue } as const),
-      environment: providerAccount.environment
     });
   } catch {
     return null;

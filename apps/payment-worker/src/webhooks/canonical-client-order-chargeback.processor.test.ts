@@ -31,6 +31,27 @@ const rawWebhook = new TextEncoder().encode(
     data: { payment_id: providerPaymentId, amount: 50_000, currency: "RUB" }
   })
 );
+/**
+ * `payment.chargeback` is an opening/hold fact in ArcPay's published contract.  A value that
+ * looks like a terminal verdict but is not a documented canonical outcome must stay untrusted:
+ * it cannot turn the provisional V2 case into a win or loss.
+ */
+const rawWebhookWithUntrustedTerminalHint = new TextEncoder().encode(
+  JSON.stringify({
+    event_id: webhookId,
+    event_type: "payment.chargeback",
+    environment: "sandbox",
+    livemode: false,
+    created_at: "2026-08-05T12:00:00.000Z",
+    tenant_id: "55555555-5555-4555-8555-555555555555",
+    data: {
+      payment_id: providerPaymentId,
+      amount: 50_000,
+      currency: "RUB",
+      resolution: "lost"
+    }
+  })
+);
 const canonicalBytes = new TextEncoder().encode(
   JSON.stringify({ id: providerPaymentId, external_id: orderId, status: "chargeback" })
 );
@@ -101,26 +122,55 @@ describe("canonical client-order chargeback inbox processor", () => {
     ]);
     expect(harness.applied).toBeUndefined();
   });
+
+  it("keeps an ArcPay chargeback provisional when transport includes an undocumented terminal hint", async () => {
+    const calls: string[] = [];
+    const harness = createHarness(calls, { rawWebhook: rawWebhookWithUntrustedTerminalHint });
+    const processor = createCanonicalClientOrderChargebackProcessor(harness as never);
+
+    await expect(processor.processOne()).resolves.toMatchObject({
+      kind: "committed",
+      effect: "applied_once"
+    });
+    expect(calls).toEqual([
+      "claim",
+      "load-webhook",
+      "read-canonical",
+      "resolve-correlation",
+      "policy",
+      "seal",
+      "apply"
+    ]);
+    expect(harness.applied).toMatchObject({
+      chargeback: {
+        providerSource: { kind: "webhook_event_id", webhookEventId: webhookId }
+      }
+    });
+    expect(harness.applied).not.toHaveProperty("resolutionAuthority");
+  });
 });
 
 function createHarness(
   calls: string[],
-  options: Readonly<{ canonicalStatus?: "chargeback" | "captured" }> = {}
+  options: Readonly<{
+    canonicalStatus?: "chargeback" | "captured";
+    rawWebhook?: Uint8Array;
+  }> = {}
 ) {
   let applied: unknown;
+  const claimedWebhook = options.rawWebhook ?? rawWebhook;
   const claim = {
     inboxItemId: "finance-webhook-inbox-1",
     inboxVersion: 2,
     expectedCheckpointSequence: 1,
     leaseFence: 1,
     providerAccount,
-    receivingEnvironment: "sandbox" as const,
     webhookId,
     providerEventType: "payment.chargeback" as const,
     sealedWebhookArtifact: {
       artifactId: "arc-webhook:1",
-      sha256Digest: digest(rawWebhook),
-      byteLength: rawWebhook.byteLength,
+      sha256Digest: digest(claimedWebhook),
+      byteLength: claimedWebhook.byteLength,
       contentType: "application/json" as const
     }
   };
@@ -137,7 +187,7 @@ function createHarness(
     webhookArtifacts: {
       async loadClaimedWebhookBytes() {
         calls.push("load-webhook");
-        return rawWebhook;
+        return claimedWebhook;
       }
     },
     canonicalPayments: {

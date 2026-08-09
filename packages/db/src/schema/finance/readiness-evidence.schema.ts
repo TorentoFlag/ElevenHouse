@@ -2,7 +2,6 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, pgTable, primaryKey, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 import {
-  financePaymentProviderEnvironmentValues,
   financeReadinessEvidenceRequirementValues,
   financeReadinessEvidenceStatusValues,
   financeRevisionString,
@@ -24,7 +23,6 @@ export const financeReadinessEvidenceVersions = pgTable(
     evidenceId: varchar("evidence_id", { length: 160 }).notNull(),
     evidenceVersion: financeRevisionString("evidence_version").notNull(),
     requirementCode: text("requirement_code").notNull(),
-    environment: text("environment"),
     transactionCategory: text("transaction_category"),
     scopeKey: varchar("scope_key", { length: 240 }).notNull(),
     isCurrent: boolean("is_current").notNull().default(true),
@@ -45,7 +43,6 @@ export const financeReadinessEvidenceVersions = pgTable(
     index("finance_readiness_evidence_current_lookup_idx").on(
       table.isCurrent,
       table.requirementCode,
-      table.environment,
       table.transactionCategory,
       table.effectiveAt
     ),
@@ -68,16 +65,11 @@ export const financeReadinessEvidenceVersions = pgTable(
     ),
     check(
       "finance_readiness_evidence_scope_check",
-      sql`${table.scopeKey} = ${table.requirementCode} || ':' || coalesce(${table.environment}, 'global') || ':' || coalesce(${table.transactionCategory}, 'global')
+      sql`${table.scopeKey} = ${table.requirementCode} || ':' || coalesce(${table.transactionCategory}, 'global')
         and (
-          (${table.requirementCode} = 'arc_pay_environment'
-            and ${table.environment} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderEnvironmentValues))}
-            and ${table.transactionCategory} is null)
-          or (${table.requirementCode} in ${legalRequirementCodes}
-            and ${table.environment} is null
+          (${table.requirementCode} in ${legalRequirementCodes}
             and ${table.transactionCategory} in ${sql.raw(formatFinanceSqlValues(financeTransactionCategoryValues))})
-          or (${table.requirementCode} not in ('arc_pay_environment', 'legal_accounting_client_purchase', 'legal_accounting_platform_subscription')
-            and ${table.environment} is null
+          or (${table.requirementCode} not in ('legal_accounting_client_purchase', 'legal_accounting_platform_subscription')
             and ${table.transactionCategory} is null)
         )`
     ),
@@ -123,7 +115,6 @@ begin
   if new.evidence_id <> old.evidence_id
      or new.evidence_version <> old.evidence_version
      or new.requirement_code <> old.requirement_code
-     or new.environment is distinct from old.environment
      or new.transaction_category is distinct from old.transaction_category
      or new.scope_key <> old.scope_key
      or new.status <> old.status

@@ -215,7 +215,6 @@ export async function listReleasableCapturedSaleHolds(
           select 1
           from ${reconciliationRecords} reconciliation_exception
           where reconciliation_exception.provider = ${ledgerTransactions.metadata}->>'provider'
-            and reconciliation_exception.environment = ${ledgerTransactions.metadata}->>'environment'
             and reconciliation_exception.provider_payment_id = ${ledgerTransactions.metadata}->>'providerPaymentId'
             and reconciliation_exception.status = 'exception'
             and reconciliation_exception.resolved_at is null
@@ -226,7 +225,6 @@ export async function listReleasableCapturedSaleHolds(
             select 1
             from ${reconciliationRecords} reconciliation_match
             where reconciliation_match.provider = ${ledgerTransactions.metadata}->>'provider'
-              and reconciliation_match.environment = ${ledgerTransactions.metadata}->>'environment'
               and reconciliation_match.provider_payment_id = ${ledgerTransactions.metadata}->>'providerPaymentId'
               and reconciliation_match.status = 'matched'
           )

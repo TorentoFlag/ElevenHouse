@@ -17,7 +17,6 @@ describe("finance readiness evidence schema", () => {
         "evidenceId",
         "evidenceVersion",
         "requirementCode",
-        "environment",
         "transactionCategory",
         "scopeKey",
         "isCurrent",
@@ -27,6 +26,7 @@ describe("finance readiness evidence schema", () => {
         "safeDigest"
       ])
     );
+    expect(Object.keys(financeReadinessEvidenceVersions)).not.toContain("environment");
     const config = getTableConfig(financeReadinessEvidenceVersions);
     expect(config.primaryKeys).toHaveLength(1);
     expect(config.indexes.map((index) => index.config.name)).toEqual(

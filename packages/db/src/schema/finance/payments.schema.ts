@@ -12,7 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   financeCurrencyValues,
-  financePaymentProviderEnvironmentValues,
   financePaymentProviderValues,
   financeSafeIntegerMinorUnitMax,
   formatFinanceSqlValues,
@@ -30,7 +29,6 @@ export const paymentAttempts = pgTable(
       .notNull()
       .references(() => orders.id, { onDelete: "restrict" }),
     provider: text("provider").notNull(),
-    environment: text("environment").notNull(),
     status: text("status").notNull().default("created"),
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
     currency: text("currency").notNull(),
@@ -43,17 +41,11 @@ export const paymentAttempts = pgTable(
   },
   (table) => [
     uniqueIndex("payment_attempts_provider_payment_unique")
-      .on(table.provider, table.environment, table.providerPaymentId)
+      .on(table.provider, table.providerPaymentId)
       .where(sql`${table.providerPaymentId} is not null`),
     check(
       "payment_attempts_provider_check",
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}`
-    ),
-    check(
-      "payment_attempts_environment_check",
-      sql`${table.environment} in ${sql.raw(
-        formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-      )}`
     ),
     check(
       "payment_attempts_status_check",
@@ -81,11 +73,7 @@ export const paymentAttempts = pgTable(
     ),
     check("payment_attempts_metadata_check", sql`jsonb_typeof(${table.metadata}) = 'object'`),
     index("payment_attempts_order_created_idx").on(table.orderId, table.createdAt, table.id),
-    index("payment_attempts_provider_status_idx").on(
-      table.provider,
-      table.environment,
-      table.status
-    )
+    index("payment_attempts_provider_status_idx").on(table.provider, table.status)
   ]
 );
 
@@ -97,7 +85,6 @@ export const paymentProviderEvents = pgTable(
       onDelete: "set null"
     }),
     provider: text("provider").notNull(),
-    environment: text("environment").notNull(),
     providerWebhookId: text("provider_webhook_id").notNull(),
     providerPaymentId: text("provider_payment_id"),
     type: text("type").notNull(),
@@ -106,20 +93,10 @@ export const paymentProviderEvents = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull()
   },
   (table) => [
-    uniqueIndex("payment_provider_events_webhook_unique").on(
-      table.provider,
-      table.environment,
-      table.providerWebhookId
-    ),
+    uniqueIndex("payment_provider_events_webhook_unique").on(table.provider, table.providerWebhookId),
     check(
       "payment_provider_events_provider_check",
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}`
-    ),
-    check(
-      "payment_provider_events_environment_check",
-      sql`${table.environment} in ${sql.raw(
-        formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-      )}`
     ),
     check(
       "payment_provider_events_type_check",
@@ -134,11 +111,7 @@ export const paymentProviderEvents = pgTable(
       sql`${table.providerPaymentId} is null or length(trim(${table.providerPaymentId})) between 1 and 160`
     ),
     check("payment_provider_events_payload_check", sql`jsonb_typeof(${table.payload}) = 'object'`),
-    index("payment_provider_events_payment_idx").on(
-      table.provider,
-      table.environment,
-      table.providerPaymentId
-    ),
+    index("payment_provider_events_payment_idx").on(table.provider, table.providerPaymentId),
     index("payment_provider_events_received_idx").on(table.receivedAt, table.id)
   ]
 );
@@ -157,7 +130,6 @@ export const refunds = pgTable(
       onDelete: "set null"
     }),
     provider: text("provider").notNull(),
-    environment: text("environment").notNull(),
     status: text("status").notNull().default("requested"),
     amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
     currency: text("currency").notNull(),
@@ -176,12 +148,6 @@ export const refunds = pgTable(
       sql`${table.provider} in ${sql.raw(formatFinanceSqlValues(financePaymentProviderValues))}`
     ),
     check(
-      "refunds_environment_check",
-      sql`${table.environment} in ${sql.raw(
-        formatFinanceSqlValues(financePaymentProviderEnvironmentValues)
-      )}`
-    ),
-    check(
       "refunds_amount_check",
       sql`${table.amountMinor} > 0 and ${table.amountMinor} <= ${sql.raw(String(financeSafeIntegerMinorUnitMax))}`
     ),
@@ -194,7 +160,7 @@ export const refunds = pgTable(
       sql`${table.providerRefundId} is null or length(trim(${table.providerRefundId})) between 1 and 160`
     ),
     uniqueIndex("refunds_provider_refund_unique")
-      .on(table.provider, table.environment, table.providerRefundId)
+      .on(table.provider, table.providerRefundId)
       .where(sql`${table.providerRefundId} is not null`),
     index("refunds_order_created_idx").on(table.orderId, table.createdAt, table.id),
     index("refunds_payment_attempt_idx").on(table.paymentAttemptId)

@@ -179,7 +179,6 @@ type ResolvedCommand = Readonly<Omit<NormalizedCommand, "purpose"> & { purpose: 
 type LockedProviderAccount = Readonly<{
   provider: string;
   merchantTenantId: string;
-  environment: string;
   terminalScope: string;
   settlementScope: string;
   activeIdentityVersion: number;
@@ -431,7 +430,6 @@ async function lockExactProviderBinding<TSchema extends Record<string, unknown>>
     .select({
       provider: financeProviderAccounts.provider,
       merchantTenantId: financeProviderAccounts.merchantTenantId,
-      environment: financeProviderAccounts.environment,
       terminalScope: financeProviderAccounts.terminalScope,
       settlementScope: financeProviderAccounts.settlementScope
     })
@@ -853,7 +851,6 @@ async function validateReplacementAuthority<TSchema extends Record<string, unkno
     identityVersion: command.providerAccount.identityVersion,
     provider: "arc_pay",
     merchantTenantId: provider.merchantTenantId,
-    environment: provider.environment,
     terminalScope: provider.terminalScope,
     settlementScope: provider.settlementScope
   };

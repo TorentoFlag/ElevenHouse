@@ -301,9 +301,13 @@ function threeDsServerTransactionId(value: unknown): value is string {
 }
 
 function isIsoInstant(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(value)
+  ) {
+    return false;
+  }
+  return !Number.isNaN(new Date(value).getTime());
 }
 
 function executionStatus(value: unknown): value is ArcPayCardSetupExecution["status"] {

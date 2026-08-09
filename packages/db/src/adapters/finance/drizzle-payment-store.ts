@@ -9,7 +9,6 @@ import {
   type Money,
   type PaymentAttempt,
   type MarkPaymentAttemptCheckoutOpenedInput,
-  type PaymentProviderEnvironment,
   type PaymentProviderEvent,
   type PaymentStore,
   type RecordPaymentProviderEventInput,
@@ -79,7 +78,7 @@ async function linkPaymentAttemptToProviderPayment(
 ): Promise<PaymentAttempt | null> {
   const existing = await findPaymentAttemptById(database, input.paymentAttemptId);
   if (!existing) return null;
-  if (existing.provider !== input.provider || existing.environment !== input.environment) {
+  if (existing.provider !== input.provider) {
     throw new FinanceProviderContextMismatchError();
   }
   assertProviderEventPaymentMatchesAttempt(
@@ -133,7 +132,6 @@ async function createPaymentAttempt(
         ...(input.id ? { id: input.id } : {}),
         orderId: input.orderId,
         provider: input.provider,
-        environment: input.environment,
         status: input.status ?? "created",
         amountMinor: input.amount.amountMinor,
         currency: input.amount.currency,
@@ -155,7 +153,6 @@ async function createPaymentAttempt(
 
   const existing = await findPaymentAttemptByProviderPaymentId(database, {
     provider: input.provider,
-    environment: input.environment,
     providerPaymentId: input.providerPaymentId
   });
   if (!existing) throw new Error("Expected existing payment attempt after provider dedupe");
@@ -205,7 +202,6 @@ async function recordProviderEvent(
       ...(input.id ? { id: input.id } : {}),
       paymentAttemptId: input.paymentAttemptId,
       provider: input.provider,
-      environment: input.environment,
       providerWebhookId: input.providerWebhookId,
       providerPaymentId: input.providerPaymentId,
       type: input.type,
@@ -226,7 +222,6 @@ async function findProviderEventByWebhookId(
   database: FinanceDatabase,
   input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerWebhookId: string;
   }
 ): Promise<PaymentProviderEvent | null> {
@@ -236,7 +231,6 @@ async function findProviderEventByWebhookId(
     .where(
       and(
         eq(paymentProviderEvents.provider, input.provider),
-        eq(paymentProviderEvents.environment, input.environment),
         eq(paymentProviderEvents.providerWebhookId, input.providerWebhookId)
       )
     )
@@ -261,7 +255,6 @@ async function createRefund(
       paymentAttemptId: input.paymentAttemptId,
       providerEventId: input.providerEventId,
       provider: providerContext.provider,
-      environment: providerContext.environment,
       status: input.status ?? "requested",
       amountMinor: input.amount.amountMinor,
       currency: input.amount.currency,
@@ -281,7 +274,6 @@ async function createRefund(
     .where(
       and(
         eq(refunds.provider, providerContext.provider),
-        eq(refunds.environment, providerContext.environment),
         eq(refunds.providerRefundId, input.providerRefundId)
       )
     )
@@ -306,7 +298,6 @@ async function findPaymentAttemptByProviderPaymentId(
   database: FinanceDatabase,
   input: {
     readonly provider: FinancePaymentProvider;
-    readonly environment: PaymentProviderEnvironment;
     readonly providerPaymentId: string;
   }
 ): Promise<PaymentAttempt | null> {
@@ -316,7 +307,6 @@ async function findPaymentAttemptByProviderPaymentId(
     .where(
       and(
         eq(paymentAttempts.provider, input.provider),
-        eq(paymentAttempts.environment, input.environment),
         eq(paymentAttempts.providerPaymentId, input.providerPaymentId)
       )
     )
@@ -325,16 +315,13 @@ async function findPaymentAttemptByProviderPaymentId(
 }
 
 export function resolveFinanceRefundProviderContext(
-  input: Pick<CreateRefundInput, "provider" | "environment">,
-  attempt: Pick<PaymentAttempt, "provider" | "environment">
-): { readonly provider: FinancePaymentProvider; readonly environment: PaymentProviderEnvironment } {
+  input: Pick<CreateRefundInput, "provider">,
+  attempt: Pick<PaymentAttempt, "provider">
+): { readonly provider: FinancePaymentProvider } {
   if (input.provider && input.provider !== attempt.provider) {
     throw new FinanceProviderContextMismatchError();
   }
-  if (input.environment && input.environment !== attempt.environment) {
-    throw new FinanceProviderContextMismatchError();
-  }
-  return { provider: attempt.provider, environment: attempt.environment };
+  return { provider: attempt.provider };
 }
 
 export function assertProviderEventPaymentMatchesAttempt(
@@ -355,7 +342,6 @@ function toPaymentAttempt(row: PaymentAttemptRow): PaymentAttempt {
     id: row.id,
     orderId: row.orderId,
     provider: row.provider as FinancePaymentProvider,
-    environment: row.environment as PaymentProviderEnvironment,
     status: row.status as PaymentAttempt["status"],
     amount: money(row.amountMinor, row.currency),
     providerPaymentId: row.providerPaymentId,
@@ -372,7 +358,6 @@ function toPaymentProviderEvent(row: PaymentProviderEventRow): PaymentProviderEv
     id: row.id,
     paymentAttemptId: row.paymentAttemptId,
     provider: row.provider as FinancePaymentProvider,
-    environment: row.environment as PaymentProviderEnvironment,
     providerWebhookId: row.providerWebhookId,
     providerPaymentId: row.providerPaymentId,
     type: row.type as PaymentProviderEvent["type"],
@@ -389,7 +374,6 @@ function toRefund(row: RefundRow): RefundRecord {
     paymentAttemptId: row.paymentAttemptId,
     providerEventId: row.providerEventId,
     provider: row.provider as FinancePaymentProvider,
-    environment: row.environment as PaymentProviderEnvironment,
     status: row.status as RefundRecord["status"],
     amount: money(row.amountMinor, row.currency),
     reason: row.reason,
