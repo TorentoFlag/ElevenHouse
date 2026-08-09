@@ -133,9 +133,13 @@ async function recheckBirthProfileInTransaction(
   }
 
   const candidates = await findWaitingBirthDataCandidates(transaction, event.clientUserId);
+  const priorReceipts = await transaction
+    .select({ outcome: flowBirthProfileRecheckReceipts.outcome })
+    .from(flowBirthProfileRecheckReceipts)
+    .where(eq(flowBirthProfileRecheckReceipts.sourceOutboxEventId, input.sourceOutboxEventId));
   let affectedRunCount = 0;
   let sawNotReady = false;
-  let replayed = candidates.length > 0;
+  let replayed = candidates.length === 0 && priorReceipts.length > 0;
 
   for (const candidate of candidates) {
     const [existingReceipt] = await transaction
@@ -188,9 +192,15 @@ async function recheckBirthProfileInTransaction(
   return {
     sourceOutboxEventId: input.sourceOutboxEventId,
     profileHistoryId: event.birthDataHistoryId,
-    outcome: affectedRunCount > 0 ? "ready" : sawNotReady ? "not_ready" : "stale",
+    outcome:
+      affectedRunCount > 0 || priorReceipts.some((receipt) => receipt.outcome === "ready")
+        ? "ready"
+        : sawNotReady || priorReceipts.some((receipt) => receipt.outcome === "not_ready")
+          ? "not_ready"
+          : "stale",
     replayed,
-    affectedRunCount
+    affectedRunCount:
+      affectedRunCount + priorReceipts.filter((receipt) => receipt.outcome === "ready").length
   };
 }
 
@@ -495,7 +505,10 @@ async function resolveReadyBirthDataWorkItem(
   }
 }
 
-function sameBirthProfileEvent(payload: unknown, event: z.infer<typeof birthProfileEventSchema>): boolean {
+function sameBirthProfileEvent(
+  payload: unknown,
+  event: z.infer<typeof birthProfileEventSchema>
+): boolean {
   const parsed = birthProfileEventSchema.safeParse(payload);
   return parsed.success && JSON.stringify(parsed.data) === JSON.stringify(event);
 }

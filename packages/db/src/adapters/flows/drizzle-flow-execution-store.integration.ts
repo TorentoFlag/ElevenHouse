@@ -10,6 +10,7 @@ import {
   createBuiltInFlowNodeExecutorRegistry,
   decideDurableFlowApproval,
   createFlowNodeExecutorRegistry,
+  CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_CHART_CALCULATION_TERMINAL_SIGNAL,
   FLOW_MESSAGING_DELIVERY_TERMINAL_SIGNAL,
   interpretFlowExecutionClaim,
@@ -35,6 +36,7 @@ import {
   createDrizzleFlowExecutionStore
 } from "./drizzle-flow-execution-store";
 import { createDrizzleFlowBookingLifecycleStore } from "./drizzle-flow-booking-lifecycle-store";
+import { createDrizzleFlowBirthProfileRecheckStore } from "./drizzle-flow-birth-profile-recheck-store";
 import { createDrizzleFlowRunCancellationStore } from "./drizzle-flow-run-cancellation-store";
 import { createDrizzleFlowWorkItemWakeStore } from "./drizzle-flow-work-item-wake-store";
 import { createDrizzleFlowWorkItemStore } from "./drizzle-flow-work-item-store";
@@ -337,11 +339,36 @@ const natalAiApprovalGraph = flowGraphV2Schema.parse({
     }
   ],
   edges: [
-    { id: "booking-chart", sourceNodeId: "booking", targetNodeId: "natal-chart", sourceHandle: "next" },
-    { id: "chart-ai", sourceNodeId: "natal-chart", targetNodeId: "review-natal-ai", sourceHandle: "next" },
-    { id: "ai-approved", sourceNodeId: "review-natal-ai", targetNodeId: "completed", sourceHandle: "approved" },
-    { id: "ai-rejected", sourceNodeId: "review-natal-ai", targetNodeId: "suppressed", sourceHandle: "rejected" },
-    { id: "ai-timeout", sourceNodeId: "review-natal-ai", targetNodeId: "failed", sourceHandle: "timeout" }
+    {
+      id: "booking-chart",
+      sourceNodeId: "booking",
+      targetNodeId: "natal-chart",
+      sourceHandle: "next"
+    },
+    {
+      id: "chart-ai",
+      sourceNodeId: "natal-chart",
+      targetNodeId: "review-natal-ai",
+      sourceHandle: "next"
+    },
+    {
+      id: "ai-approved",
+      sourceNodeId: "review-natal-ai",
+      targetNodeId: "completed",
+      sourceHandle: "approved"
+    },
+    {
+      id: "ai-rejected",
+      sourceNodeId: "review-natal-ai",
+      targetNodeId: "suppressed",
+      sourceHandle: "rejected"
+    },
+    {
+      id: "ai-timeout",
+      sourceNodeId: "review-natal-ai",
+      targetNodeId: "failed",
+      sourceHandle: "timeout"
+    }
   ]
 });
 
@@ -435,9 +462,24 @@ const messagingWaitGraph = flowGraphV2Schema.parse({
     }
   ],
   edges: [
-    { id: "booking-message", sourceNodeId: "booking", targetNodeId: "send-message", sourceHandle: "next" },
-    { id: "message-success", sourceNodeId: "send-message", targetNodeId: "completed", sourceHandle: "success" },
-    { id: "message-error", sourceNodeId: "send-message", targetNodeId: "delivery-failed", sourceHandle: "error" }
+    {
+      id: "booking-message",
+      sourceNodeId: "booking",
+      targetNodeId: "send-message",
+      sourceHandle: "next"
+    },
+    {
+      id: "message-success",
+      sourceNodeId: "send-message",
+      targetNodeId: "completed",
+      sourceHandle: "success"
+    },
+    {
+      id: "message-error",
+      sourceNodeId: "send-message",
+      targetNodeId: "delivery-failed",
+      sourceHandle: "error"
+    }
   ]
 });
 
@@ -492,6 +534,77 @@ const bookingWorkItemGraph = flowGraphV2Schema.parse({
   ]
 });
 
+const birthDataCollectionWorkItemGraph = flowGraphV2Schema.parse({
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { productIds: ["10000000-0000-4000-8000-000000000001"] }
+    },
+    {
+      id: "collect-birth-data",
+      kind: "astrologer_work_item",
+      displayTitle: "Собрать данные рождения",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        taskKind: "birth_data_collection",
+        taskTitle: "Собрать данные рождения",
+        instructions: "Получите и внесите данные рождения клиента",
+        priority: "high",
+        duePolicy: { kind: "before_booking_start", leadTimeMinutes: 1_440 },
+        completionRequirements: { resultSummary: "optional" }
+      }
+    },
+    {
+      id: "birth-data",
+      kind: "birth_data_available",
+      displayTitle: "Данные рождения готовы",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { purpose: "service_preparation" }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Подготовка завершена",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "consultation_prepared" }
+    }
+  ],
+  edges: [
+    {
+      id: "booking-birth-data",
+      sourceNodeId: "booking",
+      targetNodeId: "birth-data",
+      sourceHandle: "next"
+    },
+    {
+      id: "birth-data-missing",
+      sourceNodeId: "birth-data",
+      targetNodeId: "collect-birth-data",
+      sourceHandle: "false"
+    },
+    {
+      id: "birth-data-collected",
+      sourceNodeId: "collect-birth-data",
+      targetNodeId: "birth-data",
+      sourceHandle: "success"
+    },
+    {
+      id: "birth-data-completed",
+      sourceNodeId: "birth-data",
+      targetNodeId: "completed",
+      sourceHandle: "true"
+    }
+  ]
+});
+
 function requireCapabilityManifest(input: FlowGraphV2) {
   const compiled = compileFlowGraphV2(input);
   if (!compiled.capabilityManifest) raise("Expected publishable integration graph");
@@ -506,6 +619,9 @@ const natalAiApprovalCapabilityManifest = requireCapabilityManifest(natalAiAppro
 const chartWaitCapabilityManifest = requireCapabilityManifest(chartWaitGraph);
 const messagingWaitCapabilityManifest = requireCapabilityManifest(messagingWaitGraph);
 const bookingWorkItemCapabilityManifest = requireCapabilityManifest(bookingWorkItemGraph);
+const birthDataCollectionWorkItemCapabilityManifest = requireCapabilityManifest(
+  birthDataCollectionWorkItemGraph
+);
 
 function createBirthDataRegistry() {
   return createFlowNodeExecutorRegistry([
@@ -583,12 +699,24 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       await client.query(
         "ALTER TABLE booking_lifecycle_events DISABLE TRIGGER booking_lifecycle_events_immutable"
       );
+      await client.query(
+        "ALTER TABLE client_birth_data_history DISABLE TRIGGER client_birth_data_history_append_only"
+      );
       await client.query("delete from flow_booking_lifecycle_heads");
       await client.query("delete from flow_booking_lifecycle_receipts");
       await client.query("delete from flow_runs");
+      await client.query("delete from outbox_events where event_type = $1", [
+        CLIENT_BIRTH_PROFILE_UPDATED_EVENT
+      ]);
+      await client.query("delete from client_birth_data_history");
+      await client.query("delete from client_birth_data");
+      await client.query("delete from client_astrologer_relationships");
       await client.query("delete from booking_lifecycle_events");
       await client.query("delete from bookings");
       await client.query("delete from users");
+      await client.query(
+        "ALTER TABLE client_birth_data_history ENABLE TRIGGER client_birth_data_history_append_only"
+      );
       await client.query(
         "ALTER TABLE booking_lifecycle_events ENABLE TRIGGER booking_lifecycle_events_immutable"
       );
@@ -1128,9 +1256,11 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       claim,
       registry: createNatalAiDraftRegistry(fixture)
     });
-    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject({
-      status: "applied"
-    });
+    await expect(executionStore.finalize({ claim, decision: waitDecision })).resolves.toMatchObject(
+      {
+        status: "applied"
+      }
+    );
     const approval = await runtime.pool.query<{ id: string }>(
       "select id from flow_approvals where flow_run_id = $1",
       [fixture.runId]
@@ -1185,7 +1315,9 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       [fixture.runId]
     );
 
-    await expect(createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 })).resolves.toMatchObject({
+    await expect(
+      createDrizzleFlowApprovalWakeStore(runtime.database).wakeDue({ limit: 10 })
+    ).resolves.toMatchObject({
       expiredCount: 1
     });
     const terminalClaim = await claimExecution(executionStore, {
@@ -1197,7 +1329,9 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       claim: terminalClaim,
       registry: createBuiltInFlowNodeExecutorRegistry()
     });
-    await expect(executionStore.finalize({ claim: terminalClaim, decision: terminalDecision })).resolves.toMatchObject({
+    await expect(
+      executionStore.finalize({ claim: terminalClaim, decision: terminalDecision })
+    ).resolves.toMatchObject({
       status: "applied"
     });
     const persisted = await selectExecution(fixture.runId);
@@ -1692,7 +1826,9 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     const decision = await interpretFlowExecutionClaim({
       claim,
       registry: createBuiltInFlowNodeExecutorRegistry({
-        messagingRequester: { prepare: async () => ({ kind: "queued", messageId: fixture.messageId }) }
+        messagingRequester: {
+          prepare: async () => ({ kind: "queued", messageId: fixture.messageId })
+        }
       })
     });
     await store.finalize({ claim, decision });
@@ -2369,6 +2505,162 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       run: { status: "running", current_node_id: "completed", trace_sequence: "2" },
       token: { state: "runnable", node_id: "completed", node_activation_sequence: "2" }
     });
+  });
+
+  it("rechecks a singleton birth profile, resumes the exact waiting booking run, and replays safely", async () => {
+    const fixture = await createWaitingBirthDataCollectionFixture();
+    const profileEvent = await persistBirthProfileRevision({
+      clientUserId: fixture.clientUserId,
+      astrologerUserId: fixture.ownerUserId,
+      ready: true
+    });
+    const store = createDrizzleFlowBirthProfileRecheckStore(runtime.database);
+
+    await expect(store.recheck(profileEvent)).resolves.toEqual({
+      sourceOutboxEventId: profileEvent.sourceOutboxEventId,
+      profileHistoryId: profileEvent.event.birthDataHistoryId,
+      outcome: "ready",
+      replayed: false,
+      affectedRunCount: 1
+    });
+
+    const [execution, workItem, receipts] = await Promise.all([
+      selectExecution(fixture.runId),
+      runtime.pool.query(
+        `select status, completed_by_user_id, result_summary, revision, last_command_id
+           from flow_work_items where id = $1`,
+        [fixture.workItemId]
+      ),
+      runtime.pool.query(
+        `select outcome, birth_data_revision, source_outbox_event_id, flow_run_id
+           from flow_birth_profile_recheck_receipts where flow_run_id = $1`,
+        [fixture.runId]
+      )
+    ]);
+    expect(execution.run).toMatchObject({
+      status: "running",
+      current_node_id: "birth-data",
+      trace_sequence: "2"
+    });
+    expect(execution.token).toMatchObject({
+      state: "runnable",
+      node_id: "birth-data",
+      node_activation_sequence: "2"
+    });
+    expect(execution.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event_type: "token_advanced",
+          summary: expect.objectContaining({
+            reasonCode: "FLOW_BIRTH_PROFILE_RECHECK_READY",
+            sourceOutboxEventId: profileEvent.sourceOutboxEventId,
+            birthDataHistoryId: profileEvent.event.birthDataHistoryId,
+            birthDataRevision: 1,
+            workItemId: fixture.workItemId
+          })
+        })
+      ])
+    );
+    expect(JSON.stringify(execution.events)).not.toContain("1990-02-02");
+    expect(workItem.rows).toEqual([
+      {
+        status: "completed",
+        completed_by_user_id: null,
+        result_summary: null,
+        revision: 2,
+        last_command_id: null
+      }
+    ]);
+    expect(receipts.rows).toEqual([
+      {
+        outcome: "ready",
+        birth_data_revision: 1,
+        source_outbox_event_id: profileEvent.sourceOutboxEventId,
+        flow_run_id: fixture.runId
+      }
+    ]);
+
+    await expect(store.recheck(profileEvent)).resolves.toEqual({
+      sourceOutboxEventId: profileEvent.sourceOutboxEventId,
+      profileHistoryId: profileEvent.event.birthDataHistoryId,
+      outcome: "ready",
+      replayed: true,
+      affectedRunCount: 1
+    });
+    await expect(selectExecution(fixture.runId)).resolves.toMatchObject({
+      run: { status: "running", current_node_id: "birth-data", trace_sequence: "2" },
+      token: { state: "runnable", node_id: "birth-data", node_activation_sequence: "2" }
+    });
+  });
+
+  it("records a not-ready singleton profile without resolving its birth-data task", async () => {
+    const fixture = await createWaitingBirthDataCollectionFixture();
+    const profileEvent = await persistBirthProfileRevision({
+      clientUserId: fixture.clientUserId,
+      astrologerUserId: fixture.ownerUserId,
+      ready: false
+    });
+
+    await expect(
+      createDrizzleFlowBirthProfileRecheckStore(runtime.database).recheck(profileEvent)
+    ).resolves.toEqual({
+      sourceOutboxEventId: profileEvent.sourceOutboxEventId,
+      profileHistoryId: profileEvent.event.birthDataHistoryId,
+      outcome: "not_ready",
+      replayed: false,
+      affectedRunCount: 0
+    });
+    await expect(selectExecution(fixture.runId)).resolves.toMatchObject({
+      run: { status: "waiting", current_node_id: "collect-birth-data", trace_sequence: "1" },
+      token: {
+        state: "waiting_work_item",
+        node_id: "collect-birth-data",
+        node_activation_sequence: "1"
+      }
+    });
+    await expect(
+      runtime.pool.query(
+        `select status, completed_by_user_id, revision from flow_work_items where id = $1`,
+        [fixture.workItemId]
+      )
+    ).resolves.toMatchObject({
+      rows: [{ status: "pending", completed_by_user_id: null, revision: 1 }]
+    });
+  });
+
+  it("does not recheck a profile for an archived client-astrologer relationship", async () => {
+    const fixture = await createWaitingBirthDataCollectionFixture();
+    const profileEvent = await persistBirthProfileRevision({
+      clientUserId: fixture.clientUserId,
+      astrologerUserId: fixture.ownerUserId,
+      ready: true
+    });
+    await runtime.pool.query(
+      `update client_astrologer_relationships
+          set status = 'archived', archived_at = transaction_timestamp()
+        where client_user_id = $1 and astrologer_user_id = $2`,
+      [fixture.clientUserId, fixture.ownerUserId]
+    );
+
+    await expect(
+      createDrizzleFlowBirthProfileRecheckStore(runtime.database).recheck(profileEvent)
+    ).resolves.toEqual({
+      sourceOutboxEventId: profileEvent.sourceOutboxEventId,
+      profileHistoryId: profileEvent.event.birthDataHistoryId,
+      outcome: "stale",
+      replayed: false,
+      affectedRunCount: 0
+    });
+    await expect(selectExecution(fixture.runId)).resolves.toMatchObject({
+      run: { status: "waiting", current_node_id: "collect-birth-data", trace_sequence: "1" },
+      token: { state: "waiting_work_item", node_id: "collect-birth-data" }
+    });
+    await expect(
+      runtime.pool.query(
+        "select count(*)::text as count from flow_birth_profile_recheck_receipts where flow_run_id = $1",
+        [fixture.runId]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: "0" }] });
   });
 
   it("hides mixed Booking revisions and fences work-item commands until reschedule projection is current", async () => {
@@ -4964,12 +5256,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
          created_at, updated_at)
        values ($1, $2, 'chart', 'individual', 'adult_natal', 'natal', 'Fixture natal chart', 'calculated',
          $3, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb, $4, now(), now())`,
-      [
-        calculationId,
-        fixture.ownerUserId,
-        `sha256:${"a".repeat(64)}`,
-        `sha256:${"b".repeat(64)}`
-      ]
+      [calculationId, fixture.ownerUserId, `sha256:${"a".repeat(64)}`, `sha256:${"b".repeat(64)}`]
     );
     await runtime.pool.query(
       `insert into calculation_interpretations
@@ -5121,6 +5408,66 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     };
   }
 
+  async function createBirthDataCollectionBookingFixture(ownerUserId?: string) {
+    const resolvedOwnerUserId = ownerUserId ?? (await createUser());
+    const bookingId = randomUUID();
+    const clientUserId = await createUser();
+    const startAt = "2026-08-10T10:00:00.000Z";
+    const endAt = "2026-08-10T11:00:00.000Z";
+    const projectionSubject = await createBookingProjectionSubject({
+      ownerUserId: resolvedOwnerUserId,
+      clientUserId,
+      bookingId,
+      startAt,
+      endAt
+    });
+    const fixture = await createTerminalFixture({
+      ownerUserId: resolvedOwnerUserId,
+      graph: birthDataCollectionWorkItemGraph,
+      initialNode: {
+        id: "collect-birth-data",
+        kind: "astrologer_work_item",
+        configSchemaVersion: 1,
+        executorContractVersion: 1
+      },
+      capabilityManifest: birthDataCollectionWorkItemCapabilityManifest,
+      normalizedRuntimeEvent: projectionSubject.normalizedRuntimeEvent,
+      runtimeEventSource: "booking",
+      runtimeEventSubjectType: "booking",
+      runtimeEventSubjectId: bookingId,
+      createRunSnapshot: ({ subjectId, occurredAt }) => ({
+        schemaVersion: "flow-run-snapshot.v2",
+        enrollment: {
+          activationEpochId: randomUUID(),
+          triggerNodeId: "booking",
+          occurrenceKey: bookingId,
+          policyKey: "once_per_occurrence",
+          policyRevision: 1,
+          rolloutPolicyRevision: 1,
+          eventOccurredAt: occurredAt,
+          enrolledAt: occurredAt
+        },
+        subject: {
+          type: "booking",
+          bookingId: subjectId,
+          clientUserId,
+          productId: "10000000-0000-4000-8000-000000000001",
+          startAt,
+          endAt
+        },
+        executionAuthority: {
+          basis: "current_entitlement",
+          referenceId: randomUUID()
+        }
+      })
+    });
+    await persistFixtureBookingLifecycleHead({
+      lifecycleEvent: projectionSubject.lifecycleEvent,
+      runtimeEventId: fixture.runtimeEventId
+    });
+    return { ...fixture, bookingId, clientUserId, startAt, endAt };
+  }
+
   async function createBookingProjectionSubject(input: {
     readonly ownerUserId: string;
     readonly clientUserId: string;
@@ -5245,6 +5592,91 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
     } finally {
       client.release();
     }
+  }
+
+  async function persistBirthProfileRevision(input: {
+    readonly clientUserId: string;
+    readonly astrologerUserId: string;
+    readonly ready: boolean;
+  }) {
+    const birthDataId = randomUUID();
+    const birthDataHistoryId = randomUUID();
+    const sourceOutboxEventId = randomUUID();
+    const occurredAt = "2026-08-09T10:00:00.000Z";
+    const event = {
+      schemaVersion: "client-birth-profile-updated.v1" as const,
+      birthDataHistoryId,
+      birthDataId,
+      clientUserId: input.clientUserId,
+      revision: 1,
+      actorUserId: input.astrologerUserId,
+      actorRole: "astrologer" as const,
+      occurredAt
+    };
+    const client = await runtime.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        `insert into client_astrologer_relationships
+          (client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at,
+           created_at, updated_at)
+         values ($1, $2, 'booking', 'active', $3, $3, $3, $3)`,
+        [input.clientUserId, input.astrologerUserId, occurredAt]
+      );
+      await client.query(
+        `insert into client_birth_data
+          (id, client_user_id, birth_date, birth_time, birth_time_precision, birth_place_text,
+           birth_country_code, birth_city, birth_timezone, birth_latitude, birth_longitude,
+           source, revision, last_edited_by_user_id, last_edited_by_role, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, 'RU', 'Moscow', $7, $8, $9,
+           'client_profile', 1, $10, 'astrologer', $11, $11)`,
+        [
+          birthDataId,
+          input.clientUserId,
+          input.ready ? "1990-02-02" : null,
+          input.ready ? "12:00" : null,
+          input.ready ? "exact" : "unknown",
+          input.ready ? "Moscow" : null,
+          input.ready ? "Europe/Moscow" : null,
+          input.ready ? 55.7558 : null,
+          input.ready ? 37.6173 : null,
+          input.astrologerUserId,
+          occurredAt
+        ]
+      );
+      await client.query(
+        `insert into client_birth_data_history
+          (id, birth_data_id, client_user_id, revision, actor_user_id, actor_role, source,
+           snapshot, recorded_at)
+         values ($1, $2, $3, 1, $4, 'astrologer', 'client_profile', $5::jsonb, $6)`,
+        [
+          birthDataHistoryId,
+          birthDataId,
+          input.clientUserId,
+          input.astrologerUserId,
+          JSON.stringify({ schemaVersion: "client-birth-profile.v1", revision: 1 }),
+          occurredAt
+        ]
+      );
+      await client.query(
+        `insert into outbox_events (id, event_type, aggregate_id, payload, available_at, created_at, updated_at)
+         values ($1, $2, $3, $4::jsonb, $5, $5, $5)`,
+        [
+          sourceOutboxEventId,
+          CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
+          birthDataHistoryId,
+          JSON.stringify(event),
+          occurredAt
+        ]
+      );
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+    return { sourceOutboxEventId, event };
   }
 
   async function persistFixtureBookingLifecycleHead(input: {
@@ -5410,6 +5842,27 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
       [fixture.runId]
     );
     const workItemId = result.rows[0]?.id ?? raise("Expected waiting booking work item id");
+    return { ...fixture, workItemId };
+  }
+
+  async function createWaitingBirthDataCollectionFixture(ownerUserId?: string) {
+    const fixture = await createBirthDataCollectionBookingFixture(ownerUserId);
+    const store = createDrizzleFlowExecutionStore(runtime.database);
+    const claim = await claimExecution(store, {
+      leaseOwner: `flows-worker-create-birth-data-work-item-${fixture.tokenId}`,
+      leaseDurationMs: 30_000,
+      executorKeys: ["astrologer_work_item:1:1"]
+    });
+    const decision = await interpretFlowExecutionClaim({
+      claim,
+      registry: createBuiltInFlowNodeExecutorRegistry()
+    });
+    await store.finalize({ claim, decision });
+    const result = await runtime.pool.query<{ id: string }>(
+      "select id from flow_work_items where flow_run_id = $1",
+      [fixture.runId]
+    );
+    const workItemId = result.rows[0]?.id ?? raise("Expected waiting birth-data work item id");
     return { ...fixture, workItemId };
   }
 
