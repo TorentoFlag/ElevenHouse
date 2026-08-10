@@ -246,6 +246,7 @@ function NodeConfigFields({
         <label className={className}>
           <span>{copy.taskTitle}</span>
           <input
+            name="flowTaskTitle"
             value={node.config.taskTitle}
             disabled={!editable}
             maxLength={180}
@@ -257,6 +258,7 @@ function NodeConfigFields({
         <label className={className}>
           <span>{copy.instructions}</span>
           <textarea
+            name="flowTaskInstructions"
             value={node.config.instructions ?? ""}
             disabled={!editable}
             maxLength={4000}
@@ -275,6 +277,7 @@ function NodeConfigFields({
         <label className={className}>
           <span>{copy.priority}</span>
           <select
+            name="flowTaskPriority"
             value={node.config.priority}
             disabled={!editable}
             onChange={(event) =>

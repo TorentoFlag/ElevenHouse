@@ -16,7 +16,12 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
-import { bookings, chartCalculationJobs, clientBirthData } from "../../schema";
+import {
+  bookings,
+  chartCalculationJobs,
+  clientAstrologerRelationships,
+  clientBirthData
+} from "../../schema";
 
 export function createDrizzleFlowNatalChartRequester(
   database: ElevenHouseDatabase,
@@ -47,6 +52,14 @@ export function createDrizzleFlowNatalChartRequester(
           birthTimeDstOccurrence: clientBirthData.birthTimeDstOccurrence
         })
         .from(bookings)
+        .innerJoin(
+          clientAstrologerRelationships,
+          and(
+            eq(clientAstrologerRelationships.clientUserId, bookings.clientUserId),
+            eq(clientAstrologerRelationships.astrologerUserId, bookings.ownerUserId),
+            eq(clientAstrologerRelationships.status, "active")
+          )
+        )
         .leftJoin(clientBirthData, eq(clientBirthData.clientUserId, bookings.clientUserId))
         .where(
           and(
@@ -60,7 +73,7 @@ export function createDrizzleFlowNatalChartRequester(
       if (!row || row.state !== "confirmed") {
         throw new FlowExecutionIntegrityError(
           "FLOW_TOKEN_RUNTIME_STATE_INVALID",
-          "Natal-chart request requires the pinned confirmed booking, owner, and client"
+          "Natal-chart request requires the pinned confirmed booking, active relationship, owner, and client"
         );
       }
       const requirements = parseBookingClientDataRequirementsSnapshot(row.requirements);

@@ -56,6 +56,11 @@ describe("FlowBuilderInspector", () => {
     );
 
     expect(screen.queryByLabelText("Конфигурация")).toBeNull();
+    expect(screen.getByLabelText("Название задачи").getAttribute("name")).toBe("flowTaskTitle");
+    expect(screen.getByLabelText("Инструкции").getAttribute("name")).toBe(
+      "flowTaskInstructions"
+    );
+    expect(screen.getByLabelText("Приоритет").getAttribute("name")).toBe("flowTaskPriority");
     fireEvent.change(screen.getByLabelText("Название узла"), {
       target: { value: "Собрать материалы" }
     });
