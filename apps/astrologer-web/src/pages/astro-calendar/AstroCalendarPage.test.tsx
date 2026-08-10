@@ -97,7 +97,7 @@ const rangeResponse = {
       id: "moon-full-2026-08-09",
       source: "global",
       type: "global.moon_phase",
-      startsAt: "2026-08-09T08:55:00.000Z",
+      startsAt: futureIso(1),
       endsAt: null,
       timePrecision: "hour",
       title: "Полнолуние 17° Водолея",
@@ -116,7 +116,7 @@ const rangeResponse = {
       id: "client-transit-1",
       source: "client",
       type: "client.transit_aspect",
-      startsAt: "2026-08-13T12:00:00.000Z",
+      startsAt: futureIso(4),
       endsAt: null,
       timePrecision: "day",
       title: "Транзитный Юпитер к Солнцу",
@@ -168,6 +168,10 @@ const rangeResponse = {
   ],
   warnings: []
 } satisfies AstroCalendarRangeResponse;
+
+function futureIso(daysFromNow: number): string {
+  return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000).toISOString();
+}
 
 const dictionaryResponse = {
   entries: [],

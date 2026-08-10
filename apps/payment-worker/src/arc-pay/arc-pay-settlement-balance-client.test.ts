@@ -11,11 +11,12 @@ describe("createArcPaySettlementBalanceClient", () => {
   it("reads the documented balance endpoint without losing int64 minor units", async () => {
     const rawBody =
       '{"balances":[{"available":9223372036854775807,"currency":"RUB","pending":-7,"reserved":0,"updated_at":"2026-08-07T12:36:42.14332Z"}]}' as const;
-    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      new Response(
+    const fetchImpl = vi.fn(async (...arguments_: Parameters<typeof fetch>) => {
+      void arguments_;
+      return new Response(
         rawBody
-      )
-    );
+      );
+    });
     const client = createArcPaySettlementBalanceClient({
       apiBaseUrl: "https://api.arcpay.space",
       apiSecret: "arc-secret",

@@ -5,6 +5,7 @@ import {
   createLosslessSettlementEntry,
   createLosslessSettlementPayout,
   digestFinanceCanonicalValueV1,
+  hasAsciiControlCharacter,
   type FinanceProviderAccountIdentity,
   type FinanceSettlementStream,
   type FinancePrivateObjectStoragePort,
@@ -332,7 +333,7 @@ function identifier(value: unknown, maximumLength: number): string {
     value.length === 0 ||
     value.length > maximumLength ||
     value.trim() !== value ||
-    /[\u0000-\u001f\u007f]/.test(value)
+    hasAsciiControlCharacter(value)
   ) {
     fail("invalid_response");
   }

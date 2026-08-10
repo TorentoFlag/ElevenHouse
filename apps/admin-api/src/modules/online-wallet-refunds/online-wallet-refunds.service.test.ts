@@ -1,6 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
 import {
-  canonicalizeFinanceCommandPayload,
   hashFinanceCommandPayload
 } from "@elevenhouse/domain";
 import type {

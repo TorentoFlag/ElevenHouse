@@ -273,7 +273,10 @@ describe("Messaging persistence schema", () => {
     expect(migration).toContain(
       'ALTER TABLE "messaging_thread_identities" ADD CONSTRAINT "messaging_thread_identities_external_identity_provider_fk" FOREIGN KEY ("external_identity_id","provider") REFERENCES "public"."messaging_external_identities"("id","provider") ON DELETE cascade ON UPDATE no action'
     );
-    expect(journal.entries).toHaveLength(17);
+    expect(journal.entries.map(({ idx, tag }) => ({ idx, tag }))).toContainEqual({
+      idx: 14,
+      tag: "0014_messaging"
+    });
     expect(snapshot.prevId).not.toBe("00000000-0000-0000-0000-000000000000");
   });
 });

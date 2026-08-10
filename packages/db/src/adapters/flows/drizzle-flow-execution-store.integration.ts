@@ -5314,7 +5314,7 @@ describe("flow execution store Drizzle/PostgreSQL integration", () => {
         executorContractVersion: 1
       },
       capabilityManifest: messagingWaitCapabilityManifest,
-      createRunSnapshot: ({ flowVersionId, sourceEventId, subjectId, occurredAt }) => ({
+      createRunSnapshot: ({ flowVersionId, subjectId, occurredAt }) => ({
         schemaVersion: "flow-run-snapshot.v2",
         enrollment: {
           activationEpochId: randomUUID(),

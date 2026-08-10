@@ -2,16 +2,6 @@ import { Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import OpenAI from "openai";
 import {
-  AiProviderAuthenticationError,
-  AiProviderBadRequestError,
-  AiProviderBillingError,
-  AiProviderIncompleteResponseError,
-  AiProviderRateLimitError,
-  AiProviderRefusalError,
-  AiProviderResponseFormatError,
-  AiProviderServerError,
-  AiProviderTimeoutError,
-  AiProviderUnavailableError,
   createOpenAiProvider,
   type AiGenerationPort,
   type OpenAiClient,

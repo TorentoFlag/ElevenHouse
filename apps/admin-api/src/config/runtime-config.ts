@@ -224,37 +224,6 @@ function resolveFinanceRefundDispatch(
   });
 }
 
-function resolveFinanceArtifactStorage(config: z.infer<typeof adminApiRuntimeConfigSchema>, scope: string) {
-  const endpoint = requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT, scope);
-  if (new URL(endpoint).protocol !== "https:") {
-    throw new Error(`ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS when ${scope} is enabled`);
-  }
-  const forcePathStyle = config.ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
-  if (forcePathStyle === undefined) {
-    throw new Error(`ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when ${scope} is enabled`);
-  }
-  const kmsKeyArn = requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN, scope);
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error("ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
-  }
-  return Object.freeze({
-    endpoint,
-    region: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_REGION, scope),
-    bucket: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET, scope),
-    accessKeyId: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID, scope),
-    secretAccessKey: requiredFinanceArtifactConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY, scope),
-    forcePathStyle: forcePathStyle === "true",
-    kmsKeyArn
-  });
-}
-
-function requiredFinanceArtifactConfig(value: string | undefined, scope: string): string {
-  if (!value) {
-    throw new Error(`${scope} requires private artifact storage configuration`);
-  }
-  return value;
-}
-
 function requiredRefundDispatchConfig(value: string | undefined): string {
   if (!value) {
     throw new Error("ADMIN_API_FINANCE_REFUND_DISPATCH_ENABLED requires a provider-request retention policy");

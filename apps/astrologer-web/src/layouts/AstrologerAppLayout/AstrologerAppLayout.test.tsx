@@ -2,8 +2,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Children, isValidElement, type JSXElementConstructor, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
-import { AstrologerNavigationDrawer } from "../AstrologerNavigationDrawer";
-import { AstrologerMobileNavigation } from "../AstrologerMobileNavigation";
 import { AstrologerAppLayout } from "./AstrologerAppLayout";
 import styles from "./AstrologerAppLayout.module.css";
 

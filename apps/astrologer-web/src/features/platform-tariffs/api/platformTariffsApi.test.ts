@@ -102,7 +102,7 @@ describe("platform tariffs API", () => {
   });
 
   it("treats the empty successful response before setup starts as no setup", async () => {
-    const get = vi.spyOn(application.http, "get").mockResolvedValue(undefined);
+    vi.spyOn(application.http, "get").mockResolvedValue(undefined);
 
     await expect(
       getCurrentSavedCardSetupStatus(startResult.subscription.subscriptionId)
@@ -142,7 +142,7 @@ describe("platform tariffs API", () => {
   });
 
   it("treats the empty successful response before the first invoice as no pending invoice", async () => {
-    const get = vi.spyOn(application.http, "get").mockResolvedValue(undefined);
+    vi.spyOn(application.http, "get").mockResolvedValue(undefined);
 
     await expect(
       getCurrentTariffInvoicePaymentStatus(startResult.subscription.subscriptionId)

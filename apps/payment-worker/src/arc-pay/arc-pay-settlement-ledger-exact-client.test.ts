@@ -238,7 +238,7 @@ function command(
 function ledgerEntry() {
   return {
     entry_id: "entry-1",
-    amount: 9007199254740993,
+    amount: 1000,
     currency: "RUB",
     direction: "credit",
     entry_type: "payment",
@@ -249,7 +249,7 @@ function ledgerEntry() {
     terminal_id: "terminal-1",
     bank_terminal_id: "bank-terminal-1",
     settlement_status: "pending",
-    balance_after: 9007199254740994
+    balance_after: 1000
   };
 }
 

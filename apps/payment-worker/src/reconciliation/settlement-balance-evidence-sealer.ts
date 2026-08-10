@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type { FinanceArtifactRegistry } from "@elevenhouse/db/finance";
-import type {
+import {
+  hasAsciiControlCharacter,
   FinancePrivateObjectStoragePort,
   FinanceProviderAccountIdentity,
   RawProviderArtifactRef
@@ -118,7 +119,7 @@ function readRetention(value: Readonly<{ policyId: string; policyVersion: string
 }
 
 function identifier(value: string): boolean {
-  return value.length > 0 && value.length <= 160 && value.trim() === value && !/[\u0000-\u001f\u007f]/.test(value);
+  return value.length > 0 && value.length <= 160 && value.trim() === value && !hasAsciiControlCharacter(value);
 }
 
 function positiveRevision(value: string): boolean {

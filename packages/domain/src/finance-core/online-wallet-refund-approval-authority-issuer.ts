@@ -2,10 +2,8 @@ import {
   hashFinanceCommandPayload,
   type FinanceTransactionAuthorizationProof
 } from "../finance-authorization";
-import type {
-  FinanceDigest,
-  FinanceProviderAccountIdentity
-} from "./ports/finance-port-types";
+import { hasAsciiControlCharacter } from "./finance-string-validation";
+import type { FinanceProviderAccountIdentity } from "./ports/finance-port-types";
 import type { VerifiedOnlineWalletRefundApprovalAuthority } from "./ports/trusted-finance-evidence";
 
 export class OnlineWalletRefundApprovalAuthorityIssuanceError extends Error {
@@ -146,7 +144,7 @@ function identifier(value: unknown): string {
     value.length < 1 ||
     value.length > 200 ||
     value.trim() !== value ||
-    /[\u0000-\u001f\u007f]/u.test(value)
+    hasAsciiControlCharacter(value)
   ) {
     fail();
   }
