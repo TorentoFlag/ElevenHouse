@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1079.0",
+    "@elevenhouse/ai": "workspace:*",
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
@@ -17,8 +18,10 @@
     "@elevenhouse/validation": "workspace:*",
     "@pdf-lib/fontkit": "^1.1.1",
     "bullmq": "^5.78.1",
+    "openai": "^6.45.0",
     "pdf-lib": "^1.17.1",
-    "pg": "8.21.0"
+    "pg": "8.21.0",
+    "redis": "^5.12.1"
   },
   "devDependencies": {
     "@types/node": "25.9.2",
