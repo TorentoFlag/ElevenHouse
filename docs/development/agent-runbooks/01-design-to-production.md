@@ -90,8 +90,9 @@ dropdown/table/sidebar/overlay static screenshot одного closed state
 
 ## Evidence artifacts
 
-Сохраняй task-specific evidence под `.design-qa/<task>/` или в согласованной
-artifact location:
+Не сохраняй task-specific visual evidence в checkout или Git. Для active task
+используй временное место вне repository либо согласованное external artifact
+location:
 
 - reference screenshot(s);
 - production screenshot(s);
@@ -100,8 +101,9 @@ artifact location:
 - relevant computed-style measurements;
 - intentional deviations с rationale/source.
 
-Не используй один mutable root `design-qa.md` как доказательство для всех
-будущих tasks.
+Перед завершением task удали локальные evidence artifacts, если они не нужны
+для прямо согласованного external handoff. Не добавляй screenshots, browser
+logs, PID files или mutable summary в source repository.
 
 ## Done Checklist
 

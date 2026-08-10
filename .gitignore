@@ -20,6 +20,7 @@ Thumbs.db
 build/
 out/
 .vite/
+.tmp/
 *.log
 ElevenHouseDesign
 
@@ -27,3 +28,6 @@ ElevenHouseDesign
 .claude/
 .cursor/
 .worktrees/
+.design-qa/
+.superdesign/
+.superpowers/
