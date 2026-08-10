@@ -21,6 +21,7 @@ build/
 out/
 .vite/
 .tmp/
+.local/
 *.log
 ElevenHouseDesign
 
