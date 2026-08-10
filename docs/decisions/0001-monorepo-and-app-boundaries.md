@@ -19,7 +19,9 @@ Backend apps/processes:
 
 - `public-api`
 - `astrologer-api`
-- `admin-api` as the internal API surface; currently scaffolded with only a technical health module
+- `admin-api` as the internal API surface; current implementation includes the
+  health/identity foundation and the first finance-policy, tariff, fiscal-profile,
+  payout-evidence, refund-candidate and finance-authorization modules
 - `workers`
 - `payment-worker`
 - `notification-worker`

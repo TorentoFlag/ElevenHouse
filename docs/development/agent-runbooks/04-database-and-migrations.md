@@ -5,8 +5,8 @@ repositories/adapters and local DB workflow.
 
 ## Цель
 
-Сохранять DB schema modular, reproducible and aligned with domain ports, without
-incremental migration chains during active development.
+Сохранять DB schema modular, reproducible and aligned with domain ports through
+an append-only, journal-ordered migration lineage.
 
 ## Ownership
 
@@ -18,17 +18,24 @@ incremental migration chains during active development.
 
 ## Critical Rule
 
-При изменении DB schema не создавай цепочки incremental `ALTER`-миграций.
-Всегда пересобирай актуальную миграцию заново и делай полный reset локальной
-базы через `db:reset`.
+`packages/db/src/schema/**` — source of truth. `packages/db/drizzle/` —
+линейная последовательность committed migrations, которую Drizzle применяет в
+порядке journal. Уже committed SQL, journal и snapshot artifacts immutable: их
+нельзя переписывать, переименовывать, удалять или менять порядок.
 
-Это правило относится к repository baseline и локальной development DB. Уже
-развёрнутая production DB не сбрасывается и не получает новый baseline поверх
-существующих таблиц. При смене baseline для известного production state нужен
-явный reconciliation step с approved migration hashes, schema/data guards,
-transactional DDL/data migration, advisory lock и записью нового baseline в
-ledger только после успешного перехода. Неизвестное состояние должно завершать
-deploy ошибкой.
+Каждое изменение schema получает новую focused forward migration с ясным
+module ownership; несколько файлов допустимы только когда это требуется
+реальным dependency order. `db:generate` обязан добавить и проверить только
+следующий migration artifact, а не регенерировать историю. `db:reset` создаёт
+disposable local DB, применяя всю текущую lineage и reviewed seed data; reset
+не является способом переписать migrations.
+
+Уже развёрнутая production DB развивается только forward. Production preflight
+сверяет полный approved ordered lineage (каждый tag/hash/timestamp), а
+unknown, missing, reordered или divergent ledger останавливает deploy. Для
+известного legacy state требуется явный fail-closed reconciliation с
+schema/data guards, transactional transition и advisory lock; reset не служит
+обычным способом reconciliation.
 
 Единственное текущее исключение — принятый ADR
 `0012-prelaunch-production-baseline-reset.md`: initial Finance rollout может
@@ -54,7 +61,8 @@ rollout обязан иметь отдельную fail-before-delete прове
 7. If the domain needs persistence, implement adapter ports under
    `packages/db/src/adapters/<module>/`.
 8. Export adapters from `packages/db/src/adapters/index.ts`.
-9. Regenerate the current migration:
+9. Generate and inspect the next forward migration. Confirm that the diff
+   contains only the new SQL/meta artifacts and does not rewrite prior ones:
 
    ```bash
    pnpm db:generate
@@ -69,14 +77,14 @@ rollout обязан иметь отдельную fail-before-delete прове
 
     Do not run this against non-local or production DBs.
 
-11. Если предыдущий baseline уже развёрнут в production и ADR 0012 не применим,
+11. Если предыдущая lineage уже развёрнута в production и ADR 0012 не применим,
     добавь или обнови
     production reconciliation и его integration fixture. Проверь как минимум:
     approved legacy transition, сохранение данных, повторный no-op запуск и
     отказ на неизвестной migration history.
 
 12. Для одноразового ADR 0012 rollout вместо legacy-data reconciliation докажи
-    полный baseline на новой пустой БД, exact production target preflight,
+    полную committed lineage на новой пустой БД, exact production target preflight,
     reset/restore rehearsal на disposable clone, reviewed seeds и post-reset
     deploy/E2E. До прохождения этих gates destructive production command не
     запускается.
@@ -86,8 +94,8 @@ rollout обязан иметь отдельную fail-before-delete прове
 Add or update tests that prove:
 
 - table exports exist;
-- current baseline migration contains new table/index/constraint;
-- important checks and FKs are in the migration;
+- current committed migration lineage contains new table/index/constraint;
+- important checks and FKs are in the relevant committed migration;
 - adapters implement domain behavior with integration tests where meaningful.
 
 Example commands:
@@ -111,8 +119,9 @@ pnpm --filter @elevenhouse/db build
 ## Stop Conditions
 
 - Schema change lacks a domain owner.
-- Migration was created as a new incremental chain when policy requires
-  rebuilding current baseline.
+- Existing migration, journal or snapshot artifact would be rewritten,
+  reordered or deleted.
+- A new migration has no module owner or mixes unrelated module changes.
 - Adapter imports app code.
 - Domain imports DB code.
 - Reset would affect a non-local DB.
@@ -121,7 +130,8 @@ pnpm --filter @elevenhouse/db build
 
 - Schema lives under the correct domain folder.
 - Exports are wired.
-- Migration regenerated according to project policy.
+- New forward migration appended according to project policy; prior artifacts
+  remain unchanged.
 - Schema tests cover table/index/constraint presence.
 - Adapter tests cover persistence behavior.
 - Local reset was run only when appropriate and safe.

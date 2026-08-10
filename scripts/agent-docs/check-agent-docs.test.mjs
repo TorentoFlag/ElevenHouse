@@ -13,7 +13,13 @@ const requiredFiles = {
     "## Обязательный рабочий цикл",
     "## Shared-main concurrency"
   ],
-  "docs/README.md": ["# Документация ElevenHouse"],
+  "docs/README.md": [
+    "# Документация ElevenHouse",
+    "architecture/deployment-topology.md",
+    "architecture/media-storage.md",
+    "agent-runbooks/10-telegram-business-hookdeck.md",
+    "## Временные specs и plans"
+  ],
   "docs/development/agent-workflow.md": [
     "## Autonomous Feature Pipeline",
     "## Living ExecPlan",
@@ -190,6 +196,17 @@ async function createCurrentStateFixture(rootDir) {
       ""
     ].join("\n")
   );
+
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/current-state.md",
+    [
+      "# Generated Current Implementation State",
+      "",
+      ...backendModuleList.map((moduleName) => `\`${moduleName}\``),
+      ""
+    ].join("\n")
+  );
 }
 
 async function writeFixtureFile(rootDir, relativePath, content) {
@@ -218,6 +235,58 @@ test("rejects broken relative Markdown links", async () => {
   const result = await checkAgentDocs({ rootDir });
 
   assert.ok(result.errors.some((error) => error.includes("broken relative link")));
+});
+
+test("rejects a documentation navigator missing canonical entries", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "docs/README.md",
+    [
+      "# Документация ElevenHouse",
+      "architecture/media-storage.md",
+      "## Временные specs и plans"
+    ].join("\n")
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some(
+      (error) =>
+        error.includes("docs/README.md") &&
+        error.includes("architecture/deployment-topology.md")
+    )
+  );
+  assert.ok(
+    result.errors.some(
+      (error) =>
+        error.includes("docs/README.md") &&
+        error.includes("agent-runbooks/10-telegram-business-hookdeck.md")
+    )
+  );
+});
+
+test("rejects a documentation navigator without the plan lifecycle rule", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "docs/README.md",
+    [
+      "# Документация ElevenHouse",
+      "architecture/deployment-topology.md",
+      "architecture/media-storage.md",
+      "agent-runbooks/10-telegram-business-hookdeck.md"
+    ].join("\n")
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some(
+      (error) => error.includes("docs/README.md") && error.includes("## Временные specs и plans")
+    )
+  );
 });
 
 test("rejects skill files without required frontmatter", async () => {
@@ -303,6 +372,39 @@ test("rejects known contradictory active-document statements", async () => {
   assert.ok(result.errors.some((error) => error.includes("known stale statement")));
 });
 
+test("rejects stale admin-api health-only claims in canonical documents", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "docs/decisions/0001-monorepo-and-app-boundaries.md",
+    "`admin-api` as the internal API surface; currently scaffolded with only a technical health module\n"
+  );
+  await writeFixtureFile(
+    rootDir,
+    "docs/product/full-functional-scope.md",
+    "- `admin-api` для внутренних ролей; текущий код содержит минимальную health-only заготовку\n"
+  );
+  await writeFixtureFile(
+    rootDir,
+    "docs/product/roadmap.md",
+    "- развитие `admin-api` из health-only заготовки в отдельную backend-поверхность\n"
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  for (const relativePath of [
+    "docs/decisions/0001-monorepo-and-app-boundaries.md",
+    "docs/product/full-functional-scope.md",
+    "docs/product/roadmap.md"
+  ]) {
+    assert.ok(
+      result.errors.some(
+        (error) => error.includes(relativePath) && error.includes("known stale statement")
+      )
+    );
+  }
+});
+
 test("rejects active docs missing current app, package, or backend module entries", async () => {
   const rootDir = await createValidFixture();
   await writeFixtureFile(
@@ -317,6 +419,25 @@ test("rejects active docs missing current app, package, or backend module entrie
     result.errors.some(
       (error) =>
         error.includes("docs/architecture/backend-modules.md") &&
+        error.includes("finance-policies")
+    )
+  );
+});
+
+test("rejects generated current state missing a backend module", async () => {
+  const rootDir = await createValidFixture();
+  await writeFixtureFile(
+    rootDir,
+    "docs/architecture/current-state.md",
+    "# Generated Current Implementation State\n\n`health`\n"
+  );
+
+  const result = await checkAgentDocs({ rootDir });
+
+  assert.ok(
+    result.errors.some(
+      (error) =>
+        error.includes("docs/architecture/current-state.md") &&
         error.includes("finance-policies")
     )
   );

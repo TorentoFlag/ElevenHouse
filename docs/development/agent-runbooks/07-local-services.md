@@ -5,21 +5,15 @@
 
 ## Цель
 
-Работать с локальными процессами безопасно: не перезапускать чужие процессы,
-не занимать неожиданные порты и не запускать long-running services без явной
-команды пользователя.
+Работать с локальными процессами безопасно: не затрагивать remote/shared
+services, не занимать неожиданные порты и точно идентифицировать local target.
 
-## Strict Process Rule
+## Local Process Rule
 
-Никогда не запускай, не останавливай, не перезапускай и не убивай локальные
-dev-процессы без прямой явной команды пользователя.
-
-Если для проверки нужен сервис:
-
-1. Сначала сделай read-only диагностику.
-2. Если сервис уже запущен, используй его.
-3. Если сервис не запущен, сообщи пользователю и остановись.
-4. Запускай сервис только после явной команды.
+Standing local-development authority из `AGENTS.md` разрешает lifecycle local
+dev-процессов и infrastructure без повторного запроса. Перед запуском,
+остановкой или reset сначала сделай read-only диагностику, подтверди exact
+local port/process/DB target и не затрагивай remote/shared service.
 
 ## Standard Ports
 
@@ -59,13 +53,12 @@ policy:
 docker compose up -d postgres redis minio minio-init
 ```
 
-Run this only when the user explicitly asked to start infrastructure or services.
-Для существующей infrastructure используй read-only `docker compose ps` и
-health/readiness checks; не перезапускай её ради проверки.
+Для существующей infrastructure сначала используй read-only `docker compose
+ps` и health/readiness checks; не перезапускай её без необходимости задачи.
 
 ## Start Commands
 
-Only after explicit user command:
+Use after local target/port checks:
 
 ```bash
 pnpm --filter @elevenhouse/client-web dev
@@ -98,8 +91,8 @@ NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console pnpm --filter @elevenhou
 
 ## Stop/Restart
 
-Only stop or restart a process after explicit user command. State which process
-and port will be affected before acting.
+Перед stop/restart укажи процесс и порт, которые будут затронуты, и подтверди
+их local ownership диагностикой.
 
 Preferred identification:
 
@@ -111,7 +104,7 @@ ps -p <pid> -o pid,ppid,command
 ## Done Checklist
 
 - Read-only diagnostics happened before process changes.
-- No existing process was killed without explicit permission.
+- Every changed process had a confirmed local target.
 - Standard ports were checked.
 - Readiness endpoint is correct.
 - User has the URL/port and actual readiness result.

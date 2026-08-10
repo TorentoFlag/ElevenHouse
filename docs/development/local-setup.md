@@ -18,8 +18,11 @@
 
 ## Local Infrastructure
 
-Команда запуска инфраструктуры приведена в `commands.md`. Управлять локальными
-процессами можно только по прямой команде пользователя.
+`AGENTS.md` даёт standing local-development authority для этого checkout:
+управление local Docker/services и local test data допустимо без повторного
+запроса. `docker-compose.yml` описывает ожидаемую local infrastructure; до
+lifecycle-команды и destructive DB action сначала проверь текущий
+процесс/порт и exact target read-only по `commands.md`.
 
 Сервисы:
 
@@ -40,7 +43,10 @@ download только для `elevenhouse-local-media` и сохраняет pri
 
 Database schema и migrations живут в `packages/db` и управляются через Drizzle.
 
-При изменении DB schema не создаём цепочки incremental `ALTER`-миграций. Всегда пересобираем актуальную миграцию заново и делаем полный reset локальной базы.
+При изменении DB schema добавляем следующую focused forward migration. Уже
+committed SQL, journal и snapshot artifacts не переписываются, не
+переименовываются и не меняют порядок; чистая локальная БД строится применением
+всей текущей lineage, а не регенерацией единого baseline.
 
 Команды generate/migrate/seed/reset, проверка фактического Docker-порта и
 требования к `DATABASE_URL` описаны в `commands.md`.
@@ -66,12 +72,23 @@ verification и targeted examples зафиксированы в `commands.md`.
 - `public-api`: `3001`
 - `astrologer-api`: `3002`
 - `admin-api`: `3003`
+- `workers` readiness: `3010`
+- `payment-worker` readiness: `3011`
+- `chart-worker` readiness: `3012`
 - `notification-worker` readiness: `3013`
 
-`admin-api` сейчас содержит `health` и первый finance-policy/risk/payout
-contour. Запускай его только когда явно нужна проверка внутренней
-API-поверхности; broader user, verification, moderation, payment-support and
-platform-settings routes ещё не реализованы.
+`payment-worker` webhook listener по умолчанию также использует `3013`
+(`PAYMENT_WORKER_WEBHOOK_PORT`). Поэтому `payment-worker` и
+`notification-worker` нельзя запускать одновременно с default configuration:
+до запуска задай свободный override для одного из них и проверь, что выбранный
+порт не занят.
+
+`admin-api` сейчас содержит `health` и internal finance contour: policy/risk,
+versioned fiscal profiles and tariffs, payout evidence, saved-card disclosures,
+refund-candidate review и finance authorizations. Запускай его только когда
+явно нужна проверка этой внутренней API-поверхности; broader user,
+verification, moderation, payment-support and platform-settings routes ещё не
+реализованы.
 
 ### Admin Finance Browser Fixture
 

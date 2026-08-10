@@ -82,26 +82,48 @@ product или architecture truth. Production workflow может отличат
 - `architecture/overview.md` — high-level system map.
 - `architecture/repository-structure.md` — apps/packages и dependency direction.
 - `architecture/backend-modules.md` — domain/module ownership.
+- `architecture/current-state.md` — generated app/module/worker-port snapshot;
+  regenerate it before changing an inventory claim.
 - `architecture/account-role-model.md` — accounts, roles и authorization
   invariants.
+- `architecture/deployment-topology.md` — deployable services, production trust
+  boundaries and rollout evidence.
+- `architecture/media-storage.md` — object-storage ownership, visibility and
+  retention rules.
 - `architecture/design-reference-inventory.md` — current mapping design areas к
-  production surfaces и readiness.
+  production surfaces; load only the linked surface file needed for the task.
 - `product/full-functional-scope.md` — полный крупный functional scope.
 - `product/roadmap.md` — technical dependency order, не business strategy.
-- `api/api-boundaries.md` — public/astrologer/admin API split.
+- `api/api-boundaries.md` — API ownership, authorization and contract policy.
+- `api/route-inventory.md` — generated current Nest-controller route inventory.
+- `decisions/README.md` — ADR index and accepted/superseded status.
 - `development/local-setup.md` — local environment facts без authority на
   process lifecycle.
+- `development/agent-runbooks/10-telegram-business-hookdeck.md` — bounded
+  Telegram Business/Hookdeck verification and external-write authority.
 
-## Specs и plans
+## Временные specs и plans
 
-`docs/superpowers/specs/` хранит согласованные design artifacts, а
-`docs/superpowers/plans/` — self-contained living ExecPlans. Они обязаны иметь
-явный status/progress и observable acceptance, но после реализации не являются
-источником текущего поведения.
+Spec, research note и living ExecPlan существуют только пока по ним ведётся
+работа. Они не являются source of truth и не хранятся в `docs/` после
+завершения задачи.
 
-Durable decisions из выполненного плана переносятся в product/architecture/API,
-ADR или runbook. Исторические планы не переписываются задним числом под current
-code; их status и retrospective объясняют outcome и remaining gaps.
+До удаления из них переносят durable результат в product/architecture/API, ADR
+или runbook. История исходных файлов при необходимости доступна в Git; не
+создавай рабочий архив завершённых планов и specs, который может попасть в
+контекст будущей задачи как устаревшее требование.
+
+## Generated inventories
+
+Не редактируй current-state или route inventory вручную. После изменения app,
+backend module, worker port или Nest controller перегенерируй затронутый файл и
+проверь diff:
+
+```bash
+node scripts/agent-docs/generate-current-state.mjs
+node scripts/agent-docs/generate-route-inventory.mjs
+git diff -- docs/architecture/current-state.md docs/api/route-inventory.md
+```
 
 ## Documentation quality gate
 

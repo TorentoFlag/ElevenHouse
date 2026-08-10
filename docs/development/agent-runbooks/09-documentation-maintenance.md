@@ -29,9 +29,11 @@ evidence — из `../testing-strategy.md`.
 
 ## What Not To Keep As Living Docs
 
-Do not keep executed agentic implementation plans/specs as source of truth under
-`docs/`. They drift quickly. If a plan resulted in durable architecture, move
-that information into architecture docs, ADRs, inventory or runbooks.
+Do not keep executed agentic implementation plans/specs under `docs/`. They
+drift quickly and can be retrieved as false current context. If a plan resulted
+in durable architecture, move that information into architecture docs, ADRs,
+inventory or runbooks, then delete the task artifact. Git preserves the source
+history; do not create an in-repository archive of completed plans/specs.
 
 ## Пошаговая процедура
 
@@ -61,8 +63,8 @@ that information into architecture docs, ADRs, inventory or runbooks.
 4. Update references from secondary docs.
 
 5. Remove or correct stale active docs that now conflict with canonical docs.
-   Historical specs/plans keep their original content and receive lifecycle/
-   retrospective metadata only when needed.
+   Distil any durable decision or operational instruction first, then delete
+   completed task specs/plans rather than retaining them as historical docs.
 
 6. Check for contradictory language:
 
@@ -102,7 +104,8 @@ that information into architecture docs, ADRs, inventory or runbooks.
 
 - Canonical doc updated first.
 - Secondary docs aligned.
-- Stale implementation plans/specs removed or ignored.
+- Stale implementation plans/specs removed; their durable decisions are
+  represented in canonical docs or ADRs.
 - `rg` found no old contradictory wording.
 - `git diff --check` passed.
 - `pnpm docs:check:test` and `pnpm docs:check` passed.

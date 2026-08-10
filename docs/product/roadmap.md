@@ -188,8 +188,8 @@
 - Verification workflow.
 - Dispute workflows.
 - Platform settings: комиссии, тарифы, справочники, templates.
-- развитие `admin-api` из health-only заготовки в отдельную backend-поверхность
-  для внутренних workflows.
+- расширение уже отдельной `admin-api` backend-поверхности от первого finance
+  contour к remaining internal workflows.
 - Dedicated analytics storage, если потребуется нагрузкой или отчётностью.
 
 ## Явно вне текущего scope

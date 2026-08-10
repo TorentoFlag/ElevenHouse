@@ -47,21 +47,33 @@ target file и выполни `git diff -- <path>`. Если файл измен
    - visual truth: exact `ElevenHouseDesign` screen/state для visible UI;
    - implemented-state evidence: tests, generated schema, runtime/network/logs.
 
-4. Прочитай обязательный базовый контекст:
+4. Прочитай короткий обязательный контекст:
 
    ```text
    AGENTS.md
    docs/README.md
-   docs/architecture/design-reference-inventory.md
-   docs/architecture/overview.md
-   docs/architecture/repository-structure.md
-   docs/architecture/backend-modules.md
-   docs/product/full-functional-scope.md
-   docs/product/roadmap.md
-   docs/decisions/
+   docs/development/agent-runbooks/README.md
    ```
 
-5. Для API/backend задач дополнительно прочитай:
+5. Выбери только источники, относящиеся к scope/risk:
+
+   | Scope/risk | Required routing |
+   | --- | --- |
+   | Product behavior | relevant `docs/product/` scope/roadmap and owning contracts/domain |
+   | Architecture/module boundary | relevant `docs/architecture/` and exact accepted ADR |
+   | Visible UI | design inventory row, exact `ElevenHouseDesign` state, `01-design-to-production.md`, `02-frontend-production.md` |
+   | API/backend | `docs/api/api-boundaries.md`, `docs/architecture/backend-modules.md`, ADR `0003` and `0007` when applicable, `03-backend-feature-module.md` |
+   | DB/schema/migration | ADR `0006`, `04-database-and-migrations.md` |
+   | Worker/event/payment side effect | `06-workers-and-events.md`; add API/DB/security sources for each affected boundary |
+   | Local process/service | `07-local-services.md`, `commands.md` and only relevant runtime config |
+   | Novel/risky or ambiguous decision | `research-strategy.md`, relevant ADR/current code and `elevenhouse-research` |
+   | Documentation/agent rules | `09-documentation-maintenance.md` and the canonical source being changed |
+
+   Не читай directory целиком по умолчанию: выбери exact document/ADR по
+   маршруту и расширяй контекст только когда contour или evidence это требует.
+
+6. Для API/backend задач дополнительно прочитай, когда они относятся к
+   конкретному route/flow:
 
    ```text
    docs/api/api-boundaries.md
@@ -69,14 +81,14 @@ target file и выполни `git diff -- <path>`. Если файл измен
    docs/decisions/0007-cookie-auth-csrf-and-idempotency.md
    ```
 
-6. Для DB задач дополнительно прочитай:
+7. Для DB задач дополнительно прочитай:
 
    ```text
    docs/decisions/0006-drizzle-database-tooling.md
    docs/development/agent-runbooks/04-database-and-migrations.md
    ```
 
-7. Для UI задач дополнительно прочитай:
+8. Для UI задач дополнительно прочитай:
 
    ```text
    docs/decisions/0002-react-vite-without-next.md
@@ -85,7 +97,7 @@ target file и выполни `git diff -- <path>`. Если файл измен
    docs/development/agent-runbooks/02-frontend-production.md
    ```
 
-8. Найди релевантные production-файлы и history через быстрые команды:
+9. Найди релевантные production-файлы и history через быстрые команды:
 
    ```bash
    rg --files apps packages docs | sort
@@ -93,21 +105,21 @@ target file и выполни `git diff -- <path>`. Если файл измен
    git log --oneline --all -- relevant/path
    ```
 
-9. Трассируй complete contour, а не только первый call site:
+10. Трассируй complete contour, а не только первый call site:
 
    ```text
    route/state -> frontend -> contract -> API -> domain -> DB
                -> events/workers -> security/config/observability -> tests/deploy
    ```
 
-10. Определи research requirement по `../research-strategy.md`:
+11. Определи research requirement по `../research-strategy.md`:
     - technical research обязателен для novel/risky architecture и
       unfamiliar stack behavior;
     - product research нужен для requested alternatives или ambiguous workflow;
     - если research не нужен, зафиксируй, какой existing contract/pattern делает
       решение однозначным.
 
-11. До изменений сформулируй рабочую границу:
+12. До изменений сформулируй рабочую границу:
 
     ```text
     Outcome
@@ -123,9 +135,11 @@ target file и выполни `git diff -- <path>`. Если файл измен
     External authority / destructive actions
     ```
 
-12. Для multi-step task создай self-contained living ExecPlan по
-    `../agent-workflow.md`. Пользователю выноси material product/architecture
-    choices; routine implementation decomposition делает агент.
+13. Для multi-step task выбери plan lifecycle по `../agent-workflow.md`:
+    concise inline plan для one-session low-risk work; durable ExecPlan только
+    для cross-session/agent или high-risk boundary. Не архивируй executed plan
+    под `docs/`. Пользователю выноси material product/architecture choices;
+    routine implementation decomposition делает агент.
 
 Команды и authority requirements бери из `../commands.md`, а уровень
 доказательств — из `../testing-strategy.md`.

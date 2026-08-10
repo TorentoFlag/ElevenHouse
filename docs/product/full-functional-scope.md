@@ -84,8 +84,10 @@ ElevenHouse — закрытая SaaS/CRM-платформа для астрол
 
 - `public-api`
 - `astrologer-api`
-- `admin-api` для внутренних ролей; текущий код содержит минимальную health-only
-  заготовку, а доменные internal workflows ещё не реализованы
+- `admin-api` для внутренних ролей; текущий код содержит health/identity и
+  первый finance contour (policy, tariff, fiscal profile, payout evidence,
+  refund-candidate review и finance authorization), а broader internal
+  workflows ещё не реализованы
 - `workers`
 - `payment-worker`
 - `notification-worker`

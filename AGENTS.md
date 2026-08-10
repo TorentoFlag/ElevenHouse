@@ -84,7 +84,7 @@ scope без решения пользователя.
    → security/config/observability → tests/deploy;
 3. исследует current best practices и существующие patterns репозитория;
 4. выносит пользователю только material product/architecture decisions;
-5. составляет self-contained living ExecPlan для сложной работы;
+5. фиксирует план по lifecycle из `agent-workflow.md` для сложной работы;
 6. реализует через behavioral TDD и focused files/components;
 7. запускает targeted checks, затем проверки всего затронутого dependency
    surface;
@@ -169,22 +169,29 @@ reusable visual primitives, не unresolved business workflow.
 
 ## Process, database и external authority
 
-Никогда не запускай, не останавливай, не перезапускай и не убивай frontend,
-API, workers, Docker, PostgreSQL, Redis, queues и другие long-running процессы
-без прямой команды пользователя. Сначала используй read-only `lsof`, `ps`,
-`curl` или аналог. Если required port не слушается, сообщи blocker; не запускай
-сервис, не выбирай другой порт и не меняй lifecycle.
+### Standing local-development authority
+
+В этом checkout пользователь постоянно разрешил проверять, запускать,
+останавливать, перезапускать и завершать local-only processes; выбирать
+свободный local port; выполнять local DB reset/migrate/seed; создавать,
+изменять и удалять local test accounts, roles, orders, payments и data.
+Перед destructive action установи exact target read-only проверкой и используй
+только `localhost`, `127.0.0.1` или local Docker. Authority не относится к
+production, remote/shared host, external account/credential, deploy, purchase,
+push/PR и non-local data: для них нужна отдельная authority.
 
 Перед destructive DB command установи фактическую local ElevenHouse DB и Docker
 port по `docs/development/commands.md`. Никогда не направляй reset в production
-или non-local host. При изменении schema пересобери актуальную baseline
-migration и выполни требуемый local `db:reset`; production baseline меняется
-только через fail-closed reconciliation, не reset.
+или non-local host. При изменении schema добавь следующую focused forward
+migration, не переписывая committed SQL/journal/snapshot artifacts; выполни
+требуемый local `db:reset`, который применяет всю committed lineage. Production
+evolves forward-only through fail-closed lineage preflight/reconciliation, not
+reset.
 
 External writes, deploy, secrets, purchases, account/permission changes,
-production data mutation, commit/push/PR и destructive actions требуют authority
-из запроса или соответствующего runbook. Read-only research и диагностика
-разрешены в scope задачи.
+production data mutation и commit/push/PR требуют authority из запроса или
+соответствующего runbook. Read-only research и диагностика разрешены в scope
+задачи.
 
 ## Visual implementation contract
 
@@ -231,47 +238,12 @@ behavior, не факт вызова mock. Перед финалом испол�
 Не используй «работает», «готово» или «production-ready», если весь requested
 scope не реализован и не подтверждён обязательным evidence.
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+## GitNexus
 
-This project is indexed by GitNexus as **ElevenHouse** (34583 symbols, 85355 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
-
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
-
-## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/ElevenHouse/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/ElevenHouse/clusters` | All functional areas |
-| `gitnexus://repo/ElevenHouse/processes` | All execution flows |
-| `gitnexus://repo/ElevenHouse/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+Перед правкой функции, класса или метода выполни upstream `impact` и сообщи
+пользователю direct callers, affected processes и risk; HIGH/CRITICAL требует
+предупреждения до edit. Перед commit выполни `detect_changes()`; для compare —
+`base_ref: "main"`. Не переименовывай символы text replacement: используй
+`rename`. Для unfamiliar code сначала `query`, затем `context`; для security —
+`explain`. Полные procedure и tool reference находятся в
+`.claude/skills/gitnexus/`; выбери skill по типу задачи перед вызовом инструмента.

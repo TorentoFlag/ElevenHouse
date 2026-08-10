@@ -48,6 +48,8 @@ export class AppModule {}
 `apps/public-api` сейчас содержит:
 
 - `booking`
+- `client-commerce`
+- `client-consents` (reserved; no runtime module is implemented yet)
 - `client-join`
 - `client-profile`
 - `database`
@@ -56,6 +58,7 @@ export class AppModule {}
 - `orders`
 - `payments`
 - `redis`
+- `refund-candidates`
 - `security`
 
 `client-join` создаёт direct-link join intent по public handle и связывает его
@@ -73,6 +76,14 @@ contour for booking intent, order creation and checkout initiation. Full public
 product/profile reads, slot-selection UI integration, materials, feed,
 subscriptions, journal and client-visible calculation delivery remain separate
 incomplete contours.
+
+`client-commerce` provides authenticated relationship-scoped purchase-option
+and available-slot reads. It filters orderable products through the active
+relationship, tariff capability and finance-policy authority; it never exposes
+a public catalogue or astrologer-handle lookup. `refund-candidates` lets a
+client list and submit an idempotent CSRF-protected dispute candidate for an
+owned paid order. It is not a provider-refund success path. `client-consents`
+is a reserved directory only and has no runtime module or API contract yet.
 
 `platform-tariffs` owns the astrologer-facing tariff catalogue, selection and
 saved-card subscription/read state. It persists finance commands and worker
@@ -113,12 +124,18 @@ capability guard; browser locks are presentation only, never authorization.
 
 `apps/admin-api` сейчас содержит:
 
+- `chargeback-resolutions`
 - `database`
+- `finance-authorizations`
 - `finance-policies`
 - `fiscal-profiles`
+- `flow-runtime-control`
 - `health`
 - `identity`
+- `online-wallet-refunds`
 - `platform-tariffs`
+- `payout-evidence`
+- `refund-candidates`
 - `saved-card-disclosures`
 - `security`
 
@@ -136,6 +153,27 @@ internal lifecycle for versioned fiscal configuration; publication stays
 fail-closed until matching readiness evidence exists. `saved-card-disclosures`
 owns locale-specific recurring-card disclosures and their immutable publication
 history. None of these internal modules enables provider I/O by itself.
+
+`finance-authorizations` provides super-admin-only CSRF WebAuthn/passkey
+registration and begin/verify finance authorization; it is not provider I/O.
+`chargeback-resolutions` is the super-admin resolution boundary for an existing
+online-wallet chargeback case. It requires an authenticated CSRF-protected
+session and a consumed, version-bound WebAuthn finance authorization, then
+records the internal resolution and audit evidence from the canonical provider
+outcome. It never treats an admin command as a provider outcome.
+`online-wallet-refunds` is the super-admin approval boundary for an already
+reviewed client refund candidate: it re-reads the candidate/capture/wallet
+position inside the consumed WebAuthn-grant transaction, reserves the V2
+payable position and persists a sealed refund-operation outbox. The provider
+response is not a success result of this module; canonical payment-worker
+processing remains the only completion authority. `flow-runtime-control` owns
+the separate super-admin immutable Flow rollout-policy read/CAS surface and
+does not start or bypass worker execution.
+`payout-evidence` accepts bounded PDF/PNG/JPEG evidence uploads into immutable
+private storage only after cash-pool/config readiness and records a sealed
+artifact with audit evidence. `refund-candidates` provides the authenticated,
+CSRF-protected, idempotent review queue: review changes candidate/evidence
+state and never executes a provider refund.
 
 ## Основные модули
 

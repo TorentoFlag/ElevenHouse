@@ -33,6 +33,8 @@ ElevenHouse. Они не заменяют `AGENTS.md`, архитектурны�
 - `08-verification-and-git.md` — проверки, shared index и path-scoped
   commit/push discipline.
 - `09-documentation-maintenance.md` — когда и как обновлять документацию.
+- `10-telegram-business-hookdeck.md` — bounded Hookdeck/Telegram Business
+  verification; requires explicit authority for external changes.
 
 Repo-scoped skills:
 

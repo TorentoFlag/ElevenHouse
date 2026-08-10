@@ -14,7 +14,16 @@ const requiredFiles = new Map([
       "## Shared-main concurrency"
     ]
   ],
-  ["docs/README.md", ["# Документация ElevenHouse"]],
+  [
+    "docs/README.md",
+    [
+      "# Документация ElevenHouse",
+      "architecture/deployment-topology.md",
+      "architecture/media-storage.md",
+      "agent-runbooks/10-telegram-business-hookdeck.md",
+      "## Временные specs и plans"
+    ]
+  ],
   [
     "docs/development/agent-workflow.md",
     ["## Autonomous Feature Pipeline", "## Living ExecPlan", "## Shared Checkout Protocol"]
@@ -90,6 +99,21 @@ const staleStatements = [
     file: "docs/architecture/overview.md",
     pattern: /health-only Nest-заготовка/i,
     label: "overview marks admin-api as health-only"
+  },
+  {
+    file: "docs/decisions/0001-monorepo-and-app-boundaries.md",
+    pattern: /admin-api` as the internal API surface; currently scaffolded with only a technical health module/i,
+    label: "ADR 0001 marks admin-api as health-only"
+  },
+  {
+    file: "docs/product/full-functional-scope.md",
+    pattern: /admin-api` для внутренних ролей; текущий код содержит минимальную health-only/i,
+    label: "full functional scope marks admin-api as health-only"
+  },
+  {
+    file: "docs/product/roadmap.md",
+    pattern: /развитие `admin-api` из health-only заготовки/i,
+    label: "roadmap marks admin-api as health-only"
   }
 ];
 
@@ -104,24 +128,15 @@ const currentStateDocumentation = [
   },
   {
     sourceDirectory: "apps/public-api/src/modules",
-    docs: [
-      "docs/architecture/backend-modules.md",
-      "docs/architecture/design-reference-inventory.md"
-    ]
+    docs: ["docs/architecture/backend-modules.md", "docs/architecture/current-state.md"]
   },
   {
     sourceDirectory: "apps/astrologer-api/src/modules",
-    docs: [
-      "docs/architecture/backend-modules.md",
-      "docs/architecture/design-reference-inventory.md"
-    ]
+    docs: ["docs/architecture/backend-modules.md", "docs/architecture/current-state.md"]
   },
   {
     sourceDirectory: "apps/admin-api/src/modules",
-    docs: [
-      "docs/architecture/backend-modules.md",
-      "docs/architecture/design-reference-inventory.md"
-    ]
+    docs: ["docs/architecture/backend-modules.md", "docs/architecture/current-state.md"]
   }
 ];
 

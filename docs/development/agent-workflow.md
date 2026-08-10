@@ -67,9 +67,10 @@ accepted architecture, security/privacy, destructive authority, external state
 
 ### 5. Plan the observable outcome
 
-Для multi-step работы создай living ExecPlan. План разбивает работу по
-independently verifiable behavior, а не по техническим слоям без результата.
-Каждый milestone заканчивается командой и наблюдаемым acceptance.
+Для multi-step работы зафиксируй plan, разбитый по independently verifiable
+behavior, а не по техническим слоям без результата. Каждый milestone
+заканчивается командой и наблюдаемым acceptance. Выбери lifecycle из раздела
+`Living ExecPlan` ниже.
 
 ### 6. Implement with behavioral TDD
 
@@ -118,8 +119,18 @@ requested scope не доказан либо не останется genuine ext
 
 ## Living ExecPlan
 
-ExecPlan для сложной работы — self-contained living document. Новый агент без
-предыдущего thread context должен суметь выполнить его end-to-end.
+Для one-session работы без high-risk boundary используй concise inline plan в
+task conversation. Durable ExecPlan создавай только когда работа пересекает
+sessions/agents или включает high-risk boundary: production/destructive action,
+schema migration, security/privacy/auth, payment/ledger/consent или material
+external integration.
+
+Durable ExecPlan — self-contained task artifact: новый агент без предыдущего
+thread context должен суметь выполнить его end-to-end. Не храни и не архивируй
+executed plans/specs под `docs/`: durable decisions и operating truth перенеси в
+canonical docs/ADR, а artifact закрой или удали только если это входит в
+authority текущей задачи. Для cross-session handoff оставь current status,
+owned paths, evidence и next safe step.
 
 Обязательные sections:
 

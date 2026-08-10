@@ -15,20 +15,22 @@ significant data. Existing finance-shaped rows do not need to be preserved,
 converted, reconciled or represented as an opening balance.
 
 At the same time, shared `main` contains concurrent schema work outside Finance.
-The rollout must include that work and must not regenerate a finance-only or
-stale baseline over it.
+The rollout must include that work and must not omit it from the complete
+committed migration lineage.
 
 ## Decision
 
-The new combined PostgreSQL baseline becomes the only application-data source
-of truth. Legacy finance-data migration, subscriber conversion, backward-
-compatible data conversion and opening-balance reconstruction are out of scope.
+The complete committed PostgreSQL migration lineage becomes the only
+application-data source of truth. Legacy finance-data migration, subscriber
+conversion, backward-compatible data conversion and opening-balance
+reconstruction are out of scope.
 
 After the full requested contour is implemented and verified, operations may
 perform one destructive reset/recreate of exactly the ElevenHouse production
 PostgreSQL database. The reset is authorized only when all of these gates pass:
 
-1. the generated baseline includes every then-current shared-main schema change;
+1. the complete committed migration lineage includes every then-current
+   shared-main schema change;
 2. a fresh empty-database rehearsal and affected repository gates pass;
 3. the exact production host, database name and container are independently
    inspected and match the approved ElevenHouse target;
@@ -49,8 +51,8 @@ requirements for newly created data.
 - The former `blocked_authoritative_inventory` gate is removed.
 - Target finance schema and adapters may proceed without legacy compatibility
   columns or conversion paths.
-- The initial baseline must be tested as a complete fresh installation rather
-  than as a predecessor-data migration.
+- The complete committed migration lineage must be tested as a fresh
+  installation rather than as a predecessor-data migration.
 - The launch trial balance is exactly zero. A cash-pool/account directory row
   may be seeded, but no wallet, bank, clearing, payable, opening-control or other
   monetary balance row/journal is seeded. The first monetary journal follows a
@@ -62,5 +64,5 @@ requirements for newly created data.
   fail-closed. This ADR does not authorize later implicit resets.
 - For this one rollout, this decision supersedes reset-prohibition language in
   older plans and ADR 0011 only to the extent necessary to install the complete
-  shared baseline. It does not change the PostgreSQL authority or safety model
-  of Flows.
+  committed migration lineage. It does not change the PostgreSQL authority or
+  safety model of Flows.

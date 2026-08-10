@@ -35,13 +35,18 @@ Drizzle хорошо подходит текущей modular-first архите�
 - DB adapters должны явно реализовывать ports, объявленные в domain/use-case слое, а не дублировать их типы локально.
 - Domain layer не должен напрямую размазывать SQL/ORM details по apps.
 - `db:reset` предназначен только для локальной development базы и должен отказываться работать с production или non-local hosts.
-- Изменения schema вносятся через пересборку актуальной миграции и полный reset локальной базы, а не через цепочку incremental `ALTER` migrations.
-- Пересобранный baseline нельзя повторно применять поверх уже существующей
-  production schema. Если baseline был пересобран после production deploy,
-  deploy обязан сначала выполнить отдельный fail-closed reconciliation:
-  распознать только явно одобренную migration history, проверить legacy schema
-  и data invariants, выполнить data/DDL transition в одной транзакции и только
-  после успешной проверки записать текущий baseline в Drizzle ledger.
-- Production database никогда не сбрасывается ради синхронизации baseline.
-  Неизвестная migration history или schema drift останавливают deploy.
+- `packages/db/src/schema/**` остаётся schema source of truth, а
+  `packages/db/drizzle/` — append-only линейной Drizzle migration lineage.
+  Committed SQL, journal и snapshot artifacts immutable: их нельзя
+  переписывать, переименовывать, удалять или менять порядок.
+- Изменение schema добавляет следующую focused module-owned forward migration;
+  несколько migrations допустимы только для фактического dependency order.
+  `db:reset` пересоздаёт только disposable local DB, применяя всю committed
+  lineage и seed data, а не переписывает историю.
+- Production database развивается только forward и никогда не сбрасывается
+  ради синхронизации lineage. Preflight сверяет exact approved ordered lineage;
+  unknown history или schema drift останавливают deploy. Для известного legacy
+  state deploy выполняет отдельный fail-closed reconciliation с approved
+  lineage, schema/data guards, transactional data/DDL transition и advisory
+  lock.
 - Бизнес-таблицы добавляются отдельными focused feature changes вместе с domain/use-case кодом.
