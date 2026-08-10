@@ -1,4 +1,4 @@
-import type { FlowDefinitionSummaryV3 } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
 import {
   flowApprovalModeLabel,
   flowAutomationStateLabel,
@@ -19,7 +19,7 @@ export type FlowGalleryCardModel = {
 };
 
 export function buildFlowGalleryCard(
-  flow: FlowDefinitionSummaryV3,
+  flow: FlowDefinitionSummary,
   locale: FlowDisplayLocale
 ): FlowGalleryCardModel {
   return {
@@ -42,7 +42,7 @@ export function buildFlowGalleryCard(
   };
 }
 
-function originLabel(flow: FlowDefinitionSummaryV3, locale: FlowDisplayLocale): string {
+function originLabel(flow: FlowDefinitionSummary, locale: FlowDisplayLocale): string {
   if (flow.origin.type === "template") return locale === "ru" ? "Из шаблона" : "From template";
   return locale === "ru" ? "С нуля" : "Blank";
 }

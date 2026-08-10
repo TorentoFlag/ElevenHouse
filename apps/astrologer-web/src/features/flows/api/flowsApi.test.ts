@@ -1,11 +1,7 @@
 import {
-  FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE,
-  FLOW_DEFINITION_LIST_V3_MEDIA_TYPE,
-  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
-  FLOW_PUBLICATION_V3_MEDIA_TYPE,
   type CreateFlowDefinitionV2Request,
-  type FlowDefinitionDetailV3,
-  type FlowDefinitionSummaryV3,
+  type FlowDefinitionDetail,
+  type FlowDefinitionSummary,
   type FlowDefinitionTemplateDescriptorV2,
   type FlowDefinitionV2,
   flowGraphV2Schema,
@@ -16,11 +12,11 @@ import {
   type FlowGraphV2,
   type ListFlowApprovalsResponse,
   type ListFlowDefinitionTemplatesV2Response,
-  type ListFlowDefinitionsV3Response,
+  type ListFlowDefinitionsResponse,
   type ListFlowRunsResponse,
   type CreateManualClientFlowRunResponse,
-  type PublishFlowDefinitionV3Response,
-  type ValidateFlowDefinitionResponseV2
+  type PublishFlowDefinitionResponse,
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { application } from "../../../Application";
@@ -80,7 +76,6 @@ const graphV2: FlowGraphV2 = {
 };
 
 const definitionSummary = {
-  schemaVersion: "flow-definition-summary.v3",
   id: flowId,
   ownerUserId,
   name: "Подготовка консультации",
@@ -110,7 +105,7 @@ const definitionSummary = {
       lastPausedAt: null
     }
   }
-} satisfies FlowDefinitionSummaryV3;
+} satisfies FlowDefinitionSummary;
 
 const definition = {
   schemaVersion: "flow-definition.v2",
@@ -133,10 +128,9 @@ const definition = {
 
 const definitionDetail = {
   ...definitionSummary,
-  schemaVersion: "flow-definition-detail.v3",
   draftGraph: graphV2,
   draftPresentation: null
-} satisfies FlowDefinitionDetailV3;
+} satisfies FlowDefinitionDetail;
 
 const template = {
   schemaVersion: "flow-definition-template.v2",
@@ -225,13 +219,12 @@ describe("flows API", () => {
     expect(get).toHaveBeenCalledWith("/flow-templates?locale=ru");
   });
 
-  it("loads lightweight V3 definitions and a selected detail through negotiated contracts", async () => {
+  it("loads lightweight definitions and a selected detail through the current JSON contract", async () => {
     const response = {
-      schemaVersion: "flow-definition-list.v3",
       flows: [definitionSummary],
       total: 1,
       runtime: definitionOnlyRuntime
-    } satisfies ListFlowDefinitionsV3Response;
+    } satisfies ListFlowDefinitionsResponse;
     const get = vi
       .spyOn(application.http, "get")
       .mockResolvedValueOnce(response)
@@ -246,13 +239,11 @@ describe("flows API", () => {
       1,
       "/flows?state=draft&enrollmentState=all&limit=20&offset=40",
       {
-        cache: "no-store",
-        headers: { accept: FLOW_DEFINITION_LIST_V3_MEDIA_TYPE }
+        cache: "no-store"
       }
     );
     expect(get).toHaveBeenNthCalledWith(2, `/flows/${flowId}`, {
-      cache: "no-store",
-      headers: { accept: FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE }
+      cache: "no-store"
     });
   });
 
@@ -289,7 +280,6 @@ describe("flows API", () => {
     const publishResponse = {
       flow: publishedFlow,
       version: {
-        schemaVersion: "flow-published-version.v3",
         id: "33333333-3333-4333-8333-333333333333",
         flowId,
         version: 1,
@@ -314,7 +304,7 @@ describe("flows API", () => {
         },
         publishedAt: "2026-07-28T08:10:00.000Z"
       }
-    } satisfies PublishFlowDefinitionV3Response;
+    } satisfies PublishFlowDefinitionResponse;
     const nextDraft = {
       ...publishedFlow,
       state: "draft",
@@ -389,7 +379,6 @@ describe("flows API", () => {
       {
         csrf: true,
         headers: {
-          accept: FLOW_PUBLICATION_V3_MEDIA_TYPE,
           "idempotency-key": "flow-publish-1"
         }
       }
@@ -407,7 +396,6 @@ describe("flows API", () => {
 
   it("validates a v2 definition through the shared fail-closed contract", async () => {
     const response = {
-      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -429,7 +417,7 @@ describe("flows API", () => {
         nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
         requiredCapabilities: []
       }
-    } satisfies ValidateFlowDefinitionResponseV2;
+    } satisfies ValidateFlowDefinitionResponse;
     const post = vi.spyOn(application.http, "post").mockResolvedValue(response);
 
     await expect(validateFlowDefinition({ flowId, graph: graphV2 })).resolves.toEqual(response);
@@ -438,10 +426,7 @@ describe("flows API", () => {
       `/flows/${flowId}/validate`,
       { graph: graphV2 },
       {
-        csrf: true,
-        headers: {
-          accept: FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE
-        }
+        csrf: true
       }
     );
   });

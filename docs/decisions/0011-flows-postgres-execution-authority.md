@@ -71,18 +71,15 @@ BullMQ is explicitly rejected as the Flows execution authority.
   graph;
 - rejects unsupported graphs before publish/activation.
 
-After the manifest rollout gate opens, new publications use
-`flow-capability-manifest.v2`. Its `triggerMatcher` is the
+Published flows use `flow-capability-manifest.v2`. Its `triggerMatcher` is the
 graph's single `booking_confirmed` or `manual_client` enrollment contract;
 `kind`, `configSchemaVersion`, `matcherContractVersion` and
 `eventSchemaVersion` are all explicit compatibility data. The event version
 pins the normalized enrollment envelope consumed by that matcher; it is not
 inferred from the event payload or current deploy. The manifest's
-`nodeExecutors` contains only downstream executable kinds. Historical V1
-manifests remain accepted under their immutable shape and are checked through a
-deterministic V2-to-V1 compatibility projection. They are not rewritten in
-place, and their trigger entry does not add a production trigger executor or
-authorize a worker token.
+`nodeExecutors` contains only downstream executable kinds. The manifest is
+immutable once published; its trigger entry does not add a production trigger
+executor or authorize a worker token.
 
 ### Enrollment service
 
@@ -404,18 +401,9 @@ same key.
   owner, language, volatility, security mode and configuration; matching trigger
   names alone are insufficient. Whitespace is normalized but case is preserved,
   including inside quoted SQL literals.
-- Manifest publication uses an explicit two-phase fleet gate. The default
-  `ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE=legacy_v1` deploy is a dual
-  reader but persists V1 manifests and ignores current vendor-media opt-in.
-  `manifest_v2` may be enabled only after every API replica runs the dual reader
-  and production reconciliation has installed the validated graph/manifest
-  constraint. In that phase persistence is V2 for every client; legacy clients
-  still receive V2 publication envelopes, while V3 requires explicit `Accept`.
-- Once any V2 manifest is persisted, rollback to a pre-dual-reader binary is
-  prohibited. Operational rollback means deploying the same dual-reader build
-  with phase `legacy_v1`, which stops new V2 writes but continues exact reads and
-  idempotency replay of existing V2/V3 records. The rollout phase is not part of
-  the command request hash, so a replay always returns its original stored body.
+- Manifest publication validates and persists only
+  `flow-capability-manifest.v2`. Rollback must preserve this contract: deploying
+  a binary that expects an older graph or manifest format is prohibited.
 - The main production-baseline reconciler applies both the runtime-dispatch
   outbox and execution-safety transitions for every accepted history before it
   records or asserts the current ledger identity. Each transition accepts only

@@ -6,8 +6,8 @@ import {
   flowDefinitionV2Schema,
   flowCapabilityManifestV2Schema,
   flowGraphV2Schema,
-  flowPublishedVersionV3Schema,
-  publishFlowDefinitionV3ResponseSchema,
+  flowPublishedVersionSchema,
+  publishFlowDefinitionResponseSchema,
   type FlowApprovalMode,
   type FlowDefinitionCommandRejectionResponse,
   type FlowDefinitionState,
@@ -180,13 +180,12 @@ export function createDrizzleFlowDefinitionControlStore(
           presentation: versionRow.presentation,
           publishedAt: versionRow.publishedAt.toISOString()
         };
-        const version = flowPublishedVersionV3Schema.parse({
-          schemaVersion: "flow-published-version.v3",
+        const version = flowPublishedVersionSchema.parse({
           ...versionInput,
           capabilityManifest: versionRow.capabilityManifest
         });
         const flow = parseV2Definition({ row: updated, latestVersion: versionRow });
-        const response = publishFlowDefinitionV3ResponseSchema.parse({ flow, version });
+        const response = publishFlowDefinitionResponseSchema.parse({ flow, version });
         input.assertCreatedResponse(response);
         return succeededOutcome(response, 200);
       }),

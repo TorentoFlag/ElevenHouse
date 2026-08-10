@@ -11,18 +11,15 @@ import {
   flowGraphReadSchema,
   flowGraphV2Schema,
   flowPresentationV1Schema,
-  flowPublishedVersionCompatibleSchema,
-  flowPublishedVersionV3Schema,
+  flowPublishedVersionSchema,
   listFlowDefinitionTemplatesV2QuerySchema,
   listFlowDefinitionTemplatesV2ResponseSchema,
   listFlowDefinitionsV2QuerySchema,
   listFlowDefinitionsV2ResponseSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionV3ResponseSchema,
-  publishFlowDefinitionCompatibleResponseSchema,
+  publishFlowDefinitionResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
-  validateFlowDefinitionResponseV2Schema,
   validateFlowDefinitionResponseSchema,
   type FlowGraphV2
 } from "./flows-v2";
@@ -483,7 +480,6 @@ describe("flow definition validation contracts", () => {
 
   it("accepts a versioned trigger matcher without treating the trigger as a worker executor", () => {
     const response = {
-      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -493,7 +489,6 @@ describe("flow definition validation contracts", () => {
       capabilityManifest: capabilityManifestV2
     } as const;
 
-    expect(validateFlowDefinitionResponseV2Schema.parse(response)).toEqual(response);
     expect(validateFlowDefinitionResponseSchema.parse(response)).toEqual(response);
     expect(
       validateFlowDefinitionResponseSchema.safeParse({
@@ -539,7 +534,6 @@ describe("flow definition validation contracts", () => {
 
   it("rejects contradictory publish and activation claims", () => {
     const missingCompiledSnapshot = {
-      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: true,
       activatable: false,
@@ -571,7 +565,6 @@ describe("flow definition validation contracts", () => {
       message: "Manual trigger requires a next edge."
     } as const;
     const invalidV2 = {
-      schemaVersion: "flow-definition-validation.v2",
       graphSchemaVersion: "flow-graph.v2",
       publishable: false,
       activatable: false,
@@ -629,16 +622,6 @@ describe("flow definition v2 lifecycle contracts", () => {
     updatedAt: "2026-08-02T18:05:00.000Z",
     publishedAt: null
   } as const;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- V1 fixture is retained while exercising V3 parser rejection.
-  const capabilityManifest = {
-    schemaVersion: "flow-capability-manifest.v1",
-    executionSemanticsVersion: "flow-interpreter.v1",
-    nodeExecutors: [
-      { kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 },
-      { kind: "manual_client", configSchemaVersion: 1, executorContractVersion: 1 }
-    ],
-    requiredCapabilities: []
-  } as const;
   const capabilityManifestV2 = {
     schemaVersion: "flow-capability-manifest.v2",
     executionSemanticsVersion: "flow-interpreter.v1",
@@ -652,7 +635,6 @@ describe("flow definition v2 lifecycle contracts", () => {
     requiredCapabilities: []
   } as const;
   const version = {
-    schemaVersion: "flow-published-version.v3",
     id: "33333333-3333-4333-8333-333333333333",
     flowId: definition.id,
     version: 1,
@@ -676,16 +658,9 @@ describe("flow definition v2 lifecycle contracts", () => {
 
   it("parses revisioned drafts and immutable compiled versions", () => {
     expect(flowDefinitionV2Schema.parse(definition)).toEqual(definition);
-    expect(flowPublishedVersionV3Schema.parse(version)).toEqual(version);
-    expect(flowPublishedVersionCompatibleSchema.parse(version)).toEqual(version);
+    expect(flowPublishedVersionSchema.parse(version)).toEqual(version);
     expect(
-      publishFlowDefinitionV3ResponseSchema.parse({
-        flow: publishedDefinition,
-        version
-      })
-    ).toEqual({ flow: publishedDefinition, version });
-    expect(
-      publishFlowDefinitionCompatibleResponseSchema.parse({
+      publishFlowDefinitionResponseSchema.parse({
         flow: publishedDefinition,
         version
       })
@@ -776,19 +751,19 @@ describe("flow definition v2 lifecycle contracts", () => {
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV3ResponseSchema.safeParse({
+      publishFlowDefinitionResponseSchema.safeParse({
         flow: publishedDefinition,
         version: { ...version, sourceRevision: 1 }
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV3ResponseSchema.safeParse({
+      publishFlowDefinitionResponseSchema.safeParse({
         flow: publishedDefinition,
         version: { ...version, approvalMode: "draft_only" }
       }).success
     ).toBe(false);
     expect(
-      publishFlowDefinitionV3ResponseSchema.safeParse({
+      publishFlowDefinitionResponseSchema.safeParse({
         flow: publishedDefinition,
         version: {
           ...version,

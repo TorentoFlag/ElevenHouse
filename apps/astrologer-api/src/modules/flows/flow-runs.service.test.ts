@@ -7,7 +7,7 @@ import type {
 } from "@elevenhouse/contracts";
 import type {
   FlowDefinitionControlStore,
-  FlowDefinitionReadV3Store,
+  FlowDefinitionReadStore,
   FlowRunCancellationStore,
   FlowRuntimeAvailabilityReader,
   FlowRuntimeStore
@@ -62,7 +62,7 @@ function createService(overrides: Partial<FlowRuntimeStore>): FlowsService {
   } as unknown as FlowRuntimeAvailabilityReader;
   return new FlowsService(
     {} as FlowDefinitionControlStore,
-    {} as FlowDefinitionReadV3Store,
+    {} as FlowDefinitionReadStore,
     runtimeStore,
     runtimeAvailabilityReader,
     {} as FlowRunCancellationStore,

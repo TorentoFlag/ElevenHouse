@@ -24,7 +24,7 @@ export * from "./flows-v2";
 export * from "./flow-enrollment-control";
 export * from "./flow-runtime-control";
 export * from "./flow-work-items";
-export * from "./flow-definition-read-v3";
+export * from "./flow-definition-read";
 export * from "./charts";
 export * from "./human-design";
 export * from "./messaging";

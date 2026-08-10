@@ -14,11 +14,6 @@ const instantSchema = z.string().datetime({ offset: true });
 const positiveRevisionSchema = z.number().int().positive();
 const displayTitleSchema = z.string().trim().min(1).max(180);
 
-export const FLOW_DEFINITION_LIST_V3_MEDIA_TYPE =
-  "application/vnd.elevenhouse.flow-definition-list.v3+json";
-export const FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE =
-  "application/vnd.elevenhouse.flow-definition-detail.v3+json";
-
 export const flowDefinitionEnrollmentProjectionSchema = z
   .object({
     schemaVersion: z.literal("flow-enrollment-read-authority.v1"),
@@ -46,20 +41,18 @@ const definitionReadCommonShape = {
   enrollment: flowDefinitionEnrollmentProjectionSchema
 } as const;
 
-export const flowDefinitionSummaryV3Schema = z
+export const flowDefinitionSummarySchema = z
   .object({
-    schemaVersion: z.literal("flow-definition-summary.v3"),
     ...definitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
     origin: flowDefinitionOriginV1Schema
   })
   .strict()
   .superRefine(refineDefinitionRead);
-export type FlowDefinitionSummaryV3 = z.infer<typeof flowDefinitionSummaryV3Schema>;
+export type FlowDefinitionSummary = z.infer<typeof flowDefinitionSummarySchema>;
 
-export const flowDefinitionDetailV3Schema = z
+export const flowDefinitionDetailSchema = z
   .object({
-    schemaVersion: z.literal("flow-definition-detail.v3"),
     ...definitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
     origin: flowDefinitionOriginV1Schema,
@@ -80,7 +73,7 @@ export const flowDefinitionDetailV3Schema = z
       });
     }
   });
-export type FlowDefinitionDetailV3 = z.infer<typeof flowDefinitionDetailV3Schema>;
+export type FlowDefinitionDetail = z.infer<typeof flowDefinitionDetailSchema>;
 
 export const flowDefinitionEnrollmentStateFilterValues = [
   "all",
@@ -95,7 +88,7 @@ export type FlowDefinitionEnrollmentStateFilter = z.infer<
   typeof flowDefinitionEnrollmentStateFilterSchema
 >;
 
-export const listFlowDefinitionsV3QuerySchema = z
+export const listFlowDefinitionsQuerySchema = z
   .object({
     state: z.enum(["all", "draft", "versioned", "archived"]).optional().default("all"),
     enrollmentState: flowDefinitionEnrollmentStateFilterSchema.optional().default("all"),
@@ -103,13 +96,12 @@ export const listFlowDefinitionsV3QuerySchema = z
     offset: z.coerce.number().int().min(0).max(10_000).optional().default(0)
   })
   .strict();
-export type ListFlowDefinitionsV3QueryInput = z.input<typeof listFlowDefinitionsV3QuerySchema>;
-export type ListFlowDefinitionsV3Query = z.infer<typeof listFlowDefinitionsV3QuerySchema>;
+export type ListFlowDefinitionsQueryInput = z.input<typeof listFlowDefinitionsQuerySchema>;
+export type ListFlowDefinitionsQuery = z.infer<typeof listFlowDefinitionsQuerySchema>;
 
-export const listFlowDefinitionsV3ResponseSchema = z
+export const listFlowDefinitionsResponseSchema = z
   .object({
-    schemaVersion: z.literal("flow-definition-list.v3"),
-    flows: z.array(flowDefinitionSummaryV3Schema).max(100),
+    flows: z.array(flowDefinitionSummarySchema).max(100),
     total: z.number().int().min(0),
     runtime: flowRuntimeAvailabilitySchema
   })
@@ -131,7 +123,7 @@ export const listFlowDefinitionsV3ResponseSchema = z
       });
     }
   });
-export type ListFlowDefinitionsV3Response = z.infer<typeof listFlowDefinitionsV3ResponseSchema>;
+export type ListFlowDefinitionsResponse = z.infer<typeof listFlowDefinitionsResponseSchema>;
 
 function refineDefinitionRead(
   definition: {

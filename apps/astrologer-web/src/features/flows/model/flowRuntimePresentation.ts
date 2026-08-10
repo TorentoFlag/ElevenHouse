@@ -1,4 +1,4 @@
-import type { FlowDefinitionSummaryV3, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 
 export const flowRuntimeExecutionUnavailableMessageRu =
   "Исполнение воронки пока недоступно. Сценарий можно редактировать и публиковать.";
@@ -52,7 +52,7 @@ export function canProjectLiveFlowRuntime(
 }
 
 export function buildFlowAutomationControl(
-  flow: FlowDefinitionSummaryV3,
+  flow: FlowDefinitionSummary,
   locale: FlowRuntimeLocale = "ru"
 ): FlowAutomationControlPresentation {
   const copy = runtimeCopy[locale];

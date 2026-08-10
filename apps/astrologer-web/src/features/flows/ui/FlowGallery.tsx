@@ -1,10 +1,10 @@
-import type { FlowDefinitionSummaryV3 } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowGalleryProps = {
-  readonly flows: readonly FlowDefinitionSummaryV3[];
+  readonly flows: readonly FlowDefinitionSummary[];
   readonly locale: "ru" | "en";
   readonly onCreateFlow?: () => void;
   readonly isCreating?: boolean;

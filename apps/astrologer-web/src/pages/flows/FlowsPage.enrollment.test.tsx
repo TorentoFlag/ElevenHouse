@@ -2,7 +2,7 @@
 
 import type {
   FlowActivationReviewResponse,
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   FlowEnrollmentDetailResponse
 } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -248,10 +248,9 @@ function openAutomation(accessibleName: string) {
   fireEvent.click(screen.getAllByRole("switch", { name: accessibleName })[0]!);
 }
 
-function setList(flows: readonly FlowDefinitionSummaryV3[]) {
+function setList(flows: readonly FlowDefinitionSummary[]) {
   mocks.useFlowListQuery.mockReturnValue({
     data: {
-      schemaVersion: "flow-definition-list.v3",
       flows,
       total: flows.length,
       runtime: {
@@ -278,9 +277,8 @@ function mutation(mutate = vi.fn()) {
   };
 }
 
-function inactivePublishedFlow(): FlowDefinitionSummaryV3 {
+function inactivePublishedFlow(): FlowDefinitionSummary {
   return {
-    schemaVersion: "flow-definition-summary.v3",
     id: flowId,
     ownerUserId: "44444444-4444-4444-8444-444444444444",
     name: "Подготовка консультации",
@@ -313,7 +311,7 @@ function inactivePublishedFlow(): FlowDefinitionSummaryV3 {
   };
 }
 
-function activeFlow(): FlowDefinitionSummaryV3 {
+function activeFlow(): FlowDefinitionSummary {
   return {
     ...inactivePublishedFlow(),
     enrollment: activeEnrollmentDetail().enrollment

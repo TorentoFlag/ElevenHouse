@@ -1,4 +1,4 @@
-import type { FlowDefinitionSummaryV3, FlowRuntimeAvailability } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary, FlowRuntimeAvailability } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import {
   buildFlowAutomationControl,
@@ -47,7 +47,7 @@ describe("flow runtime presentation", () => {
     );
   });
 
-  it("derives automation controls only from the V3 enrollment authority", () => {
+  it("derives automation controls only from the enrollment authority", () => {
     expect(
       buildFlowAutomationControl(versionedFlow({ state: "inactive" }), "en")
     ).toMatchObject({
@@ -90,7 +90,7 @@ describe("flow runtime presentation", () => {
   });
 });
 
-function draftFlow(): FlowDefinitionSummaryV3 {
+function draftFlow(): FlowDefinitionSummary {
   return {
     ...versionedFlow({ state: "inactive" }),
     state: "draft",
@@ -103,11 +103,10 @@ function draftFlow(): FlowDefinitionSummaryV3 {
 function versionedFlow(input: {
   readonly state: "inactive" | "active" | "paused";
   readonly activeVersionId?: string;
-}): FlowDefinitionSummaryV3 {
+}): FlowDefinitionSummary {
   const latestVersionId = "44444444-4444-4444-8444-444444444444";
   const isActive = input.state === "active";
   return {
-    schemaVersion: "flow-definition-summary.v3",
     id: "11111111-1111-4111-8111-111111111111",
     ownerUserId: "22222222-2222-4222-8222-222222222222",
     name: "Подготовка консультации",

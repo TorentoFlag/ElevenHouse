@@ -1,7 +1,7 @@
 import type {
   FlowApprovalMode,
   FlowDefinitionState,
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   FlowNodeKindV2,
   FlowSourceHandleV2
 } from "@elevenhouse/contracts";
@@ -16,7 +16,7 @@ export function flowDefinitionStateLabel(
 }
 
 export function flowAutomationStateLabel(
-  flow: FlowDefinitionSummaryV3,
+  flow: FlowDefinitionSummary,
   locale: FlowDisplayLocale
 ): string {
   const labels = automationStateLabels[locale];
@@ -56,7 +56,7 @@ export type FlowDefinitionGallerySummary = {
 };
 
 export function summarizeFlowDefinitions(
-  flows: readonly FlowDefinitionSummaryV3[]
+  flows: readonly FlowDefinitionSummary[]
 ): FlowDefinitionGallerySummary {
   return flows.reduce<FlowDefinitionGallerySummary>(
     (summary, flow) => ({

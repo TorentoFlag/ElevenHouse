@@ -3,7 +3,7 @@ import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
 import {
   updateFlowDefinitionDraftV2RequestSchema,
-  type FlowDefinitionDetailV3,
+  type FlowDefinitionDetail,
   type FlowDefinitionValidationIssue,
   type FlowGraphV2,
   type FlowPresentationV1
@@ -25,7 +25,7 @@ import { FlowMobileDagProjection } from "./FlowMobileDagProjection";
 import { FlowNodePalette } from "./FlowNodePalette";
 
 export type CurrentFlowDefinitionDetail = Extract<
-  FlowDefinitionDetailV3,
+  FlowDefinitionDetail,
   { graphSchemaVersion: "flow-graph.v2" }
 >;
 

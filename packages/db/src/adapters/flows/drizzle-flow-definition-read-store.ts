@@ -1,17 +1,17 @@
 import {
   flowDefinitionDetailV2Schema,
-  flowDefinitionDetailV3Schema,
+  flowDefinitionDetailSchema,
   flowDefinitionSummaryV2Schema,
-  flowDefinitionSummaryV3Schema,
+  flowDefinitionSummarySchema,
   flowEnrollmentControlSchema,
   type FlowDefinitionDetailV2,
-  type FlowDefinitionDetailV3,
+  type FlowDefinitionDetail,
   type FlowDefinitionEnrollmentProjection,
   type FlowDefinitionSummaryV2,
-  type FlowDefinitionSummaryV3,
+  type FlowDefinitionSummary,
   type FlowEnrollmentControl
 } from "@elevenhouse/contracts";
-import { FlowDefinitionIntegrityError, type FlowDefinitionReadV3Store } from "@elevenhouse/domain";
+import { FlowDefinitionIntegrityError, type FlowDefinitionReadStore } from "@elevenhouse/domain";
 import { and, countDistinct, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
@@ -86,9 +86,9 @@ type FlowDefinitionDetailReadRow = FlowDefinitionReadRow & {
   readonly draftPresentation: unknown | null;
 };
 
-export function createDrizzleFlowDefinitionReadV3Store(
+export function createDrizzleFlowDefinitionReadStore(
   database: ElevenHouseDatabase
-): FlowDefinitionReadV3Store {
+): FlowDefinitionReadStore {
   return Object.freeze({
     listByOwner: async ({ ownerUserId, query }) =>
       database.transaction(
@@ -209,28 +209,26 @@ function flowListPredicate(
   );
 }
 
-function toSummary(row: FlowDefinitionReadRow): FlowDefinitionSummaryV3 {
+function toSummary(row: FlowDefinitionReadRow): FlowDefinitionSummary {
   return parsePersisted(() => {
     const definition = toDefinitionSummary(row);
     const { schemaVersion: _schemaVersion, runtimeStatus: _runtimeStatus, ...read } = definition;
     void _schemaVersion;
     void _runtimeStatus;
-    return flowDefinitionSummaryV3Schema.parse({
-      schemaVersion: "flow-definition-summary.v3",
+    return flowDefinitionSummarySchema.parse({
       ...read,
       enrollment: toEnrollmentProjection(row)
     });
   });
 }
 
-function toDetail(row: FlowDefinitionDetailReadRow): FlowDefinitionDetailV3 {
+function toDetail(row: FlowDefinitionDetailReadRow): FlowDefinitionDetail {
   return parsePersisted(() => {
     const definition = toDefinitionDetail(row);
     const { schemaVersion: _schemaVersion, runtimeStatus: _runtimeStatus, ...read } = definition;
     void _schemaVersion;
     void _runtimeStatus;
-    return flowDefinitionDetailV3Schema.parse({
-      schemaVersion: "flow-definition-detail.v3",
+    return flowDefinitionDetailSchema.parse({
       ...read,
       enrollment: toEnrollmentProjection(row)
     });

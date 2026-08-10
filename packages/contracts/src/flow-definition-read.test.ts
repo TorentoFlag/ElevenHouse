@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  flowDefinitionDetailV3Schema,
-  flowDefinitionSummaryV3Schema,
-  listFlowDefinitionsV3QuerySchema,
-  listFlowDefinitionsV3ResponseSchema
-} from "./flow-definition-read-v3";
+  flowDefinitionDetailSchema,
+  flowDefinitionSummarySchema,
+  listFlowDefinitionsQuerySchema,
+  listFlowDefinitionsResponseSchema
+} from "./flow-definition-read";
 
 const flowId = "11111111-1111-4111-8111-111111111111";
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
@@ -46,23 +46,21 @@ const inactiveEnrollment = {
   }
 } as const;
 
-describe("flow definition V3 read contracts", () => {
+describe("flow definition read contracts", () => {
   it("returns definition fields without legacy runtime status and with enrollment CAS authority", () => {
     const response = {
-      schemaVersion: "flow-definition-summary.v3",
       ...definition,
       enrollment: inactiveEnrollment
     } as const;
 
-    expect(flowDefinitionSummaryV3Schema.parse(response)).toEqual(response);
+    expect(flowDefinitionSummarySchema.parse(response)).toEqual(response);
     expect(
-      flowDefinitionSummaryV3Schema.safeParse({ ...response, runtimeStatus: "published" }).success
+      flowDefinitionSummarySchema.safeParse({ ...response, runtimeStatus: "published" }).success
     ).toBe(false);
   });
 
   it("accepts an active enrollment independently of the latest published version", () => {
     const response = {
-      schemaVersion: "flow-definition-summary.v3",
       ...definition,
       latestPublishedVersionId: "66666666-6666-4666-8666-666666666666",
       enrollment: {
@@ -79,18 +77,17 @@ describe("flow definition V3 read contracts", () => {
       }
     } as const;
 
-    expect(flowDefinitionSummaryV3Schema.parse(response)).toEqual(response);
+    expect(flowDefinitionSummarySchema.parse(response)).toEqual(response);
   });
 
   it("rejects enrollment snapshots from another flow or definition revision", () => {
     const response = {
-      schemaVersion: "flow-definition-summary.v3",
       ...definition,
       enrollment: inactiveEnrollment
     } as const;
 
     expect(
-      flowDefinitionSummaryV3Schema.safeParse({
+      flowDefinitionSummarySchema.safeParse({
         ...response,
         enrollment: {
           ...inactiveEnrollment,
@@ -102,7 +99,7 @@ describe("flow definition V3 read contracts", () => {
       }).success
     ).toBe(false);
     expect(
-      flowDefinitionSummaryV3Schema.safeParse({
+      flowDefinitionSummarySchema.safeParse({
         ...response,
         enrollment: {
           ...inactiveEnrollment,
@@ -114,7 +111,6 @@ describe("flow definition V3 read contracts", () => {
 
   it("rejects unsupported enrollment authority", () => {
     const legacyActive = {
-      schemaVersion: "flow-definition-summary.v3",
       ...definition,
       enrollment: {
         schemaVersion: "flow-enrollment-read-authority.v1",
@@ -125,12 +121,11 @@ describe("flow definition V3 read contracts", () => {
       }
     } as const;
 
-    expect(flowDefinitionSummaryV3Schema.safeParse(legacyActive).success).toBe(false);
+    expect(flowDefinitionSummarySchema.safeParse(legacyActive).success).toBe(false);
   });
 
   it("rejects non-V2 detail composition", () => {
     const detail = {
-      schemaVersion: "flow-definition-detail.v3",
       ...definition,
       graphSchemaVersion: "flow-graph.legacy",
       origin: null,
@@ -151,30 +146,28 @@ describe("flow definition V3 read contracts", () => {
       enrollment: inactiveEnrollment
     } as const;
 
-    expect(flowDefinitionDetailV3Schema.safeParse(detail).success).toBe(false);
+    expect(flowDefinitionDetailSchema.safeParse(detail).success).toBe(false);
   });
 
   it("uses enrollment filters and rejects legacy runtime filters", () => {
     expect(
-      listFlowDefinitionsV3QuerySchema.parse({ state: "all", enrollmentState: "active" })
+      listFlowDefinitionsQuerySchema.parse({ state: "all", enrollmentState: "active" })
     ).toEqual({ state: "all", enrollmentState: "active", limit: 50, offset: 0 });
     expect(
-      listFlowDefinitionsV3QuerySchema.safeParse({ state: "all", runtimeStatus: "active" }).success
+      listFlowDefinitionsQuerySchema.safeParse({ state: "all", runtimeStatus: "active" }).success
     ).toBe(false);
     expect(
-      listFlowDefinitionsV3QuerySchema.safeParse({ state: "all", enrollmentState: "legacy_active" })
+      listFlowDefinitionsQuerySchema.safeParse({ state: "all", enrollmentState: "legacy_active" })
         .success
     ).toBe(false);
   });
 
   it("rejects duplicate definitions and impossible totals", () => {
     const item = {
-      schemaVersion: "flow-definition-summary.v3",
       ...definition,
       enrollment: inactiveEnrollment
     } as const;
     const response = {
-      schemaVersion: "flow-definition-list.v3",
       flows: [item],
       total: 1,
       runtime: {
@@ -185,18 +178,17 @@ describe("flow definition V3 read contracts", () => {
       }
     } as const;
 
-    expect(listFlowDefinitionsV3ResponseSchema.parse(response)).toEqual(response);
+    expect(listFlowDefinitionsResponseSchema.parse(response)).toEqual(response);
     expect(
-      listFlowDefinitionsV3ResponseSchema.safeParse({
-        schemaVersion: response.schemaVersion,
+      listFlowDefinitionsResponseSchema.safeParse({
         flows: response.flows,
         total: response.total
       }).success
     ).toBe(false);
     expect(
-      listFlowDefinitionsV3ResponseSchema.safeParse({ ...response, flows: [item, item] }).success
+      listFlowDefinitionsResponseSchema.safeParse({ ...response, flows: [item, item] }).success
     ).toBe(false);
-    expect(listFlowDefinitionsV3ResponseSchema.safeParse({ ...response, total: 0 }).success).toBe(
+    expect(listFlowDefinitionsResponseSchema.safeParse({ ...response, total: 0 }).success).toBe(
       false
     );
   });

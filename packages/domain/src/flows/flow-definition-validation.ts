@@ -2,7 +2,7 @@ import {
   flowActivationBlockerCodeValues,
   type FlowActivationBlockerCode,
   type FlowGraphRead,
-  type ValidateFlowDefinitionResponseV2
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 
 import { compileFlowGraphV2, type FlowGraphV2CompileLimits } from "./flow-graph-v2-compiler";
@@ -15,7 +15,7 @@ export type ValidateFlowDefinitionInput = {
 
 export function validateFlowDefinition(
   input: ValidateFlowDefinitionInput
-): ValidateFlowDefinitionResponseV2 {
+): ValidateFlowDefinitionResponse {
   const compiled = compileFlowGraphV2(input.graph, input.limits);
   const activationBlockers = uniqueBlockers([
     ...(compiled.publishable ? [] : (["FLOW_GRAPH_NOT_PUBLISHABLE"] as const)),
@@ -23,7 +23,6 @@ export function validateFlowDefinition(
   ]);
 
   return {
-    schemaVersion: "flow-definition-validation.v2",
     graphSchemaVersion: "flow-graph.v2",
     publishable: compiled.publishable,
     activatable: compiled.publishable && activationBlockers.length === 0,

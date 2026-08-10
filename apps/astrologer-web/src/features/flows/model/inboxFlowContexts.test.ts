@@ -1,5 +1,5 @@
 import type {
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   FlowRunResponse,
   FlowRuntimeAvailability,
   MessagingThread
@@ -31,7 +31,6 @@ const thread = {
 } satisfies MessagingThread;
 
 const flow = {
-  schemaVersion: "flow-definition-summary.v3",
   id: flowId,
   ownerUserId: "44444444-4444-4444-8444-444444444444",
   name: "Подготовка консультации",
@@ -61,7 +60,7 @@ const flow = {
       lastPausedAt: null
     }
   }
-} satisfies FlowDefinitionSummaryV3;
+} satisfies FlowDefinitionSummary;
 
 const run = {
   id: "77777777-7777-4777-8777-777777777777",

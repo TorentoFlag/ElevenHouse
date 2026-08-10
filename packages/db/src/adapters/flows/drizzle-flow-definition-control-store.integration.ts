@@ -456,7 +456,6 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
     const published = publications[0] ?? raise("Expected published flow");
     const replayed = await publishFlowDefinitionV2(publishInput);
     expect(replayed).toEqual(published);
-    expect(published.version.schemaVersion).toBe("flow-published-version.v3");
     expect(published.flow).toMatchObject({ state: "versioned", revision: 2 });
     expect(published.version).toMatchObject({ version: 1, sourceRevision: 1 });
     await expect(selectVersions(flowId)).resolves.toMatchObject([

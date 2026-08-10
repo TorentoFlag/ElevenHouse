@@ -174,12 +174,6 @@ export function createIdentityConfigServiceStub(input: {
         };
       }
 
-      if (key === "astrologerApi.flows") {
-        return {
-          publicationRolloutPhase: "legacy_v1"
-        };
-      }
-
       throw new Error(`Unexpected config key: ${key}`);
     }
   };

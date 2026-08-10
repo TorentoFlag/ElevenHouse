@@ -1,13 +1,12 @@
 import type {
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   FlowDefinitionTemplateDescriptorV2
 } from "@elevenhouse/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FlowsPageView } from "./FlowsPageView";
 
-const flow: FlowDefinitionSummaryV3 = {
-  schemaVersion: "flow-definition-summary.v3",
+const flow: FlowDefinitionSummary = {
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Подготовка консультации",

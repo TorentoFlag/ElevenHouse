@@ -33,11 +33,6 @@ const capabilityKeySchema = z
 
 export const FLOW_GRAPH_V2_MAX_NODES = 200;
 export const FLOW_GRAPH_V2_MAX_EDGES = 400;
-export const FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE =
-  "application/vnd.elevenhouse.flow-definition-validation.v2+json";
-export const FLOW_PUBLICATION_V3_MEDIA_TYPE =
-  "application/vnd.elevenhouse.flow-publication.v3+json";
-
 export const flowNodeKindV2Values = [
   "booking_confirmed",
   "manual_client",
@@ -490,20 +485,14 @@ const flowDefinitionValidationResponseCommonShape = {
   normalizedGraph: flowGraphV2Schema.nullable()
 } as const;
 
-export const validateFlowDefinitionResponseV2Schema = z
+export const validateFlowDefinitionResponseSchema = z
   .object({
-    schemaVersion: z.literal("flow-definition-validation.v2"),
     ...flowDefinitionValidationResponseCommonShape,
     capabilityManifest: flowCapabilityManifestV2Schema.nullable()
   })
   .strict()
   .superRefine(refineFlowDefinitionValidationResponse);
-export type ValidateFlowDefinitionResponseV2 = z.infer<
-  typeof validateFlowDefinitionResponseV2Schema
->;
-
-export const validateFlowDefinitionResponseSchema = validateFlowDefinitionResponseV2Schema;
-export type ValidateFlowDefinitionResponse = ValidateFlowDefinitionResponseV2;
+export type ValidateFlowDefinitionResponse = z.infer<typeof validateFlowDefinitionResponseSchema>;
 
 function refineFlowDefinitionValidationResponse(
   result: {
@@ -1124,30 +1113,23 @@ const flowPublishedVersionCommonShape = {
   publishedAt: instantSchema
 } as const;
 
-export const flowPublishedVersionV3Schema = z
+export const flowPublishedVersionSchema = z
   .object({
-    schemaVersion: z.literal("flow-published-version.v3"),
     ...flowPublishedVersionCommonShape,
     capabilityManifest: flowCapabilityManifestV2Schema
   })
   .strict()
   .superRefine(refineFlowPublishedVersion);
-export type FlowPublishedVersionV3 = z.infer<typeof flowPublishedVersionV3Schema>;
+export type FlowPublishedVersion = z.infer<typeof flowPublishedVersionSchema>;
 
-export const flowPublishedVersionCompatibleSchema = flowPublishedVersionV3Schema;
-export type FlowPublishedVersionCompatible = FlowPublishedVersionV3;
-
-export const publishFlowDefinitionV3ResponseSchema = z
+export const publishFlowDefinitionResponseSchema = z
   .object({
     flow: flowDefinitionV2Schema,
-    version: flowPublishedVersionV3Schema
+    version: flowPublishedVersionSchema
   })
   .strict()
   .superRefine(refinePublishFlowDefinitionResponse);
-export type PublishFlowDefinitionV3Response = z.infer<typeof publishFlowDefinitionV3ResponseSchema>;
-
-export const publishFlowDefinitionCompatibleResponseSchema = publishFlowDefinitionV3ResponseSchema;
-export type PublishFlowDefinitionCompatibleResponse = PublishFlowDefinitionV3Response;
+export type PublishFlowDefinitionResponse = z.infer<typeof publishFlowDefinitionResponseSchema>;
 
 function refineFlowPublishedVersion(
   version: {
@@ -1168,7 +1150,7 @@ function refineFlowPublishedVersion(
 function refinePublishFlowDefinitionResponse(
   response: {
     readonly flow: FlowDefinitionV2;
-    readonly version: FlowPublishedVersionCompatible;
+    readonly version: FlowPublishedVersion;
   },
   context: z.RefinementCtx
 ): void {

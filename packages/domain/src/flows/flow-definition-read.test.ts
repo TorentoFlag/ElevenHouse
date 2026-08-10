@@ -1,31 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
-  FlowDefinitionDetailV3,
-  FlowDefinitionSummaryV3,
+  FlowDefinitionDetail,
+  FlowDefinitionSummary,
   FlowEnrollmentControl,
   FlowRuntimeAvailability
 } from "@elevenhouse/contracts";
 
 import { FlowDefinitionIntegrityError } from "./flow-definition-control-plane";
 import {
-  getFlowDefinitionV3,
-  listFlowDefinitionsV3,
-  type FlowDefinitionReadV3Store
-} from "./flow-definition-read-v3";
+  getFlowDefinition,
+  listFlowDefinitions,
+  type FlowDefinitionReadStore
+} from "./flow-definition-read";
 
 type CurrentFlowDefinitionSummary = Extract<
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   { readonly graphSchemaVersion: "flow-graph.v2" }
 >;
 type CurrentFlowDefinitionDetail = Extract<
-  FlowDefinitionDetailV3,
+  FlowDefinitionDetail,
   { readonly graphSchemaVersion: "flow-graph.v2" }
 >;
 
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
 const flowId = "11111111-1111-4111-8111-111111111111";
 
-describe("flow definition V3 reads", () => {
+describe("flow definition reads", () => {
   it("parses list filters and validates the complete page", async () => {
     const item = summary();
     const store = createStore({
@@ -33,7 +33,7 @@ describe("flow definition V3 reads", () => {
     });
 
     await expect(
-      listFlowDefinitionsV3({
+      listFlowDefinitions({
         store,
         ownerUserId,
         query: { state: "all", enrollmentState: "inactive", limit: "10", offset: "0" },
@@ -49,16 +49,16 @@ describe("flow definition V3 reads", () => {
   it("returns owner-scoped detail or null", async () => {
     const item = detail();
     const store = createStore({
-      getByOwner: vi.fn<FlowDefinitionReadV3Store["getByOwner"]>(async () => item)
+      getByOwner: vi.fn<FlowDefinitionReadStore["getByOwner"]>(async () => item)
     });
 
-    await expect(getFlowDefinitionV3({ store, ownerUserId, flowId })).resolves.toEqual(item);
+    await expect(getFlowDefinition({ store, ownerUserId, flowId })).resolves.toEqual(item);
     expect(store.getByOwner).toHaveBeenCalledWith({ ownerUserId, flowId });
 
     const missing = createStore({
-      getByOwner: vi.fn<FlowDefinitionReadV3Store["getByOwner"]>(async () => null)
+      getByOwner: vi.fn<FlowDefinitionReadStore["getByOwner"]>(async () => null)
     });
-    await expect(getFlowDefinitionV3({ store: missing, ownerUserId, flowId })).resolves.toBeNull();
+    await expect(getFlowDefinition({ store: missing, ownerUserId, flowId })).resolves.toBeNull();
   });
 
   it("fails closed on corrupt pages and details", async () => {
@@ -66,7 +66,7 @@ describe("flow definition V3 reads", () => {
       listByOwner: vi.fn(async () => ({ flows: [summary(), summary()], total: 2 }))
     });
     await expect(
-      listFlowDefinitionsV3({
+      listFlowDefinitions({
         store: corruptPage,
         ownerUserId,
         query: {},
@@ -75,7 +75,7 @@ describe("flow definition V3 reads", () => {
     ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
 
     const corruptDetail = createStore({
-      getByOwner: vi.fn<FlowDefinitionReadV3Store["getByOwner"]>(
+      getByOwner: vi.fn<FlowDefinitionReadStore["getByOwner"]>(
         async () =>
           ({
             ...detail(),
@@ -87,7 +87,7 @@ describe("flow definition V3 reads", () => {
       )
     });
     await expect(
-      getFlowDefinitionV3({ store: corruptDetail, ownerUserId, flowId })
+      getFlowDefinition({ store: corruptDetail, ownerUserId, flowId })
     ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
   });
 });
@@ -100,8 +100,8 @@ const definitionOnlyRuntime = {
 } satisfies FlowRuntimeAvailability;
 
 function createStore(
-  overrides: Partial<FlowDefinitionReadV3Store> = {}
-): FlowDefinitionReadV3Store {
+  overrides: Partial<FlowDefinitionReadStore> = {}
+): FlowDefinitionReadStore {
   return {
     listByOwner: vi.fn(async () => ({ flows: [], total: 0 })),
     getByOwner: vi.fn(async () => null),
@@ -111,7 +111,6 @@ function createStore(
 
 function summary(): CurrentFlowDefinitionSummary {
   return {
-    schemaVersion: "flow-definition-summary.v3" as const,
     id: flowId,
     ownerUserId,
     name: "Consultation preparation",
@@ -138,7 +137,6 @@ function detail(): CurrentFlowDefinitionDetail {
   const item = summary();
   return {
     ...item,
-    schemaVersion: "flow-definition-detail.v3" as const,
     draftGraph: {
       schemaVersion: "flow-graph.v2" as const,
       nodes: [

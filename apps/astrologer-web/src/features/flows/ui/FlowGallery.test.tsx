@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import type { FlowDefinitionSummaryV3 } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowGallery } from "./FlowGallery";
 
 const flow = {
-  schemaVersion: "flow-definition-summary.v3",
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Подготовка консультации",
@@ -22,7 +21,7 @@ const flow = {
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: inactiveEnrollment(3)
-} satisfies FlowDefinitionSummaryV3;
+} satisfies FlowDefinitionSummary;
 
 describe("FlowGallery", () => {
   afterEach(() => cleanup());
@@ -73,7 +72,7 @@ describe("FlowGallery", () => {
 
 function inactiveEnrollment(
   definitionRevision: number
-): FlowDefinitionSummaryV3["enrollment"] {
+): FlowDefinitionSummary["enrollment"] {
   return {
     schemaVersion: "flow-enrollment-read-authority.v1",
     authority: "enrollment_v1",

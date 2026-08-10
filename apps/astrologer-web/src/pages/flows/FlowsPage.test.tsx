@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
 import type {
-  FlowDefinitionDetailV3,
-  FlowDefinitionSummaryV3,
+  FlowDefinitionDetail,
+  FlowDefinitionSummary,
   FlowDefinitionTemplateDescriptorV2,
-  PublishFlowDefinitionV3Response
+  PublishFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -101,8 +101,7 @@ vi.mock("../../features/flows/ui/FlowManualClientRunDialog", () => ({
   )
 }));
 
-const flow: FlowDefinitionSummaryV3 = {
-  schemaVersion: "flow-definition-summary.v3",
+const flow: FlowDefinitionSummary = {
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   name: "Запись на консультацию",
@@ -120,9 +119,8 @@ const flow: FlowDefinitionSummaryV3 = {
   enrollment: inactiveEnrollment(3)
 };
 
-const flowDetail: Extract<FlowDefinitionDetailV3, { graphSchemaVersion: "flow-graph.v2" }> = {
+const flowDetail: Extract<FlowDefinitionDetail, { graphSchemaVersion: "flow-graph.v2" }> = {
   ...flow,
-  schemaVersion: "flow-definition-detail.v3",
   draftGraph: {
     schemaVersion: "flow-graph.v2",
     nodes: [
@@ -158,7 +156,7 @@ const availableTemplate: FlowDefinitionTemplateDescriptorV2 = {
   blockerCode: null
 };
 
-const detailResponses = new Map<string, FlowDefinitionDetailV3>();
+const detailResponses = new Map<string, FlowDefinitionDetail>();
 
 describe("FlowsPage", () => {
   beforeEach(() => {
@@ -169,7 +167,6 @@ describe("FlowsPage", () => {
     window.history.replaceState(null, "", "/flows");
     mocks.useFlowListQuery.mockReturnValue({
       data: {
-        schemaVersion: "flow-definition-list.v3",
         flows: [flow],
         total: 1,
         runtime: {
@@ -244,7 +241,7 @@ describe("FlowsPage", () => {
 
   afterEach(() => cleanup());
 
-  it("loads the V3 list and localized template catalog", () => {
+  it("loads the current definition list and localized template catalog", () => {
     renderFlowsPage();
 
     expect(mocks.useDocumentTitle).toHaveBeenCalledWith("Воронки");
@@ -327,7 +324,6 @@ describe("FlowsPage", () => {
     detailResponses.set(flow.id, active);
     mocks.useFlowListQuery.mockReturnValue({
       data: {
-        schemaVersion: "flow-definition-list.v3",
         flows: [
           {
             ...flow,
@@ -361,7 +357,7 @@ describe("FlowsPage", () => {
   });
 
   it("creates a server-backed template definition and opens its returned detail", () => {
-    const createdDetail: FlowDefinitionDetailV3 = {
+    const createdDetail: FlowDefinitionDetail = {
       ...flowDetail,
       id: "33333333-3333-4333-8333-333333333333",
       name: availableTemplate.name
@@ -471,7 +467,7 @@ describe("FlowsPage", () => {
 
   it("creates the next draft from the exact published version", () => {
     const versioned = versionedFlow();
-    const detail: Extract<FlowDefinitionDetailV3, { graphSchemaVersion: "flow-graph.v2" }> = {
+    const detail: Extract<FlowDefinitionDetail, { graphSchemaVersion: "flow-graph.v2" }> = {
       ...flowDetail,
       state: versioned.state,
       revision: versioned.revision,
@@ -610,7 +606,6 @@ function mutation(mutate = vi.fn()) {
 
 function validValidation() {
   return {
-    schemaVersion: "flow-definition-validation.v2" as const,
     graphSchemaVersion: "flow-graph.v2" as const,
     publishable: true,
     activatable: false,
@@ -632,7 +627,7 @@ function validValidation() {
   };
 }
 
-function publishedFlow(): PublishFlowDefinitionV3Response {
+function publishedFlow(): PublishFlowDefinitionResponse {
   const versionId = "44444444-4444-4444-8444-444444444444";
   const publishedAt = "2026-07-30T14:45:00.000Z";
   const capabilityManifest = validValidation().capabilityManifest!;
@@ -657,7 +652,6 @@ function publishedFlow(): PublishFlowDefinitionV3Response {
       publishedAt
     },
     version: {
-      schemaVersion: "flow-published-version.v3",
       id: versionId,
       flowId: flow.id,
       version: 1,
@@ -672,10 +666,9 @@ function publishedFlow(): PublishFlowDefinitionV3Response {
   };
 }
 
-function listFlows(flows: readonly FlowDefinitionSummaryV3[]) {
+function listFlows(flows: readonly FlowDefinitionSummary[]) {
   mocks.useFlowListQuery.mockReturnValue({
     data: {
-      schemaVersion: "flow-definition-list.v3",
       flows,
       total: flows.length,
       runtime: {
@@ -696,7 +689,7 @@ function openFlow(name: string) {
   fireEvent.click(screen.getByRole("button", { name: `Открыть схему: ${name}` }));
 }
 
-function versionedFlow(): FlowDefinitionSummaryV3 {
+function versionedFlow(): FlowDefinitionSummary {
   return {
     ...flow,
     state: "versioned",
@@ -708,7 +701,7 @@ function versionedFlow(): FlowDefinitionSummaryV3 {
   };
 }
 
-function inactiveEnrollment(definitionRevision: number): FlowDefinitionSummaryV3["enrollment"] {
+function inactiveEnrollment(definitionRevision: number): FlowDefinitionSummary["enrollment"] {
   return {
     schemaVersion: "flow-enrollment-read-authority.v1",
     authority: "enrollment_v1",

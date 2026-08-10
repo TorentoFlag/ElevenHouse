@@ -3,14 +3,14 @@ import type {
   DecideFlowApprovalRequest,
   FlowDefinitionV2,
   ListFlowApprovalsQuery,
-  ListFlowDefinitionsV3QueryInput,
+  ListFlowDefinitionsQueryInput,
   ListFlowRunsQuery,
   ListFlowRunsResponse,
   ListFlowWorkItemsQuery,
   CreateManualClientFlowRunResponse,
   CancelFlowRunResponse,
   PauseFlowEnrollmentResponse,
-  PublishFlowDefinitionV3Response
+  PublishFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import { activateFlow, type ActivateFlowInput } from "../api/activateFlow";
@@ -41,7 +41,7 @@ import {
 
 export const flowsQueryKeys = {
   all: () => ["flows"] as const,
-  list: (query: ListFlowDefinitionsV3QueryInput) => ["flows", "list", query] as const,
+  list: (query: ListFlowDefinitionsQueryInput) => ["flows", "list", query] as const,
   detail: (flowId: string | null) => ["flows", "detail", flowId] as const,
   run: (runId: string | null) => ["flows", "run", runId] as const,
   activationReview: (flowId: string | null, versionId: string | null) =>
@@ -53,7 +53,7 @@ export const flowsQueryKeys = {
   workItems: (query: ListFlowWorkItemsQuery) => ["flows", "work-items", query] as const
 };
 
-export function flowListQueryOptions(query: ListFlowDefinitionsV3QueryInput) {
+export function flowListQueryOptions(query: ListFlowDefinitionsQueryInput) {
   return {
     queryKey: flowsQueryKeys.list(query),
     queryFn: () => listFlows(query),
@@ -299,7 +299,7 @@ export type FlowMutationResult =
   | ActivateFlowVersionResponse
   | PauseFlowEnrollmentResponse
   | FlowDefinitionV2
-  | PublishFlowDefinitionV3Response
+  | PublishFlowDefinitionResponse
   | CreateManualClientFlowRunResponse
   | CancelFlowRunResponse
   | { readonly approval: { readonly status: DecideFlowApprovalRequest["decision"] } };

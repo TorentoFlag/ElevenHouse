@@ -1,5 +1,5 @@
 import type {
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   FlowRunResponse,
   FlowRuntimeAvailability,
   MessagingThread
@@ -15,7 +15,7 @@ export type FlowInboxContext = {
 
 type BuildInboxFlowContextsInput = {
   readonly threads: readonly MessagingThread[];
-  readonly flows: readonly FlowDefinitionSummaryV3[];
+  readonly flows: readonly FlowDefinitionSummary[];
   readonly runtimeAvailabilityByFlowId: Readonly<
     Record<string, FlowRuntimeAvailability | null | undefined>
   >;

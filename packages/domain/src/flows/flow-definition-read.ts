@@ -1,48 +1,47 @@
 import {
-  flowDefinitionDetailV3Schema,
-  listFlowDefinitionsV3QuerySchema,
-  listFlowDefinitionsV3ResponseSchema,
-  type FlowDefinitionDetailV3,
-  type FlowDefinitionSummaryV3,
-  type ListFlowDefinitionsV3Query,
-  type ListFlowDefinitionsV3QueryInput,
+  flowDefinitionDetailSchema,
+  listFlowDefinitionsQuerySchema,
+  listFlowDefinitionsResponseSchema,
+  type FlowDefinitionDetail,
+  type FlowDefinitionSummary,
+  type ListFlowDefinitionsQuery,
+  type ListFlowDefinitionsQueryInput,
   type FlowRuntimeAvailability
 } from "@elevenhouse/contracts";
 
 import { FlowDefinitionIntegrityError } from "./flow-definition-control-plane";
 
-export type FlowDefinitionReadV3Page = {
-  readonly flows: readonly FlowDefinitionSummaryV3[];
+export type FlowDefinitionReadPage = {
+  readonly flows: readonly FlowDefinitionSummary[];
   readonly total: number;
 };
 
-export type FlowDefinitionReadV3Result = FlowDefinitionReadV3Page & {
+export type FlowDefinitionReadResult = FlowDefinitionReadPage & {
   readonly runtime: FlowRuntimeAvailability;
 };
 
-export type FlowDefinitionReadV3Store = {
+export type FlowDefinitionReadStore = {
   readonly listByOwner: (input: {
     readonly ownerUserId: string;
-    readonly query: ListFlowDefinitionsV3Query;
-  }) => Promise<FlowDefinitionReadV3Page>;
+    readonly query: ListFlowDefinitionsQuery;
+  }) => Promise<FlowDefinitionReadPage>;
   readonly getByOwner: (input: {
     readonly ownerUserId: string;
     readonly flowId: string;
-  }) => Promise<FlowDefinitionDetailV3 | null>;
+  }) => Promise<FlowDefinitionDetail | null>;
 };
 
-export async function listFlowDefinitionsV3(input: {
-  readonly store: FlowDefinitionReadV3Store;
+export async function listFlowDefinitions(input: {
+  readonly store: FlowDefinitionReadStore;
   readonly ownerUserId: string;
-  readonly query: ListFlowDefinitionsV3QueryInput;
+  readonly query: ListFlowDefinitionsQueryInput;
   readonly runtime: FlowRuntimeAvailability;
-}): Promise<FlowDefinitionReadV3Result> {
-  const query = listFlowDefinitionsV3QuerySchema.parse(input.query);
+}): Promise<FlowDefinitionReadResult> {
+  const query = listFlowDefinitionsQuerySchema.parse(input.query);
   const page = await input.store.listByOwner({ ownerUserId: input.ownerUserId, query });
 
   try {
-    const response = listFlowDefinitionsV3ResponseSchema.parse({
-      schemaVersion: "flow-definition-list.v3",
+    const response = listFlowDefinitionsResponseSchema.parse({
       flows: page.flows,
       total: page.total,
       runtime: input.runtime
@@ -54,11 +53,11 @@ export async function listFlowDefinitionsV3(input: {
   }
 }
 
-export async function getFlowDefinitionV3(input: {
-  readonly store: FlowDefinitionReadV3Store;
+export async function getFlowDefinition(input: {
+  readonly store: FlowDefinitionReadStore;
   readonly ownerUserId: string;
   readonly flowId: string;
-}): Promise<FlowDefinitionDetailV3 | null> {
+}): Promise<FlowDefinitionDetail | null> {
   const detail = await input.store.getByOwner({
     ownerUserId: input.ownerUserId,
     flowId: input.flowId
@@ -66,7 +65,7 @@ export async function getFlowDefinitionV3(input: {
   if (detail === null) return null;
 
   try {
-    return flowDefinitionDetailV3Schema.parse(detail);
+    return flowDefinitionDetailSchema.parse(detail);
   } catch (error) {
     if (error instanceof FlowDefinitionIntegrityError) throw error;
     throw new FlowDefinitionIntegrityError();

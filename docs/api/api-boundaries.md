@@ -310,32 +310,23 @@ the returned operational history is the durable runtime record, not a browser
 preview.
 
 `POST /flows/:flowId/validate` is an owner-scoped, CSRF-protected read-only
-operation. It accepts readable v1 or strict v2 graphs through shared contracts,
+operation. It accepts the canonical strict v2 graph through shared contracts,
 returns explicit publishability issues, a canonical v2 graph and capability
 requirements when compilation succeeds, and reports activation blockers
 separately. A valid graph remains `activatable=false` with
 `FLOW_RUNTIME_EXECUTION_UNAVAILABLE` until the versioned runtime readiness
 authority exists. Validation does not mutate the flow, runtime or outbox.
 
-Validation V2 and publication V3 are vendor-media responses gated by both an
-explicit `Accept` value and
-`ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE=manifest_v2`. The default
-`legacy_v1` phase always returns legacy wire envelopes and persists a V1
-capability manifest, even to a new frontend. In `manifest_v2`, every fresh
-publication persists V2 while clients without vendor `Accept` continue to
-receive the legacy publication envelope. Idempotency replay returns the exact
-stored response across phase changes; `Vary` appends `Accept` without removing
-existing cache dimensions such as `Origin`.
+Validation, publication, and definition reads use one ordinary
+`application/json` contract. They do not negotiate vendor media types and do
+not depend on a rollout-phase environment variable. Every publication persists
+the canonical `flow-capability-manifest.v2`; idempotency replay returns the
+stored command result for the same key and request hash.
 
-Definition list/detail reads use the legacy V2 JSON representation unless the
-client sends the exact vendor media type
-`application/vnd.elevenhouse.flow-definition-list.v3+json` or
-`application/vnd.elevenhouse.flow-definition-detail.v3+json`. Negotiated V3
-responses are non-cacheable, set `Vary: Accept` and replace ambiguous
-`runtimeStatus` with an enrollment-authority projection. Current authority is
-returned as `enrollment_v1`; a historical `flows.status=active` row is exposed
-explicitly as `legacy_active` until it is drained. The server never merges both
-authorities into a guessed status.
+Definition list/detail reads are non-cacheable and include the server-backed
+runtime availability plus the `enrollment_v1` authority projection. The
+projection is derived from the durable enrollment control record, never from a
+legacy status flag or browser state.
 
 `GET /flows/:flowId/enrollment` is the owner-scoped, non-cacheable CAS read for
 enrollment authority. A never-activated definition is projected as `inactive`

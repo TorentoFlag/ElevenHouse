@@ -5,10 +5,9 @@ import {
   flowCapabilityManifestSchema,
   flowDefinitionV2Schema,
   flowGraphReadSchema,
-  flowPublishedVersionCompatibleSchema,
+  flowPublishedVersionSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionCompatibleResponseSchema,
-  publishFlowDefinitionV3ResponseSchema,
+  publishFlowDefinitionResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   type CreateFlowDefinitionV2Request,
   type CreateFlowDefinitionV2RequestInput,
@@ -23,10 +22,9 @@ import {
   type FlowDefinitionV2,
   type FlowGraphV2,
   type FlowPresentationV1,
-  type FlowPublishedVersionCompatible,
+  type FlowPublishedVersion,
   type PublishFlowDefinitionV2Request,
-  type PublishFlowDefinitionCompatibleResponse,
-  type PublishFlowDefinitionV3Response,
+  type PublishFlowDefinitionResponse,
   type UpdateFlowDefinitionDraftV2Request
 } from "@elevenhouse/contracts";
 
@@ -142,7 +140,7 @@ export type FlowDefinitionControlStore = {
       current: FlowDefinitionControlRecord
     ) => FlowDefinitionPreparation<FlowDefinitionPreparedPublication>;
     readonly assertCreatedResponse: (response: unknown) => void;
-  }) => Promise<FlowDefinitionCommandResult<PublishFlowDefinitionCompatibleResponse>>;
+  }) => Promise<FlowDefinitionCommandResult<PublishFlowDefinitionResponse>>;
   readonly executeCreateNextDraft: (input: {
     readonly command: FlowDefinitionCommand;
     readonly prepare: (
@@ -302,8 +300,7 @@ export function parseFlowDefinitionPublishedVersionRecord(input: {
 
   const manifest = flowCapabilityManifestSchema.safeParse(input.capabilityManifest);
   if (!manifest.success) throw new FlowDefinitionIntegrityError();
-  const version = flowPublishedVersionCompatibleSchema.safeParse({
-    schemaVersion: "flow-published-version.v3",
+  const version = flowPublishedVersionSchema.safeParse({
     id: input.id,
     flowId: input.flowId,
     version: input.version,
@@ -424,7 +421,7 @@ export async function publishFlowDefinitionV2(input: {
   readonly request: PublishFlowDefinitionV2Request;
   readonly idempotencyKey: string;
   readonly now: string;
-}): Promise<PublishFlowDefinitionCompatibleResponse | null> {
+}): Promise<PublishFlowDefinitionResponse | null> {
   const request = publishFlowDefinitionV2RequestSchema.parse(input.request);
   const command = createCommand({
     routeTemplate: "/flows/:flowId/publish",
@@ -437,8 +434,8 @@ export async function publishFlowDefinitionV2(input: {
     request,
     now: input.now
   });
-  const assertCreatedResponse = (response: unknown): PublishFlowDefinitionV3Response => {
-    const published = publishFlowDefinitionV3ResponseSchema.safeParse(response);
+  const assertCreatedResponse = (response: unknown): PublishFlowDefinitionResponse => {
+    const published = publishFlowDefinitionResponseSchema.safeParse(response);
     if (!published.success) throw new FlowDefinitionIntegrityError();
     assertDefinitionCommandResponse(
       published.data.flow,
@@ -462,7 +459,7 @@ export async function publishFlowDefinitionV2(input: {
   if (commandOutcomeIsNotFound(result.outcome)) return null;
   const published = resolveCommandOutcome(
     result.outcome,
-    publishFlowDefinitionCompatibleResponseSchema.parse,
+    publishFlowDefinitionResponseSchema.parse,
     200
   );
   if (result.kind === "created") assertCreatedResponse(published);
@@ -590,8 +587,7 @@ function prepareNextDraft(
       currentBaseVersionId: latestVersion.id
     });
   }
-  const version = flowPublishedVersionCompatibleSchema.safeParse({
-    schemaVersion: "flow-published-version.v3",
+  const version = flowPublishedVersionSchema.safeParse({
     ...latestVersion,
     status: "published"
   });
@@ -756,7 +752,7 @@ function assertDefinitionCommandResponse(
   }
 }
 
-function publishedVersionMatchesCompiler(version: FlowPublishedVersionCompatible): boolean {
+function publishedVersionMatchesCompiler(version: FlowPublishedVersion): boolean {
   const compiled = compileFlowGraphV2(version.graph);
   const manifestIntegrity = verifyFlowCapabilityManifestForGraph({
     graph: version.graph,

@@ -28,7 +28,7 @@ import { createDrizzlePlatformTariffAuthorityStore } from "../platform-billing/d
 import { runFlowEnrollmentControlOutcomeRetention } from "./drizzle-flow-enrollment-control-retention-store";
 import { createDrizzleFlowEnrollmentControlStore } from "./drizzle-flow-enrollment-control-store";
 import { createDrizzleFlowEnrollmentQueryStore } from "./drizzle-flow-enrollment-query-store";
-import { createDrizzleFlowDefinitionReadV3Store } from "./drizzle-flow-definition-read-v3-store";
+import { createDrizzleFlowDefinitionReadStore } from "./drizzle-flow-definition-read-store";
 import { createDrizzleFlowActivationReviewStore } from "./drizzle-flow-activation-review-store";
 import { provisionFlowEnrollmentReadAuthority } from "./drizzle-flow-enrollment-authority-provisioning";
 import { createDrizzleFlowRuntimeControlCommandStore } from "./drizzle-flow-runtime-control-command-store";
@@ -152,7 +152,7 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
   it("projects inactive and active enrollment authority without leaking foreign ownership", async () => {
     const fixture = await createFixture();
     const queryStore = createDrizzleFlowEnrollmentQueryStore(runtime.database);
-    const definitionReadStore = createDrizzleFlowDefinitionReadV3Store(runtime.database);
+    const definitionReadStore = createDrizzleFlowDefinitionReadStore(runtime.database);
 
     await expect(
       queryStore.getByOwner({ ownerUserId: fixture.ownerUserId, flowId: fixture.flowId })

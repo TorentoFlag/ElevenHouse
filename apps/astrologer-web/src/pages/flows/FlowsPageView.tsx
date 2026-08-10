@@ -1,6 +1,6 @@
 import type {
-  FlowDefinitionDetailV3,
-  FlowDefinitionSummaryV3,
+  FlowDefinitionDetail,
+  FlowDefinitionSummary,
   FlowDefinitionTemplateDescriptorV2,
   FlowDefinitionValidationIssue,
   FlowRuntimeAvailability
@@ -22,7 +22,7 @@ import styles from "./FlowsPage.module.css";
 
 export type FlowsPageViewProps = {
   readonly locale: "ru" | "en";
-  readonly flows: readonly FlowDefinitionSummaryV3[];
+  readonly flows: readonly FlowDefinitionSummary[];
   readonly templates: readonly FlowDefinitionTemplateDescriptorV2[];
   readonly products?: readonly ProductResponse[];
   readonly creationAllowed?: boolean;
@@ -33,7 +33,7 @@ export type FlowsPageViewProps = {
   readonly onRetryList?: () => void;
   readonly onRetryTemplates?: () => void;
   readonly selectedFlowId?: string | null;
-  readonly selectedFlow?: FlowDefinitionDetailV3 | null;
+  readonly selectedFlow?: FlowDefinitionDetail | null;
   readonly isLoadingSelectedFlow?: boolean;
   readonly selectedFlowError?: Error | null;
   readonly createDialogOpen?: boolean;

@@ -1,14 +1,10 @@
 import {
-  FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE,
-  FLOW_DEFINITION_LIST_V3_MEDIA_TYPE,
-  FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE,
-  FLOW_PUBLICATION_V3_MEDIA_TYPE,
-  type FlowDefinitionDetailV3,
-  type FlowDefinitionSummaryV3,
+  type FlowDefinitionDetail,
+  type FlowDefinitionSummary,
   type FlowCapabilityManifestV2,
   type FlowGraphV2,
-  type PublishFlowDefinitionV3Response,
-  type ValidateFlowDefinitionResponseV2
+  type PublishFlowDefinitionResponse,
+  type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -52,18 +48,17 @@ const graph: FlowGraphV2 = {
   ]
 };
 
-describe("flow definition V3 API", () => {
+describe("flow definition API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("loads strict V3 list/detail projections with enrollment authority", async () => {
+  it("loads the current list/detail projections with enrollment authority", async () => {
     const summary = definitionSummary();
     const detail = definitionDetail();
     const get = vi
       .spyOn(application.http, "get")
       .mockResolvedValueOnce({
-        schemaVersion: "flow-definition-list.v3",
         flows: [summary],
         total: 1,
         runtime: {
@@ -84,19 +79,16 @@ describe("flow definition V3 API", () => {
       1,
       "/flows?state=draft&enrollmentState=inactive&limit=20&offset=40",
       {
-        cache: "no-store",
-        headers: { accept: FLOW_DEFINITION_LIST_V3_MEDIA_TYPE }
+        cache: "no-store"
       }
     );
     expect(get).toHaveBeenNthCalledWith(2, `/flows/${flowId}`, {
-      cache: "no-store",
-      headers: { accept: FLOW_DEFINITION_DETAIL_V3_MEDIA_TYPE }
+      cache: "no-store"
     });
   });
 
-  it("rejects V2/default JSON fallback on the V3 read path", async () => {
+  it("rejects malformed default JSON on the read path", async () => {
     vi.spyOn(application.http, "get").mockResolvedValue({
-      schemaVersion: "flow-definition-list.v2",
       flows: [],
       total: 0,
       runtime: {
@@ -112,7 +104,7 @@ describe("flow definition V3 API", () => {
     ).rejects.toThrow();
   });
 
-  it("publishes strict V3 and validates strict V2 without compatibility fallback", async () => {
+  it("publishes and validates through the current JSON contract", async () => {
     const publication = publishedDefinition();
     const validation = validationResponse();
     const post = vi
@@ -135,10 +127,7 @@ describe("flow definition V3 API", () => {
       { expectedRevision: 1 },
       {
         csrf: true,
-        headers: {
-          accept: FLOW_PUBLICATION_V3_MEDIA_TYPE,
-          "idempotency-key": "flows:publish:attempt-1"
-        }
+        headers: { "idempotency-key": "flows:publish:attempt-1" }
       }
     );
     expect(post).toHaveBeenNthCalledWith(
@@ -146,19 +135,17 @@ describe("flow definition V3 API", () => {
       `/flows/${flowId}/validate`,
       { graph },
       {
-        csrf: true,
-        headers: { accept: FLOW_DEFINITION_VALIDATION_V2_MEDIA_TYPE }
+        csrf: true
       }
     );
   });
 });
 
 function definitionSummary(): Extract<
-  FlowDefinitionSummaryV3,
+  FlowDefinitionSummary,
   { graphSchemaVersion: "flow-graph.v2" }
 > {
   return {
-    schemaVersion: "flow-definition-summary.v3",
     id: flowId,
     ownerUserId,
     name: "Подготовка консультации",
@@ -191,10 +178,9 @@ function definitionSummary(): Extract<
   };
 }
 
-function definitionDetail(): FlowDefinitionDetailV3 {
+function definitionDetail(): FlowDefinitionDetail {
   return {
     ...definitionSummary(),
-    schemaVersion: "flow-definition-detail.v3",
     draftGraph: graph,
     draftPresentation: null
   };
@@ -215,7 +201,7 @@ function capabilityManifest(): FlowCapabilityManifestV2 {
   };
 }
 
-function publishedDefinition(): PublishFlowDefinitionV3Response {
+function publishedDefinition(): PublishFlowDefinitionResponse {
   return {
     flow: {
       schemaVersion: "flow-definition.v2",
@@ -236,7 +222,6 @@ function publishedDefinition(): PublishFlowDefinitionV3Response {
       publishedAt: "2026-08-04T18:05:00.000Z"
     },
     version: {
-      schemaVersion: "flow-published-version.v3",
       id: versionId,
       flowId,
       version: 1,
@@ -251,9 +236,8 @@ function publishedDefinition(): PublishFlowDefinitionV3Response {
   };
 }
 
-function validationResponse(): ValidateFlowDefinitionResponseV2 {
+function validationResponse(): ValidateFlowDefinitionResponse {
   return {
-    schemaVersion: "flow-definition-validation.v2",
     graphSchemaVersion: "flow-graph.v2",
     publishable: true,
     activatable: false,

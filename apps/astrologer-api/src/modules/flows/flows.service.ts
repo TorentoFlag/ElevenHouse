@@ -16,32 +16,32 @@ import {
   createNextFlowDraftV2RequestSchema,
   decideFlowApprovalRequestSchema,
   decideFlowApprovalResponseSchema,
-  flowDefinitionDetailV3Schema,
+  flowDefinitionDetailSchema,
   flowDefinitionV2Schema,
   getFlowRunResponseSchema,
   listFlowApprovalsQuerySchema,
   listFlowApprovalsResponseSchema,
   listFlowDefinitionTemplatesV2QuerySchema,
   listFlowDefinitionTemplatesV2ResponseSchema,
-  listFlowDefinitionsV3QuerySchema,
-  listFlowDefinitionsV3ResponseSchema,
+  listFlowDefinitionsQuerySchema,
+  listFlowDefinitionsResponseSchema,
   listFlowRunsQuerySchema,
   listFlowRunsResponseSchema,
   publishFlowDefinitionV2RequestSchema,
-  publishFlowDefinitionV3ResponseSchema,
+  publishFlowDefinitionResponseSchema,
   updateFlowDefinitionDraftV2RequestSchema,
   validateFlowDefinitionRequestSchema,
-  validateFlowDefinitionResponseV2Schema,
+  validateFlowDefinitionResponseSchema,
   type CancelFlowRunResponse,
   type DecideFlowApprovalResponse,
-  type FlowDefinitionDetailV3,
+  type FlowDefinitionDetail,
   type FlowDefinitionV2,
   type GetFlowRunResponse,
   type ListFlowApprovalsResponse,
   type ListFlowDefinitionTemplatesV2Response,
-  type ListFlowDefinitionsV3Response,
+  type ListFlowDefinitionsResponse,
   type ListFlowRunsResponse,
-  type PublishFlowDefinitionV3Response,
+  type PublishFlowDefinitionResponse,
   type ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import {
@@ -70,15 +70,15 @@ import {
   FlowRuntimeIdempotencyExpiredError,
   FlowRuntimeIdempotencyKeyInvalidError,
   getFlowDefinitionTemplateCatalogV2,
-  getFlowDefinitionV3 as getFlowDefinitionV3UseCase,
+  getFlowDefinition as getFlowDefinitionUseCase,
   listFlowApprovals,
-  listFlowDefinitionsV3 as listFlowDefinitionsV3UseCase,
+  listFlowDefinitions as listFlowDefinitionsUseCase,
   listFlowRuns,
   publishFlowDefinitionV2,
   updateFlowDefinitionDraftV2,
   validateFlowDefinition as validateFlowDefinitionUseCase,
   type FlowDefinitionControlStore,
-  type FlowDefinitionReadV3Store,
+  type FlowDefinitionReadStore,
   type FlowRunCancellationRejectionResponse,
   type FlowRunCancellationStore,
   type FlowRuntimeAvailabilityReader,
@@ -89,7 +89,7 @@ import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import {
   FLOW_DEFINITION_CONTROL_STORE,
-  FLOW_DEFINITION_READ_V3_STORE,
+  FLOW_DEFINITION_READ_STORE,
   FLOW_RUN_CANCELLATION_STORE,
   FLOW_RUNTIME_AVAILABILITY_READER,
   FLOW_RUNTIME_STORE
@@ -102,8 +102,8 @@ export class FlowsService {
   constructor(
     @Inject(FLOW_DEFINITION_CONTROL_STORE)
     private readonly definitionStore: FlowDefinitionControlStore,
-    @Inject(FLOW_DEFINITION_READ_V3_STORE)
-    private readonly definitionReadV3Store: FlowDefinitionReadV3Store,
+    @Inject(FLOW_DEFINITION_READ_STORE)
+    private readonly definitionReadStore: FlowDefinitionReadStore,
     @Inject(FLOW_RUNTIME_STORE) private readonly runtimeStore: FlowRuntimeStore,
     @Inject(FLOW_RUNTIME_AVAILABILITY_READER)
     private readonly runtimeAvailabilityReader: FlowRuntimeAvailabilityReader,
@@ -122,19 +122,18 @@ export class FlowsService {
   async listFlows(
     query: unknown,
     request: AstrologerSessionRequest
-  ): Promise<ListFlowDefinitionsV3Response> {
+  ): Promise<ListFlowDefinitionsResponse> {
     const ownerUserId = requireOwnerUserId(request);
-    const parsedQuery = parseContract(listFlowDefinitionsV3QuerySchema, query ?? {});
+    const parsedQuery = parseContract(listFlowDefinitionsQuerySchema, query ?? {});
     const runtime = await this.runtimeAvailabilityReader.readForOwner({ ownerUserId });
     return mapFlowDefinitionErrors(async () => {
-      const result = await listFlowDefinitionsV3UseCase({
-        store: this.definitionReadV3Store,
+      const result = await listFlowDefinitionsUseCase({
+        store: this.definitionReadStore,
         ownerUserId,
         query: parsedQuery,
         runtime
       });
-      return listFlowDefinitionsV3ResponseSchema.parse({
-        schemaVersion: "flow-definition-list.v3",
+      return listFlowDefinitionsResponseSchema.parse({
         flows: result.flows,
         total: result.total,
         runtime: result.runtime
@@ -165,17 +164,17 @@ export class FlowsService {
   async getFlow(
     flowId: string,
     request: AstrologerSessionRequest
-  ): Promise<FlowDefinitionDetailV3> {
+  ): Promise<FlowDefinitionDetail> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     return mapFlowDefinitionErrors(async () => {
-      const flow = await getFlowDefinitionV3UseCase({
-        store: this.definitionReadV3Store,
+      const flow = await getFlowDefinitionUseCase({
+        store: this.definitionReadStore,
         ownerUserId,
         flowId: parsedFlowId
       });
       if (!flow) throw flowDefinitionNotFound();
-      return flowDefinitionDetailV3Schema.parse(flow);
+      return flowDefinitionDetailSchema.parse(flow);
     });
   }
 
@@ -187,8 +186,8 @@ export class FlowsService {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const flow = await mapFlowDefinitionErrors(() =>
-      getFlowDefinitionV3UseCase({
-        store: this.definitionReadV3Store,
+      getFlowDefinitionUseCase({
+        store: this.definitionReadStore,
         ownerUserId,
         flowId: parsedFlowId
       })
@@ -200,7 +199,7 @@ export class FlowsService {
     const activationBlockers = runtime.executionAvailable
       ? []
       : (["FLOW_RUNTIME_EXECUTION_UNAVAILABLE"] as const);
-    return validateFlowDefinitionResponseV2Schema.parse(
+    return validateFlowDefinitionResponseSchema.parse(
       validateFlowDefinitionUseCase({ graph: parsedBody.graph, activationBlockers })
     );
   }
@@ -234,7 +233,7 @@ export class FlowsService {
     body: unknown,
     idempotencyKey: string | undefined,
     request: AstrologerSessionRequest
-  ): Promise<PublishFlowDefinitionV3Response> {
+  ): Promise<PublishFlowDefinitionResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
     const command = parseContract(publishFlowDefinitionV2RequestSchema, body);
@@ -249,7 +248,7 @@ export class FlowsService {
         now: this.clock.now().toISOString()
       });
       if (!result) throw flowDefinitionNotFound();
-      return publishFlowDefinitionV3ResponseSchema.parse(result);
+      return publishFlowDefinitionResponseSchema.parse(result);
     });
   }
 
@@ -284,7 +283,7 @@ export class FlowsService {
   ): Promise<ListFlowRunsResponse> {
     const ownerUserId = requireOwnerUserId(request);
     const parsedFlowId = parseContract(flowIdParamSchema, flowId);
-    const definition = await this.definitionReadV3Store.getByOwner({
+    const definition = await this.definitionReadStore.getByOwner({
       ownerUserId,
       flowId: parsedFlowId
     });
@@ -487,16 +486,6 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
     }
     throw error;
   }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Retained until obsolete V1 runtime command callers are removed.
-function flowRuntimeVersionRequired(): BadRequestException {
-  return new BadRequestException({
-    statusCode: 400,
-    error: "FLOW_RUNTIME_VERSION_REQUIRED",
-    code: "FLOW_RUNTIME_VERSION_REQUIRED",
-    message: "Publish the flow before running runtime commands"
-  });
 }
 
 async function mapRuntimeExecutionUnavailable<T>(operation: () => Promise<T>): Promise<T> {

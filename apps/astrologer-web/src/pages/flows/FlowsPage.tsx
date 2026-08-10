@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   FlowDefinitionTemplateDescriptorV2,
   PauseFlowEnrollmentRequest,
-  ValidateFlowDefinitionResponseV2
+  ValidateFlowDefinitionResponse
 } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useLocation } from "react-router";
@@ -93,7 +93,7 @@ export function FlowsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(
     handoff !== null && flowSelection === null
   );
-  const [validationResult, setValidationResult] = useState<ValidateFlowDefinitionResponseV2 | null>(
+  const [validationResult, setValidationResult] = useState<ValidateFlowDefinitionResponse | null>(
     null
   );
   const [automationTarget, setAutomationTarget] = useState<FlowAutomationTarget | null>(null);

@@ -120,11 +120,11 @@ describe("createAstrologerApiRuntimeConfig", () => {
     });
   });
 
-  it("does not expose retired V1 Flow rollout configuration", () => {
+  it("ignores an obsolete Flow rollout setting", () => {
     expect(
       createAstrologerApiRuntimeConfig({
         ...requiredSecurityConfig,
-        ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: "manifest_v2"
+        ASTROLOGER_API_FLOW_PUBLICATION_ROLLOUT_PHASE: "obsolete"
       })
     ).toMatchObject({
       flows: {}
