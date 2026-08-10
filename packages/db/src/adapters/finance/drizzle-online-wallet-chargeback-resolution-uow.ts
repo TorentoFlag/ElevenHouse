@@ -33,7 +33,7 @@ export class OnlineWalletChargebackResolutionPersistenceError extends Error {
 export function createDrizzleOnlineWalletChargebackResolutionUnitOfWork(input: Readonly<{ database: FinanceDatabase }>): ChargebackResolutionUnitOfWork {
   return Object.freeze({
     async resolveChargeback(command) {
-      try { return await input.database.transaction((tx) => persist(tx, command)); }
+      try { return await input.database.transaction((tx) => resolveOnlineWalletChargebackInTransaction(tx, command)); }
       catch (error) {
         if (error instanceof OnlineWalletChargebackResolutionPersistenceError) throw error;
         const code = postgresCode(error);
@@ -46,7 +46,14 @@ export function createDrizzleOnlineWalletChargebackResolutionUnitOfWork(input: R
   } satisfies ChargebackResolutionUnitOfWork);
 }
 
-async function persist(tx: FinanceTransaction, command: ResolveChargebackCommand): Promise<ChargebackResolutionCommitReceipt> {
+/**
+ * Transaction-composable variant for an admin authorization flow. The caller must consume the
+ * passkey grant and invoke this function in the same database transaction.
+ */
+export async function resolveOnlineWalletChargebackInTransaction(
+  tx: FinanceTransaction,
+  command: ResolveChargebackCommand
+): Promise<ChargebackResolutionCommitReceipt> {
   const authority = command.resolutionAuthority;
   if (authority.kind !== "verified_chargeback_resolution_authority" || authority.chargebackCaseId !== command.chargebackCaseId || authority.expectedChargebackVersion !== command.expectedChargebackVersion || !valid(command.operationEnvelope) || !identifier(authority.allocationAuthorityId) || !revision(authority.allocationAuthorityVersion) || !digest(authority.allocationAuthorityDigest)) fail("invalid_command");
   const [caseRow] = await tx.select().from(financeOnlineWalletChargebackCases).where(eq(financeOnlineWalletChargebackCases.chargebackCaseId, command.chargebackCaseId)).limit(2).for("update");

@@ -134,6 +134,10 @@ const contextualRequirementCases = [
     requirements: ["refund_chargeback_principal_policy", "finance_step_up"]
   },
   {
+    context: { operationKind: "chargeback_resolution" },
+    requirements: ["refund_chargeback_principal_policy", "finance_step_up"]
+  },
+  {
     context: { operationKind: "payout_destination_reveal" },
     requirements: ["payout_recipient_policy", "finance_step_up"]
   },
@@ -199,7 +203,7 @@ describe("finance readiness", () => {
   });
 
   it("classifies every operation and contextual transaction category exactly once", () => {
-    expect(contextualRequirementCases).toHaveLength(25);
+    expect(contextualRequirementCases).toHaveLength(26);
     expect([
       ...new Set(contextualRequirementCases.map(({ context }) => context.operationKind))
     ]).toEqual(financeOperationKindValues);

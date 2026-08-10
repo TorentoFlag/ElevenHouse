@@ -127,6 +127,19 @@ describe("provider dispatch envelope", () => {
     ).toThrow(ProviderDispatchEnvelopeIntegrityError);
   });
 
+  it("accepts the bounded opaque KMS locator emitted for a real saved-card setup secret", () => {
+    const secretRef = `kms://s3/${"a".repeat(360)}`;
+    expect(secretRef).toHaveLength(369);
+
+    expect(createProviderDispatchEnvelope({
+      ...cardSetupExecuteEnvelope(),
+      tokenizationSecret: {
+        ...cardSetupExecuteEnvelope().tokenizationSecret,
+        secretRef
+      }
+    })).toMatchObject({ tokenizationSecret: { secretRef } });
+  });
+
   it("carries only the browser Method outcome into its next provider operation", () => {
     const envelope = createProviderDispatchEnvelope(cardSetupThreeDsMethodEnvelope());
     expect(envelope).toEqual(cardSetupThreeDsMethodEnvelope());

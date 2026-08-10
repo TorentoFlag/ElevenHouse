@@ -465,7 +465,10 @@ function opaqueId(value: unknown): string {
 }
 
 function opaqueReference(value: unknown): string {
-  return opaqueString(value, 320);
+  // Encoded immutable-storage locators include key, digest, and key-version metadata.
+  // The largest valid local locator is 369 characters; retain a bounded envelope-wide
+  // ceiling instead of rejecting it before persistence.
+  return opaqueString(value, 1_024);
 }
 
 function opaqueString(value: unknown, maximumLength: number): string {

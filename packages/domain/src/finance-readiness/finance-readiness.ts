@@ -141,6 +141,8 @@ export function requiredFinanceReadinessRequirementsFor(
       return [];
     case "chargeback_principal_allocate":
       return ["refund_chargeback_principal_policy", "finance_step_up"];
+    case "chargeback_resolution":
+      return ["refund_chargeback_principal_policy", "finance_step_up"];
     case "payout_destination_reveal":
     case "payout_destination_change":
       return ["payout_recipient_policy", "finance_step_up"];

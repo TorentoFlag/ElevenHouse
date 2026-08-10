@@ -23,6 +23,7 @@ describe("finance operation contracts", () => {
       "refund_execute",
       "chargeback_record_provisional",
       "chargeback_principal_allocate",
+      "chargeback_resolution",
       "payout_destination_reveal",
       "payout_destination_change",
       "payout_approve",

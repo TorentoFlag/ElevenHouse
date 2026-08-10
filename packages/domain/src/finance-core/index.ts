@@ -41,6 +41,7 @@ export * from "./online-wallet-refund-approval-authority-issuer";
 export * from "./online-wallet-refund-terminal";
 export * from "./online-wallet-refund-approval-authorization";
 export * from "./online-wallet-chargeback";
+export * from "./chargeback-resolution-authority-issuer";
 export * from "./online-wallet-refund";
 export * from "./ports/online-wallet-refund-application-uow";
 export * from "./ports/online-wallet-refund-position-reader";
@@ -48,6 +49,7 @@ export * from "./ports/online-wallet-refund-approval-uow";
 export * from "./ports/online-wallet-refund-approval-preparation-reader";
 export * from "./ports/online-wallet-refund-terminal-uow";
 export * from "./ports/online-wallet-chargeback-case-uow";
+export * from "./ports/online-wallet-chargeback-resolution-preparation-reader";
 export * from "./refund-result-execution-admission";
 export * from "./webhook-inbox";
 

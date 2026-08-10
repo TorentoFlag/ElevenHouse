@@ -258,7 +258,6 @@ describe("createAdminFinancePoliciesApi", () => {
             type: "chargeback",
             severity: "critical",
             provider: "arc_pay",
-            environment: "sandbox",
             providerWebhookId: "wh_chargeback_1",
             providerPaymentId: "arc-payment-1",
             providerRefundId: null,
@@ -312,7 +311,6 @@ describe("createAdminFinancePoliciesApi", () => {
         type: "chargeback",
         severity: "critical",
         provider: "arc_pay",
-        environment: "sandbox",
         providerWebhookId: "wh_chargeback_1",
         providerPaymentId: "arc-payment-1",
         providerRefundId: null,
@@ -381,7 +379,6 @@ describe("createAdminFinancePoliciesApi", () => {
             {
               id: "11111111-1111-4111-8111-111111111111",
               provider: "arc_pay",
-              environment: "sandbox",
               providerPaymentId: "provider-payment-1",
               providerPayoutId: null,
               providerSettlementId: "settlement-1",
@@ -401,7 +398,6 @@ describe("createAdminFinancePoliciesApi", () => {
         jsonResponse({
           id: "11111111-1111-4111-8111-111111111111",
           provider: "arc_pay",
-          environment: "sandbox",
           providerPaymentId: "provider-payment-1",
           providerPayoutId: null,
           providerSettlementId: "settlement-1",

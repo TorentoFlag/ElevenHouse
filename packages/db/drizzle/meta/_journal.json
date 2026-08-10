@@ -253,6 +253,13 @@
       "when": 1786191145803,
       "tag": "0035_wallet_commitment_mutation_predecessor",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786313042789,
+      "tag": "0036_first_thena",
+      "breakpoints": true
     }
   ]
 }

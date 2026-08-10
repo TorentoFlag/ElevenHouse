@@ -237,7 +237,9 @@ const catalog = {
       lifecycle: "published"
     }
   ],
-  currentSubscription: null
+  currentSubscription: null,
+  recentInvoices: [],
+  paymentMethod: null
 } satisfies AstrologerTariffCatalogResponse;
 
 const selectionResult = {
@@ -245,6 +247,7 @@ const selectionResult = {
     subscriptionId: "22222222-2222-4222-8222-222222222222",
     tariffSeriesId: "pro",
     tariffVersion: 1,
+    billingCycle: "month",
     state: "incomplete_setup",
     commissionBpsSnapshot: 400,
     startsAt: null,

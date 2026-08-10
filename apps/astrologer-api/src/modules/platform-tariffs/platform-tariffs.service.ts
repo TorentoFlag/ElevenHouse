@@ -33,6 +33,7 @@ import {
 } from "@elevenhouse/contracts";
 import {
   createProviderDispatchEnvelope,
+  digestFinanceCanonicalValueV1,
   resolveFinanceOperationEnvelope,
   type FinanceOperationResourcePolicyReader,
   type FinancePrivateObjectStoragePort,
@@ -41,6 +42,7 @@ import {
   type SavedCardSetupCustomerActionReaderPort
 } from "@elevenhouse/domain/finance-core";
 import {
+  canonicalizeFinanceCommandPayload,
   FinanceIdempotencyConflictError,
   FinanceIdempotencyFailedError,
   FinanceIdempotencyInProgressError,
@@ -48,7 +50,8 @@ import {
   resolvePlatformTariffCapability,
   type PlatformTariffEntitlementStore,
   type PlatformTariffAuthorityStore,
-  type PlatformTariffSubscriptionSnapshot,
+  type PlatformTariffInvoiceRecord,
+  type PlatformTariffSubscriptionRecord,
   type PlatformTariffSubscriptionPurchaseRecord,
   type PlatformTariffVersion
 } from "@elevenhouse/domain";
@@ -58,9 +61,12 @@ import {
   type SavedCardSetupOwnerSession,
   type SavedCardSetupSessionReader
 } from "@elevenhouse/db/finance";
-import { decodeArcPayThreeDsAction, type ArcPayThreeDsAction } from "@elevenhouse/finance-infrastructure";
+import {
+  decodeArcPayThreeDsAction,
+  type ArcPayThreeDsAction
+} from "@elevenhouse/finance-infrastructure";
 import { PlatformTariffAuthorityPersistenceError } from "@elevenhouse/db/platform-billing";
-import { createHash, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { ConfigService } from "@nestjs/config";
 import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { SystemClock } from "../clock/system-clock.service";
@@ -83,7 +89,7 @@ export class AstrologerTariffsService {
     @Inject(ASTROLOGER_TARIFF_STORE)
     private readonly store: Pick<
       PlatformTariffAuthorityStore,
-      "listTariffVersions" | "findActiveOrPendingSubscription"
+      "listTariffVersions" | "findActiveOrPendingSubscription" | "listRecentCapturedInvoices"
     > &
       PlatformTariffEntitlementStore,
     @Inject(ASTROLOGER_TARIFF_UNIT_OF_WORK)
@@ -108,13 +114,22 @@ export class AstrologerTariffsService {
 
   async getCatalog(request: AstrologerSessionRequest): Promise<AstrologerTariffCatalogResponse> {
     const ownerUserId = requireAstrologerUserId(request);
-    const [versions, currentSubscription] = await Promise.all([
+    const [versions, currentSubscription, recentInvoices] = await Promise.all([
       this.store.listTariffVersions(),
-      this.store.findActiveOrPendingSubscription(ownerUserId)
+      this.store.findActiveOrPendingSubscription(ownerUserId),
+      this.store.listRecentCapturedInvoices({ ownerUserId, limit: 3 })
     ]);
+    const paymentMethod = currentSubscription
+      ? await this.setupSessions.findActivePaymentMethodForSubscriptionOwner({
+          subscriptionId: currentSubscription.subscriptionId,
+          ownerUserId
+        })
+      : null;
     return astrologerTariffCatalogResponseSchema.parse({
       tariffs: versions.filter((tariff) => tariff.lifecycle === "published").map(toTariffResponse),
-      currentSubscription: currentSubscription ? toSubscriptionResponse(currentSubscription) : null
+      currentSubscription: currentSubscription ? toSubscriptionResponse(currentSubscription) : null,
+      recentInvoices: recentInvoices.map(toInvoiceHistoryItem),
+      paymentMethod
     });
   }
 
@@ -244,7 +259,10 @@ export class AstrologerTariffsService {
     subscriptionId: string
   ): Promise<SavedCardSetupStatusResponse | null> {
     const ownerUserId = requireAstrologerUserId(request);
-    const session = await this.setupSessions.findForSubscriptionOwner({ subscriptionId, ownerUserId });
+    const session = await this.setupSessions.findForSubscriptionOwner({
+      subscriptionId,
+      ownerUserId
+    });
     return session ? this.toSavedCardSetupStatus(session, ownerUserId) : null;
   }
 
@@ -284,7 +302,10 @@ export class AstrologerTariffsService {
       throw new ConflictException("subscription_version_conflict");
     }
     const disclosure = await this.requirePublishedDisclosure(parsed.noticeLocale);
-    if (disclosure.version !== parsed.disclosureVersion || disclosure.canonicalDigest !== parsed.disclosureDigest) {
+    if (
+      disclosure.version !== parsed.disclosureVersion ||
+      disclosure.canonicalDigest !== parsed.disclosureDigest
+    ) {
       throw new ConflictException("saved_card_disclosure_changed");
     }
     const billing = this.billingConfig();
@@ -370,13 +391,19 @@ export class AstrologerTariffsService {
       throw new ConflictException("saved_card_setup_not_tokenizable");
     }
     const billing = this.billingConfig();
-    if (!billing.arcPayConfigured || !billing.financeArtifactStorage || !this.financePrivateStorage || !this.transientSecretVault) {
+    if (
+      !billing.arcPayConfigured ||
+      !billing.financeArtifactStorage ||
+      !this.financePrivateStorage ||
+      !this.transientSecretVault
+    ) {
       throw new ServiceUnavailableException("saved_card_setup_not_configured");
     }
     const policy = await this.operationPolicies.findPublishedForOperation({
       operationKind: "platform_card_setup_execute"
     });
-    if (!policy) throw new ServiceUnavailableException("saved_card_setup_execute_policy_unavailable");
+    if (!policy)
+      throw new ServiceUnavailableException("saved_card_setup_execute_policy_unavailable");
     const operationEnvelope = resolveFinanceOperationEnvelope({
       policy,
       operationKind: "platform_card_setup_execute"
@@ -398,22 +425,24 @@ export class AstrologerTariffsService {
           expiresAt: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
         },
         create: async ({ savedCardSetupExecution, auditLogStore }) => {
-          const providerOperationIntentId = randomUUID();
-          const sealedTokenizationSecret = await this.transientSecretVault!.sealArcPayCardTokenizationSecret({
-            secretId: `saved-card-setup-execute:${providerOperationIntentId}`,
-            providerSetupId: session.providerSetupId!,
-            cardTokenId: parsed.cardTokenId,
-            browserInfo: parsed.browserInfo,
-            // ArcPay accepts the browser token only for five minutes; retain a short safety margin.
-            providerExpiresAt: new Date(now.getTime() + 4 * 60 * 1000).toISOString()
-          });
-          const sealedThreeDsMethodContext = await this.transientSecretVault!.sealArcPayThreeDsMethodContext({
-            secretId: `saved-card-setup-method:${providerOperationIntentId}`,
-            providerSetupId: session.providerSetupId!,
-            browserInfo: parsed.browserInfo,
-            // It contains no card token, but remains one-time and no longer than the setup token window.
-            providerExpiresAt: new Date(now.getTime() + 4 * 60 * 1000).toISOString()
-          });
+          const providerOperationIntentId = uuidV7(now);
+          const sealedTokenizationSecret =
+            await this.transientSecretVault!.sealArcPayCardTokenizationSecret({
+              secretId: `saved-card-setup-execute:${providerOperationIntentId}`,
+              providerSetupId: session.providerSetupId!,
+              cardTokenId: parsed.cardTokenId,
+              browserInfo: parsed.browserInfo,
+              // ArcPay accepts the browser token only for five minutes; retain a short safety margin.
+              providerExpiresAt: new Date(now.getTime() + 4 * 60 * 1000).toISOString()
+            });
+          const sealedThreeDsMethodContext =
+            await this.transientSecretVault!.sealArcPayThreeDsMethodContext({
+              secretId: `saved-card-setup-method:${providerOperationIntentId}`,
+              providerSetupId: session.providerSetupId!,
+              browserInfo: parsed.browserInfo,
+              // It contains no card token, but remains one-time and no longer than the setup token window.
+              providerExpiresAt: new Date(now.getTime() + 4 * 60 * 1000).toISOString()
+            });
           const dispatchEnvelope = createProviderDispatchEnvelope({
             kind: "card_setup",
             step: "execute",
@@ -422,11 +451,11 @@ export class AstrologerTariffsService {
             setupExternalId: session.setupSessionId,
             tokenizationSecret: sealedTokenizationSecret
           });
-          const bytes = new TextEncoder().encode(JSON.stringify(dispatchEnvelope));
+          const bytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
           if (bytes.byteLength > operationEnvelope.maximumArtifactBytes) {
             throw new ServiceUnavailableException("saved_card_setup_execute_request_too_large");
           }
-          const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}` as const;
+          const digest = digestFinanceCanonicalValueV1(dispatchEnvelope);
           const artifactId = `arc-card-setup-execute-request:${providerOperationIntentId}`;
           const privateObject = await this.financePrivateStorage!.writeImmutable({
             artifactId,
@@ -457,8 +486,11 @@ export class AstrologerTariffsService {
             retentionPolicyId: billing.financeArtifactStorage!.requestRetention.policyId,
             retentionPolicyVersion: billing.financeArtifactStorage!.requestRetention.policyVersion,
             operationEnvelope,
-            idempotencyKey: `saved-card-setup-execute:${providerOperationIntentId}`,
-            idempotencyRetentionDeadline: new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString()
+            // The persistence boundary binds this provider dispatch key to the operation UUID.
+            idempotencyKey: providerOperationIntentId,
+            idempotencyRetentionDeadline: new Date(
+              now.getTime() + 72 * 60 * 60 * 1000
+            ).toISOString()
           });
           const value = parseExecuteSavedCardSetupResponse({
             setupSessionId: receipt.setupSessionId,
@@ -496,13 +528,20 @@ export class AstrologerTariffsService {
     const ownerUserId = requireAstrologerUserId(request);
     const parsed = parseCompleteThreeDsMethodRequest(body);
     const billing = this.billingConfig();
-    if (!billing.arcPayConfigured || !billing.financeArtifactStorage || !this.financePrivateStorage) {
+    if (
+      !billing.arcPayConfigured ||
+      !billing.financeArtifactStorage ||
+      !this.financePrivateStorage
+    ) {
       throw new ServiceUnavailableException("saved_card_setup_not_configured");
     }
     const policy = await this.operationPolicies.findPublishedForOperation({
       operationKind: "platform_card_setup_complete_3ds_method"
     });
-    if (!policy) throw new ServiceUnavailableException("saved_card_setup_complete_3ds_method_policy_unavailable");
+    if (!policy)
+      throw new ServiceUnavailableException(
+        "saved_card_setup_complete_3ds_method_policy_unavailable"
+      );
     const operationEnvelope = resolveFinanceOperationEnvelope({
       policy,
       operationKind: "platform_card_setup_complete_3ds_method"
@@ -514,57 +553,113 @@ export class AstrologerTariffsService {
           scope: "astrologer.tariff_subscription.saved_card_setup.complete_3ds_method",
           idempotencyKey,
           actorUserId: ownerUserId,
-          requestHash: hashFinanceCommandPayload({ actorUserId: ownerUserId, operation: "astrologer.tariff_subscription.saved_card_setup.complete_3ds_method", setupSessionId, request: parsed }),
+          requestHash: hashFinanceCommandPayload({
+            actorUserId: ownerUserId,
+            operation: "astrologer.tariff_subscription.saved_card_setup.complete_3ds_method",
+            setupSessionId,
+            request: parsed
+          }),
           now: now.toISOString(),
           expiresAt: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
         },
         create: async ({ savedCardSetupThreeDsMethodCompletion, auditLogStore }) => {
           const action = await this.customerActions.findPendingForOwner({
-            setupSessionId, ownerUserId, expectedSetupSessionVersion: parsed.expectedSetupSessionVersion
+            setupSessionId,
+            ownerUserId,
+            expectedSetupSessionVersion: parsed.expectedSetupSessionVersion
           });
-          if (!action || action.actionType !== "three_ds_method" || action.phase !== "method" || action.threeDsMethodContextSecretRef === null || action.threeDsMethodContextProviderExpiresAt === null) {
+          if (
+            !action ||
+            action.actionType !== "three_ds_method" ||
+            action.phase !== "method" ||
+            action.threeDsMethodContextSecretRef === null ||
+            action.threeDsMethodContextProviderExpiresAt === null
+          ) {
             throw new ConflictException("saved_card_setup_method_action_not_available");
           }
-          const providerOperationIntentId = randomUUID();
+          const providerOperationIntentId = uuidV7(now);
           const dispatchEnvelope = createProviderDispatchEnvelope({
-            kind: "card_setup", step: "complete_3ds_method", providerSetupId: action.providerSetupId,
-            setupExternalId: setupSessionId, customerActionId: action.customerActionId,
+            kind: "card_setup",
+            step: "complete_3ds_method",
+            providerSetupId: action.providerSetupId,
+            setupExternalId: setupSessionId,
+            customerActionId: action.customerActionId,
             completionIndicator: parsed.completionIndicator,
             threeDsMethodContextSecret: {
-              kind: "sealed_one_time_provider_secret_ref", secretRef: action.threeDsMethodContextSecretRef,
-              providerExpiresAt: action.threeDsMethodContextProviderExpiresAt, providerConsumption: "one_time"
+              kind: "sealed_one_time_provider_secret_ref",
+              secretRef: action.threeDsMethodContextSecretRef,
+              providerExpiresAt: action.threeDsMethodContextProviderExpiresAt,
+              providerConsumption: "one_time"
             }
           });
-          const bytes = new TextEncoder().encode(JSON.stringify(dispatchEnvelope));
-          if (bytes.byteLength > operationEnvelope.maximumArtifactBytes) throw new ServiceUnavailableException("saved_card_setup_method_request_too_large");
-          const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}` as const;
+          const bytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
+          if (bytes.byteLength > operationEnvelope.maximumArtifactBytes)
+            throw new ServiceUnavailableException("saved_card_setup_method_request_too_large");
+          const digest = digestFinanceCanonicalValueV1(dispatchEnvelope);
           const artifactId = `arc-card-setup-method-request:${providerOperationIntentId}`;
-          const privateObject = await this.financePrivateStorage!.writeImmutable({ artifactId, contentType: "application/json", bytes, expectedSha256Digest: digest });
-          if (privateObject.contentType !== "application/json" || privateObject.sha256Digest !== digest || privateObject.byteLength !== bytes.byteLength) {
+          const privateObject = await this.financePrivateStorage!.writeImmutable({
+            artifactId,
+            contentType: "application/json",
+            bytes,
+            expectedSha256Digest: digest
+          });
+          if (
+            privateObject.contentType !== "application/json" ||
+            privateObject.sha256Digest !== digest ||
+            privateObject.byteLength !== bytes.byteLength
+          ) {
             throw new ServiceUnavailableException("saved_card_setup_method_artifact_integrity");
           }
           const receipt = await savedCardSetupThreeDsMethodCompletion.completeThreeDsMethod({
-            setupSessionId, expectedSetupSessionVersion: parsed.expectedSetupSessionVersion,
-            customerActionId: action.customerActionId, completionIndicator: parsed.completionIndicator,
-            providerOperationIntentId, idempotencyKey: `saved-card-setup-method:${providerOperationIntentId}`,
-            idempotencyRetentionDeadline: new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString(),
-            dispatchArtifact: { artifactId, sha256Digest: digest, byteLength: bytes.byteLength }, dispatchPrivateObject: privateObject,
+            setupSessionId,
+            expectedSetupSessionVersion: parsed.expectedSetupSessionVersion,
+            customerActionId: action.customerActionId,
+            completionIndicator: parsed.completionIndicator,
+            providerOperationIntentId,
+            idempotencyKey: providerOperationIntentId,
+            idempotencyRetentionDeadline: new Date(
+              now.getTime() + 72 * 60 * 60 * 1000
+            ).toISOString(),
+            dispatchArtifact: { artifactId, sha256Digest: digest, byteLength: bytes.byteLength },
+            dispatchPrivateObject: privateObject,
             retentionPolicyId: billing.financeArtifactStorage!.requestRetention.policyId,
-            retentionPolicyVersion: billing.financeArtifactStorage!.requestRetention.policyVersion, operationEnvelope
+            retentionPolicyVersion: billing.financeArtifactStorage!.requestRetention.policyVersion,
+            operationEnvelope
           });
-          const value = completeSavedCardSetupThreeDsMethodResponseSchema.parse({ setupSessionId, setupSessionVersion: parsed.expectedSetupSessionVersion + 1, state: "execution_pending" });
-          await auditLogStore.createEntry({ actorUserId: ownerUserId, action: "platform_tariff.saved_card_setup_three_ds_method_requested", targetType: "finance_saved_card_setup_session", targetId: setupSessionId, occurredAt: now.toISOString(), metadata: { providerOperationIntentId: receipt.providerOperationIntentId, customerActionId: action.customerActionId, completionIndicator: parsed.completionIndicator } });
+          const value = completeSavedCardSetupThreeDsMethodResponseSchema.parse({
+            setupSessionId,
+            setupSessionVersion: parsed.expectedSetupSessionVersion + 1,
+            state: "execution_pending"
+          });
+          await auditLogStore.createEntry({
+            actorUserId: ownerUserId,
+            action: "platform_tariff.saved_card_setup_three_ds_method_requested",
+            targetType: "finance_saved_card_setup_session",
+            targetId: setupSessionId,
+            occurredAt: now.toISOString(),
+            metadata: {
+              providerOperationIntentId: receipt.providerOperationIntentId,
+              customerActionId: action.customerActionId,
+              completionIndicator: parsed.completionIndicator
+            }
+          });
           return { result: value, value };
         },
         replay: async (result) => completeSavedCardSetupThreeDsMethodResponseSchema.parse(result)
       });
       return result.value;
-    } catch (error) { throw mapError(error); }
+    } catch (error) {
+      throw mapError(error);
+    }
   }
 
   private async requireIncompleteSetupSubscription(ownerUserId: string, subscriptionId: string) {
     const subscription = await this.store.findActiveOrPendingSubscription(ownerUserId);
-    if (!subscription || subscription.subscriptionId !== subscriptionId || subscription.state !== "incomplete_setup") {
+    if (
+      !subscription ||
+      subscription.subscriptionId !== subscriptionId ||
+      subscription.state !== "incomplete_setup"
+    ) {
       throw new ConflictException("subscription_not_incomplete_setup");
     }
     return subscription;
@@ -584,7 +679,9 @@ export class AstrologerTariffsService {
   }
 
   private billingConfig(): AstrologerApiRuntimeConfig["billing"] {
-    return this.configService.getOrThrow<AstrologerApiRuntimeConfig["billing"]>("astrologerApi.billing");
+    return this.configService.getOrThrow<AstrologerApiRuntimeConfig["billing"]>(
+      "astrologerApi.billing"
+    );
   }
 
   private async getSavedCardSetupCustomerActionStatus(
@@ -679,7 +776,8 @@ function parseExecuteSavedCardSetupRequest(body: unknown) {
 
 function parseCompleteThreeDsMethodRequest(body: unknown) {
   const result = completeSavedCardSetupThreeDsMethodRequestSchema.safeParse(body);
-  if (!result.success) throw new BadRequestException("Invalid saved-card 3DS Method completion request");
+  if (!result.success)
+    throw new BadRequestException("Invalid saved-card 3DS Method completion request");
   return result.data;
 }
 
@@ -745,17 +843,34 @@ function toTariffResponse(tariff: PlatformTariffVersion) {
 }
 
 function toSubscriptionResponse(
-  subscription: PlatformTariffSubscriptionSnapshot
+  subscription: PlatformTariffSubscriptionRecord
 ): AstrologerTariffSubscriptionResponse {
   return astrologerTariffSubscriptionResponseSchema.parse({
     subscriptionId: subscription.subscriptionId,
     tariffSeriesId: subscription.tariffSeriesId,
     tariffVersion: subscription.tariffVersion,
+    billingCycle: subscription.billingCycle,
     state: subscription.state,
     commissionBpsSnapshot: subscription.commissionBpsSnapshot,
     startsAt: subscription.startsAt,
     endsAt: subscription.endsAt
   });
+}
+
+function toInvoiceHistoryItem(invoice: PlatformTariffInvoiceRecord) {
+  if (!invoice.capturedAt) {
+    throw new ServiceUnavailableException("captured_tariff_invoice_missing_capture_time");
+  }
+  return {
+    invoiceId: invoice.invoiceId,
+    subscriptionId: invoice.subscriptionId,
+    tariffSeriesId: invoice.tariffSeriesId,
+    tariffVersion: invoice.tariffVersion,
+    amountMinor: invoice.amountMinor,
+    currency: invoice.currency,
+    state: "captured" as const,
+    capturedAt: invoice.capturedAt
+  };
 }
 
 function toStartResponse(
@@ -767,6 +882,23 @@ function toStartResponse(
     billingCycle: purchase.subscription.billingCycle,
     nextAction: subscription.state === "active" ? "active" : "saved_card_setup_required"
   });
+}
+
+function uuidV7(now: Date): string {
+  const milliseconds = now.getTime();
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) {
+    throw new ServiceUnavailableException("provider_operation_clock_unavailable");
+  }
+  const bytes = randomBytes(16);
+  bytes[0] = Math.floor(milliseconds / 2 ** 40) & 0xff;
+  bytes[1] = Math.floor(milliseconds / 2 ** 32) & 0xff;
+  bytes[2] = Math.floor(milliseconds / 2 ** 24) & 0xff;
+  bytes[3] = Math.floor(milliseconds / 2 ** 16) & 0xff;
+  bytes[4] = Math.floor(milliseconds / 2 ** 8) & 0xff;
+  bytes[5] = milliseconds & 0xff;
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  return `${bytes.subarray(0, 4).toString("hex")}-${bytes.subarray(4, 6).toString("hex")}-${bytes.subarray(6, 8).toString("hex")}-${bytes.subarray(8, 10).toString("hex")}-${bytes.subarray(10, 16).toString("hex")}`;
 }
 
 function mapError(error: unknown): ConflictException {
@@ -782,7 +914,10 @@ function mapError(error: unknown): ConflictException {
     return new ConflictException(error.reason);
   }
   if (error instanceof SavedCardSetupInitiationPersistenceError) {
-    if (error.reason === "provider_account_not_configured" || error.reason === "saved_card_disclosure_not_published") {
+    if (
+      error.reason === "provider_account_not_configured" ||
+      error.reason === "saved_card_disclosure_not_published"
+    ) {
       return new ServiceUnavailableException(error.reason);
     }
     return new ConflictException(error.reason);

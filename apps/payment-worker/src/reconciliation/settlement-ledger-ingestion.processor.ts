@@ -5,6 +5,7 @@ import {
   resolveFinanceOperationEnvelope,
   type AcquiredSettlementPage,
   type ActiveProviderAccountReaderPort,
+  type FinanceSettlementStream,
   type FinanceOperationResourcePolicyReader,
   type SettlementBatchIngestionUnitOfWork,
   type SettlementCursorLeaseUnitOfWork,
@@ -37,7 +38,8 @@ export class SettlementLedgerIngestionProcessorError extends Error {
  * Coordinates one or more exact settlement pages. Each database transaction is short and a
  * sealed provider response is always fetched outside it; cursors make retries and replicas safe.
  */
-export function createSettlementLedgerIngestionProcessor(input: Readonly<{
+type SettlementIngestionProcessorInput = Readonly<{
+  stream: FinanceSettlementStream;
   providerAccounts: ActiveProviderAccountReaderPort;
   operationPolicies: FinanceOperationResourcePolicyReader;
   cursors: SettlementCursorWorkUnitOfWork;
@@ -49,7 +51,15 @@ export function createSettlementLedgerIngestionProcessor(input: Readonly<{
   overlapSeconds: number;
   leaseDurationSeconds: number;
   maximumPageCount: number;
-}>): Readonly<{ tick(): Promise<SettlementLedgerIngestionResult> }> {
+}>;
+
+/**
+ * Runs one independently checkpointed ArcPay settlement stream. Ledger rows and merchant payouts
+ * intentionally never share a cursor: a delayed payout page must not block payment-ledger intake.
+ */
+export function createSettlementIngestionProcessor(
+  input: SettlementIngestionProcessorInput
+): Readonly<{ tick(): Promise<SettlementLedgerIngestionResult> }> {
   return Object.freeze({
     async tick() {
       const providerAccount = await input.providerAccounts.findActiveProviderAccount({
@@ -69,7 +79,7 @@ export function createSettlementLedgerIngestionProcessor(input: Readonly<{
       } catch {
         fail("policy_not_published");
       }
-      const cursorKey = createSettlementCursorKey({ providerAccount, stream: "settlement_ledger" });
+      const cursorKey = createSettlementCursorKey({ providerAccount, stream: input.stream });
       let provision;
       try {
         provision = await input.cursors.ensureCursor({
@@ -141,6 +151,13 @@ export function createSettlementLedgerIngestionProcessor(input: Readonly<{
       });
     }
   });
+}
+
+/** Preserves the original payment-ledger entry point for its existing caller and tests. */
+export function createSettlementLedgerIngestionProcessor(
+  input: Omit<SettlementIngestionProcessorInput, "stream">
+): Readonly<{ tick(): Promise<SettlementLedgerIngestionResult> }> {
+  return createSettlementIngestionProcessor({ ...input, stream: "settlement_ledger" });
 }
 
 export function startSettlementLedgerIngestionInterval(input: Readonly<{

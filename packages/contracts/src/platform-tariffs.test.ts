@@ -41,19 +41,31 @@ const tariffTerms = {
 describe("admin tariff contracts", () => {
   it("accepts only editable terms when creating a draft", () => {
     expect(adminTariffDraftRequestSchema.parse(tariffTerms)).toEqual(tariffTerms);
-    expect(() => adminTariffDraftRequestSchema.parse({ ...tariffTerms, canonicalDigest: "sha256:forged" })).toThrow();
+    expect(() =>
+      adminTariffDraftRequestSchema.parse({ ...tariffTerms, canonicalDigest: "sha256:forged" })
+    ).toThrow();
   });
 
   it("requires optimistic revision and rejects duplicate capabilities on edits", () => {
-    expect(adminTariffUpdateRequestSchema.parse({ ...tariffTerms, expectedDraftRevision: 2 })).toMatchObject({
+    expect(
+      adminTariffUpdateRequestSchema.parse({ ...tariffTerms, expectedDraftRevision: 2 })
+    ).toMatchObject({
       expectedDraftRevision: 2,
       tariffSeriesId: "pro"
     });
-    expect(() => adminTariffUpdateRequestSchema.parse({ ...tariffTerms, expectedDraftRevision: 2, features: ["engine", "engine"] })).toThrow();
+    expect(() =>
+      adminTariffUpdateRequestSchema.parse({
+        ...tariffTerms,
+        expectedDraftRevision: 2,
+        features: ["engine", "engine"]
+      })
+    ).toThrow();
   });
 
   it("publishes only an exact draft revision", () => {
-    expect(adminTariffPublishRequestSchema.parse({ expectedDraftRevision: 3 })).toEqual({ expectedDraftRevision: 3 });
+    expect(adminTariffPublishRequestSchema.parse({ expectedDraftRevision: 3 })).toEqual({
+      expectedDraftRevision: 3
+    });
     expect(() => adminTariffPublishRequestSchema.parse({ expectedDraftRevision: 0 })).toThrow();
   });
 });
@@ -69,33 +81,42 @@ describe("saved-card setup contracts", () => {
       buyerContact: { kind: "email" as const, value: "billing@example.com" }
     };
     expect(initiateSavedCardSetupRequestSchema.parse(request)).toEqual(request);
-    expect(() => initiateSavedCardSetupRequestSchema.parse({ ...request, acceptedDisclosure: false }))
-      .toThrow();
-    expect(() => initiateSavedCardSetupRequestSchema.parse({
-      ...request,
-      buyerContact: { kind: "email", value: "not-an-email" }
-    })).toThrow();
-    expect(() => initiateSavedCardSetupRequestSchema.parse({
-      ...request,
-      buyerContact: { kind: "phone", value: "+79990000000" },
-      unexpectedBuyerContact: true
-    })).toThrow();
-    expect(initiateSavedCardSetupResponseSchema.parse({
-      setupSessionId: "11111111-1111-4111-8111-111111111111",
-      setupSessionVersion: 1,
-      state: "setup_requested"
-    })).toMatchObject({ state: "setup_requested" });
-    expect(savedCardSetupDisclosureResponseSchema.parse({
-      subscriptionId: "11111111-1111-4111-8111-111111111111",
-      expectedSubscriptionVersion: 1,
-      disclosure: {
-        disclosureSeriesId: "platform-tariff-saved-card",
-        version: 2,
-        locale: "ru",
-        body: "Я соглашаюсь с условиями.",
-        canonicalDigest: request.disclosureDigest
-      }
-    })).toMatchObject({ expectedSubscriptionVersion: 1 });
+    expect(() =>
+      initiateSavedCardSetupRequestSchema.parse({ ...request, acceptedDisclosure: false })
+    ).toThrow();
+    expect(() =>
+      initiateSavedCardSetupRequestSchema.parse({
+        ...request,
+        buyerContact: { kind: "email", value: "not-an-email" }
+      })
+    ).toThrow();
+    expect(() =>
+      initiateSavedCardSetupRequestSchema.parse({
+        ...request,
+        buyerContact: { kind: "phone", value: "+79990000000" },
+        unexpectedBuyerContact: true
+      })
+    ).toThrow();
+    expect(
+      initiateSavedCardSetupResponseSchema.parse({
+        setupSessionId: "11111111-1111-4111-8111-111111111111",
+        setupSessionVersion: 1,
+        state: "setup_requested"
+      })
+    ).toMatchObject({ state: "setup_requested" });
+    expect(
+      savedCardSetupDisclosureResponseSchema.parse({
+        subscriptionId: "11111111-1111-4111-8111-111111111111",
+        expectedSubscriptionVersion: 1,
+        disclosure: {
+          disclosureSeriesId: "platform-tariff-saved-card",
+          version: 2,
+          locale: "ru",
+          body: "Я соглашаюсь с условиями.",
+          canonicalDigest: request.disclosureDigest
+        }
+      })
+    ).toMatchObject({ expectedSubscriptionVersion: 1 });
   });
 
   it("exposes a browser tokenization action only for a created provider setup", () => {
@@ -113,7 +134,9 @@ describe("saved-card setup contracts", () => {
       customerAction: null
     } as const;
     expect(savedCardSetupStatusResponseSchema.parse(status)).toEqual(status);
-    expect(() => savedCardSetupStatusResponseSchema.parse({ ...status, tokenization: null })).toThrow();
+    expect(() =>
+      savedCardSetupStatusResponseSchema.parse({ ...status, tokenization: null })
+    ).toThrow();
   });
 
   it("delivers a 3DS browser handoff only as an exact customer-action state", () => {
@@ -139,7 +162,12 @@ describe("saved-card setup contracts", () => {
       }
     } as const;
     expect(savedCardSetupStatusResponseSchema.parse(status)).toEqual(status);
-    expect(() => savedCardSetupStatusResponseSchema.parse({ ...status, nextAction: "provider_confirmation_pending" })).toThrow();
+    expect(() =>
+      savedCardSetupStatusResponseSchema.parse({
+        ...status,
+        nextAction: "provider_confirmation_pending"
+      })
+    ).toThrow();
   });
 
   it("accepts one browser tokenization result only with the setup optimistic revision", () => {
@@ -159,26 +187,37 @@ describe("saved-card setup contracts", () => {
       }
     } as const;
     expect(executeSavedCardSetupRequestSchema.parse(request)).toEqual(request);
-    expect(executeSavedCardSetupResponseSchema.parse({
-      setupSessionId: "11111111-1111-4111-8111-111111111111",
-      setupSessionVersion: 4,
-      state: "execution_pending"
-    })).toMatchObject({ state: "execution_pending" });
-    expect(() => executeSavedCardSetupRequestSchema.parse({ ...request, browserInfo: { ...request.browserInfo, ignored: true } })).toThrow();
+    expect(
+      executeSavedCardSetupResponseSchema.parse({
+        setupSessionId: "11111111-1111-4111-8111-111111111111",
+        setupSessionVersion: 4,
+        state: "execution_pending"
+      })
+    ).toMatchObject({ state: "execution_pending" });
+    expect(() =>
+      executeSavedCardSetupRequestSchema.parse({
+        ...request,
+        browserInfo: { ...request.browserInfo, ignored: true }
+      })
+    ).toThrow();
   });
 
   it("accepts only a browser Method completion indicator and never provider-controlled 3DS values", () => {
     const request = { expectedSetupSessionVersion: 5, completionIndicator: "Y" } as const;
     expect(completeSavedCardSetupThreeDsMethodRequestSchema.parse(request)).toEqual(request);
-    expect(() => completeSavedCardSetupThreeDsMethodRequestSchema.parse({
-      ...request,
-      threeDsServerTransactionId: "forged-server-value"
-    })).toThrow();
-    expect(completeSavedCardSetupThreeDsMethodResponseSchema.parse({
-      setupSessionId: "11111111-1111-4111-8111-111111111111",
-      setupSessionVersion: 6,
-      state: "execution_pending"
-    })).toMatchObject({ state: "execution_pending" });
+    expect(() =>
+      completeSavedCardSetupThreeDsMethodRequestSchema.parse({
+        ...request,
+        threeDsServerTransactionId: "forged-server-value"
+      })
+    ).toThrow();
+    expect(
+      completeSavedCardSetupThreeDsMethodResponseSchema.parse({
+        setupSessionId: "11111111-1111-4111-8111-111111111111",
+        setupSessionVersion: 6,
+        state: "execution_pending"
+      })
+    ).toMatchObject({ state: "execution_pending" });
   });
 });
 
@@ -205,10 +244,12 @@ describe("tariff invoice payment contracts", () => {
       }
     } as const;
     expect(tariffInvoicePaymentStatusResponseSchema.parse(status)).toEqual(status);
-    expect(() => tariffInvoicePaymentStatusResponseSchema.parse({
-      ...status,
-      customerAction: null
-    })).toThrow();
+    expect(() =>
+      tariffInvoicePaymentStatusResponseSchema.parse({
+        ...status,
+        customerAction: null
+      })
+    ).toThrow();
   });
 });
 
@@ -222,6 +263,7 @@ describe("astrologer tariff subscription contracts", () => {
         subscriptionId: "11111111-1111-4111-8111-111111111111",
         tariffSeriesId: "pro",
         tariffVersion: 1,
+        billingCycle: "month",
         state: "incomplete_setup",
         commissionBpsSnapshot: 800,
         startsAt: null,
@@ -231,9 +273,24 @@ describe("astrologer tariff subscription contracts", () => {
       nextAction: "saved_card_setup_required"
     } as const;
     expect(startAstrologerTariffSubscriptionResponseSchema.parse(response)).toEqual(response);
-    expect(
-      astrologerTariffCatalogResponseSchema.parse({ tariffs: [], currentSubscription: null })
-    ).toEqual({ tariffs: [], currentSubscription: null });
+    const catalog = {
+      tariffs: [],
+      currentSubscription: null,
+      recentInvoices: [],
+      paymentMethod: {
+        brand: "visa",
+        last4: "4521",
+        expiryMonth: 9,
+        expiryYear: 2027
+      }
+    } as const;
+    expect(astrologerTariffCatalogResponseSchema.parse(catalog)).toEqual(catalog);
+    expect(() =>
+      astrologerTariffCatalogResponseSchema.parse({
+        ...catalog,
+        paymentMethod: { ...catalog.paymentMethod, last4: "452" }
+      })
+    ).toThrow();
   });
 
   it("exposes product and funnel access as explicit server-authoritative projections", () => {

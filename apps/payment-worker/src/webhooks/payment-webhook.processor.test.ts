@@ -97,6 +97,33 @@ describe("Arc Pay payment webhook ingestion", () => {
     expect(harness.createdEvents).toEqual([]);
   });
 
+  it("seals an undocumented signed chargeback outcome without inventing a ledger effect", async () => {
+    const financeIngress = {
+      store: vi.fn(async () => ({ duplicate: false }))
+    } satisfies FinanceReversalWebhookIngress;
+    const harness = createHarness({ financeIngress, attemptMissing: true });
+    const request = signedRequest({
+      ...basePayload(eventId(99)),
+      event_type: "chargeback.outcome",
+      data: { payment_id: providerPaymentId, chargeback_id: "provider-case-opaque" }
+    });
+
+    await expect(harness.handler.handle(request)).resolves.toEqual({
+      statusCode: 200,
+      body: { accepted: true, duplicate: false }
+    });
+
+    expect(financeIngress.store).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transport: expect.objectContaining({ providerEventType: "chargeback.outcome" }),
+        rawBody: new TextEncoder().encode(request.rawBody)
+      })
+    );
+    expect(harness.createdEvents).toEqual([]);
+    expect(harness.ledgerTransactions).toEqual([]);
+    expect(harness.resolvePaymentAttemptId).not.toHaveBeenCalled();
+  });
+
   it("fails closed for a captured event until v2 canonical ingress is configured", async () => {
     const harness = createHarness();
     const request = signedRequest(capturedPayload({ eventId: eventId(2) }));

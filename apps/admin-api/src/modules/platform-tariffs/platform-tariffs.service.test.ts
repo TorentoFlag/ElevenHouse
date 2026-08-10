@@ -161,6 +161,7 @@ function tariffStore(): PlatformTariffAuthorityStore {
     beginSubscriptionPurchase: vi.fn(),
     findActiveOrPendingSubscription: vi.fn(),
     findCurrentSubscription: vi.fn(),
+    listRecentCapturedInvoices: vi.fn(async () => []),
     markInvoicePaymentPending: vi.fn(),
     applyVerifiedInvoiceCapture: vi.fn()
   };

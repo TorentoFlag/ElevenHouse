@@ -20,6 +20,11 @@ const adminApiRuntimeConfigSchema = z.object({
   ADMIN_API_FINANCE_WEBAUTHN_RP_ID: z.string().trim().min(1).max(253).optional(),
   ADMIN_API_FINANCE_WEBAUTHN_ORIGIN: z.string().url().optional(),
   ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED: z.enum(["true", "false"]).default("false"),
+  ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ARTIFACT_DIRECTORY: z
+    .string()
+    .trim()
+    .min(1)
+    .default(".local/finance-payout-evidence"),
   ADMIN_API_FINANCE_REFUND_DISPATCH_ENABLED: z.enum(["true", "false"]).default("false"),
   ADMIN_API_FINANCE_REFUND_ARTIFACT_DIRECTORY: z.string().trim().min(1).default(".local/finance-artifacts"),
   ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
@@ -59,15 +64,18 @@ export type AdminApiRuntimeConfig = {
   readonly allowedOrigins: readonly string[];
   readonly financeWebAuthn: Readonly<{ rpId: string; origin: string }> | null;
   readonly financePayoutEvidence: Readonly<{
-    artifactStorage: Readonly<{
-      endpoint: string;
-      region: string;
-      bucket: string;
-      accessKeyId: string;
-      secretAccessKey: string;
-      forcePathStyle: boolean;
-      kmsKeyArn: string;
-    }>;
+    artifactStorage:
+      | Readonly<{ kind: "filesystem"; rootDirectory: string }>
+      | Readonly<{
+          kind: "s3";
+          endpoint: string;
+          region: string;
+          bucket: string;
+          accessKeyId: string;
+          secretAccessKey: string;
+          forcePathStyle: boolean;
+          kmsKeyArn: string;
+        }>;
     bankCashPoolId: string;
     statementSourceFingerprint: `sha256:${string}`;
     retentionPolicy: Readonly<{ policyId: string; policyVersion: string }>;
@@ -148,28 +156,16 @@ function resolveFinancePayoutEvidence(
   config: z.infer<typeof adminApiRuntimeConfigSchema>
 ): AdminApiRuntimeConfig["financePayoutEvidence"] {
   if (config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED === "false") return null;
-  const endpoint = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT);
-  if (new URL(endpoint).protocol !== "https:") {
-    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
-  }
-  const forcePathStyle = config.ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
-  if (forcePathStyle === undefined) {
-    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when payout evidence is enabled");
-  }
-  const kmsKeyArn = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error("ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
-  }
+  const artifactStorage = config.NODE_ENV === "production"
+    ? resolvePayoutEvidenceS3Storage(config)
+    : config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT
+      ? resolvePayoutEvidenceS3Storage(config)
+      : Object.freeze({
+          kind: "filesystem" as const,
+          rootDirectory: config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ARTIFACT_DIRECTORY
+        });
   return Object.freeze({
-    artifactStorage: Object.freeze({
-      endpoint,
-      region: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_REGION),
-      bucket: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET),
-      accessKeyId: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
-      secretAccessKey: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
-      forcePathStyle: forcePathStyle === "true",
-      kmsKeyArn
-    }),
+    artifactStorage,
     bankCashPoolId: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_CASH_POOL_ID),
     statementSourceFingerprint: requiredPayoutEvidenceConfig(
       config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_STATEMENT_SOURCE_FINGERPRINT
@@ -183,6 +179,31 @@ function resolveFinancePayoutEvidence(
       )
     }),
     maxBytes: config.ADMIN_API_FINANCE_PAYOUT_EVIDENCE_MAX_BYTES
+  });
+}
+
+function resolvePayoutEvidenceS3Storage(config: z.infer<typeof adminApiRuntimeConfigSchema>) {
+  const endpoint = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT);
+  if (new URL(endpoint).protocol !== "https:") {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
+  }
+  const forcePathStyle = config.ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE is required when payout evidence is enabled");
+  }
+  const kmsKeyArn = requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error("ADMIN_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN");
+  }
+  return Object.freeze({
+    kind: "s3" as const,
+    endpoint,
+    region: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_REGION),
+    bucket: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_BUCKET),
+    accessKeyId: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
+    secretAccessKey: requiredPayoutEvidenceConfig(config.ADMIN_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
+    forcePathStyle: forcePathStyle === "true",
+    kmsKeyArn
   });
 }
 

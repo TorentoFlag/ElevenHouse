@@ -1,4 +1,10 @@
-import type { ArcPayBrowserInfoRequest, SavedCardSetupStatusResponse, TariffInvoicePaymentStatusResponse } from "@elevenhouse/contracts";
+import type {
+  ArcPayBrowserInfoRequest,
+  InitiateSavedCardSetupRequest,
+  SavedCardSetupStatusResponse,
+  TariffInvoicePaymentStatusResponse
+} from "@elevenhouse/contracts";
+import type { HostedFieldsAppearance } from "@thavguard/arc-pay";
 
 type ArcPaySdkBrowserInfo = Readonly<{
   accept_header: string;
@@ -11,6 +17,50 @@ type ArcPaySdkBrowserInfo = Readonly<{
   java_enabled?: boolean;
   window_size?: ArcPayBrowserInfoRequest["windowSize"];
 }>;
+
+/** ArcPay allows only iframe-safe input properties; containers remain app-owned CSS. */
+export const hostedCardFieldsAppearance = {
+  theme: "none",
+  variables: {
+    fontFamily: '"Onest", system-ui, -apple-system, sans-serif',
+    fontSize: "15px",
+    lineHeight: "24px",
+    colorText: "#eceaf7",
+    colorPlaceholder: "#6f6a93",
+    colorDanger: "#f47a7a",
+    colorSuccess: "#4ec8a0",
+    colorBackground: "#171432",
+    caretColor: "#f4c430"
+  },
+  rules: {
+    focus: { "font-weight": "500" },
+    invalid: { color: "#f47a7a" },
+    complete: { color: "#eceaf7" }
+  }
+} satisfies HostedFieldsAppearance;
+
+export type HostedCardFieldReadiness = Readonly<{
+  cardNumber: boolean;
+  cardExpiry: boolean;
+  cardCvv: boolean;
+}>;
+
+export function areHostedCardFieldsReady(readiness: HostedCardFieldReadiness): boolean {
+  return readiness.cardNumber && readiness.cardExpiry && readiness.cardCvv;
+}
+
+/** Normalizes only a contract-valid receipt contact; it never substitutes a guessed value. */
+export function resolveBuyerContact(value: string): InitiateSavedCardSetupRequest["buyerContact"] | null {
+  const trimmed = value.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    return { kind: "email", value: trimmed };
+  }
+  const normalizedPhone = trimmed.replace(/[\s()-]/g, "");
+  if (/^\+[1-9]\d{1,14}$/.test(normalizedPhone)) {
+    return { kind: "phone", value: normalizedPhone };
+  }
+  return null;
+}
 
 /** Maps the audited ArcPay SDK shape into the strict shared browser-attestation contract. */
 export function toBrowserInfoRequest(info: ArcPaySdkBrowserInfo): ArcPayBrowserInfoRequest {

@@ -19,7 +19,7 @@ import { userSessions } from "./auth-sessions.schema";
 const digestPattern = sql.raw("'^sha256:[a-f0-9]{64}$'");
 const base64UrlPattern = sql.raw("'^[A-Za-z0-9_-]+$'");
 const financeActionKinds = sql.raw(
-  "('tariff_publish', 'fiscal_policy_publish', 'risk_policy_publish', 'refund_execute', 'chargeback_principal_allocate', 'payout_destination_reveal', 'payout_destination_change', 'payout_approve', 'payout_start_processing', 'payout_confirm_paid', 'bank_snapshot_attest', 'bank_statement_match', 'ledger_correction')"
+  "('tariff_publish', 'fiscal_policy_publish', 'risk_policy_publish', 'refund_execute', 'chargeback_principal_allocate', 'chargeback_resolution', 'payout_destination_reveal', 'payout_destination_change', 'payout_approve', 'payout_start_processing', 'payout_confirm_paid', 'bank_snapshot_attest', 'bank_statement_match', 'ledger_correction')"
 );
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea"

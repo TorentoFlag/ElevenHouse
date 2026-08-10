@@ -9,14 +9,21 @@ const nullablePositiveInteger = positiveInteger.nullable();
 const recurringFrequencyDaysSchema = z.number().int().min(1).max(366).nullable();
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 const uuidSchema = z.string().uuid();
-const tariffSeriesIdSchema = z.string().min(1).max(160).refine(
-  (value) => value.trim() === value && !/[\u0000-\u001f\u007f]/.test(value),
-  "Tariff series ID must be a trimmed visible identifier"
-);
-const tariffFeaturesSchema = z.array(platformPlanFeatureCodeSchema).max(40).refine(
-  (features) => new Set(features).size === features.length,
-  "Tariff capabilities must be unique"
-);
+const tariffSeriesIdSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .refine(
+    (value) => value.trim() === value && !/[\u0000-\u001f\u007f]/.test(value),
+    "Tariff series ID must be a trimmed visible identifier"
+  );
+const tariffFeaturesSchema = z
+  .array(platformPlanFeatureCodeSchema)
+  .max(40)
+  .refine(
+    (features) => new Set(features).size === features.length,
+    "Tariff capabilities must be unique"
+  );
 
 const adminTariffTermsSchema = z
   .object({
@@ -43,7 +50,8 @@ const adminTariffTermsSchema = z
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["monthlyRecurringFrequencyDays"],
-        message: "A recurring interval is required exactly when the monthly tariff price is positive"
+        message:
+          "A recurring interval is required exactly when the monthly tariff price is positive"
       });
     }
     if ((value.yearlyPriceMinor === 0) !== (value.yearlyRecurringFrequencyDays === null)) {
@@ -103,6 +111,7 @@ export const astrologerTariffSubscriptionResponseSchema = z
     subscriptionId: uuidSchema,
     tariffSeriesId: tariffSeriesIdSchema,
     tariffVersion: positiveInteger,
+    billingCycle: platformTariffBillingCycleSchema,
     state: tariffSubscriptionStateSchema,
     commissionBpsSnapshot: z.number().int().min(0).max(10_000),
     startsAt: isoDateTimeSchema.nullable(),
@@ -113,10 +122,40 @@ export type AstrologerTariffSubscriptionResponse = z.infer<
   typeof astrologerTariffSubscriptionResponseSchema
 >;
 
+/** A completed charge for the authenticated astrologer's tariff subscription. */
+export const astrologerTariffInvoiceHistoryItemSchema = z
+  .object({
+    invoiceId: z.string().min(1).max(160),
+    subscriptionId: uuidSchema,
+    tariffSeriesId: tariffSeriesIdSchema,
+    tariffVersion: positiveInteger,
+    amountMinor: nonNegativeInteger,
+    currency: z.literal("RUB"),
+    state: z.literal("captured"),
+    capturedAt: isoDateTimeSchema
+  })
+  .strict();
+export type AstrologerTariffInvoiceHistoryItem = z.infer<
+  typeof astrologerTariffInvoiceHistoryItemSchema
+>;
+
+/** Display-only data for the active saved card; never a card token or PAN. */
+export const astrologerTariffPaymentMethodSchema = z
+  .object({
+    brand: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/),
+    last4: z.string().regex(/^\d{4}$/),
+    expiryMonth: z.number().int().min(1).max(12),
+    expiryYear: z.number().int().min(2000).max(9999)
+  })
+  .strict();
+export type AstrologerTariffPaymentMethod = z.infer<typeof astrologerTariffPaymentMethodSchema>;
+
 export const astrologerTariffCatalogResponseSchema = z
   .object({
     tariffs: z.array(astrologerTariffResponseSchema).max(500),
-    currentSubscription: astrologerTariffSubscriptionResponseSchema.nullable()
+    currentSubscription: astrologerTariffSubscriptionResponseSchema.nullable(),
+    recentInvoices: z.array(astrologerTariffInvoiceHistoryItemSchema).max(12),
+    paymentMethod: astrologerTariffPaymentMethodSchema.nullable()
   })
   .strict();
 export type AstrologerTariffCatalogResponse = z.infer<typeof astrologerTariffCatalogResponseSchema>;
@@ -175,30 +214,38 @@ export type StartAstrologerTariffSubscriptionResponse = z.infer<
 const disclosureDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 const localeSchema = z.enum(["ru", "en"]);
 const fiscalBuyerContactSchema = z.union([
-  z.object({
-    kind: z.literal("email"),
-    value: z.string().trim().min(3).max(254).email()
-  }).strict(),
-  z.object({
-    kind: z.literal("phone"),
-    value: z.string().regex(/^\+[1-9]\d{1,14}$/)
-  }).strict()
+  z
+    .object({
+      kind: z.literal("email"),
+      value: z.string().trim().min(3).max(254).email()
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("phone"),
+      value: z.string().regex(/^\+[1-9]\d{1,14}$/)
+    })
+    .strict()
 ]);
 
 export const savedCardSetupDisclosureResponseSchema = z
   .object({
     subscriptionId: uuidSchema,
     expectedSubscriptionVersion: positiveInteger,
-    disclosure: z.object({
-      disclosureSeriesId: z.string().min(1).max(160),
-      version: positiveInteger,
-      locale: localeSchema,
-      body: z.string().min(1).max(20_000),
-      canonicalDigest: disclosureDigestSchema
-    }).strict()
+    disclosure: z
+      .object({
+        disclosureSeriesId: z.string().min(1).max(160),
+        version: positiveInteger,
+        locale: localeSchema,
+        body: z.string().min(1).max(20_000),
+        canonicalDigest: disclosureDigestSchema
+      })
+      .strict()
   })
   .strict();
-export type SavedCardSetupDisclosureResponse = z.infer<typeof savedCardSetupDisclosureResponseSchema>;
+export type SavedCardSetupDisclosureResponse = z.infer<
+  typeof savedCardSetupDisclosureResponseSchema
+>;
 
 export const initiateSavedCardSetupRequestSchema = z
   .object({
@@ -229,7 +276,16 @@ export const arcPayBrowserInfoSchema = z
     language: z.string().trim().min(1).max(64),
     screenWidth: z.number().int().min(1).max(20_000),
     screenHeight: z.number().int().min(1).max(20_000),
-    colorDepth: z.union([z.literal(1), z.literal(4), z.literal(8), z.literal(15), z.literal(16), z.literal(24), z.literal(32), z.literal(48)]),
+    colorDepth: z.union([
+      z.literal(1),
+      z.literal(4),
+      z.literal(8),
+      z.literal(15),
+      z.literal(16),
+      z.literal(24),
+      z.literal(32),
+      z.literal(48)
+    ]),
     timezoneOffsetMinutes: z.number().int().min(-1_440).max(1_440),
     userAgent: z.string().trim().min(1).max(2048),
     javaEnabled: z.boolean().optional(),
@@ -310,12 +366,14 @@ export const savedCardSetupStatusResponseSchema = z
     tokenization: z
       .object({
         providerSetupId: uuidSchema,
-        apiBaseUrl: z.string().url().refine((value) => new URL(value).protocol === "https:"),
+        apiBaseUrl: z
+          .string()
+          .url()
+          .refine((value) => new URL(value).protocol === "https:"),
         publishableKey: z.string().trim().min(1).max(512)
       })
       .strict()
-      .nullable()
-    ,
+      .nullable(),
     customerAction: z
       .object({
         type: z.enum(["three_ds_method", "three_ds_challenge"]),
@@ -326,9 +384,22 @@ export const savedCardSetupStatusResponseSchema = z
             submit: z
               .object({
                 method: z.literal("POST"),
-                url: z.string().url().refine((value) => new URL(value).protocol === "https:"),
+                url: z
+                  .string()
+                  .url()
+                  .refine((value) => new URL(value).protocol === "https:"),
                 target: z.enum(["hidden_iframe", "browser"]),
-                fields: z.array(z.object({ name: z.string().min(1).max(8192), value: z.string().min(1).max(8192) }).strict()).min(1).max(32)
+                fields: z
+                  .array(
+                    z
+                      .object({
+                        name: z.string().min(1).max(8192),
+                        value: z.string().min(1).max(8192)
+                      })
+                      .strict()
+                  )
+                  .min(1)
+                  .max(32)
               })
               .strict()
           })
@@ -341,10 +412,16 @@ export const savedCardSetupStatusResponseSchema = z
   .superRefine((value, context) => {
     const hasTokenization = value.tokenization !== null;
     if ((value.nextAction === "tokenize_card") !== hasTokenization) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "Tokenization must match the next action" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tokenization must match the next action"
+      });
     }
     if ((value.nextAction === "complete_3ds") !== (value.customerAction !== null)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "3DS action must match the next action" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "3DS action must match the next action"
+      });
     }
   });
 export type SavedCardSetupStatusResponse = z.infer<typeof savedCardSetupStatusResponseSchema>;
@@ -371,10 +448,17 @@ const tariffInvoiceThreeDsActionSchema = z
         submit: z
           .object({
             method: z.literal("POST"),
-            url: z.string().url().refine((value) => new URL(value).protocol === "https:"),
+            url: z
+              .string()
+              .url()
+              .refine((value) => new URL(value).protocol === "https:"),
             target: z.enum(["hidden_iframe", "browser"]),
             fields: z
-              .array(z.object({ name: z.string().min(1).max(8192), value: z.string().min(1).max(8192) }).strict())
+              .array(
+                z
+                  .object({ name: z.string().min(1).max(8192), value: z.string().min(1).max(8192) })
+                  .strict()
+              )
               .min(1)
               .max(32)
           })

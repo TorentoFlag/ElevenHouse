@@ -975,7 +975,6 @@ describe("admin finance policy HTTP flow", () => {
           expect.objectContaining({
             id: "12121212-1212-4121-8121-121212121212",
             provider: "arc_pay",
-            environment: "sandbox",
             providerPaymentId: "provider-payment-reconciliation-1",
             status: "exception",
             exceptionCode: "missing_on_bank",

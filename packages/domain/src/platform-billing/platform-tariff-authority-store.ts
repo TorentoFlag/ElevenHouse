@@ -19,6 +19,7 @@ export type PlatformTariffInvoiceRecord = Readonly<{
   version: number;
   billingPeriodStartAt: string;
   billingPeriodEndAt: string;
+  capturedAt: string | null;
 }>;
 
 export type PlatformTariffSubscriptionRecord = Readonly<
@@ -90,6 +91,11 @@ export type PlatformTariffAuthorityStore = Readonly<{
   findActiveOrPendingSubscription(
     ownerUserId: string
   ): Promise<PlatformTariffSubscriptionRecord | null>;
+  /** Owner-scoped completed charges, newest first, for the tariff settings read model. */
+  listRecentCapturedInvoices(input: Readonly<{
+    ownerUserId: string;
+    limit: number;
+  }>): Promise<readonly PlatformTariffInvoiceRecord[]>;
   /** Active-only authority for commission and capability enforcement. */
   findCurrentSubscription(ownerUserId: string): Promise<PlatformTariffSubscriptionSnapshot | null>;
 }>;

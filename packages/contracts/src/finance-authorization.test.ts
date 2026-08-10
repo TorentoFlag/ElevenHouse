@@ -35,6 +35,7 @@ describe("finance authorization contracts", () => {
       "risk_policy_publish",
       "refund_execute",
       "chargeback_principal_allocate",
+      "chargeback_resolution",
       "payout_destination_reveal",
       "payout_destination_change",
       "payout_approve",

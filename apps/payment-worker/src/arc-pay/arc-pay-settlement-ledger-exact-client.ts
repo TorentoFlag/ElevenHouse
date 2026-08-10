@@ -3,10 +3,13 @@ import { createHash } from "node:crypto";
 import type { FinanceArtifactRegistry } from "@elevenhouse/db/finance";
 import {
   createLosslessSettlementEntry,
+  createLosslessSettlementPayout,
   digestFinanceCanonicalValueV1,
   type FinanceProviderAccountIdentity,
+  type FinanceSettlementStream,
   type FinancePrivateObjectStoragePort,
   type LosslessSettlementEntry,
+  type LosslessSettlementPayout,
   type SettlementProviderReadPort,
   type VerifiedSettlementPageBundle
 } from "@elevenhouse/domain/finance-core";
@@ -34,7 +37,8 @@ export class ArcPayExactSettlementLedgerError extends Error {
  * Fetches one immutable ArcPay ledger page outside the database transaction. The raw response is
  * sealed before normalization, so a later parser or reconciliation change never alters evidence.
  */
-export function createArcPayExactSettlementLedgerClient(input: Readonly<{
+type ExactSettlementClientInput = Readonly<{
+  stream: FinanceSettlementStream;
   apiBaseUrl: string;
   apiSecret: string | null;
   privateObjectStorage: Pick<FinancePrivateObjectStoragePort, "writeImmutable">;
@@ -42,14 +46,22 @@ export function createArcPayExactSettlementLedgerClient(input: Readonly<{
   retention: Readonly<{ policyId: string; policyVersion: string }>;
   fetchImpl?: typeof fetch;
   now?: () => Date;
-}>): SettlementProviderReadPort {
+}>;
+
+/**
+ * Reads one exact ArcPay settlement stream. Each stream remains independently cursor-bound and
+ * gets its own immutable raw artifact, even when a provider page happens to have the same body.
+ */
+export function createArcPayExactSettlementClient(
+  input: ExactSettlementClientInput
+): SettlementProviderReadPort {
   const fetchImpl = input.fetchImpl ?? fetch;
   const retention = readRetention(input.retention);
 
   return Object.freeze({
     transactionBoundary: "outside_database_transaction" as const,
     async fetchVerifiedPage(command) {
-      if (command.cursorKey.stream !== "settlement_ledger") fail("invalid_command");
+      if (command.cursorKey.stream !== input.stream) fail("invalid_command");
       const maximumRows = command.operationEnvelope.maximumRows;
       const maximumArtifactBytes = command.operationEnvelope.maximumArtifactBytes;
       if (
@@ -61,11 +73,18 @@ export function createArcPayExactSettlementLedgerClient(input: Readonly<{
         fail("invalid_command");
       }
 
-      const url = new URL("/v1/settlement/ledger", input.apiBaseUrl);
-      url.searchParams.set("from", command.windowStart);
-      url.searchParams.set("to", command.windowEnd);
+      const url = new URL(
+        input.stream === "settlement_ledger" ? "/v1/settlement/ledger" : "/v1/settlement/payouts",
+        input.apiBaseUrl
+      );
+      if (input.stream === "settlement_ledger") {
+        url.searchParams.set("from", command.windowStart);
+        url.searchParams.set("to", command.windowEnd);
+      }
       url.searchParams.set("limit", String(maximumRows));
-      url.searchParams.set("currency", "RUB");
+      if (input.stream === "settlement_ledger") {
+        url.searchParams.set("currency", "RUB");
+      }
       if (command.checkpointIdentity.providerPageCursor !== null) {
         url.searchParams.set("cursor", command.checkpointIdentity.providerPageCursor);
       }
@@ -95,10 +114,13 @@ export function createArcPayExactSettlementLedgerClient(input: Readonly<{
       } catch {
         fail("invalid_response");
       }
-      const page = parseLedgerPage(decoded.value, command.cursorKey.providerAccount);
+      const page =
+        input.stream === "settlement_ledger"
+          ? parseLedgerPage(decoded.value, command.cursorKey.providerAccount)
+          : parsePayoutPage(decoded.value, command.cursorKey.providerAccount);
       if (page.rows.length > maximumRows) fail("policy_limit");
 
-      const artifactId = `arc-settlement-ledger:${command.cursorKey.providerAccount.providerAccountId}:${rawDigest.slice(7)}`;
+      const artifactId = `arc-${input.stream.replaceAll("_", "-")}:${command.cursorKey.providerAccount.providerAccountId}:${rawDigest.slice(7)}`;
       let privateObject: Awaited<ReturnType<FinancePrivateObjectStoragePort["writeImmutable"]>>;
       try {
         privateObject = await input.privateObjectStorage.writeImmutable({
@@ -151,14 +173,14 @@ export function createArcPayExactSettlementLedgerClient(input: Readonly<{
         pageEvidence: Object.freeze({
           kind: "verified_settlement_page_evidence",
           providerAccount: command.cursorKey.providerAccount,
-          stream: "settlement_ledger",
+          stream: input.stream,
           windowGeneration: command.checkpointIdentity.windowGeneration,
           providerPageCursor: command.checkpointIdentity.providerPageCursor,
           artifact,
           fetchedAt
         }),
         verifiedAt: fetchedAt,
-        stream: "settlement_ledger",
+        stream: input.stream,
         normalizedEntries: Object.freeze({
           rows: page.rows,
           nextCursor: page.nextCursor,
@@ -168,6 +190,13 @@ export function createArcPayExactSettlementLedgerClient(input: Readonly<{
       }) as unknown as VerifiedSettlementPageBundle;
     }
   } satisfies SettlementProviderReadPort);
+}
+
+/** Preserves the ledger-specific public entry point for existing payment-ledger callers. */
+export function createArcPayExactSettlementLedgerClient(
+  input: Omit<ExactSettlementClientInput, "stream">
+): SettlementProviderReadPort {
+  return createArcPayExactSettlementClient({ ...input, stream: "settlement_ledger" });
 }
 
 function parseLedgerPage(value: unknown, providerAccount: FinanceProviderAccountIdentity): Readonly<{
@@ -222,6 +251,60 @@ function parseLedgerEntry(
     bankInternalReference: optionalIdentifier(entry.bank_internal_reference, 500),
     settlementStatus: nullableIdentifier(entry.settlement_status, 500),
     rawPayloadDigest: digestFinanceCanonicalValueV1(entry)
+  });
+}
+
+function parsePayoutPage(
+  value: unknown,
+  providerAccount: FinanceProviderAccountIdentity
+): Readonly<{
+  rows: readonly LosslessSettlementPayout[];
+  nextCursor: string | null;
+}> {
+  const page = recordWithOptional(value, ["payouts"], ["next_cursor"]);
+  if (!Array.isArray(page.payouts)) fail("invalid_response");
+  return Object.freeze({
+    rows: Object.freeze(page.payouts.map((payout) => parsePayout(payout, providerAccount))),
+    nextCursor: optionalIdentifier(page.next_cursor, 1_000)
+  });
+}
+
+function parsePayout(
+  value: unknown,
+  providerAccount: FinanceProviderAccountIdentity
+): LosslessSettlementPayout {
+  const payout = recordWithOptional(
+    value,
+    ["payout_id", "amount", "currency", "status"],
+    [
+      "payout_method",
+      "bank_code",
+      "bank_terminal_id",
+      "bank_payout_id",
+      "bank_payout_status",
+      "initiated_at",
+      "completed_at",
+      "failed_reason"
+    ]
+  );
+  if (payout.currency !== "RUB") fail("invalid_response");
+  return createLosslessSettlementPayout({
+    key: {
+      providerAccount,
+      providerPayoutId: identifier(payout.payout_id, 200)
+    },
+    amountMinor: int64(payout.amount),
+    currency: "RUB",
+    status: identifier(payout.status, 500),
+    payoutMethod: optionalIdentifier(payout.payout_method, 500),
+    bankCode: optionalIdentifier(payout.bank_code, 500),
+    bankTerminalId: optionalIdentifier(payout.bank_terminal_id, 500),
+    providerBankPayoutId: optionalIdentifier(payout.bank_payout_id, 500),
+    bankPayoutStatus: optionalIdentifier(payout.bank_payout_status, 500),
+    initiatedAt: optionalTimestamp(payout.initiated_at),
+    completedAt: optionalTimestamp(payout.completed_at),
+    failedReason: optionalIdentifier(payout.failed_reason, 1_000),
+    rawPayloadDigest: digestFinanceCanonicalValueV1(payout)
   });
 }
 
@@ -290,6 +373,10 @@ function timestamp(value: unknown): string | null {
   const parsed = identifier(value, 500);
   if (Number.isNaN(Date.parse(parsed))) fail("invalid_response");
   return parsed;
+}
+
+function optionalTimestamp(value: unknown): string | null {
+  return value === undefined ? null : timestamp(value);
 }
 
 function readRetention(value: Readonly<{ policyId: string; policyVersion: string }>) {

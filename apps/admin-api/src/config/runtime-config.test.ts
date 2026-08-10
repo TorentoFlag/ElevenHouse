@@ -73,6 +73,25 @@ describe("createAdminApiRuntimeConfig", () => {
     ).toThrow("ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED requires private artifact storage");
   });
 
+  it("uses an immutable local filesystem store for enabled payout evidence outside production", () => {
+    expect(
+      createAdminApiRuntimeConfig({
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ENABLED: "true",
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_CASH_POOL_ID: "elevenhouse-main-bank",
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_STATEMENT_SOURCE_FINGERPRINT: `sha256:${"a".repeat(64)}`,
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_ID: "bank-transfer-evidence",
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_RETENTION_POLICY_VERSION: "1",
+        ADMIN_API_FINANCE_PAYOUT_EVIDENCE_ARTIFACT_DIRECTORY: ".local/payout-evidence"
+      }).financePayoutEvidence
+    ).toMatchObject({
+      artifactStorage: {
+        kind: "filesystem",
+        rootDirectory: ".local/payout-evidence"
+      },
+      bankCashPoolId: "elevenhouse-main-bank"
+    });
+  });
+
   it("requires an exact matching WebAuthn RP configuration and HTTPS in production", () => {
     expect(
       createAdminApiRuntimeConfig({

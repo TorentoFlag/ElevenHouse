@@ -23,12 +23,13 @@ describe("finance transient secret vault", () => {
       providerSetupId,
       cardTokenId,
       browserInfo: browserInfo(),
-      providerExpiresAt: "2026-08-04T12:05:00.000Z"
+      providerExpiresAt: "2026-08-04T12:04:00.050Z"
     });
 
     expect(sealed).toMatchObject({
       kind: "sealed_one_time_provider_secret_ref",
       secretRef: expect.stringMatching(/^kms:\/\/s3\//),
+      providerExpiresAt: "2026-08-04T12:04:00.05Z",
       providerConsumption: "one_time"
     });
     expect(sealed.secretRef).not.toContain(cardTokenId);

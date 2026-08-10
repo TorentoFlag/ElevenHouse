@@ -2008,7 +2008,9 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
       `insert into finance_artifact_retention_policies
          (policy_id, policy_version, artifact_class, retain_for_seconds, authority_ref, effective_at)
        values ($1, 1, 'bank_statement', 86400, 'integration-test', $2)`,
-      [retentionPolicyId, now]
+      // `registered_at` is assigned by PostgreSQL at the later artifact insert. Making the
+      // policy effective one second earlier keeps this fixture deterministic across clocks.
+      [retentionPolicyId, new Date(now.getTime() - 1_000)]
     );
     await runtime.pool.query(
       `insert into finance_artifacts

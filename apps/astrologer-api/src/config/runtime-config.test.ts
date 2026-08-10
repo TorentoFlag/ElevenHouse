@@ -801,7 +801,7 @@ describe("ArcPay browser tokenization config", () => {
       billing: {
         financeArtifactStorage: {
           artifactDirectory: ".local/finance-artifacts",
-          requestRetention: { policyId: "platform-provider-request", policyVersion: "1" }
+          requestRetention: { policyId: "provider-request", policyVersion: "1" }
         }
       }
     });

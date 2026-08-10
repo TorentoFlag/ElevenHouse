@@ -6,7 +6,10 @@ import {
 } from "@elevenhouse/domain/finance-core";
 import { describe, expect, it, vi } from "vitest";
 
-import { createSettlementLedgerIngestionProcessor } from "./settlement-ledger-ingestion.processor";
+import {
+  createSettlementIngestionProcessor,
+  createSettlementLedgerIngestionProcessor
+} from "./settlement-ledger-ingestion.processor";
 
 const providerAccount = Object.freeze({
   seriesId: "arc-pay-company-merchant",
@@ -138,6 +141,93 @@ describe("createSettlementLedgerIngestionProcessor", () => {
     });
 
     await expect(processor.tick()).resolves.toEqual({ kind: "concurrent_worker" });
+  });
+
+  it("keeps ArcPay payout ingestion on its own cursor stream", async () => {
+    const cursorKey = createSettlementCursorKey({ providerAccount, stream: "settlement_payouts" });
+    const checkpointIdentity = createSettlementPageCheckpointKey({
+      cursorKey,
+      windowGeneration: 1,
+      providerPageCursor: null
+    });
+    const processor = createSettlementIngestionProcessor({
+      stream: "settlement_payouts",
+      providerAccounts: { findActiveProviderAccount: vi.fn(async () => providerAccount) } as never,
+      operationPolicies: { findPublishedForOperation: vi.fn(async () => settlementPolicy()) } as never,
+      cursors: {
+        ensureCursor: vi.fn(async () => ({ cursorKey, cursorVersion: 1, created: true })),
+        acquireNextPage: vi.fn(async () => ({
+          lease: {
+            kind: "settlement_cursor_lease_receipt",
+            cursorKey,
+            cursorVersion: 1,
+            leaseOwnerId: "payment-worker:test",
+            leaseToken: "payout-lease-token",
+            fencingToken: 1,
+            databaseClaimedAt: "2026-08-08T09:59:00.000Z",
+            databaseExpiresAt: "2026-08-08T10:10:00.000Z",
+            state: "active"
+          },
+          checkpointIdentity,
+          windowStart: "2026-08-08T00:00:00.000Z",
+          windowEnd: "2026-08-08T10:00:00.000Z"
+        }))
+      } as never,
+      leases: { releaseLease: vi.fn(async () => ({})) } as never,
+      provider: {
+        transactionBoundary: "outside_database_transaction",
+        fetchVerifiedPage: vi.fn(async (command) => ({
+          kind: "verified_settlement_page_bundle",
+          providerAccount,
+          checkpointIdentity: command.checkpointIdentity,
+          rawArtifact: {
+            artifactId: "settlement-payout-page-1",
+            sha256Digest: `sha256:${"a".repeat(64)}`,
+            byteLength: 100
+          },
+          decodedEntriesDigest: `sha256:${"b".repeat(64)}`,
+          pageEvidence: {
+            kind: "verified_settlement_page_evidence",
+            providerAccount,
+            stream: "settlement_payouts",
+            windowGeneration: 1,
+            providerPageCursor: null,
+            artifact: {
+              artifactId: "settlement-payout-page-1",
+              sha256Digest: `sha256:${"a".repeat(64)}`,
+              byteLength: 100
+            },
+            fetchedAt: "2026-08-08T10:00:00.000Z"
+          },
+          verifiedAt: "2026-08-08T10:00:00.000Z",
+          stream: "settlement_payouts",
+          normalizedEntries: {
+            rows: [],
+            nextCursor: null,
+            returnedCount: 0,
+            operationEnvelope: command.operationEnvelope
+          }
+        }))
+      } as never,
+      ingestion: {
+        ingestVerifiedPage: vi.fn(async () => ({
+          cursorVersion: 2,
+          insertedEntryCount: 1,
+          replayedEntryCount: 0
+        }))
+      } as never,
+      workerId: "payment-worker:test:payouts",
+      initialBackfillStart: () => "2026-08-06T10:00:00.000Z",
+      overlapSeconds: 3600,
+      leaseDurationSeconds: 90,
+      maximumPageCount: 1
+    });
+
+    await expect(processor.tick()).resolves.toMatchObject({
+      kind: "ingested",
+      pages: 1,
+      insertedEntries: 1
+    });
   });
 });
 

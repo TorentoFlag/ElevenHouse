@@ -68,7 +68,7 @@ function input() {
 }
 
 function invoice(): PlatformTariffInvoiceRecord {
-  return { invoiceId: "platform-tariff-invoice:1", subscriptionId: subscription().subscriptionId, ownerUserId: subscription().ownerUserId, tariffSeriesId: "pro", tariffVersion: 1, tariffVersionDigest: digest, amountMinor: 199_000, currency: "RUB", state: "open", version: 1, billingPeriodStartAt: "2026-08-04T10:00:00.000Z", billingPeriodEndAt: "2026-09-04T10:00:00.000Z" };
+  return { invoiceId: "platform-tariff-invoice:1", subscriptionId: subscription().subscriptionId, ownerUserId: subscription().ownerUserId, tariffSeriesId: "pro", tariffVersion: 1, tariffVersionDigest: digest, amountMinor: 199_000, currency: "RUB", state: "open", version: 1, billingPeriodStartAt: "2026-08-04T10:00:00.000Z", billingPeriodEndAt: "2026-09-04T10:00:00.000Z", capturedAt: null };
 }
 
 function subscription(): PlatformTariffSubscriptionRecord {

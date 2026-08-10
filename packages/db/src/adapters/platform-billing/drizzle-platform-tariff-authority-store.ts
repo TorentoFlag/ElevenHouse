@@ -143,6 +143,24 @@ export function createDrizzlePlatformTariffAuthorityStore<TSchema extends Record
         fail("persistence_write_incomplete");
       }
     },
+    listRecentCapturedInvoices: async ({ ownerUserId, limit }) => {
+      try {
+        if (!Number.isInteger(limit) || limit < 1 || limit > 12) fail("persistence_write_incomplete");
+        const rows = await input.database
+          .select()
+          .from(platformTariffInvoices)
+          .where(and(
+            eq(platformTariffInvoices.ownerUserId, ownerUserId),
+            eq(platformTariffInvoices.state, "captured")
+          ))
+          .orderBy(desc(platformTariffInvoices.capturedAt), desc(platformTariffInvoices.createdAt))
+          .limit(limit);
+        return rows.map(mapInvoice);
+      } catch (error) {
+        if (error instanceof PlatformTariffAuthorityPersistenceError) throw error;
+        fail("persistence_write_incomplete");
+      }
+    },
     findCurrentSubscription: async (ownerUserId) => {
       try {
         const [row] = await input.database
@@ -748,7 +766,8 @@ function mapInvoice(row: typeof platformTariffInvoices.$inferSelect): PlatformTa
     state: row.state as PlatformTariffInvoiceRecord["state"],
     version: row.version,
     billingPeriodStartAt,
-    billingPeriodEndAt
+    billingPeriodEndAt,
+    capturedAt: row.capturedAt ? iso(row.capturedAt) : null
   });
 }
 

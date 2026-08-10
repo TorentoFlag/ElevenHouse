@@ -41,3 +41,4 @@ export * from "./reconciliation";
 export * from "./refund-candidates";
 export * from "./admin-refund-candidates";
 export * from "./admin-online-wallet-refunds";
+export * from "./admin-chargeback-resolutions";

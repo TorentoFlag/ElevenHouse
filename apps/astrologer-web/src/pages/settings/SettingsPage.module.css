@@ -15,6 +15,16 @@
   min-height: calc(100dvh - var(--astrologer-app-header-height, 68px) - 64px);
   margin: -32px;
   flex-direction: column;
+  background-color: #080718;
+  background-image:
+    radial-gradient(circle at 8% 18%, rgb(244 196 48 / 0.72) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 18% 42%, rgb(234 231 255 / 0.62) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 39% 11%, rgb(244 196 48 / 0.52) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 54% 31%, rgb(234 231 255 / 0.54) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 73% 20%, rgb(244 196 48 / 0.52) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 87% 47%, rgb(234 231 255 / 0.58) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 96% 78%, rgb(244 196 48 / 0.58) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 11% 84%, rgb(234 231 255 / 0.52) 0 1px, transparent 1.5px);
   color: var(--eh-color-moon-120);
 }
 
@@ -100,8 +110,8 @@
 }
 
 .settingsNavigation {
-  width: 260px;
-  flex: 0 0 260px;
+  width: 215px;
+  flex: 0 0 215px;
   padding: 14px 12px;
   border-right: 1px solid var(--settings-line);
   background: var(--settings-panel);
@@ -110,9 +120,10 @@
 .navigationButton {
   display: flex;
   width: 100%;
-  align-items: flex-start;
+  align-items: center;
   gap: 11px;
-  padding: 12px 13px;
+  margin-bottom: 3px;
+  padding: 11px 13px;
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
@@ -124,7 +135,6 @@
 
 .navigationButton svg {
   flex: 0 0 auto;
-  margin-top: 1px;
   color: var(--eh-color-moon-600);
 }
 
@@ -138,21 +148,21 @@
 .navigationButton strong {
   color: var(--eh-color-moon-120);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.25;
 }
 
 .navigationButton em {
-  margin-top: 2px;
-  color: var(--eh-color-muted);
-  font-size: 11.5px;
-  font-style: normal;
-  line-height: 1.35;
+  display: none;
 }
 
 .navigationButtonActive {
   border-color: var(--eh-color-gold-alpha-26);
   background: var(--eh-color-gold-alpha-14);
+}
+
+.navigationButtonActive strong {
+  font-weight: 600;
 }
 
 .navigationButtonActive svg {
@@ -184,7 +194,7 @@
 }
 
 .billingPanel {
-  width: min(100%, 920px);
+  width: min(100%, 620px);
 }
 
 .billingProviderNotice,
@@ -199,7 +209,7 @@
 
 .billingProviderNotice {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin-bottom: 22px;
   padding: 14px 16px;
@@ -299,16 +309,16 @@
 
 .billingCycleSegment button {
   display: inline-flex;
-  min-height: 32px;
+  min-height: 30px;
   align-items: center;
-  padding: 0 13px;
+  padding: 7px 14px;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--eh-color-moon-500);
   cursor: pointer;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .billingCycleSegment button:focus-visible {
@@ -316,7 +326,7 @@
   outline-offset: 2px;
 }
 
-.billingCycleActive {
+.billingCycleSegment .billingCycleActive {
   background: var(--settings-accent);
   color: rgb(23 18 6) !important;
 }
@@ -324,16 +334,16 @@
 .planGrid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .planCard {
   display: flex;
-  min-height: 316px;
+  min-height: 344px;
   flex-direction: column;
   padding: 16px;
   border: 1px solid var(--settings-line-strong);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--settings-surface-1);
 }
 
@@ -386,7 +396,7 @@
 
 .planPrice strong {
   color: var(--eh-color-moon-120);
-  font-size: 23px;
+  font-size: 24px;
   font-weight: 800;
   line-height: 1;
 }
@@ -451,9 +461,12 @@
   color: var(--eh-color-moon-300);
 }
 
-.planButton:disabled,
 .planGhostButton:disabled {
   opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.planButton:disabled {
   cursor: not-allowed;
 }
 
@@ -505,6 +518,52 @@
 .invoiceList {
   display: grid;
   gap: 8px;
+}
+
+.invoiceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--settings-line);
+  border-radius: 12px;
+  background: var(--settings-surface-1);
+}
+
+.invoiceRow > span,
+.invoiceRow strong,
+.invoiceRow em {
+  display: block;
+  min-width: 0;
+}
+
+.invoiceRow strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+
+.invoiceRow em {
+  margin-top: 2px;
+  color: var(--eh-color-muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.3;
+}
+
+.invoiceRow b {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.invoiceRow i {
+  color: #7edb9f;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .billingEmptyRow,
@@ -610,14 +669,19 @@
 }
 
 .tariffHostedField {
+  box-sizing: border-box;
+  display: flex;
+  height: 42px;
+  align-items: center;
   overflow: hidden;
-  padding: 8px 11px;
+  padding: 0 11px;
 }
 
 .tariffHostedField iframe {
   width: 100%;
-  min-height: 24px;
+  height: 18px !important;
   border: 0;
+  transform: none;
 }
 
 .tariffHostedFieldRow {
@@ -1165,5 +1229,21 @@
 
   .fieldGrid {
     grid-template-columns: 1fr;
+  }
+
+  .planGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .planCard {
+    min-height: 0;
+  }
+
+  .invoiceRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .invoiceRow i {
+    grid-column: 2;
   }
 }

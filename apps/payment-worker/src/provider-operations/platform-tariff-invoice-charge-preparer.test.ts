@@ -114,7 +114,7 @@ function candidate() {
       invoiceId: "platform-tariff-invoice:1", subscriptionId: "20000000-0000-4000-8000-000000000002", ownerUserId: "30000000-0000-4000-8000-000000000003",
       tariffSeriesId: "pro", tariffVersion: 1, tariffVersionDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const,
       amountMinor: 9_900, currency: "RUB" as const, state: "open" as const, version: 1,
-      billingPeriodStartAt: "2026-08-04T12:00:00.000Z", billingPeriodEndAt: "2026-09-03T12:00:00.000Z"
+      billingPeriodStartAt: "2026-08-04T12:00:00.000Z", billingPeriodEndAt: "2026-09-03T12:00:00.000Z", capturedAt: null
     },
     subscription: {
       subscriptionId: "20000000-0000-4000-8000-000000000002", ownerUserId: "30000000-0000-4000-8000-000000000003", tariffSeriesId: "pro", tariffVersion: 1,

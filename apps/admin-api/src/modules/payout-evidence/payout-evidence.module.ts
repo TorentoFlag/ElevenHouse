@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { createS3FinancePrivateObjectStorage } from "@elevenhouse/finance-infrastructure";
+import {
+  createFilesystemFinancePrivateObjectStorage,
+  createS3FinancePrivateObjectStorage
+} from "@elevenhouse/finance-infrastructure";
 import type { AdminApiRuntimeConfig } from "../../config/runtime-config.js";
 import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
@@ -26,7 +29,11 @@ import { PAYOUT_EVIDENCE_PRIVATE_STORAGE } from "./payout-evidence.tokens";
       useFactory: async (configService: ConfigService) => {
         const config = configService.getOrThrow<AdminApiRuntimeConfig>("adminApi").financePayoutEvidence;
         if (!config) return null;
-        const storage = createS3FinancePrivateObjectStorage(config.artifactStorage);
+        const storage = config.artifactStorage.kind === "filesystem"
+          ? createFilesystemFinancePrivateObjectStorage({
+              rootDirectory: config.artifactStorage.rootDirectory
+            })
+          : createS3FinancePrivateObjectStorage(config.artifactStorage);
         await storage.checkReady();
         return storage;
       },

@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ArcPayExactSettlementLedgerError,
+  createArcPayExactSettlementClient,
   createArcPayExactSettlementLedgerClient
 } from "./arc-pay-settlement-ledger-exact-client";
 
@@ -126,10 +127,82 @@ describe("createArcPayExactSettlementLedgerClient", () => {
     } satisfies Partial<ArcPayExactSettlementLedgerError>);
     expect(writeImmutable).not.toHaveBeenCalled();
   });
+
+  it("seals and losslessly decodes a payout page on the payout stream", async () => {
+    const responseBody = JSON.stringify({
+      payouts: [
+        {
+          payout_id: "payout-1",
+          amount: 125000,
+          currency: "RUB",
+          status: "completed",
+          payout_method: "bank_transfer",
+          bank_payout_id: "bank-payout-1",
+          completed_at: "2026-08-08T08:00:00.000Z"
+        }
+      ],
+      next_cursor: null
+    });
+    const bytes = new TextEncoder().encode(responseBody);
+    const digest = sha256(bytes);
+    const fetchImpl = vi.fn(async () => new Response(bytes, { status: 200 }));
+    const client = createArcPayExactSettlementClient({
+      stream: "settlement_payouts",
+      apiBaseUrl: "https://api.arcpay.space",
+      apiSecret: "test-secret",
+      privateObjectStorage: {
+        writeImmutable: vi.fn(async () => ({
+          privateObjectKey: "finance/settlement/payout-1",
+          privateObjectVersion: "1",
+          envelopeKeyVersion: "local-v1",
+          sha256Digest: digest,
+          byteLength: bytes.byteLength,
+          contentType: "application/json"
+        }))
+      } as never,
+      artifactRegistry: {
+        registerSealedArtifact: vi.fn(async () => ({
+          artifactId: `arc-settlement-payouts:${providerAccount.providerAccountId}:${digest.slice(7)}`,
+          sha256Digest: digest,
+          byteLength: bytes.byteLength
+        }))
+      } as never,
+      retention: { policyId: "provider-settlement-page", policyVersion: "1" },
+      fetchImpl,
+      now: () => new Date("2026-08-08T10:00:00.000Z")
+    });
+
+    const result = await client.fetchVerifiedPage(command("settlement_payouts"));
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: "https://api.arcpay.space/v1/settlement/payouts?limit=100"
+      }),
+      { headers: { authorization: "Bearer test-secret" } }
+    );
+    expect(result).toMatchObject({
+      stream: "settlement_payouts",
+      rawArtifact: { sha256Digest: digest, byteLength: bytes.byteLength },
+      normalizedEntries: {
+        returnedCount: 1,
+        rows: [
+          {
+            key: { providerAccount, providerPayoutId: "payout-1" },
+            amountMinor: "125000",
+            currency: "RUB",
+            status: "completed",
+            providerBankPayoutId: "bank-payout-1"
+          }
+        ]
+      }
+    });
+  });
 });
 
-function command(): Parameters<SettlementProviderReadPort["fetchVerifiedPage"]>[0] {
-  const cursorKey = createSettlementCursorKey({ providerAccount, stream: "settlement_ledger" });
+function command(
+  stream: "settlement_ledger" | "settlement_payouts" = "settlement_ledger"
+): Parameters<SettlementProviderReadPort["fetchVerifiedPage"]>[0] {
+  const cursorKey = createSettlementCursorKey({ providerAccount, stream });
   return {
     cursorKey,
     checkpointIdentity: createSettlementPageCheckpointKey({

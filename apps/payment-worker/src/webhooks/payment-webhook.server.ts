@@ -96,6 +96,17 @@ export function createPaymentWebhookHandler(input: {
           });
           return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
         }
+        // ArcPay documents `chargeback.outcome`, but has not published a closed payload schema for
+        // it. Preserve the signed bytes first, then let a future canonical resolver consume a
+        // documented contract; never infer a win/loss or mutate money at HTTP ingress.
+        if (transport.providerEventType === "chargeback.outcome" && input.financeIngress) {
+          const result = await input.financeIngress.store({
+            signature,
+            transport,
+            rawBody: exactRawBytes(request.rawBody)
+          });
+          return { statusCode: 200, body: { accepted: true, duplicate: result.duplicate } };
+        }
         const event = parseArcPayWebhook({
           webhookId: signature.webhookId,
           rawBody

@@ -339,7 +339,9 @@ const tariffCatalog = {
       lifecycle: "published"
     }
   ],
-  currentSubscription: null
+  currentSubscription: null,
+  recentInvoices: [],
+  paymentMethod: null
 } satisfies AstrologerTariffCatalogResponse;
 
 const verification = {

@@ -163,7 +163,7 @@ export function mapPlatformTariffInvoiceChargePreparationCandidate(
         tariffSeriesId: invoice.tariffSeriesId, tariffVersion: invoice.tariffVersion,
         tariffVersionDigest: invoice.tariffVersionDigest as `sha256:${string}`,
         amountMinor: invoice.amountMinor, currency: "RUB", state: "open", version: invoice.version,
-        billingPeriodStartAt: start, billingPeriodEndAt: end
+        billingPeriodStartAt: start, billingPeriodEndAt: end, capturedAt: null
       }),
       subscription: Object.freeze({
         subscriptionId: subscription.id, ownerUserId: subscription.ownerUserId,

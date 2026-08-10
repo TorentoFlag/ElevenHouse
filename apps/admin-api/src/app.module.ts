@@ -11,6 +11,7 @@ import { SavedCardDisclosuresModule } from "./modules/saved-card-disclosures/sav
 import { AdminRefundCandidatesModule } from "./modules/refund-candidates/refund-candidates.module";
 import { AdminFinanceAuthorizationsModule } from "./modules/finance-authorizations/finance-authorizations.module";
 import { AdminOnlineWalletRefundsModule } from "./modules/online-wallet-refunds/online-wallet-refunds.module";
+import { AdminChargebackResolutionsModule } from "./modules/chargeback-resolutions/chargeback-resolutions.module";
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { AdminOnlineWalletRefundsModule } from "./modules/online-wallet-refunds/
     SavedCardDisclosuresModule,
     AdminRefundCandidatesModule,
     AdminFinanceAuthorizationsModule,
-    AdminOnlineWalletRefundsModule
+    AdminOnlineWalletRefundsModule,
+    AdminChargebackResolutionsModule
   ]
 })
 export class AppModule {}

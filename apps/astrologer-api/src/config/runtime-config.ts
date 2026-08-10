@@ -190,7 +190,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("platform-provider-request"),
+    .default("provider-request"),
   ASTROLOGER_BILLING_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z
     .string()
     .regex(/^[1-9][0-9]*$/)

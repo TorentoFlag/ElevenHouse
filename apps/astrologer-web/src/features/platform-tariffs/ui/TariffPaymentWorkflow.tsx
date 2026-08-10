@@ -4,7 +4,7 @@ import type {
   SavedCardSetupStatusResponse,
   TariffInvoicePaymentStatusResponse
 } from "@elevenhouse/contracts";
-import { ArcPay, collectBrowserInfo, mountThreeDSBrowserForm, type Elements, type ThreeDSAction } from "@thavguard/arc-pay";
+import { ArcPay, collectBrowserInfo, mountThreeDSBrowserForm, type ElementEvent, type Elements, type ThreeDSAction } from "@thavguard/arc-pay";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -16,7 +16,13 @@ import {
   getSavedCardSetupDisclosure,
   initiateSavedCardSetup
 } from "../api/platformTariffsApi";
-import { needsProviderStatusPolling, toBrowserInfoRequest } from "../model/tariffPaymentWorkflowModel";
+import {
+  hostedCardFieldsAppearance,
+  areHostedCardFieldsReady,
+  needsProviderStatusPolling,
+  resolveBuyerContact,
+  toBrowserInfoRequest
+} from "../model/tariffPaymentWorkflowModel";
 import styles from "../../../pages/settings/SettingsPage.module.css";
 
 type TariffPaymentWorkflowProps = Readonly<{
@@ -28,6 +34,15 @@ type PaymentActionSource =
   | Readonly<{ kind: "setup"; status: SavedCardSetupStatusResponse }>
   | Readonly<{ kind: "invoice"; status: TariffInvoicePaymentStatusResponse }>;
 
+type HostedCardField = Readonly<{
+  mount: (target: HTMLElement) => void;
+  getIframeContentWindow: () => Window | null;
+  on: (
+    event: "ready" | "error",
+    callback: (payload: ElementEvent) => void
+  ) => () => void;
+}>;
+
 /**
  * Browser boundary for the paid tariff flow. PAN/CVV stay in ArcPay hosted iframes; this
  * component receives only a single-use card token and server-authoritative state snapshots.
@@ -37,7 +52,7 @@ export function TariffPaymentWorkflow({ subscription, locale }: TariffPaymentWor
   const [setup, setSetup] = useState<SavedCardSetupStatusResponse | null>(null);
   const [invoice, setInvoice] = useState<TariffInvoicePaymentStatusResponse | null>(null);
   const [acceptedDisclosure, setAcceptedDisclosure] = useState(false);
-  const [email, setEmail] = useState("");
+  const [buyerContactValue, setBuyerContactValue] = useState("");
   const [isLoading, setLoading] = useState(true);
   const [isSubmitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +100,8 @@ export function TariffPaymentWorkflow({ subscription, locale }: TariffPaymentWor
   }, [invoice, refresh, setup]);
 
   const beginSetup = async () => {
-    if (!disclosure || !acceptedDisclosure || !email) return;
+    const buyerContact = resolveBuyerContact(buyerContactValue);
+    if (!disclosure || !acceptedDisclosure || !buyerContact) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -97,7 +113,7 @@ export function TariffPaymentWorkflow({ subscription, locale }: TariffPaymentWor
           disclosureDigest: disclosure.disclosure.canonicalDigest,
           noticeLocale: disclosure.disclosure.locale,
           acceptedDisclosure: true,
-          buyerContact: { kind: "email", value: email }
+          buyerContact
         }
       });
       await refresh();
@@ -151,19 +167,20 @@ export function TariffPaymentWorkflow({ subscription, locale }: TariffPaymentWor
             <span>Я принимаю условия регулярной оплаты тарифа.</span>
           </label>
           <label className={styles.tariffPaymentContact}>
-            <span>Email для чека</span>
+            <span>Email или телефон для чека</span>
             <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
+              type="text"
+              autoComplete="email tel"
+              inputMode="email"
+              value={buyerContactValue}
+              onChange={(event) => setBuyerContactValue(event.target.value)}
+              placeholder="you@example.com или +79990000000"
             />
           </label>
           <button
             className={styles.planButton}
             type="button"
-            disabled={!acceptedDisclosure || !email || isSubmitting}
+            disabled={!acceptedDisclosure || !resolveBuyerContact(buyerContactValue) || isSubmitting}
             onClick={() => void beginSetup()}
           >
             {isSubmitting ? "Подготавливаем…" : "Продолжить к защищённой карте"}
@@ -255,20 +272,27 @@ function HostedCardFields({
     let active = true;
     let created: Elements | null = null;
     void ArcPay.load(publishableKey)
-      .then((provider) => {
+      .then(async (provider) => {
         if (!active || !number.current || !expiry.current || !cvv.current) return;
-        created = provider.elements({
-          appearance: {
-            variables: { colorText: "#f4f0e8", colorPlaceholder: "#938d82", fontSize: "15px" }
-          }
-        });
-        created.create("cardNumber", { placeholder: "Номер карты" }).mount(number.current);
-        created.create("cardExpiry", { placeholder: "ММ / ГГ" }).mount(expiry.current);
-        created.create("cardCvv", { placeholder: "CVV" }).mount(cvv.current);
+        created = provider.elements({ appearance: hostedCardFieldsAppearance });
+        const cardNumber = created.create("cardNumber", { placeholder: "Номер карты" });
+        const cardExpiry = created.create("cardExpiry", { placeholder: "ММ / ГГ" });
+        const cardCvv = created.create("cardCvv", { placeholder: "CVV" });
+        const channelId = getHostedFieldsChannelId(created);
+
+        // ArcPay's iframe handshake is asynchronous. Mount one field at a time and do
+        // not make tokenization available until every field has explicitly confirmed it.
+        await mountHostedCardField(cardNumber, number.current, publishableKey, channelId);
+        if (!active) return;
+        await mountHostedCardField(cardExpiry, expiry.current, publishableKey, channelId);
+        if (!active) return;
+        await mountHostedCardField(cardCvv, cvv.current, publishableKey, channelId);
+        if (!active) return;
+
         elements.current = created;
-        setReady(true);
+        setReady(areHostedCardFieldsReady({ cardNumber: true, cardExpiry: true, cardCvv: true }));
       })
-      .catch(() => { if (active) setLoadError("Не удалось загрузить защищённые поля карты ArcPay."); });
+      .catch(() => { if (active) setLoadError("Не удалось подключить все защищённые поля ArcPay. Повторите попытку."); });
     return () => { active = false; created?.destroy(); elements.current = null; };
   }, [publishableKey]);
 
@@ -285,7 +309,6 @@ function HostedCardFields({
   return (
     <section className={styles.tariffPaymentCard} aria-label="Карта для тарифа">
       <h3>Данные карты</h3>
-      <p>Реквизиты вводятся в защищённых полях ArcPay и не проходят через ElevenHouse.</p>
       {loadError ? <WorkflowNotice tone="danger">{loadError}</WorkflowNotice> : null}
       <div ref={number} className={styles.tariffHostedField} aria-label="Номер карты" />
       <div className={styles.tariffHostedFieldRow}>
@@ -297,6 +320,59 @@ function HostedCardFields({
       </button>
     </section>
   );
+}
+
+function getHostedFieldsChannelId(elements: Elements): string {
+  // The published SDK keeps the channel id private in TypeScript but uses a normal
+  // runtime property. We need the same id only to repeat its public `hello` message.
+  const channelId = (elements as unknown as Readonly<{ channelId?: unknown }>).channelId;
+  if (typeof channelId !== "string" || channelId.length === 0) {
+    throw new Error("ArcPay Hosted Fields channel is unavailable");
+  }
+  return channelId;
+}
+
+function mountHostedCardField(
+  element: HostedCardField,
+  target: HTMLDivElement,
+  publishableKey: string,
+  channelId: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let handshakeRetry: number | null = null;
+    const sendHello = () => {
+      element.getIframeContentWindow()?.postMessage({
+        type: "arcpay:hello",
+        origin: window.location.origin,
+        publishableKey,
+        channelId
+      }, "https://sdk.arcpay.space");
+    };
+    const settle = (outcome: "ready" | "error", reason?: string) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      if (handshakeRetry !== null) window.clearInterval(handshakeRetry);
+      removeReady();
+      removeError();
+      if (outcome === "ready") resolve();
+      else reject(new Error(reason ?? "ArcPay field did not become ready"));
+    };
+    const removeReady = element.on("ready", () => settle("ready"));
+    const removeError = element.on("error", (event) => settle("error", "reason" in event ? event.reason : undefined));
+    const timeout = window.setTimeout(() => settle("error", "ArcPay field readiness timed out"), 10_000);
+    try {
+      element.mount(target);
+      // ArcPay SDK 0.1.46 sends hello only once on iframe load, while its iframe
+      // subscribes in a later React effect. Repeat the identical public handshake
+      // briefly so the first message cannot be lost in that race.
+      handshakeRetry = window.setInterval(sendHello, 250);
+      sendHello();
+    } catch (error) {
+      settle("error", error instanceof Error ? error.message : undefined);
+    }
+  });
 }
 
 function ThreeDsActionRunner({

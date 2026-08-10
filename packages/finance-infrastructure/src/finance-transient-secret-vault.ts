@@ -282,7 +282,10 @@ function sha256(bytes: Uint8Array): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 function canonicalInstant(value: string): string {
-  return new Date(value).toISOString().replace(/\.000Z$/, "Z");
+  return new Date(value)
+    .toISOString()
+    .replace(/(\.\d*?[1-9])0+Z$/, "$1Z")
+    .replace(/\.0+Z$/, "Z");
 }
 function uuid(value: unknown): value is string { return typeof value === "string" && uuidPattern.test(value); }
 function validDate(value: unknown): value is string { return typeof value === "string" && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString() === value; }
