@@ -219,8 +219,7 @@
   "scripts": {
     "build": "pnpm clean && tsc -p tsconfig.build.json",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "db:generate": "drizzle-kit generate --config drizzle.config.ts --name sticky_rictor && tsx scripts/normalize-baseline-index-order.ts && tsx scripts/augment-scheduling-baseline.ts && tsx scripts/augment-flows-baseline.ts && tsx scripts/augment-client-birth-profile-baseline.ts && tsx scripts/augment-ai-usage-baseline.ts && tsx scripts/augment-chart-jobs-baseline.ts && tsx scripts/augment-finance-baseline.ts",
-    "db:consolidate-prelaunch-baseline": "tsx scripts/consolidate-prelaunch-baseline.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
     "db:preflight-production-baseline": "tsx scripts/production-baseline-preflight.ts",
     "db:reset-production-prelaunch": "tsx scripts/production-prelaunch-reset.ts",
