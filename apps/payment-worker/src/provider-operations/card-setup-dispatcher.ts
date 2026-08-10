@@ -11,6 +11,7 @@ import {
   type ProviderOperationResultApplicationUnitOfWork,
   type SavedCardSetupCustomerActionUnitOfWork,
   type SavedCardSetupResultUnitOfWork,
+  type SavedCardSetupTerminalFailureUnitOfWork,
   type ProviderOperationTransportUnknownUnitOfWork,
   type VerifiedProviderOperationEvidence
 } from "@elevenhouse/domain/finance-core";
@@ -116,6 +117,7 @@ export function createCardSetupExecuteDispatcher(
     transientSecretVault: FinanceTransientSecretVaultPort;
     cardSetupClient: ArcPayCardSetupClient;
     customerAction: SavedCardSetupCustomerActionUnitOfWork;
+    failure: SavedCardSetupTerminalFailureUnitOfWork;
     transportUnknown: ProviderOperationTransportUnknownUnitOfWork;
     responseArtifactRetention: ProviderResponseArtifactRetention;
   }>
@@ -162,6 +164,12 @@ export function createCardSetupExecuteDispatcher(
         rawResponseBytes: response.rawResponseBytes,
         retention
       });
+      if (response.status === "declined" || response.status === "failed") {
+        await input.failure.applyTerminalFailure({
+          providerResult: failedSetupProviderResult(workItem, response.providerSetupId, responseArtifact)
+        });
+        return;
+      }
       if (response.status !== "pending_3ds" || response.nextAction === null) {
         // This branch remains fail-closed until the canonical-read activation UOW is composed.
         // It never records the execute response as a terminal credential fact.
@@ -193,6 +201,7 @@ export function createCardSetupThreeDsMethodDispatcher(
     transientSecretVault: FinanceTransientSecretVaultPort;
     cardSetupClient: ArcPayCardSetupClient;
     customerAction: SavedCardSetupCustomerActionUnitOfWork;
+    failure: SavedCardSetupTerminalFailureUnitOfWork;
     transportUnknown: ProviderOperationTransportUnknownUnitOfWork;
     responseArtifactRetention: ProviderResponseArtifactRetention;
   }>
@@ -216,6 +225,12 @@ export function createCardSetupThreeDsMethodDispatcher(
       }
       assertExecutionResponseIdentity(response);
       const responseArtifact = await sealResponse({ storage: input.privateObjectStorage, registry: input.artifactRegistry, workItem, rawResponseBytes: response.rawResponseBytes, retention });
+      if (response.status === "declined" || response.status === "failed") {
+        await input.failure.applyTerminalFailure({
+          providerResult: failedSetupProviderResult(workItem, response.providerSetupId, responseArtifact)
+        });
+        return;
+      }
       if (response.status !== "pending_3ds" || response.nextAction === null || response.nextAction.type !== "three_ds_challenge") throw new CardSetupDispatcherError("response_payload_invalid");
       await input.customerAction.recordCustomerAction({
         setupSessionId: workItem.dispatch.sourceId, expectedSetupSessionVersion: workItem.savedCardSetup.setupSessionVersion,
@@ -400,6 +415,40 @@ function providerSetupEvidence(
     artifact,
     observedAt: new Date().toISOString()
   }) as VerifiedProviderOperationEvidence;
+}
+
+function failedSetupProviderResult(
+  workItem: ProviderOperationDispatchWorkItem,
+  providerSetupId: string,
+  artifact: Readonly<{ artifactId: string; sha256Digest: FinanceDigest; byteLength: number }>
+): Parameters<SavedCardSetupTerminalFailureUnitOfWork["applyTerminalFailure"]>[0]["providerResult"] {
+  const dispatch = workItem.dispatch;
+  return Object.freeze({
+    economicPaymentIntentId: dispatch.economicPaymentIntentId,
+    expectedEconomicPaymentVersion: dispatch.economicPaymentVersion,
+    providerOperationIntentId: dispatch.providerOperationIntentId,
+    expectedProviderOperationIntentVersion: dispatch.providerOperationIntentVersion,
+    evidence: Object.freeze({
+      kind: "verified_provider_operation_evidence" as const,
+      providerAccount: dispatch.providerAccount,
+      economicPaymentIntentId: dispatch.economicPaymentIntentId,
+      economicPaymentSessionId: dispatch.economicPaymentSessionId,
+      sourceId: dispatch.sourceId,
+      purpose: dispatch.purpose,
+      providerOperationIntentId: dispatch.providerOperationIntentId,
+      operationKind: workItem.operationKind,
+      providerOperationId: providerSetupId,
+      canonicalRequestDigest: dispatch.canonicalRequestDigest,
+      idempotencyKey: dispatch.idempotencyKey,
+      outcome: "failed" as const,
+      providerPaymentId: null,
+      amountMinor: null,
+      currency: null,
+      artifact,
+      observedAt: new Date().toISOString()
+    }) as VerifiedProviderOperationEvidence & Readonly<{ outcome: "failed" }>,
+    operationEnvelope: workItem.operationEnvelope
+  }) as Parameters<SavedCardSetupTerminalFailureUnitOfWork["applyTerminalFailure"]>[0]["providerResult"];
 }
 
 function assertResponseIdentity(value: Readonly<{ providerSetupId: string; rawResponseBytes: Uint8Array }>) {

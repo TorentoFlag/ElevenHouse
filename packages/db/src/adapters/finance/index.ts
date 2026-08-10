@@ -14,6 +14,7 @@ export * from "./drizzle-saved-card-setup-preparation-uow";
 export * from "./drizzle-saved-card-setup-execution-uow";
 export * from "./drizzle-saved-card-setup-three-ds-method-completion-uow";
 export * from "./drizzle-saved-card-setup-result-uow";
+export * from "./drizzle-saved-card-setup-terminal-failure-uow";
 export * from "./drizzle-saved-card-credential-activation-uow";
 export * from "./drizzle-saved-card-setup-terminal-reconciliation-reader";
 export * from "./drizzle-saved-card-setup-customer-action-uow";

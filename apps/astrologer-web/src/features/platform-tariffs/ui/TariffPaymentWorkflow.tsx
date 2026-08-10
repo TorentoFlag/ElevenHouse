@@ -234,7 +234,13 @@ export function TariffPaymentWorkflow({ subscription, locale }: TariffPaymentWor
       {setup?.nextAction === "provider_setup_pending" ? (
         <WorkflowNotice>Платёжный провайдер подготавливает защищённую сессию.</WorkflowNotice>
       ) : null}
-      {setup?.nextAction === "provider_confirmation_pending" || setup?.nextAction === "initial_payment_pending" ? (
+      {setup?.nextAction === "setup_failed" ? (
+        <WorkflowNotice tone="danger">Не удалось привязать карту. Попробуйте ещё раз или используйте другую карту.</WorkflowNotice>
+      ) : null}
+      {setup?.nextAction === "provider_confirmation_pending" ? (
+        <WorkflowNotice>Провайдер завершает привязку карты. Этот экран обновится автоматически.</WorkflowNotice>
+      ) : null}
+      {setup?.nextAction === "initial_payment_pending" ? (
         <WorkflowNotice>Карта привязана. Ждём подтверждения первого списания от платёжного провайдера.</WorkflowNotice>
       ) : null}
       {invoice?.nextAction === "provider_confirmation_pending" ? (
@@ -375,7 +381,7 @@ function mountHostedCardField(
   });
 }
 
-function ThreeDsActionRunner({
+export function ThreeDsActionRunner({
   source,
   onMethodComplete
 }: Readonly<{
@@ -383,10 +389,15 @@ function ThreeDsActionRunner({
   onMethodComplete: (indicator: "Y" | "N" | "U") => Promise<void>;
 }>) {
   const handled = useRef<string | null>(null);
+  const onMethodCompleteRef = useRef(onMethodComplete);
   const action = source.status.customerAction;
   const key = source.kind === "setup"
     ? `${source.kind}:${source.status.setupSessionId}:${source.status.setupSessionVersion}`
     : `${source.kind}:${source.status.invoiceId}:${source.status.invoiceVersion}`;
+
+  useEffect(() => {
+    onMethodCompleteRef.current = onMethodComplete;
+  }, [onMethodComplete]);
 
   useEffect(() => {
     if (!action || action.type !== "three_ds_method" || handled.current === key) return;
@@ -396,13 +407,17 @@ function ThreeDsActionRunner({
     const complete = (indicator: "Y" | "N" | "U") => {
       if (settled) return;
       settled = true;
-      void onMethodComplete(indicator);
+      void onMethodCompleteRef.current(indicator);
     };
     const timer = window.setTimeout(() => complete("U"), 10_000);
     mounted.iframe?.addEventListener("load", () => complete("Y"), { once: true });
     mounted.submit();
-    return () => { window.clearTimeout(timer); mounted.remove(); };
-  }, [action, key, onMethodComplete]);
+    return () => {
+      window.clearTimeout(timer);
+      mounted.remove();
+      if (!settled && handled.current === key) handled.current = null;
+    };
+  }, [action?.type, key]);
 
   if (!action) return null;
   if (action.type === "three_ds_method") {

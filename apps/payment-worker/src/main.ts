@@ -19,6 +19,7 @@ import {
   createDrizzleProviderOperationResultApplicationUnitOfWork,
   createDrizzleSavedCardCredentialActivationUnitOfWork,
   createDrizzleSavedCardSetupResultUnitOfWork,
+  createDrizzleSavedCardSetupTerminalFailureUnitOfWork,
   createDrizzleSavedCardSetupCustomerActionUnitOfWork,
   createDrizzleSavedCardSetupPreparationUnitOfWork,
   createDrizzleSavedCardSetupSessionReader,
@@ -330,6 +331,9 @@ async function startPaymentWorker(): Promise<void> {
         customerAction: createDrizzleSavedCardSetupCustomerActionUnitOfWork({
           database: postgresRuntime.database
         }),
+        failure: createDrizzleSavedCardSetupTerminalFailureUnitOfWork({
+          database: postgresRuntime.database
+        }),
         transportUnknown: createDrizzleProviderOperationTransportUnknownUnitOfWork(
           postgresRuntime.database
         ),
@@ -341,6 +345,9 @@ async function startPaymentWorker(): Promise<void> {
         transientSecretVault,
         cardSetupClient: createArcPayCardSetupClient(config.arcPay),
         customerAction: createDrizzleSavedCardSetupCustomerActionUnitOfWork({
+          database: postgresRuntime.database
+        }),
+        failure: createDrizzleSavedCardSetupTerminalFailureUnitOfWork({
           database: postgresRuntime.database
         }),
         transportUnknown: createDrizzleProviderOperationTransportUnknownUnitOfWork(

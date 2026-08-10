@@ -286,6 +286,7 @@ const allowedArtifactClassesByServicePurpose: Readonly<
   "astrologer_billing:platform_tariff_invoice_customer_action_delivery": new Set([
     "provider_canonical_read"
   ]),
+  "astrologer_billing:saved_card_customer_action_delivery": new Set(["provider_response"]),
   "client_checkout_delivery:client_checkout_action_delivery": new Set(["provider_response"]),
   "refund_processing:provider_operation_dispatch": new Set(["provider_request"]),
   "refund_processing:refund_result_verification": new Set([
@@ -1074,12 +1075,20 @@ function accessAllowed(
   serviceIdentity: FinanceArtifactServiceIdentity,
   purpose: FinanceArtifactAccessPurpose
 ): boolean {
-  const key = `${serviceIdentity}:${purpose}`;
-  return (
-    allowedArtifactClassesByServicePurpose[key]?.has(
-      artifact.artifactClass as FinanceArtifactClass
-    ) === true
-  );
+  return isFinanceArtifactAccessAllowed({
+    serviceIdentity,
+    purpose,
+    artifactClass: artifact.artifactClass as FinanceArtifactClass
+  });
+}
+
+export function isFinanceArtifactAccessAllowed(input: Readonly<{
+  serviceIdentity: FinanceArtifactServiceIdentity;
+  purpose: FinanceArtifactAccessPurpose;
+  artifactClass: FinanceArtifactClass;
+}>): boolean {
+  return allowedArtifactClassesByServicePurpose[`${input.serviceIdentity}:${input.purpose}`]
+    ?.has(input.artifactClass) === true;
 }
 
 async function appendAccessAudit(

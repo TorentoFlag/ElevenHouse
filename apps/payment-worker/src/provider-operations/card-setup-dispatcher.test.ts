@@ -192,6 +192,7 @@ describe("card setup dispatcher", () => {
         }))
       } as unknown as ReturnType<typeof import("../arc-pay/arc-pay-card-setup-client").createArcPayCardSetupClient>,
       customerAction: { recordCustomerAction } as never,
+      failure: { applyTerminalFailure: vi.fn() } as never,
       transportUnknown: { markProviderOperationTransportUnknown: vi.fn() } as unknown as ProviderOperationTransportUnknownUnitOfWork,
       responseArtifactRetention: { policyId: "provider-response", policyVersion: "1" }
     });
@@ -210,6 +211,76 @@ describe("card setup dispatcher", () => {
       actionType: "three_ds_method",
       phase: "method"
     }));
+  });
+
+  it("turns an ArcPay-declared card-setup refusal into one terminal setup failure", async () => {
+    const envelope = cardSetupExecuteEnvelope();
+    const bytes = new TextEncoder().encode(JSON.stringify(envelope));
+    const responseBytes = new TextEncoder().encode(JSON.stringify({
+      payment_id: providerSetupId,
+      status: "declined",
+      decline_code: "do_not_honor"
+    }));
+    const applyTerminalFailure = vi.fn(async () => undefined);
+    const recordCustomerAction = vi.fn(async () => undefined);
+    const dispatcher = createCardSetupExecuteDispatcher({
+      privateObjectStorage: {
+        ...storage(bytes),
+        writeImmutable: vi.fn(async (input) => ({
+          privateObjectKey: `private/${input.artifactId}`,
+          privateObjectVersion: "version-1",
+          envelopeKeyVersion: "key-1",
+          contentType: input.contentType,
+          sha256Digest: input.expectedSha256Digest,
+          byteLength: input.bytes.byteLength
+        }))
+      },
+      artifactRegistry: {
+        registerSealedArtifact: vi.fn(async () => ({
+          artifactId: `arc-card-setup-response:${providerOperationIntentId}`,
+          sha256Digest: digest(responseBytes),
+          byteLength: responseBytes.byteLength
+        }))
+      },
+      transientSecretVault: {
+        consumeArcPayCardTokenizationSecret: vi.fn(async () => ({
+          kind: "arc_pay_card_tokenization_secret" as const,
+          providerSetupId,
+          cardTokenId: "80000000-0000-4000-8000-000000000008",
+          browserInfo: browserInfo()
+        }))
+      } as unknown as FinanceTransientSecretVaultPort,
+      cardSetupClient: {
+        executeCardSetup: vi.fn(async () => ({
+          providerSetupId,
+          status: "declined" as const,
+          cardTokenId: null,
+          nextAction: null,
+          rawResponseBytes: responseBytes
+        }))
+      } as unknown as ReturnType<typeof import("../arc-pay/arc-pay-card-setup-client").createArcPayCardSetupClient>,
+      customerAction: { recordCustomerAction } as never,
+      failure: { applyTerminalFailure } as never,
+      transportUnknown: { markProviderOperationTransportUnknown: vi.fn() } as unknown as ProviderOperationTransportUnknownUnitOfWork,
+      responseArtifactRetention: { policyId: "provider-response", policyVersion: "1" }
+    });
+
+    await dispatcher.dispatch(executeWorkItem(envelope, bytes));
+
+    expect(applyTerminalFailure).toHaveBeenCalledWith(expect.objectContaining({
+      providerResult: expect.objectContaining({
+        economicPaymentIntentId,
+        providerOperationIntentId,
+        evidence: expect.objectContaining({
+          outcome: "failed",
+          providerPaymentId: null,
+          amountMinor: null,
+          currency: null,
+          providerOperationId: providerSetupId
+        })
+      })
+    }));
+    expect(recordCustomerAction).not.toHaveBeenCalled();
   });
 
   it("uses only sealed Method evidence and a token-free context before persisting a challenge", async () => {
@@ -259,6 +330,7 @@ describe("card setup dispatcher", () => {
       transientSecretVault: { consumeArcPayThreeDsMethodContext } as unknown as FinanceTransientSecretVaultPort,
       cardSetupClient: { completeThreeDsMethod } as unknown as ReturnType<typeof import("../arc-pay/arc-pay-card-setup-client").createArcPayCardSetupClient>,
       customerAction: { recordCustomerAction } as never,
+      failure: { applyTerminalFailure: vi.fn() } as never,
       transportUnknown: { markProviderOperationTransportUnknown: vi.fn() } as unknown as ProviderOperationTransportUnknownUnitOfWork,
       responseArtifactRetention: { policyId: "provider-response", policyVersion: "1" }
     });

@@ -125,6 +125,7 @@ export * from "./ports/saved-card-setup-customer-action-uow";
 export * from "./ports/saved-card-setup-customer-action-reader";
 export * from "./ports/saved-card-setup-three-ds-method-completion-uow";
 export * from "./ports/saved-card-credential-activation-uow";
+export * from "./ports/saved-card-setup-terminal-failure-uow";
 export * from "./ports/saved-card-setup-terminal-reconciliation-reader";
 export * from "./ports/finance-operation-resource-policy-reader";
 export * from "./ports/platform-tariff-credential-activation-uow";
