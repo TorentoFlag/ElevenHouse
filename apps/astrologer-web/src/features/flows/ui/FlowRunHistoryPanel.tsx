@@ -65,7 +65,11 @@ export function FlowRunHistoryPanel({ flowId, locale, classNames }: FlowRunHisto
   };
 
   return (
-    <section className={classNames?.runHistory ?? ""} aria-label={copy.heading}>
+    <section
+      className={classNames?.runHistory ?? ""}
+      data-flow-panel="history"
+      aria-label={copy.heading}
+    >
       <header className={classNames?.runHistoryHeader ?? ""}>
         <div>
           <p className={classNames?.runHistoryEyebrow ?? ""}>{copy.eyebrow}</p>

@@ -291,7 +291,7 @@ export function FlowBuilder({
       className={`${classNames?.page ?? ""} ${classNames?.builderPage ?? ""}`.trim()}
       aria-label={copy.builder}
     >
-      <header className={classNames?.builderHeader ?? ""}>
+      <header className={classNames?.builderHeader ?? ""} aria-label={copy.builderHeader}>
         <button
           className={classNames?.builderBackButton ?? ""}
           type="button"
@@ -313,6 +313,9 @@ export function FlowBuilder({
           </p>
           <h1>{flow.name}</h1>
         </div>
+        <span className={classNames?.builderHeaderStatus ?? ""}>
+          {editable ? (dirty ? copy.unsaved : copy.saved) : copy.readOnly}
+        </span>
         <div className={classNames?.builderActions ?? ""}>
           {hasActiveManualClientTrigger ? (
             <button
@@ -374,9 +377,6 @@ export function FlowBuilder({
         </div>
       </header>
 
-      <div className={classNames?.builderSaveState ?? ""} role="status">
-        {editable ? (dirty ? copy.unsaved : copy.saved) : copy.readOnly}
-      </div>
       {exitConfirmationVisible ? (
         <section
           className={classNames?.builderExitConfirmation ?? ""}
@@ -673,6 +673,7 @@ function connectionLabel(
 const builderCopy = {
   ru: {
     builder: "Конструктор воронки",
+    builderHeader: "Заголовок конструктора воронки",
     allFlows: "Все воронки",
     revision: "редакция",
     version: "версия",
@@ -707,6 +708,7 @@ const builderCopy = {
   },
   en: {
     builder: "Flow builder",
+    builderHeader: "Flow editor header",
     allFlows: "All flows",
     revision: "revision",
     version: "version",

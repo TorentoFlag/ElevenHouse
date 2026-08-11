@@ -86,6 +86,43 @@ describe("FlowBuilder", () => {
     expect(screen.getByLabelText("Название узла")).toBeTruthy();
   });
 
+  it("keeps normal draft state in the compact builder header while alerts remain separate", () => {
+    renderBuilder({
+      revisionConflict: {
+        operation: "save",
+        expectedRevision: 4,
+        currentRevision: 7
+      }
+    });
+
+    const header = screen.getByRole("banner", { name: "Заголовок конструктора воронки" });
+    expect(header.textContent).toContain("Изменения сохранены");
+    expect(screen.queryByRole("status")).toBeNull();
+
+    const conflict = screen.getByRole("alert");
+    expect(header.contains(conflict)).toBe(false);
+    expect(conflict.textContent).toContain("редакция 7");
+  });
+
+  it("renders compact categorical palette rows without changing disabled rules", () => {
+    renderBuilder();
+
+    const message = screen.getByRole("button", { name: "Добавить узел: Отправить сообщение" });
+    expect(message.querySelector("[data-flow-palette-icon]")).not.toBeNull();
+    expect(message.querySelector("[data-flow-palette-title]")?.textContent).toContain(
+      "Отправить сообщение"
+    );
+    expect(message.querySelector("[data-flow-palette-subtitle]")?.textContent).toContain(
+      "Отправить текст в единственный подходящий подключённый диалог клиента"
+    );
+
+    cleanup();
+    renderBuilder({ flow: activeManualVersion() });
+    expect(
+      screen.getByRole("button", { name: "Добавить узел: Отправить сообщение" })
+    ).toHaveProperty("disabled", true);
+  });
+
   it("keeps edits local and saves graph plus presentation with optimistic revision", () => {
     const onSaveDraft = vi.fn();
     renderBuilder({ onSaveDraft });

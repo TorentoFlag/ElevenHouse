@@ -1,5 +1,6 @@
 import type { FlowGraphV2, FlowNodeV2 } from "@elevenhouse/contracts";
-import { flowNodeKindLabel } from "../model/flowDisplay";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { getFlowNodeVisual } from "./flowsVisualModel";
 
 export type FlowBuilderInspectorProps = {
   readonly graph: FlowGraphV2;
@@ -26,16 +27,21 @@ export function FlowBuilderInspector({
 
   const incomingCount = graph.edges.filter((edge) => edge.targetNodeId === selectedNode.id).length;
   const outgoingCount = graph.edges.filter((edge) => edge.sourceNodeId === selectedNode.id).length;
+  const visual = getFlowNodeVisual(selectedNode.kind, locale);
 
   return (
     <div className={classNames?.builderInspectorSection ?? ""} aria-label={copy.settings}>
       <div className={classNames?.builderInspectorHeader ?? ""}>
-        <span className={classNames?.builderInspectorIcon ?? ""} aria-hidden="true">
-          {nodeInitial[selectedNode.kind]}
+        <span
+          className={classNames?.builderInspectorIcon ?? ""}
+          data-flow-node-tone={visual.tone}
+          aria-hidden="true"
+        >
+          <Icon iconName={visual.iconName} size={18} />
         </span>
         <div>
           <p className={classNames?.builderInspectorCategory ?? ""}>
-            {flowNodeKindLabel(selectedNode.kind, locale)}
+            {visual.label}
           </p>
           <h2>{selectedNode.displayTitle}</h2>
           <p className={classNames?.builderInspectorId ?? ""}>id: {selectedNode.id}</p>
@@ -408,20 +414,6 @@ function pluralRu(value: number, one: string, few: string, many: string): string
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
   return many;
 }
-
-const nodeInitial = {
-  booking_confirmed: "B",
-  manual_client: "M",
-  birth_data_available: "?",
-  natal_chart_request: "N",
-  natal_chart_ai_draft: "AI",
-  send_message: "✉",
-  astrologer_work_item: "T",
-  astrologer_approval: "A",
-  completed: "✓",
-  suppressed: "S",
-  failed: "!"
-} satisfies Record<FlowNodeV2["kind"], string>;
 
 const inspectorCopy = {
   ru: {
