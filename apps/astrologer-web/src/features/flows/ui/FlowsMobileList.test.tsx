@@ -19,6 +19,7 @@ const flow = {
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
+  graphNodeKinds: ["booking_confirmed", "birth_data_available", "completed"],
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: inactiveEnrollment()
 } satisfies FlowDefinitionSummary;
@@ -33,6 +34,8 @@ describe("FlowsMobileList", () => {
     expect(screen.getByText("Воронок: 1")).toBeTruthy();
     expect(screen.getByText("Редакция 2")).toBeTruthy();
     expect(screen.getByText("Схема V2")).toBeTruthy();
+    expect(screen.getByTitle("Запись подтверждена").getAttribute("data-tone")).toBe("trigger");
+    expect(screen.getByTitle("Данные рождения").getAttribute("data-tone")).toBe("logic");
     expect(screen.queryByText("Конверсия")).toBeNull();
     const createButton = screen.getByRole("button", { name: "Новая воронка" });
     expect(createButton.textContent).toContain("Новая воронка");

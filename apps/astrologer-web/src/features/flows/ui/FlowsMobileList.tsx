@@ -2,6 +2,7 @@ import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { summarizeFlowDefinitions } from "../model/flowDisplay";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
+import { FlowGraphPreview } from "./FlowGraphPreview";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
 export type FlowsMobileListProps = {
@@ -77,6 +78,19 @@ export function FlowsMobileList({
       ) : null}
       {cards.map(({ card, automation }) => (
         <article key={card.id} className={className("mobileCard")}>
+          {card.graphNodeKinds.length > 0 ? (
+            <div className={className("mobileGraphPreview")} aria-label={copy.graphPreview}>
+              <FlowGraphPreview
+                nodeKinds={card.graphNodeKinds}
+                locale={locale}
+                classNames={{
+                  node: className("graphNode"),
+                  connector: className("graphConnector"),
+                  overflow: className("graphOverflow")
+                }}
+              />
+            </div>
+          ) : null}
           <div className={className("mobileTitleRow")}>
             <div>
               <h2 className={className("mobileTitle")}>{card.title}</h2>
@@ -162,6 +176,7 @@ const mobileCopy = {
     active: "активны",
     create: "Новая воронка",
     open: "Открыть схему",
+    graphPreview: "Предпросмотр схемы",
     schema: "Схема",
     revision: "Редакция",
     version: "Версия",
@@ -173,6 +188,7 @@ const mobileCopy = {
     active: "active",
     create: "New flow",
     open: "Open flow",
+    graphPreview: "Graph preview",
     schema: "Graph",
     revision: "Revision",
     version: "Version",

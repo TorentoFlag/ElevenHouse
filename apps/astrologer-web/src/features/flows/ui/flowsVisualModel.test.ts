@@ -62,30 +62,33 @@ describe("flows visual model", () => {
   });
 
   it("defines an explicit visual tone and localized label for every supported node kind", () => {
-    const expectedTones = {
-      booking_confirmed: "trigger",
-      manual_client: "trigger",
-      birth_data_available: "logic",
-      natal_chart_request: "chartAi",
-      natal_chart_ai_draft: "chartAi",
-      send_message: "communication",
-      astrologer_work_item: "human",
-      astrologer_approval: "human",
-      completed: "result",
-      suppressed: "result",
-      failed: "error"
-    } as const satisfies Record<FlowNodeKindV2, FlowVisualTone>;
+    const expectedVisuals = {
+      booking_confirmed: ["trigger", "Запись подтверждена", "Booking confirmed"],
+      manual_client: ["trigger", "Клиент выбран", "Client selected"],
+      birth_data_available: ["logic", "Данные рождения", "Birth data"],
+      natal_chart_request: ["chartAi", "Натальная карта", "Natal chart"],
+      natal_chart_ai_draft: ["chartAi", "AI-черновик", "AI draft"],
+      send_message: ["communication", "Сообщение", "Message"],
+      astrologer_work_item: ["human", "Задача астрологу", "Astrologer task"],
+      astrologer_approval: ["human", "Подтверждение", "Approval"],
+      completed: ["result", "Завершено", "Completed"],
+      suppressed: ["result", "Пропущено", "Suppressed"],
+      failed: ["error", "Ошибка", "Failed"]
+    } as const satisfies Record<
+      FlowNodeKindV2,
+      readonly [FlowVisualTone, string, string]
+    >;
 
     expect(
       Object.fromEntries(
-        Object.keys(expectedTones).map((kind) => [
-          kind,
-          getFlowNodeVisual(kind as FlowNodeKindV2, "ru").tone
-        ])
+        Object.keys(expectedVisuals).map((kindValue) => {
+          const kind = kindValue as FlowNodeKindV2;
+          const russian = getFlowNodeVisual(kind, "ru");
+          const english = getFlowNodeVisual(kind, "en");
+          return [kind, [russian.tone, russian.label, english.label]];
+        })
       )
-    ).toEqual(expectedTones);
-    expect(getFlowNodeVisual("booking_confirmed", "ru").label).toBe("Запись подтверждена");
-    expect(getFlowNodeVisual("booking_confirmed", "en").label).toBe("Booking confirmed");
+    ).toEqual(expectedVisuals);
   });
 
 });
