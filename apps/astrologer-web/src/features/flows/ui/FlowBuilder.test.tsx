@@ -193,6 +193,24 @@ describe("FlowBuilder", () => {
     });
   });
 
+  it("stores a completed draft viewport interaction with the next explicit save", () => {
+    const onSaveDraft = vi.fn();
+    renderBuilder({ onSaveDraft });
+
+    fireEvent.click(screen.getByRole("button", { name: "Увеличить масштаб" }));
+
+    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(onSaveDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        presentation: expect.objectContaining({
+          viewport: expect.objectContaining({ zoom: expect.any(Number) })
+        })
+      })
+    );
+    expect(onSaveDraft.mock.calls[0]?.[0].presentation.viewport.zoom).not.toBe(1);
+  });
+
   it("adds a node only through the selected free semantic handle", () => {
     renderBuilder();
 

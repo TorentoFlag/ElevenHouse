@@ -578,6 +578,10 @@ export function FlowBuilder({
               setDraftPresentation((current) => moveFlowNodePresentation(current, nodeId, position));
               markDraftDirty();
             }}
+            onChangeViewport={(viewport) => {
+              setDraftPresentation((current) => ({ ...current, viewport }));
+              markDraftDirty();
+            }}
             classNames={classNames}
           />
         ) : null}
