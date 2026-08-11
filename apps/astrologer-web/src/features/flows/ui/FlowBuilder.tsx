@@ -291,7 +291,11 @@ export function FlowBuilder({
       className={`${classNames?.page ?? ""} ${classNames?.builderPage ?? ""}`.trim()}
       aria-label={copy.builder}
     >
-      <header className={classNames?.builderHeader ?? ""} aria-label={copy.builderHeader}>
+      <header
+        className={classNames?.builderHeader ?? ""}
+        role="group"
+        aria-label={copy.builderHeader}
+      >
         <button
           className={classNames?.builderBackButton ?? ""}
           type="button"
@@ -313,7 +317,7 @@ export function FlowBuilder({
           </p>
           <h1>{flow.name}</h1>
         </div>
-        <span className={classNames?.builderHeaderStatus ?? ""}>
+        <span className={classNames?.builderHeaderStatus ?? ""} role="status">
           {editable ? (dirty ? copy.unsaved : copy.saved) : copy.readOnly}
         </span>
         <div className={classNames?.builderActions ?? ""}>

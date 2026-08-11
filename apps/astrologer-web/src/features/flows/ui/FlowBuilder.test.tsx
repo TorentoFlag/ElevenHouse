@@ -86,22 +86,64 @@ describe("FlowBuilder", () => {
     expect(screen.getByLabelText("Название узла")).toBeTruthy();
   });
 
-  it("keeps normal draft state in the compact builder header while alerts remain separate", () => {
+  it("announces saved draft state inside the named compact header group", () => {
     renderBuilder({
+      classNames: { builderSaveState: "legacyBuilderSaveState" }
+    });
+
+    const header = screen.getByRole("group", { name: "Заголовок конструктора воронки" });
+    const status = screen.getByRole("status");
+
+    expect(header.contains(status)).toBe(true);
+    expect(status.textContent).toBe("Изменения сохранены");
+    expect(screen.queryByRole("banner", { name: "Заголовок конструктора воронки" })).toBeNull();
+    expect(document.querySelector(".legacyBuilderSaveState")).toBeNull();
+  });
+
+  it("announces unsaved state after a real draft edit", () => {
+    renderBuilder();
+
+    fireEvent.change(screen.getByLabelText("Название узла"), {
+      target: { value: "Выбрать клиента" }
+    });
+
+    const header = screen.getByRole("group", { name: "Заголовок конструктора воронки" });
+    const status = screen.getByRole("status");
+    expect(header.contains(status)).toBe(true);
+    expect(status.textContent).toBe("Есть несохранённые изменения");
+  });
+
+  it("announces read-only published state and keeps alerts outside the header", () => {
+    renderBuilder({
+      flow: activeManualVersion(),
       revisionConflict: {
         operation: "save",
         expectedRevision: 4,
         currentRevision: 7
-      }
+      },
+      validationIssues: [
+        {
+          code: "missing_required_source_handle",
+          severity: "error",
+          blocking: true,
+          path: "nodes.manual-client.next",
+          message: "Node manual_client requires exactly one next edge."
+        }
+      ],
+      nextDraftError: new Error("Команда создания версии недоступна")
     });
 
-    const header = screen.getByRole("banner", { name: "Заголовок конструктора воронки" });
-    expect(header.textContent).toContain("Изменения сохранены");
-    expect(screen.queryByRole("status")).toBeNull();
+    const header = screen.getByRole("group", { name: "Заголовок конструктора воронки" });
+    const status = screen.getByRole("status");
+    expect(header.contains(status)).toBe(true);
+    expect(status.textContent).toBe("Опубликованная версия доступна только для чтения");
 
-    const conflict = screen.getByRole("alert");
-    expect(header.contains(conflict)).toBe(false);
-    expect(conflict.textContent).toContain("редакция 7");
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(3);
+    expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("редакция 7");
+    expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("Проверка схемы");
+    expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("Команда создания версии недоступна");
+    expect(alerts.every((alert) => !header.contains(alert))).toBe(true);
   });
 
   it("renders compact categorical palette rows without changing disabled rules", () => {
@@ -115,6 +157,13 @@ describe("FlowBuilder", () => {
     expect(message.querySelector("[data-flow-palette-subtitle]")?.textContent).toContain(
       "Отправить текст в единственный подходящий подключённый диалог клиента"
     );
+    expect(message).toHaveProperty("disabled", false);
+
+    cleanup();
+    renderBuilder({ flow: draftWithoutAvailableConnection() });
+    expect(
+      screen.getByRole("button", { name: "Добавить узел: Отправить сообщение" })
+    ).toHaveProperty("disabled", true);
 
     cleanup();
     renderBuilder({ flow: activeManualVersion() });
@@ -467,6 +516,40 @@ function activeManualVersion(): FlowDefinitionDetail {
         activeActivationEpochId: "44444444-4444-4444-8444-444444444444",
         activeSince: "2026-07-28T08:30:00.000Z"
       }
+    }
+  };
+}
+
+function draftWithoutAvailableConnection(): FlowDefinitionDetail {
+  const completedNode = {
+    id: "completed",
+    kind: "completed" as const,
+    displayTitle: "Завершено",
+    configSchemaVersion: 1 as const,
+    executorContractVersion: 1 as const,
+    config: { goalKey: "flow_completed" }
+  };
+
+  return {
+    ...flow,
+    draftGraph: {
+      ...flow.draftGraph,
+      nodes: [...flow.draftGraph.nodes, completedNode],
+      edges: [
+        {
+          id: "manual-client-next",
+          sourceNodeId: "manual-client",
+          sourceHandle: "next",
+          targetNodeId: completedNode.id
+        }
+      ]
+    },
+    draftPresentation: {
+      ...flow.draftPresentation,
+      nodes: [
+        ...flow.draftPresentation.nodes,
+        { nodeId: completedNode.id, position: { x: 360, y: 120 } }
+      ]
     }
   };
 }

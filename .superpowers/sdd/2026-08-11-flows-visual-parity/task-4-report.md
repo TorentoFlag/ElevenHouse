@@ -10,11 +10,12 @@
 
 ## Implemented
 
-- Moved normal saved, unsaved, and read-only status into the named 60 px builder header. Removed the separate normal-layout status row.
+- Kept normal saved, unsaved, and read-only status inside the named builder `<header role="group">`; the compact status is a live `role="status"` announcement. The legacy separate normal-layout status row/class is not rendered.
 - Kept unsaved-exit, mutation, revision-conflict, validation, and server-error rows in document flow.
 - Rendered compact palette rows with a 28 px categorical icon, title, and subtitle. Existing disabled rules are unchanged.
 - Reused `getFlowNodeVisual` for palette and inspector icon/category metadata; no node kind or production contract changed.
-- Retuned the existing three-column builder and translucent panel styling: 244 px palette, 340 px inspector, 14 px header gap, compact palette spacing, and inspector-rhythm run history.
+- Retuned the existing three-column builder and translucent panel styling: a border-box 60 px header with 14 px gap, 244 px palette, 340 px inspector, and `rgba(13, 12, 32, 0.6)` panel backgrounds.
+- Recomposed the existing palette DOM without changing node data or callbacks: the aside has no blanket padding, its heading/hint form a 62 px rhythm, and the scrollable groups body has 12 px side padding. At desktop 1440 px, palette rows target 209 by 51 px; they use a 5 px vertical gap, 11 px radius, and 12.5 px title.
 
 ## Behavioral TDD Evidence
 
@@ -44,15 +45,37 @@
 
    Result: 3 test files / 25 tests passed; astrologer-web typecheck passed; `git diff --check` passed.
 
+3. Review fix RED, before the accessibility correction:
+
+   ```bash
+   pnpm --filter @elevenhouse/astrologer-web exec vitest run src/features/flows/ui/FlowBuilder.test.tsx
+   ```
+
+   Result: 3 expected failures out of 20 tests. The named header still exposed `banner` instead of `group`, and saved, unsaved-after-edit, and published read-only status had no `role="status"` live region.
+
+4. Review fix GREEN, after the correction:
+
+   ```bash
+   pnpm exec vitest run \
+     apps/astrologer-web/src/features/flows/ui/FlowBuilder.test.tsx \
+     apps/astrologer-web/src/features/flows/ui/FlowBuilderInspector.test.tsx \
+     apps/astrologer-web/src/features/flows/ui/FlowRunHistoryPanel.test.tsx \
+     --config vitest.config.ts
+   pnpm --filter @elevenhouse/astrologer-web typecheck
+   git diff --check
+   ```
+
+   Result: 3 test files / 27 tests passed; astrologer-web typecheck passed; `git diff --check` passed. The expanded builder tests assert saved, actual unsaved edit, published read-only, conflict/validation/mutation alert separation, and disabled palette actions for both no source and non-editable active-version states.
+
 ## Visual Evidence
 
 - Reference inspected: `http://localhost:8000/ElevenHouse.html` at desktop `1440x1000`; opened `Воронки` and the `Авто-разбор в записи` builder state.
 - Reference composition verified against `ElevenHouseDesign/app/flow-builder.jsx`: 60 px subheader, 14 px header gap, 244 px palette, canvas, and 340 px inspector.
-- Local production route inspected: `http://localhost:5174/flows` at desktop `1440x1000`. It redirects to `/auth` in the available isolated browser context, so no authenticated flow definition could be opened for a rendered production builder comparison.
+- Authenticated production `/flows` is available in the controller browser context. The implementer’s isolated DevTools context redirects `http://localhost:5174/flows` to `/auth`; that is an isolation-specific limitation, not an overall browser-acceptance blocker.
 
 ## Blocked and Residual Risk
 
-- Blocked: network-backed authenticated `/flows` builder visual comparison, including production console/network, saved/unsaved/read-only states, and responsive interaction. The current browser context has no authenticated astrologer session and redirects to `/auth`.
+- No overall browser-acceptance blocker: the controller browser has authenticated production access. The isolated implementer tab remains unauthenticated and redirects to `/auth`, so it cannot independently repeat the controller's network-backed builder checks.
 - Not run: repository-wide `pnpm verify`; Task 4 affects only the focused astrologer-web UI paths, and the brief requires the focused suites plus typecheck.
 - No mocks, fake data, AI Flow generation, consent flow, node kinds, commands, authorization, CAS behavior, or runtime states were introduced or changed.
 
