@@ -1,6 +1,10 @@
-import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary, FlowNodeKindV2 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
-import { buildFlowGalleryCard } from "./flowsVisualModel";
+import {
+  buildFlowGalleryCard,
+  getFlowNodeVisual,
+  type FlowVisualTone
+} from "./flowsVisualModel";
 
 const flow = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -55,6 +59,33 @@ describe("flows visual model", () => {
       revisionLabel: "Редакция 3",
       publishedVersionLabel: "Не опубликована"
     });
+  });
+
+  it("defines an explicit visual tone and localized label for every supported node kind", () => {
+    const expectedTones = {
+      booking_confirmed: "trigger",
+      manual_client: "trigger",
+      birth_data_available: "logic",
+      natal_chart_request: "chartAi",
+      natal_chart_ai_draft: "chartAi",
+      send_message: "communication",
+      astrologer_work_item: "human",
+      astrologer_approval: "human",
+      completed: "result",
+      suppressed: "result",
+      failed: "error"
+    } as const satisfies Record<FlowNodeKindV2, FlowVisualTone>;
+
+    expect(
+      Object.fromEntries(
+        Object.keys(expectedTones).map((kind) => [
+          kind,
+          getFlowNodeVisual(kind as FlowNodeKindV2, "ru").tone
+        ])
+      )
+    ).toEqual(expectedTones);
+    expect(getFlowNodeVisual("booking_confirmed", "ru").label).toBe("Запись подтверждена");
+    expect(getFlowNodeVisual("booking_confirmed", "en").label).toBe("Booking confirmed");
   });
 
 });

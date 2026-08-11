@@ -1,5 +1,5 @@
-import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
-import type { FlowNodeKindV2 } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary, FlowNodeKindV2 } from "@elevenhouse/contracts";
+import type { IconProps } from "@elevenhouse/design-system/icons/Icon";
 import {
   flowApprovalModeLabel,
   flowAutomationStateLabel,
@@ -19,6 +19,21 @@ export type FlowGalleryCardModel = {
   readonly originLabel: string;
   readonly revisionLabel: string;
   readonly publishedVersionLabel: string;
+};
+
+export type FlowVisualTone =
+  | "trigger"
+  | "communication"
+  | "chartAi"
+  | "logic"
+  | "human"
+  | "result"
+  | "error";
+
+export type FlowNodeVisual = {
+  readonly iconName: IconProps["iconName"];
+  readonly label: string;
+  readonly tone: FlowVisualTone;
 };
 
 export function buildFlowGalleryCard(
@@ -60,23 +75,87 @@ function summarizeGraph(
 }
 
 function graphNodeLabel(kind: FlowNodeKindV2, locale: FlowDisplayLocale): string {
-  const labels = {
-    booking_confirmed: ["Запись подтверждена", "Booking confirmed"],
-    manual_client: ["Клиент выбран", "Client selected"],
-    birth_data_available: ["Данные рождения", "Birth data"],
-    natal_chart_request: ["Натальная карта", "Natal chart"],
-    natal_chart_ai_draft: ["AI-черновик", "AI draft"],
-    send_message: ["Сообщение", "Message"],
-    astrologer_work_item: ["Задача астрологу", "Astrologer task"],
-    astrologer_approval: ["Подтверждение", "Approval"],
-    completed: ["Завершено", "Completed"],
-    suppressed: ["Пропущено", "Suppressed"],
-    failed: ["Ошибка", "Failed"]
-  } as const satisfies Record<FlowNodeKindV2, readonly [string, string]>;
-  return labels[kind][locale === "ru" ? 0 : 1];
+  return getFlowNodeVisual(kind, locale).label;
 }
 
 function originLabel(flow: FlowDefinitionSummary, locale: FlowDisplayLocale): string {
   if (flow.origin.type === "template") return locale === "ru" ? "Из шаблона" : "From template";
   return locale === "ru" ? "С нуля" : "Blank";
 }
+
+export function getFlowNodeVisual(
+  kind: FlowNodeKindV2,
+  locale: FlowDisplayLocale
+): FlowNodeVisual {
+  const visual = flowNodeVisualByKind[kind];
+  return {
+    iconName: visual.iconName,
+    label: visual.labels[locale === "ru" ? 0 : 1],
+    tone: visual.tone
+  };
+}
+
+const flowNodeVisualByKind = {
+  booking_confirmed: {
+    iconName: "calendar",
+    labels: ["Запись подтверждена", "Booking confirmed"],
+    tone: "trigger"
+  },
+  manual_client: {
+    iconName: "users",
+    labels: ["Клиент выбран", "Client selected"],
+    tone: "trigger"
+  },
+  birth_data_available: {
+    iconName: "doc",
+    labels: ["Данные рождения", "Birth data"],
+    tone: "logic"
+  },
+  natal_chart_request: {
+    iconName: "orbit",
+    labels: ["Натальная карта", "Natal chart"],
+    tone: "chartAi"
+  },
+  natal_chart_ai_draft: {
+    iconName: "sparkle",
+    labels: ["AI-черновик", "AI draft"],
+    tone: "chartAi"
+  },
+  send_message: {
+    iconName: "chat",
+    labels: ["Сообщение", "Message"],
+    tone: "communication"
+  },
+  astrologer_work_item: {
+    iconName: "doc",
+    labels: ["Задача астрологу", "Astrologer task"],
+    tone: "human"
+  },
+  astrologer_approval: {
+    iconName: "check",
+    labels: ["Подтверждение", "Approval"],
+    tone: "human"
+  },
+  completed: {
+    iconName: "check",
+    labels: ["Завершено", "Completed"],
+    tone: "result"
+  },
+  suppressed: {
+    iconName: "dots",
+    labels: ["Пропущено", "Suppressed"],
+    tone: "result"
+  },
+  failed: {
+    iconName: "close",
+    labels: ["Ошибка", "Failed"],
+    tone: "error"
+  }
+} as const satisfies Record<
+  FlowNodeKindV2,
+  {
+    readonly iconName: IconProps["iconName"];
+    readonly labels: readonly [string, string];
+    readonly tone: FlowVisualTone;
+  }
+>;
