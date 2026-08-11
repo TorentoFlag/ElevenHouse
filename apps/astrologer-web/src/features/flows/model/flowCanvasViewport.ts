@@ -62,10 +62,28 @@ export function fitFlowCanvasViewport(input: {
   readonly padding: number;
 }): FlowPresentationV1["viewport"] {
   const { container, bounds, padding } = input;
+
+  if (container.width <= 0 || container.height <= 0) {
+    return { ...defaultViewport };
+  }
+  if (
+    !Number.isFinite(container.width) ||
+    !Number.isFinite(container.height) ||
+    !Number.isFinite(bounds.x) ||
+    !Number.isFinite(bounds.y) ||
+    !Number.isFinite(bounds.width) ||
+    !Number.isFinite(bounds.height) ||
+    !Number.isFinite(padding) ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  ) {
+    return { ...defaultViewport };
+  }
+
   const availableWidth = container.width - padding * 2;
   const availableHeight = container.height - padding * 2;
 
-  if (availableWidth <= 0 || availableHeight <= 0 || bounds.width <= 0 || bounds.height <= 0) {
+  if (availableWidth <= 0 || availableHeight <= 0) {
     return { ...defaultViewport };
   }
 

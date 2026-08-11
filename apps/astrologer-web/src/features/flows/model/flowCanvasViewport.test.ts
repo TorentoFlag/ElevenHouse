@@ -29,17 +29,25 @@ describe("flow canvas viewport mathematics", () => {
     });
   });
 
+  it("keeps the graph point under the cursor from a non-unit initial zoom", () => {
+    expect(zoomFlowCanvasAtPoint({ x: 30, y: -10, zoom: 0.5 }, 1.25, { x: 130, y: 90 })).toEqual({
+      x: -120,
+      y: -160,
+      zoom: 1.25
+    });
+  });
+
   it("fits padded graph bounds in the container and centers them", () => {
     expect(
       fitFlowCanvasViewport({
         container: { width: 800, height: 600 },
-        bounds: { x: 100, y: 50, width: 400, height: 200 },
-        padding: 40
+        bounds: { x: 100, y: 80, width: 500, height: 400 },
+        padding: 50
       })
     ).toEqual({
-      x: -80,
-      y: 60,
-      zoom: 1.6
+      x: -37.5,
+      y: -50,
+      zoom: 1.25
     });
   });
 
@@ -48,6 +56,40 @@ describe("flow canvas viewport mathematics", () => {
       fitFlowCanvasViewport({
         container: { width: 0, height: 600 },
         bounds: { x: 100, y: 50, width: 400, height: 200 },
+        padding: -40
+      })
+    ).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+
+  it("falls back to the default viewport for zero-size graph bounds", () => {
+    expect(
+      fitFlowCanvasViewport({
+        container: { width: 800, height: 600 },
+        bounds: { x: 100, y: 50, width: 0, height: 200 },
+        padding: 40
+      })
+    ).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(
+      fitFlowCanvasViewport({
+        container: { width: 800, height: 600 },
+        bounds: { x: 100, y: 50, width: 400, height: 0 },
+        padding: 40
+      })
+    ).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+
+  it("falls back to the default viewport for non-finite fit input", () => {
+    expect(
+      fitFlowCanvasViewport({
+        container: { width: 800, height: 600 },
+        bounds: { x: 100, y: 50, width: 400, height: 200 },
+        padding: Number.NaN
+      })
+    ).toEqual({ x: 0, y: 0, zoom: 1 });
+    expect(
+      fitFlowCanvasViewport({
+        container: { width: 800, height: 600 },
+        bounds: { x: Number.POSITIVE_INFINITY, y: 50, width: 400, height: 200 },
         padding: 40
       })
     ).toEqual({ x: 0, y: 0, zoom: 1 });
