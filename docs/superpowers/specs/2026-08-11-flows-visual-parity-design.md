@@ -88,8 +88,8 @@ global app shell or unrelated modules.
 
 ### Visual Model
 
-`flowsVisualModel` will map real Flow node kinds and lifecycle states into
-stable presentation categories:
+The existing `flowsVisualModel` will be extended to map real Flow node kinds
+and lifecycle states into stable presentation categories:
 
 - trigger;
 - communication/action;
@@ -126,8 +126,8 @@ typography, template card rhythm, icon treatment, and responsive behavior.
 
 Only server-provided and production-supported templates are displayed. Product
 eligibility remains explicit. Blank creation remains available according to the
-existing API. The reference AI prompt block is excluded until a real backend
-capability, contract, authorization policy, and observable failure path exist.
+existing API. The reference AI prompt block is excluded because the product has
+no production AI Flow-generation capability.
 
 ### Builder Header
 
@@ -247,7 +247,7 @@ matrix.
   composition;
 - canvas tests for pan, zoom, fit, drag, persisted presentation updates, and
   prohibition of published graph mutation;
-- existing Flow API, page, enrollment, runtime, approval, and work-item tests;
+- affected Flow model, component, page, and API-client tests;
 - lint, typecheck, and affected application build.
 
 ### Browser Evidence
