@@ -78,6 +78,13 @@ export function FlowsMobileList({
       ) : null}
       {cards.map(({ card, automation }) => (
         <article key={card.id} className={className("mobileCard")}>
+          <button
+            className={className("mobileCardOpenButton")}
+            type="button"
+            aria-label={copy.open}
+            onClick={() => onOpenFlow?.(card.id)}
+            disabled={!onOpenFlow}
+          />
           {card.graphNodeKinds.length > 0 ? (
             <div className={className("mobileGraphPreview")} aria-label={copy.graphPreview}>
               <FlowGraphPreview
@@ -91,13 +98,33 @@ export function FlowsMobileList({
               />
             </div>
           ) : null}
-          <div className={className("mobileTitleRow")}>
-            <div>
+          <div className={className("cardBody")}>
+            <div className={className("mobileTitleRow")}>
               <h2 className={className("mobileTitle")}>{card.title}</h2>
-              <span className={className("statusChip")}>
-                {automation.statusLabel ?? card.automationStatusLabel}
-              </span>
+              <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
             </div>
+            {card.graphSummary ? (
+              <p className={className("graphSummary")}>{card.graphSummary}</p>
+            ) : null}
+          </div>
+          <footer className={className("cardFooter")}>
+            <dl className={className("mobileMetrics")}>
+              <MobileMetric
+                classNames={classNames}
+                label={copy.state}
+                value={card.definitionStateLabel}
+              />
+              <MobileMetric
+                classNames={classNames}
+                label={copy.revision}
+                value={card.revisionLabel}
+              />
+              <MobileMetric
+                classNames={classNames}
+                label={copy.version}
+                value={card.publishedVersionLabel}
+              />
+            </dl>
             <button
               className={className("automationToggle")}
               type="button"
@@ -112,40 +139,12 @@ export function FlowsMobileList({
                 }
               }}
             >
-              <span aria-hidden="true" />
+              <span className={className("automationToggleKnob")} aria-hidden="true" />
+              <span className={className("automationToggleLabel")}>
+                {card.automationControlLabel}
+              </span>
             </button>
-          </div>
-          <dl className={className("mobileMetrics")}>
-            <MobileMetric
-              classNames={classNames}
-              label={copy.schema}
-              value={card.graphSchemaLabel}
-            />
-            <MobileMetric
-              classNames={classNames}
-              label={copy.revision}
-              value={card.revisionLabel}
-            />
-            <MobileMetric
-              classNames={classNames}
-              label={copy.version}
-              value={card.publishedVersionLabel}
-            />
-            <MobileMetric
-              classNames={classNames}
-              label={copy.state}
-              value={card.definitionStateLabel}
-            />
-          </dl>
-          <button
-            className={className("mobileOpenButton")}
-            type="button"
-            onClick={() => onOpenFlow?.(card.id)}
-            disabled={!onOpenFlow}
-          >
-            <Icon iconName="flow" width={15} height={15} aria-hidden="true" />
-            {copy.open}
-          </button>
+          </footer>
         </article>
       ))}
     </div>
@@ -164,7 +163,9 @@ function MobileMetric({
   return (
     <div className={classNames?.metric ?? ""}>
       <dt>{label}</dt>
-      <dd className={classNames?.metricValue ?? ""}>{value}</dd>
+      <dd className={classNames?.metricValue ?? ""} title={value}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -177,7 +178,6 @@ const mobileCopy = {
     create: "Новая воронка",
     open: "Открыть схему",
     graphPreview: "Предпросмотр схемы",
-    schema: "Схема",
     revision: "Редакция",
     version: "Версия",
     state: "Состояние"
@@ -189,7 +189,6 @@ const mobileCopy = {
     create: "New flow",
     open: "Open flow",
     graphPreview: "Graph preview",
-    schema: "Graph",
     revision: "Revision",
     version: "Version",
     state: "State"

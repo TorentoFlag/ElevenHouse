@@ -70,12 +70,13 @@ export function FlowGallery({
         {cards.map(({ card, automation }) => (
           <article key={card.id} className={className("flowCard")}>
             <button
-              className={className("graphPreview")}
+              className={className("cardOpenButton")}
               type="button"
               aria-label={`${copy.open}: ${card.title}`}
               onClick={() => onOpenFlow?.(card.id)}
               disabled={!onOpenFlow}
-            >
+            />
+            <div className={className("graphPreview")}>
               {card.graphNodeKinds.length > 0 ? (
                 <FlowGraphPreview
                   nodeKinds={card.graphNodeKinds}
@@ -92,15 +93,10 @@ export function FlowGallery({
                   <span className={className("graphNode")}>{card.originLabel}</span>
                 </>
               )}
-            </button>
+            </div>
             <div className={className("cardBody")}>
               <div className={className("cardHeading")}>
                 <h2 className={className("cardTitle")}>{card.title}</h2>
-              </div>
-              <div className={className("chipRow")}>
-                <span className={className("statusChip")}>
-                  {automation.statusLabel ?? card.automationStatusLabel}
-                </span>
                 <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
               </div>
               {card.graphSummary ? (
@@ -113,11 +109,6 @@ export function FlowGallery({
                   classNames={classNames}
                   label={copy.definition}
                   value={card.definitionStateLabel}
-                />
-                <Metric
-                  classNames={classNames}
-                  label={copy.runtime}
-                  value={automation.statusLabel ?? card.automationStatusLabel}
                 />
                 <Metric classNames={classNames} label={copy.revision} value={card.revisionLabel} />
                 <Metric
@@ -135,6 +126,9 @@ export function FlowGallery({
                   }
                 }}
                 className={className("automationToggle")}
+                labelClassName={className("automationToggleLabel")}
+                knobClassName={className("automationToggleKnob")}
+                statusLabel={card.automationControlLabel}
               />
             </footer>
           </article>
@@ -160,12 +154,18 @@ function AutomationToggle({
   automation,
   disabled,
   onToggle,
-  className
+  className,
+  labelClassName,
+  knobClassName,
+  statusLabel
 }: {
   readonly automation: ReturnType<typeof buildFlowAutomationControl>;
   readonly disabled: boolean;
   readonly onToggle: () => void;
   readonly className: string;
+  readonly labelClassName: string;
+  readonly knobClassName: string;
+  readonly statusLabel: string;
 }) {
   return (
     <button
@@ -180,7 +180,8 @@ function AutomationToggle({
         if (automation.canToggle) onToggle();
       }}
     >
-      <span aria-hidden="true" />
+      <span className={knobClassName} aria-hidden="true" />
+      <span className={labelClassName}>{statusLabel}</span>
     </button>
   );
 }
@@ -197,7 +198,9 @@ function Metric({
   return (
     <div className={classNames?.metric ?? ""}>
       <dt>{label}</dt>
-      <dd className={classNames?.metricValue ?? ""}>{value}</dd>
+      <dd className={classNames?.metricValue ?? ""} title={value}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -209,7 +212,6 @@ const galleryCopy = {
     open: "Открыть схему",
     createHint: "С нуля или из доступного сценария",
     definition: "Состояние",
-    runtime: "Исполнение",
     revision: "Редакция",
     version: "Версия"
   },
@@ -219,7 +221,6 @@ const galleryCopy = {
     open: "Open flow",
     createHint: "Start blank or use an available template",
     definition: "Definition",
-    runtime: "Runtime",
     revision: "Revision",
     version: "Version"
   }

@@ -33,7 +33,7 @@ describe("FlowsMobileList", () => {
 
     expect(screen.getByText("Воронок: 1")).toBeTruthy();
     expect(screen.getByText("Редакция 2")).toBeTruthy();
-    expect(screen.getByText("Схема V2")).toBeTruthy();
+    expect(screen.queryByText("Схема V2")).toBeNull();
     expect(screen.getByTitle("Запись подтверждена").getAttribute("data-tone")).toBe("trigger");
     expect(screen.getByTitle("Данные рождения").getAttribute("data-tone")).toBe("logic");
     expect(screen.queryByText("Конверсия")).toBeNull();
@@ -69,8 +69,11 @@ describe("FlowsMobileList", () => {
       name: "Проверить и включить автоматизацию"
     });
     expect(toggle).toHaveProperty("disabled", false);
+    expect(toggle.textContent).toContain("Выкл.");
     fireEvent.click(toggle);
     expect(onAutomationAction).toHaveBeenCalledWith(flow.id, "review_activation");
+    expect(onOpenFlow).toHaveBeenCalledOnce();
+    expect(screen.queryByText("Схема V2")).toBeNull();
   });
 
   it("counts server-authoritative active enrollments without legacy runtime metadata", () => {

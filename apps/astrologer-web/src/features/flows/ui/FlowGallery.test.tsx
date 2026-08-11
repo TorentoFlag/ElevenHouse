@@ -35,7 +35,8 @@ describe("FlowGallery", () => {
     expect(screen.getByTitle("Запись подтверждена")).toBeTruthy();
     expect(screen.getByText("Узлы: Запись подтверждена · Данные рождения · Натальная карта")).toBeTruthy();
     expect(screen.getByText("Редакция 3")).toBeTruthy();
-    expect(screen.getAllByText("Не опубликована")).toHaveLength(3);
+    expect(screen.getAllByText("Не опубликована")).toHaveLength(1);
+    expect(screen.getByRole("switch").textContent).toContain("Черновик");
     expect(screen.queryByText("Конверсия")).toBeNull();
     expect(screen.queryByText("В работе")).toBeNull();
     expect(
@@ -54,6 +55,43 @@ describe("FlowGallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open flow: Подготовка консультации" }));
     expect(onCreateFlow).toHaveBeenCalledOnce();
     expect(onOpenFlow).toHaveBeenCalledWith(flow.id);
+  });
+
+  it("keeps the card open command separate from the automation switch", () => {
+    const onOpenFlow = vi.fn();
+    const onAutomationAction = vi.fn();
+    const publishedFlow = {
+      ...flow,
+      state: "versioned",
+      latestPublishedVersionId: "44444444-4444-4444-8444-444444444444",
+      latestPublishedVersion: 1,
+      publishedAt: "2026-07-30T14:45:00.000Z"
+    } satisfies FlowDefinitionSummary;
+
+    render(
+      <FlowGallery
+        flows={[publishedFlow]}
+        locale="ru"
+        onOpenFlow={onOpenFlow}
+        onAutomationAction={onAutomationAction}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Открыть схему: Подготовка консультации" })
+    );
+    expect(onOpenFlow).toHaveBeenCalledOnce();
+    expect(onAutomationAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("switch", { name: "Проверить и включить автоматизацию" }));
+    expect(onAutomationAction).toHaveBeenCalledWith(flow.id, "review_activation");
+    expect(onOpenFlow).toHaveBeenCalledOnce();
+
+    const toggle = screen.getByRole("switch", {
+      name: "Проверить и включить автоматизацию"
+    });
+    expect(toggle.textContent).toContain("Выкл.");
+    expect(screen.queryByText("Исполнение")).toBeNull();
   });
 
   it("renders the persisted node sequence instead of fabricated funnel metrics", () => {

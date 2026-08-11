@@ -1,7 +1,6 @@
 import type { FlowDefinitionSummary, FlowNodeKindV2 } from "@elevenhouse/contracts";
 import type { IconProps } from "@elevenhouse/design-system/icons/Icon";
 import {
-  flowApprovalModeLabel,
   flowAutomationStateLabel,
   flowDefinitionStateLabel,
   type FlowDisplayLocale
@@ -12,6 +11,7 @@ export type FlowGalleryCardModel = {
   readonly title: string;
   readonly definitionStateLabel: string;
   readonly automationStatusLabel: string;
+  readonly automationControlLabel: string;
   readonly approvalModeLabel: string;
   readonly graphSchemaLabel: string;
   readonly graphNodeKinds: readonly FlowNodeKindV2[];
@@ -45,7 +45,8 @@ export function buildFlowGalleryCard(
     title: flow.name,
     definitionStateLabel: flowDefinitionStateLabel(flow.state, locale),
     automationStatusLabel: flowAutomationStateLabel(flow, locale),
-    approvalModeLabel: flowApprovalModeLabel(flow.approvalMode, locale),
+    automationControlLabel: compactAutomationControlLabel(flow, locale),
+    approvalModeLabel: compactApprovalModeLabel(flow.approvalMode, locale),
     graphSchemaLabel: locale === "ru" ? "Схема V2" : "V2 graph",
     graphNodeKinds: flow.graphNodeKinds ?? [],
     graphSummary: summarizeGraph(flow.graphNodeKinds ?? [], locale),
@@ -60,6 +61,41 @@ export function buildFlowGalleryCard(
           ? `Версия ${flow.latestPublishedVersion}`
           : `Version ${flow.latestPublishedVersion}`,
   };
+}
+
+function compactAutomationControlLabel(
+  flow: FlowDefinitionSummary,
+  locale: FlowDisplayLocale
+): string {
+  const ru = locale === "ru";
+  if (flow.enrollment.control.state === "active") {
+    return flow.enrollment.control.activeVersionId === flow.latestPublishedVersionId
+      ? ru
+        ? "Активна"
+        : "Active"
+      : ru
+        ? "Другая"
+        : "Other";
+  }
+  if (flow.state === "archived") return ru ? "Архив" : "Archived";
+  if (flow.latestPublishedVersionId !== null) return ru ? "Выкл." : "Off";
+  return ru ? "Черновик" : "Draft";
+}
+
+function compactApprovalModeLabel(
+  mode: FlowDefinitionSummary["approvalMode"],
+  locale: FlowDisplayLocale
+): string {
+  const labels = {
+    draft_only: ["Черновик", "Draft"],
+    manual_approve: ["Ручное", "Manual"],
+    auto_internal: ["Авто", "Auto"],
+    auto_send: ["Автодоставка", "Auto-send"]
+  } as const satisfies Record<
+    FlowDefinitionSummary["approvalMode"],
+    readonly [string, string]
+  >;
+  return labels[mode][locale === "ru" ? 0 : 1];
 }
 
 function summarizeGraph(
