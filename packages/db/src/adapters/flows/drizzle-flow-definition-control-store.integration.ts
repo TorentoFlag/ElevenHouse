@@ -569,9 +569,9 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
   ): Promise<string> {
     const result = await runtime.pool.query<{ id: string }>(
       `insert into flows
-        (owner_user_id, name, status, definition_state, approval_mode, revision,
+        (owner_user_id, name, definition_state, approval_mode, revision,
          origin, draft_graph, draft_presentation, created_at, updated_at)
-       values ($1, 'Подготовка', 'draft', 'draft', 'manual_approve', 1,
+       values ($1, 'Подготовка', 'draft', 'manual_approve', 1,
          $2, $3, $4, '2026-08-02T19:00:00.000Z', '2026-08-02T19:00:00.000Z')
        returning id`,
       [

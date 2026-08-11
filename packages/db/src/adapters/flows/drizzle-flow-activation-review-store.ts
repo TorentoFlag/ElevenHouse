@@ -2,8 +2,7 @@ import {
   flowActivationReviewResponseSchema,
   type FlowActivationBlocker,
   type FlowActivationReviewResponse,
-  type FlowEnrollmentState,
-  type FlowStatus
+  type FlowEnrollmentState
 } from "@elevenhouse/contracts";
 import {
   FlowEnrollmentAuthorityIntegrityError,
@@ -36,7 +35,6 @@ export function createDrizzleFlowActivationReviewStore(
               ownerUserId: flows.ownerUserId,
               definitionState: flows.definitionState,
               definitionRevision: flows.revision,
-              legacyRuntimeStatus: flows.status,
               targetId: flowVersions.id,
               targetOwnerUserId: flowVersions.ownerUserId,
               targetGraphSchemaVersion: flowVersions.graphSchemaVersion,
@@ -135,7 +133,6 @@ function enrollmentSnapshot(row: {
   readonly ownerUserId: string;
   readonly definitionState: string;
   readonly definitionRevision: number;
-  readonly legacyRuntimeStatus: string;
   readonly ownerSubjectId: string | null;
   readonly controlFlowId: string | null;
   readonly controlOwnerUserId: string | null;
@@ -162,7 +159,6 @@ function enrollmentSnapshot(row: {
       ownerUserId: row.ownerUserId,
       definitionState: row.definitionState as FlowEnrollmentAuthoritySnapshot["definitionState"],
       definitionRevision: row.definitionRevision,
-      legacyRuntimeStatus: row.legacyRuntimeStatus as FlowStatus,
       enrollmentState: "inactive",
       enrollmentRevision: 0,
       activeVersionId: null,
@@ -189,10 +185,7 @@ function enrollmentSnapshot(row: {
     row.activeVersionId === null &&
     row.activeActivationEpochId === null &&
     row.openEpochId === null;
-  if (
-    (enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent) ||
-    (enrollmentState === "active" && row.legacyRuntimeStatus === "active")
-  ) {
+  if (enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent) {
     throw new FlowEnrollmentAuthorityIntegrityError();
   }
   return {
@@ -200,7 +193,6 @@ function enrollmentSnapshot(row: {
     ownerUserId: row.ownerUserId,
     definitionState: row.definitionState as FlowEnrollmentAuthoritySnapshot["definitionState"],
     definitionRevision: row.definitionRevision,
-    legacyRuntimeStatus: row.legacyRuntimeStatus as FlowStatus,
     enrollmentState,
     enrollmentRevision: row.enrollmentRevision,
     activeVersionId: row.activeVersionId,
@@ -226,9 +218,6 @@ function toReview(
   const localBlockers: FlowActivationBlocker[] = [];
   if (current.definitionState === "archived") {
     localBlockers.push(blocker("FLOW_DEFINITION_ARCHIVED", "definition.state"));
-  }
-  if (current.legacyRuntimeStatus === "active") {
-    localBlockers.push(blocker("FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE", "enrollment.authority"));
   }
   if (current.enrollmentState === "active" && current.activeVersionId === versionId) {
     localBlockers.push(blocker("FLOW_ACTIVATION_ALREADY_ACTIVE", "enrollment.activeVersionId"));

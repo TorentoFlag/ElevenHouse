@@ -71,7 +71,6 @@ export function createDrizzleFlowDefinitionControlStore(
                 ownerUserId: input.command.ownerUserId,
                 name: prepared.value.name,
                 origin: prepared.value.origin,
-                status: "draft",
                 definitionState: "draft",
                 approvalMode: prepared.value.approvalMode,
                 revision: 1,
@@ -154,7 +153,6 @@ export function createDrizzleFlowDefinitionControlStore(
         const [updated] = await transaction
           .update(flows)
           .set({
-            status: "published",
             definitionState: "versioned",
             approvalMode: prepared.value.approvalMode,
             revision: current.revision + 1,
@@ -205,7 +203,6 @@ export function createDrizzleFlowDefinitionControlStore(
         const [updated] = await transaction
           .update(flows)
           .set({
-            status: "draft",
             definitionState: "draft",
             approvalMode: prepared.value.approvalMode,
             revision: prepared.value.revision,

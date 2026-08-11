@@ -219,7 +219,6 @@ export type FlowEnrollmentDetailResponse = z.infer<typeof flowEnrollmentDetailRe
 export const flowEnrollmentActivationBlockerCodeValues = [
   "FLOW_DEFINITION_ARCHIVED",
   "FLOW_ACTIVATION_ALREADY_ACTIVE",
-  "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE",
   "FLOW_RUNTIME_ROLLOUT_DISABLED",
   "FLOW_RUNTIME_OWNER_NOT_IN_CANARY",
   "FLOW_RUNTIME_KILL_SWITCH_ENGAGED",
@@ -384,7 +383,6 @@ export const flowEnrollmentCommandRejectionSchema = z.discriminatedUnion("code",
     })
     .strict(),
   z.object({ code: z.literal("FLOW_DEFINITION_ARCHIVED") }).strict(),
-  z.object({ code: z.literal("FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE") }).strict(),
   z.object({ code: z.literal("FLOW_ACTIVATION_VERSION_UNSUPPORTED") }).strict(),
   z.object({ code: z.literal("FLOW_ACTIVATION_ALREADY_ACTIVE") }).strict(),
   z.object({ code: z.literal("FLOW_ENROLLMENT_NOT_ACTIVE") }).strict(),

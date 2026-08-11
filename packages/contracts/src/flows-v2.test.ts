@@ -832,7 +832,7 @@ describe("flow definition v2 lifecycle contracts", () => {
   });
 });
 
-describe("flow definition v2 create, template and migration contracts", () => {
+describe("flow definition v2 create and template contracts", () => {
   const availableTemplate = {
     schemaVersion: "flow-definition-template.v2",
     key: "manual-consultation-preparation",
@@ -850,13 +850,13 @@ describe("flow definition v2 create, template and migration contracts", () => {
     ...availableTemplate,
     key: "session-prep",
     name: "Подготовка к живой сессии",
-    description: "Legacy-сценарий требует явной миграции и недоступен для создания.",
+    description: "Removed graph state that must not be accepted.",
     availability: "legacy_read_only",
     requiredCapabilities: ["chart_engine"],
     blockerCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
   } as const;
 
-  it("exposes versioned template descriptors without client-owned graphs", () => {
+  it("exposes current template descriptors and rejects removed legacy template states", () => {
     expect(listFlowDefinitionTemplatesV2QuerySchema.parse({ locale: "en" })).toEqual({
       locale: "en"
     });
@@ -868,9 +868,18 @@ describe("flow definition v2 create, template and migration contracts", () => {
         schemaVersion: "flow-definition-template-catalog.v2",
         catalogVersion: 1,
         locale: "ru",
-        templates: [availableTemplate, legacyTemplate]
+        templates: [availableTemplate]
       })
-    ).toMatchObject({ templates: [availableTemplate, legacyTemplate] });
+    ).toMatchObject({ templates: [availableTemplate] });
+    expect(flowDefinitionTemplateDescriptorV2Schema.safeParse(legacyTemplate).success).toBe(false);
+    expect(
+      listFlowDefinitionTemplatesV2ResponseSchema.safeParse({
+        schemaVersion: "flow-definition-template-catalog.v2",
+        catalogVersion: 1,
+        locale: "ru",
+        templates: [legacyTemplate]
+      }).success
+    ).toBe(false);
     expect(
       flowDefinitionTemplateDescriptorV2Schema.safeParse({
         ...availableTemplate,

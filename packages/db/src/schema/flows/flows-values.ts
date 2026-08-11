@@ -1,5 +1,3 @@
-export const flowStatusValues = ["draft", "published", "active", "paused", "archived"] as const;
-
 export const flowDefinitionStateValues = ["draft", "versioned", "archived"] as const;
 
 export const flowDefinitionCommandStateValues = ["processing", "succeeded", "failed"] as const;

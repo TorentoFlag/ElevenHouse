@@ -795,8 +795,7 @@ export type ListFlowDefinitionsV2Response = z.infer<typeof listFlowDefinitionsV2
 
 export const flowDefinitionTemplateAvailabilityValues = [
   "available",
-  "unavailable",
-  "legacy_read_only"
+  "unavailable"
 ] as const;
 export const flowDefinitionTemplateAvailabilitySchema = z.enum(
   flowDefinitionTemplateAvailabilityValues
@@ -806,8 +805,7 @@ export type FlowDefinitionTemplateAvailability = z.infer<
 >;
 
 export const flowDefinitionTemplateBlockerCodeValues = [
-  "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE",
-  "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+  "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE"
 ] as const;
 export const flowDefinitionTemplateBlockerCodeSchema = z.enum(
   flowDefinitionTemplateBlockerCodeValues

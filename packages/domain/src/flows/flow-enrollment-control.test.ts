@@ -36,7 +36,6 @@ const inactiveAuthority: FlowEnrollmentAuthoritySnapshot = {
   ownerUserId: ids.owner,
   definitionState: "versioned",
   definitionRevision: 4,
-  legacyRuntimeStatus: "published",
   enrollmentState: "inactive",
   enrollmentRevision: 0,
   activeVersionId: null,
@@ -158,20 +157,12 @@ describe("Flow enrollment control state machine", () => {
     });
   });
 
-  it("rejects archived, legacy-active, legacy-manifest, already-active and readiness-blocked activation", async () => {
+  it("rejects archived, unsupported-manifest, already-active and readiness-blocked activation", async () => {
     expect(
       await prepareActivation({
         current: { ...inactiveAuthority, definitionState: "archived" }
       })
     ).toMatchObject({ kind: "rejected", response: { body: { code: "FLOW_DEFINITION_ARCHIVED" } } });
-    expect(
-      await prepareActivation({
-        current: { ...inactiveAuthority, legacyRuntimeStatus: "active" }
-      })
-    ).toMatchObject({
-      kind: "rejected",
-      response: { body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" } }
-    });
     expect(
       await prepareActivation({
         target: { ...currentTarget(), manifestSchemaVersion: "flow-capability-manifest.v1" }
@@ -216,26 +207,6 @@ describe("Flow enrollment control state machine", () => {
       kind: "rejected",
       response: { body: { code: "FLOW_ACTIVATION_BLOCKED" } }
     });
-  });
-
-  it("fails closed when legacy and enrollment authorities are both active", async () => {
-    await expect(
-      prepareActivation({
-        current: {
-          ...inactiveAuthority,
-          legacyRuntimeStatus: "active",
-          enrollmentState: "active",
-          enrollmentRevision: 1,
-          activeVersionId: ids.version,
-          activeActivationEpochId: ids.epoch
-        },
-        readiness: transactionalReadiness({ enrollmentRevision: 1 }),
-        request: activationRequest({
-          expectedEnrollmentRevision: 1,
-          expectedActiveVersionId: ids.version
-        })
-      })
-    ).rejects.toMatchObject({ code: "FLOW_ENROLLMENT_AUTHORITY_INTEGRITY_ERROR" });
   });
 
   it("pauses only the exact active epoch and leaves definition revision out of the control CAS", async () => {

@@ -72,7 +72,7 @@ export type FlowBookingEnrollmentCandidate = {
 export type FlowBookingEnrollmentPlan =
   | {
       readonly status: "not_matched";
-      readonly reason: "product_filter";
+      readonly reason: "product_filter" | "trigger_kind";
     }
   | {
       readonly status: "matched";
@@ -294,8 +294,14 @@ export function planBookingConfirmedFlowEnrollment(input: {
     occurredAt < effectiveFrom ||
     (effectiveTo !== null && occurredAt >= effectiveTo) ||
     manifestDigest !== input.candidate.manifestDigest ||
-    !verifyFlowCapabilityManifestForGraph({ graph, capabilityManifest: manifest }).valid ||
-    manifest.triggerMatcher.kind !== "booking_confirmed" ||
+    !verifyFlowCapabilityManifestForGraph({ graph, capabilityManifest: manifest }).valid
+  ) {
+    throw pinnedDefinitionError("the activation epoch is inconsistent with the enrollment event");
+  }
+  if (manifest.triggerMatcher.kind !== "booking_confirmed") {
+    return { status: "not_matched", reason: "trigger_kind" };
+  }
+  if (
     manifest.triggerMatcher.configSchemaVersion !== 1 ||
     manifest.triggerMatcher.matcherContractVersion !== 1 ||
     manifest.triggerMatcher.eventSchemaVersion !== input.event.payloadSchemaVersion

@@ -199,6 +199,52 @@ describe.sequential("Flow booking enrollment Drizzle/PostgreSQL integration", ()
     });
   });
 
+  it("enrolls a booking Flow when a manual-client Flow is also active for the owner", async () => {
+    const fixture = await createFixture({ automationLimit: 2 });
+    const manualGraph = manualClientGraph();
+    const compiledManualGraph = compileFlowGraphV2(manualGraph);
+    const manualCapabilityManifest =
+      compiledManualGraph.capabilityManifest ?? raise("Expected manual client manifest");
+    const manualFlow = await createPublishedFlow({
+      ownerUserId: fixture.ownerUserId,
+      graph: manualGraph,
+      capabilityManifest: manualCapabilityManifest
+    });
+    const activation = await activateFlowVersionEnrollment({
+      store: createDrizzleFlowEnrollmentControlStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      ownerUserId: fixture.ownerUserId,
+      flowId: manualFlow.flowId,
+      idempotencyKey: `activate-manual-flow-${randomUUID()}`,
+      request: {
+        schemaVersion: "flow-activation-command.v1",
+        versionId: manualFlow.versionId,
+        expectedRevision: 1,
+        expectedEnrollmentRevision: 0,
+        expectedActiveVersionId: null
+      }
+    });
+    if (activation.outcome.kind !== "succeeded") raise("Expected manual Flow activation");
+
+    const result = await enrollmentStore(fixture).enrollBookingConfirmed({
+      request: fixture.request,
+      latenessHorizonMs: 7 * 24 * 60 * 60 * 1_000,
+      futureSkewToleranceMs: 5 * 60 * 1_000
+    });
+
+    expect(result).toMatchObject({
+      status: "enrolled",
+      runs: [
+        {
+          flowId: fixture.flowId,
+          flowVersionId: fixture.versionId,
+          activationEpochId: fixture.activationEpochId
+        }
+      ]
+    });
+    expect(result.runs).toHaveLength(1);
+  });
+
   it("persists a manual client enrollment with server-side relationship provenance and exact replay", async () => {
     const fixture = await createFixture({ automationLimit: 2 });
     const graph = manualClientGraph();
@@ -2113,10 +2159,10 @@ async function createPublishedFlow(input: {
   return inTransaction(async (client) => {
     const flow = await client.query<{ id: string }>(
       `INSERT INTO flows (
-         owner_user_id, name, origin, status, definition_state, approval_mode,
+         owner_user_id, name, origin, definition_state, approval_mode,
          revision, draft_graph, created_at, updated_at
        ) VALUES (
-         $1, 'Booking enrollment fixture', $2, 'draft', 'draft', 'manual_approve',
+         $1, 'Booking enrollment fixture', $2, 'draft', 'manual_approve',
          1, $3, transaction_timestamp(), transaction_timestamp()
        ) RETURNING id`,
       [
@@ -2139,7 +2185,7 @@ async function createPublishedFlow(input: {
     const versionId = version.rows[0]?.id ?? raise("Expected version");
     await client.query(
       `UPDATE flows
-          SET status = 'published', definition_state = 'versioned',
+          SET definition_state = 'versioned',
               published_version_id = $2,
               published_at = (SELECT published_at FROM flow_versions WHERE id = $2),
               updated_at = transaction_timestamp()

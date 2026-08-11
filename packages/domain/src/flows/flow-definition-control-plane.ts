@@ -216,7 +216,7 @@ export class FlowDefinitionTemplateNotAvailableError extends Error {
 
   constructor(
     readonly templateKey: string,
-    readonly reasonCode: "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE" | "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+    readonly reasonCode: "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE"
   ) {
     super("Flow template is not available for creation");
     this.name = "FlowDefinitionTemplateNotAvailableError";

@@ -97,7 +97,7 @@ executor or authorize a worker token.
 
 - advances one execution token through one node transition at a time;
 - rejects a token or selected transition target whose kind is an enrollment
-  trigger, even when an immutable V1 manifest lists that trigger entry;
+  trigger, even when its immutable capability manifest lists that trigger entry;
 - chooses exactly one edge for a condition;
 - creates durable wait/approval state instead of pre-completing future work;
 - invokes external behavior only through registered owning-module ports.

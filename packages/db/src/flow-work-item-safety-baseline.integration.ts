@@ -277,6 +277,11 @@ const downgradeFlowRuntimeCommandEventIntegrityDdl = `
 `;
 
 const downgradeFlowWorkItemSafetyDdl = `
+  ALTER TABLE flow_birth_profile_recheck_receipts
+    DROP CONSTRAINT flow_birth_profile_recheck_receipts_work_item_run_owner_fk;
+  ALTER TABLE flow_approvals
+    DROP CONSTRAINT flow_approvals_last_run_event_run_owner_fk,
+    DROP CONSTRAINT flow_approvals_last_command_run_owner_fk;
   ${downgradeFlowRuntimeCommandEventIntegrityDdl}
   DROP TRIGGER "flow_run_events_work_item_consistency" ON flow_run_events;
   DROP TRIGGER "flow_run_event_command_consistency" ON flow_run_events;

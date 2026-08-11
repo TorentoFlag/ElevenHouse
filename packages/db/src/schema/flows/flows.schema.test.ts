@@ -40,7 +40,6 @@ describe("Flows persistence schema", () => {
         "ownerUserId",
         "name",
         "origin",
-        "status",
         "definitionState",
         "approvalMode",
         "revision",
@@ -65,6 +64,7 @@ describe("Flows persistence schema", () => {
         "publishedAt"
       ])
     );
+    expect(Object.keys(getTableColumns(flows))).not.toContain("status");
     expect(getTableName(flowDefinitionCommands)).toBe("flow_definition_commands");
     expect(Object.keys(getTableColumns(flowDefinitionCommands))).toEqual(
       expect.arrayContaining([
@@ -99,7 +99,6 @@ describe("Flows persistence schema", () => {
 
     expect(flowConfig.indexes.map((index) => index.config.name)).toEqual(
       expect.arrayContaining([
-        "flows_owner_status_updated_idx",
         "flows_owner_definition_state_updated_idx",
         "flows_owner_name_idx"
       ])
@@ -123,7 +122,6 @@ describe("Flows persistence schema", () => {
     );
     expect(flowConfig.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
-        "flows_status_check",
         "flows_definition_state_check",
         "flows_revision_check",
         "flows_definition_lifecycle_check",
@@ -635,7 +633,7 @@ describe("Flows persistence schema", () => {
     expect(migration).toContain('CREATE TABLE "flow_birth_profile_recheck_receipts"');
     expect(migration).toContain('CREATE TABLE "flow_definition_commands"');
     expect(migration).toContain('CREATE TABLE "flow_definition_command_outcomes"');
-    expect(migration).toContain("flows_status_check");
+    expect(migration).toContain('ALTER TABLE "flows" DROP COLUMN "status"');
     expect(migration).toContain("flow_versions_flow_version_unique");
     expect(migration).toContain("flow_versions_flow_source_revision_unique");
     expect(migration).toContain("flow_definition_commands_scope_key_unique");

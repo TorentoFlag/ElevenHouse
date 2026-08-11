@@ -2,7 +2,6 @@ export * from "./flow-graph-v2-compiler";
 export * from "./flow-capability-manifest-integrity";
 export * from "./flow-definition-validation";
 export * from "./flow-definition-control-plane";
-export * from "./flow-definition-query";
 export * from "./flow-definition-read";
 export * from "./flow-definition-templates";
 export * from "./flow-eligibility";

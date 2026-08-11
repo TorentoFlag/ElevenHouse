@@ -30,7 +30,7 @@ const workItemSafetyRelations = [
 ] as const;
 
 const currentCatalog = {
-  hash: "a3eb744ce6f2887364fab14cdfc1ba2d677ee07e43c79c9741561d0bef8acb72",
+  hash: "847390b3db0ec1c84367524d8094062807ca55687834389eea7845a455dd24c1",
   relations: 3,
   columns: 50,
   constraints: 35,
@@ -42,7 +42,7 @@ const currentCatalog = {
 } as const satisfies CatalogFingerprint;
 
 const generatedCommandEventPredecessorCatalog = {
-  hash: "5b86692597dc86df2812f929fa577737634f9e7b570a6438528b3670beb340c1",
+  hash: "48132a18ff5c21d4f2f9e6a54f0b291606c029d9ba3e71821cc9707b660c7cc9",
   relations: 3,
   columns: 50,
   constraints: 35,

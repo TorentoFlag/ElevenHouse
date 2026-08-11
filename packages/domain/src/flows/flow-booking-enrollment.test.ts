@@ -169,6 +169,37 @@ describe("booking-confirmed Flow enrollment", () => {
       }
     });
   });
+
+  it("skips an active definition with a different trigger kind", () => {
+    const subject = bookingSubject();
+    const event = normalizeBookingConfirmedFlowEnrollmentEvent({
+      request: enrollmentRequest(subject.id),
+      subject
+    });
+    const graph = manualClientToCompletedGraph();
+    const compiled = compileFlowGraphV2(graph);
+    const capabilityManifest = compiled.capabilityManifest ?? raise("Expected manifest");
+
+    expect(
+      planBookingConfirmedFlowEnrollment({
+        event,
+        candidate: {
+          activationEpochId: "55555555-5555-4555-8555-555555555555",
+          flowId: "66666666-6666-4666-8666-666666666666",
+          flowVersionId: "77777777-7777-4777-8777-777777777777",
+          ownerUserId: subject.ownerUserId,
+          effectiveFrom: "2026-08-01T00:00:00.000Z",
+          effectiveTo: null,
+          rolloutPolicyRevision: 3,
+          manifestDigest: sha256CanonicalJson(
+            capabilityManifest as unknown as CanonicalJson
+          ),
+          graph,
+          capabilityManifest
+        }
+      })
+    ).toEqual({ status: "not_matched", reason: "trigger_kind" });
+  });
 });
 
 function bookingToCompletedGraph(productId: string): FlowGraphV2 {
@@ -196,6 +227,38 @@ function bookingToCompletedGraph(productId: string): FlowGraphV2 {
       {
         id: "trigger-next",
         sourceNodeId: "trigger-booking",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  };
+}
+
+function manualClientToCompletedGraph(): FlowGraphV2 {
+  return {
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "trigger-manual-client",
+        kind: "manual_client",
+        displayTitle: "Client selected manually",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {}
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "prepared" }
+      }
+    ],
+    edges: [
+      {
+        id: "trigger-next",
+        sourceNodeId: "trigger-manual-client",
         targetNodeId: "done",
         sourceHandle: "next"
       }

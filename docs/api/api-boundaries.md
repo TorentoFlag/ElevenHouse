@@ -372,14 +372,7 @@ accepted only when its own transaction re-proves all readiness requirements;
 otherwise it is rejected as `409 FLOW_ACTIVATION_BLOCKED` with explicit
 blockers and creates no epoch.
 
-`POST /flows/:flowId/pause` remains only as a transitional drain for a
-historical `flows.status=active` definition that has no active enrollment
-authority. It serializes on the same flow row as activation, is idempotent after
-the legacy status is paused and returns
-`409 FLOW_LEGACY_PAUSE_NOT_APPLICABLE` if authoritative enrollment is active.
-It is never an alias for `pause-enrollment` and never fabricates an activation
-epoch. Create/edit/publish and read-only history remain available. Simulation
-is not an HTTP surface. `POST /flows/:flowId/manual-runs` is an authenticated,
+Simulation is not an HTTP surface. `POST /flows/:flowId/manual-runs` is an authenticated,
 owner-scoped, CSRF-protected and idempotent command for a `manual_client`
 trigger only. Its body contains only `clientUserId`; PostgreSQL locks and proves
 the existing client--astrologer relationship, resolves the active enrollment
@@ -409,13 +402,14 @@ does not fabricate an attempt. Bounded PostgreSQL lock/statement timeouts roll
 back before authority is acquired and return `503 FLOW_RUNTIME_COMMAND_BUSY`;
 the same idempotency key remains retryable.
 
-Internal event dispatch never enrolls a legacy active flow: it returns the
-terminal disposition
-`execution_unavailable` with a matched-flow count, creates no run/effect and
-lets the outbox relay consume the event with a sanitized ignored-event log.
-This prevents an unbounded payload backlog and prevents stale events from being
-replayed after v2 activation. The durable v2 runtime and activation epochs are
-defined in ADR 0011 and the current Flows production-module spec.
+Internal event dispatch resolves only the authoritative enrollment control and
+its open activation epoch. It returns the terminal disposition
+`execution_unavailable` with a matched-flow count when execution admission is
+not proven, creates no run/effect and lets the outbox relay consume the event
+with a sanitized ignored-event log. This prevents an unbounded payload backlog
+and stale events from being replayed after activation. The durable v2 runtime
+and activation epochs are defined in ADR 0011 and the current Flows
+production-module spec.
 
 Availability, calendar and manual-booking routes are authenticated and owner
 scoped. Availability and calendar reads are side-effect free. Their mutations

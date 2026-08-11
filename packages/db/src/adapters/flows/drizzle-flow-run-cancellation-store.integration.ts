@@ -1139,9 +1139,9 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       const ownerUserId = user.rows[0]?.id ?? raise("Expected owner user id");
       const flow = await client.query<{ id: string }>(
         `insert into flows
-          (owner_user_id, name, origin, status, definition_state, approval_mode,
+          (owner_user_id, name, origin, definition_state, approval_mode,
            revision, draft_graph, draft_presentation, created_at, updated_at)
-         values ($1, 'Cancellation fixture', $2, 'draft', 'draft', 'manual_approve',
+         values ($1, 'Cancellation fixture', $2, 'draft', 'manual_approve',
            1, $3, $4, transaction_timestamp(), transaction_timestamp())
          returning id`,
         [
@@ -1172,7 +1172,7 @@ describe("flow run cancellation store Drizzle/PostgreSQL integration", () => {
       const flowVersionId = version.rows[0]?.id ?? raise("Expected flow version id");
       await client.query(
         `update flows
-            set status = 'published', definition_state = 'versioned',
+            set definition_state = 'versioned',
                 published_version_id = $2,
                 published_at = (
                   select published_at from flow_versions where id = $2 and flow_id = $1

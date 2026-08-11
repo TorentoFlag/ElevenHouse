@@ -9,7 +9,6 @@ import {
   createFlowRuntimeRequirementKeys,
   FlowEnrollmentAuthorityIntegrityError,
   FlowEnrollmentCommandBusyError,
-  FlowDefinitionIntegrityError,
   pauseFlowEnrollment,
   replaceFlowRuntimeRolloutPolicy,
   type FlowRuntimeRolloutPolicy,
@@ -220,10 +219,11 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
         expectedActivationEpochId: activated.outcome.response.body.activationEpoch.id
       }
     });
-    await runtime.pool.query("UPDATE flows SET status = 'active' WHERE id = $1", [fixture.flowId]);
     await expect(
       definitionReadStore.getByOwner({ ownerUserId: fixture.ownerUserId, flowId: fixture.flowId })
-    ).rejects.toBeInstanceOf(FlowDefinitionIntegrityError);
+    ).resolves.toMatchObject({
+      enrollment: { control: { state: "paused" } }
+    });
   });
 
   it("reviews activation in a read-only snapshot with complete command CAS evidence", async () => {
@@ -259,20 +259,6 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
     ).resolves.toBeNull();
     await expect(readReviewWriteCounts(fixture.ownerUserId)).resolves.toEqual(before);
 
-    await runtime.pool.query("UPDATE flows SET status = 'active' WHERE id = $1", [fixture.flowId]);
-    await expect(
-      store.getByOwner({
-        ownerUserId: fixture.ownerUserId,
-        flowId: fixture.flowId,
-        versionId: fixture.versionId
-      })
-    ).resolves.toMatchObject({
-      decision: "blocked",
-      expectedActiveVersionId: null,
-      blockers: expect.arrayContaining([
-        expect.objectContaining({ code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" })
-      ])
-    });
   });
 
   it("blocks review and activation when the persisted manifest does not match its graph", async () => {
@@ -1240,10 +1226,10 @@ async function createPublishedFlow(
   return inTransaction(async (client) => {
     const flow = await client.query<{ id: string }>(
       `INSERT INTO flows (
-         owner_user_id, name, origin, status, definition_state, approval_mode,
+         owner_user_id, name, origin, definition_state, approval_mode,
          revision, draft_graph, draft_presentation, created_at, updated_at
        ) VALUES (
-         $1, 'Enrollment fixture', $2, 'draft', 'draft', 'manual_approve',
+         $1, 'Enrollment fixture', $2, 'draft', 'manual_approve',
          $3, $4, $5, transaction_timestamp(), transaction_timestamp()
        ) RETURNING id`,
       [ownerUserId, origin(), definitionRevision, graph, presentation()]
@@ -1258,7 +1244,7 @@ async function createPublishedFlow(
     });
     await client.query(
       `UPDATE flows
-          SET status = 'published', definition_state = 'versioned',
+          SET definition_state = 'versioned',
               published_version_id = $2,
               published_at = (SELECT published_at FROM flow_versions WHERE id = $2),
               updated_at = transaction_timestamp()

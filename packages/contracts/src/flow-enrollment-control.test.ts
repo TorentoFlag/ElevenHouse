@@ -273,7 +273,6 @@ describe("Flow enrollment control contracts", () => {
   it.each([
     "FLOW_DEFINITION_ARCHIVED",
     "FLOW_ACTIVATION_ALREADY_ACTIVE",
-    "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE",
     "FLOW_RUNTIME_KILL_SWITCH_ENGAGED",
     "FLOW_REQUIRED_CAPABILITY_NOT_READY",
     "FLOW_AUTOMATION_QUOTA_NOT_READY"
@@ -402,11 +401,5 @@ describe("Flow enrollment control contracts", () => {
         }
       })
     ).toMatchObject({ statusCode: 409 });
-    expect(
-      flowEnrollmentCommandRejectionResponseSchema.parse({
-        statusCode: 409,
-        body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" }
-      })
-    ).toEqual({ statusCode: 409, body: { code: "FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE" } });
   });
 });

@@ -30,7 +30,6 @@ const definitionSummarySelection = {
   ownerUserId: flows.ownerUserId,
   name: flows.name,
   origin: flows.origin,
-  runtimeStatus: flows.status,
   definitionState: flows.definitionState,
   approvalMode: flows.approvalMode,
   revision: flows.revision,
@@ -58,7 +57,6 @@ type FlowDefinitionReadRow = {
   readonly ownerUserId: string;
   readonly name: string;
   readonly origin: unknown | null;
-  readonly runtimeStatus: string;
   readonly definitionState: string;
   readonly approvalMode: string;
   readonly revision: number;
@@ -265,7 +263,7 @@ function toDefinitionCommon(
     ownerUserId: row.ownerUserId,
     name: row.name,
     state: row.definitionState,
-    runtimeStatus: row.runtimeStatus,
+    runtimeStatus: deriveRuntimeStatus(row),
     approvalMode: row.approvalMode,
     revision: row.revision,
     draftBaseVersionId: row.draftBaseVersionId,
@@ -279,7 +277,6 @@ function toDefinitionCommon(
 
 function toEnrollmentProjection(row: FlowDefinitionReadRow): FlowDefinitionEnrollmentProjection {
   const control = toEnrollmentControl(row);
-  if (row.runtimeStatus === "active") throw new FlowDefinitionIntegrityError();
   if (control === null) {
     if (row.openEpochId !== null) throw new FlowDefinitionIntegrityError();
     return {
@@ -304,6 +301,22 @@ function toEnrollmentProjection(row: FlowDefinitionReadRow): FlowDefinitionEnrol
     authority: "enrollment_v1",
     control
   };
+}
+
+function deriveRuntimeStatus(row: FlowDefinitionReadRow) {
+  switch (row.definitionState) {
+    case "draft":
+      return "draft";
+    case "archived":
+      return "archived";
+    case "versioned":
+      if (row.enrollmentState === "active") return "active";
+      if (row.enrollmentState === "paused") return "paused";
+      if (row.enrollmentState === null || row.enrollmentState === "inactive") return "published";
+      throw new FlowDefinitionIntegrityError();
+    default:
+      throw new FlowDefinitionIntegrityError();
+  }
 }
 
 function toEnrollmentControl(row: FlowDefinitionReadRow): FlowEnrollmentControl | null {

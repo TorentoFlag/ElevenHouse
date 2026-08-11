@@ -5,7 +5,6 @@ import {
   flowDefinitionStateSchema,
   flowEnrollmentCommandRejectionResponseSchema,
   flowEnrollmentStateSchema,
-  flowStatusSchema,
   pauseFlowEnrollmentResponseSchema,
   pauseFlowEnrollmentRequestSchema,
   type ActivateFlowVersionRequest,
@@ -14,7 +13,6 @@ import {
   type FlowDefinitionState,
   type FlowEnrollmentCommandRejectionResponse,
   type FlowEnrollmentState,
-  type FlowStatus,
   type PauseFlowEnrollmentRequest,
   type PauseFlowEnrollmentResponse
 } from "@elevenhouse/contracts";
@@ -105,7 +103,6 @@ export type FlowEnrollmentAuthoritySnapshot = {
   readonly ownerUserId: string;
   readonly definitionState: FlowDefinitionState;
   readonly definitionRevision: number;
-  readonly legacyRuntimeStatus: FlowStatus;
   readonly enrollmentState: FlowEnrollmentState;
   readonly enrollmentRevision: number;
   readonly activeVersionId: string | null;
@@ -348,9 +345,6 @@ function planFlowActivationTransition(input: {
   if (input.current.definitionState === "archived") {
     return conflict("FLOW_DEFINITION_ARCHIVED");
   }
-  if (input.current.legacyRuntimeStatus === "active") {
-    return conflict("FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE");
-  }
   if (request.versionId !== input.target.id) {
     throw new FlowEnrollmentAuthorityIntegrityError();
   }
@@ -534,7 +528,6 @@ function assertEnrollmentAuthority(
     !current.flowId.trim() ||
     !current.ownerUserId.trim() ||
     !flowDefinitionStateSchema.safeParse(current.definitionState).success ||
-    !flowStatusSchema.safeParse(current.legacyRuntimeStatus).success ||
     !flowEnrollmentStateSchema.safeParse(current.enrollmentState).success ||
     !Number.isSafeInteger(current.definitionRevision) ||
     current.definitionRevision < 1 ||
@@ -542,8 +535,7 @@ function assertEnrollmentAuthority(
     current.enrollmentRevision < 0 ||
     (current.enrollmentState === "inactive" && current.enrollmentRevision !== 0) ||
     (current.enrollmentState !== "inactive" && current.enrollmentRevision === 0) ||
-    (current.enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent) ||
-    (current.legacyRuntimeStatus === "active" && current.enrollmentState === "active")
+    (current.enrollmentState === "active" ? !activeFieldsPresent : !activeFieldsAbsent)
   ) {
     throw new FlowEnrollmentAuthorityIntegrityError();
   }

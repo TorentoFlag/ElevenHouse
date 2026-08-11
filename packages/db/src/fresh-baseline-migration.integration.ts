@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { Client } from "pg";
@@ -27,6 +29,7 @@ const adminClient = integrationDatabaseUrl
 const databaseClient = isolatedDatabaseUrl
   ? new Client({ connectionString: isolatedDatabaseUrl })
   : undefined;
+const migrationCount = readMigrationCount();
 
 describeWithDatabase("fresh generated baseline migration", () => {
   beforeAll(async () => {
@@ -61,7 +64,7 @@ describeWithDatabase("fresh generated baseline migration", () => {
       ) AS exists
     `);
 
-    expect(migrationLedger.rows).toEqual([{ count: "17" }]);
+    expect(migrationLedger.rows).toEqual([{ count: String(migrationCount) }]);
     expect(refundCaseTable.rows).toEqual([{ exists: true }]);
     expect(refundCaseTrigger.rows).toEqual([{ exists: true }]);
   }, 30_000);
@@ -73,6 +76,13 @@ async function runMigrator(): Promise<void> {
     env: { ...process.env, DATABASE_URL: isolatedDatabaseUrl },
     timeout: 30_000
   });
+}
+
+function readMigrationCount(): number {
+  const journalPath = join(process.cwd(), "packages/db/drizzle/meta/_journal.json");
+  const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries?: unknown };
+  if (!Array.isArray(journal.entries)) throw new Error("Migration journal entries are required");
+  return journal.entries.length;
 }
 
 function withDatabaseName(databaseUrl: string, name: string): string {

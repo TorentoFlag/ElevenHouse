@@ -1008,12 +1008,14 @@ export const flowWorkItemSafetyBaselineDdl = `
       api_surface = 'astrologer-api'
       AND route_template IN (
         '/flow-runs/:runId/cancel',
+        '/flow-approvals/:approvalId/decision',
         '/flow-work-items/:workItemId/start',
         '/flow-work-items/:workItemId/snooze',
         '/flow-work-items/:workItemId/complete'
       )
       AND command_scope IN (
         'flows.runtime.cancel.v1',
+        'flows.approvals.decide.v1',
         'flows.work-items.start.v1',
         'flows.work-items.snooze.v1',
         'flows.work-items.complete.v1'
@@ -1022,6 +1024,8 @@ export const flowWorkItemSafetyBaselineDdl = `
         (route_template = '/flow-runs/:runId/cancel'
           AND command_scope = 'flows.runtime.cancel.v1'
           AND flow_run_id = resource_id)
+        OR (route_template = '/flow-approvals/:approvalId/decision'
+          AND command_scope = 'flows.approvals.decide.v1')
         OR (route_template = '/flow-work-items/:workItemId/start'
           AND command_scope = 'flows.work-items.start.v1')
         OR (route_template = '/flow-work-items/:workItemId/snooze'
@@ -1072,7 +1076,7 @@ export const flowWorkItemSafetyBaselineDdl = `
       status IN ('pending', 'in_progress', 'snoozed', 'completed', 'expired', 'canceled')
     ),
     CONSTRAINT flow_work_items_task_kind_check CHECK (
-      task_kind IN ('consultation_preparation')
+      task_kind IN ('consultation_preparation', 'birth_data_collection')
     ),
     CONSTRAINT flow_work_items_priority_check CHECK (
       priority IN ('low', 'normal', 'high', 'urgent')
@@ -1110,7 +1114,7 @@ export const flowWorkItemSafetyBaselineDdl = `
         AND expired_at IS NULL AND canceled_at IS NULL)
       OR (status = 'completed'
         AND started_at IS NOT NULL AND completed_at IS NOT NULL
-        AND completed_by_user_id IS NOT NULL AND snoozed_until IS NULL
+        AND snoozed_until IS NULL
         AND expired_at IS NULL AND canceled_at IS NULL)
       OR (status = 'expired'
         AND expired_at IS NOT NULL AND snoozed_until IS NULL
@@ -1158,6 +1162,9 @@ export const flowWorkItemSafetyBaselineDdl = `
     ON flow_work_items (flow_run_id, created_at, id);
 
   ${flowWorkItemCoreIntegritySql}
+  DROP TRIGGER IF EXISTS "flow_run_event_command_consistency" ON flow_run_events;
+  ${flowRunEventCommandIntegritySql}
+  ${flowWorkItemEventIntegritySql}
 `;
 
 export const flowWorkItemWakeSafetyBaselineDdl = `

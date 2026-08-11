@@ -4,7 +4,6 @@ import {
   createDrizzleFlowActivationReviewStore,
   createDrizzleFlowRuntimeAvailabilityReader,
   createDrizzleFlowDefinitionControlStore,
-  createDrizzleFlowDefinitionQueryStore,
   createDrizzleFlowDefinitionReadStore,
   createDrizzleFlowEnrollmentControlStore,
   createDrizzleFlowEnrollmentQueryStore,
@@ -37,7 +36,6 @@ import {
   FLOW_ACTIVATION_REVIEW_STORE,
   FLOW_APPROVAL_STORE,
   FLOW_DEFINITION_CONTROL_STORE,
-  FLOW_DEFINITION_QUERY_STORE,
   FLOW_DEFINITION_READ_STORE,
   FLOW_ENROLLMENT_CONTROL_STORE,
   FLOW_ENROLLMENT_QUERY_STORE,
@@ -78,12 +76,6 @@ import {
       provide: FLOW_DEFINITION_CONTROL_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleFlowDefinitionControlStore(postgresRuntime.database),
-      inject: [PostgresRuntimeService]
-    },
-    {
-      provide: FLOW_DEFINITION_QUERY_STORE,
-      useFactory: (postgresRuntime: PostgresRuntimeService) =>
-        createDrizzleFlowDefinitionQueryStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

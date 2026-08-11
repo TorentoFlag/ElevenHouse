@@ -33,8 +33,6 @@ const copyByLocale = {
     tariffUnavailable: "Текущий тариф не позволяет создавать воронки.",
     recommended: "Рекомендовано интеграцией",
     capabilityUnavailable: "Необходимые возможности пока недоступны.",
-    legacyReadOnly:
-      "Этот legacy-сценарий доступен только для чтения до миграции в актуальный формат.",
     unavailable: "Этот сценарий пока недоступен для создания.",
     requestedAvailable: (name: string) => `Интеграция рекомендует сценарий «${name}».`,
     requestedUnavailable: (name: string) =>
@@ -56,7 +54,6 @@ const copyByLocale = {
     tariffUnavailable: "Your current plan does not allow creating flows.",
     recommended: "Recommended by integration",
     capabilityUnavailable: "Required capabilities are not available yet.",
-    legacyReadOnly: "This legacy flow is read-only until it is migrated to the current format.",
     unavailable: "This flow is not available for creation yet.",
     requestedAvailable: (name: string) => `The integration recommends the “${name}” flow.`,
     requestedUnavailable: (name: string) =>
@@ -350,9 +347,5 @@ function getBlockerReason(
     return copy.capabilityUnavailable;
   }
 
-  if (template.blockerCode === "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY") {
-    return copy.legacyReadOnly;
-  }
-
-  return template.availability === "legacy_read_only" ? copy.legacyReadOnly : copy.unavailable;
+  return copy.unavailable;
 }

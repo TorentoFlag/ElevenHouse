@@ -189,7 +189,7 @@ CREATE TABLE booking_lifecycle_events (
     FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT booking_lifecycle_events_revision_check CHECK (revision > 0),
   CONSTRAINT booking_lifecycle_events_event_kind_check
-    CHECK (event_kind IN ('confirmed', 'rescheduled', 'cancelled')),
+    CHECK (event_kind IN ('confirmed', 'rescheduled', 'completed', 'cancelled')),
   CONSTRAINT booking_lifecycle_events_actor_check CHECK (
     (actor_kind = 'system' AND actor_user_id IS NULL)
     OR (actor_kind IN ('astrologer', 'client') AND actor_user_id IS NOT NULL)
@@ -219,6 +219,11 @@ CREATE TABLE booking_lifecycle_events (
       AND after_start_at IS NOT NULL AND after_end_at IS NOT NULL AND after_time_zone IS NOT NULL
       AND (before_start_at, before_end_at, before_time_zone)
         IS DISTINCT FROM (after_start_at, after_end_at, after_time_zone))
+    OR (event_kind = 'completed'
+      AND revision > 1
+      AND reason_code IS NULL
+      AND before_start_at IS NOT NULL AND before_end_at IS NOT NULL AND before_time_zone IS NOT NULL
+      AND after_start_at IS NULL AND after_end_at IS NULL AND after_time_zone IS NULL)
     OR (event_kind = 'cancelled'
       AND revision > 1
       AND reason_code IS NOT NULL
@@ -253,9 +258,9 @@ CREATE TABLE flow_booking_lifecycle_heads (
     REFERENCES booking_lifecycle_events(id, booking_id, owner_user_id) ON DELETE RESTRICT,
   CONSTRAINT flow_booking_lifecycle_heads_booking_owner_unique UNIQUE (booking_id, owner_user_id),
   CONSTRAINT flow_booking_lifecycle_heads_revision_check CHECK (applied_revision > 0),
-  CONSTRAINT flow_booking_lifecycle_heads_state_check CHECK (state IN ('confirmed', 'cancelled')),
+  CONSTRAINT flow_booking_lifecycle_heads_state_check CHECK (state IN ('confirmed', 'completed', 'cancelled')),
   CONSTRAINT flow_booking_lifecycle_heads_state_schedule_check CHECK (
-    (state = 'confirmed'
+    (state IN ('confirmed', 'completed')
       AND current_start_at IS NOT NULL AND current_end_at IS NOT NULL
       AND current_start_at < current_end_at
       AND length(trim(current_time_zone)) BETWEEN 1 AND 100)
@@ -291,9 +296,9 @@ CREATE TABLE flow_booking_lifecycle_receipts (
   CONSTRAINT flow_booking_lifecycle_receipts_booking_revision_unique UNIQUE (booking_id, revision),
   CONSTRAINT flow_booking_lifecycle_receipts_revision_check CHECK (revision > 0),
   CONSTRAINT flow_booking_lifecycle_receipts_event_kind_check
-    CHECK (event_kind IN ('confirmed', 'rescheduled', 'cancelled')),
+    CHECK (event_kind IN ('confirmed', 'rescheduled', 'completed', 'cancelled')),
   CONSTRAINT flow_booking_lifecycle_receipts_outcome_check CHECK (
-    outcome IN ('enrolled', 'no_match', 'late_unmatched', 'subject_ineligible', 'suppressed', 'canceled', 'rescheduled')
+    outcome IN ('enrolled', 'no_match', 'late_unmatched', 'subject_ineligible', 'suppressed', 'completed', 'canceled', 'rescheduled')
   ),
   CONSTRAINT flow_booking_lifecycle_receipts_digest_check
     CHECK (canonical_digest ~ '^sha256:[a-f0-9]{64}$'),
@@ -309,6 +314,12 @@ CREATE TABLE flow_booking_lifecycle_receipts (
       AND affected_work_item_count = 0
       AND preserved_completed_work_item_count = 0)
     OR (event_kind = 'rescheduled' AND outcome = 'rescheduled' AND flow_runtime_event_id IS NULL)
+    OR (event_kind = 'completed'
+      AND outcome = 'completed'
+      AND flow_runtime_event_id IS NULL
+      AND affected_run_count = 0
+      AND affected_work_item_count = 0
+      AND preserved_completed_work_item_count = 0)
     OR (event_kind = 'cancelled' AND outcome = 'canceled' AND flow_runtime_event_id IS NULL)
   )
 );

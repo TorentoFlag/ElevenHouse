@@ -19,7 +19,6 @@ import { flowCapabilityManifestSchemaPredicate } from "./flow-capability-manifes
 import {
   flowApprovalModeValues,
   flowDefinitionStateValues,
-  flowStatusValues,
   formatFlowSqlValues
 } from "./flows-values";
 
@@ -39,7 +38,6 @@ export const flows = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     origin: jsonb("origin").$type<FlowDefinitionOriginV1>().notNull(),
-    status: text("status").notNull().default("draft"),
     definitionState: text("definition_state").notNull().default("draft"),
     approvalMode: text("approval_mode").notNull().default("manual_approve"),
     revision: integer("revision").notNull().default(1),
@@ -76,10 +74,6 @@ export const flows = pgTable(
         name: "flows_draft_base_version_owner_fk"
       }).onDelete("restrict"),
       check("flows_name_length_check", sql`length(trim(${table.name})) between 1 and 180`),
-      check(
-        "flows_status_check",
-        sql`${table.status} in ${sql.raw(formatFlowSqlValues(flowStatusValues))}`
-      ),
       check(
         "flows_definition_state_check",
         sql`${table.definitionState} in ${sql.raw(formatFlowSqlValues(flowDefinitionStateValues))}`
@@ -139,7 +133,6 @@ export const flows = pgTable(
         "flows_draft_presentation_object_check",
         sql`${table.draftPresentation} is null or jsonb_typeof(${table.draftPresentation}) = 'object'`
       ),
-      index("flows_owner_status_updated_idx").on(table.ownerUserId, table.status, table.updatedAt),
       index("flows_owner_definition_state_updated_idx").on(
         table.ownerUserId,
         table.definitionState,

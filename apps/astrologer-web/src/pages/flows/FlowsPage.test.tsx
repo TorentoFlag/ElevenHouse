@@ -540,9 +540,9 @@ describe("FlowsPage", () => {
       ...availableTemplate,
       key: "sleeping-client-reactivation",
       name: "Реактивация клиента",
-      availability: "legacy_read_only",
+      availability: "unavailable",
       requiredCapabilities: ["segments", "astro_calendar", "consent", "messaging"],
-      blockerCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
+      blockerCode: "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE"
     };
     mocks.useFlowTemplatesQuery.mockReturnValue({
       data: {

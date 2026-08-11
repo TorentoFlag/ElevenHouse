@@ -174,7 +174,7 @@ async function insertBooking(lifecycleRevision: number, includeRevision: boolean
         ${includeRevision ? "lifecycle_revision," : ""}
         service_start_at, service_end_at, product_title_snapshot,
         duration_minutes_snapshot, delivery_format_snapshot, price_minor_snapshot,
-        currency_snapshot, time_zone_snapshot, policy_snapshot
+        currency_snapshot, time_zone_snapshot, policy_snapshot, client_data_requirements_snapshot
       ) VALUES (
         'c1000000-0000-4000-8000-000000000001',
         'c2000000-0000-4000-8000-000000000001',
@@ -183,7 +183,8 @@ async function insertBooking(lifecycleRevision: number, includeRevision: boolean
         'c5000000-0000-4000-8000-000000000001',
         ${includeRevision ? `${lifecycleRevision},` : ""}
         '2026-08-06T10:00:00Z', '2026-08-06T11:00:00Z', 'Lifecycle fixture',
-        60, 'video', 10000, 'RUB', 'Europe/Moscow', '{}'::jsonb
+        60, 'video', 10000, 'RUB', 'Europe/Moscow', '{}'::jsonb,
+        '{"schemaVersion":"booking-client-data-requirements.v1","executionMode":"live","participantMode":"solo","requiredClientData":[],"methods":[]}'::jsonb
       )
     `);
     await databaseClient.query("COMMIT");
@@ -219,7 +220,7 @@ async function insertCurrentLifecycleHistoryWithCompletedPreservation(): Promise
         id, owner_user_id, client_user_id, product_id, reservation_id, lifecycle_revision,
         service_start_at, service_end_at, product_title_snapshot,
         duration_minutes_snapshot, delivery_format_snapshot, price_minor_snapshot,
-        currency_snapshot, time_zone_snapshot, policy_snapshot
+        currency_snapshot, time_zone_snapshot, policy_snapshot, client_data_requirements_snapshot
       ) VALUES (
         'd1000000-0000-4000-8000-000000000001',
         'd2000000-0000-4000-8000-000000000001',
@@ -227,7 +228,8 @@ async function insertCurrentLifecycleHistoryWithCompletedPreservation(): Promise
         'd4000000-0000-4000-8000-000000000001',
         'd5000000-0000-4000-8000-000000000001', 2,
         '2026-08-07T12:00:00Z', '2026-08-07T13:00:00Z', 'Lifecycle fixture',
-        60, 'video', 10000, 'RUB', 'Europe/Moscow', '{}'::jsonb
+        60, 'video', 10000, 'RUB', 'Europe/Moscow', '{}'::jsonb,
+        '{"schemaVersion":"booking-client-data-requirements.v1","executionMode":"live","participantMode":"solo","requiredClientData":[],"methods":[]}'::jsonb
       );
 
       INSERT INTO booking_lifecycle_events (
@@ -319,6 +321,8 @@ ALTER TABLE flow_booking_lifecycle_receipts
 
 const downgradeLifecycleAuthorityDdl = `
 DROP TRIGGER bookings_lifecycle_history_consistency ON bookings;
+ALTER TABLE finance_online_wallet_hold_release_evidence
+  DROP CONSTRAINT finance_online_wallet_hold_release_evidence_booking_event_fk;
 DROP INDEX flow_run_events_booking_lifecycle_run_unique;
 ALTER TABLE flow_run_events
   DROP CONSTRAINT flow_run_events_booking_lifecycle_event_owner_fk,

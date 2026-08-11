@@ -64,8 +64,6 @@ const blockerCopy = {
   ru: {
     FLOW_DEFINITION_ARCHIVED: "Воронка находится в архиве.",
     FLOW_ACTIVATION_ALREADY_ACTIVE: "Эта версия уже активна.",
-    FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE:
-      "Сначала остановите действующее legacy-исполнение воронки.",
     FLOW_RUNTIME_ROLLOUT_DISABLED: "Запуск автоматизаций отключён политикой развёртывания.",
     FLOW_RUNTIME_OWNER_NOT_IN_CANARY:
       "Аккаунт ещё не включён в текущую группу запуска автоматизаций.",
@@ -88,7 +86,6 @@ const blockerCopy = {
   en: {
     FLOW_DEFINITION_ARCHIVED: "The flow is archived.",
     FLOW_ACTIVATION_ALREADY_ACTIVE: "This version is already active.",
-    FLOW_LEGACY_ACTIVE_REQUIRES_PAUSE: "Pause the current legacy execution first.",
     FLOW_RUNTIME_ROLLOUT_DISABLED: "Automation activation is disabled by rollout policy.",
     FLOW_RUNTIME_OWNER_NOT_IN_CANARY: "The account is not included in the current rollout group.",
     FLOW_RUNTIME_KILL_SWITCH_ENGAGED:

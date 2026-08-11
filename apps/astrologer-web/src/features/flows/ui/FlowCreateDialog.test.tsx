@@ -30,18 +30,8 @@ const unavailableTemplate = {
   blockerCode: "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE"
 } satisfies FlowDefinitionTemplateDescriptorV2;
 
-const legacyTemplate = {
-  ...availableTemplate,
-  key: "session-prep",
-  name: "Подготовка к живой сессии",
-  description: "Подготовить данные клиента и карту к консультации.",
-  availability: "legacy_read_only",
-  requiredCapabilities: ["birth_data", "chart_engine"],
-  blockerCode: "FLOW_TEMPLATE_LEGACY_GRAPH_ONLY"
-} satisfies FlowDefinitionTemplateDescriptorV2;
-
 const defaultProps = {
-  templates: [availableTemplate, unavailableTemplate, legacyTemplate],
+  templates: [availableTemplate, unavailableTemplate],
   locale: "ru",
   open: true,
   pending: false,
@@ -117,28 +107,20 @@ describe("FlowCreateDialog", () => {
     expect(onCreateTemplate).toHaveBeenCalledWith(availableTemplate, {});
   });
 
-  it("keeps unavailable and legacy templates visible, disabled and honestly explained", () => {
+  it("keeps unavailable templates visible, disabled and honestly explained", () => {
     const onCreateTemplate = vi.fn();
     render(<FlowCreateDialog {...defaultProps} onCreateTemplate={onCreateTemplate} />);
 
     const unavailableButton = screen.getByRole("button", {
       name: new RegExp(unavailableTemplate.name)
     });
-    const legacyButton = screen.getByRole("button", { name: new RegExp(legacyTemplate.name) });
 
     expect(unavailableButton).toHaveProperty("disabled", true);
-    expect(legacyButton).toHaveProperty("disabled", true);
     expect(
       within(unavailableButton).getByText("Необходимые возможности пока недоступны.")
     ).toBeTruthy();
-    expect(
-      within(legacyButton).getByText(
-        "Этот legacy-сценарий доступен только для чтения до миграции в актуальный формат."
-      )
-    ).toBeTruthy();
 
     fireEvent.click(unavailableButton);
-    fireEvent.click(legacyButton);
     expect(onCreateTemplate).not.toHaveBeenCalled();
   });
 

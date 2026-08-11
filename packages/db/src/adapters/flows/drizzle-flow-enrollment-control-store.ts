@@ -442,8 +442,7 @@ async function lockEnrollmentAuthority(
       id: flows.id,
       ownerUserId: flows.ownerUserId,
       definitionState: flows.definitionState,
-      revision: flows.revision,
-      legacyRuntimeStatus: flows.status
+      revision: flows.revision
     })
     .from(flows)
     .where(and(eq(flows.id, input.flowId), eq(flows.ownerUserId, input.ownerUserId)))
@@ -479,8 +478,6 @@ async function lockEnrollmentAuthority(
       ownerUserId: flow.ownerUserId,
       definitionState: flow.definitionState as FlowEnrollmentAuthoritySnapshot["definitionState"],
       definitionRevision: flow.revision,
-      legacyRuntimeStatus:
-        flow.legacyRuntimeStatus as FlowEnrollmentAuthoritySnapshot["legacyRuntimeStatus"],
       enrollmentState: control.state as FlowEnrollmentAuthoritySnapshot["enrollmentState"],
       enrollmentRevision: control.enrollmentRevision,
       activeVersionId: control.activeVersionId,
