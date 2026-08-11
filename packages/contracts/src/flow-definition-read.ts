@@ -6,6 +6,7 @@ import {
   flowDefinitionOriginV1Schema,
   flowDefinitionStateSchema,
   flowGraphV2Schema,
+  flowNodeKindV2Schema,
   flowPresentationV1Schema
 } from "./flows-v2";
 
@@ -45,7 +46,9 @@ export const flowDefinitionSummarySchema = z
   .object({
     ...definitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
-    origin: flowDefinitionOriginV1Schema
+    origin: flowDefinitionOriginV1Schema,
+    /** Read-only gallery preview derived from the persisted draft graph. */
+    graphNodeKinds: z.array(flowNodeKindV2Schema).min(1).max(64).optional()
   })
   .strict()
   .superRefine(refineDefinitionRead);

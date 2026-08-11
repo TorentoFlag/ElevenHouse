@@ -19,6 +19,7 @@ const flow = {
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
+  graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: inactiveEnrollment(3)
 } satisfies FlowDefinitionSummary;
@@ -26,12 +27,13 @@ const flow = {
 describe("FlowGallery", () => {
   afterEach(() => cleanup());
 
-  it("renders only server-backed definition facts from a lightweight summary", () => {
+  it("renders only server-backed definition facts and graph preview data", () => {
     render(<FlowGallery flows={[flow]} locale="ru" />);
 
     expect(screen.getByRole("heading", { name: /^Воронки/ })).toBeTruthy();
     expect(screen.getByText("Подготовка консультации")).toBeTruthy();
-    expect(screen.getByText("Схема V2")).toBeTruthy();
+    expect(screen.getByTitle("Запись подтверждена")).toBeTruthy();
+    expect(screen.getByText("Узлы: Запись подтверждена · Данные рождения · Натальная карта")).toBeTruthy();
     expect(screen.getByText("Редакция 3")).toBeTruthy();
     expect(screen.getAllByText("Не опубликована")).toHaveLength(3);
     expect(screen.queryByText("Конверсия")).toBeNull();
@@ -52,6 +54,15 @@ describe("FlowGallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open flow: Подготовка консультации" }));
     expect(onCreateFlow).toHaveBeenCalledOnce();
     expect(onOpenFlow).toHaveBeenCalledWith(flow.id);
+  });
+
+  it("renders the persisted node sequence instead of fabricated funnel metrics", () => {
+    render(<FlowGallery flows={[flow]} locale="en" />);
+
+    expect(screen.getByTitle("Booking confirmed")).toBeTruthy();
+    expect(screen.getByTitle("Birth data")).toBeTruthy();
+    expect(screen.getByTitle("Natal chart")).toBeTruthy();
+    expect(screen.queryByText("Conversion")).toBeNull();
   });
 
   it("keeps the empty state inside the gallery below its stable header", () => {

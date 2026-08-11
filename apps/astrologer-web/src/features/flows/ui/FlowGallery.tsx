@@ -1,4 +1,5 @@
-import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
+import type { FlowDefinitionSummary, FlowNodeKindV2 } from "@elevenhouse/contracts";
+import { Fragment } from "react";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
@@ -75,8 +76,19 @@ export function FlowGallery({
               onClick={() => onOpenFlow?.(card.id)}
               disabled={!onOpenFlow}
             >
-              <span className={className("graphNode")}>{card.graphSchemaLabel}</span>
-              <span className={className("graphNode")}>{card.originLabel}</span>
+              {card.graphNodeKinds.length > 0 ? (
+                <FlowGraphPreview
+                  nodeKinds={card.graphNodeKinds}
+                  locale={locale}
+                  className={className("graphNode")}
+                  connectorClassName={className("graphConnector")}
+                />
+              ) : (
+                <>
+                  <span className={className("graphNode")}>{card.graphSchemaLabel}</span>
+                  <span className={className("graphNode")}>{card.originLabel}</span>
+                </>
+              )}
             </button>
             <div className={className("cardBody")}>
               <div className={className("cardHeading")}>
@@ -88,6 +100,9 @@ export function FlowGallery({
                 </span>
                 <span className={className("approvalChip")}>{card.approvalModeLabel}</span>
               </div>
+              {card.graphSummary ? (
+                <p className={className("graphSummary")}>{card.graphSummary}</p>
+              ) : null}
             </div>
             <footer className={className("cardFooter")}>
               <dl className={className("metrics")}>
@@ -135,6 +150,34 @@ export function FlowGallery({
         </button>
       </div>
     </div>
+  );
+}
+
+function FlowGraphPreview({
+  nodeKinds,
+  locale,
+  className,
+  connectorClassName
+}: {
+  readonly nodeKinds: readonly FlowNodeKindV2[];
+  readonly locale: "ru" | "en";
+  readonly className: string;
+  readonly connectorClassName: string;
+}) {
+  const visibleNodes = nodeKinds.slice(0, 7);
+  const hiddenCount = nodeKinds.length - visibleNodes.length;
+  return (
+    <>
+      {visibleNodes.map((kind, index) => (
+        <Fragment key={`${kind}-${index}`}>
+          <span className={className} title={graphNodeCopy[kind][locale]}>
+            <Icon iconName={graphNodeIcon[kind]} width={15} height={15} aria-hidden="true" />
+          </span>
+          {index < visibleNodes.length - 1 ? <i className={connectorClassName} aria-hidden="true" /> : null}
+        </Fragment>
+      ))}
+      {hiddenCount > 0 ? <span className={className}>+{hiddenCount}</span> : null}
+    </>
   );
 }
 
@@ -206,3 +249,31 @@ const galleryCopy = {
     version: "Version"
   }
 } as const;
+
+const graphNodeIcon = {
+  booking_confirmed: "calendar",
+  manual_client: "users",
+  birth_data_available: "doc",
+  natal_chart_request: "orbit",
+  natal_chart_ai_draft: "sparkle",
+  send_message: "chat",
+  astrologer_work_item: "doc",
+  astrologer_approval: "check",
+  completed: "check",
+  suppressed: "dots",
+  failed: "close"
+} as const satisfies Record<FlowNodeKindV2, Parameters<typeof Icon>[0]["iconName"]>;
+
+const graphNodeCopy = {
+  booking_confirmed: { ru: "Запись подтверждена", en: "Booking confirmed" },
+  manual_client: { ru: "Клиент выбран", en: "Client selected" },
+  birth_data_available: { ru: "Данные рождения", en: "Birth data" },
+  natal_chart_request: { ru: "Натальная карта", en: "Natal chart" },
+  natal_chart_ai_draft: { ru: "AI-черновик", en: "AI draft" },
+  send_message: { ru: "Сообщение", en: "Message" },
+  astrologer_work_item: { ru: "Задача астрологу", en: "Astrologer task" },
+  astrologer_approval: { ru: "Подтверждение", en: "Approval" },
+  completed: { ru: "Завершено", en: "Completed" },
+  suppressed: { ru: "Пропущено", en: "Suppressed" },
+  failed: { ru: "Ошибка", en: "Failed" }
+} as const satisfies Record<FlowNodeKindV2, Record<"ru" | "en", string>>;

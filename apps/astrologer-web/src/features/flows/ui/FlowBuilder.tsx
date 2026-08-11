@@ -108,7 +108,7 @@ export function FlowBuilder({
   const [draftGraph, setDraftGraph] = useState(flow.draftGraph);
   const [draftPresentation, setDraftPresentation] = useState(initialPresentation);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
-    flow.draftGraph.nodes[0]?.id ?? null
+    flow.state === "draft" ? (flow.draftGraph.nodes[0]?.id ?? null) : null
   );
   const [connectionSource, setConnectionSource] = useState<FlowConnectionSource | null>(() =>
     firstAvailableConnection(flow.draftGraph, flow.draftGraph.nodes[0]?.id ?? null)
@@ -201,7 +201,9 @@ export function FlowBuilder({
     setDirty(false);
     setExitConfirmationVisible(false);
     setSelectedNodeId((current) =>
-      current && flow.draftGraph.nodes.some((node) => node.id === current)
+      flow.state !== "draft"
+        ? null
+        : current && flow.draftGraph.nodes.some((node) => node.id === current)
         ? current
         : (flow.draftGraph.nodes[0]?.id ?? null)
     );
@@ -216,7 +218,8 @@ export function FlowBuilder({
     flow.draftGraph,
     flow.draftPresentation,
     flow.id,
-    flow.revision
+    flow.revision,
+    flow.state
   ]);
 
   const selectNode = (nodeId: string) => {
@@ -272,7 +275,7 @@ export function FlowBuilder({
       setObservedServerRevision(null);
       setDirty(false);
       setExitConfirmationVisible(false);
-      setSelectedNodeId(refreshed.draftGraph.nodes[0]?.id ?? null);
+      setSelectedNodeId(refreshed.state === "draft" ? (refreshed.draftGraph.nodes[0]?.id ?? null) : null);
       setConnectionSource(
         firstAvailableConnection(refreshed.draftGraph, refreshed.draftGraph.nodes[0]?.id ?? null)
       );

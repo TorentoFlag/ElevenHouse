@@ -721,7 +721,9 @@ export const flowDefinitionSummaryV2Schema = z
     schemaVersion: z.literal("flow-definition-summary.v2"),
     ...flowDefinitionReadCommonShape,
     graphSchemaVersion: z.literal("flow-graph.v2"),
-    origin: flowDefinitionOriginV1Schema
+    origin: flowDefinitionOriginV1Schema,
+    /** Read-only gallery preview derived from the persisted draft graph. */
+    graphNodeKinds: z.array(flowNodeKindV2Schema).min(1).max(64).optional()
   })
   .strict()
   .superRefine(refineFlowDefinitionReadLifecycle);

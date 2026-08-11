@@ -21,6 +21,7 @@ import {
   flows,
   flowVersions
 } from "../../schema/flows";
+import { orderFlowGraphNodeKindsForRead } from "./flow-graph-read-order";
 
 type FlowTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
 type FlowDatabase = ElevenHouseDatabase | FlowTransaction;
@@ -36,6 +37,7 @@ const definitionSummarySelection = {
   draftBaseVersionId: flows.draftBaseVersionId,
   latestPublishedVersionId: flows.publishedVersionId,
   latestPublishedVersion: flowVersions.version,
+  draftGraph: flows.draftGraph,
   graphSchemaVersion: sql<string | null>`${flows.draftGraph}->>'schemaVersion'`,
   createdAt: flows.createdAt,
   updatedAt: flows.updatedAt,
@@ -63,6 +65,7 @@ type FlowDefinitionReadRow = {
   readonly draftBaseVersionId: string | null;
   readonly latestPublishedVersionId: string | null;
   readonly latestPublishedVersion: number | null;
+  readonly draftGraph: unknown;
   readonly graphSchemaVersion: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -80,7 +83,6 @@ type FlowDefinitionReadRow = {
 };
 
 type FlowDefinitionDetailReadRow = FlowDefinitionReadRow & {
-  readonly draftGraph: unknown;
   readonly draftPresentation: unknown | null;
 };
 
@@ -139,7 +141,6 @@ function selectDetails(database: FlowDatabase) {
   return database
     .select({
       ...definitionSummarySelection,
-      draftGraph: flows.draftGraph,
       draftPresentation: flows.draftPresentation
     })
     .from(flows)
@@ -238,7 +239,8 @@ function toDefinitionSummary(row: FlowDefinitionReadRow): FlowDefinitionSummaryV
   return flowDefinitionSummaryV2Schema.parse({
     ...common,
     graphSchemaVersion: row.graphSchemaVersion,
-    origin: row.origin
+    origin: row.origin,
+    graphNodeKinds: orderFlowGraphNodeKindsForRead(row.draftGraph)
   });
 }
 

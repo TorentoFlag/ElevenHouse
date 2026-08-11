@@ -351,7 +351,8 @@ describe("FlowBuilder", () => {
     } satisfies FlowDefinitionDetail;
     renderBuilder({ flow: versioned, onCreateNextDraft });
 
-    expect(screen.getByLabelText("Название узла")).toHaveProperty("disabled", true);
+    expect(screen.queryByLabelText("Название узла")).toBeNull();
+    expect(screen.getByText("Выберите узел на схеме")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Создать новую версию" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Опубликовать" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Создать новую версию" }));

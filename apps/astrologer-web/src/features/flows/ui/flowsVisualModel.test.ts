@@ -16,6 +16,7 @@ const flow = {
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
   graphSchemaVersion: "flow-graph.v2",
+  graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
   origin: {
     schemaVersion: "flow-definition-origin.v1",
     type: "template",
@@ -40,7 +41,7 @@ const flow = {
 } satisfies FlowDefinitionSummary;
 
 describe("flows visual model", () => {
-  it("maps a lightweight summary without inventing graph or runtime metrics", () => {
+  it("maps server-backed graph kinds into an operator-readable scenario preview", () => {
     expect(buildFlowGalleryCard(flow, "ru")).toEqual({
       id: flow.id,
       title: flow.name,
@@ -48,6 +49,8 @@ describe("flows visual model", () => {
       automationStatusLabel: "Не опубликована",
       approvalModeLabel: "С подтверждением",
       graphSchemaLabel: "Схема V2",
+      graphSummary: "Узлы: Запись подтверждена · Данные рождения · Натальная карта",
+      graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
       originLabel: "Из шаблона",
       revisionLabel: "Редакция 3",
       publishedVersionLabel: "Не опубликована"

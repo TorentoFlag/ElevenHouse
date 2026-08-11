@@ -137,7 +137,7 @@
 
 .flowCard {
   display: flex;
-  min-height: 211px;
+  min-height: 205px;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--flows-line);
@@ -147,7 +147,7 @@
 
 .graphPreview {
   display: flex;
-  min-height: 64px;
+  min-height: 56px;
   align-items: center;
   gap: 8px;
   overflow: hidden;
@@ -177,6 +177,16 @@
   white-space: nowrap;
 }
 
+.graphNode[title] {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  justify-content: center;
+  border-color: var(--flows-gold-line);
+  padding: 0;
+  color: var(--flows-gold);
+}
+
 .graphConnector {
   width: 14px;
   height: 2px;
@@ -185,12 +195,22 @@
   background: var(--flows-line-strong);
 }
 
+.graphSummary {
+  overflow: hidden;
+  margin: 0;
+  color: var(--flows-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cardBody {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 9px;
-  padding: 14px 16px;
+  gap: 6px;
+  padding: 10px 16px;
 }
 
 .cardHeading {
@@ -242,7 +262,7 @@
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--flows-line);
-  padding: 10px 16px;
+  padding: 7px 16px;
 }
 
 .metrics,
