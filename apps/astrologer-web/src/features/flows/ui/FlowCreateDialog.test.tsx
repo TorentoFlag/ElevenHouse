@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { FlowDefinitionTemplateDescriptorV2 } from "@elevenhouse/contracts";
+import type { FlowDefinitionTemplateDescriptorV2, ProductResponse } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowCreateDialog, type FlowCreateDialogProps } from "./FlowCreateDialog";
@@ -30,6 +30,61 @@ const unavailableTemplate = {
   blockerCode: "FLOW_TEMPLATE_CAPABILITY_UNAVAILABLE"
 } satisfies FlowDefinitionTemplateDescriptorV2;
 
+const productRequiredTemplate = {
+  ...availableTemplate,
+  key: "booking-natal-preparation",
+  name: "Подготовка натальной консультации",
+  parameters: [
+    {
+      key: "product_ids",
+      kind: "product_ids",
+      required: true,
+      minimumItems: 1,
+      maximumItems: 100
+    }
+  ]
+} satisfies FlowDefinitionTemplateDescriptorV2;
+
+const eligibleProduct = {
+  id: "11111111-1111-4111-8111-111111111111",
+  ownerUserId: "22222222-2222-4222-8222-222222222222",
+  type: "single",
+  status: "active",
+  title: "Натальная консультация",
+  subtitle: null,
+  priceMinor: 490000,
+  currency: "RUB",
+  coverMediaId: null,
+  coverMedia: null,
+  introVideoUrl: null,
+  executionMode: "live",
+  paymentModel: "once",
+  durationMinutes: 60,
+  durationLabel: "60 мин",
+  slaLabel: null,
+  packageSessionCount: null,
+  packageDiscountPercent: null,
+  subscriptionPeriod: null,
+  trialDays: null,
+  participantMode: "solo",
+  groupSize: null,
+  deliveryFormats: ["video"],
+  requiredClientData: ["chart1"],
+  methods: ["natal"],
+  accessGrants: [],
+  includedItems: [],
+  modifiers: [],
+  analytics: {
+    salesCount: 0,
+    grossRevenueMinor: 0,
+    currency: "RUB",
+    averageRating: null,
+    reviewsCount: 0
+  },
+  createdAt: "2026-07-02T00:00:00.000Z",
+  updatedAt: "2026-07-02T00:00:00.000Z"
+} satisfies ProductResponse;
+
 const defaultProps = {
   templates: [availableTemplate, unavailableTemplate],
   locale: "ru",
@@ -57,7 +112,7 @@ describe("FlowCreateDialog", () => {
     const onClose = vi.fn();
     render(<FlowCreateDialog {...defaultProps} onClose={onClose} />);
 
-    const dialog = screen.getByRole("dialog", { name: "Новый сценарий" });
+    const dialog = screen.getByRole("dialog", { name: "Новая воронка" });
 
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(
@@ -65,6 +120,7 @@ describe("FlowCreateDialog", () => {
     ).toBeTruthy();
     expect(within(dialog).getByRole("heading", { name: "Готовые сценарии" })).toBeTruthy();
     expect(within(dialog).queryByText(/собрать с AI/i)).toBeNull();
+    expect(within(dialog).queryByRole("textbox", { name: /AI|нейросет/i })).toBeNull();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Закрыть" }));
     expect(onClose).toHaveBeenCalledOnce();
@@ -73,10 +129,10 @@ describe("FlowCreateDialog", () => {
   it("owns keyboard focus, traps tab navigation and closes with Escape or backdrop", () => {
     const onClose = vi.fn();
     const { rerender } = render(<FlowCreateDialog {...defaultProps} onClose={onClose} />);
-    const dialog = screen.getByRole("dialog", { name: "Новый сценарий" });
+    const dialog = screen.getByRole("dialog", { name: "Новая воронка" });
     const closeButton = within(dialog).getByRole("button", { name: "Закрыть" });
     const blankButton = within(dialog).getByRole("button", {
-      name: "Начать с пустого сценария"
+      name: "Пустая воронка Собрать с нуля"
     });
 
     expect(document.activeElement).toBe(closeButton);
@@ -124,11 +180,47 @@ describe("FlowCreateDialog", () => {
     expect(onCreateTemplate).not.toHaveBeenCalled();
   });
 
+  it("requires an eligible product before submitting a parameterized template", () => {
+    const onCreateTemplate = vi.fn();
+    const { rerender } = render(
+      <FlowCreateDialog
+        {...defaultProps}
+        templates={[productRequiredTemplate]}
+        onCreateTemplate={onCreateTemplate}
+      />
+    );
+
+    expect(screen.getByText(/Нет активных услуг/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Подготовка натальной консультации/ })).toHaveProperty(
+      "disabled",
+      true
+    );
+
+    rerender(
+      <FlowCreateDialog
+        {...defaultProps}
+        templates={[productRequiredTemplate]}
+        products={[eligibleProduct]}
+        onCreateTemplate={onCreateTemplate}
+      />
+    );
+
+    const option = screen.getByRole("option", { name: eligibleProduct.title }) as HTMLOptionElement;
+    option.selected = true;
+    fireEvent.change(option.closest("select")!);
+    fireEvent.click(screen.getByRole("button", { name: /Подготовка натальной консультации/ }));
+    expect(onCreateTemplate).toHaveBeenCalledWith(productRequiredTemplate, {
+      product_ids: [eligibleProduct.id]
+    });
+  });
+
   it("offers an active secondary blank-flow action", () => {
     const onCreateBlank = vi.fn();
     render(<FlowCreateDialog {...defaultProps} onCreateBlank={onCreateBlank} />);
 
-    const blankButton = screen.getByRole("button", { name: "Начать с пустого сценария" });
+    const blankButton = screen.getByRole("button", {
+      name: "Пустая воронка Собрать с нуля"
+    });
 
     expect(blankButton).toHaveProperty("disabled", false);
     fireEvent.click(blankButton);
@@ -160,7 +252,9 @@ describe("FlowCreateDialog", () => {
     expect(within(dialog).getByText("Choose a ready-made flow or start from blank.")).toBeTruthy();
     expect(within(dialog).getByRole("heading", { name: "Ready-made flows" })).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeTruthy();
-    expect(within(dialog).getByRole("button", { name: "Start with a blank flow" })).toBeTruthy();
+    expect(
+      within(dialog).getByRole("button", { name: "Blank flow Build from scratch" })
+    ).toBeTruthy();
     expect(
       within(screen.getByRole("button", { name: /Post-session follow-up/ })).getByText(
         "Required capabilities are not available yet."
@@ -193,7 +287,9 @@ describe("FlowCreateDialog", () => {
 
     expect(screen.getByRole("status").textContent).toContain("Загружаем каталог сценариев");
     expect(screen.queryByText(/отсутствует в текущем каталоге/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Начать с пустого сценария" })).toHaveProperty(
+    expect(
+      screen.getByRole("button", { name: "Пустая воронка Собрать с нуля" })
+    ).toHaveProperty(
       "disabled",
       false
     );
@@ -245,7 +341,9 @@ describe("FlowCreateDialog", () => {
       "disabled",
       true
     );
-    expect(screen.getByRole("button", { name: "Начать с пустого сценария" })).toHaveProperty(
+    expect(
+      screen.getByRole("button", { name: "Пустая воронка Собрать с нуля" })
+    ).toHaveProperty(
       "disabled",
       true
     );
@@ -260,7 +358,9 @@ describe("FlowCreateDialog", () => {
       "disabled",
       true
     );
-    expect(screen.getByRole("button", { name: "Начать с пустого сценария" })).toHaveProperty(
+    expect(
+      screen.getByRole("button", { name: "Пустая воронка Собрать с нуля" })
+    ).toHaveProperty(
       "disabled",
       true
     );
@@ -270,6 +370,7 @@ describe("FlowCreateDialog", () => {
     const classNames = {
       createDialogBackdrop: "backdrop-hook",
       createDialog: "dialog-hook",
+      createDialogHandle: "handle-hook",
       createDialogHeader: "header-hook",
       createDialogClose: "close-hook",
       createDialogIntro: "intro-hook",
@@ -279,6 +380,7 @@ describe("FlowCreateDialog", () => {
       createDialogTemplate: "template-hook",
       createDialogTemplateIcon: "icon-hook",
       createDialogTemplateCopy: "copy-hook",
+      createDialogTemplateChevron: "chevron-hook",
       createDialogTemplateMeta: "meta-hook",
       createDialogBlank: "blank-hook"
     } as const;

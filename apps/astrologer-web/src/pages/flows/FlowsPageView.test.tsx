@@ -126,6 +126,8 @@ describe("FlowsPageView", () => {
       requestedTemplateKey: availableTemplate.key
     });
     expect(markup).toContain('role="dialog"');
+    expect(markup).toContain("Новая воронка");
+    expect(markup).not.toContain("Собрать с AI");
     expect(markup).toContain(availableTemplate.name);
     expect(markup).toContain("Интеграция рекомендует сценарий");
   });

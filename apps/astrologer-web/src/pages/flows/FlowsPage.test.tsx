@@ -401,7 +401,9 @@ describe("FlowsPage", () => {
       name: new RegExp(availableTemplate.name)
     });
     fireEvent.click(templateButton);
-    fireEvent.click(screen.getByRole("button", { name: "Начать с пустого сценария" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Пустая воронка Собрать с нуля" })
+    );
     fireEvent.click(templateButton);
 
     expect(mutate).toHaveBeenCalledTimes(3);

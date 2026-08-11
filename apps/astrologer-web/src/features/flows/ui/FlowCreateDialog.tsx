@@ -24,11 +24,12 @@ export type FlowCreateDialogProps = {
 
 const copyByLocale = {
   ru: {
-    title: "Новый сценарий",
+    title: "Новая воронка",
     close: "Закрыть",
     intro: "Выберите готовый сценарий или начните с пустого.",
     templatesTitle: "Готовые сценарии",
-    blank: "Начать с пустого сценария",
+    blankTitle: "Пустая воронка",
+    blankDescription: "Собрать с нуля",
     available: "Доступен к созданию",
     tariffUnavailable: "Текущий тариф не позволяет создавать воронки.",
     recommended: "Рекомендовано интеграцией",
@@ -49,7 +50,8 @@ const copyByLocale = {
     close: "Close",
     intro: "Choose a ready-made flow or start from blank.",
     templatesTitle: "Ready-made flows",
-    blank: "Start with a blank flow",
+    blankTitle: "Blank flow",
+    blankDescription: "Build from scratch",
     available: "Available to create",
     tariffUnavailable: "Your current plan does not allow creating flows.",
     recommended: "Recommended by integration",
@@ -152,6 +154,7 @@ export function FlowCreateDialog({
         aria-busy={pending || loading}
         onKeyDown={(event) => handleDialogKeyDown(event, dialogRef.current, onClose)}
       >
+        <span className={className("createDialogHandle")} aria-hidden="true" />
         <header className={className("createDialogHeader")}>
           <h2 id={titleId}>{copy.title}</h2>
           <button
@@ -230,6 +233,7 @@ export function FlowCreateDialog({
                     }
                     aria-describedby={`${descriptionId} ${metaId}`}
                     data-recommended={recommended ? "true" : undefined}
+                    data-available={available ? "true" : "false"}
                     onClick={() =>
                       onCreateTemplate(
                         template,
@@ -241,11 +245,14 @@ export function FlowCreateDialog({
                       <Icon iconName="flow" width={19} height={19} />
                     </span>
                     <span className={className("createDialogTemplateCopy")}>
-                      <span>{template.name}</span>
+                      <span title={template.name}>{template.name}</span>
                       <span id={descriptionId}>{template.description}</span>
                       <span id={metaId} className={className("createDialogTemplateMeta")}>
                         {meta}
                       </span>
+                    </span>
+                    <span className={className("createDialogTemplateChevron")} aria-hidden="true">
+                      <Icon iconName="chevronRight" width={15} height={15} />
                     </span>
                   </button>
                   {requiresProducts ? (
@@ -285,11 +292,20 @@ export function FlowCreateDialog({
           <button
             className={className("createDialogBlank")}
             type="button"
+            aria-label={`${copy.blankTitle} ${copy.blankDescription}`}
             disabled={pending || !creationAllowed}
             onClick={onCreateBlank}
           >
-            <Icon iconName="plus" width={16} height={16} aria-hidden="true" />
-            <span>{copy.blank}</span>
+            <span className={className("createDialogTemplateIcon")} aria-hidden="true">
+              <Icon iconName="plus" width={16} height={16} />
+            </span>
+            <span className={className("createDialogTemplateCopy")}>
+              <span>{copy.blankTitle}</span>
+              <span>{copy.blankDescription}</span>
+            </span>
+            <span className={className("createDialogTemplateChevron")} aria-hidden="true">
+              <Icon iconName="chevronRight" width={15} height={15} />
+            </span>
           </button>
         </section>
       </div>
