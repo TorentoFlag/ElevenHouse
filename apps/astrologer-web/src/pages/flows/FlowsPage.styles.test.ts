@@ -59,3 +59,11 @@ describe("FlowsPage gallery geometry", () => {
     );
   });
 });
+
+describe("FlowsPage create dialog geometry", () => {
+  it("keeps the mobile blank command fluid below the 390px reference viewport", () => {
+    expect(styles).toMatch(
+      /@media \(max-width:\s*720px\)[\s\S]*\.createDialogBlank\s*\{[^}]*width:\s*100%[^}]*max-width:\s*316px/s
+    );
+  });
+});
