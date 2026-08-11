@@ -147,9 +147,9 @@
 
 .graphPreview {
   display: flex;
-  min-height: 56px;
+  min-height: 64px;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   overflow: hidden;
   border: 0;
   border-bottom: 1px solid var(--flows-line);
@@ -178,13 +178,44 @@
 }
 
 .graphNode[title] {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   justify-content: center;
   border-color: var(--flows-gold-line);
   padding: 0;
   color: var(--flows-gold);
+}
+
+.graphNode[data-tone="communication"] {
+  border-color: rgb(139 92 246 / 0.4);
+  background: rgb(139 92 246 / 0.14);
+  color: #b79cfb;
+}
+
+.graphNode[data-tone="chartAi"] {
+  border-color: rgb(183 156 251 / 0.5);
+  background: rgb(244 196 48 / 0.1);
+  color: #f6d266;
+}
+
+.graphNode[data-tone="logic"] {
+  border-color: rgb(111 168 255 / 0.42);
+  background: rgb(111 168 255 / 0.13);
+  color: #6fa8ff;
+}
+
+.graphNode[data-tone="human"],
+.graphNode[data-tone="result"] {
+  border-color: rgb(78 200 160 / 0.42);
+  background: rgb(78 200 160 / 0.13);
+  color: #4ec8a0;
+}
+
+.graphNode[data-tone="error"] {
+  border-color: rgb(244 122 122 / 0.42);
+  background: rgb(244 122 122 / 0.13);
+  color: #f47a7a;
 }
 
 .graphConnector {
@@ -2122,6 +2153,16 @@
     border-radius: 18px;
     padding: 15px 16px;
     background: var(--flows-surface);
+  }
+
+  .mobileGraphPreview {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    border-bottom: 1px solid var(--flows-line);
+    padding: 0 14px;
   }
 
   .mobileTitleRow {
