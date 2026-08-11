@@ -2168,9 +2168,12 @@
   }
 
   .mobileList {
+    box-sizing: border-box;
     display: grid;
+    width: 100vw;
     gap: 12px;
-    padding: 14px 16px 28px;
+    margin-inline: auto;
+    padding: 14px 0 28px;
   }
 
   .mobileHeader {
@@ -2179,6 +2182,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+    margin: 0 10px;
     padding: 0 0 6px;
   }
 
@@ -2201,9 +2205,12 @@
 
   .mobileCard {
     position: relative;
+    box-sizing: border-box;
+    width: calc(100% - 20px);
     overflow: hidden;
+    margin: 0 10px;
     border: 1px solid var(--flows-line);
-    border-radius: 18px;
+    border-radius: 16px;
     padding: 0;
     background:
       linear-gradient(180deg, rgb(244 196 48 / 0.025), transparent 44%),
@@ -2247,6 +2254,34 @@
   .mobileCard .cardFooter {
     height: auto;
     min-height: 69px;
+  }
+
+  .mobileCard .automationToggle {
+    isolation: isolate;
+    min-height: 44px;
+    border-color: transparent;
+    padding: 0 10px;
+    background: transparent;
+  }
+
+  .mobileCard .automationToggle::before {
+    position: absolute;
+    z-index: -1;
+    inset: 8.75px 0;
+    border: 1px solid rgb(216 212 236 / 0.14);
+    border-radius: 999px;
+    background: #16142f;
+    content: "";
+  }
+
+  .mobileCard .automationToggle[aria-checked="true"] {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .mobileCard .automationToggle[aria-checked="true"]::before {
+    border-color: rgb(78 200 160 / 0.35);
+    background: rgb(78 200 160 / 0.14);
   }
 
   .builderPage {
