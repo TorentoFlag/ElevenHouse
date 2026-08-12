@@ -17,7 +17,10 @@ export type ClaimedOutboxEvent = {
   readonly claimFence: bigint;
 };
 
-export type OutboxRelayDispositionOperation = "mark_published" | "mark_publish_failed";
+export type OutboxRelayDispositionOperation =
+  | "mark_published"
+  | "mark_publish_failed"
+  | "mark_quarantined";
 
 export class OutboxRelayStaleClaimError extends Error {
   readonly code = "OUTBOX_RELAY_STALE_CLAIM" as const;
@@ -45,6 +48,13 @@ export type OutboxRelayStore = {
     readonly claimFence: bigint;
     readonly failedAt: Date;
     readonly nextAvailableAt: Date;
+    readonly errorMessage: string;
+  }) => Promise<void>;
+  readonly markQuarantined: (input: {
+    readonly eventId: string;
+    readonly claimFence: bigint;
+    readonly quarantinedAt: Date;
+    readonly reasonCode: string;
     readonly errorMessage: string;
   }) => Promise<void>;
 };
@@ -126,6 +136,22 @@ export function createDrizzleOutboxRelayStore(database: ElevenHouseDatabase): Ou
         .where(claimDispositionFence(input))
         .returning({ id: outboxEvents.id });
       assertClaimDispositionApplied(rows, "mark_publish_failed");
+    },
+    markQuarantined: async (input) => {
+      const rows = await database
+        .update(outboxEvents)
+        .set({
+          status: "quarantined",
+          lockedAt: null,
+          publishedAt: null,
+          quarantinedAt: input.quarantinedAt,
+          quarantineReasonCode: input.reasonCode,
+          lastError: input.errorMessage,
+          updatedAt: input.quarantinedAt
+        })
+        .where(claimDispositionFence(input))
+        .returning({ id: outboxEvents.id });
+      assertClaimDispositionApplied(rows, "mark_quarantined");
     }
   };
 }

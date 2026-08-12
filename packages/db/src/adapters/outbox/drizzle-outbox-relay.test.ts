@@ -106,4 +106,41 @@ describe("createDrizzleOutboxRelayStore", () => {
       })
     ]);
   });
+
+  it("quarantines only the exact fenced claim without pretending it published", async () => {
+    const updates: unknown[] = [];
+    const database = {
+      update: () => ({
+        set: (values: unknown) => {
+          updates.push(values);
+          return {
+            where: () => ({
+              returning: async () => [{ id: "00000000-0000-4000-8000-000000000001" }]
+            })
+          };
+        }
+      })
+    };
+    const quarantinedAt = new Date("2026-08-12T12:00:00.000Z");
+
+    await createDrizzleOutboxRelayStore(database as never).markQuarantined({
+      eventId: "00000000-0000-4000-8000-000000000001",
+      claimFence: 5n,
+      quarantinedAt,
+      reasonCode: "EVENT_PAYLOAD_INVALID",
+      errorMessage: "The immutable event payload is malformed"
+    });
+
+    expect(updates).toEqual([
+      expect.objectContaining({
+        status: "quarantined",
+        lockedAt: null,
+        publishedAt: null,
+        quarantinedAt,
+        quarantineReasonCode: "EVENT_PAYLOAD_INVALID",
+        lastError: "The immutable event payload is malformed",
+        updatedAt: quarantinedAt
+      })
+    ]);
+  });
 });

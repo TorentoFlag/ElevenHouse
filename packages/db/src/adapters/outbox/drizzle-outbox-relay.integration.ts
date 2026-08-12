@@ -175,6 +175,47 @@ describe("generic outbox relay store Drizzle/PostgreSQL integration", () => {
       last_error: null
     });
   });
+
+  it("rejects a stale quarantine while the current claimant quarantines the event", async () => {
+    const event = await insertEvent();
+    const store = createDrizzleOutboxRelayStore(runtime.database);
+    const staleClaim = onlyClaim(await store.claimPending(claimInput(firstClaimAt)));
+    const currentClaim = onlyClaim(await store.claimPending(claimInput(reclaimedAt)));
+
+    const [staleResult, currentResult] = await Promise.allSettled([
+      store.markQuarantined({
+        eventId: event.id,
+        claimFence: staleClaim.claimFence,
+        quarantinedAt: reclaimedAt,
+        reasonCode: "STALE",
+        errorMessage: "stale claimant"
+      }),
+      store.markQuarantined({
+        eventId: event.id,
+        claimFence: currentClaim.claimFence,
+        quarantinedAt: reclaimedAt,
+        reasonCode: "PAYLOAD_INVALID",
+        errorMessage: "current claimant"
+      })
+    ]);
+
+    expect(staleResult).toMatchObject({
+      status: "rejected",
+      reason: expect.objectContaining({
+        name: "OutboxRelayStaleClaimError",
+        operation: "mark_quarantined"
+      })
+    });
+    expect(currentResult).toEqual({ status: "fulfilled", value: undefined });
+    expect(await selectEvent(event.id)).toMatchObject({
+      status: "quarantined",
+      attempts: 0,
+      claim_fence: "2",
+      locked_at: null,
+      published_at: null,
+      last_error: "current claimant"
+    });
+  });
 });
 
 function claimInput(now: Date) {
