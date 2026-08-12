@@ -512,9 +512,18 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
         }
       }
     };
-    const applied = await executeAstroDiaryPromptCommand(unitOfWork, input);
-    expect(applied).toMatchObject({ outcome: "applied" });
-    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toEqual({
+    const competingInput = {
+      ...input,
+      idempotencyKey: `${input.idempotencyKey}-concurrent`
+    };
+    const [left, right] = await Promise.all([
+      executeAstroDiaryPromptCommand(unitOfWork, input),
+      executeAstroDiaryPromptCommand(unitOfWork, competingInput)
+    ]);
+    expect([left.outcome, right.outcome].sort()).toEqual(["applied", "version_conflict"]);
+    const appliedInput = left.outcome === "applied" ? input : competingInput;
+    const applied = left.outcome === "applied" ? left : right;
+    await expect(executeAstroDiaryPromptCommand(unitOfWork, appliedInput)).resolves.toEqual({
       outcome: "replayed",
       result: applied.outcome === "applied" ? applied.receipt.result : expect.anything()
     });
@@ -1475,6 +1484,12 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
         .from(astroDiaryResponseObligations)
         .where(eq(astroDiaryResponseObligations.id, obligationId))
     ).resolves.toMatchObject([{ state: "open", triggerItemId: entryItemId }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryResponseObligations)
+        .where(eq(astroDiaryResponseObligations.cycleId, cycleId))
+    ).resolves.toHaveLength(2);
     await expect(
       runtime.database
         .select()
