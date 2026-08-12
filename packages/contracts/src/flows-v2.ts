@@ -18,6 +18,7 @@ const stableIdSchema = z
   .max(160)
   .regex(/^[a-z0-9][a-z0-9_-]*$/);
 const displayTitleSchema = z.string().trim().min(1).max(180);
+const flowNameSchema = displayTitleSchema;
 const descriptionSchema = z.string().trim().min(1).max(1_000);
 export const flowWorkItemInstructionsV2Schema = z.string().trim().min(1).max(4_000);
 const instantSchema = z.string().datetime({ offset: true });
@@ -1073,6 +1074,30 @@ export const createNextFlowDraftV2RequestSchema = z
   .strict();
 export type CreateNextFlowDraftV2Request = z.infer<typeof createNextFlowDraftV2RequestSchema>;
 
+export const flowDefinitionLifecycleTransitionRequestSchema = z
+  .object({
+    expectedRevision: positiveRevisionSchema
+  })
+  .strict();
+export type FlowDefinitionLifecycleTransitionRequest = z.infer<
+  typeof flowDefinitionLifecycleTransitionRequestSchema
+>;
+
+export const duplicateFlowDefinitionRequestSchema = z
+  .object({
+    expectedRevision: positiveRevisionSchema,
+    name: flowNameSchema.optional()
+  })
+  .strict();
+export type DuplicateFlowDefinitionRequest = z.infer<typeof duplicateFlowDefinitionRequestSchema>;
+
+export const deleteFlowDefinitionResponseSchema = z
+  .object({
+    deleted: z.literal(true)
+  })
+  .strict();
+export type DeleteFlowDefinitionResponse = z.infer<typeof deleteFlowDefinitionResponseSchema>;
+
 export const flowGraphV2CompileIssueSchema = flowDefinitionValidationIssueSchema
   .extend({ code: flowGraphV2CompileIssueCodeSchema })
   .strict();
@@ -1138,6 +1163,21 @@ export const flowDefinitionCommandRejectionSchema = z.discriminatedUnion("code",
     })
     .strict(),
   z.object({ code: z.literal("FLOW_DRAFT_MUTATION_INVALID") }).strict(),
+  z
+    .object({
+      code: z.literal("FLOW_DEFINITION_ARCHIVE_NOT_AVAILABLE"),
+      state: flowDefinitionStateSchema
+    })
+    .strict(),
+  z
+    .object({
+      code: z.literal("FLOW_DEFINITION_RESTORE_NOT_AVAILABLE"),
+      state: flowDefinitionStateSchema
+    })
+    .strict(),
+  z.object({ code: z.literal("FLOW_DEFINITION_ACTIVE_ENROLLMENT") }).strict(),
+  z.object({ code: z.literal("FLOW_DEFINITION_HAS_RUN_HISTORY") }).strict(),
+  z.object({ code: z.literal("FLOW_DEFINITION_DUPLICATE_INVALID") }).strict(),
   z
     .object({
       code: z.literal("FLOW_GRAPH_NOT_PUBLISHABLE"),

@@ -151,6 +151,70 @@ export class FlowsController {
     return this.service.createNextFlowDraft(flowId, body, idempotencyKey, request);
   }
 
+  @Post(":flowId/archive")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.archive",
+    capability: "funnels",
+    operation: "mutation"
+  })
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  archiveFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.archiveFlow(flowId, body, request);
+  }
+
+  @Post(":flowId/restore")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.restore",
+    capability: "funnels",
+    operation: "mutation"
+  })
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  restoreFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.restoreFlow(flowId, body, request);
+  }
+
+  @Post(":flowId/duplicate")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.duplicate",
+    capability: "funnels",
+    operation: "mutation"
+  })
+  @HttpCode(HttpStatus.CREATED)
+  @RequireCsrf()
+  duplicateFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.duplicateFlow(flowId, body, request);
+  }
+
+  @Post(":flowId/delete")
+  @RequirePlatformTariffCapability({
+    surfaceId: "funnels.delete",
+    capability: "funnels",
+    operation: "mutation"
+  })
+  @HttpCode(HttpStatus.OK)
+  @RequireCsrf()
+  deleteFlow(
+    @Param("flowId") flowId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.deleteFlow(flowId, body, request);
+  }
+
   @Get(":flowId/runs")
   listFlowRuns(
     @Param("flowId") flowId: string,

@@ -1,9 +1,12 @@
 import {
   createFlowDefinitionV2RequestSchema,
   createNextFlowDraftV2RequestSchema,
+  deleteFlowDefinitionResponseSchema,
+  duplicateFlowDefinitionRequestSchema,
   flowApprovalModeSchema,
   flowCapabilityManifestSchema,
   flowDefinitionV2Schema,
+  flowDefinitionLifecycleTransitionRequestSchema,
   flowGraphReadSchema,
   flowPublishedVersionSchema,
   publishFlowDefinitionV2RequestSchema,
@@ -12,6 +15,8 @@ import {
   type CreateFlowDefinitionV2Request,
   type CreateFlowDefinitionV2RequestInput,
   type CreateNextFlowDraftV2Request,
+  type DeleteFlowDefinitionResponse,
+  type DuplicateFlowDefinitionRequest,
   type FlowApprovalMode,
   type FlowCapabilityManifest,
   type FlowCapabilityManifestV2,
@@ -21,6 +26,7 @@ import {
   type FlowDefinitionState,
   type FlowDefinitionV2,
   type FlowGraphV2,
+  type FlowDefinitionLifecycleTransitionRequest,
   type FlowPresentationV1,
   type FlowPublishedVersion,
   type PublishFlowDefinitionV2Request,
@@ -148,6 +154,30 @@ export type FlowDefinitionControlStore = {
       latestVersion: FlowDefinitionPublishedVersionRecord | null
     ) => FlowDefinitionPreparation<FlowDefinitionV2>;
   }) => Promise<FlowDefinitionCommandResult<FlowDefinitionV2>>;
+  readonly archiveDefinition: (input: {
+    readonly ownerUserId: string;
+    readonly flowId: string;
+    readonly expectedRevision: number;
+    readonly now: string;
+  }) => Promise<FlowDefinitionV2 | null>;
+  readonly restoreDefinition: (input: {
+    readonly ownerUserId: string;
+    readonly flowId: string;
+    readonly expectedRevision: number;
+    readonly now: string;
+  }) => Promise<FlowDefinitionV2 | null>;
+  readonly duplicateDefinition: (input: {
+    readonly ownerUserId: string;
+    readonly flowId: string;
+    readonly expectedRevision: number;
+    readonly name: string | undefined;
+    readonly now: string;
+  }) => Promise<FlowDefinitionV2 | null>;
+  readonly deleteDefinition: (input: {
+    readonly ownerUserId: string;
+    readonly flowId: string;
+    readonly expectedRevision: number;
+  }) => Promise<DeleteFlowDefinitionResponse | null>;
 };
 
 export class FlowDefinitionRevisionConflictError extends Error {
@@ -271,6 +301,51 @@ export class FlowDefinitionDraftMutationInvalidError extends Error {
   constructor() {
     super("Flow draft mutation conflicts with the persisted graph or presentation");
     this.name = "FlowDefinitionDraftMutationInvalidError";
+  }
+}
+
+export class FlowDefinitionArchiveNotAvailableError extends Error {
+  readonly code = "FLOW_DEFINITION_ARCHIVE_NOT_AVAILABLE";
+
+  constructor(readonly state: FlowDefinitionState) {
+    super("Flow definition cannot be archived from its current state");
+    this.name = "FlowDefinitionArchiveNotAvailableError";
+  }
+}
+
+export class FlowDefinitionRestoreNotAvailableError extends Error {
+  readonly code = "FLOW_DEFINITION_RESTORE_NOT_AVAILABLE";
+
+  constructor(readonly state: FlowDefinitionState) {
+    super("Only an archived flow definition can be restored");
+    this.name = "FlowDefinitionRestoreNotAvailableError";
+  }
+}
+
+export class FlowDefinitionActiveEnrollmentError extends Error {
+  readonly code = "FLOW_DEFINITION_ACTIVE_ENROLLMENT";
+
+  constructor() {
+    super("Active flow enrollment must be paused before this definition lifecycle command");
+    this.name = "FlowDefinitionActiveEnrollmentError";
+  }
+}
+
+export class FlowDefinitionHasRunHistoryError extends Error {
+  readonly code = "FLOW_DEFINITION_HAS_RUN_HISTORY";
+
+  constructor() {
+    super("Flow definition with run history cannot be deleted");
+    this.name = "FlowDefinitionHasRunHistoryError";
+  }
+}
+
+export class FlowDefinitionDuplicateInvalidError extends Error {
+  readonly code = "FLOW_DEFINITION_DUPLICATE_INVALID";
+
+  constructor() {
+    super("Flow definition duplicate violates lifecycle invariants");
+    this.name = "FlowDefinitionDuplicateInvalidError";
   }
 }
 
@@ -511,6 +586,98 @@ export async function createNextFlowDraftV2(input: {
   return definition;
 }
 
+export async function archiveFlowDefinitionV2(input: {
+  readonly store: FlowDefinitionControlStore;
+  readonly ownerUserId: string;
+  readonly flowId: string;
+  readonly request: FlowDefinitionLifecycleTransitionRequest;
+  readonly now: string;
+}): Promise<FlowDefinitionV2 | null> {
+  const request = flowDefinitionLifecycleTransitionRequestSchema.parse(input.request);
+  const definition = await input.store.archiveDefinition({
+    ownerUserId: input.ownerUserId,
+    flowId: input.flowId,
+    expectedRevision: request.expectedRevision,
+    now: normalizeCommandTime(input.now)
+  });
+  if (!definition) return null;
+  assertDefinitionCommandResponse(definition, input, request.expectedRevision, "archived");
+  return definition;
+}
+
+export async function restoreFlowDefinitionV2(input: {
+  readonly store: FlowDefinitionControlStore;
+  readonly ownerUserId: string;
+  readonly flowId: string;
+  readonly request: FlowDefinitionLifecycleTransitionRequest;
+  readonly now: string;
+}): Promise<FlowDefinitionV2 | null> {
+  const request = flowDefinitionLifecycleTransitionRequestSchema.parse(input.request);
+  const definition = await input.store.restoreDefinition({
+    ownerUserId: input.ownerUserId,
+    flowId: input.flowId,
+    expectedRevision: request.expectedRevision,
+    now: normalizeCommandTime(input.now)
+  });
+  if (!definition) return null;
+  if (
+    definition.id !== input.flowId ||
+    definition.ownerUserId !== input.ownerUserId ||
+    definition.revision !== request.expectedRevision + 1 ||
+    (definition.state !== "draft" && definition.state !== "versioned")
+  ) {
+    throw new FlowDefinitionIntegrityError();
+  }
+  return definition;
+}
+
+export async function duplicateFlowDefinitionV2(input: {
+  readonly store: FlowDefinitionControlStore;
+  readonly ownerUserId: string;
+  readonly flowId: string;
+  readonly request: DuplicateFlowDefinitionRequest;
+  readonly now: string;
+}): Promise<FlowDefinitionV2 | null> {
+  const request = duplicateFlowDefinitionRequestSchema.parse(input.request);
+  const definition = await input.store.duplicateDefinition({
+    ownerUserId: input.ownerUserId,
+    flowId: input.flowId,
+    expectedRevision: request.expectedRevision,
+    name: request.name,
+    now: normalizeCommandTime(input.now)
+  });
+  if (!definition) return null;
+  if (
+    definition.ownerUserId !== input.ownerUserId ||
+    definition.id === input.flowId ||
+    definition.state !== "draft" ||
+    definition.revision !== 1 ||
+    definition.draftBaseVersionId !== null ||
+    definition.latestPublishedVersionId !== null ||
+    definition.latestPublishedVersion !== null ||
+    definition.publishedAt !== null
+  ) {
+    throw new FlowDefinitionIntegrityError();
+  }
+  return definition;
+}
+
+export async function deleteFlowDefinitionV2(input: {
+  readonly store: FlowDefinitionControlStore;
+  readonly ownerUserId: string;
+  readonly flowId: string;
+  readonly request: FlowDefinitionLifecycleTransitionRequest;
+}): Promise<DeleteFlowDefinitionResponse | null> {
+  const request = flowDefinitionLifecycleTransitionRequestSchema.parse(input.request);
+  const response = await input.store.deleteDefinition({
+    ownerUserId: input.ownerUserId,
+    flowId: input.flowId,
+    expectedRevision: request.expectedRevision
+  });
+  if (!response) return null;
+  return deleteFlowDefinitionResponseSchema.parse(response);
+}
+
 function prepareDraftUpdate(
   current: FlowDefinitionControlRecord,
   request: UpdateFlowDefinitionDraftV2Request,
@@ -731,6 +898,16 @@ function rejectionToError(rejection: FlowDefinitionCommandRejection): Error {
       );
     case "FLOW_DRAFT_MUTATION_INVALID":
       return new FlowDefinitionDraftMutationInvalidError();
+    case "FLOW_DEFINITION_ARCHIVE_NOT_AVAILABLE":
+      return new FlowDefinitionArchiveNotAvailableError(rejection.state);
+    case "FLOW_DEFINITION_RESTORE_NOT_AVAILABLE":
+      return new FlowDefinitionRestoreNotAvailableError(rejection.state);
+    case "FLOW_DEFINITION_ACTIVE_ENROLLMENT":
+      return new FlowDefinitionActiveEnrollmentError();
+    case "FLOW_DEFINITION_HAS_RUN_HISTORY":
+      return new FlowDefinitionHasRunHistoryError();
+    case "FLOW_DEFINITION_DUPLICATE_INVALID":
+      return new FlowDefinitionDuplicateInvalidError();
     case "FLOW_GRAPH_NOT_PUBLISHABLE":
       return new FlowDefinitionPublishValidationError(rejection.issues);
   }
@@ -783,11 +960,7 @@ function createCommand(input: {
   readonly now: string;
 }): FlowDefinitionCommand {
   const idempotencyKey = normalizeIdempotencyKey(input.idempotencyKey);
-  const nowDate = new Date(input.now);
-  if (!Number.isFinite(nowDate.getTime())) {
-    throw new TypeError("Flow definition command time must be a valid instant");
-  }
-  const now = nowDate.toISOString();
+  const now = normalizeCommandTime(input.now);
   return {
     apiSurface: "astrologer-api",
     routeTemplate: input.routeTemplate,
@@ -809,6 +982,14 @@ function createCommand(input: {
     }),
     now
   };
+}
+
+function normalizeCommandTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new TypeError("Flow definition command time must be a valid instant");
+  }
+  return date.toISOString();
 }
 
 function normalizeIdempotencyKey(value: string): string {

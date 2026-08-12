@@ -14,10 +14,13 @@ import {
   cancelFlowRunResponseSchema,
   createFlowDefinitionV2RequestSchema,
   createNextFlowDraftV2RequestSchema,
+  deleteFlowDefinitionResponseSchema,
+  duplicateFlowDefinitionRequestSchema,
   decideFlowApprovalRequestSchema,
   decideFlowApprovalResponseSchema,
   flowDefinitionDetailSchema,
   flowDefinitionV2Schema,
+  flowDefinitionLifecycleTransitionRequestSchema,
   getFlowRunResponseSchema,
   listFlowApprovalsQuerySchema,
   listFlowApprovalsResponseSchema,
@@ -33,6 +36,7 @@ import {
   validateFlowDefinitionRequestSchema,
   validateFlowDefinitionResponseSchema,
   type CancelFlowRunResponse,
+  type DeleteFlowDefinitionResponse,
   type DecideFlowApprovalResponse,
   type FlowDefinitionDetail,
   type FlowDefinitionV2,
@@ -46,9 +50,16 @@ import {
 } from "@elevenhouse/contracts";
 import {
   cancelDurableFlowRun,
+  archiveFlowDefinitionV2,
   createFlowDefinitionV2,
   createNextFlowDraftV2,
   decideFlowApproval as decideFlowApprovalUseCase,
+  deleteFlowDefinitionV2,
+  duplicateFlowDefinitionV2,
+  FlowDefinitionActiveEnrollmentError,
+  FlowDefinitionArchiveNotAvailableError,
+  FlowDefinitionDuplicateInvalidError,
+  FlowDefinitionHasRunHistoryError,
   FlowDefinitionDraftMutationInvalidError,
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
@@ -59,6 +70,7 @@ import {
   FlowDefinitionNotEditableError,
   FlowDefinitionPublishValidationError,
   FlowDefinitionRevisionConflictError,
+  FlowDefinitionRestoreNotAvailableError,
   FlowDefinitionTemplateNotAvailableError,
   FlowDefinitionTemplateNotFoundError,
   FlowDefinitionTemplateParametersInvalidError,
@@ -75,6 +87,7 @@ import {
   listFlowDefinitions as listFlowDefinitionsUseCase,
   listFlowRuns,
   publishFlowDefinitionV2,
+  restoreFlowDefinitionV2,
   updateFlowDefinitionDraftV2,
   validateFlowDefinition as validateFlowDefinitionUseCase,
   type FlowDefinitionControlStore,
@@ -276,6 +289,89 @@ export class FlowsService {
     });
   }
 
+  async archiveFlow(
+    flowId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionV2> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(flowDefinitionLifecycleTransitionRequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await archiveFlowDefinitionV2({
+        store: this.definitionStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        now: this.clock.now().toISOString()
+      });
+      if (!flow) throw flowDefinitionNotFound();
+      return flowDefinitionV2Schema.parse(flow);
+    });
+  }
+
+  async restoreFlow(
+    flowId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionV2> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(flowDefinitionLifecycleTransitionRequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await restoreFlowDefinitionV2({
+        store: this.definitionStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        now: this.clock.now().toISOString()
+      });
+      if (!flow) throw flowDefinitionNotFound();
+      return flowDefinitionV2Schema.parse(flow);
+    });
+  }
+
+  async duplicateFlow(
+    flowId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<FlowDefinitionV2> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(duplicateFlowDefinitionRequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const flow = await duplicateFlowDefinitionV2({
+        store: this.definitionStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command,
+        now: this.clock.now().toISOString()
+      });
+      if (!flow) throw flowDefinitionNotFound();
+      return flowDefinitionV2Schema.parse(flow);
+    });
+  }
+
+  async deleteFlow(
+    flowId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<DeleteFlowDefinitionResponse> {
+    const ownerUserId = requireOwnerUserId(request);
+    const parsedFlowId = parseContract(flowIdParamSchema, flowId);
+    const command = parseContract(flowDefinitionLifecycleTransitionRequestSchema, body);
+    return mapFlowDefinitionErrors(async () => {
+      const response = await deleteFlowDefinitionV2({
+        store: this.definitionStore,
+        ownerUserId,
+        flowId: parsedFlowId,
+        request: command
+      });
+      if (!response) throw flowDefinitionNotFound();
+      return deleteFlowDefinitionResponseSchema.parse(response);
+    });
+  }
+
   async listFlowRuns(
     flowId: string,
     query: unknown,
@@ -439,6 +535,12 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
     if (error instanceof FlowDefinitionNotEditableError) {
       throw new ConflictException({ code: error.code, state: error.state });
     }
+    if (error instanceof FlowDefinitionArchiveNotAvailableError) {
+      throw new ConflictException({ code: error.code, state: error.state });
+    }
+    if (error instanceof FlowDefinitionRestoreNotAvailableError) {
+      throw new ConflictException({ code: error.code, state: error.state });
+    }
     if (error instanceof FlowDefinitionNextDraftUnavailableError) {
       throw new ConflictException({ code: error.code, state: error.state });
     }
@@ -452,7 +554,10 @@ async function mapFlowDefinitionErrors<T>(operation: () => Promise<T>): Promise<
     if (
       error instanceof FlowDefinitionIdempotencyConflictError ||
       error instanceof FlowDefinitionIdempotencyExpiredError ||
-      error instanceof FlowDefinitionDraftMutationInvalidError
+      error instanceof FlowDefinitionDraftMutationInvalidError ||
+      error instanceof FlowDefinitionActiveEnrollmentError ||
+      error instanceof FlowDefinitionHasRunHistoryError ||
+      error instanceof FlowDefinitionDuplicateInvalidError
     ) {
       throw new ConflictException({ code: error.code });
     }

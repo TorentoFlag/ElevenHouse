@@ -17,7 +17,13 @@ import {
 import {
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
+  FlowDefinitionActiveEnrollmentError,
+  FlowDefinitionArchiveNotAvailableError,
+  FlowDefinitionDuplicateInvalidError,
+  FlowDefinitionHasRunHistoryError,
   FlowDefinitionIntegrityError,
+  FlowDefinitionRestoreNotAvailableError,
+  FlowDefinitionRevisionConflictError,
   parseFlowDefinitionPublishedVersionRecord,
   type FlowDefinitionCommand,
   type FlowDefinitionCommandOutcome,
@@ -31,6 +37,9 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowDefinitionCommandOutcomes,
   flowDefinitionCommands,
+  flowActivationEpochs,
+  flowEnrollmentControls,
+  flowRuns,
   flowVersions,
   flows
 } from "../../schema/flows";
@@ -219,6 +228,127 @@ export function createDrizzleFlowDefinitionControlStore(
           200
         );
       }),
+
+    archiveDefinition: (input) =>
+      database.transaction(async (transaction) => {
+        const locked = await lockOwnedFlowById(transaction, input.ownerUserId, input.flowId);
+        if (!locked) return null;
+        const current = toControlRecord(locked);
+        assertExpectedRevision(current, input.expectedRevision);
+        if (current.state === "archived") {
+          throw new FlowDefinitionArchiveNotAvailableError(current.state);
+        }
+        await assertNoActiveEnrollment(transaction, input.ownerUserId, input.flowId);
+        const timestamp = new Date(input.now);
+        const [updated] = await transaction
+          .update(flows)
+          .set({
+            definitionState: "archived",
+            revision: current.revision + 1,
+            updatedAt: timestamp
+          })
+          .where(
+            and(
+              eq(flows.ownerUserId, input.ownerUserId),
+              eq(flows.id, input.flowId),
+              eq(flows.revision, current.revision),
+              eq(flows.definitionState, current.state)
+            )
+          )
+          .returning();
+        if (!updated) throw new FlowDefinitionIntegrityError();
+        return parseV2Definition({ row: updated, latestVersion: locked.latestVersion });
+      }),
+
+    restoreDefinition: (input) =>
+      database.transaction(async (transaction) => {
+        const locked = await lockOwnedFlowById(transaction, input.ownerUserId, input.flowId);
+        if (!locked) return null;
+        const current = toControlRecord(locked);
+        assertExpectedRevision(current, input.expectedRevision);
+        if (current.state !== "archived") {
+          throw new FlowDefinitionRestoreNotAvailableError(current.state);
+        }
+        const restoredState: FlowDefinitionState =
+          current.latestPublishedVersionId === null ? "draft" : "versioned";
+        const timestamp = new Date(input.now);
+        const [updated] = await transaction
+          .update(flows)
+          .set({
+            definitionState: restoredState,
+            revision: current.revision + 1,
+            updatedAt: timestamp
+          })
+          .where(
+            and(
+              eq(flows.ownerUserId, input.ownerUserId),
+              eq(flows.id, input.flowId),
+              eq(flows.revision, current.revision),
+              eq(flows.definitionState, current.state)
+            )
+          )
+          .returning();
+        if (!updated) throw new FlowDefinitionIntegrityError();
+        return parseV2Definition({ row: updated, latestVersion: locked.latestVersion });
+      }),
+
+    duplicateDefinition: (input) =>
+      database.transaction(async (transaction) => {
+        const locked = await lockOwnedFlowById(transaction, input.ownerUserId, input.flowId);
+        if (!locked) return null;
+        const current = toControlRecord(locked);
+        assertExpectedRevision(current, input.expectedRevision);
+        const timestamp = new Date(input.now);
+        const name = normalizeDuplicateName(input.name ?? `${current.name} (копия)`);
+        const row = await insertReturningOne(
+          () =>
+            transaction
+              .insert(flows)
+              .values({
+                ownerUserId: input.ownerUserId,
+                name,
+                origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+                definitionState: "draft",
+                approvalMode: current.approvalMode,
+                revision: 1,
+                draftBaseVersionId: null,
+                draftGraph: current.draftGraph,
+                draftPresentation: current.draftPresentation,
+                publishedVersionId: null,
+                publishedAt: null,
+                createdAt: timestamp,
+                updatedAt: timestamp
+              })
+              .returning(),
+          "flows"
+        );
+        const duplicated = parseV2Definition({ row, latestVersion: null });
+        if (duplicated.id === input.flowId) throw new FlowDefinitionDuplicateInvalidError();
+        return duplicated;
+      }),
+
+    deleteDefinition: (input) =>
+      database.transaction(async (transaction) => {
+        const locked = await lockOwnedFlowById(transaction, input.ownerUserId, input.flowId);
+        if (!locked) return null;
+        const current = toControlRecord(locked);
+        assertExpectedRevision(current, input.expectedRevision);
+        await assertNoActiveEnrollment(transaction, input.ownerUserId, input.flowId);
+        await assertNoRunHistory(transaction, input.ownerUserId, input.flowId);
+        const [deleted] = await transaction
+          .delete(flows)
+          .where(
+            and(
+              eq(flows.ownerUserId, input.ownerUserId),
+              eq(flows.id, input.flowId),
+              eq(flows.revision, current.revision),
+              eq(flows.definitionState, current.state)
+            )
+          )
+          .returning({ id: flows.id });
+        if (!deleted) throw new FlowDefinitionIntegrityError();
+        return { deleted: true as const };
+      })
   };
 }
 
@@ -344,10 +474,20 @@ async function lockOwnedFlow(
   transaction: FlowTransaction,
   command: FlowDefinitionCommand
 ): Promise<LockedFlow | null> {
+  return lockOwnedFlowResource(transaction, {
+    ownerUserId: command.ownerUserId,
+    flowId: command.resourceId
+  });
+}
+
+async function lockOwnedFlowResource(
+  transaction: FlowTransaction,
+  input: { readonly ownerUserId: string; readonly flowId: string }
+): Promise<LockedFlow | null> {
   const [row] = await transaction
     .select()
     .from(flows)
-    .where(and(eq(flows.ownerUserId, command.ownerUserId), eq(flows.id, command.resourceId)))
+    .where(and(eq(flows.ownerUserId, input.ownerUserId), eq(flows.id, input.flowId)))
     .limit(1)
     .for("update");
   if (!row) return null;
@@ -357,14 +497,68 @@ async function lockOwnedFlow(
     .from(flowVersions)
     .where(
       and(
-        eq(flowVersions.ownerUserId, command.ownerUserId),
-        eq(flowVersions.flowId, command.resourceId)
+        eq(flowVersions.ownerUserId, input.ownerUserId),
+        eq(flowVersions.flowId, input.flowId)
       )
     )
     .orderBy(desc(flowVersions.version))
     .limit(1);
   assertPublicationPointer(row, latestVersion ?? null);
   return { row, latestVersion: latestVersion ?? null };
+}
+
+async function lockOwnedFlowById(
+  transaction: FlowTransaction,
+  ownerUserId: string,
+  flowId: string
+): Promise<LockedFlow | null> {
+  return lockOwnedFlowResource(transaction, { ownerUserId, flowId });
+}
+
+function assertExpectedRevision(
+  current: FlowDefinitionControlRecord,
+  expectedRevision: number
+): void {
+  if (current.revision !== expectedRevision) {
+    throw new FlowDefinitionRevisionConflictError(expectedRevision, current.revision);
+  }
+}
+
+async function assertNoActiveEnrollment(
+  transaction: FlowTransaction,
+  ownerUserId: string,
+  flowId: string
+): Promise<void> {
+  const [active] = await transaction
+    .select({ flowId: flowEnrollmentControls.flowId })
+    .from(flowEnrollmentControls)
+    .where(
+      and(
+        eq(flowEnrollmentControls.ownerUserId, ownerUserId),
+        eq(flowEnrollmentControls.flowId, flowId),
+        eq(flowEnrollmentControls.state, "active")
+      )
+    )
+    .limit(1);
+  if (active) throw new FlowDefinitionActiveEnrollmentError();
+}
+
+async function assertNoRunHistory(
+  transaction: FlowTransaction,
+  ownerUserId: string,
+  flowId: string
+): Promise<void> {
+  const [history] = await transaction
+    .select({ count: sql<number>`count(*)::int` })
+    .from(flowRuns)
+    .where(and(eq(flowRuns.ownerUserId, ownerUserId), eq(flowRuns.flowId, flowId)));
+  const [activationHistory] = await transaction
+    .select({ count: sql<number>`count(*)::int` })
+    .from(flowActivationEpochs)
+    .where(eq(flowActivationEpochs.flowId, flowId));
+  if ((history?.count ?? 0) > 0 || (activationHistory?.count ?? 0) > 0) {
+    throw new FlowDefinitionHasRunHistoryError();
+  }
 }
 
 function assertPublicationPointer(row: FlowRow, latestVersion: FlowVersionRow | null): void {
@@ -432,6 +626,14 @@ function parseV2Definition(locked: LockedFlow): FlowDefinitionV2 {
     schemaVersion: "flow-definition.v2",
     ...toControlRecord(locked)
   });
+}
+
+function normalizeDuplicateName(value: string): string {
+  const normalized = value.trim();
+  if (normalized.length < 1 || normalized.length > 180) {
+    throw new FlowDefinitionDuplicateInvalidError();
+  }
+  return normalized;
 }
 
 function toPublishedVersionRecord(row: FlowVersionRow): FlowDefinitionPublishedVersionRecord {

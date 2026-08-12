@@ -3,14 +3,18 @@ import { randomUUID } from "node:crypto";
 
 import { flowGraphV2Schema, type FlowGraphRead, type FlowPresentationV1 } from "@elevenhouse/contracts";
 import {
+  archiveFlowDefinitionV2,
   createFlowDefinitionV2,
   createNextFlowDraftV2,
   compileFlowGraphV2,
+  deleteFlowDefinitionV2,
+  duplicateFlowDefinitionV2,
   FlowDefinitionIdempotencyConflictError,
   FlowDefinitionIdempotencyExpiredError,
   FlowDefinitionIntegrityError,
   FlowDefinitionRevisionConflictError,
   publishFlowDefinitionV2,
+  restoreFlowDefinitionV2,
   sha256CanonicalJson,
   type CanonicalJson,
   updateFlowDefinitionDraftV2
@@ -486,6 +490,92 @@ describe("flow definition control store Drizzle/PostgreSQL integration", () => {
       latestPublishedVersionId: published.version.id
     });
     await expect(selectVersions(flowId)).resolves.toHaveLength(1);
+  });
+
+  it("archives, restores, duplicates and deletes definitions without copying history", async () => {
+    const ownerUserId = await createUser();
+    const flowId = await createFlow(ownerUserId);
+    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
+
+    const archived = await archiveFlowDefinitionV2({
+      store,
+      ownerUserId,
+      flowId,
+      request: { expectedRevision: 1 },
+      now: "2026-08-02T20:02:00.000Z"
+    });
+    expect(archived).toMatchObject({ state: "archived", revision: 2 });
+
+    const restored = await restoreFlowDefinitionV2({
+      store,
+      ownerUserId,
+      flowId,
+      request: { expectedRevision: 2 },
+      now: "2026-08-02T20:03:00.000Z"
+    });
+    expect(restored).toMatchObject({ state: "draft", revision: 3 });
+
+    const duplicated = await duplicateFlowDefinitionV2({
+      store,
+      ownerUserId,
+      flowId,
+      request: { expectedRevision: 3, name: "Копия подготовки" },
+      now: "2026-08-02T20:04:00.000Z"
+    });
+    expect(duplicated).toMatchObject({
+      ownerUserId,
+      name: "Копия подготовки",
+      state: "draft",
+      revision: 1,
+      latestPublishedVersionId: null,
+      latestPublishedVersion: null
+    });
+    expect(duplicated?.id).not.toBe(flowId);
+    await expect(selectVersions(duplicated?.id ?? raise("Expected duplicate id"))).resolves.toHaveLength(0);
+
+    await expect(
+      deleteFlowDefinitionV2({
+        store,
+        ownerUserId,
+        flowId: duplicated?.id ?? raise("Expected duplicate id"),
+        request: { expectedRevision: 1 }
+      })
+    ).resolves.toEqual({ deleted: true });
+    await expect(selectFlow(duplicated?.id ?? raise("Expected duplicate id"))).resolves.toBeNull();
+  });
+
+  it("restores archived published definitions as disabled versioned definitions", async () => {
+    const ownerUserId = await createUser();
+    const flowId = await createFlow(ownerUserId);
+    const store = createDrizzleFlowDefinitionControlStore(runtime.database);
+
+    await publishFlowDefinitionV2({
+      store,
+      actorUserId: ownerUserId,
+      ownerUserId,
+      flowId,
+      request: { expectedRevision: 1 },
+      idempotencyKey: "flow-publish-before-archive",
+      now: "2026-08-02T20:05:00.000Z"
+    });
+    await expect(
+      archiveFlowDefinitionV2({
+        store,
+        ownerUserId,
+        flowId,
+        request: { expectedRevision: 2 },
+        now: "2026-08-02T20:06:00.000Z"
+      })
+    ).resolves.toMatchObject({ state: "archived", revision: 3 });
+    await expect(
+      restoreFlowDefinitionV2({
+        store,
+        ownerUserId,
+        flowId,
+        request: { expectedRevision: 3 },
+        now: "2026-08-02T20:07:00.000Z"
+      })
+    ).resolves.toMatchObject({ state: "versioned", revision: 4 });
   });
 
   it("returns the same no-leak not-found result for foreign and missing resources", async () => {
