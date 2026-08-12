@@ -205,6 +205,22 @@ describe.sequential("Flow booking enrollment Drizzle/PostgreSQL integration", ()
     const compiledManualGraph = compileFlowGraphV2(manualGraph);
     const manualCapabilityManifest =
       compiledManualGraph.capabilityManifest ?? raise("Expected manual client manifest");
+    const manualRequirementKeys = createFlowRuntimeRequirementKeys(manualCapabilityManifest);
+    const combinedRequirementKeys = [
+      ...new Set([...fixture.requirementKeys, ...manualRequirementKeys])
+    ].sort();
+    await replaceFlowRuntimeRolloutPolicy({
+      store: createDrizzleFlowRuntimeControlCommandStore(runtime.database),
+      actorUserId: fixture.ownerUserId,
+      idempotencyKey: `enable-booking-and-manual-client-flow-${randomUUID()}`,
+      expectedRevision: 2,
+      policy: canaryPolicy(fixture.ownerSubjectId, combinedRequirementKeys),
+      reason: "Booking and manual client enrollment integration"
+    });
+    await createDrizzleFlowWorkerReadinessStore(runtime.database).heartbeat(fixture.workerIdentity);
+    await createDrizzleFlowWorkerReadinessStore(runtime.database).register(
+      workerRegistration(fixture.ownerSubjectId, combinedRequirementKeys)
+    );
     const manualFlow = await createPublishedFlow({
       ownerUserId: fixture.ownerUserId,
       graph: manualGraph,

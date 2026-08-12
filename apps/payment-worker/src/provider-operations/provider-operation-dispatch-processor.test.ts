@@ -6,7 +6,12 @@ describe("provider operation dispatch processor", () => {
   it("owns only interval orchestration and delegates the fenced relay one time per tick", async () => {
     const claimPending = vi.fn(async () => []);
     const processor = createProviderOperationDispatchProcessor({
-      store: { claimPending, markPublished: vi.fn(), markPublishFailed: vi.fn() },
+      store: {
+        claimPending,
+        markPublished: vi.fn(),
+        markPublishFailed: vi.fn(),
+        markQuarantined: vi.fn()
+      },
       reader: { readDispatchWorkItem: vi.fn() },
       dispatcher: { dispatch: vi.fn() },
       now: () => new Date("2026-08-04T12:00:00.000Z"),

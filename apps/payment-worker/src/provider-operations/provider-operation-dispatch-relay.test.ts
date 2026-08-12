@@ -125,7 +125,8 @@ function createStore(claimed: ClaimedOutboxEvent): OutboxRelayStore {
   return {
     claimPending: vi.fn(async () => [claimed]),
     markPublished: vi.fn(async () => undefined),
-    markPublishFailed: vi.fn(async () => undefined)
+    markPublishFailed: vi.fn(async () => undefined),
+    markQuarantined: vi.fn(async () => undefined)
   };
 }
 
