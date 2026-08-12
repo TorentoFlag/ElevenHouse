@@ -536,6 +536,102 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
     ).resolves.toMatchObject([{ available: 4, reserved: 0, consumed: 0, released: 0, version: 3 }]);
   });
 
+  it("withdraws a prompt with an append-only tombstone revision and releases its reservation", async () => {
+    const { fixture, journalId } = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const promptDraft = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, {
+      journalId,
+      idempotencyKey: `draft-withdraw-prompt-${randomUUID()}`,
+      actorUserId: fixture.authority.astrologerUserId,
+      actorRole: "astrologer",
+      request: {
+        expectedJournalVersion: 1,
+        cycleId: null,
+        kind: "reflection_prompt",
+        body: "Какой вопрос сейчас важнее оставить открытым?",
+        attachmentIds: [],
+        moodId: null,
+        correctsItemId: null
+      }
+    });
+    if (promptDraft.outcome !== "applied" || promptDraft.response.resource === null) {
+      throw new Error("Expected a prompt draft");
+    }
+    const cycleId = randomUUID();
+    const promptItemId = randomUUID();
+    await executeAstroDiaryPromptCommand(unitOfWork, {
+      journalId,
+      expectedJournalVersion: 2,
+      idempotencyKey: `open-withdraw-prompt-${randomUUID()}`,
+      request: {
+        type: "open_prompt",
+        command: {
+          actorUserId: fixture.authority.astrologerUserId,
+          promptDraftId: promptDraft.response.resource.draftId,
+          expectedPromptDraftVersion: 1,
+          cycleId,
+          promptItemId,
+          periodId: fixture.periodId,
+          allowanceExpectedVersion: 1,
+          allowanceIdempotencyKey: `reserve-withdraw-${randomUUID()}`,
+          reservationId: randomUUID(),
+          derivativeCommandId: randomUUID(),
+          eventIds: {
+            cycleOpened: randomUUID(),
+            promptPublished: randomUUID(),
+            derivativeRequested: randomUUID()
+          }
+        }
+      }
+    });
+    const input = {
+      journalId,
+      expectedJournalVersion: 3,
+      idempotencyKey: `withdraw-prompt-${randomUUID()}`,
+      request: {
+        type: "close_prompt" as const,
+        command: {
+          reason: "prompt_withdrawn" as const,
+          actorUserId: fixture.authority.astrologerUserId,
+          cycleId,
+          expectedCycleVersion: 1,
+          promptItemId,
+          expectedPromptRevision: 1,
+          allowancePeriodId: fixture.periodId,
+          allowanceExpectedVersion: 2,
+          allowanceIdempotencyKey: `release-withdraw-${randomUUID()}`,
+          cycleClosedEventId: randomUUID()
+        }
+      }
+    };
+    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "applied"
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItems)
+        .where(eq(astroDiaryTimelineItems.id, promptItemId))
+    ).resolves.toMatchObject([
+      {
+        kind: "tombstone",
+        originalKind: "reflection_prompt",
+        currentRevision: 2,
+        body: null,
+        tombstoneReason: "hidden_by_author"
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItemRevisions)
+        .where(eq(astroDiaryTimelineItemRevisions.itemId, promptItemId))
+    ).resolves.toHaveLength(2);
+    await expect(
+      runtime.database.select().from(astroDiaryCycles).where(eq(astroDiaryCycles.id, cycleId))
+    ).resolves.toMatchObject([{ state: "closed", closeReason: "prompt_withdrawn" }]);
+  });
+
   it("updates and deletes an own draft with journal plus draft CAS and body-free replay", async () => {
     const { fixture, journalId } = await createJournalFixture(runtime);
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);

@@ -138,6 +138,8 @@ async function executeAstroDiaryCommandInTransaction(
     await persistPromptAcceptanceWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "prompt_decline") {
     await persistPromptDeclineWriteSet(transaction, decision.writeSet, commandAt);
+  } else if (persistence === "prompt_withdrawal") {
+    await persistPromptWithdrawalWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "client_entry_publication") {
     await persistClientEntryPublicationWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "closing_reply") {
@@ -177,6 +179,7 @@ function assertSupportedWriteSet(
   | "prompt_opening"
   | "prompt_acceptance"
   | "prompt_decline"
+  | "prompt_withdrawal"
   | "client_entry_publication"
   | "closing_reply"
   | "follow_up_reply" {
@@ -188,6 +191,9 @@ function assertSupportedWriteSet(
   }
   if (isPromptDeclineWriteSet(input, writeSet, allocation)) {
     return "prompt_decline";
+  }
+  if (isPromptWithdrawalWriteSet(input, writeSet, allocation)) {
+    return "prompt_withdrawal";
   }
   if (isClientEntryPublicationWriteSet(input, writeSet, allocation)) {
     return "client_entry_publication";
@@ -458,6 +464,67 @@ function isPromptDeclineWriteSet(
     writeSet.cascadeTargets.length === 0 &&
     writeSet.erasureFacts.length === 0 &&
     writeSet.readCursors.length === 0
+  );
+}
+
+function isPromptWithdrawalWriteSet(
+  input: AstroDiaryCommandUnitOfWorkInput,
+  writeSet: AstroDiaryCommandWriteSet,
+  allocation: AstroDiaryCommandAllocatedResource | null
+): boolean {
+  if (
+    allocation !== null ||
+    input.resultResource !== null ||
+    input.envelope.operation !== "close"
+  ) {
+    return false;
+  }
+  const [journal] = writeSet.journals;
+  const [cycle] = writeSet.cycles;
+  const [allowance] = writeSet.allowances;
+  const [item] = writeSet.timelineItems;
+  return Boolean(
+    journal?.after &&
+    journal.beforeVersion !== null &&
+    journal.after.id === input.journalId &&
+    journal.after.version === journal.beforeVersion + 1 &&
+    cycle !== undefined &&
+    cycle.beforeVersion !== null &&
+    cycle.after?.journalId === input.journalId &&
+    cycle.after.state === "closed" &&
+    cycle.after.closeReason === "prompt_withdrawn" &&
+    cycle.after.openingAllowanceReservationId === null &&
+    allowance !== undefined &&
+    allowance.beforeVersion !== null &&
+    allowance.after?.version === allowance.beforeVersion + 1 &&
+    item !== undefined &&
+    item.beforeRevision !== null &&
+    item.after.journalId === input.journalId &&
+    item.after.kind === "tombstone" &&
+    item.after.revision === item.beforeRevision + 1 &&
+    item.after.originalKind === "reflection_prompt" &&
+    item.after.reason === "hidden_by_author" &&
+    writeSet.journals.length === 1 &&
+    writeSet.cycles.length === 1 &&
+    writeSet.drafts.length === 0 &&
+    writeSet.obligations.length === 0 &&
+    writeSet.allowances.length === 1 &&
+    writeSet.timelineItems.length === 1 &&
+    writeSet.mediaBindings.length === 0 &&
+    writeSet.mediaReleases.length === 0 &&
+    writeSet.mediaAccessRevocations.length === 0 &&
+    writeSet.journalMediaAccessRevocations.length === 0 &&
+    writeSet.itemReadAccessRevocations.length === 0 &&
+    writeSet.contextSnapshots.length === 0 &&
+    writeSet.contextInvalidations.length === 0 &&
+    writeSet.derivativeCommands.length === 0 &&
+    writeSet.erasureCommands.length === 0 &&
+    writeSet.subscriptionTransitions.length === 0 &&
+    writeSet.cascadeCommands.length === 0 &&
+    writeSet.cascadeTargets.length === 0 &&
+    writeSet.erasureFacts.length === 0 &&
+    writeSet.readCursors.length === 0 &&
+    writeSet.events.length === 1
   );
 }
 
@@ -1209,6 +1276,98 @@ async function persistPromptDeclineWriteSet(
   await persistEventsAndDeliveries(transaction, writeSet.events, commandAt);
 }
 
+async function persistPromptWithdrawalWriteSet(
+  transaction: ClientSubscriptionTransaction,
+  writeSet: AstroDiaryCommandWriteSet,
+  commandAt: Date
+): Promise<void> {
+  const [journalEffect] = writeSet.journals;
+  const [cycleEffect] = writeSet.cycles;
+  const [allowanceEffect] = writeSet.allowances;
+  const [itemEffect] = writeSet.timelineItems;
+  if (
+    !journalEffect?.after ||
+    !cycleEffect?.after ||
+    !allowanceEffect?.after ||
+    !itemEffect?.after ||
+    itemEffect.after.kind !== "tombstone"
+  ) {
+    throw new Error("AstroDiary prompt withdrawal write-set is incomplete");
+  }
+  const [updatedJournal] = await transaction
+    .update(astroDiaryJournals)
+    .set({ state: journalEffect.after.state, version: journalEffect.after.version })
+    .where(
+      and(
+        eq(astroDiaryJournals.id, journalEffect.after.id),
+        eq(astroDiaryJournals.version, journalEffect.beforeVersion!)
+      )
+    )
+    .returning({ id: astroDiaryJournals.id });
+  if (!updatedJournal) throw new Error("AstroDiary journal CAS changed inside locked transaction");
+  const cycle = cycleEffect.after;
+  const updatedCycle = await transaction
+    .update(astroDiaryCycles)
+    .set({
+      openingAllowanceReservationId: null,
+      awaitingClientPromptItemId: null,
+      clientResponseDueAt: nullableDate(cycle.clientResponseDueAt),
+      clientResponseWindowCalendarDays: cycle.clientResponseWindowCalendarDays,
+      clientResponseTimezone: cycle.clientResponseTimezone,
+      state: cycle.state,
+      version: cycle.version,
+      closedAt: nullableDate(cycle.closedAt),
+      closeReason: cycle.closeReason
+    })
+    .where(
+      and(
+        eq(astroDiaryCycles.id, cycle.id),
+        eq(astroDiaryCycles.version, cycleEffect.beforeVersion!)
+      )
+    )
+    .returning({ id: astroDiaryCycles.id });
+  if (updatedCycle.length !== 1)
+    throw new Error("AstroDiary prompt withdrawal cycle CAS changed inside locked transaction");
+  await persistReleasedOpeningAllowance(transaction, allowanceEffect);
+
+  const tombstone = itemEffect.after;
+  const [updatedItem] = await transaction
+    .update(astroDiaryTimelineItems)
+    .set({
+      currentRevision: tombstone.revision,
+      kind: tombstone.kind,
+      originalKind: tombstone.originalKind,
+      body: null,
+      moodId: null,
+      contextStatus: null,
+      correctsItemId: null,
+      tombstoneReason: tombstone.reason,
+      editedAt: null
+    })
+    .where(
+      and(
+        eq(astroDiaryTimelineItems.id, tombstone.id),
+        eq(astroDiaryTimelineItems.currentRevision, itemEffect.beforeRevision!)
+      )
+    )
+    .returning({ id: astroDiaryTimelineItems.id });
+  if (!updatedItem)
+    throw new Error("AstroDiary prompt withdrawal timeline CAS changed inside lock");
+  await transaction.insert(astroDiaryTimelineItemRevisions).values({
+    ...mapTombstoneTimelineItem(tombstone),
+    itemId: tombstone.id,
+    revision: tombstone.revision,
+    sourceDigest: sha256CanonicalJson({
+      itemId: tombstone.id,
+      revision: tombstone.revision,
+      originalKind: tombstone.originalKind,
+      reason: tombstone.reason
+    }),
+    recordedAt: commandAt
+  });
+  await persistEventsAndDeliveries(transaction, writeSet.events, commandAt);
+}
+
 async function persistPublishedMediaBindings(
   transaction: ClientSubscriptionTransaction,
   bindings: AstroDiaryCommandWriteSet["mediaBindings"],
@@ -1710,6 +1869,27 @@ function mapTimelineItem(
     contextStatus: item.contextStatus,
     correctsItemId: null,
     tombstoneReason: null,
+    editedAt: null,
+    occurredAt: new Date(item.occurredAt)
+  };
+}
+
+function mapTombstoneTimelineItem(item: Extract<AstroDiaryTimelineItem, { kind: "tombstone" }>) {
+  return {
+    id: item.id,
+    journalId: item.journalId,
+    cycleId: item.cycleId,
+    currentRevision: item.revision,
+    cursor: item.cursor,
+    kind: item.kind,
+    originalKind: item.originalKind,
+    authorRole: item.authorRole,
+    authorUserId: item.authorUserId,
+    body: null,
+    moodId: null,
+    contextStatus: null,
+    correctsItemId: null,
+    tombstoneReason: item.reason,
     editedAt: null,
     occurredAt: new Date(item.occurredAt)
   };
