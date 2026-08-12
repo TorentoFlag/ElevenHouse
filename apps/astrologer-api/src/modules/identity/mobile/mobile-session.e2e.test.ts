@@ -163,6 +163,58 @@ describe("mobile astrologer auth HTTP flow", () => {
     expect(store.authSecurityEvents.at(-1)).toMatchObject({ eventType: "registration_succeeded" });
   });
 
+  it("returns a stable conflict when native registration finds an existing identity", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "existing-astrologer@example.com",
+      roles: ["astrologer"]
+    });
+    const challenge = await post("/identity/astrologer/mobile/passwordless/request-code", {
+      channel: "email",
+      identifier: "existing-astrologer@example.com"
+    });
+
+    const registration = await post("/identity/astrologer/mobile/registration/verify-code", {
+      challengeId: challenge.body.challengeId,
+      code: "123456",
+      displayName: "Астролог Анна",
+      platform: "ios",
+      deviceLabel: "Anna iPhone"
+    });
+
+    expect(registration).toMatchObject({
+      status: 409,
+      body: { code: "identity_already_exists" }
+    });
+  });
+
+  it("revokes the authenticated mobile session through the common logout endpoint", async () => {
+    seedExistingPasswordlessAccount(store, {
+      channel: "email",
+      identifierNormalized: "logout-astrologer@example.com",
+      roles: ["astrologer"]
+    });
+    const challenge = await post("/identity/astrologer/mobile/passwordless/request-code", {
+      channel: "email",
+      identifier: "logout-astrologer@example.com"
+    });
+    const login = await post("/identity/astrologer/mobile/passwordless/verify-code", {
+      challengeId: challenge.body.challengeId,
+      code: "123456",
+      platform: "ios",
+      deviceLabel: "Anton iPhone"
+    });
+
+    await expect(postEmpty("/identity/logout", login.body.accessToken)).resolves.toMatchObject({
+      status: 204
+    });
+    await expect(get("/identity/me", login.body.accessToken)).resolves.toMatchObject({ status: 401 });
+    expect(store.authSecurityEvents.at(-1)).toMatchObject({
+      eventType: "logout_succeeded",
+      metadata: expect.objectContaining({ mobileSessionId: login.body.sessionId })
+    });
+  });
+
   it("returns 400 for an invalid refresh body", async () => {
     await expect(post("/identity/astrologer/mobile/refresh", { refreshToken: "too-short" })).resolves.toMatchObject({
       status: 400
@@ -183,5 +235,13 @@ describe("mobile astrologer auth HTTP flow", () => {
       headers: { authorization: `Bearer ${accessToken}` }
     });
     return { status: response.status, body: await response.json() };
+  }
+
+  async function postEmpty(path: string, accessToken: string) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${accessToken}` }
+    });
+    return { status: response.status, headers: response.headers };
   }
 });

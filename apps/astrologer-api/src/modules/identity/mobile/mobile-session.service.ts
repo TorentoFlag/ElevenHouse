@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  UnauthorizedException
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   createAes256GcmSecretCipher,
@@ -15,6 +21,7 @@ import {
   type VerifyMobileAstrologerPasswordlessCodeRequest
 } from "@elevenhouse/contracts";
 import {
+  CustomerAccountIdentityConflictError,
   MobileAstrologerAccountAccessDeniedError,
   type MobileRefreshRetryReceiptCipher,
   PasswordlessCodeVerificationError,
@@ -271,6 +278,15 @@ export class MobileAstrologerSessionService {
     } catch (error) {
       if (error instanceof PasswordlessCodeVerificationError) {
         throw new UnauthorizedException("Invalid or expired passwordless code", { cause: error });
+      }
+      if (error instanceof CustomerAccountIdentityConflictError) {
+        throw new ConflictException(
+          {
+            code: "identity_already_exists",
+            message: "Astrologer account identity already exists"
+          },
+          { cause: error }
+        );
       }
       throw error;
     }
