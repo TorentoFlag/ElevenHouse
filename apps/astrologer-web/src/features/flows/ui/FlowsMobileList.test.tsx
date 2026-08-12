@@ -78,6 +78,17 @@ describe("FlowsMobileList", () => {
     expect(screen.queryByText("Схема V2")).toBeNull();
   });
 
+  it("routes lifecycle actions from the mobile card", () => {
+    const onLifecycleAction = vi.fn();
+    render(<FlowsMobileList flows={[flow]} locale="ru" onLifecycleAction={onLifecycleAction} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "В архив" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    expect(onLifecycleAction).toHaveBeenNthCalledWith(1, flow.id, "archive");
+    expect(onLifecycleAction).toHaveBeenNthCalledWith(2, flow.id, "delete");
+  });
+
   it("counts server-authoritative active enrollments without legacy runtime metadata", () => {
     render(
       <FlowsMobileList

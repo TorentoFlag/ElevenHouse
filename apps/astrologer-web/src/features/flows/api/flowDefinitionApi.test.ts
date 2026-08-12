@@ -9,6 +9,12 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { application } from "../../../Application";
+import {
+  archiveFlowDefinition,
+  deleteFlowDefinition,
+  duplicateFlowDefinition,
+  restoreFlowDefinition
+} from "./flowDefinitionLifecycle";
 import { getFlowDefinition } from "./getFlowDefinition";
 import { listFlows } from "./listFlows";
 import { publishFlow } from "./publishFlow";
@@ -139,6 +145,39 @@ describe("flow definition API", () => {
       }
     );
   });
+
+  it("transitions lifecycle actions through the authoritative Flow endpoints", async () => {
+    const versioned = publishedDefinition().flow;
+    const post = vi
+      .spyOn(application.http, "post")
+      .mockResolvedValueOnce({ ...versioned, state: "archived", revision: 2 })
+      .mockResolvedValueOnce({ ...versioned, state: "versioned", revision: 3 })
+      .mockResolvedValueOnce(definitionV2({ id: versionId, name: "Копия" }))
+      .mockResolvedValueOnce({ deleted: true });
+
+    await expect(
+      archiveFlowDefinition({ flowId, body: { expectedRevision: 1 } })
+    ).resolves.toMatchObject({ state: "archived", revision: 2 });
+    await expect(
+      restoreFlowDefinition({ flowId, body: { expectedRevision: 2 } })
+    ).resolves.toMatchObject({ state: "versioned", revision: 3 });
+    await expect(
+      duplicateFlowDefinition({ flowId, body: { expectedRevision: 3, name: "Копия" } })
+    ).resolves.toMatchObject({ id: versionId, name: "Копия" });
+    await expect(
+      deleteFlowDefinition({ flowId, body: { expectedRevision: 1 } })
+    ).resolves.toEqual({ deleted: true });
+
+    expect(post).toHaveBeenNthCalledWith(1, `/flows/${flowId}/archive`, { expectedRevision: 1 }, { csrf: true });
+    expect(post).toHaveBeenNthCalledWith(2, `/flows/${flowId}/restore`, { expectedRevision: 2 }, { csrf: true });
+    expect(post).toHaveBeenNthCalledWith(
+      3,
+      `/flows/${flowId}/duplicate`,
+      { expectedRevision: 3, name: "Копия" },
+      { csrf: true }
+    );
+    expect(post).toHaveBeenNthCalledWith(4, `/flows/${flowId}/delete`, { expectedRevision: 1 }, { csrf: true });
+  });
 });
 
 function definitionSummary(): Extract<
@@ -184,6 +223,30 @@ function definitionDetail(): FlowDefinitionDetail {
     ...definitionSummary(),
     draftGraph: graph,
     draftPresentation: null
+  };
+}
+
+function definitionV2(
+  overrides: Partial<PublishFlowDefinitionResponse["flow"]> = {}
+): PublishFlowDefinitionResponse["flow"] {
+  return {
+    schemaVersion: "flow-definition.v2",
+    id: flowId,
+    ownerUserId,
+    name: "Подготовка консультации",
+    origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
+    state: "draft",
+    approvalMode: "manual_approve",
+    revision: 1,
+    draftBaseVersionId: null,
+    draftGraph: graph,
+    draftPresentation: null,
+    latestPublishedVersionId: null,
+    latestPublishedVersion: null,
+    createdAt: "2026-08-04T18:00:00.000Z",
+    updatedAt: "2026-08-04T18:00:00.000Z",
+    publishedAt: null,
+    ...overrides
   };
 }
 

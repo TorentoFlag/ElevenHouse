@@ -27,12 +27,16 @@ const mocks = vi.hoisted(() => ({
   useFlowActivationReviewQuery: vi.fn(),
   useFlowEnrollmentQuery: vi.fn(),
   useActivateFlowMutation: vi.fn(),
+  useArchiveFlowDefinitionMutation: vi.fn(),
   usePauseFlowEnrollmentMutation: vi.fn(),
   useCreateFlowMutation: vi.fn(),
   useCreateManualFlowRunMutation: vi.fn(),
   useCreateNextFlowDraftMutation: vi.fn(),
+  useDeleteFlowDefinitionMutation: vi.fn(),
+  useDuplicateFlowDefinitionMutation: vi.fn(),
   useUpdateFlowDraftMutation: vi.fn(),
   usePublishFlowMutation: vi.fn(),
+  useRestoreFlowDefinitionMutation: vi.fn(),
   useValidateFlowDefinitionMutation: vi.fn()
 }));
 
@@ -65,6 +69,9 @@ vi.mock("../../features/flows/model/useFlowEnrollmentQuery", () => ({
 vi.mock("../../features/flows/model/useActivateFlowMutation", () => ({
   useActivateFlowMutation: mocks.useActivateFlowMutation
 }));
+vi.mock("../../features/flows/model/useArchiveFlowDefinitionMutation", () => ({
+  useArchiveFlowDefinitionMutation: mocks.useArchiveFlowDefinitionMutation
+}));
 vi.mock("../../features/flows/model/usePauseFlowEnrollmentMutation", () => ({
   usePauseFlowEnrollmentMutation: mocks.usePauseFlowEnrollmentMutation
 }));
@@ -77,11 +84,20 @@ vi.mock("../../features/flows/model/useCreateManualFlowRunMutation", () => ({
 vi.mock("../../features/flows/model/useCreateNextFlowDraftMutation", () => ({
   useCreateNextFlowDraftMutation: mocks.useCreateNextFlowDraftMutation
 }));
+vi.mock("../../features/flows/model/useDeleteFlowDefinitionMutation", () => ({
+  useDeleteFlowDefinitionMutation: mocks.useDeleteFlowDefinitionMutation
+}));
+vi.mock("../../features/flows/model/useDuplicateFlowDefinitionMutation", () => ({
+  useDuplicateFlowDefinitionMutation: mocks.useDuplicateFlowDefinitionMutation
+}));
 vi.mock("../../features/flows/model/useUpdateFlowDraftMutation", () => ({
   useUpdateFlowDraftMutation: mocks.useUpdateFlowDraftMutation
 }));
 vi.mock("../../features/flows/model/usePublishFlowMutation", () => ({
   usePublishFlowMutation: mocks.usePublishFlowMutation
+}));
+vi.mock("../../features/flows/model/useRestoreFlowDefinitionMutation", () => ({
+  useRestoreFlowDefinitionMutation: mocks.useRestoreFlowDefinitionMutation
 }));
 vi.mock("../../features/flows/model/useValidateFlowDefinitionMutation", () => ({
   useValidateFlowDefinitionMutation: mocks.useValidateFlowDefinitionMutation
@@ -142,12 +158,16 @@ describe("FlowsPage enrollment controller", () => {
 
     for (const hook of [
       mocks.useActivateFlowMutation,
+      mocks.useArchiveFlowDefinitionMutation,
       mocks.usePauseFlowEnrollmentMutation,
       mocks.useCreateFlowMutation,
       mocks.useCreateManualFlowRunMutation,
       mocks.useCreateNextFlowDraftMutation,
+      mocks.useDeleteFlowDefinitionMutation,
+      mocks.useDuplicateFlowDefinitionMutation,
       mocks.useUpdateFlowDraftMutation,
       mocks.usePublishFlowMutation,
+      mocks.useRestoreFlowDefinitionMutation,
       mocks.useValidateFlowDefinitionMutation
     ]) {
       hook.mockReturnValue(mutation());

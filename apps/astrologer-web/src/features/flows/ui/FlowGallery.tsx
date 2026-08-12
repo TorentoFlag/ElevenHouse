@@ -15,9 +15,13 @@ export type FlowGalleryProps = {
     flowId: string,
     action: "review_activation" | "pause_enrollment"
   ) => void;
+  readonly onLifecycleAction?: (flowId: string, action: FlowDefinitionLifecycleAction) => void;
   readonly isTogglingAutomation?: boolean;
+  readonly isLifecycleActionPending?: boolean;
   readonly classNames?: FlowGalleryClassNames;
 };
+
+export type FlowDefinitionLifecycleAction = "archive" | "restore" | "duplicate" | "delete";
 
 export type FlowGalleryClassNames = Readonly<Record<string, string>>;
 
@@ -29,10 +33,13 @@ export function FlowGallery({
   emptyMessage,
   onOpenFlow,
   onAutomationAction,
+  onLifecycleAction,
   isTogglingAutomation = false,
+  isLifecycleActionPending = false,
   classNames
 }: FlowGalleryProps) {
   const cards = flows.map((flow) => ({
+    flow,
     card: buildFlowGalleryCard(flow, locale),
     automation: buildFlowAutomationControl(flow, locale)
   }));
@@ -67,7 +74,7 @@ export function FlowGallery({
             {emptyMessage}
           </p>
         ) : null}
-        {cards.map(({ card, automation }) => (
+        {cards.map(({ flow, card, automation }) => (
           <article key={card.id} className={className("flowCard")}>
             <button
               className={className("cardOpenButton")}
@@ -139,6 +146,14 @@ export function FlowGallery({
                 statusLabel={card.automationControlLabel}
               />
             </footer>
+            <FlowCardActions
+              card={card}
+              flow={flow}
+              copy={copy}
+              classNames={classNames}
+              disabled={!onLifecycleAction || isLifecycleActionPending}
+              onAction={(action) => onLifecycleAction?.(card.id, action)}
+            />
           </article>
         ))}
 
@@ -157,6 +172,65 @@ export function FlowGallery({
     </div>
   );
 }
+
+function FlowCardActions({
+  card,
+  flow,
+  copy,
+  classNames,
+  disabled,
+  onAction
+}: {
+  readonly card: ReturnType<typeof buildFlowGalleryCard>;
+  readonly flow: FlowDefinitionSummary | undefined;
+  readonly copy: GalleryCopy;
+  readonly classNames: FlowGalleryClassNames | undefined;
+  readonly disabled: boolean;
+  readonly onAction: (action: FlowDefinitionLifecycleAction) => void;
+}) {
+  if (!flow) return null;
+  const actions = flowLifecycleActions(flow, copy);
+  return (
+    <div className={classNames?.cardActions ?? ""} aria-label={`${copy.actions}: ${card.title}`}>
+      {actions.map((action) => (
+        <button
+          key={action.action}
+          className={classNames?.cardActionButton ?? ""}
+          type="button"
+          disabled={disabled || action.disabled}
+          title={action.reason}
+          onClick={() => onAction(action.action)}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function flowLifecycleActions(flow: FlowDefinitionSummary, copy: GalleryCopy) {
+  const active = flow.enrollment.control.state === "active";
+  const archiveDisabled = active || flow.state === "archived";
+  return [
+    flow.state === "archived"
+      ? { action: "restore" as const, label: copy.restore, disabled: false, reason: undefined }
+      : {
+          action: "archive" as const,
+          label: copy.archive,
+          disabled: archiveDisabled,
+          reason: active ? copy.pauseBeforeArchive : undefined
+        },
+    { action: "duplicate" as const, label: copy.duplicate, disabled: false, reason: undefined },
+    {
+      action: "delete" as const,
+      label: copy.delete,
+      disabled: active,
+      reason: active ? copy.pauseBeforeDelete : copy.deleteOnlyNeverRun
+    }
+  ];
+}
+
+type GalleryCopy = (typeof galleryCopy)[keyof typeof galleryCopy];
 
 function AutomationToggle({
   automation,
@@ -222,7 +296,15 @@ const galleryCopy = {
     definition: "Состояние",
     revision: "Редакция",
     version: "Версия",
-    clientsInside: "Клиентов внутри"
+    clientsInside: "Клиентов внутри",
+    actions: "Действия",
+    archive: "В архив",
+    restore: "Вернуть",
+    duplicate: "Дублировать",
+    delete: "Удалить",
+    pauseBeforeArchive: "Сначала выключите воронку",
+    pauseBeforeDelete: "Сначала выключите воронку",
+    deleteOnlyNeverRun: "Удаление разрешено только для воронок без запусков"
   },
   en: {
     title: "Flows",
@@ -232,6 +314,14 @@ const galleryCopy = {
     definition: "Definition",
     revision: "Revision",
     version: "Version",
-    clientsInside: "Clients inside"
+    clientsInside: "Clients inside",
+    actions: "Actions",
+    archive: "Archive",
+    restore: "Restore",
+    duplicate: "Duplicate",
+    delete: "Delete",
+    pauseBeforeArchive: "Pause the flow first",
+    pauseBeforeDelete: "Pause the flow first",
+    deleteOnlyNeverRun: "Deletion is allowed only for flows with no runs"
   }
 } as const;

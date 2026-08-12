@@ -1,5 +1,6 @@
 import type {
   ActivateFlowVersionResponse,
+  DeleteFlowDefinitionResponse,
   DecideFlowApprovalRequest,
   FlowDefinitionV2,
   ListFlowApprovalsQuery,
@@ -20,6 +21,14 @@ import { createManualFlowRun, type CreateManualFlowRunInput } from "../api/creat
 import { cancelFlowRun, type CancelFlowRunInput } from "../api/cancelFlowRun";
 import { completeFlowWorkItem, type CompleteFlowWorkItemInput } from "../api/completeFlowWorkItem";
 import { decideFlowApproval, type DecideFlowApprovalInput } from "../api/decideFlowApproval";
+import {
+  archiveFlowDefinition,
+  deleteFlowDefinition,
+  duplicateFlowDefinition,
+  restoreFlowDefinition,
+  type DuplicateFlowDefinitionInput,
+  type FlowDefinitionLifecycleInput
+} from "../api/flowDefinitionLifecycle";
 import { getFlowDefinition } from "../api/getFlowDefinition";
 import { getFlowRun } from "../api/getFlowRun";
 import { getFlowActivationReview } from "../api/getFlowActivationReview";
@@ -211,6 +220,46 @@ export function createNextFlowDraftMutationOptions(
   };
 }
 
+export function archiveFlowDefinitionMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: FlowDefinitionLifecycleInput) => archiveFlowDefinition(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function restoreFlowDefinitionMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: FlowDefinitionLifecycleInput) => restoreFlowDefinition(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function duplicateFlowDefinitionMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: DuplicateFlowDefinitionInput) => duplicateFlowDefinition(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
+export function deleteFlowDefinitionMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries">
+) {
+  return {
+    mutationFn: (input: FlowDefinitionLifecycleInput) => deleteFlowDefinition(input),
+    onSuccess: () => invalidateFlows(queryClient),
+    retry: false
+  };
+}
+
 export function activateFlowMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
     mutationFn: (input: ActivateFlowInput) => activateFlow(input),
@@ -299,6 +348,7 @@ export type FlowMutationResult =
   | ActivateFlowVersionResponse
   | PauseFlowEnrollmentResponse
   | FlowDefinitionV2
+  | DeleteFlowDefinitionResponse
   | PublishFlowDefinitionResponse
   | CreateManualClientFlowRunResponse
   | CancelFlowRunResponse

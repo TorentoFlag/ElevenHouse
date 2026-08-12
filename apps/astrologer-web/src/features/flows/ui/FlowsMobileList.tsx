@@ -2,6 +2,7 @@ import type { FlowDefinitionSummary } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { summarizeFlowDefinitions } from "../model/flowDisplay";
 import { buildFlowAutomationControl } from "../model/flowRuntimePresentation";
+import type { FlowDefinitionLifecycleAction } from "./FlowGallery";
 import { FlowGraphPreview } from "./FlowGraphPreview";
 import { buildFlowGalleryCard } from "./flowsVisualModel";
 
@@ -16,7 +17,9 @@ export type FlowsMobileListProps = {
     flowId: string,
     action: "review_activation" | "pause_enrollment"
   ) => void;
+  readonly onLifecycleAction?: (flowId: string, action: FlowDefinitionLifecycleAction) => void;
   readonly isTogglingAutomation?: boolean;
+  readonly isLifecycleActionPending?: boolean;
   readonly classNames?: FlowsMobileListClassNames;
 };
 
@@ -30,10 +33,13 @@ export function FlowsMobileList({
   emptyMessage,
   onOpenFlow,
   onAutomationAction,
+  onLifecycleAction,
   isTogglingAutomation = false,
+  isLifecycleActionPending = false,
   classNames
 }: FlowsMobileListProps) {
   const cards = flows.map((flow) => ({
+    flow,
     card: buildFlowGalleryCard(flow, locale),
     automation: buildFlowAutomationControl(flow, locale)
   }));
@@ -76,7 +82,7 @@ export function FlowsMobileList({
           {emptyMessage}
         </p>
       ) : null}
-      {cards.map(({ card, automation }) => (
+      {cards.map(({ flow, card, automation }) => (
         <article key={card.id} className={className("mobileCard")}>
           <button
             className={className("mobileCardOpenButton")}
@@ -149,10 +155,41 @@ export function FlowsMobileList({
               </span>
             </button>
           </footer>
+          <div className={className("cardActions")} aria-label={`${copy.actions}: ${card.title}`}>
+            {mobileLifecycleActions(flow, automation.checked, copy).map((action) => (
+              <button
+                key={action.action}
+                className={className("cardActionButton")}
+                type="button"
+                disabled={!onLifecycleAction || isLifecycleActionPending || action.disabled}
+                onClick={() => onLifecycleAction?.(card.id, action.action)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         </article>
       ))}
     </div>
   );
+}
+
+function mobileLifecycleActions(
+  flow: FlowDefinitionSummary,
+  automationChecked: boolean,
+  copy: (typeof mobileCopy)[keyof typeof mobileCopy]
+): ReadonlyArray<{
+  readonly action: FlowDefinitionLifecycleAction;
+  readonly label: string;
+  readonly disabled: boolean;
+}> {
+  return [
+    flow.state === "archived"
+      ? { action: "restore", label: copy.restore, disabled: false }
+      : { action: "archive", label: copy.archive, disabled: automationChecked },
+    { action: "duplicate", label: copy.duplicate, disabled: false },
+    { action: "delete", label: copy.delete, disabled: automationChecked }
+  ];
 }
 
 function MobileMetric({
@@ -185,7 +222,13 @@ const mobileCopy = {
     revision: "Редакция",
     version: "Версия",
     state: "Состояние",
-    clientsInside: "Клиентов внутри"
+    clientsInside: "Клиентов внутри",
+    actions: "Действия",
+    archived: "Архив",
+    archive: "В архив",
+    restore: "Вернуть",
+    duplicate: "Дублировать",
+    delete: "Удалить"
   },
   en: {
     title: "Flows",
@@ -197,6 +240,12 @@ const mobileCopy = {
     revision: "Revision",
     version: "Version",
     state: "State",
-    clientsInside: "Clients inside"
+    clientsInside: "Clients inside",
+    actions: "Actions",
+    archived: "Archived",
+    archive: "Archive",
+    restore: "Restore",
+    duplicate: "Duplicate",
+    delete: "Delete"
   }
 } as const;

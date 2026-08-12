@@ -2,12 +2,15 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { describe, expect, it, vi } from "vitest";
 import {
   activateFlowMutationOptions,
+  archiveFlowDefinitionMutationOptions,
   completeFlowWorkItemMutationOptions,
   cancelFlowRunMutationOptions,
   createNextFlowDraftMutationOptions,
   createFlowMutationOptions,
   createManualFlowRunMutationOptions,
+  deleteFlowDefinitionMutationOptions,
   decideFlowApprovalMutationOptions,
+  duplicateFlowDefinitionMutationOptions,
   flowApprovalsQueryOptions,
   flowDefinitionQueryOptions,
   flowOperatorQueueRefreshInterval,
@@ -20,14 +23,18 @@ import {
   flowWorkItemsQueryOptions,
   flowsQueryKeys,
   publishFlowMutationOptions,
+  restoreFlowDefinitionMutationOptions,
   snoozeFlowWorkItemMutationOptions,
   startFlowWorkItemMutationOptions,
   updateFlowDraftMutationOptions,
   validateFlowDefinitionMutationOptions
 } from "./flowsQueryOptions";
 import { useActivateFlowMutation } from "./useActivateFlowMutation";
+import { useArchiveFlowDefinitionMutation } from "./useArchiveFlowDefinitionMutation";
 import { useCreateNextFlowDraftMutation } from "./useCreateNextFlowDraftMutation";
 import { useCreateFlowMutation } from "./useCreateFlowMutation";
+import { useDeleteFlowDefinitionMutation } from "./useDeleteFlowDefinitionMutation";
+import { useDuplicateFlowDefinitionMutation } from "./useDuplicateFlowDefinitionMutation";
 import { useFlowDefinitionQuery } from "./useFlowDefinitionQuery";
 import { useFlowApprovalsQuery } from "./useFlowApprovalsQuery";
 import { useFlowListQuery } from "./useFlowListQuery";
@@ -37,6 +44,7 @@ import { useCompleteFlowWorkItemMutation } from "./useCompleteFlowWorkItemMutati
 import { useCancelFlowRunMutation } from "./useCancelFlowRunMutation";
 import { useFlowRunQuery } from "./useFlowRunQuery";
 import { usePublishFlowMutation } from "./usePublishFlowMutation";
+import { useRestoreFlowDefinitionMutation } from "./useRestoreFlowDefinitionMutation";
 import { useUpdateFlowDraftMutation } from "./useUpdateFlowDraftMutation";
 import { useValidateFlowDefinitionMutation } from "./useValidateFlowDefinitionMutation";
 import { useSnoozeFlowWorkItemMutation } from "./useSnoozeFlowWorkItemMutation";
@@ -122,6 +130,10 @@ describe("flows query options", () => {
     await updateFlowDraftMutationOptions(queryClient).onSuccess();
     await publishFlowMutationOptions(queryClient).onSuccess();
     await createNextFlowDraftMutationOptions(queryClient).onSuccess();
+    await archiveFlowDefinitionMutationOptions(queryClient).onSuccess();
+    await restoreFlowDefinitionMutationOptions(queryClient).onSuccess();
+    await duplicateFlowDefinitionMutationOptions(queryClient).onSuccess();
+    await deleteFlowDefinitionMutationOptions(queryClient).onSuccess();
     await activateFlowMutationOptions(queryClient).onSuccess();
     await createManualFlowRunMutationOptions(queryClient).onSuccess();
     await decideFlowApprovalMutationOptions(queryClient).onSuccess();
@@ -130,7 +142,7 @@ describe("flows query options", () => {
     await completeFlowWorkItemMutationOptions(queryClient).onSuccess();
     await cancelFlowRunMutationOptions(queryClient).onSuccess();
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(11);
+    expect(invalidateQueries).toHaveBeenCalledTimes(15);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: flowsQueryKeys.all() });
   });
 
@@ -164,6 +176,10 @@ describe("flows query options", () => {
     expect(useUpdateFlowDraftMutation()).toHaveProperty("mutationFn");
     expect(usePublishFlowMutation()).toHaveProperty("mutationFn");
     expect(useCreateNextFlowDraftMutation()).toHaveProperty("mutationFn");
+    expect(useArchiveFlowDefinitionMutation()).toHaveProperty("mutationFn");
+    expect(useRestoreFlowDefinitionMutation()).toHaveProperty("mutationFn");
+    expect(useDuplicateFlowDefinitionMutation()).toHaveProperty("mutationFn");
+    expect(useDeleteFlowDefinitionMutation()).toHaveProperty("mutationFn");
     expect(useActivateFlowMutation()).toHaveProperty("mutationFn");
     expect(useValidateFlowDefinitionMutation()).toHaveProperty("mutationFn");
     expect(useStartFlowWorkItemMutation()).toHaveProperty("mutationFn");

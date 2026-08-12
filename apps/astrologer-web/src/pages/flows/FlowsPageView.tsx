@@ -17,7 +17,7 @@ import type {
 } from "../../features/flows/ui/FlowBuilder";
 import { FlowBuilder } from "../../features/flows/ui/FlowBuilder";
 import { FlowCreateDialog } from "../../features/flows/ui/FlowCreateDialog";
-import { FlowGallery } from "../../features/flows/ui/FlowGallery";
+import { FlowGallery, type FlowDefinitionLifecycleAction } from "../../features/flows/ui/FlowGallery";
 import { FlowsMobileList } from "../../features/flows/ui/FlowsMobileList";
 import styles from "./FlowsPage.module.css";
 
@@ -62,6 +62,7 @@ export type FlowsPageViewProps = {
     flowId: string,
     action: "review_activation" | "pause_enrollment"
   ) => void;
+  readonly onLifecycleAction?: (flowId: string, action: FlowDefinitionLifecycleAction) => void;
   readonly runtimeAvailability?: FlowRuntimeAvailability | null;
   readonly onCreateManualRun?: (flowId: string) => void;
   readonly isCreating?: boolean;
@@ -69,6 +70,7 @@ export type FlowsPageViewProps = {
   readonly isPublishing?: boolean;
   readonly isCreatingNextDraft?: boolean;
   readonly isTogglingAutomation?: boolean;
+  readonly isLifecycleActionPending?: boolean;
   readonly isCreatingManualRun?: boolean;
   readonly isValidating?: boolean;
   readonly createError?: Error | null;
@@ -118,6 +120,7 @@ export function FlowsPageView({
   onPublish,
   onCreateNextDraft,
   onAutomationAction,
+  onLifecycleAction,
   runtimeAvailability = null,
   onCreateManualRun,
   isCreating = false,
@@ -125,6 +128,7 @@ export function FlowsPageView({
   isPublishing = false,
   isCreatingNextDraft = false,
   isTogglingAutomation = false,
+  isLifecycleActionPending = false,
   isCreatingManualRun = false,
   isValidating = false,
   createError = null,
@@ -230,7 +234,9 @@ export function FlowsPageView({
             emptyMessage={flows.length === 0 ? (emptyMessage ?? copy.empty) : undefined}
             onOpenFlow={onOpenFlow}
             onAutomationAction={onAutomationAction}
+            onLifecycleAction={onLifecycleAction}
             isTogglingAutomation={isTogglingAutomation}
+            isLifecycleActionPending={isLifecycleActionPending}
             classNames={styles}
           />
           <FlowsMobileList
@@ -241,7 +247,9 @@ export function FlowsPageView({
             emptyMessage={flows.length === 0 ? (emptyMessage ?? copy.empty) : undefined}
             onOpenFlow={onOpenFlow}
             onAutomationAction={onAutomationAction}
+            onLifecycleAction={onLifecycleAction}
             isTogglingAutomation={isTogglingAutomation}
+            isLifecycleActionPending={isLifecycleActionPending}
             classNames={styles}
           />
           <FlowCreateDialog

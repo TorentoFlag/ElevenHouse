@@ -28,9 +28,12 @@ import {
   type FlowEnrollmentCommandErrorClassification
 } from "../../features/flows/model/flowEnrollmentCommandModel";
 import { useActivateFlowMutation } from "../../features/flows/model/useActivateFlowMutation";
+import { useArchiveFlowDefinitionMutation } from "../../features/flows/model/useArchiveFlowDefinitionMutation";
 import { useCreateFlowMutation } from "../../features/flows/model/useCreateFlowMutation";
 import { useCreateManualFlowRunMutation } from "../../features/flows/model/useCreateManualFlowRunMutation";
 import { useCreateNextFlowDraftMutation } from "../../features/flows/model/useCreateNextFlowDraftMutation";
+import { useDeleteFlowDefinitionMutation } from "../../features/flows/model/useDeleteFlowDefinitionMutation";
+import { useDuplicateFlowDefinitionMutation } from "../../features/flows/model/useDuplicateFlowDefinitionMutation";
 import { useFlowDefinitionQuery } from "../../features/flows/model/useFlowDefinitionQuery";
 import { useFlowActivationReviewQuery } from "../../features/flows/model/useFlowActivationReviewQuery";
 import { useFlowEnrollmentQuery } from "../../features/flows/model/useFlowEnrollmentQuery";
@@ -40,6 +43,7 @@ import { useProductListQuery } from "../../features/products/model/useProductLis
 import { useAstrologerTariffEntitlementsQuery } from "../../features/platform-tariffs/model/useAstrologerTariffEntitlementsQuery";
 import { usePauseFlowEnrollmentMutation } from "../../features/flows/model/usePauseFlowEnrollmentMutation";
 import { usePublishFlowMutation } from "../../features/flows/model/usePublishFlowMutation";
+import { useRestoreFlowDefinitionMutation } from "../../features/flows/model/useRestoreFlowDefinitionMutation";
 import { useUpdateFlowDraftMutation } from "../../features/flows/model/useUpdateFlowDraftMutation";
 import { useValidateFlowDefinitionMutation } from "../../features/flows/model/useValidateFlowDefinitionMutation";
 import type {
@@ -53,6 +57,7 @@ import { FlowManualClientRunDialog } from "../../features/flows/ui/FlowManualCli
 import { FlowPauseConfirmationDialog } from "../../features/flows/ui/FlowPauseConfirmationDialog";
 import { FlowRunHistoryPanel } from "../../features/flows/ui/FlowRunHistoryPanel";
 import { FlowWorkItemQueuePanel } from "../../features/flows/ui/FlowWorkItemQueuePanel";
+import type { FlowDefinitionLifecycleAction } from "../../features/flows/ui/FlowGallery";
 import { FlowsPageView } from "./FlowsPageView";
 import styles from "./FlowsPage.module.css";
 
@@ -135,6 +140,10 @@ export function FlowsPage() {
   const nextDraftMutation = useCreateNextFlowDraftMutation();
   const activateMutation = useActivateFlowMutation();
   const pauseEnrollmentMutation = usePauseFlowEnrollmentMutation();
+  const archiveMutation = useArchiveFlowDefinitionMutation();
+  const restoreMutation = useRestoreFlowDefinitionMutation();
+  const duplicateMutation = useDuplicateFlowDefinitionMutation();
+  const deleteMutation = useDeleteFlowDefinitionMutation();
   const manualRunMutation = useCreateManualFlowRunMutation();
   const validationMutation = useValidateFlowDefinitionMutation();
   const saveConflict = getFlowDefinitionRevisionConflict(updateMutation.error);
@@ -428,6 +437,30 @@ export function FlowsPage() {
     );
   };
 
+  const requestLifecycleAction = (flowId: string, action: FlowDefinitionLifecycleAction) => {
+    const flow = flowsQuery.data?.flows.find((candidate) => candidate.id === flowId);
+    if (!flow) return;
+    const body = { expectedRevision: flow.revision };
+
+    if (action === "archive") {
+      archiveMutation.mutate({ flowId, body });
+      return;
+    }
+    if (action === "restore") {
+      restoreMutation.mutate({ flowId, body });
+      return;
+    }
+    if (action === "duplicate") {
+      duplicateMutation.mutate({
+        flowId,
+        body: { ...body, name: `${flow.name} (копия)` }
+      });
+      return;
+    }
+    if (!window.confirm(lifecycleCopy[locale].deleteConfirm(flow.name))) return;
+    deleteMutation.mutate({ flowId, body });
+  };
+
   const refetchAutomationAuthority = async () => {
     if (!automationTarget) return;
     try {
@@ -504,6 +537,7 @@ export function FlowsPage() {
         onPublish={publishDraft}
         onCreateNextDraft={createNextDraft}
         onAutomationAction={requestAutomationAction}
+        onLifecycleAction={requestLifecycleAction}
         onCreateManualRun={(flowId) => {
           const flow = selectedFlowQuery.data;
           if (!flow || flow.id !== flowId) return;
@@ -517,6 +551,12 @@ export function FlowsPage() {
         isValidating={validationMutation.isPending}
         isCreatingNextDraft={nextDraftMutation.isPending}
         isTogglingAutomation={activateMutation.isPending || pauseEnrollmentMutation.isPending}
+        isLifecycleActionPending={
+          archiveMutation.isPending ||
+          restoreMutation.isPending ||
+          duplicateMutation.isPending ||
+          deleteMutation.isPending
+        }
         isCreatingManualRun={manualRunMutation.isPending}
         createError={asLocalizedError(createMutation.error, locale)}
         saveError={asLocalizedError(updateMutation.error, locale)}
@@ -615,6 +655,17 @@ export function FlowsPage() {
     </>
   );
 }
+
+const lifecycleCopy = {
+  ru: {
+    deleteConfirm: (name: string) =>
+      `Удалить воронку «${name}»? Это возможно только если она ни разу не запускалась.`
+  },
+  en: {
+    deleteConfirm: (name: string) =>
+      `Delete “${name}”? This is allowed only if the flow has never run.`
+  }
+} as const;
 
 function asLocalizedError(error: unknown, locale: "ru" | "en"): Error | null {
   return error ? describeFlowDefinitionError(error, locale) : null;

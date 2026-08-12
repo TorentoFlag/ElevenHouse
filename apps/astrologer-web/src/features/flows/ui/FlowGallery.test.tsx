@@ -96,6 +96,41 @@ describe("FlowGallery", () => {
     expect(screen.queryByText("Исполнение")).toBeNull();
   });
 
+  it("routes lifecycle actions without opening the card", () => {
+    const onOpenFlow = vi.fn();
+    const onLifecycleAction = vi.fn();
+    render(
+      <FlowGallery
+        flows={[flow]}
+        locale="ru"
+        onOpenFlow={onOpenFlow}
+        onLifecycleAction={onLifecycleAction}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "В архив" }));
+    fireEvent.click(screen.getByRole("button", { name: "Дублировать" }));
+
+    expect(onLifecycleAction).toHaveBeenNthCalledWith(1, flow.id, "archive");
+    expect(onLifecycleAction).toHaveBeenNthCalledWith(2, flow.id, "duplicate");
+    expect(onOpenFlow).not.toHaveBeenCalled();
+  });
+
+  it("offers restore instead of archive for archived definitions", () => {
+    const onLifecycleAction = vi.fn();
+    render(
+      <FlowGallery
+        flows={[{ ...flow, state: "archived" }]}
+        locale="ru"
+        onLifecycleAction={onLifecycleAction}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "В архив" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть" }));
+    expect(onLifecycleAction).toHaveBeenCalledWith(flow.id, "restore");
+  });
+
   it("renders the persisted node sequence instead of fabricated funnel metrics", () => {
     render(<FlowGallery flows={[flow]} locale="en" />);
 
