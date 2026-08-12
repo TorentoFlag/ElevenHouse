@@ -267,6 +267,13 @@
       "when": 1786405439699,
       "tag": "0037_numerous_mister_fear",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786540225361,
+      "tag": "0038_mobile_device_sessions",
+      "breakpoints": true
     }
   ]
 }
