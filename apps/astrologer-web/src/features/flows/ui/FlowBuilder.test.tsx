@@ -142,7 +142,9 @@ describe("FlowBuilder", () => {
     expect(alerts).toHaveLength(3);
     expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("редакция 7");
     expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("Проверка схемы");
-    expect(alerts.map((alert) => alert.textContent).join(" ")).toContain("Команда создания версии недоступна");
+    expect(alerts.map((alert) => alert.textContent).join(" ")).toContain(
+      "Команда создания версии недоступна"
+    );
     expect(alerts.every((alert) => !header.contains(alert))).toBe(true);
   });
 
@@ -209,6 +211,32 @@ describe("FlowBuilder", () => {
       })
     );
     expect(onSaveDraft.mock.calls[0]?.[0].presentation.viewport.zoom).not.toBe(1);
+  });
+
+  it("keeps the draft saved after no-op canvas interactions", () => {
+    renderBuilder({
+      flow: {
+        ...flow,
+        draftPresentation: {
+          ...flow.draftPresentation,
+          viewport: { x: 0, y: 0, zoom: 1.8 }
+        }
+      }
+    });
+
+    const canvas = screen.getByRole("region", { name: "Схема воронки" });
+    const node = screen
+      .getByRole("button", { name: "Выбрать узел: Клиент выбран вручную" })
+      .closest("article");
+    expect(node).not.toBeNull();
+
+    fireEvent.pointerDown(node!, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(node!, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(canvas, { pointerId: 2, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 100, clientY: 100 });
+    fireEvent.click(screen.getByRole("button", { name: "Увеличить масштаб" }));
+
+    expect(screen.getByRole("status").textContent).toBe("Изменения сохранены");
   });
 
   it("adds a node only through the selected free semantic handle", () => {
@@ -300,7 +328,9 @@ describe("FlowBuilder", () => {
 
       expect(screen.getByRole("region", { name: "Мобильная схема воронки" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Добавить шаг" })).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })
+      ).toBeTruthy();
       expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
       expect(screen.queryByLabelText("Название узла")).toBeNull();
 

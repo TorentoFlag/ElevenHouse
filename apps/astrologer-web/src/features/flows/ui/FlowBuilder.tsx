@@ -563,6 +563,7 @@ export function FlowBuilder({
         )}
         {!isMobileViewport ? (
           <FlowBuilderCanvas
+            flowId={flow.id}
             graph={draftGraph}
             presentation={draftPresentation}
             locale={locale}

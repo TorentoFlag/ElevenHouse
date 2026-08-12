@@ -8,8 +8,8 @@ import {
 
 describe("flow canvas viewport mathematics", () => {
   it("clamps zoom to the supported canvas range", () => {
-    expect(clampFlowCanvasZoom(0.1)).toBe(0.35);
-    expect(clampFlowCanvasZoom(2)).toBe(1.6);
+    expect(clampFlowCanvasZoom(0.1)).toBe(0.55);
+    expect(clampFlowCanvasZoom(2)).toBe(1.8);
     expect(clampFlowCanvasZoom(Number.NaN)).toBe(1);
   });
 

@@ -7,6 +7,13 @@
   --flows-gold: var(--eh-color-gold);
   --flows-gold-soft: rgb(244 196 48 / 0.14);
   --flows-gold-line: rgb(244 196 48 / 0.42);
+  --flows-tone-trigger: rgb(103 201 157);
+  --flows-tone-communication: rgb(102 168 255);
+  --flows-tone-chart-ai: rgb(150 127 255);
+  --flows-tone-logic: rgb(244 196 72);
+  --flows-tone-human: rgb(255 159 159);
+  --flows-tone-result: rgb(118 211 201);
+  --flows-tone-error: rgb(244 122 122);
   position: relative;
   z-index: 1;
   display: flex;
@@ -951,9 +958,9 @@
   overflow: hidden;
   cursor: grab;
   touch-action: none;
-  background-color: var(--eh-color-night-950);
-  background-image: radial-gradient(rgb(216 212 236 / 0.1) 1px, transparent 1px);
-  background-size: 13.2px 13.2px;
+  background-color: rgb(11 11 31);
+  background-image: radial-gradient(rgb(216 212 236 / 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .builderCanvasControls {
@@ -963,18 +970,18 @@
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 5px;
+  height: 42px;
+  gap: 6px;
   border: 1px solid var(--flows-line-strong);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 5px;
-  background: rgb(13 12 32 / 0.9);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 0.32);
+  background: rgb(17 15 38 / 0.9);
 }
 
 .builderCanvasControls button {
   display: grid;
   width: 30px;
-  min-height: 30px;
+  height: 30px;
   place-items: center;
   border: 0;
   border-radius: 8px;
@@ -987,7 +994,8 @@
 
 .builderCanvasControls button:last-child {
   width: auto;
-  padding: 0 7px;
+  padding: 0 10px;
+  font: 600 12.5px / 1 var(--eh-font-sans);
 }
 
 .builderCanvasControls [data-flow-canvas-zoom] {
@@ -1067,13 +1075,14 @@
 }
 
 .builderNode {
+  --flow-node-tone: var(--flows-tone-result);
   display: grid;
   position: absolute;
   z-index: 1;
-  width: 210px;
+  width: 264px;
   min-height: 112px;
   border: 1px solid var(--flows-line-strong);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 0;
   overflow: hidden;
   background: var(--flows-surface-strong);
@@ -1088,37 +1097,41 @@
   right: 0;
   left: 0;
   height: 3px;
-  background: var(--flows-gold);
+  background: var(--flow-node-tone);
   content: "";
 }
 
-.builderNode[data-tone="trigger"]::before {
-  background: rgb(103 201 157);
+.builderNode[data-tone="trigger"] {
+  --flow-node-tone: var(--flows-tone-trigger);
 }
 
-.builderNode[data-tone="communication"]::before {
-  background: rgb(102 168 255);
+.builderNode[data-tone="communication"] {
+  --flow-node-tone: var(--flows-tone-communication);
 }
 
-.builderNode[data-tone="logic"]::before {
-  background: rgb(244 196 72);
+.builderNode[data-tone="chartAi"] {
+  --flow-node-tone: var(--flows-tone-chart-ai);
 }
 
-.builderNode[data-tone="calculation"]::before {
-  background: rgb(150 127 255);
+.builderNode[data-tone="logic"] {
+  --flow-node-tone: var(--flows-tone-logic);
 }
 
-.builderNode[data-tone="manual"]::before {
-  background: rgb(255 159 159);
+.builderNode[data-tone="human"] {
+  --flow-node-tone: var(--flows-tone-human);
 }
 
-.builderNode[data-tone="outcome"]::before {
-  background: rgb(118 211 201);
+.builderNode[data-tone="result"] {
+  --flow-node-tone: var(--flows-tone-result);
+}
+
+.builderNode[data-tone="error"] {
+  --flow-node-tone: var(--flows-tone-error);
 }
 
 .builderNode[data-selected="true"] {
-  border-color: var(--flows-gold-line);
-  box-shadow: 0 0 0 1px var(--flows-gold-line);
+  border-color: var(--flow-node-tone);
+  box-shadow: 0 0 0 1px var(--flow-node-tone);
 }
 
 .builderNodeSelect {
@@ -1135,7 +1148,7 @@
 }
 
 .builderNodeSelect span {
-  color: var(--flows-gold);
+  color: var(--flow-node-tone);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;

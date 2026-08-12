@@ -1,7 +1,7 @@
 import type { FlowPresentationV1 } from "@elevenhouse/contracts";
 
-export const FLOW_CANVAS_MIN_ZOOM = 0.35;
-export const FLOW_CANVAS_MAX_ZOOM = 1.6;
+export const FLOW_CANVAS_MIN_ZOOM = 0.55;
+export const FLOW_CANVAS_MAX_ZOOM = 1.8;
 
 export type FlowCanvasPoint = Readonly<{
   x: number;
