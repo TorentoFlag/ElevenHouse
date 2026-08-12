@@ -43,15 +43,16 @@ export function deriveFlowRuntimeAvailability(input: {
   const ownerSubjectId = input.ownerSubjectId;
   if (
     input.policy.mode === "definition_only" ||
-    ownerSubjectId === null ||
     input.policy.killSwitches.claim.global ||
-    input.policy.killSwitches.claim.ownerSubjectIds.includes(ownerSubjectId) ||
+    (ownerSubjectId !== null &&
+      input.policy.killSwitches.claim.ownerSubjectIds.includes(ownerSubjectId)) ||
     (input.policy.mode === "canary" &&
-      !input.policy.canaryOwnerSubjectIds.includes(ownerSubjectId))
+      (ownerSubjectId === null || !input.policy.canaryOwnerSubjectIds.includes(ownerSubjectId)))
   ) {
     return unavailable;
   }
-  if (!hasReadyExecutorLease({ ...input, ownerSubjectId })) return unavailable;
+  if (!hasReadyExecutorLease({ ...input, ownerSubjectId: ownerSubjectId ?? "" }))
+    return unavailable;
 
   return {
     mode: input.policy.mode,

@@ -3,7 +3,8 @@ import type { Logger } from "@elevenhouse/observability";
 
 type FlowExecutionDeploymentCeiling =
   | { readonly mode: "definition_only" }
-  | { readonly mode: "canary" };
+  | { readonly mode: "canary" }
+  | { readonly mode: "enabled" };
 
 type FlowExecutionTickResult = { readonly status: string };
 type FlowExecutionRunSummary =
@@ -40,7 +41,8 @@ export function createFlowExecutionRuntime(input: {
 }) {
   if (
     input.deploymentCeiling.mode !== "definition_only" &&
-    input.deploymentCeiling.mode !== "canary"
+    input.deploymentCeiling.mode !== "canary" &&
+    input.deploymentCeiling.mode !== "enabled"
   ) {
     throw new Error("FLOW_EXECUTION_DEPLOYMENT_CEILING_INVALID");
   }
@@ -75,7 +77,7 @@ export function createFlowExecutionRuntime(input: {
   let workItemWakeScheduleFailures = 0;
   let approvalWakeScheduleFailures = 0;
 
-  const claimingEnabled = input.deploymentCeiling.mode === "canary";
+  const claimingEnabled = input.deploymentCeiling.mode !== "definition_only";
 
   const startExecutionOperation = (): Promise<FlowExecutionRunSummary> => {
     const operation = drainExecutionBatch(input.processNext, input.pollBatchSize, () => accepting);

@@ -66,6 +66,22 @@ describe("Flow runtime availability", () => {
       historySemantics: "durable_execution"
     });
   });
+
+  it("admits every owner in enabled mode without a pre-created canary subject", () => {
+    expect(
+      deriveFlowRuntimeAvailability({
+        policy: policy({ mode: "enabled", canaryOwnerSubjectIds: [] }),
+        ownerSubjectId: null,
+        workerLeases: [lease({ maxRuntimeMode: "enabled", maxCanaryOwnerSubjectIds: [] })],
+        checkedAt
+      })
+    ).toEqual({
+      mode: "enabled",
+      executionAvailable: true,
+      reasonCode: null,
+      historySemantics: "durable_execution"
+    });
+  });
 });
 
 function policy(input: {

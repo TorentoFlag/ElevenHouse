@@ -35,7 +35,9 @@ const schema = z.object({
     .min(1_000)
     .max(86_400_000)
     .default(30_000),
-  WORKERS_FLOW_EXECUTION_MAX_MODE: z.enum(["definition_only", "canary"]).default("definition_only"),
+  WORKERS_FLOW_EXECUTION_MAX_MODE: z
+    .enum(["definition_only", "canary", "enabled"])
+    .default("definition_only"),
   WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: z.string().default(""),
   WORKERS_FLOW_EXECUTION_INSTANCE_ID: z
     .string()
@@ -273,6 +275,11 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
   if (value.WORKERS_FLOW_EXECUTION_MAX_MODE === "canary" && ownerUserIds.length === 0) {
     throw new Error("WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS is required in canary mode");
   }
+  if (value.WORKERS_FLOW_EXECUTION_MAX_MODE === "enabled" && ownerUserIds.length > 0) {
+    throw new Error(
+      "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS must be empty in enabled mode"
+    );
+  }
   if (
     value.WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS >=
     value.WORKERS_FLOW_EXECUTION_DRAIN_TIMEOUT_MS
@@ -299,10 +306,12 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
     deploymentCeiling:
       value.WORKERS_FLOW_EXECUTION_MAX_MODE === "definition_only"
         ? ({ mode: "definition_only" } as const)
-        : ({
-            mode: "canary",
-            ownerUserIds
-          } as const),
+        : value.WORKERS_FLOW_EXECUTION_MAX_MODE === "canary"
+          ? ({
+              mode: "canary",
+              ownerUserIds
+            } as const)
+          : ({ mode: "enabled" } as const),
     instanceId: value.WORKERS_FLOW_EXECUTION_INSTANCE_ID,
     pollIntervalMs: value.WORKERS_FLOW_EXECUTION_POLL_INTERVAL_MS,
     pollBatchSize: value.WORKERS_FLOW_EXECUTION_POLL_BATCH_SIZE,

@@ -190,7 +190,7 @@ describe("createWorkersRuntimeConfig", () => {
     });
   });
 
-  it("rejects empty, duplicated, malformed or prematurely global flow rollout", () => {
+  it("rejects invalid Flow rollout owner scopes", () => {
     expect(() => createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "canary" })).toThrow(
       "WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS"
     );
@@ -207,9 +207,16 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "00000000-0000-4000-8000-000000000001"
       })
     ).toThrow("definition_only");
+    expect(
+      createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" }).flowExecution
+        .deploymentCeiling
+    ).toEqual({ mode: "enabled" });
     expect(() =>
-      createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" })
-    ).toThrow("WORKERS_FLOW_EXECUTION_MAX_MODE");
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled",
+        WORKERS_FLOW_EXECUTION_MAX_CANARY_OWNER_USER_IDS: "00000000-0000-4000-8000-000000000001"
+      })
+    ).toThrow("enabled");
     expect(() =>
       createWorkersRuntimeConfig({
         WORKERS_FLOW_EXECUTION_MAX_MODE: "canary",

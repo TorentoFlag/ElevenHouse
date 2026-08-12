@@ -415,10 +415,10 @@ describe("createFlowExecutionRuntime", () => {
     await Promise.resolve();
   });
 
-  it("rejects a forged global owner scope in canary mode", () => {
+  it("rejects an unknown deployment ceiling", () => {
     expect(() =>
       createRuntime({
-        deploymentCeiling: { mode: "enabled" } as never
+        deploymentCeiling: { mode: "unsupported" } as never
       })
     ).toThrow("FLOW_EXECUTION_DEPLOYMENT_CEILING_INVALID");
   });
