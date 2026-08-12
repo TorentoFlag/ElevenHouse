@@ -12,7 +12,10 @@ import type {
   PasswordlessAuthStore,
   UserAccount,
   UserProfile,
-  UserRoleAssignment
+  UserRoleAssignment,
+  MobileSession,
+  MobileRefreshToken,
+  MobileSessionPlatform
 } from "@elevenhouse/domain";
 
 export class InMemoryPasswordlessAuthStore
@@ -26,6 +29,14 @@ export class InMemoryPasswordlessAuthStore
   readonly roleAssignments: UserRoleAssignment[] = [];
   readonly userSessions: AuthSession[] = [];
   readonly authSecurityEvents: AuthSecurityEvent[] = [];
+  readonly mobileSessions: MobileSession[] = [];
+  readonly mobileRefreshTokens: MobileRefreshToken[] = [];
+  readonly mobileRefreshRetryReceipts: Array<{
+    readonly refreshTokenId: string;
+    readonly operationId: string;
+    readonly encryptedTokenPair: string;
+    readonly expiresAt: string;
+  }> = [];
   readonly authCodeDeliveryRequestedEvents: Array<{
     readonly payload: AuthCodeDeliveryRequestedPayload;
     readonly occurredAt: string;
@@ -128,7 +139,16 @@ export class InMemoryPasswordlessAuthStore
   async revokeSession(input: {
     readonly sessionId: string;
     readonly revokedAt: string;
+    readonly revokedReason?: string;
   }): Promise<void> {
+    if (input.revokedReason) {
+      await this.revokeMobileSession({
+        sessionId: input.sessionId,
+        revokedAt: input.revokedAt,
+        revokedReason: input.revokedReason
+      });
+      return;
+    }
     const session = this.userSessions.find((candidate) => candidate.id === input.sessionId);
 
     if (!session) {
@@ -278,6 +298,178 @@ export class InMemoryPasswordlessAuthStore
       user,
       roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
     };
+  }
+
+  async createMobileSession(input: {
+    readonly userId: string;
+    readonly platform: MobileSessionPlatform;
+    readonly deviceLabel: string;
+    readonly accessTokenHash: string;
+    readonly accessTokenExpiresAt: string;
+    readonly refreshTokenHash: string;
+    readonly createdAt: string;
+    readonly expiresAt: string;
+  }): Promise<MobileSession> {
+    const session: MobileSession = {
+      id: randomUUID(),
+      userId: input.userId,
+      platform: input.platform,
+      deviceLabel: input.deviceLabel,
+      status: "active",
+      accessTokenHash: input.accessTokenHash,
+      accessTokenExpiresAt: input.accessTokenExpiresAt,
+      createdAt: input.createdAt,
+      lastUsedAt: input.createdAt,
+      expiresAt: input.expiresAt
+    };
+    this.mobileSessions.push(session);
+    this.mobileRefreshTokens.push({
+      id: randomUUID(),
+      sessionId: session.id,
+      tokenHash: input.refreshTokenHash,
+      status: "active",
+      createdAt: input.createdAt,
+      expiresAt: input.expiresAt
+    });
+    return session;
+  }
+
+  async findByAccessTokenHash(tokenHash: string) {
+    const session = this.mobileSessions.find((candidate) => candidate.accessTokenHash === tokenHash);
+    if (!session) return null;
+    const user = this.requireUser(session.userId);
+    return {
+      session,
+      user,
+      roleAssignments: this.roleAssignments.filter((assignment) => assignment.userId === user.id)
+    };
+  }
+
+  async lockRefreshFamilyByTokenHash(tokenHash: string) {
+    const refreshToken = this.mobileRefreshTokens.find((candidate) => candidate.tokenHash === tokenHash);
+    if (!refreshToken) return null;
+    const session = this.mobileSessions.find((candidate) => candidate.id === refreshToken.sessionId);
+    return session ? { refreshToken, session } : null;
+  }
+
+  async purgeExpiredArtifacts(input: { readonly now: string }): Promise<void> {
+    const expiredReceiptIds = new Set(
+      this.mobileRefreshRetryReceipts
+        .filter((receipt) => receipt.expiresAt <= input.now)
+        .map((receipt) => `${receipt.refreshTokenId}:${receipt.operationId}`)
+    );
+    const remainingReceipts = this.mobileRefreshRetryReceipts.filter(
+      (receipt) => !expiredReceiptIds.has(`${receipt.refreshTokenId}:${receipt.operationId}`)
+    );
+    this.mobileRefreshRetryReceipts.splice(0, this.mobileRefreshRetryReceipts.length, ...remainingReceipts);
+    const remainingTokens = this.mobileRefreshTokens.filter(
+      (token) =>
+        token.expiresAt > input.now || (token.status !== "consumed" && token.status !== "revoked")
+    );
+    this.mobileRefreshTokens.splice(0, this.mobileRefreshTokens.length, ...remainingTokens);
+  }
+
+  async consumeRefreshToken(input: { readonly refreshTokenId: string; readonly consumedAt: string }) {
+    const token = this.mobileRefreshTokens.find((candidate) => candidate.id === input.refreshTokenId);
+    if (!token || token.status !== "active") return false;
+    Object.assign(token, { status: "consumed", consumedAt: input.consumedAt });
+    return true;
+  }
+
+  async rotateSession(input: {
+    readonly sessionId: string;
+    readonly accessTokenHash: string;
+    readonly accessTokenExpiresAt: string;
+    readonly refreshTokenHash: string;
+    readonly lastUsedAt: string;
+    readonly expiresAt: string;
+  }) {
+    const session = this.mobileSessions.find((candidate) => candidate.id === input.sessionId);
+    if (!session || session.status !== "active") return false;
+    Object.assign(session, {
+      accessTokenHash: input.accessTokenHash,
+      accessTokenExpiresAt: input.accessTokenExpiresAt,
+      lastUsedAt: input.lastUsedAt,
+      expiresAt: input.expiresAt
+    });
+    this.mobileRefreshTokens.push({
+      id: randomUUID(),
+      sessionId: session.id,
+      tokenHash: input.refreshTokenHash,
+      status: "active",
+      createdAt: input.lastUsedAt,
+      expiresAt: input.expiresAt
+    });
+    return true;
+  }
+
+  async findRefreshRetryReceipt(input: {
+    readonly refreshTokenId: string;
+    readonly operationId: string;
+    readonly now: string;
+  }) {
+    return (
+      this.mobileRefreshRetryReceipts.find(
+        (receipt) =>
+          receipt.refreshTokenId === input.refreshTokenId &&
+          receipt.operationId === input.operationId &&
+          receipt.expiresAt > input.now
+      ) ?? null
+    );
+  }
+
+  async createRefreshRetryReceipt(input: {
+    readonly refreshTokenId: string;
+    readonly operationId: string;
+    readonly encryptedTokenPair: string;
+    readonly createdAt: string;
+    readonly expiresAt: string;
+  }) {
+    this.mobileRefreshRetryReceipts.push(input);
+  }
+
+  async revokeAllSessionsForUser(input: {
+    readonly userId: string;
+    readonly revokedAt: string;
+    readonly revokedReason: string;
+  }): Promise<void> {
+    await Promise.all(
+      this.mobileSessions
+        .filter((session) => session.userId === input.userId)
+        .map((session) =>
+          this.revokeMobileSession({
+            sessionId: session.id,
+            revokedAt: input.revokedAt,
+            revokedReason: input.revokedReason
+          })
+        )
+    );
+  }
+
+  async revokeMobileSession(input: {
+    readonly sessionId: string;
+    readonly revokedAt: string;
+    readonly revokedReason: string;
+  }): Promise<void> {
+    const session = this.mobileSessions.find((candidate) => candidate.id === input.sessionId);
+    if (!session || session.status !== "active") return;
+    Object.assign(session, {
+      status: "revoked",
+      revokedAt: input.revokedAt,
+      revokedReason: input.revokedReason
+    });
+    for (const token of this.mobileRefreshTokens) {
+      if (token.sessionId === input.sessionId && token.status === "active") {
+        Object.assign(token, { status: "revoked" });
+      }
+    }
+  }
+
+  async listActiveSessionsForUser(input: { readonly userId: string; readonly now: string }) {
+    return this.mobileSessions.filter(
+      (session) =>
+        session.userId === input.userId && session.status === "active" && session.expiresAt > input.now
+    );
   }
 
   private requireChallenge(challengeId: string): AuthChallenge {

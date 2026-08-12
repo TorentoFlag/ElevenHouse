@@ -20,6 +20,9 @@
       "@elevenhouse/db/auth-sessions": [
         "../../packages/db/dist/adapters/identity/auth-sessions/index.d.ts"
       ],
+      "@elevenhouse/db/mobile-sessions": [
+        "../../packages/db/dist/adapters/identity/mobile-sessions/index.d.ts"
+      ],
       "@elevenhouse/db/calculations": [
         "../../packages/db/dist/adapters/calculations/index.d.ts"
       ],

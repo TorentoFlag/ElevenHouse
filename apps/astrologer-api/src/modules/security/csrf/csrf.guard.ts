@@ -6,6 +6,7 @@ import { AstrologerCsrfTokenService, type CsrfRequest } from "./astrologer-csrf-
 
 type CookieAuthRequest = CsrfRequest & {
   readonly headers?: Record<string, string | readonly string[] | undefined>;
+  readonly currentMobileSessionId?: string;
 };
 
 @Injectable()
@@ -27,6 +28,9 @@ export class CsrfGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<CookieAuthRequest>();
+    if (request.currentMobileSessionId) {
+      return true;
+    }
     const sessionToken = readCookieValue(
       normalizeHeaderValue(request.headers?.cookie),
       this.configService.getOrThrow<string>("astrologerApi.sessionCookieName")

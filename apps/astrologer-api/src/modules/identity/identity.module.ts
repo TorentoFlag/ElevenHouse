@@ -4,6 +4,13 @@ import {
   createDrizzleAuthSessionAuthenticationStore,
   createDrizzleAuthSessionRevocationUnitOfWork
 } from "@elevenhouse/db/auth-sessions";
+import {
+  createDrizzleMobileSessionAuthenticationStore,
+  createDrizzleMobilePasswordlessLoginUnitOfWork,
+  createDrizzleMobilePasswordlessRegistrationUnitOfWork,
+  createDrizzleMobileSessionManagementStore,
+  createDrizzleMobileSessionUnitOfWork
+} from "@elevenhouse/db/mobile-sessions";
 import { createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/db/account-registration";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
 import { ClockModule } from "../clock/clock.module";
@@ -18,6 +25,19 @@ import {
   AUTH_SESSION_REVOCATION_UNIT_OF_WORK
 } from "./auth/identity-auth.tokens";
 import { IdentityPasswordlessController } from "./passwordless/identity-passwordless.controller";
+import { MobileAstrologerSessionController } from "./mobile/mobile-session.controller";
+import {
+  MOBILE_SESSION_AUTHENTICATION_STORE,
+  MOBILE_PASSWORDLESS_LOGIN_UNIT_OF_WORK,
+  MOBILE_PASSWORDLESS_REGISTRATION_UNIT_OF_WORK,
+  MOBILE_SESSION_MANAGEMENT_STORE,
+  MOBILE_SESSION_UNIT_OF_WORK
+} from "./mobile/mobile-session.tokens";
+import {
+  MobileAstrologerSessionService,
+  MobileAstrologerSessionTokenIssuer,
+  MobileRefreshRetryReceiptCodec
+} from "./mobile/mobile-session.service";
 import {
   AesGcmAuthCodeEncryption,
   DomainPasswordlessAuthHandler,
@@ -56,17 +76,21 @@ import {
   imports: [ClockModule, ConfigModule, DatabaseModule, RedisModule, SecurityModule],
   controllers: [
     IdentityPasswordlessController,
+    MobileAstrologerSessionController,
     IdentityRegistrationController,
     IdentityCurrentAccountController,
     IdentitySessionController
   ],
   providers: [
     IdentityPasswordlessService,
+    MobileAstrologerSessionService,
     IdentityRegistrationService,
     IdentityCurrentSessionService,
     IdentityLogoutService,
     AstrologerSessionAuthGuard,
     AstrologerSessionTokenIssuer,
+    MobileAstrologerSessionTokenIssuer,
+    MobileRefreshRetryReceiptCodec,
     AstrologerSessionCookieService,
     DomainPasswordlessAuthHandler,
     DomainRegistrationHandler,
@@ -94,6 +118,36 @@ import {
       provide: AUTH_SESSION_REVOCATION_UNIT_OF_WORK,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleAuthSessionRevocationUnitOfWork(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_SESSION_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobileSessionUnitOfWork(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_PASSWORDLESS_LOGIN_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobilePasswordlessLoginUnitOfWork(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_PASSWORDLESS_REGISTRATION_UNIT_OF_WORK,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobilePasswordlessRegistrationUnitOfWork(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_SESSION_AUTHENTICATION_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobileSessionAuthenticationStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_SESSION_MANAGEMENT_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobileSessionManagementStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

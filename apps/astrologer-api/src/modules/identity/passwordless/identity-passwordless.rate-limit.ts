@@ -23,6 +23,10 @@ export type PasswordlessRateLimitPort = {
     readonly challengeId: string;
     readonly ipAddress: string;
   }) => Promise<PasswordlessRateLimitDecision>;
+  readonly consumeMobileRefresh: (input: {
+    readonly refreshTokenHash: string;
+    readonly ipAddress: string;
+  }) => Promise<PasswordlessRateLimitDecision>;
 };
 
 export const anonymousPasswordlessIpAddress = "unknown";
@@ -38,6 +42,8 @@ export type PasswordlessRateLimitOptions = {
   readonly requestCodeIdentifierIp: PasswordlessRateLimitBucketOptions;
   readonly verifyChallenge: PasswordlessRateLimitBucketOptions;
   readonly verifyIp: PasswordlessRateLimitBucketOptions;
+  readonly mobileRefreshToken?: PasswordlessRateLimitBucketOptions;
+  readonly mobileRefreshIp?: PasswordlessRateLimitBucketOptions;
 };
 
 export type RedisPasswordlessRateLimitClient = {
@@ -60,6 +66,9 @@ type RedisPasswordlessRateLimiterSettings = {
   readonly now?: () => Date;
   readonly nonce?: () => string;
 };
+
+const defaultMobileRefreshTokenBucket = { limit: 30, windowSeconds: 60 } as const;
+const defaultMobileRefreshIpBucket = { limit: 120, windowSeconds: 60 } as const;
 
 export class RedisPasswordlessRateLimiter implements PasswordlessRateLimitPort {
   private readonly keyPrefix: string;
@@ -112,6 +121,22 @@ export class RedisPasswordlessRateLimiter implements PasswordlessRateLimitPort {
       {
         key: this.key("verify-code", "ip", hashRateLimitKeyPart(input.ipAddress)),
         ...this.options.verifyIp
+      }
+    ]);
+  }
+
+  consumeMobileRefresh(input: {
+    readonly refreshTokenHash: string;
+    readonly ipAddress: string;
+  }): Promise<PasswordlessRateLimitDecision> {
+    return this.consume([
+      {
+        key: this.key("mobile-refresh", "token", hashRateLimitKeyPart(input.refreshTokenHash)),
+        ...(this.options.mobileRefreshToken ?? defaultMobileRefreshTokenBucket)
+      },
+      {
+        key: this.key("mobile-refresh", "ip", hashRateLimitKeyPart(input.ipAddress)),
+        ...(this.options.mobileRefreshIp ?? defaultMobileRefreshIpBucket)
       }
     ]);
   }

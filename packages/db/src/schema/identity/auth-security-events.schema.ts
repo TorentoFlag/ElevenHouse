@@ -23,7 +23,9 @@ export const authSecurityEvents = pgTable(
         'login_succeeded',
         'login_failed',
         'logout_succeeded',
-        'session_revoked'
+        'session_revoked',
+        'refresh_succeeded',
+        'refresh_token_reuse_detected'
       )`
     ),
     index("auth_security_events_user_id_index").on(table.userId),

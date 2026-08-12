@@ -38,6 +38,17 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .transform((value) => value === "true"),
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
   ASTROLOGER_API_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
+  ASTROLOGER_API_MOBILE_ACCESS_TOKEN_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(3600)
+    .default(900),
+  ASTROLOGER_API_MOBILE_SESSION_IDLE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15_552_000),
   ASTROLOGER_API_SESSION_COOKIE_SECURE: z
     .enum(["true", "false"])
     .default("false")
@@ -242,6 +253,18 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .int()
     .positive()
     .default(900),
+  ASTROLOGER_API_MOBILE_REFRESH_TOKEN_LIMIT: z.coerce.number().int().positive().default(30),
+  ASTROLOGER_API_MOBILE_REFRESH_TOKEN_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+  ASTROLOGER_API_MOBILE_REFRESH_IP_LIMIT: z.coerce.number().int().positive().default(120),
+  ASTROLOGER_API_MOBILE_REFRESH_IP_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
   ASTROLOGER_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX: z
     .string()
     .trim()
@@ -279,6 +302,8 @@ export type AstrologerApiRuntimeConfig = {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Flow runtime has no API config after V1 rollout removal.
   readonly flows: {};
   readonly sessionTtlSeconds: number;
+  readonly mobileAccessTokenTtlSeconds: number;
+  readonly mobileSessionIdleTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
   readonly csrfSecret: string;
@@ -364,6 +389,14 @@ export type AstrologerApiRuntimeConfig = {
       readonly windowSeconds: number;
     };
     readonly verifyIp: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly mobileRefreshToken: {
+      readonly limit: number;
+      readonly windowSeconds: number;
+    };
+    readonly mobileRefreshIp: {
       readonly limit: number;
       readonly windowSeconds: number;
     };
@@ -582,6 +615,8 @@ export function createAstrologerApiRuntimeConfig(
     flows: {
     },
     sessionTtlSeconds: config.ASTROLOGER_API_SESSION_TTL_SECONDS,
+    mobileAccessTokenTtlSeconds: config.ASTROLOGER_API_MOBILE_ACCESS_TOKEN_TTL_SECONDS,
+    mobileSessionIdleTtlSeconds: config.ASTROLOGER_API_MOBILE_SESSION_IDLE_TTL_SECONDS,
     sessionCookieSecure: config.ASTROLOGER_API_SESSION_COOKIE_SECURE,
     sessionCookieName,
     csrfSecret:
@@ -659,6 +694,14 @@ export function createAstrologerApiRuntimeConfig(
       verifyIp: {
         limit: config.ASTROLOGER_API_PASSWORDLESS_VERIFY_IP_LIMIT,
         windowSeconds: config.ASTROLOGER_API_PASSWORDLESS_VERIFY_IP_WINDOW_SECONDS
+      },
+      mobileRefreshToken: {
+        limit: config.ASTROLOGER_API_MOBILE_REFRESH_TOKEN_LIMIT,
+        windowSeconds: config.ASTROLOGER_API_MOBILE_REFRESH_TOKEN_WINDOW_SECONDS
+      },
+      mobileRefreshIp: {
+        limit: config.ASTROLOGER_API_MOBILE_REFRESH_IP_LIMIT,
+        windowSeconds: config.ASTROLOGER_API_MOBILE_REFRESH_IP_WINDOW_SECONDS
       }
     },
     mediaStorage: {

@@ -31,6 +31,8 @@ const defaultSecurityConfig = {
   flows: {},
   trustProxy: false,
   sessionTtlSeconds: 604800,
+  mobileAccessTokenTtlSeconds: 900,
+  mobileSessionIdleTtlSeconds: 15_552_000,
   sessionCookieSecure: false,
   sessionCookieName: "elevenhouse_astrologer_session",
   csrfSecret: "elevenhouse-dev-astrologer-api-csrf-secret-change-before-production",
@@ -72,7 +74,9 @@ const defaultSecurityConfig = {
     requestCodeIp: { limit: 30, windowSeconds: 3600 },
     requestCodeIdentifierIp: { limit: 3, windowSeconds: 3600 },
     verifyChallenge: { limit: 5, windowSeconds: 900 },
-    verifyIp: { limit: 60, windowSeconds: 900 }
+    verifyIp: { limit: 60, windowSeconds: 900 },
+    mobileRefreshToken: { limit: 30, windowSeconds: 60 },
+    mobileRefreshIp: { limit: 120, windowSeconds: 60 }
   },
   mediaStorage: {
     endpoint: "http://localhost:9000",
@@ -99,6 +103,17 @@ const defaultSecurityConfig = {
 };
 
 describe("createAstrologerApiRuntimeConfig", () => {
+  it("maps mobile access and idle session lifetimes from env", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_API_MOBILE_ACCESS_TOKEN_TTL_SECONDS: "600",
+      ASTROLOGER_API_MOBILE_SESSION_IDLE_TTL_SECONDS: "86400"
+    });
+
+    expect(config.mobileAccessTokenTtlSeconds).toBe(600);
+    expect(config.mobileSessionIdleTtlSeconds).toBe(86400);
+  });
+
   it("uses the default astrologer API port when env is not set", () => {
     expect(createAstrologerApiRuntimeConfig(requiredSecurityConfig)).toEqual({
       port: 3002,
@@ -754,6 +769,41 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(config.ai.enabled).toBe(true);
     expect(config.ai.openAiApiKey).toBe("openai-secret");
     expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
+  });
+
+  it("maps every ASTROLOGER_AI provider setting without changing its env contract", () => {
+    const config = createAstrologerApiRuntimeConfig({
+      ...requiredSecurityConfig,
+      ASTROLOGER_AI_ENABLED: "true",
+      ASTROLOGER_AI_PROVIDER: "openai",
+      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
+      ASTROLOGER_OPENAI_BASE_URL: "https://openai.internal/v1/",
+      ASTROLOGER_AI_FAST_DRAFT_MODEL: "gpt-5.5",
+      ASTROLOGER_AI_QUALITY_DRAFT_MODEL: "gpt-5.4-mini",
+      ASTROLOGER_AI_TIMEOUT_MS: "12345",
+      ASTROLOGER_AI_MAX_OUTPUT_TOKENS: "4321",
+      ASTROLOGER_AI_RATE_LIMIT_REDIS_KEY_PREFIX: "elevenhouse:test:astrologer-ai",
+      ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: "7",
+      ASTROLOGER_AI_RATE_LIMIT_USER_PER_HOUR: "70",
+      ASTROLOGER_AI_RATE_LIMIT_USER_PER_DAY: "700"
+    });
+
+    expect(config.ai).toEqual({
+      enabled: true,
+      provider: "openai",
+      openAiApiKey: "openai-secret",
+      openAiBaseUrl: "https://openai.internal/v1/",
+      fastDraftModel: "gpt-5.5",
+      qualityDraftModel: "gpt-5.4-mini",
+      timeoutMs: 12345,
+      maxOutputTokens: 4321,
+      rateLimitRedisKeyPrefix: "elevenhouse:test:astrologer-ai",
+      rateLimits: {
+        userPerMinute: { limit: 7, windowSeconds: 60 },
+        userPerHour: { limit: 70, windowSeconds: 3600 },
+        userPerDay: { limit: 700, windowSeconds: 86400 }
+      }
+    });
   });
 
   it("keeps chart AI disabled by default", () => {

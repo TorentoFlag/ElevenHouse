@@ -56,6 +56,23 @@ export class TestPasswordlessRateLimiter implements PasswordlessRateLimitPort {
     );
   }
 
+  consumeMobileRefresh(
+    input: Parameters<PasswordlessRateLimitPort["consumeMobileRefresh"]>[0]
+  ): Promise<PasswordlessRateLimitDecision> {
+    return Promise.resolve(
+      this.consume([
+        {
+          key: `mobile-refresh:token:${input.refreshTokenHash}`,
+          ...(this.options.mobileRefreshToken ?? { limit: 30, windowSeconds: 60 })
+        },
+        {
+          key: `mobile-refresh:ip:${input.ipAddress}`,
+          ...(this.options.mobileRefreshIp ?? { limit: 120, windowSeconds: 60 })
+        }
+      ])
+    );
+  }
+
   private consume(buckets: readonly TestRateLimitBucket[]): PasswordlessRateLimitDecision {
     const nowMs = this.now().getTime();
     const retryAfterSeconds = buckets

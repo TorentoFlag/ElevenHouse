@@ -50,6 +50,11 @@
       "import": "./dist/adapters/identity/auth-sessions/index.js",
       "require": "./dist/adapters/identity/auth-sessions/index.js"
     },
+    "./mobile-sessions": {
+      "types": "./dist/adapters/identity/mobile-sessions/index.d.ts",
+      "import": "./dist/adapters/identity/mobile-sessions/index.js",
+      "require": "./dist/adapters/identity/mobile-sessions/index.js"
+    },
     "./passwordless-auth": {
       "types": "./dist/adapters/identity/passwordless-auth/index.d.ts",
       "import": "./dist/adapters/identity/passwordless-auth/index.js",

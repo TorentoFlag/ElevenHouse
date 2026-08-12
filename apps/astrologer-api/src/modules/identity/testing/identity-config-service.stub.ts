@@ -65,6 +65,14 @@ export function createIdentityConfigServiceStub(input: {
         return 604800;
       }
 
+      if (key === "astrologerApi.mobileAccessTokenTtlSeconds") {
+        return 900;
+      }
+
+      if (key === "astrologerApi.mobileSessionIdleTtlSeconds") {
+        return 15_552_000;
+      }
+
       if (key === "astrologerApi.sessionCookieSecure") {
         return false;
       }

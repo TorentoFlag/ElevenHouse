@@ -5,6 +5,11 @@ import { authChallengeDeliveries } from "./auth-challenge-deliveries.schema";
 import { authChallenges } from "./auth-challenges.schema";
 import { authIdentities } from "./auth-identities.schema";
 import { userSessions } from "./auth-sessions.schema";
+import {
+  mobileRefreshRetryReceipts,
+  mobileRefreshTokens,
+  mobileSessions
+} from "./mobile-sessions.schema";
 import { userRoleAssignments } from "./role-assignments.schema";
 import { userProfiles } from "./user-profiles.schema";
 
@@ -12,9 +17,27 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   authIdentities: many(authIdentities),
   roleAssignments: many(userRoleAssignments),
   sessions: many(userSessions),
+  mobileSessions: many(mobileSessions),
   profile: one(userProfiles, {
     fields: [users.id],
     references: [userProfiles.userId]
+  })
+}));
+
+export const mobileSessionsRelations = relations(mobileSessions, ({ many, one }) => ({
+  user: one(users, { fields: [mobileSessions.userId], references: [users.id] }),
+  refreshTokens: many(mobileRefreshTokens)
+}));
+
+export const mobileRefreshTokensRelations = relations(mobileRefreshTokens, ({ many, one }) => ({
+  session: one(mobileSessions, { fields: [mobileRefreshTokens.sessionId], references: [mobileSessions.id] }),
+  retryReceipts: many(mobileRefreshRetryReceipts)
+}));
+
+export const mobileRefreshRetryReceiptsRelations = relations(mobileRefreshRetryReceipts, ({ one }) => ({
+  refreshToken: one(mobileRefreshTokens, {
+    fields: [mobileRefreshRetryReceipts.refreshTokenId],
+    references: [mobileRefreshTokens.id]
   })
 }));
 

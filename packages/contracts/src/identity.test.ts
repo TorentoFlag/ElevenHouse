@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   authenticatedAstrologerAccountResponseSchema,
   authenticatedCustomerAccountResponseSchema,
+  mobileAstrologerSessionResponseSchema,
+  mobileAstrologerTokenRefreshResponseSchema,
+  refreshMobileAstrologerSessionRequestSchema,
+  verifyMobileAstrologerRegistrationPasswordlessCodeRequestSchema,
+  verifyMobileAstrologerPasswordlessCodeRequestSchema,
   requestAstrologerPasswordlessCodeRequestSchema,
   requestPasswordlessCodeRequestSchema,
   requestPasswordlessCodeResponseSchema,
@@ -372,5 +377,83 @@ describe("authenticatedAstrologerAccountResponseSchema", () => {
         }
       })
     ).toThrow();
+  });
+});
+
+describe("mobile astrologer identity contracts", () => {
+  it("accepts a mobile passwordless verification request without caller-controlled roles", () => {
+    expect(
+      verifyMobileAstrologerPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        platform: "ios",
+        deviceLabel: " Анна’s iPhone "
+      })
+    ).toEqual({
+      challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+      code: "123456",
+      platform: "ios",
+      deviceLabel: "Анна’s iPhone"
+    });
+  });
+
+  it("returns an astrologer account and opaque mobile tokens", () => {
+    expect(
+      mobileAstrologerSessionResponseSchema.parse({
+        account: {
+          id: "8e14390f-3db1-4d1c-9344-55679c778427",
+          status: "active",
+          roles: ["astrologer"]
+        },
+        sessionId: "5a14390f-3db1-4d1c-9344-55679c778427",
+        accessToken: "a".repeat(32),
+        accessTokenExpiresAt: "2026-08-11T12:15:00.000Z",
+        refreshToken: "r".repeat(32),
+        refreshTokenExpiresAt: "2027-02-07T12:00:00.000Z"
+      })
+    ).toMatchObject({ sessionId: "5a14390f-3db1-4d1c-9344-55679c778427" });
+  });
+
+  it("requires an opaque refresh token, operation id, and rejects extra refresh fields", () => {
+    expect(
+      refreshMobileAstrologerSessionRequestSchema.parse({
+        refreshToken: "r".repeat(32),
+        operationId: "5a14390f-3db1-4d1c-9344-55679c778427"
+      })
+    ).toEqual({
+      refreshToken: "r".repeat(32),
+      operationId: "5a14390f-3db1-4d1c-9344-55679c778427"
+    });
+    expect(() =>
+      refreshMobileAstrologerSessionRequestSchema.parse({
+        refreshToken: "r".repeat(32),
+        operationId: "5a14390f-3db1-4d1c-9344-55679c778427",
+        roles: ["admin"]
+      })
+    ).toThrow();
+  });
+
+  it("accepts native registration only with the same fixed astrologer role and a device", () => {
+    expect(
+      verifyMobileAstrologerRegistrationPasswordlessCodeRequestSchema.parse({
+        challengeId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        code: "123456",
+        displayName: "Анна",
+        platform: "ios",
+        deviceLabel: "Анна’s iPhone"
+      })
+    ).toMatchObject({ platform: "ios", deviceLabel: "Анна’s iPhone" });
+  });
+
+  it("does not expose account data from the refresh response", () => {
+    expect(
+      mobileAstrologerTokenRefreshResponseSchema.parse({
+        sessionId: "5a14390f-3db1-4d1c-9344-55679c778427",
+        accessToken: "a".repeat(32),
+        accessTokenExpiresAt: "2026-08-11T12:15:00.000Z",
+        refreshToken: "r".repeat(32),
+        refreshTokenExpiresAt: "2027-02-07T12:00:00.000Z"
+      })
+    ).toMatchObject({ sessionId: "5a14390f-3db1-4d1c-9344-55679c778427" });
   });
 });

@@ -108,7 +108,8 @@ describe("IdentityRegistrationService", () => {
       consumeVerifyCode: vi.fn(async () => ({
         allowed: false as const,
         retryAfterSeconds: 45
-      }))
+      })),
+      consumeMobileRefresh: vi.fn()
     });
 
     let error: unknown;

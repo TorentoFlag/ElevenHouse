@@ -27,6 +27,8 @@ export const authSecurityEventTypeValues = [
   "login_succeeded",
   "login_failed",
   "logout_succeeded",
-  "session_revoked"
+  "session_revoked",
+  "refresh_succeeded",
+  "refresh_token_reuse_detected"
 ] as const;
 export type AuthSecurityEventType = (typeof authSecurityEventTypeValues)[number];

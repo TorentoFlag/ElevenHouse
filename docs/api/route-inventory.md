@@ -123,6 +123,14 @@ This is the current route inventory. API ownership, authorization and contract r
 | GET | `/human-design/calculations/:calculationId/report/pdf/:jobId/download` | `apps/astrologer-api/src/modules/human-design/human-design-pdf.controller.ts` |
 | GET | `/human-design/calculations/:calculationId/transits` | `apps/astrologer-api/src/modules/human-design/human-design.controller.ts` |
 | POST | `/human-design/preview` | `apps/astrologer-api/src/modules/human-design/human-design.controller.ts` |
+| POST | `/identity/astrologer/mobile/logout` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| POST | `/identity/astrologer/mobile/logout-all` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| POST | `/identity/astrologer/mobile/passwordless/request-code` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| POST | `/identity/astrologer/mobile/passwordless/verify-code` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| POST | `/identity/astrologer/mobile/refresh` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| POST | `/identity/astrologer/mobile/registration/verify-code` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| GET | `/identity/astrologer/mobile/sessions` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
+| DELETE | `/identity/astrologer/mobile/sessions/:sessionId` | `apps/astrologer-api/src/modules/identity/mobile/mobile-session.controller.ts` |
 | POST | `/identity/astrologer/passwordless/request-code` | `apps/astrologer-api/src/modules/identity/passwordless/identity-passwordless.controller.ts` |
 | POST | `/identity/astrologer/passwordless/verify-code` | `apps/astrologer-api/src/modules/identity/passwordless/identity-passwordless.controller.ts` |
 | POST | `/identity/astrologer/registration/passwordless/verify-code` | `apps/astrologer-api/src/modules/identity/registration/identity-registration.controller.ts` |

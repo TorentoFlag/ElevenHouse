@@ -5,12 +5,18 @@ import { describe, expect, it, vi } from "vitest";
 import { CsrfGuard } from "./csrf.guard";
 import type { AstrologerCsrfTokenService } from "./astrologer-csrf-token.service";
 
-function createContext(headers: Record<string, string | undefined>): ExecutionContext {
+function createContext(
+  headers: Record<string, string | undefined>,
+  currentMobileSessionId?: string
+): ExecutionContext {
   return {
     getHandler: vi.fn(),
     getClass: vi.fn(),
     switchToHttp: vi.fn(() => ({
-      getRequest: () => ({ headers })
+      getRequest: () => ({
+        headers,
+        ...(currentMobileSessionId === undefined ? {} : { currentMobileSessionId })
+      })
     }))
   } as unknown as ExecutionContext;
 }
@@ -67,5 +73,23 @@ describe("CsrfGuard", () => {
       },
       sessionToken: "raw-session-token"
     });
+  });
+
+  it("does not change CSRF mode merely because a request carries a bearer-shaped header", () => {
+    const assertValidRequest = vi.fn();
+    const guard = createGuard({ csrfRequired: true, assertValidRequest });
+
+    expect(() =>
+      guard.canActivate(createContext({ authorization: "Bearer mobile-access-token" }))
+    ).toThrow(UnauthorizedException);
+    expect(assertValidRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not require CSRF after the authentication guard has verified a mobile session", () => {
+    const assertValidRequest = vi.fn();
+    const guard = createGuard({ csrfRequired: true, assertValidRequest });
+
+    expect(guard.canActivate(createContext({}, "mobile-session-1"))).toBe(true);
+    expect(assertValidRequest).not.toHaveBeenCalled();
   });
 });

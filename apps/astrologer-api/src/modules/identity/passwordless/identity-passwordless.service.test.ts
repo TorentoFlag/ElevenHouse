@@ -89,7 +89,8 @@ describe("IdentityPasswordlessService", () => {
         allowed: false as const,
         retryAfterSeconds: 45
       })),
-      consumeVerifyCode: vi.fn()
+      consumeVerifyCode: vi.fn(),
+      consumeMobileRefresh: vi.fn()
     });
 
     let error: unknown;

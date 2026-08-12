@@ -168,6 +168,84 @@ export type VerifyAstrologerPasswordlessCodeResponse = z.infer<
   typeof verifyAstrologerPasswordlessCodeResponseSchema
 >;
 
+export const mobileAstrologerPlatformSchema = z.enum(["ios", "android"]);
+export type MobileAstrologerPlatform = z.infer<typeof mobileAstrologerPlatformSchema>;
+
+const mobileDeviceLabelSchema = z.string().trim().min(1).max(120);
+const opaqueMobileTokenSchema = z.string().trim().min(32).max(512);
+
+export const verifyMobileAstrologerPasswordlessCodeRequestSchema =
+  baseVerifyPasswordlessCodeRequestSchema.extend({
+    platform: mobileAstrologerPlatformSchema,
+    deviceLabel: mobileDeviceLabelSchema
+  }).strict();
+
+export type VerifyMobileAstrologerPasswordlessCodeRequest = z.infer<
+  typeof verifyMobileAstrologerPasswordlessCodeRequestSchema
+>;
+
+export const mobileAstrologerSessionResponseSchema = authenticatedAstrologerAccountResponseSchema
+  .extend({
+    sessionId: z.string().uuid(),
+    accessToken: opaqueMobileTokenSchema,
+    accessTokenExpiresAt: z.string().datetime(),
+    refreshToken: opaqueMobileTokenSchema,
+    refreshTokenExpiresAt: z.string().datetime()
+  })
+  .strict();
+
+export type MobileAstrologerSessionResponse = z.infer<
+  typeof mobileAstrologerSessionResponseSchema
+>;
+
+export const mobileAstrologerTokenRefreshResponseSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    accessToken: opaqueMobileTokenSchema,
+    accessTokenExpiresAt: z.string().datetime(),
+    refreshToken: opaqueMobileTokenSchema,
+    refreshTokenExpiresAt: z.string().datetime()
+  })
+  .strict();
+
+export type MobileAstrologerTokenRefreshResponse = z.infer<
+  typeof mobileAstrologerTokenRefreshResponseSchema
+>;
+
+export const refreshMobileAstrologerSessionRequestSchema = z
+  .object({
+    refreshToken: opaqueMobileTokenSchema,
+    operationId: z.string().uuid()
+  })
+  .strict();
+
+export type RefreshMobileAstrologerSessionRequest = z.infer<
+  typeof refreshMobileAstrologerSessionRequestSchema
+>;
+
+export const mobileAstrologerSessionSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    platform: mobileAstrologerPlatformSchema,
+    deviceLabel: z.string().min(1).max(120),
+    createdAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime(),
+    isCurrent: z.boolean()
+  })
+  .strict();
+
+export type MobileAstrologerSessionSummary = z.infer<
+  typeof mobileAstrologerSessionSummarySchema
+>;
+
+export const mobileAstrologerSessionListResponseSchema = z
+  .object({ sessions: z.array(mobileAstrologerSessionSummarySchema) })
+  .strict();
+
+export type MobileAstrologerSessionListResponse = z.infer<
+  typeof mobileAstrologerSessionListResponseSchema
+>;
+
 export const verifyAstrologerRegistrationPasswordlessCodeRequestSchema =
   baseVerifyPasswordlessCodeRequestSchema.extend({
     displayName: displayNameSchema
@@ -182,4 +260,14 @@ export const verifyAstrologerRegistrationPasswordlessCodeResponseSchema =
 
 export type VerifyAstrologerRegistrationPasswordlessCodeResponse = z.infer<
   typeof verifyAstrologerRegistrationPasswordlessCodeResponseSchema
+>;
+
+export const verifyMobileAstrologerRegistrationPasswordlessCodeRequestSchema =
+  verifyAstrologerRegistrationPasswordlessCodeRequestSchema.extend({
+    platform: mobileAstrologerPlatformSchema,
+    deviceLabel: mobileDeviceLabelSchema
+  }).strict();
+
+export type VerifyMobileAstrologerRegistrationPasswordlessCodeRequest = z.infer<
+  typeof verifyMobileAstrologerRegistrationPasswordlessCodeRequestSchema
 >;

@@ -13,6 +13,11 @@ Accepted
 `SameSite` is a defense-in-depth layer and must not be the only protection for
 cookie-auth state-changing routes.
 
+The native astrologer application cannot use browser cookies. It therefore has
+per-device bearer sessions whose opaque access and refresh tokens are held by
+the client Keychain. They grant the same astrologer authorization as a browser
+session; they are not a new role or a privilege boundary.
+
 ElevenHouse is a product-grade production codebase. Booking, orders and
 payments must be built on a consistent security policy from the first route,
 not retrofitted after business workflows exist.
@@ -52,6 +57,17 @@ request hash and persisted business result.
   cookies.
 - Future cookie-auth mutations must opt into route metadata instead of
   hand-rolled header checks.
+- Native bearer requests bypass CSRF only after the authentication guard has
+  verified the mobile session and attached its id to the request. A syntactically
+  valid `Authorization` header alone never changes CSRF mode.
+- Mobile access tokens expire after 15 minutes. Refresh tokens rotate on every
+  successful refresh; the database stores only their SHA-256 hashes. A device
+  session has a 180-day sliding inactivity limit and no absolute expiry while
+  it remains active, as decided for the native product.
+- The client provides a UUID `operationId` on refresh. For 60 seconds, retrying
+  the same consumed refresh token with the same id returns the originally
+  issued token pair from an AES-GCM encrypted receipt. A different operation id
+  is refresh-token replay and revokes the device family.
 
 ## References
 
