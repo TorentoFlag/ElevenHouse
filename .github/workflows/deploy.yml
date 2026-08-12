@@ -309,6 +309,7 @@ jobs:
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 120 postgres redis minio
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up --force-recreate --exit-code-from minio-init minio-init
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-migrator </dev/null
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-preflight </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
           deploy_phase=service_start
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180

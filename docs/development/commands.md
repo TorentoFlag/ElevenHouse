@@ -121,8 +121,10 @@ object storage. Compose задаёт `stop_grace_period: 60s`; Redis queue trans
 должен сохранять AOF и использовать `maxmemory-policy=noeviction`.
 
 Ordinary production deploy запускает fail-closed `db-baseline-preflight` до
-остановки writers. Любая неизвестная migration history останавливает deploy до
-backup и schema mutation.
+остановки writers и повторно после `db-migrator`, до `db-seeder` и запуска
+services. Любая неизвестная migration history или drift критичных Flow
+authority tables, включая shared outbox, останавливает deploy до backup либо
+до service start соответственно.
 
 Одноразовый pre-launch reset из ADR 0012 доступен только в ручном
 `Deploy Production` workflow с `prelaunch_reset=true`. После writer quiesce,

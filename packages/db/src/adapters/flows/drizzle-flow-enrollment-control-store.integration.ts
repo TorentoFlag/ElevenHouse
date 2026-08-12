@@ -2,7 +2,11 @@ import { readCurrentMigrationSql } from "../../testing/current-migration-sql";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-import { flowCapabilityManifestV2Schema, flowGraphV2Schema } from "@elevenhouse/contracts";
+import {
+  flowCapabilityManifestV2Schema,
+  flowGraphV2Schema,
+  type FlowGraphV2
+} from "@elevenhouse/contracts";
 import {
   activateFlowVersionEnrollment,
   compileFlowGraphV2,
@@ -309,6 +313,86 @@ describe.sequential("Flow enrollment control store Drizzle/PostgreSQL integratio
       openEpochs: 0,
       activeAllocations: 0
     });
+  });
+
+  it("blocks a natal Flow when an active selected product does not require a single natal chart", async () => {
+    const productId = randomUUID();
+    const natalGraph = bookingNatalGraph(productId);
+    const compiledNatalGraph = compileFlowGraphV2(natalGraph);
+    const natalManifest = compiledNatalGraph.capabilityManifest;
+    if (!natalManifest) throw new Error("Expected a publishable natal Flow graph");
+    const fixture = await createFixture({ graph: natalGraph, capabilityManifest: natalManifest });
+    await insertProduct(fixture.ownerUserId, productId, {
+      methods: ["forecast"],
+      requiredClientData: ["chart1"]
+    });
+
+    await expect(
+      activateFlowVersionEnrollment(activationInput(fixture, "activate-incompatible-product-0001"))
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: {
+            code: "FLOW_ACTIVATION_BLOCKED",
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "FLOW_PRODUCT_UNAVAILABLE" })
+            ])
+          }
+        }
+      }
+    });
+    await expect(readEnrollmentState(fixture.ownerUserId)).resolves.toMatchObject({
+      activeControls: 0,
+      openEpochs: 0,
+      activeAllocations: 0
+    });
+  });
+
+  it("blocks a natal Flow when the selected product requires a second chart", async () => {
+    const productId = randomUUID();
+    const natalGraph = bookingNatalGraph(productId);
+    const natalManifest = compileRequiredManifest(natalGraph);
+    const fixture = await createFixture({ graph: natalGraph, capabilityManifest: natalManifest });
+    await insertProduct(fixture.ownerUserId, productId, {
+      methods: ["natal"],
+      requiredClientData: ["chart1", "chart2"]
+    });
+
+    await expect(
+      activateFlowVersionEnrollment(activationInput(fixture, "activate-second-chart-product-0001"))
+    ).resolves.toMatchObject({
+      kind: "created",
+      outcome: {
+        kind: "rejected",
+        response: {
+          statusCode: 409,
+          body: {
+            code: "FLOW_ACTIVATION_BLOCKED",
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "FLOW_PRODUCT_UNAVAILABLE" })
+            ])
+          }
+        }
+      }
+    });
+  });
+
+  it("activates a natal Flow for an active product that requires one natal chart", async () => {
+    const productId = randomUUID();
+    const natalGraph = bookingNatalGraph(productId);
+    const natalManifest = compileRequiredManifest(natalGraph);
+    const fixture = await createFixture({ graph: natalGraph, capabilityManifest: natalManifest });
+    await insertProduct(fixture.ownerUserId, productId, {
+      methods: ["natal"],
+      requiredClientData: ["chart1"]
+    });
+
+    await expect(
+      activateFlowVersionEnrollment(activationInput(fixture, "activate-natal-product-0001"))
+    ).resolves.toMatchObject({ kind: "created", outcome: { kind: "succeeded" } });
   });
 
   it("evaluates entitlement with a database instant sampled after subscription locks", async () => {
@@ -1169,6 +1253,7 @@ async function createFixture(
   input: {
     readonly automationLimit?: number;
     readonly capabilityManifest?: typeof capabilityManifest;
+    readonly graph?: FlowGraphV2;
   } = {}
 ) {
   const ownerUserId = randomUUID();
@@ -1180,18 +1265,21 @@ async function createFixture(
   );
   const ownerSubjectId = owner.rows[0]!.owner_subject_id;
 
+  const fixtureGraph = input.graph ?? graph;
+  const fixtureManifest = input.capabilityManifest ?? compileRequiredManifest(fixtureGraph);
+  const fixtureRequirementKeys = createFlowRuntimeRequirementKeys(fixtureManifest);
   await replaceFlowRuntimeRolloutPolicy({
     store: createDrizzleFlowRuntimeControlCommandStore(runtime.database),
     actorUserId,
     idempotencyKey: `enable-flow-${randomUUID()}`,
     expectedRevision: 1,
-    policy: canaryPolicy(ownerSubjectId),
+    policy: canaryPolicy(ownerSubjectId, fixtureRequirementKeys),
     reason: "Enrollment integration"
   });
   const workerStore = createDrizzleFlowWorkerReadinessStore(runtime.database);
-  await workerStore.register(workerRegistration(ownerSubjectId));
+  await workerStore.register(workerRegistration(ownerSubjectId, fixtureRequirementKeys));
   await createActiveTariff(ownerUserId, input.automationLimit ?? 1);
-  const published = await createPublishedFlow(ownerUserId, 1, input.capabilityManifest);
+  const published = await createPublishedFlow(ownerUserId, 1, fixtureManifest, fixtureGraph);
   return {
     ...published,
     actorUserId,
@@ -1221,7 +1309,8 @@ function activationInput(fixture: Fixture, idempotencyKey: string) {
 async function createPublishedFlow(
   ownerUserId: string,
   definitionRevision: number,
-  publishedCapabilityManifest: typeof capabilityManifest = capabilityManifest
+  publishedCapabilityManifest: typeof capabilityManifest = capabilityManifest,
+  publishedGraph: FlowGraphV2 = graph
 ) {
   return inTransaction(async (client) => {
     const flow = await client.query<{ id: string }>(
@@ -1232,7 +1321,7 @@ async function createPublishedFlow(
          $1, 'Enrollment fixture', $2, 'draft', 'manual_approve',
          $3, $4, $5, transaction_timestamp(), transaction_timestamp()
        ) RETURNING id`,
-      [ownerUserId, origin(), definitionRevision, graph, presentation()]
+      [ownerUserId, origin(), definitionRevision, publishedGraph, presentation()]
     );
     const flowId = flow.rows[0]!.id;
     const version = await insertVersion(client, {
@@ -1240,6 +1329,7 @@ async function createPublishedFlow(
       ownerUserId,
       version: 1,
       sourceRevision: definitionRevision,
+      graph: publishedGraph,
       capabilityManifest: publishedCapabilityManifest
     });
     await client.query(
@@ -1309,6 +1399,7 @@ async function insertVersion(
     readonly ownerUserId: string;
     readonly version: number;
     readonly sourceRevision: number;
+    readonly graph?: FlowGraphV2;
     readonly capabilityManifest?: typeof capabilityManifest;
   }
 ) {
@@ -1325,7 +1416,7 @@ async function insertVersion(
       input.ownerUserId,
       input.version,
       input.sourceRevision,
-      graph,
+      input.graph ?? graph,
       presentation(),
       input.capabilityManifest ?? capabilityManifest
     ]
@@ -1369,12 +1460,15 @@ async function createActiveTariff(ownerUserId: string, automationLimit: number):
   });
 }
 
-function canaryPolicy(ownerSubjectId: string): Omit<FlowRuntimeRolloutPolicy, "revision"> {
+function canaryPolicy(
+  ownerSubjectId: string,
+  requiredRequirementKeys = requirementKeys
+): Omit<FlowRuntimeRolloutPolicy, "revision"> {
   return {
     schemaVersion: "flow-runtime-rollout-policy.v2",
     mode: "canary",
     canaryOwnerSubjectIds: [ownerSubjectId],
-    allowedRequirementKeys: requirementKeys,
+    allowedRequirementKeys: requiredRequirementKeys,
     killSwitches: {
       enrollment: { global: false, ownerSubjectIds: [], capabilityKeys: [] },
       claim: { global: false, ownerSubjectIds: [], capabilityKeys: [] },
@@ -1401,7 +1495,10 @@ function definitionOnlyPolicy(): Omit<FlowRuntimeRolloutPolicy, "revision"> {
   };
 }
 
-function workerRegistration(ownerSubjectId: string): FlowWorkerRegistration {
+function workerRegistration(
+  ownerSubjectId: string,
+  requiredRequirementKeys = requirementKeys
+): FlowWorkerRegistration {
   const identity = randomUUID();
   return {
     schemaVersion: "flow-worker-registration.v2",
@@ -1410,7 +1507,7 @@ function workerRegistration(ownerSubjectId: string): FlowWorkerRegistration {
     roles: ["executor", "enrollment"],
     maxRuntimeMode: "canary",
     maxCanaryOwnerSubjectIds: [ownerSubjectId],
-    requirementKeys,
+    requirementKeys: requiredRequirementKeys,
     deploymentId: `deployment-${identity}`,
     buildId: `build-${identity}`
   };
@@ -1519,6 +1616,100 @@ function presentation() {
     ],
     viewport: { x: 0, y: 0, zoom: 1 }
   };
+}
+
+function compileRequiredManifest(value: FlowGraphV2): typeof capabilityManifest {
+  const compiled = compileFlowGraphV2(value);
+  if (!compiled.capabilityManifest) throw new Error("Expected a publishable Flow graph");
+  return compiled.capabilityManifest;
+}
+
+async function insertProduct(
+  ownerUserId: string,
+  productId: string,
+  input: {
+    readonly methods: readonly string[];
+    readonly requiredClientData: readonly string[];
+  }
+): Promise<void> {
+  await inTransaction(async (client) => {
+    await client.query(
+      `INSERT INTO products (
+         id, owner_user_id, type, status, title, price_minor, currency,
+         execution_mode, payment_model, duration_minutes, participant_mode
+       ) VALUES ($1, $2, 'single', 'active', 'Natal fixture', 10000, 'RUB',
+         'live', 'once', 60, 'solo')`,
+      [productId, ownerUserId]
+    );
+    await client.query("UPDATE products SET revision = revision + 1 WHERE id = $1", [productId]);
+    for (const [order, value] of input.methods.entries()) {
+      await client.query(
+        "INSERT INTO product_methods (product_id, value, \"order\") VALUES ($1, $2, $3)",
+        [productId, value, order]
+      );
+    }
+    for (const [order, value] of input.requiredClientData.entries()) {
+      await client.query(
+        "INSERT INTO product_required_client_data (product_id, value, \"order\") VALUES ($1, $2, $3)",
+        [productId, value, order]
+      );
+    }
+  });
+}
+
+function bookingNatalGraph(productId: string): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "booking",
+        kind: "booking_confirmed",
+        displayTitle: "Booking confirmed",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: [productId] }
+      },
+      {
+        id: "natal-chart",
+        kind: "natal_chart_request",
+        displayTitle: "Calculate natal chart",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          interpretationMode: "adult_natal",
+          settings: {
+            zodiac: "tropical",
+            houseSystem: "placidus",
+            nodeType: "true",
+            aspectPreset: "major",
+            orbMultiplier: 1
+          }
+        }
+      },
+      {
+        id: "completed",
+        kind: "completed",
+        displayTitle: "Completed",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "natal_chart_calculated" }
+      }
+    ],
+    edges: [
+      {
+        id: "booking-to-chart",
+        sourceNodeId: "booking",
+        targetNodeId: "natal-chart",
+        sourceHandle: "next"
+      },
+      {
+        id: "chart-to-completed",
+        sourceNodeId: "natal-chart",
+        targetNodeId: "completed",
+        sourceHandle: "next"
+      }
+    ]
+  });
 }
 
 function getIntegrationDatabaseUrl(value: string | undefined): string {

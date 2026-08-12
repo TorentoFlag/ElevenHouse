@@ -260,6 +260,69 @@ describe("flow outbox safety baseline PostgreSQL integration", () => {
     await expect(assertFlowOutboxSafety(databaseClient)).resolves.toBeUndefined();
   });
 
+  it("accepts the exact subscription lifecycle integrity trigger without attesting it as Flow state", async () => {
+    await applyTransition();
+    await databaseClient.query(`
+      CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_graph_integrity()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      DECLARE
+        checked_event_id uuid;
+      BEGIN
+        IF TG_TABLE_NAME = 'outbox_events' THEN
+          IF TG_OP <> 'DELETE'
+             AND NEW.event_type = 'client_subscription.lifecycle_event.dispatch_requested.v1' THEN
+            checked_event_id := NEW.aggregate_id;
+          ELSIF TG_OP <> 'INSERT'
+             AND OLD.event_type = 'client_subscription.lifecycle_event.dispatch_requested.v1' THEN
+            checked_event_id := OLD.aggregate_id;
+          ELSE
+            RETURN NULL;
+          END IF;
+        ELSIF TG_TABLE_NAME = 'client_subscription_fixture' THEN
+          RETURN NULL;
+        END IF;
+        RETURN NULL;
+      END;
+      $$;
+      CREATE CONSTRAINT TRIGGER client_subscription_graph_integrity
+      AFTER INSERT OR DELETE OR UPDATE ON outbox_events
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW
+      EXECUTE FUNCTION elevenhouse_assert_client_subscription_graph_integrity();
+    `);
+
+    await expect(assertFlowOutboxSafety(databaseClient)).resolves.toBeUndefined();
+  });
+
+  it("rejects a subscription-named trigger that can observe Flow events", async () => {
+    await applyTransition();
+    await databaseClient.query(`
+      CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_graph_integrity()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF TG_OP <> 'DELETE'
+           AND NEW.event_type = 'flows.runtime_event.dispatch_requested' THEN
+          RAISE EXCEPTION 'unexpected Flow event';
+        END IF;
+        RETURN NULL;
+      END;
+      $$;
+      CREATE CONSTRAINT TRIGGER client_subscription_graph_integrity
+      AFTER INSERT OR DELETE OR UPDATE ON outbox_events
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW
+      EXECUTE FUNCTION elevenhouse_assert_client_subscription_graph_integrity();
+    `);
+
+    await expect(assertFlowOutboxSafety(databaseClient)).rejects.toThrow(
+      /Flow outbox safety catalog drifted/
+    );
+  });
+
   it("rejects an extension-named constraint that can affect Flow events", async () => {
     await applyTransition();
     await databaseClient.query(`

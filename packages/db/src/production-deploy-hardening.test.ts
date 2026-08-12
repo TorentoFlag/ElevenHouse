@@ -94,6 +94,7 @@ describe("production chart deployment hardening", () => {
     const liveCompose =
       "docker compose --env-file env/.env.deploy -f compose/compose.production.yml";
     const preflight = `${stagedCompose} run --rm -T db-baseline-preflight`;
+    const postMigrationPreflight = `${liveCompose} run --rm -T db-baseline-preflight`;
     const stopWriters = `${liveCompose} stop --timeout 150 "\${DATABASE_WRITER_SERVICES[@]}"`;
     const sessionFence = "PRODUCTION_DATABASE_NOT_QUIESCED";
     const backup = "./backup-postgres.sh";
@@ -111,6 +112,13 @@ describe("production chart deployment hardening", () => {
 
     expect(workflow).toContain(preflight);
     expect(workflow.indexOf(preflight)).toBeLessThan(workflow.indexOf(stopWriters));
+    expect(workflow).toContain(postMigrationPreflight);
+    expect(workflow.indexOf("run --rm -T db-migrator </dev/null")).toBeLessThan(
+      workflow.indexOf(postMigrationPreflight)
+    );
+    expect(workflow.indexOf(postMigrationPreflight)).toBeLessThan(
+      workflow.indexOf("run --rm -T db-seeder </dev/null")
+    );
     expect(workflow).toContain("DATABASE_WRITER_SERVICES=(");
     for (const writer of expectedWriters) expect(workflow).toContain(`            ${writer}`);
     expect(workflow).toContain(stopWriters);

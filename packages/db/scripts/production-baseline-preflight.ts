@@ -3,6 +3,7 @@ import { Client } from "pg";
 
 import { assertFlowBookingLifecycleSafety } from "./flow-booking-lifecycle-safety-reconciliation";
 import { assertFlowEnrollmentControl } from "./flow-enrollment-control-reconciliation";
+import { assertFlowOutboxSafety } from "./flow-outbox-safety-reconciliation";
 import {
   isCurrentBaselineHistory,
   type MigrationLedgerRow
@@ -68,6 +69,7 @@ async function main(): Promise<void> {
 async function assertCurrentFlowRolloutSafety(client: Client): Promise<void> {
   await assertFlowEnrollmentControl(client);
   await assertFlowBookingLifecycleSafety(client);
+  await assertFlowOutboxSafety(client);
 }
 
 async function relationExists(client: Client, qualifiedName: string): Promise<boolean> {

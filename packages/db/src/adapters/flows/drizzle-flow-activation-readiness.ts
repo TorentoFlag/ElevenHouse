@@ -29,7 +29,7 @@ import {
   platformTariffVersionCapabilities,
   platformTariffVersions
 } from "../../schema/platform-billing";
-import { products } from "../../schema/products";
+import { productMethods, productRequiredClientData, products } from "../../schema/products";
 import { readCurrentFlowRuntimeControl } from "./drizzle-flow-runtime-control-reader";
 import type { FlowEnrollmentTransaction } from "./drizzle-flow-enrollment-subjects";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
@@ -346,15 +346,60 @@ async function readProductBlockers(
     )
   ];
   if (productIds.length === 0) return [];
+  const requiresSingleNatalChart = graph.nodes.some(
+    (node) => node.kind === "natal_chart_request"
+  );
   const query = transaction
     .select({ id: products.id, status: products.status })
     .from(products)
     .where(and(eq(products.ownerUserId, ownerUserId), inArray(products.id, productIds)));
   const rows = lockRows ? await query.for("share", { of: products }) : await query;
-  const activeIds = new Set(rows.filter((row) => row.status === "active").map((row) => row.id));
-  return productIds.every((productId) => activeIds.has(productId))
+  if (!requiresSingleNatalChart) {
+    const activeIds = new Set(
+      rows.filter((product) => product.status === "active").map((product) => product.id)
+    );
+    return productIds.every((productId) => activeIds.has(productId))
+      ? []
+      : [blocker("FLOW_PRODUCT_UNAVAILABLE", "graph.nodes.booking_confirmed.config.productIds")];
+  }
+
+  const methodRows = await transaction
+    .select({ productId: productMethods.productId, value: productMethods.value })
+    .from(productMethods)
+    .where(inArray(productMethods.productId, productIds));
+  const requirementRows = await transaction
+    .select({ productId: productRequiredClientData.productId, value: productRequiredClientData.value })
+    .from(productRequiredClientData)
+    .where(inArray(productRequiredClientData.productId, productIds));
+  const methodsByProductId = groupProductValues(methodRows);
+  const requirementsByProductId = groupProductValues(requirementRows);
+  const productsById = new Map(rows.map((row) => [row.id, row]));
+  const everyProductIsEligible = productIds.every((productId) => {
+    const product = productsById.get(productId);
+    if (!product || product.status !== "active") return false;
+    const methods = methodsByProductId.get(productId) ?? new Set<string>();
+    const requirements = requirementsByProductId.get(productId) ?? new Set<string>();
+    return (
+      methods.has("natal") &&
+      requirements.has("chart1") &&
+      !requirements.has("chart2")
+    );
+  });
+  return everyProductIsEligible
     ? []
     : [blocker("FLOW_PRODUCT_UNAVAILABLE", "graph.nodes.booking_confirmed.config.productIds")];
+}
+
+function groupProductValues(
+  rows: readonly { readonly productId: string; readonly value: string }[]
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const valuesByProductId = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const values = valuesByProductId.get(row.productId) ?? new Set<string>();
+    values.add(row.value);
+    valuesByProductId.set(row.productId, values);
+  }
+  return valuesByProductId;
 }
 
 function blockedReadiness(

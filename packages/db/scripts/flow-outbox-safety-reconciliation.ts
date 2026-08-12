@@ -22,6 +22,15 @@ type OutboxConstraintCatalogRow = {
   readonly validated: boolean;
 };
 
+type OutboxTriggerCatalogRow = {
+  readonly object_name: string;
+  readonly definition: string;
+  readonly enabled: string;
+  readonly function_schema: string;
+  readonly function_name: string;
+  readonly function_definition: string;
+};
+
 export type FlowOutboxSafetyReconciliationResult = "already_current" | "reconciled";
 
 const predecessorOutboxSafetyCatalog = {
@@ -58,8 +67,19 @@ const sharedOutboxConstraintExtensions = [
   {
     constraintNamePrefix: "outbox_events_messaging_delivery_",
     eventTypePrefix: "messaging.message.delivery_"
+  },
+  {
+    constraintNamePrefix: "outbox_events_client_subscription_lifecycle_",
+    eventTypePrefix: "client_subscription.lifecycle_event."
   }
 ] as const;
+
+const clientSubscriptionOutboxTrigger = {
+  name: "client_subscription_graph_integrity",
+  functionSchema: "public",
+  functionName: "elevenhouse_assert_client_subscription_graph_integrity",
+  eventType: "client_subscription.lifecycle_event.dispatch_requested.v1"
+} as const;
 
 export async function reconcileFlowOutboxSafety(
   client: Client
@@ -188,18 +208,19 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
     WHERE index_catalog.schemaname = 'public'
       AND index_catalog.tablename = 'outbox_events'
   `);
-  const triggers = await client.query<{
-    object_name: string;
-    definition: string;
-    enabled: string;
-  }>(`
+  const triggers = await client.query<OutboxTriggerCatalogRow>(`
     SELECT
       trigger_record.tgname AS object_name,
       pg_get_triggerdef(trigger_record.oid, false) AS definition,
-      trigger_record.tgenabled AS enabled
+      trigger_record.tgenabled AS enabled,
+      function_namespace.nspname AS function_schema,
+      function_record.proname AS function_name,
+      pg_get_functiondef(function_record.oid) AS function_definition
     FROM pg_trigger AS trigger_record
     JOIN pg_class AS relation ON relation.oid = trigger_record.tgrelid
     JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_proc AS function_record ON function_record.oid = trigger_record.tgfoid
+    JOIN pg_namespace AS function_namespace ON function_namespace.oid = function_record.pronamespace
     WHERE namespace.nspname = 'public'
       AND relation.relname = 'outbox_events'
       AND NOT trigger_record.tgisinternal
@@ -207,6 +228,9 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
 
   const attestedConstraints = constraints.rows.filter(
     (row) => !isApprovedSharedOutboxConstraintExtension(row)
+  );
+  const attestedTriggers = triggers.rows.filter(
+    (row) => !isApprovedSharedOutboxTriggerExtension(row)
   );
   const payload = {
     relations: relations.rows
@@ -239,7 +263,7 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
           }|ready=${row.ready}`
       )
       .sort(),
-    triggers: triggers.rows
+    triggers: attestedTriggers
       .map(
         (row) =>
           `${row.object_name}|${normalizeCatalogDefinition(row.definition)}|enabled=${row.enabled}`
@@ -257,6 +281,42 @@ async function readOutboxSafetyCatalog(client: Client): Promise<OutboxSafetyCata
     unvalidatedConstraints: constraints.rows.filter((row) => !row.validated).length,
     invalidIndexes: indexes.rows.filter((row) => !row.valid || !row.ready).length
   };
+}
+
+function isApprovedSharedOutboxTriggerExtension(row: OutboxTriggerCatalogRow): boolean {
+  if (
+    row.object_name !== clientSubscriptionOutboxTrigger.name ||
+    row.enabled !== "O" ||
+    row.function_schema !== clientSubscriptionOutboxTrigger.functionSchema ||
+    row.function_name !== clientSubscriptionOutboxTrigger.functionName
+  ) {
+    return false;
+  }
+
+  const normalizedTriggerDefinition = normalizeCatalogDefinition(row.definition);
+  const triggerDefinitionMatches =
+    /^CREATE CONSTRAINT TRIGGER client_subscription_graph_integrity AFTER INSERT OR DELETE OR UPDATE ON (?:public\.)?outbox_events DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION elevenhouse_assert_client_subscription_graph_integrity\(\)$/.test(
+      normalizedTriggerDefinition
+    );
+  if (!triggerDefinitionMatches) {
+    return false;
+  }
+
+  const normalizedFunctionDefinition = normalizeCatalogDefinition(row.function_definition);
+  const expectedGuard = normalizeCatalogDefinition(`
+    IF TG_TABLE_NAME = 'outbox_events' THEN
+      IF TG_OP <> 'DELETE'
+         AND NEW.event_type = '${clientSubscriptionOutboxTrigger.eventType}' THEN
+        checked_event_id := NEW.aggregate_id;
+      ELSIF TG_OP <> 'INSERT'
+         AND OLD.event_type = '${clientSubscriptionOutboxTrigger.eventType}' THEN
+        checked_event_id := OLD.aggregate_id;
+      ELSE
+        RETURN NULL;
+      END IF;
+    ELSIF TG_TABLE_NAME =
+  `);
+  return normalizedFunctionDefinition.includes(expectedGuard);
 }
 
 function isApprovedSharedOutboxConstraintExtension(row: OutboxConstraintCatalogRow): boolean {
