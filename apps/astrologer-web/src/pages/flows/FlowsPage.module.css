@@ -113,6 +113,9 @@
   border-radius: 14px;
   padding: 10px 16px;
   background: var(--flows-gold);
+  box-shadow:
+    rgb(244 196 48 / 0.42) 0 0 0 1px,
+    rgb(244 196 48 / 0.4) 0 10px 26px -10px;
   color: #2a1b0b;
   cursor: pointer;
   font: 600 13px / 1 var(--eh-font-sans);
@@ -1203,7 +1206,7 @@
 
 .builderInspectorSection {
   border-bottom: 1px solid var(--flows-line);
-  padding: 18px;
+  padding: 18px 20px;
 }
 
 .builderInspector h2 {
@@ -1322,13 +1325,14 @@
 .builderField select {
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid var(--flows-line-strong);
-  border-radius: 8px;
-  padding: 10px;
+  min-height: 45px;
+  border: 1px solid var(--flows-line);
+  border-radius: 14px;
+  padding: 12px 14px;
   outline: none;
-  background: var(--eh-color-night-950);
+  background: rgb(11 11 31);
   color: var(--eh-color-moon-120);
-  font: 13px / 1.35 var(--eh-font-sans);
+  font: 15px var(--eh-font-sans);
 }
 
 .builderField textarea {
@@ -2753,12 +2757,14 @@
   }
 
   .createDialogClose {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
     border-color: var(--flows-line);
     border-radius: 10px;
-    background: var(--flows-surface-strong);
+    background:
+      linear-gradient(var(--flows-surface-strong), var(--flows-surface-strong)) center / 34px 34px
+        no-repeat;
   }
 
   .createDialogIntro,

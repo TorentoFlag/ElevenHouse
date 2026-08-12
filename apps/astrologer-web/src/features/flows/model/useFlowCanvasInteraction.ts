@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type RefObject
+} from "react";
 import type { FlowPresentationV1 } from "@elevenhouse/contracts";
 import {
   fitFlowCanvasViewport,
@@ -64,19 +71,19 @@ export function useFlowCanvasInteraction({
   editableRef.current = editable;
   onChangeViewportRef.current = onChangeViewport;
 
-  const cancelWheelPersistence = () => {
+  const cancelWheelPersistence = useCallback(() => {
     if (wheelCompletionTimer.current !== null) clearTimeout(wheelCompletionTimer.current);
     wheelCompletionTimer.current = null;
     wheelStartViewportRef.current = null;
-  };
+  }, []);
 
-  const cancelInteraction = (pointerId?: number, releaseCapture = true) => {
+  const cancelInteraction = useCallback((pointerId?: number, releaseCapture = true) => {
     const interaction = interactionRef.current;
     if (!interaction || (pointerId !== undefined && interaction.pointerId !== pointerId)) return;
     interactionRef.current = null;
     setDraggedNodePosition(null);
     if (releaseCapture) canvasRef.current?.releasePointerCapture?.(interaction.pointerId);
-  };
+  }, [canvasRef]);
 
   useEffect(() => {
     cancelWheelPersistence();
@@ -85,29 +92,29 @@ export function useFlowCanvasInteraction({
     viewportRef.current = presentation.viewport;
     setViewport(presentation.viewport);
     setDraggedNodePosition(null);
-  }, [flowId, presentation]);
+  }, [cancelInteraction, cancelWheelPersistence, flowId, presentation]);
 
   useEffect(() => {
     cancelWheelPersistence();
     if (!editable) cancelInteraction();
-  }, [editable]);
+  }, [cancelInteraction, cancelWheelPersistence, editable]);
 
   useEffect(
     () => () => {
       cancelWheelPersistence();
       cancelInteraction();
     },
-    []
+    [cancelInteraction, cancelWheelPersistence]
   );
 
-  const updateViewport = (nextViewport: Viewport): boolean => {
+  const updateViewport = useCallback((nextViewport: Viewport): boolean => {
     if (sameViewport(viewportRef.current, nextViewport)) return false;
     viewportRef.current = nextViewport;
     setViewport(nextViewport);
     return true;
-  };
+  }, []);
 
-  const persistViewportIfChanged = (startViewport: Viewport) => {
+  const persistViewportIfChanged = useCallback((startViewport: Viewport) => {
     const currentViewport = viewportRef.current;
     if (
       !editableRef.current ||
@@ -117,9 +124,9 @@ export function useFlowCanvasInteraction({
       return;
     }
     onChangeViewportRef.current?.(currentViewport);
-  };
+  }, []);
 
-  const scheduleWheelPersistence = () => {
+  const scheduleWheelPersistence = useCallback(() => {
     if (wheelCompletionTimer.current !== null) clearTimeout(wheelCompletionTimer.current);
     wheelCompletionTimer.current = setTimeout(() => {
       const startViewport = wheelStartViewportRef.current;
@@ -127,7 +134,7 @@ export function useFlowCanvasInteraction({
       wheelStartViewportRef.current = null;
       if (startViewport) persistViewportIfChanged(startViewport);
     }, 160);
-  };
+  }, [persistViewportIfChanged]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -158,7 +165,7 @@ export function useFlowCanvasInteraction({
       canvas.removeEventListener("wheel", handleWheel, listenerOptions);
       cancelWheelPersistence();
     };
-  }, [canvasRef]);
+  }, [canvasRef, cancelWheelPersistence, scheduleWheelPersistence, updateViewport]);
 
   const zoomAtCanvasCenter = (factor: number, fallbackCenter: FlowCanvasPoint) => {
     const rect = canvasRef.current?.getBoundingClientRect();

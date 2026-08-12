@@ -262,7 +262,7 @@ describe("FlowBuilderCanvas", () => {
     const kinds = Object.keys(expectedTones) as FlowNodeKindV2[];
     const visualGraph = {
       ...graph,
-      nodes: kinds.map((kind, index) => ({
+      nodes: kinds.map((kind) => ({
         ...graph.nodes[0]!,
         id: `node-${kind}`,
         kind,

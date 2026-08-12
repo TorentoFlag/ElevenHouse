@@ -61,9 +61,18 @@ describe("FlowsPage gallery geometry", () => {
 });
 
 describe("FlowsPage create dialog geometry", () => {
+  it("keeps the measured primary command glow", () => {
+    expect(styles).toMatch(
+      /\.createButton,\s*\.mobileOpenButton\s*\{[^}]*box-shadow:\s*rgb\(244 196 48 \/ 0\.42\) 0 0 0 1px,[^}]*rgb\(244 196 48 \/ 0\.4\) 0 10px 26px -10px/s
+    );
+  });
+
   it("keeps the mobile blank command fluid below the 390px reference viewport", () => {
     expect(styles).toMatch(
       /@media \(max-width:\s*700px\)[\s\S]*\.createDialogBlank\s*\{[^}]*width:\s*100%[^}]*max-width:\s*316px/s
+    );
+    expect(styles).toMatch(
+      /@media \(max-width:\s*700px\)[\s\S]*\.createDialogClose\s*\{[^}]*width:\s*44px[^}]*height:\s*44px[^}]*flex-basis:\s*44px/s
     );
   });
 });
@@ -75,6 +84,17 @@ describe("FlowsPage builder controls geometry", () => {
     );
     expect(styles).toMatch(
       /\.builderCanvasControls button:first-child\s*\{[^}]*font-size:\s*20px/s
+    );
+  });
+});
+
+describe("FlowsPage builder inspector geometry", () => {
+  it("matches the measured reference section and field rhythm", () => {
+    expect(styles).toMatch(
+      /\.builderInspectorSection\s*\{[^}]*padding:\s*18px 20px/s
+    );
+    expect(styles).toMatch(
+      /\.builderField input,[\s\S]*?\.builderField select\s*\{[^}]*min-height:\s*45px[^}]*border:\s*1px solid var\(--flows-line\)[^}]*border-radius:\s*14px[^}]*padding:\s*12px 14px[^}]*background:\s*rgb\(11 11 31\)[^}]*font:\s*15px/s
     );
   });
 });
