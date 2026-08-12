@@ -140,6 +140,8 @@ async function executeAstroDiaryCommandInTransaction(
     await persistPromptDeclineWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "prompt_withdrawal") {
     await persistPromptWithdrawalWriteSet(transaction, decision.writeSet, commandAt);
+  } else if (persistence === "client_follow_up") {
+    await persistClientFollowUpWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "client_entry_publication") {
     await persistClientEntryPublicationWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "closing_reply") {
@@ -180,6 +182,7 @@ function assertSupportedWriteSet(
   | "prompt_acceptance"
   | "prompt_decline"
   | "prompt_withdrawal"
+  | "client_follow_up"
   | "client_entry_publication"
   | "closing_reply"
   | "follow_up_reply" {
@@ -194,6 +197,9 @@ function assertSupportedWriteSet(
   }
   if (isPromptWithdrawalWriteSet(input, writeSet, allocation)) {
     return "prompt_withdrawal";
+  }
+  if (isClientFollowUpWriteSet(input, writeSet, allocation)) {
+    return "client_follow_up";
   }
   if (isClientEntryPublicationWriteSet(input, writeSet, allocation)) {
     return "client_entry_publication";
@@ -525,6 +531,70 @@ function isPromptWithdrawalWriteSet(
     writeSet.erasureFacts.length === 0 &&
     writeSet.readCursors.length === 0 &&
     writeSet.events.length === 1
+  );
+}
+
+function isClientFollowUpWriteSet(
+  input: AstroDiaryCommandUnitOfWorkInput,
+  writeSet: AstroDiaryCommandWriteSet,
+  allocation: AstroDiaryCommandAllocatedResource | null
+): boolean {
+  if (
+    allocation !== null ||
+    input.resultResource !== null ||
+    input.envelope.operation !== "continue_open_cycle"
+  ) {
+    return false;
+  }
+  const [journal] = writeSet.journals;
+  const [cycle] = writeSet.cycles;
+  const [draft] = writeSet.drafts;
+  const [obligation] = writeSet.obligations;
+  const [item] = writeSet.timelineItems;
+  const [context] = writeSet.contextSnapshots;
+  const [derivative] = writeSet.derivativeCommands;
+  return Boolean(
+    journal?.after &&
+    journal.beforeVersion !== null &&
+    journal.after.id === input.journalId &&
+    journal.after.version === journal.beforeVersion + 1 &&
+    cycle !== undefined &&
+    cycle.beforeVersion !== null &&
+    cycle.after?.journalId === input.journalId &&
+    cycle.after.state === "awaiting_astrologer_closing_response" &&
+    draft !== undefined &&
+    draft.beforeVersion !== null &&
+    draft.after === null &&
+    obligation?.beforeVersion === null &&
+    obligation.after?.journalId === input.journalId &&
+    item?.beforeRevision === null &&
+    item.after.journalId === input.journalId &&
+    item.after.kind === "client_entry" &&
+    context?.beforeVersion === null &&
+    context.after?.journalId === input.journalId &&
+    derivative?.operation === "generate" &&
+    derivative.itemId === item.after.id &&
+    writeSet.journals.length === 1 &&
+    writeSet.cycles.length === 1 &&
+    writeSet.drafts.length === 1 &&
+    writeSet.obligations.length === 1 &&
+    writeSet.allowances.length === 0 &&
+    writeSet.timelineItems.length === 1 &&
+    writeSet.mediaBindings.every((binding) => binding.itemId === item.after.id) &&
+    writeSet.contextSnapshots.length === 1 &&
+    writeSet.contextInvalidations.length === 0 &&
+    writeSet.derivativeCommands.length === 1 &&
+    writeSet.events.length === 4 &&
+    writeSet.mediaReleases.length === 0 &&
+    writeSet.mediaAccessRevocations.length === 0 &&
+    writeSet.journalMediaAccessRevocations.length === 0 &&
+    writeSet.itemReadAccessRevocations.length === 0 &&
+    writeSet.erasureCommands.length === 0 &&
+    writeSet.subscriptionTransitions.length === 0 &&
+    writeSet.cascadeCommands.length === 0 &&
+    writeSet.cascadeTargets.length === 0 &&
+    writeSet.erasureFacts.length === 0 &&
+    writeSet.readCursors.length === 0
   );
 }
 
@@ -1224,6 +1294,150 @@ async function persistPromptAcceptanceWriteSet(
     .returning({ id: astroDiaryDrafts.id });
   if (deletedDraft.length !== 1)
     throw new Error("AstroDiary accepted entry draft CAS changed under lock");
+  await persistEventsAndDeliveries(transaction, writeSet.events, commandAt);
+}
+
+async function persistClientFollowUpWriteSet(
+  transaction: ClientSubscriptionTransaction,
+  writeSet: AstroDiaryCommandWriteSet,
+  commandAt: Date
+): Promise<void> {
+  const [journalEffect] = writeSet.journals;
+  const [cycleEffect] = writeSet.cycles;
+  const [draftEffect] = writeSet.drafts;
+  const [obligationEffect] = writeSet.obligations;
+  const [itemEffect] = writeSet.timelineItems;
+  const [contextEffect] = writeSet.contextSnapshots;
+  const [derivative] = writeSet.derivativeCommands;
+  if (
+    !journalEffect?.after ||
+    !cycleEffect?.after ||
+    !draftEffect ||
+    draftEffect.after !== null ||
+    !obligationEffect?.after ||
+    !itemEffect?.after ||
+    !contextEffect?.after ||
+    !derivative
+  ) {
+    throw new Error("AstroDiary client follow-up write-set is incomplete");
+  }
+  if (itemEffect.after.kind !== "client_entry") {
+    throw new Error("AstroDiary client follow-up requires a client entry timeline item");
+  }
+  const [updatedJournal] = await transaction
+    .update(astroDiaryJournals)
+    .set({ state: journalEffect.after.state, version: journalEffect.after.version })
+    .where(
+      and(
+        eq(astroDiaryJournals.id, journalEffect.after.id),
+        eq(astroDiaryJournals.version, journalEffect.beforeVersion!)
+      )
+    )
+    .returning({ id: astroDiaryJournals.id });
+  if (!updatedJournal) throw new Error("AstroDiary journal CAS changed inside locked transaction");
+  const cycle = cycleEffect.after;
+  const updatedCycle = await transaction
+    .update(astroDiaryCycles)
+    .set({
+      awaitingClientPromptItemId: cycle.awaitingClientPromptItemId,
+      clientResponseDueAt: nullableDate(cycle.clientResponseDueAt),
+      clientResponseWindowCalendarDays: cycle.clientResponseWindowCalendarDays,
+      clientResponseTimezone: cycle.clientResponseTimezone,
+      state: cycle.state,
+      version: cycle.version,
+      closedAt: nullableDate(cycle.closedAt),
+      closeReason: cycle.closeReason
+    })
+    .where(
+      and(
+        eq(astroDiaryCycles.id, cycle.id),
+        eq(astroDiaryCycles.version, cycleEffect.beforeVersion!)
+      )
+    )
+    .returning({ id: astroDiaryCycles.id });
+  if (updatedCycle.length !== 1) {
+    throw new Error("AstroDiary client follow-up cycle CAS changed inside locked transaction");
+  }
+  const item = itemEffect.after;
+  await transaction.insert(astroDiaryTimelineItems).values(mapTimelineItem(item));
+  await transaction.insert(astroDiaryTimelineItemRevisions).values({
+    ...mapTimelineItem(item),
+    itemId: item.id,
+    revision: item.revision,
+    sourceDigest: derivative.sourceDigest,
+    recordedAt: commandAt
+  });
+  await persistPublishedMediaBindings(transaction, writeSet.mediaBindings, item, commandAt);
+  const obligation = obligationEffect.after;
+  await transaction.insert(astroDiaryResponseObligations).values({
+    id: obligation.id,
+    journalId: obligation.journalId,
+    cycleId: obligation.cycleId,
+    triggerItemId: obligation.triggerItemId,
+    state: obligation.state,
+    version: obligation.version,
+    openedAt: new Date(obligation.openedAt),
+    dueAt: new Date(obligation.dueAt),
+    responseSlaWorkingDays: obligation.responseSlaWorkingDays,
+    serviceTimezone: obligation.serviceTimezone,
+    resolvedDueLocal: obligation.resolvedDueLocal,
+    resolvedDueOffset: obligation.resolvedDueOffset,
+    satisfiedByItemId: obligation.satisfiedByItemId,
+    closedAt: nullableDate(obligation.closedAt)
+  });
+  await transaction
+    .insert(astroDiaryResponseObligationWeekdays)
+    .values(
+      obligation.workingWeekdays.map((isoWeekday) => ({ obligationId: obligation.id, isoWeekday }))
+    );
+  const context = contextEffect.after;
+  if (context.sourceItemDigest !== derivative.sourceDigest) {
+    throw new Error("AstroDiary follow-up context and derivative source digest differ");
+  }
+  await transaction.insert(astroDiaryContextSnapshots).values({
+    id: context.id,
+    journalId: context.journalId,
+    itemId: context.itemId,
+    sourceItemRevision: context.sourceItemRevision,
+    sourceItemDigest: context.sourceItemDigest,
+    eventAt: new Date(context.eventAt),
+    eventTimezone: context.eventTimezone,
+    version: context.version,
+    status: context.status,
+    engineRevision: context.engineRevision,
+    globalContextRef: context.globalContextRef,
+    birthProfileId: context.birthProfileId,
+    birthProfileRevision: context.birthProfileRevision,
+    personalChartRef: context.personalChartRef,
+    contextDigest: context.contextDigest,
+    calculatedAt: nullableDate(context.calculatedAt),
+    failureCode: context.failureCode
+  });
+  await transaction.insert(astroDiaryDerivativeCommands).values({
+    id: derivative.commandId,
+    journalId: item.journalId,
+    itemId: derivative.itemId,
+    sourceRevision: derivative.sourceRevision,
+    sourceDigest: derivative.sourceDigest,
+    operation: derivative.operation,
+    state: "pending",
+    requestedAt: commandAt
+  });
+  await transaction
+    .delete(astroDiaryDraftAttachments)
+    .where(eq(astroDiaryDraftAttachments.draftId, draftEffect.draftId));
+  const deletedDraft = await transaction
+    .delete(astroDiaryDrafts)
+    .where(
+      and(
+        eq(astroDiaryDrafts.id, draftEffect.draftId),
+        eq(astroDiaryDrafts.version, draftEffect.beforeVersion)
+      )
+    )
+    .returning({ id: astroDiaryDrafts.id });
+  if (deletedDraft.length !== 1) {
+    throw new Error("AstroDiary client follow-up draft CAS changed under lock");
+  }
   await persistEventsAndDeliveries(transaction, writeSet.events, commandAt);
 }
 

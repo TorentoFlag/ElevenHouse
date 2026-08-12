@@ -1308,6 +1308,175 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
     ).resolves.toHaveLength(2);
   });
 
+  it("publishes a client follow-up without consuming allowance twice and creates the closing obligation", async () => {
+    const { fixture, journalId } = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const initialDraft = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      draftCreateInput(fixture, journalId, `draft-follow-up-initial-${randomUUID()}`, "Начинаю")
+    );
+    if (initialDraft.outcome !== "applied" || initialDraft.response.resource === null) {
+      throw new Error("Expected an initial client draft");
+    }
+    const cycleId = randomUUID();
+    const firstObligationId = randomUUID();
+    await executeOpenClientCycleCommand(unitOfWork, {
+      journalId,
+      expectedJournalVersion: 2,
+      idempotencyKey: `open-follow-up-${randomUUID()}`,
+      command: {
+        actorUserId: fixture.authority.clientUserId,
+        draftId: initialDraft.response.resource.draftId,
+        expectedDraftVersion: 1,
+        cycleId,
+        entryItemId: randomUUID(),
+        obligationId: firstObligationId,
+        contextId: randomUUID(),
+        derivativeCommandId: randomUUID(),
+        allowancePeriodId: fixture.periodId,
+        allowanceExpectedVersion: 1,
+        allowanceIdempotencyKey: `consume-follow-up-${randomUUID()}`,
+        allowanceConsumptionId: randomUUID(),
+        eventIds: {
+          cycleOpened: randomUUID(),
+          itemPublished: randomUUID(),
+          obligationCreated: randomUUID(),
+          contextRequested: randomUUID(),
+          derivativeRequested: randomUUID()
+        }
+      }
+    });
+    const replyDraft = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, {
+      journalId,
+      idempotencyKey: `draft-follow-up-reply-${randomUUID()}`,
+      actorUserId: fixture.authority.astrologerUserId,
+      actorRole: "astrologer",
+      request: {
+        expectedJournalVersion: 3,
+        cycleId,
+        kind: "astrologer_reply",
+        body: "Давайте посмотрим, что меняется после этого первого шага.",
+        attachmentIds: [],
+        moodId: null,
+        correctsItemId: null
+      }
+    });
+    const promptDraft = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, {
+      journalId,
+      idempotencyKey: `draft-follow-up-prompt-${randomUUID()}`,
+      actorUserId: fixture.authority.astrologerUserId,
+      actorRole: "astrologer",
+      request: {
+        expectedJournalVersion: 4,
+        cycleId,
+        kind: "reflection_prompt",
+        body: "Что вы заметите, если сделаете этот шаг сегодня?",
+        attachmentIds: [],
+        moodId: null,
+        correctsItemId: null
+      }
+    });
+    if (
+      replyDraft.outcome !== "applied" ||
+      replyDraft.response.resource === null ||
+      promptDraft.outcome !== "applied" ||
+      promptDraft.response.resource === null
+    ) {
+      throw new Error("Expected reply and prompt drafts");
+    }
+    await executePublishAstrologerReplyCommand(unitOfWork, {
+      journalId,
+      expectedJournalVersion: 5,
+      idempotencyKey: `publish-follow-up-reply-${randomUUID()}`,
+      command: {
+        mode: "follow_up",
+        actorUserId: fixture.authority.astrologerUserId,
+        cycleId,
+        expectedCycleVersion: 1,
+        obligationId: firstObligationId,
+        expectedObligationVersion: 1,
+        replyDraftId: replyDraft.response.resource.draftId,
+        expectedReplyDraftVersion: 1,
+        replyItemId: randomUUID(),
+        replyDerivativeCommandId: randomUUID(),
+        promptDraftId: promptDraft.response.resource.draftId,
+        expectedPromptDraftVersion: 1,
+        promptItemId: randomUUID(),
+        promptDerivativeCommandId: randomUUID(),
+        eventIds: {
+          replyPublished: randomUUID(),
+          promptPublished: randomUUID(),
+          obligationSatisfied: randomUUID(),
+          replyDerivativeRequested: randomUUID(),
+          promptDerivativeRequested: randomUUID()
+        }
+      }
+    });
+    const followUpDraft = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, {
+      journalId,
+      idempotencyKey: `draft-client-follow-up-${randomUUID()}`,
+      actorUserId: fixture.authority.clientUserId,
+      actorRole: "client",
+      request: {
+        expectedJournalVersion: 6,
+        cycleId,
+        kind: "client_entry",
+        body: "Я заметила, что дышу свободнее, когда не тороплю себя.",
+        attachmentIds: [],
+        moodId: "calm",
+        correctsItemId: null
+      }
+    });
+    if (followUpDraft.outcome !== "applied" || followUpDraft.response.resource === null) {
+      throw new Error("Expected a client follow-up draft");
+    }
+    const obligationId = randomUUID();
+    const entryItemId = randomUUID();
+    const input = {
+      journalId,
+      expectedJournalVersion: 7,
+      idempotencyKey: `publish-client-follow-up-${randomUUID()}`,
+      request: {
+        type: "client_follow_up" as const,
+        command: {
+          actorUserId: fixture.authority.clientUserId,
+          cycleId,
+          expectedCycleVersion: 2,
+          entryDraftId: followUpDraft.response.resource.draftId,
+          expectedEntryDraftVersion: 1,
+          entryItemId,
+          obligationId,
+          contextId: randomUUID(),
+          derivativeCommandId: randomUUID(),
+          eventIds: {
+            itemPublished: randomUUID(),
+            obligationCreated: randomUUID(),
+            contextRequested: randomUUID(),
+            derivativeRequested: randomUUID()
+          }
+        }
+      }
+    };
+    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "applied"
+    });
+    await expect(
+      runtime.database.select().from(astroDiaryCycles).where(eq(astroDiaryCycles.id, cycleId))
+    ).resolves.toMatchObject([{ state: "awaiting_astrologer_closing_response", version: 3 }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryResponseObligations)
+        .where(eq(astroDiaryResponseObligations.id, obligationId))
+    ).resolves.toMatchObject([{ state: "open", triggerItemId: entryItemId }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionPeriodAllowances)
+        .where(eq(clientSubscriptionPeriodAllowances.periodId, fixture.periodId))
+    ).resolves.toMatchObject([{ available: 3, reserved: 0, consumed: 1, version: 2 }]);
+  });
+
   it("rolls back instead of partially persisting an unsupported write-set", async () => {
     const { fixture, journalId } = await createJournalFixture(runtime);
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
