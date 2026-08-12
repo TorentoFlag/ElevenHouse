@@ -604,8 +604,11 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
         }
       }
     };
-    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toMatchObject({
-      outcome: "applied"
+    const applied = await executeAstroDiaryPromptCommand(unitOfWork, input);
+    expect(applied).toMatchObject({ outcome: "applied" });
+    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toEqual({
+      outcome: "replayed",
+      result: applied.outcome === "applied" ? applied.receipt.result : expect.anything()
     });
     await expect(
       runtime.database
@@ -1475,6 +1478,12 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
         .from(clientSubscriptionPeriodAllowances)
         .where(eq(clientSubscriptionPeriodAllowances.periodId, fixture.periodId))
     ).resolves.toMatchObject([{ available: 3, reserved: 0, consumed: 1, version: 2 }]);
+    await expect(
+      runtime.database
+        .select({ version: astroDiaryJournals.version })
+        .from(astroDiaryJournals)
+        .where(eq(astroDiaryJournals.id, journalId))
+    ).resolves.toEqual([{ version: 8 }]);
   });
 
   it("rolls back instead of partially persisting an unsupported write-set", async () => {
