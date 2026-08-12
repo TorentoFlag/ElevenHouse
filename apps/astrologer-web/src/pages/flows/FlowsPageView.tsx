@@ -7,6 +7,7 @@ import type {
 } from "@elevenhouse/contracts";
 import type { ProductResponse } from "@elevenhouse/contracts";
 import type { ReactNode } from "react";
+import type { FlowDefinitionGalleryTab } from "../../features/flows/model/flowDisplay";
 import type {
   CurrentFlowDefinitionDetail,
   FlowDraftCommandPayload,
@@ -23,6 +24,12 @@ import styles from "./FlowsPage.module.css";
 export type FlowsPageViewProps = {
   readonly locale: "ru" | "en";
   readonly flows: readonly FlowDefinitionSummary[];
+  readonly totalFlowCount?: number;
+  readonly activeFlowFilter?: FlowDefinitionGalleryTab;
+  readonly flowSearch?: string;
+  readonly emptyMessage?: string;
+  readonly onFlowFilterChange?: (filter: FlowDefinitionGalleryTab) => void;
+  readonly onFlowSearchChange?: (search: string) => void;
   readonly templates: readonly FlowDefinitionTemplateDescriptorV2[];
   readonly products?: readonly ProductResponse[];
   readonly creationAllowed?: boolean;
@@ -79,6 +86,12 @@ export type FlowsPageViewProps = {
 export function FlowsPageView({
   locale,
   flows,
+  totalFlowCount = flows.length,
+  activeFlowFilter = "all",
+  flowSearch = "",
+  emptyMessage,
+  onFlowFilterChange,
+  onFlowSearchChange,
   templates,
   products = [],
   creationAllowed = false,
@@ -200,12 +213,21 @@ export function FlowsPageView({
               {createError.message}
             </p>
           ) : null}
+          <FlowListToolbar
+            locale={locale}
+            totalFlowCount={totalFlowCount}
+            visibleFlowCount={flows.length}
+            activeFilter={activeFlowFilter}
+            search={flowSearch}
+            onFilterChange={onFlowFilterChange}
+            onSearchChange={onFlowSearchChange}
+          />
           <FlowGallery
             flows={flows}
             locale={locale}
             onCreateFlow={onRequestCreate}
             isCreating={isCreating}
-            emptyMessage={flows.length === 0 ? copy.empty : undefined}
+            emptyMessage={flows.length === 0 ? (emptyMessage ?? copy.empty) : undefined}
             onOpenFlow={onOpenFlow}
             onAutomationAction={onAutomationAction}
             isTogglingAutomation={isTogglingAutomation}
@@ -216,7 +238,7 @@ export function FlowsPageView({
             locale={locale}
             onCreateFlow={onRequestCreate}
             isCreating={isCreating}
-            emptyMessage={flows.length === 0 ? copy.empty : undefined}
+            emptyMessage={flows.length === 0 ? (emptyMessage ?? copy.empty) : undefined}
             onOpenFlow={onOpenFlow}
             onAutomationAction={onAutomationAction}
             isTogglingAutomation={isTogglingAutomation}
@@ -244,6 +266,64 @@ export function FlowsPageView({
   );
 }
 
+function FlowListToolbar({
+  locale,
+  totalFlowCount,
+  visibleFlowCount,
+  activeFilter,
+  search,
+  onFilterChange,
+  onSearchChange
+}: {
+  readonly locale: "ru" | "en";
+  readonly totalFlowCount: number;
+  readonly visibleFlowCount: number;
+  readonly activeFilter: FlowDefinitionGalleryTab;
+  readonly search: string;
+  readonly onFilterChange?: (filter: FlowDefinitionGalleryTab) => void;
+  readonly onSearchChange?: (search: string) => void;
+}) {
+  const copy = toolbarCopy[locale];
+  return (
+    <div className={styles.listToolbar} aria-label={copy.toolbarLabel}>
+      <label className={styles.searchField}>
+        <span>{copy.searchLabel}</span>
+        <input
+          type="search"
+          value={search}
+          aria-label={copy.searchLabel}
+          placeholder={copy.searchPlaceholder}
+          onChange={(event) => onSearchChange?.(event.currentTarget.value)}
+        />
+      </label>
+      <div className={styles.filterTabs} role="group" aria-label={copy.filtersLabel}>
+        {flowFilterTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={styles.filterTab}
+            aria-pressed={activeFilter === tab}
+            onClick={() => onFilterChange?.(tab)}
+          >
+            {copy.tabs[tab]}
+          </button>
+        ))}
+      </div>
+      <p className={styles.filterSummary} aria-live="polite">
+        {copy.summary(visibleFlowCount, totalFlowCount)}
+      </p>
+    </div>
+  );
+}
+
+const flowFilterTabs: readonly FlowDefinitionGalleryTab[] = [
+  "all",
+  "active",
+  "disabled",
+  "draft",
+  "archived"
+];
+
 const pageCopy = {
   ru: {
     loading: "Загружаем воронки",
@@ -264,5 +344,36 @@ const pageCopy = {
     back: "All flows",
     builderUnavailable: "The builder is unavailable for this graph.",
     retry: "Retry loading"
+  }
+} as const;
+
+const toolbarCopy = {
+  ru: {
+    toolbarLabel: "Фильтры списка воронок",
+    filtersLabel: "Статус воронки",
+    searchLabel: "Поиск по названию воронки",
+    searchPlaceholder: "Найти воронку",
+    tabs: {
+      all: "Все",
+      active: "Активные",
+      disabled: "Отключенные",
+      draft: "Черновики",
+      archived: "Архив"
+    },
+    summary: (visible: number, total: number) => `Показано ${visible} из ${total}`
+  },
+  en: {
+    toolbarLabel: "Flow list filters",
+    filtersLabel: "Flow status",
+    searchLabel: "Search by flow name",
+    searchPlaceholder: "Find a flow",
+    tabs: {
+      all: "All",
+      active: "Active",
+      disabled: "Disabled",
+      draft: "Drafts",
+      archived: "Archived"
+    },
+    summary: (visible: number, total: number) => `Showing ${visible} of ${total}`
   }
 } as const;

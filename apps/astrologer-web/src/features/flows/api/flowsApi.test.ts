@@ -88,6 +88,7 @@ const definitionSummary = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: {

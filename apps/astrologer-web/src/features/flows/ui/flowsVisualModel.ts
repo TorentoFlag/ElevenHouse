@@ -19,6 +19,9 @@ export type FlowGalleryCardModel = {
   readonly originLabel: string;
   readonly revisionLabel: string;
   readonly publishedVersionLabel: string;
+  readonly updatedAtLabel: string;
+  readonly draftChangesLabel: string;
+  readonly activeRunCountLabel: string;
 };
 
 export type FlowVisualTone =
@@ -60,6 +63,12 @@ export function buildFlowGalleryCard(
         : locale === "ru"
           ? `Версия ${flow.latestPublishedVersion}`
           : `Version ${flow.latestPublishedVersion}`,
+    updatedAtLabel: updatedAtLabel(flow.updatedAt, locale),
+    draftChangesLabel: draftChangesLabel(flow, locale),
+    activeRunCountLabel:
+      locale === "ru"
+        ? `Клиентов внутри: ${flow.activeRunCount}`
+        : `Clients inside: ${flow.activeRunCount}`
   };
 }
 
@@ -119,6 +128,25 @@ function originLabel(flow: FlowDefinitionSummary, locale: FlowDisplayLocale): st
   return locale === "ru" ? "С нуля" : "Blank";
 }
 
+function updatedAtLabel(value: string, locale: FlowDisplayLocale): string {
+  const formatted = new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(value));
+  return locale === "ru" ? `Изменена ${formatted}` : `Updated ${formatted}`;
+}
+
+function draftChangesLabel(flow: FlowDefinitionSummary, locale: FlowDisplayLocale): string {
+  const ru = locale === "ru";
+  if (flow.state === "draft" && flow.draftBaseVersionId !== null) {
+    return ru ? "Есть правки" : "Unpublished changes";
+  }
+  if (flow.state === "draft") return ru ? "Черновик" : "Draft";
+  return ru ? "Без черновых правок" : "No draft changes";
+}
+
 export function getFlowNodeVisual(
   kind: FlowNodeKindV2,
   locale: FlowDisplayLocale
@@ -140,6 +168,21 @@ const flowNodeVisualByKind = {
   manual_client: {
     iconName: "users",
     labels: ["Клиент выбран", "Client selected"],
+    tone: "trigger"
+  },
+  product_purchased: {
+    iconName: "gift",
+    labels: ["Куплен продукт", "Product purchased"],
+    tone: "trigger"
+  },
+  first_inbound_message: {
+    iconName: "chat",
+    labels: ["Первое сообщение", "First message"],
+    tone: "trigger"
+  },
+  client_lifecycle_changed: {
+    iconName: "users",
+    labels: ["Статус клиента", "Client status"],
     tone: "trigger"
   },
   birth_data_available: {

@@ -18,6 +18,7 @@ const flow = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   graphNodeKinds: ["booking_confirmed", "birth_data_available", "completed"],
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
@@ -32,7 +33,8 @@ describe("FlowsMobileList", () => {
     render(<FlowsMobileList flows={[flow]} locale="ru" onCreateFlow={onCreateFlow} />);
 
     expect(screen.getByText("Воронок: 1")).toBeTruthy();
-    expect(screen.getByText("Редакция 2")).toBeTruthy();
+    expect(screen.getByText("Изменена 28.07.2026")).toBeTruthy();
+    expect(screen.getByText("Клиентов внутри")).toBeTruthy();
     expect(screen.queryByText("Схема V2")).toBeNull();
     expect(screen.getByTitle("Запись подтверждена").getAttribute("data-tone")).toBe("trigger");
     expect(screen.getByTitle("Данные рождения").getAttribute("data-tone")).toBe("logic");

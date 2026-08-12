@@ -43,6 +43,7 @@ const flow = {
   createdAt: "2026-08-05T08:00:00.000Z",
   updatedAt: "2026-08-05T08:00:00.000Z",
   publishedAt: "2026-08-05T08:00:00.000Z",
+  activeRunCount: 1,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: {

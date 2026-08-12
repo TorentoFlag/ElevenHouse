@@ -15,6 +15,7 @@ const flow = {
   draftBaseVersionId: null,
   latestPublishedVersionId: null,
   latestPublishedVersion: null,
+  activeRunCount: 0,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,

@@ -6,6 +6,7 @@ import {
   flowNodeKindLabel,
   flowAutomationStateLabel,
   flowSourceHandleLabel,
+  filterFlowDefinitionsForGallery,
   summarizeFlowDefinitions
 } from "./flowDisplay";
 
@@ -22,12 +23,62 @@ const flow = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: enrollment("inactive")
 } satisfies FlowDefinitionSummary;
 
 describe("flow display model", () => {
+  it("filters the gallery by lifecycle tab and keeps archived flows out of All", () => {
+    const activeVersionId = "44444444-4444-4444-8444-444444444444";
+    const flows = [
+      flow,
+      {
+        ...flow,
+        id: "33333333-3333-4333-8333-333333333333",
+        name: "Активная цепочка",
+        state: "versioned",
+        latestPublishedVersionId: activeVersionId,
+        latestPublishedVersion: 1,
+        publishedAt: "2026-07-28T09:00:00.000Z",
+        enrollment: enrollment("active", activeVersionId)
+      },
+      {
+        ...flow,
+        id: "55555555-5555-4555-8555-555555555555",
+        name: "Архивная цепочка",
+        state: "archived"
+      }
+    ] satisfies readonly FlowDefinitionSummary[];
+
+    expect(filterFlowDefinitionsForGallery(flows, { tab: "all", search: "" }).map(({ name }) => name)).toEqual([
+      "Подготовка консультации",
+      "Активная цепочка"
+    ]);
+    expect(
+      filterFlowDefinitionsForGallery(flows, { tab: "active", search: "" }).map(({ name }) => name)
+    ).toEqual(["Активная цепочка"]);
+    expect(
+      filterFlowDefinitionsForGallery(flows, { tab: "archived", search: "" }).map(({ name }) => name)
+    ).toEqual(["Архивная цепочка"]);
+  });
+
+  it("filters the gallery by normalized title search", () => {
+    const flows = [
+      flow,
+      {
+        ...flow,
+        id: "33333333-3333-4333-8333-333333333333",
+        name: "Оплата прогрева"
+      }
+    ] satisfies readonly FlowDefinitionSummary[];
+
+    expect(filterFlowDefinitionsForGallery(flows, { tab: "all", search: "  оплат " })).toEqual([
+      flows[1]
+    ]);
+  });
+
   it("summarizes definition lifecycle separately from runtime status", () => {
     expect(
       summarizeFlowDefinitions([
@@ -63,7 +114,10 @@ describe("flow display model", () => {
   });
 });
 
-function enrollment(state: "inactive" | "paused"): FlowDefinitionSummary["enrollment"] {
+function enrollment(
+  state: "inactive" | "active" | "paused",
+  activeVersionId: string | null = null
+): FlowDefinitionSummary["enrollment"] {
   return {
     schemaVersion: "flow-enrollment-read-authority.v1",
     authority: "enrollment_v1",
@@ -73,9 +127,9 @@ function enrollment(state: "inactive" | "paused"): FlowDefinitionSummary["enroll
       state,
       definitionRevision: 1,
       enrollmentRevision: state === "inactive" ? 0 : 2,
-      activeVersionId: null,
-      activeActivationEpochId: null,
-      activeSince: null,
+      activeVersionId,
+      activeActivationEpochId: state === "active" ? "55555555-5555-4555-8555-555555555555" : null,
+      activeSince: state === "active" ? "2026-07-28T10:00:00.000Z" : null,
       lastPausedAt: state === "paused" ? "2026-07-28T10:00:00.000Z" : null
     }
   };

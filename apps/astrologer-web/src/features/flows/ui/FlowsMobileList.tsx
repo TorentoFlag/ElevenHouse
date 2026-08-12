@@ -106,6 +106,10 @@ export function FlowsMobileList({
             {card.graphSummary ? (
               <p className={className("graphSummary")}>{card.graphSummary}</p>
             ) : null}
+            <p className={className("cardMeta")}>
+              <span>{card.updatedAtLabel}</span>
+              <span>{card.draftChangesLabel}</span>
+            </p>
           </div>
           <footer className={className("cardFooter")}>
             <dl className={className("mobileMetrics")}>
@@ -116,13 +120,13 @@ export function FlowsMobileList({
               />
               <MobileMetric
                 classNames={classNames}
-                label={copy.revision}
-                value={card.revisionLabel}
+                label={copy.version}
+                value={card.publishedVersionLabel}
               />
               <MobileMetric
                 classNames={classNames}
-                label={copy.version}
-                value={card.publishedVersionLabel}
+                label={copy.clientsInside}
+                value={String(card.activeRunCountLabel.replace(`${copy.clientsInside}: `, ""))}
               />
             </dl>
             <button
@@ -180,7 +184,8 @@ const mobileCopy = {
     graphPreview: "Предпросмотр схемы",
     revision: "Редакция",
     version: "Версия",
-    state: "Состояние"
+    state: "Состояние",
+    clientsInside: "Клиентов внутри"
   },
   en: {
     title: "Flows",
@@ -191,6 +196,7 @@ const mobileCopy = {
     graphPreview: "Graph preview",
     revision: "Revision",
     version: "Version",
-    state: "State"
+    state: "State",
+    clientsInside: "Clients inside"
   }
 } as const;

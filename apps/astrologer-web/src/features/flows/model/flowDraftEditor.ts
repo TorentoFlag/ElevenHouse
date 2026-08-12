@@ -8,7 +8,14 @@ import type {
 
 export type FlowEditorLocale = "ru" | "en";
 
-export type FlowPaletteNodeId = Exclude<FlowNodeKindV2, "booking_confirmed" | "manual_client">;
+export type FlowPaletteNodeId = Exclude<
+  FlowNodeKindV2,
+  | "booking_confirmed"
+  | "manual_client"
+  | "product_purchased"
+  | "first_inbound_message"
+  | "client_lifecycle_changed"
+>;
 
 export type FlowPaletteNodeDefinition = {
   readonly id: FlowPaletteNodeId;

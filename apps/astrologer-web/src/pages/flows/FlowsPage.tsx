@@ -17,6 +17,10 @@ import {
   parseFlowDefinitionSelection
 } from "../../features/flows/model/flowsPageModel";
 import {
+  filterFlowDefinitionsForGallery,
+  type FlowDefinitionGalleryTab
+} from "../../features/flows/model/flowDisplay";
+import {
   buildActivateFlowVersionRequest,
   buildPauseFlowEnrollmentRequest,
   classifyFlowEnrollmentCommandError,
@@ -100,6 +104,8 @@ export function FlowsPage() {
   const [automationFeedback, setAutomationFeedback] =
     useState<FlowAutomationCommandFeedback | null>(null);
   const [manualRunTarget, setManualRunTarget] = useState<FlowManualRunTarget | null>(null);
+  const [flowFilterTab, setFlowFilterTab] = useState<FlowDefinitionGalleryTab>("all");
+  const [flowSearch, setFlowSearch] = useState("");
   const commandAttempts = useRef(createFlowCommandAttemptRegistry()).current;
   const enrollmentCommandAttempts = useRef(createFlowEnrollmentCommandAttemptRegistry()).current;
 
@@ -138,6 +144,17 @@ export function FlowsPage() {
     : publishConflict
       ? { ...publishConflict, operation: "publish" as const }
       : null;
+  const allFlows = flowsQuery.data?.flows ?? [];
+  const visibleFlows = useMemo(
+    () => filterFlowDefinitionsForGallery(allFlows, { tab: flowFilterTab, search: flowSearch }),
+    [allFlows, flowFilterTab, flowSearch]
+  );
+  const emptyMessage =
+    allFlows.length === 0 && flowFilterTab === "all" && flowSearch.trim().length === 0
+      ? undefined
+      : locale === "ru"
+        ? "Ничего не найдено"
+        : "Nothing found";
 
   useEffect(() => {
     if (!flowSelection) return;
@@ -439,7 +456,13 @@ export function FlowsPage() {
     <>
       <FlowsPageView
         locale={locale}
-        flows={flowsQuery.data?.flows ?? []}
+        flows={visibleFlows}
+        totalFlowCount={allFlows.length}
+        activeFlowFilter={flowFilterTab}
+        flowSearch={flowSearch}
+        emptyMessage={emptyMessage}
+        onFlowFilterChange={setFlowFilterTab}
+        onFlowSearchChange={setFlowSearch}
         templates={templatesQuery.data?.templates ?? []}
         products={productsQuery.data?.products ?? []}
         creationAllowed={entitlementsQuery.data?.funnels?.mutation === "allow"}

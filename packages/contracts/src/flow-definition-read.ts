@@ -36,6 +36,7 @@ const definitionReadCommonShape = {
   draftBaseVersionId: uuidSchema.nullable(),
   latestPublishedVersionId: uuidSchema.nullable(),
   latestPublishedVersion: z.number().int().positive().nullable(),
+  activeRunCount: z.number().int().min(0),
   createdAt: instantSchema,
   updatedAt: instantSchema,
   publishedAt: instantSchema.nullable(),

@@ -13,12 +13,13 @@ const flow = {
   state: "draft",
   approvalMode: "manual_approve",
   revision: 3,
-  draftBaseVersionId: null,
-  latestPublishedVersionId: null,
-  latestPublishedVersion: null,
+  draftBaseVersionId: "33333333-3333-4333-8333-333333333333",
+  latestPublishedVersionId: "33333333-3333-4333-8333-333333333333",
+  latestPublishedVersion: 1,
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 2,
   graphSchemaVersion: "flow-graph.v2",
   graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
   origin: {
@@ -50,15 +51,18 @@ describe("flows visual model", () => {
       id: flow.id,
       title: flow.name,
       definitionStateLabel: "Черновик",
-      automationStatusLabel: "Не опубликована",
-      automationControlLabel: "Черновик",
+      automationStatusLabel: "Не запущена",
+      automationControlLabel: "Выкл.",
       approvalModeLabel: "Ручное",
       graphSchemaLabel: "Схема V2",
       graphSummary: "Узлы: Запись подтверждена · Данные рождения · Натальная карта",
       graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
       originLabel: "Из шаблона",
       revisionLabel: "Редакция 3",
-      publishedVersionLabel: "Не опубликована"
+      publishedVersionLabel: "Версия 1",
+      updatedAtLabel: "Изменена 28.07.2026",
+      draftChangesLabel: "Есть правки",
+      activeRunCountLabel: "Клиентов внутри: 2"
     });
   });
 
@@ -66,6 +70,9 @@ describe("flows visual model", () => {
     const expectedVisuals = {
       booking_confirmed: ["trigger", "Запись подтверждена", "Booking confirmed"],
       manual_client: ["trigger", "Клиент выбран", "Client selected"],
+      product_purchased: ["trigger", "Куплен продукт", "Product purchased"],
+      first_inbound_message: ["trigger", "Первое сообщение", "First message"],
+      client_lifecycle_changed: ["trigger", "Статус клиента", "Client status"],
       birth_data_available: ["logic", "Данные рождения", "Birth data"],
       natal_chart_request: ["chartAi", "Натальная карта", "Natal chart"],
       natal_chart_ai_draft: ["chartAi", "AI-черновик", "AI draft"],

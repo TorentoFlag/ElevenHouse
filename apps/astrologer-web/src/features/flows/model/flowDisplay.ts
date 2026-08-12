@@ -55,6 +55,8 @@ export type FlowDefinitionGallerySummary = {
   readonly paused: number;
 };
 
+export type FlowDefinitionGalleryTab = "all" | "active" | "disabled" | "draft" | "archived";
+
 export function summarizeFlowDefinitions(
   flows: readonly FlowDefinitionSummary[]
 ): FlowDefinitionGallerySummary {
@@ -69,6 +71,47 @@ export function summarizeFlowDefinitions(
     }),
     { total: 0, editableDrafts: 0, versioned: 0, archived: 0, active: 0, paused: 0 }
   );
+}
+
+export function filterFlowDefinitionsForGallery(
+  flows: readonly FlowDefinitionSummary[],
+  filter: {
+    readonly tab: FlowDefinitionGalleryTab;
+    readonly search: string;
+  }
+): readonly FlowDefinitionSummary[] {
+  const query = normalizeFlowSearch(filter.search);
+  return flows.filter((flow) => {
+    if (!matchesGalleryTab(flow, filter.tab)) return false;
+    if (query.length === 0) return true;
+    return normalizeFlowSearch(flow.name).includes(query);
+  });
+}
+
+function matchesGalleryTab(
+  flow: FlowDefinitionSummary,
+  tab: FlowDefinitionGalleryTab
+): boolean {
+  switch (tab) {
+    case "all":
+      return flow.state !== "archived";
+    case "active":
+      return flow.enrollment.control.state === "active";
+    case "disabled":
+      return (
+        flow.state !== "archived" &&
+        flow.state !== "draft" &&
+        flow.enrollment.control.state !== "active"
+      );
+    case "draft":
+      return flow.state === "draft";
+    case "archived":
+      return flow.state === "archived";
+  }
+}
+
+function normalizeFlowSearch(value: string): string {
+  return value.trim().toLocaleLowerCase();
 }
 
 const definitionStateLabels = {
@@ -114,6 +157,9 @@ const nodeKindLabels = {
   ru: {
     booking_confirmed: "Запись подтверждена",
     manual_client: "Ручной запуск",
+    product_purchased: "Куплен продукт",
+    first_inbound_message: "Первое сообщение",
+    client_lifecycle_changed: "Изменение статуса клиента",
     birth_data_available: "Данные рождения",
     natal_chart_request: "Расчёт натальной карты",
     natal_chart_ai_draft: "AI-черновик трактовки",
@@ -127,6 +173,9 @@ const nodeKindLabels = {
   en: {
     booking_confirmed: "Booking confirmed",
     manual_client: "Manual start",
+    product_purchased: "Product purchased",
+    first_inbound_message: "First inbound message",
+    client_lifecycle_changed: "Client status changed",
     birth_data_available: "Birth data",
     natal_chart_request: "Natal chart calculation",
     natal_chart_ai_draft: "AI interpretation draft",

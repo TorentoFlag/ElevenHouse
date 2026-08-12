@@ -155,6 +155,7 @@ function definitionSummary(): Extract<
     draftBaseVersionId: null,
     latestPublishedVersionId: null,
     latestPublishedVersion: null,
+    activeRunCount: 0,
     createdAt: "2026-08-04T18:00:00.000Z",
     updatedAt: "2026-08-04T18:00:00.000Z",
     publishedAt: null,

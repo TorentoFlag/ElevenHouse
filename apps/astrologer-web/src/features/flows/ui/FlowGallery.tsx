@@ -102,6 +102,10 @@ export function FlowGallery({
               {card.graphSummary ? (
                 <p className={className("graphSummary")}>{card.graphSummary}</p>
               ) : null}
+              <p className={className("cardMeta")}>
+                <span>{card.updatedAtLabel}</span>
+                <span>{card.draftChangesLabel}</span>
+              </p>
             </div>
             <footer className={className("cardFooter")}>
               <dl className={className("metrics")}>
@@ -110,11 +114,15 @@ export function FlowGallery({
                   label={copy.definition}
                   value={card.definitionStateLabel}
                 />
-                <Metric classNames={classNames} label={copy.revision} value={card.revisionLabel} />
                 <Metric
                   classNames={classNames}
                   label={copy.version}
                   value={card.publishedVersionLabel}
+                />
+                <Metric
+                  classNames={classNames}
+                  label={copy.clientsInside}
+                  value={String(card.activeRunCountLabel.replace(`${copy.clientsInside}: `, ""))}
                 />
               </dl>
               <AutomationToggle
@@ -213,7 +221,8 @@ const galleryCopy = {
     createHint: "С нуля или из доступного сценария",
     definition: "Состояние",
     revision: "Редакция",
-    version: "Версия"
+    version: "Версия",
+    clientsInside: "Клиентов внутри"
   },
   en: {
     title: "Flows",
@@ -222,6 +231,7 @@ const galleryCopy = {
     createHint: "Start blank or use an available template",
     definition: "Definition",
     revision: "Revision",
-    version: "Version"
+    version: "Version",
+    clientsInside: "Clients inside"
   }
 } as const;

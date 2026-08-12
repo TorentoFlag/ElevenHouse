@@ -129,6 +129,13 @@ function NodeConfigFields({
   if (node.kind === "manual_client") {
     return <p className={className}>{copy.manualTrigger}</p>;
   }
+  if (
+    node.kind === "product_purchased" ||
+    node.kind === "first_inbound_message" ||
+    node.kind === "client_lifecycle_changed"
+  ) {
+    return null;
+  }
   if (node.kind === "birth_data_available") {
     return (
       <label className={className}>

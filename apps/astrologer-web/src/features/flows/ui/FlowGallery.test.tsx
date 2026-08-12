@@ -18,6 +18,7 @@ const flow = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
@@ -34,7 +35,8 @@ describe("FlowGallery", () => {
     expect(screen.getByText("Подготовка консультации")).toBeTruthy();
     expect(screen.getByTitle("Запись подтверждена")).toBeTruthy();
     expect(screen.getByText("Узлы: Запись подтверждена · Данные рождения · Натальная карта")).toBeTruthy();
-    expect(screen.getByText("Редакция 3")).toBeTruthy();
+    expect(screen.getByText("Изменена 28.07.2026")).toBeTruthy();
+    expect(screen.getByText("Клиентов внутри")).toBeTruthy();
     expect(screen.getAllByText("Не опубликована")).toHaveLength(1);
     expect(screen.getByRole("switch").textContent).toContain("Черновик");
     expect(screen.queryByText("Конверсия")).toBeNull();

@@ -26,6 +26,7 @@ const definition = {
   createdAt,
   updatedAt: createdAt,
   publishedAt: createdAt,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" }
 } as const;

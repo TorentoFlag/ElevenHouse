@@ -19,6 +19,7 @@ const flow: FlowDefinitionSummary = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: {
@@ -60,12 +61,33 @@ describe("FlowsPageView", () => {
     expect(render({ isError: true, onRetryList: () => undefined })).toContain("Повторить загрузку");
   });
 
+  it("renders search, lifecycle filters and the nothing-found state", () => {
+    const markup = render({
+      flows: [],
+      totalFlowCount: 2,
+      flowSearch: "не найдено",
+      activeFlowFilter: "active",
+      emptyMessage: "Ничего не найдено"
+    });
+
+    expect(markup).toContain('aria-label="Поиск по названию воронки"');
+    expect(markup).toContain('value="не найдено"');
+    expect(markup).toContain("Все");
+    expect(markup).toContain("Активные");
+    expect(markup).toContain("Отключенные");
+    expect(markup).toContain("Черновики");
+    expect(markup).toContain("Архив");
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain("Ничего не найдено");
+  });
+
   it("renders lightweight definition facts without prototype metrics", () => {
     const markup = render({ flows: [flow] });
 
     expect(markup).toContain("Подготовка консультации");
     expect(markup).toContain("Схема V2");
-    expect(markup).toContain("Редакция 3");
+    expect(markup).toContain("Изменена 28.07.2026");
+    expect(markup).toContain("Клиентов внутри");
     expect(markup).not.toContain("Конверсия");
     expect(markup).not.toContain("Выручка");
   });

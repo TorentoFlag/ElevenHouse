@@ -123,6 +123,7 @@ function summary(): CurrentFlowDefinitionSummary {
     createdAt: "2026-08-02T18:00:00.000Z",
     updatedAt: "2026-08-02T18:00:00.000Z",
     publishedAt: null,
+    activeRunCount: 0,
     graphSchemaVersion: "flow-graph.v2" as const,
     origin: { schemaVersion: "flow-definition-origin.v1" as const, type: "blank" as const },
     enrollment: {

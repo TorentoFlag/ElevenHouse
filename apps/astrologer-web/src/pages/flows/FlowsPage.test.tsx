@@ -114,6 +114,7 @@ const flow: FlowDefinitionSummary = {
   createdAt: "2026-07-28T08:00:00.000Z",
   updatedAt: "2026-07-28T08:00:00.000Z",
   publishedAt: null,
+  activeRunCount: 0,
   graphSchemaVersion: "flow-graph.v2",
   origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" },
   enrollment: inactiveEnrollment(3)
@@ -275,6 +276,57 @@ describe("FlowsPage", () => {
       { status: "active", limit: 100, offset: 0 },
       { enabled: false }
     );
+  });
+
+  it("filters the list locally while keeping archived flows out of All", () => {
+    const archivedFlow = {
+      ...flow,
+      id: "33333333-3333-4333-8333-333333333333",
+      name: "Архивная реактивация",
+      state: "archived" as const
+    };
+    const activeVersionId = "44444444-4444-4444-8444-444444444444";
+    const activeFlow = {
+      ...flow,
+      id: "55555555-5555-4555-8555-555555555555",
+      name: "Активная продажа",
+      state: "versioned" as const,
+      latestPublishedVersionId: activeVersionId,
+      latestPublishedVersion: 1,
+      publishedAt: "2026-07-30T14:45:00.000Z",
+      enrollment: {
+        ...inactiveEnrollment(5),
+        control: {
+          ...inactiveEnrollment(5).control,
+          flowId: "55555555-5555-4555-8555-555555555555",
+          state: "active" as const,
+          enrollmentRevision: 1,
+          activeVersionId,
+          activeActivationEpochId: "66666666-6666-4666-8666-666666666666",
+          activeSince: "2026-07-30T14:45:00.000Z"
+        }
+      }
+    };
+    listFlows([flow, archivedFlow, activeFlow]);
+
+    renderFlowsPage();
+
+    expect(screen.getAllByText(flow.name).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(activeFlow.name).length).toBeGreaterThan(0);
+    expect(screen.queryByText(archivedFlow.name)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Архив" }));
+    expect(screen.getAllByText(archivedFlow.name).length).toBeGreaterThan(0);
+    expect(screen.queryByText(activeFlow.name)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Все" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Поиск по названию воронки" }), {
+      target: { value: "актив" }
+    });
+
+    expect(screen.getAllByText(activeFlow.name).length).toBeGreaterThan(0);
+    expect(screen.queryByText(flow.name)).toBeNull();
+    expect(screen.queryByText(archivedFlow.name)).toBeNull();
   });
 
   it("shows the work-item queue on the flow list and removes it inside the builder", () => {

@@ -18,6 +18,7 @@ import type { ElevenHouseDatabase } from "../../runtime";
 import {
   flowActivationEpochs,
   flowEnrollmentControls,
+  flowRuns,
   flows,
   flowVersions
 } from "../../schema/flows";
@@ -37,6 +38,13 @@ const definitionSummarySelection = {
   draftBaseVersionId: flows.draftBaseVersionId,
   latestPublishedVersionId: flows.publishedVersionId,
   latestPublishedVersion: flowVersions.version,
+  activeRunCount: sql<number>`coalesce((
+    select count(*)::int
+      from ${flowRuns}
+     where ${flowRuns.ownerUserId} = ${flows.ownerUserId}
+       and ${flowRuns.flowId} = ${flows.id}
+       and ${flowRuns.status} in ('pending', 'running', 'waiting', 'approval_required', 'failed_retryable')
+  ), 0)`,
   draftGraph: flows.draftGraph,
   graphSchemaVersion: sql<string | null>`${flows.draftGraph}->>'schemaVersion'`,
   createdAt: flows.createdAt,
@@ -65,6 +73,7 @@ type FlowDefinitionReadRow = {
   readonly draftBaseVersionId: string | null;
   readonly latestPublishedVersionId: string | null;
   readonly latestPublishedVersion: number | null;
+  readonly activeRunCount: number;
   readonly draftGraph: unknown;
   readonly graphSchemaVersion: string | null;
   readonly createdAt: Date;
@@ -271,6 +280,7 @@ function toDefinitionCommon(
     draftBaseVersionId: row.draftBaseVersionId,
     latestPublishedVersionId: row.latestPublishedVersionId,
     latestPublishedVersion: row.latestPublishedVersion,
+    activeRunCount: Number(row.activeRunCount),
     createdAt: requiredIsoInstant(row.createdAt),
     updatedAt: requiredIsoInstant(row.updatedAt),
     publishedAt: optionalIsoInstant(row.publishedAt)

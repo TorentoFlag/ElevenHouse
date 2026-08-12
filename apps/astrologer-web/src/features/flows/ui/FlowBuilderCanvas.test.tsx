@@ -249,6 +249,9 @@ describe("FlowBuilderCanvas", () => {
     const expectedTones = {
       booking_confirmed: "trigger",
       manual_client: "trigger",
+      product_purchased: "trigger",
+      first_inbound_message: "trigger",
+      client_lifecycle_changed: "trigger",
       birth_data_available: "logic",
       natal_chart_request: "chartAi",
       natal_chart_ai_draft: "chartAi",
