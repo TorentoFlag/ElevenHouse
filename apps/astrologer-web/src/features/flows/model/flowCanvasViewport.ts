@@ -1,7 +1,10 @@
 import type { FlowPresentationV1 } from "@elevenhouse/contracts";
 
-export const FLOW_CANVAS_MIN_ZOOM = 0.55;
+export const FLOW_CANVAS_MIN_ZOOM = 0.3;
 export const FLOW_CANVAS_MAX_ZOOM = 1.8;
+const FLOW_CANVAS_FIT_MIN_ZOOM = 0.55;
+const FLOW_CANVAS_FIT_MAX_ZOOM = 1;
+const FLOW_CANVAS_OVERFLOW_INSET = 32;
 
 export type FlowCanvasPoint = Readonly<{
   x: number;
@@ -80,24 +83,32 @@ export function fitFlowCanvasViewport(input: {
     return { ...defaultViewport };
   }
 
-  const availableWidth = container.width - padding * 2;
-  const availableHeight = container.height - padding * 2;
+  const paddedBounds = {
+    x: bounds.x - padding,
+    y: bounds.y - padding,
+    width: bounds.width + padding * 2,
+    height: bounds.height + padding * 2
+  };
 
-  if (availableWidth <= 0 || availableHeight <= 0) {
+  if (paddedBounds.width <= 0 || paddedBounds.height <= 0) {
     return { ...defaultViewport };
   }
 
-  const zoom = clampFlowCanvasZoom(
-    Math.min(availableWidth / bounds.width, availableHeight / bounds.height)
+  const rawZoom = Math.min(
+    container.width / paddedBounds.width,
+    container.height / paddedBounds.height
   );
-  const boundsCenter = {
-    x: bounds.x + bounds.width / 2,
-    y: bounds.y + bounds.height / 2
-  };
+  const zoom = Math.min(
+    FLOW_CANVAS_FIT_MAX_ZOOM,
+    Math.max(FLOW_CANVAS_FIT_MIN_ZOOM, rawZoom)
+  );
+  const fitsAtReadableZoom = rawZoom >= FLOW_CANVAS_FIT_MIN_ZOOM;
 
   return normalizeViewport({
-    x: container.width / 2 - boundsCenter.x * zoom,
-    y: container.height / 2 - boundsCenter.y * zoom,
+    x: fitsAtReadableZoom
+      ? (container.width - paddedBounds.width * zoom) / 2 - paddedBounds.x * zoom
+      : FLOW_CANVAS_OVERFLOW_INSET - paddedBounds.x * zoom,
+    y: (container.height - paddedBounds.height * zoom) / 2 - paddedBounds.y * zoom,
     zoom
   });
 }

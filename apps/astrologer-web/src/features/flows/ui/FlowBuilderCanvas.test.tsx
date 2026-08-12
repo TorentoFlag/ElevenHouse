@@ -151,6 +151,28 @@ describe("FlowBuilderCanvas", () => {
     expect(latestCallback).toHaveBeenCalledTimes(1);
   });
 
+  it("waits for a clamped wheel series to finish before persisting its effective zoom", () => {
+    vi.useFakeTimers();
+    const onChangeViewport = vi.fn();
+    renderCanvas({
+      locale: "en",
+      onChangeViewport,
+      presentation: { ...presentation, viewport: { x: 0, y: 0, zoom: 1.7 } }
+    });
+    mockCanvasRect();
+    const canvas = screen.getByRole("region", { name: "Flow graph" });
+
+    fireEvent.wheel(canvas, { clientX: 100, clientY: 100, deltaY: -100 });
+    vi.advanceTimersByTime(120);
+    fireEvent.wheel(canvas, { clientX: 100, clientY: 100, deltaY: -100 });
+    vi.advanceTimersByTime(120);
+
+    expect(onChangeViewport).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(40);
+    expect(onChangeViewport).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels pending wheel persistence when unmounted", () => {
     vi.useFakeTimers();
     const onChangeViewport = vi.fn();
@@ -291,8 +313,13 @@ describe("FlowBuilderCanvas", () => {
 
     mockCanvasRect();
     const viewport = screen.getByTestId("flow-canvas-viewport");
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(zoomOut.textContent).toBe("−");
+    expect(zoomIn.querySelector("svg")).not.toBeNull();
+
+    fireEvent.click(zoomIn);
     expect(viewport.style.transform).toContain("scale(");
     expect(viewport.style.transform).not.toBe("translate(0px, 0px) scale(1)");
     expect(screen.getByRole("region", { name: "Flow graph" }).style.backgroundSize).toBe(
@@ -300,7 +327,7 @@ describe("FlowBuilderCanvas", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Fit graph" }));
-    expect(viewport.style.transform).toContain("scale(1.4383561643835616)");
+    expect(viewport.style.transform).toBe("translate(128px, 144px) scale(1)");
   });
 
   it("moves a draft node only after its pointer interaction completes", () => {

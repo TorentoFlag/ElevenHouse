@@ -143,7 +143,10 @@ export function useFlowCanvasInteraction({
         currentViewport.zoom * (wheelEvent.deltaY < 0 ? 1.1 : 0.9),
         { x: wheelEvent.clientX - rect.left, y: wheelEvent.clientY - rect.top }
       );
-      if (!updateViewport(nextViewport)) return;
+      if (!updateViewport(nextViewport)) {
+        if (wheelStartViewportRef.current) scheduleWheelPersistence();
+        return;
+      }
       wheelStartViewportRef.current ??= currentViewport;
       scheduleWheelPersistence();
     };
@@ -173,7 +176,7 @@ export function useFlowCanvasInteraction({
     const nextViewport = fitFlowCanvasViewport({
       container: { width: rect.width, height: rect.height },
       bounds,
-      padding: 80
+      padding: 40
     });
     if (!updateViewport(nextViewport)) return;
     persistViewportIfChanged(startViewport);

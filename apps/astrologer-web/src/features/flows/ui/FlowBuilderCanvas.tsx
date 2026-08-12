@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { FlowGraphV2, FlowPresentationV1, FlowSourceHandleV2 } from "@elevenhouse/contracts";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { useFlowCanvasInteraction } from "../model/useFlowCanvasInteraction";
 import { flowSourceHandleLabel } from "../model/flowDisplay";
 import { getRequiredSourceHandles } from "../model/flowDraftEditor";
@@ -210,7 +211,7 @@ export function FlowBuilderCanvas({
           aria-label={copy.zoomOut}
           onClick={() => zoomAtCanvasCenter(1 / 1.2, { x: canvasWidth / 2, y: canvasHeight / 2 })}
         >
-          -
+          −
         </button>
         <span data-flow-canvas-zoom aria-label={copy.zoomLevel}>
           {Math.round(viewport.zoom * 100)}%
@@ -220,7 +221,7 @@ export function FlowBuilderCanvas({
           aria-label={copy.zoomIn}
           onClick={() => zoomAtCanvasCenter(1.2, { x: canvasWidth / 2, y: canvasHeight / 2 })}
         >
-          +
+          <Icon iconName="plus" width={16} height={16} aria-hidden="true" />
         </button>
         <span aria-hidden="true" />
         <button type="button" aria-label={copy.fitLabel} onClick={() => fitViewport(bounds)}>

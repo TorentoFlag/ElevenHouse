@@ -67,3 +67,14 @@ describe("FlowsPage create dialog geometry", () => {
     );
   });
 });
+
+describe("FlowsPage builder controls geometry", () => {
+  it("keeps the measured 42px zoom control height as a border-box", () => {
+    expect(styles).toMatch(
+      /\.builderCanvasControls\s*\{[^}]*box-sizing:\s*border-box[^}]*height:\s*42px/s
+    );
+    expect(styles).toMatch(
+      /\.builderCanvasControls button:first-child\s*\{[^}]*font-size:\s*20px/s
+    );
+  });
+});

@@ -965,6 +965,7 @@
 
 .builderCanvasControls {
   position: absolute;
+  box-sizing: border-box;
   bottom: 16px;
   left: 16px;
   z-index: 2;
@@ -972,7 +973,7 @@
   align-items: center;
   height: 42px;
   gap: 6px;
-  border: 1px solid var(--flows-line-strong);
+  border: 1px solid var(--flows-line);
   border-radius: 12px;
   padding: 5px;
   background: rgb(17 15 38 / 0.9);
@@ -998,8 +999,14 @@
   font: 600 12.5px / 1 var(--eh-font-sans);
 }
 
+.builderCanvasControls button:first-child {
+  font-size: 20px;
+  font-weight: 400;
+}
+
 .builderCanvasControls [data-flow-canvas-zoom] {
-  min-width: 40px;
+  min-width: 42px;
+  margin: 0;
   color: var(--flows-muted);
   font: 700 12px / 1 var(--eh-font-mono);
   text-align: center;

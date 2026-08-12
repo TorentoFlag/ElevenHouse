@@ -8,7 +8,7 @@ import {
 
 describe("flow canvas viewport mathematics", () => {
   it("clamps zoom to the supported canvas range", () => {
-    expect(clampFlowCanvasZoom(0.1)).toBe(0.55);
+    expect(clampFlowCanvasZoom(0.1)).toBe(0.3);
     expect(clampFlowCanvasZoom(2)).toBe(1.8);
     expect(clampFlowCanvasZoom(Number.NaN)).toBe(1);
   });
@@ -37,7 +37,7 @@ describe("flow canvas viewport mathematics", () => {
     });
   });
 
-  it("fits padded graph bounds in the container and centers them", () => {
+  it("fits padded graph bounds in the container without enlarging nodes past 100%", () => {
     expect(
       fitFlowCanvasViewport({
         container: { width: 800, height: 600 },
@@ -45,9 +45,23 @@ describe("flow canvas viewport mathematics", () => {
         padding: 50
       })
     ).toEqual({
-      x: -37.5,
-      y: -50,
-      zoom: 1.25
+      x: 50,
+      y: 20,
+      zoom: 1
+    });
+  });
+
+  it("keeps an oversized fitted graph readable and aligned from the leading edge", () => {
+    expect(
+      fitFlowCanvasViewport({
+        container: { width: 608, height: 772 },
+        bounds: { x: 80, y: 120, width: 1704, height: 112 },
+        padding: 40
+      })
+    ).toEqual({
+      x: 10,
+      y: 289.2,
+      zoom: 0.55
     });
   });
 
