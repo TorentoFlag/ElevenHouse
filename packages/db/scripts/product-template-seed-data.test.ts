@@ -5,13 +5,46 @@ import { productTemplateSeedData } from "./product-template-seed-data";
 
 describe("product template seed data", () => {
   it("contains localized profession-neutral templates for every product type", () => {
-    expect(productTemplateSeedData).toHaveLength(14);
+    expect(productTemplateSeedData).toHaveLength(16);
     expect(new Set(productTemplateSeedData.map((template) => template.locale))).toEqual(
       new Set(["ru", "en"])
     );
     expect(new Set(productTemplateSeedData.map((template) => template.type))).toEqual(
       new Set(productTypeValues)
     );
+  });
+
+  it("defines separate RU and EN AstroDiary subscription templates with exact defaults", () => {
+    const templates = productTemplateSeedData.filter(
+      (template) => template.code === "astro_diary_subscription"
+    );
+
+    expect(templates).toHaveLength(2);
+    expect(templates.map((template) => template.locale)).toEqual(["ru", "en"]);
+    for (const template of templates) {
+      expect(template.payload).toMatchObject({
+        type: "sub",
+        priceMinor: 0,
+        currency: "RUB",
+        executionMode: "async",
+        paymentModel: "sub",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        deliveryFormats: ["chat", "audio", "file"],
+        requiredClientData: [],
+        methods: [],
+        accessGrants: ["journal"],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 4,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "UTC"
+        }
+      });
+      expect(template.payload).not.toHaveProperty("trialDays");
+      expect(template.payload).not.toHaveProperty("slaLabel");
+    }
   });
 
   it("keeps template identity unique by code and locale", () => {

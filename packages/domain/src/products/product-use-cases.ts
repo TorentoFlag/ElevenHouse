@@ -3,7 +3,12 @@ import {
   collectProductModifierInvariantIssues
 } from "@elevenhouse/validation/products";
 import { normalizeRequiredString } from "../shared";
-import { ProductNotFoundError, ProductValidationError } from "./product-errors";
+import {
+  ProductFulfillmentNotReadyError,
+  ProductNotFoundError,
+  ProductRevisionConflictError,
+  ProductValidationError
+} from "./product-errors";
 import type { ProductListResult, ProductStore } from "./product-store";
 import type {
   Product,
@@ -68,6 +73,7 @@ export async function updateProduct(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly patch: ProductUpdatePatch;
   readonly now: Date;
 }): Promise<Product> {
@@ -83,25 +89,35 @@ export async function updateProduct(input: {
   if (!current) {
     throw new ProductNotFoundError();
   }
+  const expectedRevision = normalizeExpectedRevision(input.expectedRevision);
+  if (current.revision !== expectedRevision) {
+    throw new ProductRevisionConflictError(expectedRevision, current.revision);
+  }
   const patch = normalizeProductPatch(input.patch);
   validateEditableProduct({ ...current, ...patch });
 
-  const product = await input.store.update({
+  const outcome = await input.store.update({
     ownerUserId,
     productId,
+    expectedRevision,
     patch,
     now: input.now.toISOString()
   });
-  if (!product) {
-    throw new ProductNotFoundError();
+  switch (outcome.outcome) {
+    case "updated":
+      return outcome.product;
+    case "not_found":
+      throw new ProductNotFoundError();
+    case "revision_conflict":
+      throw new ProductRevisionConflictError(expectedRevision, outcome.currentRevision);
   }
-  return product;
 }
 
 export function publishProduct(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly now: Date;
 }): Promise<Product> {
   return updateProductStatus({ ...input, status: "active" });
@@ -111,6 +127,7 @@ export function moveProductToDraft(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly now: Date;
 }): Promise<Product> {
   return updateProductStatus({ ...input, status: "draft" });
@@ -120,6 +137,7 @@ export function archiveProduct(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly now: Date;
 }): Promise<Product> {
   return updateProductStatus({ ...input, status: "archived" });
@@ -129,10 +147,15 @@ export async function duplicateProduct(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly title?: string;
   readonly now: Date;
 }): Promise<Product> {
   const source = await getProduct(input);
+  const expectedRevision = normalizeExpectedRevision(input.expectedRevision);
+  if (source.revision !== expectedRevision) {
+    throw new ProductRevisionConflictError(expectedRevision, source.revision);
+  }
   const duplicate = {
     ownerUserId: source.ownerUserId,
     type: source.type,
@@ -157,36 +180,69 @@ export async function duplicateProduct(input: {
     requiredClientData: source.requiredClientData,
     methods: source.methods,
     accessGrants: source.accessGrants,
+    astroDiaryConfig: source.astroDiaryConfig,
     includedItems: stripIncludedItemIds(source.includedItems),
     modifiers: stripModifierIds(source.modifiers)
   };
   validateEditableProduct(duplicate);
 
-  return input.store.duplicate({
+  const outcome = await input.store.duplicate({
     sourceProductId: source.id,
+    expectedSourceRevision: expectedRevision,
     ...duplicate,
     status: "draft",
     now: input.now.toISOString()
   });
+  switch (outcome.outcome) {
+    case "duplicated":
+      return outcome.product;
+    case "not_found":
+      throw new ProductNotFoundError();
+    case "revision_conflict":
+      throw new ProductRevisionConflictError(expectedRevision, outcome.currentRevision);
+  }
 }
 
 async function updateProductStatus(input: {
   readonly store: ProductStore;
   readonly ownerUserId: string;
   readonly productId: string;
+  readonly expectedRevision: number;
   readonly status: "active" | "draft" | "archived";
   readonly now: Date;
 }): Promise<Product> {
-  const product = await input.store.update({
-    ownerUserId: normalizeRequiredString(input.ownerUserId, "Product owner user id is required"),
-    productId: normalizeRequiredString(input.productId, "Product id is required"),
+  const ownerUserId = normalizeRequiredString(
+    input.ownerUserId,
+    "Product owner user id is required"
+  );
+  const productId = normalizeRequiredString(input.productId, "Product id is required");
+  const expectedRevision = normalizeExpectedRevision(input.expectedRevision);
+  const current = await input.store.findByOwnerAndId({ ownerUserId, productId });
+  if (!current) {
+    throw new ProductNotFoundError();
+  }
+  if (current.revision !== expectedRevision) {
+    throw new ProductRevisionConflictError(expectedRevision, current.revision);
+  }
+  if (input.status === "active" && current.accessGrants.includes("journal")) {
+    throw new ProductFulfillmentNotReadyError();
+  }
+
+  const outcome = await input.store.update({
+    ownerUserId,
+    productId,
+    expectedRevision,
     patch: { status: input.status },
     now: input.now.toISOString()
   });
-  if (!product) {
-    throw new ProductNotFoundError();
+  switch (outcome.outcome) {
+    case "updated":
+      return outcome.product;
+    case "not_found":
+      throw new ProductNotFoundError();
+    case "revision_conflict":
+      throw new ProductRevisionConflictError(expectedRevision, outcome.currentRevision);
   }
-  return product;
 }
 
 function normalizeProductPatch(patch: ProductUpdatePatch): ProductUpdatePatch {
@@ -197,6 +253,13 @@ function normalizeProductPatch(patch: ProductUpdatePatch): ProductUpdatePatch {
         ? undefined
         : normalizeRequiredString(patch.title, "Product title is required")
   });
+}
+
+function normalizeExpectedRevision(value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new ProductValidationError("Product expected revision must be a positive integer");
+  }
+  return value;
 }
 
 function validateEditableProduct(product: ProductEditableFields): void {

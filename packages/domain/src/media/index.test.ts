@@ -167,6 +167,32 @@ describe("media use cases", () => {
     expect(store.assets.size).toBe(0);
   });
 
+  it("keeps Diary purposes behind Diary authorization instead of the generic upload use case", async () => {
+    const store = new InMemoryMediaStore();
+    const storage = new FakeObjectStorage();
+
+    for (const purpose of ["astro_diary_attachment", "astro_diary_voice"]) {
+      await expect(
+        createMediaUploadIntent({
+          store,
+          storage,
+          ownerUserId,
+          input: {
+            purpose,
+            fileName: "journal.bin",
+            mimeType: purpose === "astro_diary_voice" ? "audio/ogg" : "application/pdf",
+            sizeBytes: 1_250_000
+          },
+          idGenerator: () => mediaId,
+          now
+        })
+      ).rejects.toBeInstanceOf(MediaValidationError);
+    }
+
+    expect(storage.uploads).toHaveLength(0);
+    expect(store.assets.size).toBe(0);
+  });
+
   it("marks an uploaded asset ready after storage metadata matches the intent", async () => {
     const store = new InMemoryMediaStore();
     const storage = new FakeObjectStorage();

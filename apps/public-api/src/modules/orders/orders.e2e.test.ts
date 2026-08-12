@@ -113,17 +113,19 @@ describe("orders public HTTP flow", () => {
         {
           provide: ORDERS_FINANCE_POLICY_STORE,
           useValue: {
-            findEffectivePolicyForAstrologer: vi.fn(async (): Promise<EffectiveFinancePolicy> => ({
-              policyId,
-              policyVersion: 1,
-              riskTier: "standard",
-              baseRiskTier: "standard",
-              profile: null,
-              holdDurationHours: 48,
-              reserveBps: 0,
-              reserveReleaseDelayDays: 0,
-              providerSettlementRequired: true
-            }))
+            findEffectivePolicyForAstrologer: vi.fn(
+              async (): Promise<EffectiveFinancePolicy> => ({
+                policyId,
+                policyVersion: 1,
+                riskTier: "standard",
+                baseRiskTier: "standard",
+                profile: null,
+                holdDurationHours: 48,
+                reserveBps: 0,
+                reserveReleaseDelayDays: 0,
+                providerSettlementRequired: true
+              })
+            )
           } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">
         },
         {
@@ -160,7 +162,7 @@ describe("orders public HTTP flow", () => {
   });
 
   it("requires authentication, CSRF and Idempotency-Key before creating an order", async () => {
-    const body = { astrologerUserId, productId, bookingId };
+    const body = { astrologerUserId, productId, expectedProductRevision: 1, bookingId };
 
     await expect(postJson("/orders", body)).resolves.toMatchObject({ status: 401 });
     await expect(
@@ -306,6 +308,7 @@ function createOrderStore(): FinanceOrderStore {
 
 const activeProduct = {
   id: productId,
+  revision: 1,
   ownerUserId: astrologerUserId,
   type: "single",
   status: "active",
@@ -330,6 +333,7 @@ const activeProduct = {
   requiredClientData: [],
   methods: [],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [],
   modifiers: [],
   createdAt: now.toISOString(),

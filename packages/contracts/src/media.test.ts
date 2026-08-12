@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  createAstroDiaryMediaUploadIntentRequestSchema,
   completeMediaUploadRequestSchema,
   createMediaUploadIntentRequestSchema,
   mediaAssetResponseSchema,
+  mediaPurposeSchema,
   mediaUploadIntentResponseSchema
 } from "./media";
 
@@ -79,6 +81,93 @@ describe("media contracts", () => {
         fileName: "calculation.pdf",
         mimeType: "application/pdf",
         sizeBytes: 900_000
+      })
+    ).toThrow();
+  });
+
+  it("keeps AstroDiary purposes out of the generic upload contract", () => {
+    for (const purpose of [
+      "astro_diary_attachment",
+      "astro_diary_voice",
+      "astro_diary_export_pdf"
+    ]) {
+      expect(() =>
+        createMediaUploadIntentRequestSchema.parse({
+          purpose,
+          fileName: "journal.bin",
+          mimeType: "application/pdf",
+          sizeBytes: 100
+        })
+      ).toThrow();
+    }
+  });
+
+  it("recognizes server-generated AstroDiary PDF exports without exposing a browser upload", () => {
+    expect(mediaPurposeSchema.parse("astro_diary_export_pdf")).toBe("astro_diary_export_pdf");
+    expect(() =>
+      createAstroDiaryMediaUploadIntentRequestSchema.parse({
+        purpose: "astro_diary_export_pdf",
+        fileName: "journal.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1_000
+      })
+    ).toThrow();
+  });
+
+  it("accepts only exact private AstroDiary attachment and voice MIME policies", () => {
+    const attachmentMimeTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/avif",
+      "application/pdf"
+    ];
+    const voiceMimeTypes = ["audio/ogg", "audio/mpeg", "audio/mp4"];
+
+    for (const mimeType of attachmentMimeTypes) {
+      expect(
+        createAstroDiaryMediaUploadIntentRequestSchema.parse({
+          purpose: "astro_diary_attachment",
+          fileName: " observation.bin ",
+          mimeType,
+          sizeBytes: 20 * 1024 * 1024
+        })
+      ).toMatchObject({
+        purpose: "astro_diary_attachment",
+        fileName: "observation.bin",
+        mimeType
+      });
+    }
+    for (const mimeType of voiceMimeTypes) {
+      expect(
+        createAstroDiaryMediaUploadIntentRequestSchema.parse({
+          purpose: "astro_diary_voice",
+          fileName: "reflection.audio",
+          mimeType,
+          sizeBytes: 20 * 1024 * 1024
+        })
+      ).toMatchObject({ purpose: "astro_diary_voice", mimeType });
+    }
+
+    for (const candidate of [
+      { purpose: "astro_diary_attachment", mimeType: "audio/ogg" },
+      { purpose: "astro_diary_voice", mimeType: "image/jpeg" },
+      { purpose: "astro_diary_voice", mimeType: "video/mp4" }
+    ]) {
+      expect(() =>
+        createAstroDiaryMediaUploadIntentRequestSchema.parse({
+          ...candidate,
+          fileName: "invalid.bin",
+          sizeBytes: 1_000
+        })
+      ).toThrow();
+    }
+    expect(() =>
+      createAstroDiaryMediaUploadIntentRequestSchema.parse({
+        purpose: "astro_diary_attachment",
+        fileName: "too-large.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 20 * 1024 * 1024 + 1
       })
     ).toThrow();
   });

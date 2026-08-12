@@ -36,6 +36,7 @@ import {
   astroDiaryMediaAuthorities,
   astroDiaryResponseObligations,
   astroDiaryResponseObligationWeekdays,
+  astroDiaryReadCursors,
   astroDiaryTimelineItemRevisions,
   astroDiaryTimelineRevisionAttachments,
   astroDiaryTimelineItems
@@ -97,8 +98,13 @@ async function executeAstroDiaryCommandInTransaction(
   if (!locked) return { outcome: "not_found" };
   for (const precondition of input.preconditions) {
     const currentVersion = locked.preconditionVersions.get(preconditionKey(precondition));
-    if (currentVersion === undefined) return { outcome: "not_found" };
-    if (currentVersion !== precondition.expectedVersion) {
+    if (currentVersion === undefined) {
+      if (precondition.aggregate === "read_cursor" && precondition.expectedVersion === null) {
+        continue;
+      }
+      return { outcome: "not_found" };
+    }
+    if (precondition.expectedVersion === null || currentVersion !== precondition.expectedVersion) {
       return {
         outcome: "version_conflict",
         aggregate: precondition.aggregate,
@@ -146,6 +152,8 @@ async function executeAstroDiaryCommandInTransaction(
     await persistClientEntryPublicationWriteSet(transaction, decision.writeSet, commandAt);
   } else if (persistence === "closing_reply") {
     await persistClosingReplyWriteSet(transaction, decision.writeSet, commandAt);
+  } else if (persistence === "read_cursor") {
+    await persistReadCursorWriteSet(transaction, decision.writeSet);
   } else {
     await persistFollowUpReplyWriteSet(transaction, decision.writeSet, commandAt);
   }
@@ -185,7 +193,11 @@ function assertSupportedWriteSet(
   | "client_follow_up"
   | "client_entry_publication"
   | "closing_reply"
+  | "read_cursor"
   | "follow_up_reply" {
+  if (isReadCursorWriteSet(input, writeSet, allocation)) {
+    return "read_cursor";
+  }
   if (isPromptOpeningWriteSet(input, writeSet, allocation)) {
     return "prompt_opening";
   }
@@ -287,6 +299,94 @@ function assertSupportedWriteSet(
     throw new Error("AstroDiary draft-create adapter refuses an unsupported partial write-set");
   }
   return "draft";
+}
+
+function isReadCursorWriteSet(
+  input: AstroDiaryCommandUnitOfWorkInput,
+  writeSet: AstroDiaryCommandWriteSet,
+  allocation: AstroDiaryCommandAllocatedResource | null
+): boolean {
+  if (
+    allocation !== null ||
+    input.resultResource !== null ||
+    input.envelope.operation !== "read" ||
+    input.envelope.actorRole === "system"
+  ) {
+    return false;
+  }
+  const [cursor] = writeSet.readCursors;
+  if (!cursor?.after || cursor.after.journalId !== input.journalId) return false;
+  const precondition = input.preconditions.find(
+    (candidate) =>
+      candidate.aggregate === "read_cursor" && candidate.id === cursor.after?.participantUserId
+  );
+  if (!precondition || precondition.id !== input.envelope.actorUserId) return false;
+  const isCreate = cursor.beforeVersion === null;
+  if (
+    (isCreate && (precondition.expectedVersion !== null || cursor.after.version !== 1)) ||
+    (!isCreate &&
+      (precondition.expectedVersion === null ||
+        cursor.beforeVersion !== precondition.expectedVersion ||
+        cursor.after.version !== cursor.beforeVersion + 1))
+  ) {
+    return false;
+  }
+  return [
+    writeSet.journals,
+    writeSet.cycles,
+    writeSet.drafts,
+    writeSet.obligations,
+    writeSet.allowances,
+    writeSet.timelineItems,
+    writeSet.mediaBindings,
+    writeSet.mediaReleases,
+    writeSet.mediaAccessRevocations,
+    writeSet.journalMediaAccessRevocations,
+    writeSet.itemReadAccessRevocations,
+    writeSet.contextSnapshots,
+    writeSet.contextInvalidations,
+    writeSet.derivativeCommands,
+    writeSet.erasureCommands,
+    writeSet.subscriptionTransitions,
+    writeSet.cascadeCommands,
+    writeSet.cascadeTargets,
+    writeSet.erasureFacts,
+    writeSet.events
+  ].every((effects) => effects.length === 0);
+}
+
+async function persistReadCursorWriteSet(
+  transaction: ClientSubscriptionTransaction,
+  writeSet: AstroDiaryCommandWriteSet
+): Promise<void> {
+  const [effect] = writeSet.readCursors;
+  if (!effect?.after) throw new Error("AstroDiary read command requires one cursor after-state");
+  if (effect.beforeVersion === null) {
+    await transaction.insert(astroDiaryReadCursors).values({
+      journalId: effect.after.journalId,
+      participantUserId: effect.after.participantUserId,
+      lastReadCursor: effect.after.lastReadCursor,
+      version: effect.after.version,
+      updatedAt: new Date(effect.after.updatedAt)
+    });
+    return;
+  }
+  const updated = await transaction
+    .update(astroDiaryReadCursors)
+    .set({
+      lastReadCursor: effect.after.lastReadCursor,
+      version: effect.after.version,
+      updatedAt: new Date(effect.after.updatedAt)
+    })
+    .where(
+      and(
+        eq(astroDiaryReadCursors.journalId, effect.after.journalId),
+        eq(astroDiaryReadCursors.participantUserId, effect.after.participantUserId),
+        eq(astroDiaryReadCursors.version, effect.beforeVersion)
+      )
+    )
+    .returning({ version: astroDiaryReadCursors.version });
+  if (updated.length !== 1) throw new Error("AstroDiary read cursor CAS changed under lock");
 }
 
 function isPromptOpeningWriteSet(
@@ -2334,19 +2434,14 @@ async function readReceipt(
 function mapPrecondition(
   row: typeof astroDiaryCommandPreconditions.$inferSelect
 ): AstroDiaryCommandReceipt["preconditions"][number] {
-  return {
-    aggregate: z
-      .enum([
-        "journal",
-        "cycle",
-        "draft",
-        "timeline_item",
-        "obligation",
-        "allowance",
-        "read_cursor"
-      ])
-      .parse(row.aggregate),
-    id: row.aggregateId,
-    expectedVersion: row.expectedVersion
-  };
+  const aggregate = z
+    .enum(["journal", "cycle", "draft", "timeline_item", "obligation", "allowance", "read_cursor"])
+    .parse(row.aggregate);
+  if (aggregate === "read_cursor") {
+    return { aggregate, id: row.aggregateId, expectedVersion: row.expectedVersion };
+  }
+  if (row.expectedVersion === null) {
+    throw new Error("Only AstroDiary read-cursor preconditions may have an absent version");
+  }
+  return { aggregate, id: row.aggregateId, expectedVersion: row.expectedVersion };
 }

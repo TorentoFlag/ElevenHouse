@@ -34,7 +34,9 @@ export function ClientPurchaseFlow({
   const [products, setProducts] = useState<readonly ClientPurchaseOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [deliveryFormat, setDeliveryFormat] = useState("");
-  const [slots, setSlots] = useState<readonly { readonly startAt: string; readonly endAt: string }[]>([]);
+  const [slots, setSlots] = useState<
+    readonly { readonly startAt: string; readonly endAt: string }[]
+  >([]);
   const [selectedStartAt, setSelectedStartAt] = useState<string | null>(null);
   const [contactKind, setContactKind] = useState<"email" | "phone">("email");
   const [contactValue, setContactValue] = useState("");
@@ -44,7 +46,8 @@ export function ClientPurchaseFlow({
   const checkoutKeys = useRef<CheckoutKeys | null>(null);
   const checkoutPreparationId = useRef<string | null>(null);
 
-  const selectedAstrologer = astrologers.find((item) => item.astrologerUserId === astrologerId) ?? null;
+  const selectedAstrologer =
+    astrologers.find((item) => item.astrologerUserId === astrologerId) ?? null;
   const selectedProduct = products.find((item) => item.id === selectedProductId) ?? null;
   const selectedSlot = slots.find((slot) => slot.startAt === selectedStartAt) ?? null;
 
@@ -206,6 +209,7 @@ export function ClientPurchaseFlow({
         {
           astrologerUserId: selectedAstrologer.astrologerUserId,
           productId: selectedProduct.id,
+          expectedProductRevision: selectedProduct.revision,
           directLinkIntentId: null,
           bookingId,
           clientBirthDataId: null
@@ -227,7 +231,11 @@ export function ClientPurchaseFlow({
       setStatus("preparing");
     } catch {
       setStatus("error");
-      setMessage(window.location.protocol === "https:" ? copy.checkoutFailedGeneric : copy.checkoutRequiresHttps);
+      setMessage(
+        window.location.protocol === "https:"
+          ? copy.checkoutFailedGeneric
+          : copy.checkoutRequiresHttps
+      );
     }
   }
 
@@ -236,7 +244,10 @@ export function ClientPurchaseFlow({
   }
 
   return (
-    <section className={styles.flow} aria-busy={status === "loading" || status === "submitting" || status === "preparing"}>
+    <section
+      className={styles.flow}
+      aria-busy={status === "loading" || status === "submitting" || status === "preparing"}
+    >
       <div className={styles.heading}>
         <span>{copy.eyebrow}</span>
         <h2>{copy.title}</h2>
@@ -245,7 +256,11 @@ export function ClientPurchaseFlow({
 
       <label className={styles.field}>
         <span>{copy.astrologerLabel}</span>
-        <select value={astrologerId} onChange={(event) => setAstrologerId(event.target.value)} disabled={status === "submitting" || status === "preparing"}>
+        <select
+          value={astrologerId}
+          onChange={(event) => setAstrologerId(event.target.value)}
+          disabled={status === "submitting" || status === "preparing"}
+        >
           {astrologers.map((astrologer) => (
             <option key={astrologer.astrologerUserId} value={astrologer.astrologerUserId}>
               {astrologer.publicName}
@@ -255,7 +270,9 @@ export function ClientPurchaseFlow({
       </label>
 
       {status === "loading" ? <p className={styles.muted}>{copy.loadingProducts}</p> : null}
-      {products.length === 0 && status !== "loading" ? <p className={styles.muted}>{copy.noProducts}</p> : null}
+      {products.length === 0 && status !== "loading" ? (
+        <p className={styles.muted}>{copy.noProducts}</p>
+      ) : null}
       <div className={styles.products}>
         {products.map((product) => (
           <button
@@ -265,7 +282,10 @@ export function ClientPurchaseFlow({
             onClick={() => selectProduct(product)}
             disabled={status === "submitting" || status === "preparing"}
           >
-            <span><strong>{product.title}</strong>{product.subtitle ? <small>{product.subtitle}</small> : null}</span>
+            <span>
+              <strong>{product.title}</strong>
+              {product.subtitle ? <small>{product.subtitle}</small> : null}
+            </span>
             <b>{formatMoney(product.priceMinor, product.currency, locale)}</b>
           </button>
         ))}
@@ -275,49 +295,134 @@ export function ClientPurchaseFlow({
         <div className={styles.checkoutCard}>
           <div className={styles.productMeta}>
             <strong>{selectedProduct.title}</strong>
-            <span>{selectedProduct.executionMode === "live" ? copy.liveProductHint : selectedProduct.slaLabel ?? copy.asyncProductFallbackHint}</span>
+            <span>
+              {selectedProduct.executionMode === "live"
+                ? copy.liveProductHint
+                : (selectedProduct.slaLabel ?? copy.asyncProductFallbackHint)}
+            </span>
           </div>
           <label className={styles.field}>
             <span>{copy.formatLabel}</span>
-            <select value={deliveryFormat} onChange={(event) => { setDeliveryFormat(event.target.value); checkoutKeys.current = null; }}>
-              {selectedProduct.deliveryFormats.map((format) => <option key={format} value={format}>{formatLabel(format, copy)}</option>)}
+            <select
+              value={deliveryFormat}
+              onChange={(event) => {
+                setDeliveryFormat(event.target.value);
+                checkoutKeys.current = null;
+              }}
+            >
+              {selectedProduct.deliveryFormats.map((format) => (
+                <option key={format} value={format}>
+                  {formatLabel(format, copy)}
+                </option>
+              ))}
             </select>
           </label>
           {selectedProduct.executionMode === "live" ? (
             <div className={styles.slots} aria-label={copy.availableSlotsLabel}>
               <strong>{copy.availableSlotsLabel}</strong>
-              {slots.length === 0 && status !== "loading" ? <p className={styles.muted}>{copy.noSlots}</p> : null}
-              <div>{slots.map((slot) => <button key={slot.startAt} type="button" onClick={() => { setSelectedStartAt(slot.startAt); checkoutKeys.current = null; }} className={slot.startAt === selectedStartAt ? styles.slotSelected : styles.slot}>{formatSlot(slot.startAt, locale)}</button>)}</div>
+              {slots.length === 0 && status !== "loading" ? (
+                <p className={styles.muted}>{copy.noSlots}</p>
+              ) : null}
+              <div>
+                {slots.map((slot) => (
+                  <button
+                    key={slot.startAt}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStartAt(slot.startAt);
+                      checkoutKeys.current = null;
+                    }}
+                    className={slot.startAt === selectedStartAt ? styles.slotSelected : styles.slot}
+                  >
+                    {formatSlot(slot.startAt, locale)}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
           <div className={styles.contactRow}>
-            <label className={styles.field}><span>{copy.receiptContactLabel}</span><select value={contactKind} onChange={(event) => setContactKind(event.target.value as "email" | "phone")}><option value="email">{copy.emailLabel}</option><option value="phone">{copy.phoneLabel}</option></select></label>
-            <label className={styles.field}><span>{contactKind === "email" ? copy.emailLabel : copy.phonePlaceholderLabel}</span><input value={contactValue} onChange={(event) => setContactValue(event.target.value)} autoComplete={contactKind === "email" ? "email" : "tel"} /></label>
+            <label className={styles.field}>
+              <span>{copy.receiptContactLabel}</span>
+              <select
+                value={contactKind}
+                onChange={(event) => setContactKind(event.target.value as "email" | "phone")}
+              >
+                <option value="email">{copy.emailLabel}</option>
+                <option value="phone">{copy.phoneLabel}</option>
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>{contactKind === "email" ? copy.emailLabel : copy.phonePlaceholderLabel}</span>
+              <input
+                value={contactValue}
+                onChange={(event) => setContactValue(event.target.value)}
+                autoComplete={contactKind === "email" ? "email" : "tel"}
+              />
+            </label>
           </div>
           <p className={styles.note}>{copy.receiptContactHint}</p>
-          <button className={styles.payButton} type="button" disabled={!canPay || status === "submitting" || status === "preparing"} onClick={() => void startCheckout()}>
-            {status === "preparing" ? copy.preparingPayment : status === "submitting" ? copy.creatingOrder : interpolate(copy.pay, { amount: formatMoney(selectedProduct.priceMinor, selectedProduct.currency, locale) })}
+          <button
+            className={styles.payButton}
+            type="button"
+            disabled={!canPay || status === "submitting" || status === "preparing"}
+            onClick={() => void startCheckout()}
+          >
+            {status === "preparing"
+              ? copy.preparingPayment
+              : status === "submitting"
+                ? copy.creatingOrder
+                : interpolate(copy.pay, {
+                    amount: formatMoney(
+                      selectedProduct.priceMinor,
+                      selectedProduct.currency,
+                      locale
+                    )
+                  })}
           </button>
         </div>
       ) : null}
-      {message ? <p className={styles.error} role="alert">{message}</p> : null}
+      {message ? (
+        <p className={styles.error} role="alert">
+          {message}
+        </p>
+      ) : null}
     </section>
   );
 }
 
-function CheckoutReturn({ copy, locale, order }: { readonly copy: ClientPurchaseFlowCopy; readonly locale: SupportedLocale; readonly order: OrderResponse }) {
-  const text = order.status === "paid" || order.status === "fulfilled"
-    ? copy.paid
-    : order.status === "pending_payment"
-      ? copy.pendingPayment
-      : copy.paymentNotCompleted;
-  return <section className={styles.returnCard}><span>{copy.returnStatusLabel}</span><h2>{order.productTitleSnapshot}</h2><p>{text}</p><b>{formatMoney(order.grossAmount.amountMinor, order.grossAmount.currency, locale)}</b></section>;
+function CheckoutReturn({
+  copy,
+  locale,
+  order
+}: {
+  readonly copy: ClientPurchaseFlowCopy;
+  readonly locale: SupportedLocale;
+  readonly order: OrderResponse;
+}) {
+  const text =
+    order.status === "paid" || order.status === "fulfilled"
+      ? copy.paid
+      : order.status === "pending_payment"
+        ? copy.pendingPayment
+        : copy.paymentNotCompleted;
+  return (
+    <section className={styles.returnCard}>
+      <span>{copy.returnStatusLabel}</span>
+      <h2>{order.productTitleSnapshot}</h2>
+      <p>{text}</p>
+      <b>{formatMoney(order.grossAmount.amountMinor, order.grossAmount.currency, locale)}</b>
+    </section>
+  );
 }
 
 function createCheckoutKeys(): CheckoutKeys {
   const randomUuid = globalThis.crypto?.randomUUID?.();
   if (!randomUuid) throw new Error("Secure browser randomness is unavailable");
-  return { booking: `client-checkout:booking:${randomUuid}`, order: `client-checkout:order:${randomUuid}`, checkout: `client-checkout:checkout:${randomUuid}` };
+  return {
+    booking: `client-checkout:booking:${randomUuid}`,
+    order: `client-checkout:order:${randomUuid}`,
+    checkout: `client-checkout:checkout:${randomUuid}`
+  };
 }
 
 /**
@@ -354,9 +459,15 @@ function readCheckoutKeys(storageKey: string): CheckoutKeys | null {
       const order = candidate.order;
       const checkout = candidate.checkout;
       if (
-        typeof booking === "string" && booking.length > 0 && booking.length <= 160 &&
-        typeof order === "string" && order.length > 0 && order.length <= 160 &&
-        typeof checkout === "string" && checkout.length > 0 && checkout.length <= 160
+        typeof booking === "string" &&
+        booking.length > 0 &&
+        booking.length <= 160 &&
+        typeof order === "string" &&
+        order.length > 0 &&
+        order.length <= 160 &&
+        typeof checkout === "string" &&
+        checkout.length > 0 &&
+        checkout.length <= 160
       ) {
         return { booking, order, checkout };
       }
@@ -374,7 +485,12 @@ function checkoutScope(input: {
   readonly selectedStartAt: string | null;
 }): string {
   return encodeURIComponent(
-    [input.astrologerUserId, input.productId, input.deliveryFormat, input.selectedStartAt ?? ""].join("|")
+    [
+      input.astrologerUserId,
+      input.productId,
+      input.deliveryFormat,
+      input.selectedStartAt ?? ""
+    ].join("|")
   );
 }
 
@@ -391,11 +507,18 @@ function upcomingRange(): { readonly start: string; readonly end: string } {
 }
 
 function formatMoney(amountMinor: number, currency: string, locale: SupportedLocale): string {
-  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(amountMinor / 100);
+  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2
+  }).format(amountMinor / 100);
 }
 
 function formatSlot(value: string, locale: SupportedLocale): string {
-  return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 function formatLabel(value: string, copy: ClientPurchaseFlowCopy): string {

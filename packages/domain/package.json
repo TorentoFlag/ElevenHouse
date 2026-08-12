@@ -19,6 +19,11 @@
       "types": "./dist/finance-core/reconciliation.d.ts",
       "import": "./dist/finance-core/reconciliation.js",
       "require": "./dist/finance-core/reconciliation.js"
+    },
+    "./astro-diary": {
+      "types": "./dist/astro-diary/index.d.ts",
+      "import": "./dist/astro-diary/index.js",
+      "require": "./dist/astro-diary/index.js"
     }
   },
   "scripts": {

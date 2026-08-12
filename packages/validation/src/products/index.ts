@@ -22,6 +22,7 @@ export const productDeliveryFormatValues = [
   "channel"
 ] as const;
 export type ProductDeliveryFormatValue = (typeof productDeliveryFormatValues)[number];
+export const astroDiaryDeliveryFormatValues = ["chat", "audio", "file"] as const satisfies readonly ProductDeliveryFormatValue[];
 
 export const productExecutionModeValues = ["live", "async", "instant"] as const;
 export type ProductExecutionModeValue = (typeof productExecutionModeValues)[number];
@@ -80,6 +81,25 @@ export type ProductTemplateStatusValue = (typeof productTemplateStatusValues)[nu
 export const productTemplateLocaleValues = ["ru", "en"] as const;
 export type ProductTemplateLocaleValue = (typeof productTemplateLocaleValues)[number];
 
+export const astroDiaryReflectionCyclesPerPeriodBounds = { min: 1, max: 366 } as const;
+export const astroDiaryResponseSlaWorkingDaysBounds = { min: 1, max: 30 } as const;
+export const astroDiaryClientResponseWindowCalendarDaysBounds = { min: 1, max: 90 } as const;
+
+export const isoWeekdayValues = [1, 2, 3, 4, 5, 6, 7] as const;
+export type IsoWeekdayValue = (typeof isoWeekdayValues)[number];
+export const astroDiaryWorkingWeekdaysMaskBounds = {
+  min: 1,
+  max: (1 << isoWeekdayValues.length) - 1
+} as const;
+
+export type ProductAstroDiaryConfigValue = {
+  readonly reflectionCyclesPerPeriod: number;
+  readonly responseSlaWorkingDays: number;
+  readonly clientResponseWindowCalendarDays: number;
+  readonly workingWeekdays: readonly IsoWeekdayValue[];
+  readonly serviceTimezone: string;
+};
+
 export type ProductInvariantIssue = {
   readonly path: readonly string[];
   readonly message: string;
@@ -101,6 +121,21 @@ export type ProductCreateInvariantInput = ProductUpdateInvariantInput & {
   readonly participantMode?: ProductParticipantModeValue;
   readonly groupSize?: number | null;
   readonly priceMinor?: number;
+  readonly durationMinutes?: number | null;
+  readonly durationLabel?: string | null;
+  readonly slaLabel?: string | null;
+  readonly packageDiscountPercent?: number | null;
+  readonly trialDays?: number | null;
+  readonly astroDiaryConfig?: ProductAstroDiaryConfigInvariantInput | null;
+  readonly modifiers?: readonly ProductModifierInvariantInput[];
+};
+
+type ProductAstroDiaryConfigInvariantInput = {
+  readonly reflectionCyclesPerPeriod?: number;
+  readonly responseSlaWorkingDays?: number;
+  readonly clientResponseWindowCalendarDays?: number;
+  readonly workingWeekdays?: readonly number[];
+  readonly serviceTimezone?: string;
 };
 
 export type ProductModifierInvariantInput = {
@@ -171,6 +206,8 @@ export function collectProductCreateInvariantIssues(
     });
   }
 
+  issues.push(...collectAstroDiaryInvariantIssues(value));
+
   return issues;
 }
 
@@ -231,6 +268,182 @@ function collectUniqueArrayIssues(
   }
 
   return [];
+}
+
+function collectAstroDiaryInvariantIssues(
+  value: ProductCreateInvariantInput
+): ProductInvariantIssue[] {
+  const hasJournalGrant = value.accessGrants?.includes("journal") ?? false;
+  const config = value.astroDiaryConfig;
+
+  if (!hasJournalGrant) {
+    return config == null
+      ? []
+      : [
+          {
+            path: ["astroDiaryConfig"],
+            message: "Only AstroDiary products may define AstroDiary configuration"
+          }
+        ];
+  }
+
+  const issues: ProductInvariantIssue[] = [];
+  if (value.accessGrants?.length !== 1) {
+    issues.push({
+      path: ["accessGrants"],
+      message: "AstroDiary products require journal as their only access grant"
+    });
+  }
+  if (value.type !== "sub") {
+    issues.push({ path: ["type"], message: "AstroDiary products require subscription type" });
+  }
+  if (value.paymentModel !== "sub") {
+    issues.push({
+      path: ["paymentModel"],
+      message: "AstroDiary products require subscription payment model"
+    });
+  }
+  if (value.executionMode !== "async") {
+    issues.push({
+      path: ["executionMode"],
+      message: "AstroDiary products require async execution mode"
+    });
+  }
+  if (value.participantMode !== "solo") {
+    issues.push({
+      path: ["participantMode"],
+      message: "AstroDiary products require solo participant mode"
+    });
+  }
+  if (!hasExactStringSet(value.deliveryFormats, astroDiaryDeliveryFormatValues)) {
+    issues.push({
+      path: ["deliveryFormats"],
+      message: "AstroDiary products require chat, audio and file delivery formats"
+    });
+  }
+  if (value.requiredClientData?.length !== 0) {
+    issues.push({
+      path: ["requiredClientData"],
+      message: "AstroDiary products do not collect generic required client data"
+    });
+  }
+  if (value.methods?.length !== 0) {
+    issues.push({
+      path: ["methods"],
+      message: "AstroDiary products do not define astrology methods"
+    });
+  }
+  if (value.modifiers?.length !== 0) {
+    issues.push({
+      path: ["modifiers"],
+      message: "AstroDiary subscriptions do not support price modifiers"
+    });
+  }
+  if (
+    value.durationMinutes != null ||
+    value.durationLabel != null ||
+    value.slaLabel != null ||
+    value.packageSessionCount != null ||
+    value.packageDiscountPercent != null ||
+    value.trialDays != null ||
+    value.groupSize != null
+  ) {
+    issues.push({
+      path: ["astroDiaryConfig"],
+      message: "AstroDiary products reject live, package, trial and display-label settings"
+    });
+  }
+  if (config == null) {
+    issues.push({
+      path: ["astroDiaryConfig"],
+      message: "AstroDiary products require complete configuration"
+    });
+    return issues;
+  }
+
+  collectBoundedIntegerIssue(
+    issues,
+    config.reflectionCyclesPerPeriod,
+    astroDiaryReflectionCyclesPerPeriodBounds,
+    "reflectionCyclesPerPeriod"
+  );
+  collectBoundedIntegerIssue(
+    issues,
+    config.responseSlaWorkingDays,
+    astroDiaryResponseSlaWorkingDaysBounds,
+    "responseSlaWorkingDays"
+  );
+  collectBoundedIntegerIssue(
+    issues,
+    config.clientResponseWindowCalendarDays,
+    astroDiaryClientResponseWindowCalendarDaysBounds,
+    "clientResponseWindowCalendarDays"
+  );
+
+  const workingWeekdays = config.workingWeekdays;
+  if (
+    !workingWeekdays ||
+    workingWeekdays.length === 0 ||
+    workingWeekdays.length > isoWeekdayValues.length ||
+    new Set(workingWeekdays).size !== workingWeekdays.length ||
+    workingWeekdays.some(
+      (weekday) =>
+        !Number.isInteger(weekday) ||
+        weekday < isoWeekdayValues[0] ||
+        weekday > isoWeekdayValues[isoWeekdayValues.length - 1]!
+    )
+  ) {
+    issues.push({
+      path: ["astroDiaryConfig", "workingWeekdays"],
+      message: "AstroDiary working weekdays must be non-empty unique ISO weekdays"
+    });
+  }
+
+  if (!config.serviceTimezone || !isValidIanaTimezone(config.serviceTimezone)) {
+    issues.push({
+      path: ["astroDiaryConfig", "serviceTimezone"],
+      message: "AstroDiary service timezone must be a valid IANA timezone"
+    });
+  }
+
+  return issues;
+}
+
+function hasExactStringSet(
+  values: readonly string[] | undefined,
+  expected: readonly string[]
+): boolean {
+  return (
+    values !== undefined &&
+    values.length === expected.length &&
+    new Set(values).size === values.length &&
+    expected.every((item) => values.includes(item))
+  );
+}
+
+function collectBoundedIntegerIssue(
+  issues: ProductInvariantIssue[],
+  value: number | undefined,
+  bounds: { readonly min: number; readonly max: number },
+  field: string
+): void {
+  if (!Number.isInteger(value) || value === undefined || value < bounds.min || value > bounds.max) {
+    issues.push({
+      path: ["astroDiaryConfig", field],
+      message: `AstroDiary ${field} must be an integer from ${bounds.min} to ${bounds.max}`
+    });
+  }
+}
+
+export function isValidIanaTimezone(value: string): boolean {
+  if (value.trim() !== value || value.length === 0) return false;
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getFixedScenario(type: ProductTypeValue | undefined):

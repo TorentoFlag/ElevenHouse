@@ -40,6 +40,17 @@ export const outboxEventStatusValues = [
   "quarantined"
 ] as const;
 
+export type ClientSubscriptionLifecycleEventDispatchRequestedPayload = Readonly<{
+  schemaVersion: "client-subscription-lifecycle-event-dispatch-request.v1";
+  lifecycleEventId: string;
+}>;
+
+/** Body-free pointer to one independently claimable AstroDiary event consumer delivery. */
+export type AstroDiaryEventDeliveryDispatchRequestedPayload = Readonly<{
+  schemaVersion: "astro-diary-event-delivery-dispatch-request.v1";
+  deliveryId: string;
+}>;
+
 export type OutboxEventPayload =
   | AuthCodeDeliveryRequestedPayload
   | AstroCalendarGenerationRequestedPayload
@@ -57,7 +68,9 @@ export type OutboxEventPayload =
   | FlowBookingConfirmedEnrollmentRequestedPayloadV1
   | MessagingMessageDeliveryTerminalPayload
   | MessagingMessageDeliveryReconciliationRequestedPayload
-  | MessagingMessageDeliveryRequestedPayload;
+  | MessagingMessageDeliveryRequestedPayload
+  | ClientSubscriptionLifecycleEventDispatchRequestedPayload
+  | AstroDiaryEventDeliveryDispatchRequestedPayload;
 
 export const outboxEvents = pgTable(
   "outbox_events",
@@ -128,6 +141,15 @@ export const outboxEvents = pgTable(
       sql`${table.eventType} <> 'bookings.lifecycle_event.dispatch_requested.v1' or (
         ${table.payload} = jsonb_build_object(
           'schemaVersion', 'booking-lifecycle-event-dispatch-request.v1',
+          'lifecycleEventId', ${table.aggregateId}::text
+        )
+      )`
+    ),
+    check(
+      "outbox_events_client_subscription_lifecycle_dispatch_check",
+      sql`${table.eventType} <> 'client_subscription.lifecycle_event.dispatch_requested.v1' or (
+        ${table.payload} = jsonb_build_object(
+          'schemaVersion', 'client-subscription-lifecycle-event-dispatch-request.v1',
           'lifecycleEventId', ${table.aggregateId}::text
         )
       )`

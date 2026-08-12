@@ -8,6 +8,8 @@ import {
   OrderClientRelationshipRequiredError,
   OrderFinancePolicyUnavailableError,
   OrderProductNotAvailableError,
+  OrderProductRevisionConflictError,
+  OrderPurchaseAuthorityChangedError,
   OrderTariffCommissionUnavailableError,
   createOrder,
   type ClientAstrologerRelationshipReader,
@@ -41,7 +43,10 @@ export class OrdersService {
     @Inject(ORDERS_PRODUCT_STORE)
     private readonly productStore: Pick<ProductStore, "findByOwnerAndId">,
     @Inject(ORDERS_FINANCE_POLICY_STORE)
-    private readonly financePolicyStore: Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">,
+    private readonly financePolicyStore: Pick<
+      FinancePolicyStore,
+      "findEffectivePolicyForAstrologer"
+    >,
     @Inject(ORDERS_TARIFF_AUTHORITY_STORE)
     private readonly tariffAuthorityStore: PlatformTariffEntitlementStore,
     @Inject(SystemClock)
@@ -87,13 +92,8 @@ export class OrdersService {
 }
 
 function toPublicOrderResponse(order: Awaited<ReturnType<typeof createOrder>>): OrderResponse {
-  const {
-    tariffSeriesId,
-    tariffVersion,
-    tariffVersionDigest,
-    tariffCommissionBps,
-    ...response
-  } = order;
+  const { tariffSeriesId, tariffVersion, tariffVersionDigest, tariffCommissionBps, ...response } =
+    order;
   void tariffSeriesId;
   void tariffVersion;
   void tariffVersionDigest;
@@ -111,6 +111,12 @@ async function mapOrderErrors<T>(operation: () => Promise<T>): Promise<T> {
     }
     if (error instanceof OrderProductNotAvailableError) {
       throw orderHttpError(404, error.code, error.message);
+    }
+    if (error instanceof OrderProductRevisionConflictError) {
+      throw orderHttpError(409, error.code, error.message);
+    }
+    if (error instanceof OrderPurchaseAuthorityChangedError) {
+      throw orderHttpError(409, error.code, error.message);
     }
     if (
       error instanceof OrderFinancePolicyUnavailableError ||

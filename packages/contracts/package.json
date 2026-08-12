@@ -15,6 +15,16 @@
       "import": "./dist/products.js",
       "require": "./dist/products.js"
     },
+    "./client-subscriptions": {
+      "types": "./dist/client-subscriptions.d.ts",
+      "import": "./dist/client-subscriptions.js",
+      "require": "./dist/client-subscriptions.js"
+    },
+    "./astro-diary": {
+      "types": "./dist/astro-diary.d.ts",
+      "import": "./dist/astro-diary.js",
+      "require": "./dist/astro-diary.js"
+    },
     "./media": {
       "types": "./dist/media.d.ts",
       "import": "./dist/media.js",

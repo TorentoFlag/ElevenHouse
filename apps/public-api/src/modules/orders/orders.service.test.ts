@@ -4,6 +4,8 @@ import {
   OrderClientRelationshipRequiredError,
   OrderFinancePolicyUnavailableError,
   OrderProductNotAvailableError,
+  OrderProductRevisionConflictError,
+  OrderPurchaseAuthorityChangedError,
   createPlatformTariffDraft,
   type ClientAstrologerRelationshipReader,
   type CreateFinanceOrderRecordInput,
@@ -28,11 +30,22 @@ const bookingId = "77777777-7777-4777-8777-777777777777";
 const now = new Date("2026-07-24T10:00:00.000Z");
 const tariff = {
   ...createPlatformTariffDraft({
-  tariffSeriesId: "pro", version: 1, name: "Pro", tagline: "For active practice",
-  monthlyPriceMinor: 2_500, yearlyPriceMinor: 25_000, clientSaleCommissionBps: 800,
-  monthlyRecurringFrequencyDays: 30, yearlyRecurringFrequencyDays: 365,
-  seatsLimit: 1, bookingsLimit: null, aiRequestsLimit: null, automationLimit: null,
-    isPopular: false, displayOrder: 0, features: ["products"]
+    tariffSeriesId: "pro",
+    version: 1,
+    name: "Pro",
+    tagline: "For active practice",
+    monthlyPriceMinor: 2_500,
+    yearlyPriceMinor: 25_000,
+    clientSaleCommissionBps: 800,
+    monthlyRecurringFrequencyDays: 30,
+    yearlyRecurringFrequencyDays: 365,
+    seatsLimit: 1,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 0,
+    features: ["products"]
   }),
   lifecycle: "published" as const
 };
@@ -44,7 +57,7 @@ describe("OrdersService", () => {
     await expect(
       service.createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId, bookingId },
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).resolves.toEqual({
@@ -80,7 +93,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ hasRelationship: false }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId, bookingId },
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(403, new OrderClientRelationshipRequiredError().code));
@@ -88,7 +101,7 @@ describe("OrdersService", () => {
     await expect(
       createService({ product: null }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId, bookingId },
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(404, new OrderProductNotAvailableError().code));
@@ -96,29 +109,48 @@ describe("OrdersService", () => {
     await expect(
       createService({ hasPolicy: false }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId, bookingId },
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(409, new OrderFinancePolicyUnavailableError().code));
+
+    await expect(
+      createService({ product: { ...activeProduct, revision: 2 } }).createOrder(
+        clientUserId,
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
+        "order-create:key-1"
+      )
+    ).rejects.toSatisfy(hasHttpError(409, new OrderProductRevisionConflictError(1, 2).code));
+
+    await expect(
+      createService({ orderError: new OrderPurchaseAuthorityChangedError() }).createOrder(
+        clientUserId,
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
+        "order-create:key-1"
+      )
+    ).rejects.toSatisfy(hasHttpError(409, new OrderPurchaseAuthorityChangedError().code));
   });
 
   it("maps idempotency conflicts to HTTP 409", async () => {
     await expect(
       createService({ conflict: true }).createOrder(
         clientUserId,
-        { astrologerUserId, productId, directLinkIntentId, bookingId },
+        { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId, bookingId },
         "order-create:key-1"
       )
     ).rejects.toSatisfy(hasHttpError(409, new FinanceIdempotencyConflictError().code));
   });
 });
 
-function createService(options: {
-  readonly hasRelationship?: boolean;
-  readonly product?: Product | null;
-  readonly hasPolicy?: boolean;
-  readonly conflict?: boolean;
-} = {}): OrdersService {
+function createService(
+  options: {
+    readonly hasRelationship?: boolean;
+    readonly product?: Product | null;
+    readonly hasPolicy?: boolean;
+    readonly conflict?: boolean;
+    readonly orderError?: Error;
+  } = {}
+): OrdersService {
   const relationshipReader: ClientAstrologerRelationshipReader = {
     hasActiveRelationship: vi.fn(async () => options.hasRelationship ?? true)
   };
@@ -132,7 +164,7 @@ function createService(options: {
       options.hasPolicy === false ? null : effectivePolicy()
     )
   } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
-  const orderStore = createOrderStore(options.conflict);
+  const orderStore = createOrderStore(options.conflict, options.orderError);
   const tariffAuthorityStore = {
     findCurrentSubscription: vi.fn(async () => ({
       subscriptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -150,13 +182,21 @@ function createService(options: {
     findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
   } satisfies PlatformTariffEntitlementStore;
 
-  return new OrdersService(orderStore, relationshipReader, productStore, financePolicyStore, tariffAuthorityStore, {
-    now: () => now
-  });
+  return new OrdersService(
+    orderStore,
+    relationshipReader,
+    productStore,
+    financePolicyStore,
+    tariffAuthorityStore,
+    {
+      now: () => now
+    }
+  );
 }
 
 const activeProduct = {
   id: productId,
+  revision: 1,
   ownerUserId: astrologerUserId,
   type: "single",
   status: "active",
@@ -181,17 +221,19 @@ const activeProduct = {
   requiredClientData: [],
   methods: [],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [],
   modifiers: [],
   createdAt: now.toISOString(),
   updatedAt: now.toISOString()
 } satisfies Product;
 
-function createOrderStore(conflict = false): FinanceOrderStore {
+function createOrderStore(conflict = false, orderError?: Error): FinanceOrderStore {
   return {
     executeCreateOrder: vi.fn(async (_command, createInput) => {
       if (conflict) throw new FinanceIdempotencyConflictError();
       const input = await createInput();
+      if (orderError) throw orderError;
       return { kind: "created" as const, value: toOrder(input) };
     }),
     create: vi.fn(),

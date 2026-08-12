@@ -34,7 +34,11 @@ export const orderResponseSchema = z
     astrologerNetAmount: moneySchema,
     financePolicySnapshotId: uuidSchema,
     financePolicyRiskTier: riskTierSchema,
-    financePolicyHoldDurationHours: z.number().int().min(0).max(24 * 180),
+    financePolicyHoldDurationHours: z
+      .number()
+      .int()
+      .min(0)
+      .max(24 * 180),
     financePolicyReserveBps: z.number().int().min(0).max(10_000),
     financePolicyReserveReleaseDelayDays: z.number().int().min(0).max(540),
     financePolicyProviderSettlementRequired: z.boolean(),
@@ -70,6 +74,7 @@ export const createOrderRequestSchema = z
   .object({
     astrologerUserId: uuidSchema,
     productId: uuidSchema,
+    expectedProductRevision: z.number().int().positive(),
     directLinkIntentId: uuidSchema.nullable().optional(),
     bookingId: uuidSchema.nullable().optional(),
     clientBirthDataId: uuidSchema.nullable().optional()

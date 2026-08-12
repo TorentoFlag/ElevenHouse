@@ -17,6 +17,7 @@ const uuidSchema = z.string().uuid();
 export const clientPurchaseOptionSchema = z
   .object({
     id: uuidSchema,
+    revision: z.number().int().positive(),
     title: z.string().trim().min(1).max(200),
     subtitle: z.string().trim().max(500).nullable(),
     type: productTypeSchema,

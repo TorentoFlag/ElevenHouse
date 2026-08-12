@@ -12,6 +12,7 @@ import {
   productSubscriptionPeriodValues,
   productTypeValues,
   type ProductAccessGrantValue,
+  type ProductAstroDiaryConfigValue,
   type ProductCurrencyValue,
   type ProductDeliveryFormatValue,
   type ProductExecutionModeValue,
@@ -52,6 +53,7 @@ export type ProductParticipantMode = ProductParticipantModeValue;
 export type ProductRequiredClientData = ProductRequiredClientDataValue;
 export type ProductMethod = ProductMethodValue;
 export type ProductAccessGrant = ProductAccessGrantValue;
+export type ProductAstroDiaryConfig = ProductAstroDiaryConfigValue;
 export type ProductModifierKind = ProductModifierKindValue;
 export type ProductCurrency = ProductCurrencyValue;
 
@@ -103,10 +105,12 @@ export type ProductCoreFields = {
   readonly requiredClientData: readonly ProductRequiredClientData[];
   readonly methods: readonly ProductMethod[];
   readonly accessGrants: readonly ProductAccessGrant[];
+  readonly astroDiaryConfig: ProductAstroDiaryConfig | null;
 };
 
 export type Product = ProductCoreFields & {
   readonly id: string;
+  readonly revision: number;
   readonly includedItems: readonly ProductIncludedItem[];
   readonly modifiers: readonly ProductModifier[];
   readonly createdAt: string;

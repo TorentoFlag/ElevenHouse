@@ -1,4 +1,5 @@
 export * from "./product-values";
+export * from "./astro-diary-product-integrity";
 export * from "./products.schema";
 export * from "./product-delivery-formats.schema";
 export * from "./product-required-client-data.schema";

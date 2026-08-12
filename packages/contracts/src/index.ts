@@ -17,6 +17,8 @@ export * from "./matrix-notes";
 export * from "./matrix-report";
 export * from "./clients";
 export * from "./client-commerce";
+export * from "./client-subscriptions";
+export * from "./astro-diary";
 export * from "./calendar";
 export * from "./astro-calendar";
 export * from "./flows";

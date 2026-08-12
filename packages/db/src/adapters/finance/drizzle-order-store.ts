@@ -12,6 +12,7 @@ import type { Money } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import { bookings, orders, scheduleReservations } from "../../schema";
 import { financeOrderEconomicsSnapshots } from "../../schema/finance/capture-authorities.schema";
+import { sealClientSubscriptionPurchaseAuthorityForOrder } from "../client-subscriptions/drizzle-client-subscription-purchase-authority";
 import {
   executeIdempotentFinanceCommand,
   type FinanceDatabase,
@@ -96,7 +97,7 @@ async function insertOrder(
       financePolicyProviderSettlementRequired: input.financePolicyProviderSettlementRequired,
       createdAt: timestamp,
       updatedAt: timestamp
-  })
+    })
     .returning();
   if (!row) throw new Error("Expected finance order insert to return a row");
   const economics = createOrderEconomicsSnapshotForPersistence({ ...input, id: row.id });
@@ -113,6 +114,10 @@ async function insertOrder(
     payableCurrency: economics.payable.currency,
     commissionBps: economics.commissionBps,
     allocationRevision: economics.allocationRevision
+  });
+  await sealClientSubscriptionPurchaseAuthorityForOrder(database, {
+    orderId: row.id,
+    purpose: input.purchasePurpose
   });
   if (input.bookingId) {
     await claimPaidBookingHoldForOrder(database, {

@@ -18,7 +18,8 @@ type ProductTemplateOptionalField =
   | "packageDiscountPercent"
   | "subscriptionPeriod"
   | "trialDays"
-  | "groupSize";
+  | "groupSize"
+  | "astroDiaryConfig";
 
 export type ProductTemplatePayload = Omit<
   ProductCreateInput,

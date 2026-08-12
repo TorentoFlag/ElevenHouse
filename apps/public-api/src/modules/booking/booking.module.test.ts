@@ -4,6 +4,7 @@ import { toBookingProduct } from "./booking.module";
 
 const product: Product = {
   id: "11111111-1111-4111-8111-111111111111",
+  revision: 1,
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "active",
@@ -30,6 +31,7 @@ const product: Product = {
   accessGrants: [],
   includedItems: [],
   modifiers: [],
+  astroDiaryConfig: null,
   createdAt: "2026-08-07T00:00:00.000Z",
   updatedAt: "2026-08-07T00:00:00.000Z"
 };

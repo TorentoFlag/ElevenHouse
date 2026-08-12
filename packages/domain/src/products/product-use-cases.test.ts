@@ -48,6 +48,7 @@ const baseInput: ProductCreateInput = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [{ text: "Полный разбор карты", icon: "check", order: 10 }],
   modifiers: []
 };
@@ -87,6 +88,7 @@ class InMemoryProductStore implements ProductStore {
     const product: Product = {
       ...productInput,
       id: `product-${this.nextId++}`,
+      revision: 1,
       includedItems: input.includedItems.map((item) => ({
         ...item,
         id: `child-${this.nextChildId++}`
@@ -106,18 +108,34 @@ class InMemoryProductStore implements ProductStore {
     const index = this.products.findIndex(
       (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
     );
-    if (index === -1) return null;
+    if (index === -1) return { outcome: "not_found" as const };
 
     const current = this.products[index];
-    if (!current) return null;
+    if (!current) return { outcome: "not_found" as const };
+    if (current.revision !== input.expectedRevision) {
+      return { outcome: "revision_conflict" as const, currentRevision: current.revision };
+    }
     const patch = materializePatch(input.patch, () => `child-${this.nextChildId++}`);
-    const next: Product = { ...current, ...(patch as Partial<Product>), updatedAt: input.now };
+    const next: Product = {
+      ...current,
+      ...(patch as Partial<Product>),
+      revision: current.revision + 1,
+      updatedAt: input.now
+    };
     this.products[index] = next;
-    return next;
+    return { outcome: "updated" as const, product: next };
   }
 
   async duplicate(input: Parameters<ProductStore["duplicate"]>[0]) {
-    return this.create(input);
+    const source = this.products.find(
+      (product) =>
+        product.id === input.sourceProductId && product.ownerUserId === input.ownerUserId
+    );
+    if (!source) return { outcome: "not_found" as const };
+    if (source.revision !== input.expectedSourceRevision) {
+      return { outcome: "revision_conflict" as const, currentRevision: source.revision };
+    }
+    return { outcome: "duplicated" as const, product: await this.create(input) };
   }
 }
 
@@ -136,6 +154,7 @@ describe("product use cases", () => {
 
     expect(result.total).toBe(1);
     expect(result.products[0]?.status).toBe("draft");
+    expect(result.products[0]?.revision).toBe(1);
     expect(result.products[0]?.createdAt).toBe("2026-07-02T00:00:00.000Z");
   });
 
@@ -160,24 +179,30 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 1,
       now: new Date("2026-07-02T00:10:00.000Z")
     });
     const draft = await moveProductToDraft({
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 2,
       now: new Date("2026-07-02T00:15:00.000Z")
     });
     const archived = await archiveProduct({
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 3,
       now: new Date("2026-07-02T00:20:00.000Z")
     });
 
     expect(active.status).toBe("active");
+    expect(active.revision).toBe(2);
     expect(draft.status).toBe("draft");
+    expect(draft.revision).toBe(3);
     expect(archived.status).toBe("archived");
+    expect(archived.revision).toBe(4);
   });
 
   it("updates product fields without changing analytics-owned data", async () => {
@@ -188,12 +213,14 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 1,
       patch: { title: "Синастрия", priceMinor: 540000 },
       now: new Date("2026-07-02T00:30:00.000Z")
     });
 
     expect(updated.title).toBe("Синастрия");
     expect(updated.priceMinor).toBe(540000);
+    expect(updated.revision).toBe(2);
     expect(updated.updatedAt).toBe("2026-07-02T00:30:00.000Z");
   });
 
@@ -205,6 +232,7 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 1,
       patch: {
         subtitle: null,
         introVideoUrl: null,
@@ -239,6 +267,7 @@ describe("product use cases", () => {
         store,
         ownerUserId: "owner-1",
         productId: product.id,
+        expectedRevision: 1,
         patch: { paymentModel: "pack" },
         now: new Date("2026-07-02T00:34:00.000Z")
       })
@@ -256,6 +285,7 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 1,
       now: new Date("2026-07-02T00:35:00.000Z")
     });
 
@@ -263,14 +293,207 @@ describe("product use cases", () => {
       store,
       ownerUserId: "owner-1",
       productId: product.id,
+      expectedRevision: 2,
       title: "Natal reading (copy)",
       now: new Date("2026-07-02T00:40:00.000Z")
     });
 
     expect(copy.id).not.toBe(product.id);
     expect(copy.status).toBe("draft");
+    expect(copy.revision).toBe(1);
     expect(copy.title).toBe("Natal reading (copy)");
     expect(copy.includedItems[0]?.id).not.toBe(product.includedItems[0]?.id);
+  });
+
+  it("rejects stale product updates without overwriting the current revision", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({ store, input: baseInput, now });
+    await updateProduct({
+      store,
+      ownerUserId: "owner-1",
+      productId: product.id,
+      expectedRevision: 1,
+      patch: { title: "Current title" },
+      now: new Date("2026-07-02T00:30:00.000Z")
+    });
+
+    await expect(
+      updateProduct({
+        store,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        expectedRevision: 1,
+        patch: { title: "Stale title" },
+        now: new Date("2026-07-02T00:31:00.000Z")
+      })
+    ).rejects.toMatchObject({
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 1,
+      currentRevision: 2
+    });
+
+    await expect(
+      getProduct({ store, ownerUserId: "owner-1", productId: product.id })
+    ).resolves.toMatchObject({ title: "Current title", revision: 2 });
+  });
+
+  it("rejects stale duplicate snapshots and starts accepted copies at revision one", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({ store, input: baseInput, now });
+    await updateProduct({
+      store,
+      ownerUserId: "owner-1",
+      productId: product.id,
+      expectedRevision: 1,
+      patch: { title: "Current title" },
+      now: new Date("2026-07-02T00:30:00.000Z")
+    });
+
+    await expect(
+      duplicateProduct({
+        store,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        expectedRevision: 1,
+        now: new Date("2026-07-02T00:31:00.000Z")
+      })
+    ).rejects.toMatchObject({
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 1,
+      currentRevision: 2
+    });
+
+    await expect(
+      duplicateProduct({
+        store,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        expectedRevision: 2,
+        now: new Date("2026-07-02T00:32:00.000Z")
+      })
+    ).resolves.toMatchObject({ title: "Current title", revision: 1 });
+  });
+
+  it("reports the authoritative revision when the atomic update loses a race", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({ store, input: baseInput, now });
+    const racingStore: ProductStore = {
+      listByOwner: store.listByOwner.bind(store),
+      findByOwnerAndId: store.findByOwnerAndId.bind(store),
+      create: store.create.bind(store),
+      update: async () => ({ outcome: "revision_conflict", currentRevision: 2 }),
+      duplicate: store.duplicate.bind(store)
+    };
+
+    await expect(
+      updateProduct({
+        store: racingStore,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        expectedRevision: 1,
+        patch: { title: "Losing update" },
+        now: new Date("2026-07-02T00:30:00.000Z")
+      })
+    ).rejects.toMatchObject({
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 1,
+      currentRevision: 2
+    });
+  });
+
+  it.each([
+    ["deliveryFormats", { deliveryFormats: ["chat", "file"] }],
+    ["requiredClientData", { requiredClientData: ["question"] }],
+    ["methods", { methods: ["natal"] }],
+    [
+      "modifiers",
+      {
+        modifiers: [
+          {
+            label: "Extra",
+            priceMinor: 100,
+            kind: "fixed",
+            isEnabled: true,
+            createsArtifact: false,
+            order: 10
+          }
+        ]
+      }
+    ]
+  ] as const)("rejects AstroDiary %s outside the fixed contract", async (_path, patch) => {
+    const store = new InMemoryProductStore();
+
+    await expect(
+      createProduct({
+        store,
+        input: {
+          ...baseInput,
+          type: "sub",
+          title: "Астродневник",
+          executionMode: "async",
+          paymentModel: "sub",
+          durationMinutes: null,
+          durationLabel: null,
+          introVideoUrl: null,
+          slaLabel: null,
+          subscriptionPeriod: "month",
+          deliveryFormats: ["chat", "audio", "file"],
+          requiredClientData: [],
+          methods: [],
+          accessGrants: ["journal"],
+          modifiers: [],
+          astroDiaryConfig: {
+            reflectionCyclesPerPeriod: 12,
+            responseSlaWorkingDays: 2,
+            clientResponseWindowCalendarDays: 7,
+            workingWeekdays: [1, 2, 3, 4, 5],
+            serviceTimezone: "Europe/Moscow"
+          },
+          ...patch
+        },
+        now
+      })
+    ).rejects.toBeInstanceOf(ProductValidationError);
+  });
+
+  it("creates configured AstroDiary drafts but rejects activation before fulfillment readiness", async () => {
+    const store = new InMemoryProductStore();
+    const product = await createProduct({
+      store,
+      input: {
+        ...baseInput,
+        type: "sub",
+        title: "Астродневник",
+        executionMode: "async",
+        paymentModel: "sub",
+        durationMinutes: null,
+        durationLabel: null,
+        subscriptionPeriod: "month",
+        deliveryFormats: ["chat", "audio", "file"],
+        requiredClientData: [],
+        methods: [],
+        accessGrants: ["journal"],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 12,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        }
+      },
+      now
+    });
+
+    expect(product.astroDiaryConfig).toMatchObject({ reflectionCyclesPerPeriod: 12 });
+    await expect(
+      publishProduct({
+        store,
+        ownerUserId: "owner-1",
+        productId: product.id,
+        expectedRevision: 1,
+        now: new Date("2026-07-02T00:10:00.000Z")
+      })
+    ).rejects.toThrow("AstroDiary subscription fulfillment is not ready");
   });
 
   it("lists active product templates by locale", async () => {

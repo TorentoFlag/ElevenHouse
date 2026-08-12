@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   varchar
@@ -80,6 +81,12 @@ export const orders = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
+    unique("orders_exact_subscription_identity_unique").on(
+      table.id,
+      table.clientUserId,
+      table.astrologerUserId,
+      table.productId
+    ),
     foreignKey({
       columns: [table.tariffSeriesId, table.tariffVersion, table.tariffVersionDigest],
       foreignColumns: [

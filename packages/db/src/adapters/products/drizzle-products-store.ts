@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   Product,
   ProductAccessGrant,
@@ -13,6 +13,7 @@ import type {
   ProductListResult,
   ProductStore,
   ProductStoreCreateInput,
+  ProductStoreUpdateOutcome,
   ProductStoreUpdatePatch
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
@@ -26,6 +27,10 @@ import {
   products
 } from "../../schema";
 import { insertReturningOne } from "../../shared";
+import {
+  fromAstroDiaryProductConfigColumns,
+  toAstroDiaryProductConfigColumns
+} from "./astro-diary-product-config.persistence";
 
 type ProductRow = typeof products.$inferSelect;
 type ProductInsertRow = typeof products.$inferInsert;
@@ -74,20 +79,73 @@ export function createDrizzleProductStore(database: ElevenHouseDatabase): Produc
       database.transaction(async (transaction) => {
         const [row] = await transaction
           .update(products)
-          .set(toProductUpdateRow(input.patch, input.now))
-          .where(and(eq(products.ownerUserId, input.ownerUserId), eq(products.id, input.productId)))
+          .set({
+            ...toProductUpdateRow(input.patch, input.now),
+            revision: sql`${products.revision} + 1`
+          })
+          .where(
+            and(
+              eq(products.ownerUserId, input.ownerUserId),
+              eq(products.id, input.productId),
+              eq(products.revision, input.expectedRevision)
+            )
+          )
           .returning();
-        if (!row) return null;
+        if (!row) {
+          return readFailedProductMutationOutcome(
+            transaction,
+            input.ownerUserId,
+            input.productId
+          );
+        }
 
         if (hasChildPatch(input.patch)) {
           await replaceChildren(transaction, row.id, input.patch);
         }
 
         const [product] = await hydrateProducts(transaction, [row]);
-        return product ?? null;
+        if (!product) {
+          throw new Error("Expected updated product to hydrate");
+        }
+        return { outcome: "updated", product };
       }),
-    duplicate: (input) => database.transaction((transaction) => insertProduct(transaction, input))
+    duplicate: (input) =>
+      database.transaction(async (transaction) => {
+        const [source] = await transaction
+          .select({ id: products.id, revision: products.revision })
+          .from(products)
+          .where(
+            and(
+              eq(products.ownerUserId, input.ownerUserId),
+              eq(products.id, input.sourceProductId)
+            )
+          )
+          .for("share")
+          .limit(1);
+        if (!source) return { outcome: "not_found" };
+        if (source.revision !== input.expectedSourceRevision) {
+          return { outcome: "revision_conflict", currentRevision: source.revision };
+        }
+
+        return { outcome: "duplicated", product: await insertProduct(transaction, input) };
+      })
   };
+}
+
+async function readFailedProductMutationOutcome(
+  database: ProductDatabase,
+  ownerUserId: string,
+  productId: string
+): Promise<Extract<ProductStoreUpdateOutcome, { readonly outcome: "not_found" | "revision_conflict" }>> {
+  const [current] = await database
+    .select({ revision: products.revision })
+    .from(products)
+    .where(and(eq(products.ownerUserId, ownerUserId), eq(products.id, productId)))
+    .limit(1);
+
+  return current
+    ? { outcome: "revision_conflict", currentRevision: current.revision }
+    : { outcome: "not_found" };
 }
 
 async function insertProduct(
@@ -133,7 +191,9 @@ async function replaceChildren(
     await insertAccessGrants(database, productId, patch.accessGrants);
   }
   if (patch.includedItems !== undefined) {
-    await database.delete(productIncludedItems).where(eq(productIncludedItems.productId, productId));
+    await database
+      .delete(productIncludedItems)
+      .where(eq(productIncludedItems.productId, productId));
     await insertIncludedItems(database, productId, patch.includedItems);
   }
   if (patch.modifiers !== undefined) {
@@ -300,6 +360,7 @@ async function hydrateProducts(
     ownerUserId: row.ownerUserId,
     type: row.type as Product["type"],
     status: row.status as Product["status"],
+    revision: row.revision,
     title: row.title,
     subtitle: row.subtitle,
     priceMinor: row.priceMinor,
@@ -322,6 +383,7 @@ async function hydrateProducts(
       []) as Product["requiredClientData"],
     methods: (methodsByProduct.get(row.id) ?? []) as Product["methods"],
     accessGrants: (accessGrantsByProduct.get(row.id) ?? []) as Product["accessGrants"],
+    astroDiaryConfig: fromAstroDiaryProductConfigColumns(row),
     includedItems: includedItemsByProduct.get(row.id) ?? [],
     modifiers: modifiersByProduct.get(row.id) ?? [],
     createdAt: toIsoString(row.createdAt),
@@ -381,6 +443,7 @@ function toProductInsertRow(input: ProductStoreCreateInput): ProductInsertRow {
     trialDays: input.trialDays,
     participantMode: input.participantMode,
     groupSize: input.groupSize,
+    ...toAstroDiaryProductConfigColumns(input.astroDiaryConfig),
     createdAt: new Date(input.now),
     updatedAt: new Date(input.now)
   };
@@ -407,6 +470,9 @@ function toProductUpdateRow(patch: ProductStoreUpdatePatch, now: string): Produc
     trialDays: patch.trialDays,
     participantMode: patch.participantMode,
     groupSize: patch.groupSize,
+    ...(patch.astroDiaryConfig === undefined
+      ? {}
+      : toAstroDiaryProductConfigColumns(patch.astroDiaryConfig)),
     updatedAt: new Date(now)
   });
 }

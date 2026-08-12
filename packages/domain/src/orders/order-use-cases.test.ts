@@ -6,6 +6,7 @@ import {
   OrderBookingHoldRequiredError,
   OrderProductFiscalLabelInvalidError,
   OrderProductNotAvailableError,
+  OrderProductRevisionConflictError,
   createPlatformTariffDraft,
   createOrder,
   type ClientAstrologerRelationshipReader,
@@ -28,21 +29,21 @@ const bookingId = "99999999-9999-4999-8999-999999999999";
 const now = new Date("2026-07-24T10:00:00.000Z");
 const tariffAuthorityVersion = {
   ...createPlatformTariffDraft({
-  tariffSeriesId: "pro",
-  version: 1,
-  name: "Pro",
-  tagline: "For active practice",
-  monthlyPriceMinor: 2_500,
-  yearlyPriceMinor: 25_000,
-  monthlyRecurringFrequencyDays: 31,
-  yearlyRecurringFrequencyDays: 365,
-  clientSaleCommissionBps: 800,
-  seatsLimit: 1,
-  bookingsLimit: null,
-  aiRequestsLimit: null,
-  automationLimit: null,
-  isPopular: false,
-  displayOrder: 0,
+    tariffSeriesId: "pro",
+    version: 1,
+    name: "Pro",
+    tagline: "For active practice",
+    monthlyPriceMinor: 2_500,
+    yearlyPriceMinor: 25_000,
+    monthlyRecurringFrequencyDays: 31,
+    yearlyRecurringFrequencyDays: 365,
+    clientSaleCommissionBps: 800,
+    seatsLimit: 1,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 0,
     features: ["products"]
   }),
   lifecycle: "published" as const
@@ -57,7 +58,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now,
         idGenerator: () => orderId
@@ -106,7 +107,86 @@ describe("createOrder", () => {
       financePolicyReserveBps: 0,
       financePolicyReserveReleaseDelayDays: 0,
       tariffCommissionBps: 800,
-      financePolicyProviderSettlementRequired: true
+      financePolicyProviderSettlementRequired: true,
+      purchasePurpose: { kind: "standard", expectedProductRevision: 1 }
+    });
+  });
+
+  it("rejects a stale product revision before creating an order", async () => {
+    const harness = createHarness();
+
+    await expect(
+      createOrder({
+        ...harness.dependencies,
+        clientUserId,
+        request: { astrologerUserId, productId, expectedProductRevision: 2, directLinkIntentId },
+        idempotencyKey: "order-create:client:stale-product-1",
+        now
+      })
+    ).rejects.toEqual(new OrderProductRevisionConflictError(2, 1));
+    expect(harness.orderStore.createdInputs).toHaveLength(0);
+  });
+
+  it("carries the exact accepted AstroDiary product and relationship into the order transaction", async () => {
+    const diary = {
+      ...activeProduct,
+      type: "sub",
+      paymentModel: "sub",
+      subscriptionPeriod: "month",
+      durationMinutes: null,
+      deliveryFormats: ["chat", "audio", "file"],
+      accessGrants: ["journal"],
+      astroDiaryConfig: {
+        reflectionCyclesPerPeriod: 6,
+        responseSlaWorkingDays: 2,
+        clientResponseWindowCalendarDays: 5,
+        workingWeekdays: [1, 2, 3, 4, 5],
+        serviceTimezone: "Europe/Moscow"
+      }
+    } satisfies Product;
+    const harness = createHarness({ product: diary });
+
+    await createOrder({
+      ...harness.dependencies,
+      clientUserId,
+      request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
+      idempotencyKey: "order-create:client:astro-diary-1",
+      now,
+      idGenerator: () => orderId
+    });
+
+    expect(harness.orderStore.createdInputs[0]?.purchasePurpose).toEqual({
+      kind: "astro_diary_subscription",
+      expectedProductRevision: 1,
+      acceptedProduct: {
+        productId,
+        revision: 1,
+        ownerUserId: astrologerUserId,
+        status: "active",
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        participantMode: "solo",
+        priceMinor: 500_00,
+        currency: "RUB",
+        cadence: "month",
+        trialDays: null,
+        groupSize: null,
+        packageSessionCount: null,
+        accessGrants: ["journal"],
+        deliveryFormats: ["chat", "audio", "file"],
+        requiredClientData: [],
+        methods: [],
+        modifiers: [],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 6,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 5,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        }
+      },
+      acceptedRelationship: { clientUserId, astrologerUserId, status: "active" }
     });
   });
 
@@ -125,7 +205,7 @@ describe("createOrder", () => {
     await createOrder({
       ...harness.dependencies,
       clientUserId,
-      request: { astrologerUserId, productId, directLinkIntentId },
+      request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
       idempotencyKey: "order-create:client:risk-override-1",
       now,
       idGenerator: () => orderId
@@ -151,7 +231,12 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId: null },
+        request: {
+          astrologerUserId,
+          productId,
+          expectedProductRevision: 1,
+          directLinkIntentId: null
+        },
         idempotencyKey: "order-create:client:request-1",
         now,
         idGenerator: () => orderId
@@ -173,7 +258,13 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId, bookingId },
+        request: {
+          astrologerUserId,
+          productId,
+          expectedProductRevision: 1,
+          directLinkIntentId,
+          bookingId
+        },
         idempotencyKey: "order-create:client:booking-1",
         now,
         idGenerator: () => orderId
@@ -199,7 +290,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:live-without-hold-1",
         now
       })
@@ -215,7 +306,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -229,7 +320,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -243,7 +334,7 @@ describe("createOrder", () => {
       createOrder({
         ...missing.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -254,7 +345,7 @@ describe("createOrder", () => {
       createOrder({
         ...inactive.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -267,7 +358,7 @@ describe("createOrder", () => {
       createOrder({
         ...freeProduct.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -281,7 +372,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -295,7 +386,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:no-tariff-1",
         now
       })
@@ -313,7 +404,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:products-entitlement-1",
         now
       })
@@ -329,7 +420,7 @@ describe("createOrder", () => {
       createOrder({
         ...harness.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:bad-fiscal-label-1",
         now
       })
@@ -343,7 +434,7 @@ describe("createOrder", () => {
       createOrder({
         ...replay.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -355,7 +446,7 @@ describe("createOrder", () => {
       createOrder({
         ...conflict.dependencies,
         clientUserId,
-        request: { astrologerUserId, productId, directLinkIntentId },
+        request: { astrologerUserId, productId, expectedProductRevision: 1, directLinkIntentId },
         idempotencyKey: "order-create:client:request-1",
         now
       })
@@ -366,6 +457,7 @@ describe("createOrder", () => {
 const activeProduct = {
   id: productId,
   ownerUserId: astrologerUserId,
+  revision: 1,
   type: "async",
   status: "active",
   title: "Natal reading",
@@ -389,21 +481,24 @@ const activeProduct = {
   requiredClientData: [],
   methods: [],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [],
   modifiers: [],
   createdAt: now.toISOString(),
   updatedAt: now.toISOString()
 } satisfies Product;
 
-function createHarness(options: {
-  readonly hasRelationship?: boolean;
-  readonly product?: Product | null;
-  readonly hasPolicy?: boolean;
-  readonly hasTariffCommission?: boolean;
-  readonly effectivePolicy?: EffectiveFinancePolicy;
-  readonly replay?: boolean;
-  readonly conflict?: boolean;
-} = {}) {
+function createHarness(
+  options: {
+    readonly hasRelationship?: boolean;
+    readonly product?: Product | null;
+    readonly hasPolicy?: boolean;
+    readonly hasTariffCommission?: boolean;
+    readonly effectivePolicy?: EffectiveFinancePolicy;
+    readonly replay?: boolean;
+    readonly conflict?: boolean;
+  } = {}
+) {
   const relationshipReader: ClientAstrologerRelationshipReader = {
     hasActiveRelationship: vi.fn(async () => options.hasRelationship ?? true)
   };
@@ -418,18 +513,22 @@ function createHarness(options: {
     )
   } satisfies Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer">;
   const tariffAuthorityStore = {
-    findCurrentSubscription: vi.fn(async () => options.hasTariffCommission === false ? null : ({
-      subscriptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      ownerUserId: astrologerUserId,
-      tariffSeriesId: "pro",
-      tariffVersion: 1,
-      tariffVersionDigest: tariffDigest,
-      commissionBpsSnapshot: 800,
-      version: 1,
-      state: "active" as const,
-      startsAt: "2026-07-01T00:00:00.000Z",
-      endsAt: "2026-08-01T00:00:00.000Z"
-    })),
+    findCurrentSubscription: vi.fn(async () =>
+      options.hasTariffCommission === false
+        ? null
+        : {
+            subscriptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            ownerUserId: astrologerUserId,
+            tariffSeriesId: "pro",
+            tariffVersion: 1,
+            tariffVersionDigest: tariffDigest,
+            commissionBpsSnapshot: 800,
+            version: 1,
+            state: "active" as const,
+            startsAt: "2026-07-01T00:00:00.000Z",
+            endsAt: "2026-08-01T00:00:00.000Z"
+          }
+    ),
     findTariffVersion: vi.fn(async () => tariffAuthorityVersion),
     findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
   };
@@ -449,10 +548,12 @@ function createHarness(options: {
   };
 }
 
-function createOrderStore(options: {
-  readonly replay?: boolean;
-  readonly conflict?: boolean;
-} = {}): FinanceOrderStore & { readonly createdInputs: CreateFinanceOrderRecordInput[] } {
+function createOrderStore(
+  options: {
+    readonly replay?: boolean;
+    readonly conflict?: boolean;
+  } = {}
+): FinanceOrderStore & { readonly createdInputs: CreateFinanceOrderRecordInput[] } {
   const createdInputs: CreateFinanceOrderRecordInput[] = [];
   return {
     createdInputs,
@@ -461,9 +562,7 @@ function createOrderStore(options: {
       if (options.replay) {
         return {
           kind: "replayed" as const,
-          value: toOrder(
-            createOrderRecordInput({ id: "77777777-7777-4777-8777-777777777777" })
-          )
+          value: toOrder(createOrderRecordInput({ id: "77777777-7777-4777-8777-777777777777" }))
         };
       }
 
@@ -501,6 +600,7 @@ function createOrderRecordInput(
     astrologerUserId,
     productId,
     productTitleSnapshot: "Индивидуальная консультация",
+    purchasePurpose: { kind: "standard", expectedProductRevision: 1 },
     directLinkIntentId,
     bookingId: null,
     status: "pending_payment",

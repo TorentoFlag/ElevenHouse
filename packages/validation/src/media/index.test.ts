@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  astroDiaryMediaPurposeUploadLimits,
+  astroDiaryMediaUploadPurposeValues,
   mediaAudioMimeTypeValues,
+  mediaDocumentMimeTypeValues,
   mediaImageMimeTypeValues,
   mediaPurposeUploadLimits,
   mediaPurposeStorageLimits,
@@ -19,7 +22,10 @@ describe("media validation values", () => {
       "verification_identity_document",
       "verification_qualification_document",
       "calculation_report_pdf",
-      "messaging_attachment"
+      "messaging_attachment",
+      "astro_diary_attachment",
+      "astro_diary_voice",
+      "astro_diary_export_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -30,6 +36,46 @@ describe("media validation values", () => {
       "image/avif"
     ]);
     expect(mediaAudioMimeTypeValues).toEqual(["audio/ogg", "audio/mpeg", "audio/mp4"]);
+  });
+
+  it("defines separate exact private AstroDiary browser-upload policies", () => {
+    expect(astroDiaryMediaUploadPurposeValues).toEqual([
+      "astro_diary_attachment",
+      "astro_diary_voice"
+    ]);
+    expect(astroDiaryMediaPurposeUploadLimits).toEqual({
+      astro_diary_attachment: {
+        maxSizeBytes: 20 * 1024 * 1024,
+        allowedMimeTypes: [...mediaImageMimeTypeValues, ...mediaDocumentMimeTypeValues],
+        visibility: "private"
+      },
+      astro_diary_voice: {
+        maxSizeBytes: 20 * 1024 * 1024,
+        allowedMimeTypes: mediaAudioMimeTypeValues,
+        visibility: "private"
+      }
+    });
+  });
+
+  it("does not widen generic browser uploads or worker-created Messaging media", () => {
+    expect(mediaUploadPurposeValues).not.toContain("astro_diary_attachment");
+    expect(mediaUploadPurposeValues).not.toContain("astro_diary_voice");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("astro_diary_attachment");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("astro_diary_voice");
+    expect(mediaUploadPurposeValues).not.toContain("astro_diary_export_pdf");
+    expect(astroDiaryMediaUploadPurposeValues).not.toContain("astro_diary_export_pdf");
+    expect(mediaPurposeUploadLimits).not.toHaveProperty("astro_diary_export_pdf");
+    expect(astroDiaryMediaPurposeUploadLimits).not.toHaveProperty("astro_diary_export_pdf");
+    expect(mediaPurposeStorageLimits.astro_diary_export_pdf).toEqual({
+      maxSizeBytes: 20 * 1024 * 1024,
+      allowedMimeTypes: mediaDocumentMimeTypeValues,
+      visibility: "private"
+    });
+    expect(mediaPurposeStorageLimits.messaging_attachment).toEqual({
+      maxSizeBytes: 20_000_000,
+      allowedMimeTypes: [...mediaAudioMimeTypeValues, ...mediaImageMimeTypeValues, "video/mp4"],
+      visibility: "private"
+    });
   });
 
   it("keeps generated worker media out of the browser-upload vocabulary", () => {

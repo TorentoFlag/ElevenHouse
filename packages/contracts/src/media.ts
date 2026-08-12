@@ -1,4 +1,6 @@
 import {
+  astroDiaryMediaPurposeUploadLimits,
+  astroDiaryMediaUploadPurposeValues,
   mediaImageMimeTypeValues,
   mediaMimeTypeValues,
   mediaPurposeUploadLimits,
@@ -14,13 +16,19 @@ const uuidSchema = z.string().uuid();
 const dateTimeSchema = z.string().datetime();
 const uploadHeaderNameSchema = z.string().trim().min(1).max(100).toLowerCase();
 const uploadHeaderValueSchema = z.string().trim().min(1).max(500);
-const checksumSha256Schema = z.string().trim().regex(/^[a-f0-9]{64}$/);
+const checksumSha256Schema = z
+  .string()
+  .trim()
+  .regex(/^[a-f0-9]{64}$/);
 
 export const mediaPurposeSchema = z.enum(mediaPurposeValues);
 export type MediaPurpose = z.infer<typeof mediaPurposeSchema>;
 
 export const mediaUploadPurposeSchema = z.enum(mediaUploadPurposeValues);
 export type MediaUploadPurpose = z.infer<typeof mediaUploadPurposeSchema>;
+
+export const astroDiaryMediaUploadPurposeSchema = z.enum(astroDiaryMediaUploadPurposeValues);
+export type AstroDiaryMediaUploadPurpose = z.infer<typeof astroDiaryMediaUploadPurposeSchema>;
 
 export const mediaStatusSchema = z.enum(mediaStatusValues);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
@@ -64,8 +72,37 @@ export const createMediaUploadIntentRequestSchema = z
       });
     }
   });
-export type CreateMediaUploadIntentRequest = z.infer<
-  typeof createMediaUploadIntentRequestSchema
+export type CreateMediaUploadIntentRequest = z.infer<typeof createMediaUploadIntentRequestSchema>;
+
+export const createAstroDiaryMediaUploadIntentRequestSchema = z
+  .object({
+    purpose: astroDiaryMediaUploadPurposeSchema,
+    fileName: nonEmptyStringSchema.max(255),
+    mimeType: mediaMimeTypeSchema,
+    sizeBytes: z.number().int().positive()
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const limit = astroDiaryMediaPurposeUploadLimits[value.purpose];
+
+    if (!(limit.allowedMimeTypes as readonly string[]).includes(value.mimeType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mimeType"],
+        message: "Unsupported AstroDiary media MIME type for purpose"
+      });
+    }
+
+    if (value.sizeBytes > limit.maxSizeBytes) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sizeBytes"],
+        message: "AstroDiary media file exceeds purpose upload limit"
+      });
+    }
+  });
+export type CreateAstroDiaryMediaUploadIntentRequest = z.infer<
+  typeof createAstroDiaryMediaUploadIntentRequestSchema
 >;
 
 export const mediaUploadTargetSchema = z

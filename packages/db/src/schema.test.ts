@@ -427,7 +427,10 @@ describe("database account schema constants", () => {
       "verification_identity_document",
       "verification_qualification_document",
       "calculation_report_pdf",
-      "messaging_attachment"
+      "messaging_attachment",
+      "astro_diary_attachment",
+      "astro_diary_voice",
+      "astro_diary_export_pdf"
     ]);
     expect(mediaStatusValues).toEqual(["uploading", "processing", "ready", "failed", "deleted"]);
     expect(mediaVisibilityValues).toEqual(["public", "private"]);
@@ -468,6 +471,9 @@ describe("database account schema constants", () => {
     expect(migration).toContain('CONSTRAINT "media_assets_visibility_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_mime_type_check"');
     expect(migration).toContain("messaging_attachment");
+    expect(migration).toContain("astro_diary_attachment");
+    expect(migration).toContain("astro_diary_voice");
+    expect(migration).toContain("astro_diary_export_pdf");
     expect(migration).toContain("audio/ogg");
     expect(migration).toContain('CONSTRAINT "media_assets_size_bytes_check"');
     expect(migration).toContain('CONSTRAINT "media_assets_ready_size_bytes_check"');
@@ -580,7 +586,9 @@ describe("database account schema constants", () => {
       "login_succeeded",
       "login_failed",
       "logout_succeeded",
-      "session_revoked"
+      "session_revoked",
+      "refresh_succeeded",
+      "refresh_token_reuse_detected"
     ]);
   });
 });

@@ -95,7 +95,9 @@ export class ClientCommerceService {
   }
 
   private async requireRelationship(clientUserId: string, astrologerUserId: string): Promise<void> {
-    if (!(await this.relationshipReader.hasActiveRelationship({ clientUserId, astrologerUserId }))) {
+    if (
+      !(await this.relationshipReader.hasActiveRelationship({ clientUserId, astrologerUserId }))
+    ) {
       throw new NotFoundException("Astrologer relationship was not found");
     }
   }
@@ -128,6 +130,7 @@ export class ClientCommerceService {
 function toPurchaseOption(product: Product) {
   return {
     id: product.id,
+    revision: product.revision,
     title: product.title,
     subtitle: product.subtitle,
     type: product.type,

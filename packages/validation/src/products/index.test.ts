@@ -3,6 +3,9 @@ import {
   collectProductCreateInvariantIssues,
   collectProductModifierInvariantIssues,
   collectProductUpdateInvariantIssues,
+  astroDiaryClientResponseWindowCalendarDaysBounds,
+  astroDiaryReflectionCyclesPerPeriodBounds,
+  astroDiaryResponseSlaWorkingDaysBounds,
   productPaymentModelValues,
   productStatusValues,
   productTemplateLocaleValues,
@@ -15,6 +18,9 @@ describe("product validation taxonomy", () => {
     expect(productPaymentModelValues).toEqual(["once", "pack", "sub", "free"]);
     expect(productTemplateStatusValues).toEqual(["active", "archived"]);
     expect(productTemplateLocaleValues).toEqual(["ru", "en"]);
+    expect(astroDiaryReflectionCyclesPerPeriodBounds).toEqual({ min: 1, max: 366 });
+    expect(astroDiaryResponseSlaWorkingDaysBounds).toEqual({ min: 1, max: 30 });
+    expect(astroDiaryClientResponseWindowCalendarDaysBounds).toEqual({ min: 1, max: 90 });
   });
 });
 
@@ -116,6 +122,172 @@ describe("product invariant validation", () => {
         message: "Course products require course access grant"
       }
     ]);
+  });
+
+  it("accepts only the fixed AstroDiary product shape with complete configuration", () => {
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        deliveryFormats: ["chat", "audio", "file"],
+        requiredClientData: [],
+        methods: [],
+        accessGrants: ["journal"],
+        modifiers: [],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 12,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        }
+      })
+    ).toEqual([]);
+
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        deliveryFormats: ["file", "chat", "audio"],
+        requiredClientData: [],
+        methods: [],
+        accessGrants: ["journal"],
+        modifiers: [],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 12,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        }
+      })
+    ).toEqual([]);
+
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "group",
+        accessGrants: ["journal"],
+        astroDiaryConfig: null
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          path: ["participantMode"],
+          message: "AstroDiary products require solo participant mode"
+        },
+        {
+          path: ["astroDiaryConfig"],
+          message: "AstroDiary products require complete configuration"
+        }
+      ])
+    );
+  });
+
+  it.each([
+    ["deliveryFormats", { deliveryFormats: ["chat", "file"] }],
+    ["requiredClientData", { requiredClientData: ["question"] }],
+    ["methods", { methods: ["natal"] }],
+    [
+      "modifiers",
+      {
+        modifiers: [
+          {
+            label: "Extra",
+            priceMinor: 100,
+            kind: "fixed",
+            isEnabled: true,
+            createsArtifact: false,
+            order: 10
+          }
+        ]
+      }
+    ]
+  ] as const)("rejects AstroDiary %s outside the fixed contract", (path, patch) => {
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        deliveryFormats: ["chat", "audio", "file"],
+        requiredClientData: [],
+        methods: [],
+        accessGrants: ["journal"],
+        modifiers: [],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 12,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        },
+        ...patch
+      })
+    ).toContainEqual(expect.objectContaining({ path: [path] }));
+  });
+
+  it("rejects AstroDiary configuration without the journal grant", () => {
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        accessGrants: ["content"],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 12,
+          responseSlaWorkingDays: 2,
+          clientResponseWindowCalendarDays: 7,
+          workingWeekdays: [1, 2, 3, 4, 5],
+          serviceTimezone: "Europe/Moscow"
+        }
+      })
+    ).toContainEqual({
+      path: ["astroDiaryConfig"],
+      message: "Only AstroDiary products may define AstroDiary configuration"
+    });
+  });
+
+  it("collects AstroDiary configuration bounds, weekday and timezone issues", () => {
+    expect(
+      collectProductCreateInvariantIssues({
+        type: "sub",
+        paymentModel: "sub",
+        executionMode: "async",
+        subscriptionPeriod: "month",
+        participantMode: "solo",
+        accessGrants: ["journal"],
+        astroDiaryConfig: {
+          reflectionCyclesPerPeriod: 367,
+          responseSlaWorkingDays: 31,
+          clientResponseWindowCalendarDays: 91,
+          workingWeekdays: [1, 1, 8],
+          serviceTimezone: "Mars/Olympus"
+        }
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: ["astroDiaryConfig", "reflectionCyclesPerPeriod"] }),
+        expect.objectContaining({ path: ["astroDiaryConfig", "responseSlaWorkingDays"] }),
+        expect.objectContaining({
+          path: ["astroDiaryConfig", "clientResponseWindowCalendarDays"]
+        }),
+        expect.objectContaining({ path: ["astroDiaryConfig", "workingWeekdays"] }),
+        expect.objectContaining({ path: ["astroDiaryConfig", "serviceTimezone"] })
+      ])
+    );
   });
 
   it("collects out-of-range percent modifier issues", () => {

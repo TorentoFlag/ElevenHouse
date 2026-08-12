@@ -26,6 +26,16 @@ export type ProductStoreUpdatePatch = ProductUpdatePatch & {
   readonly status?: ProductStatus;
 };
 
+export type ProductStoreUpdateOutcome =
+  | { readonly outcome: "updated"; readonly product: Product }
+  | { readonly outcome: "not_found" }
+  | { readonly outcome: "revision_conflict"; readonly currentRevision: number };
+
+export type ProductStoreDuplicateOutcome =
+  | { readonly outcome: "duplicated"; readonly product: Product }
+  | { readonly outcome: "not_found" }
+  | { readonly outcome: "revision_conflict"; readonly currentRevision: number };
+
 export type ProductStore = {
   readonly listByOwner: (query: {
     readonly ownerUserId: string;
@@ -41,12 +51,14 @@ export type ProductStore = {
   readonly update: (input: {
     readonly ownerUserId: string;
     readonly productId: string;
+    readonly expectedRevision: number;
     readonly patch: ProductStoreUpdatePatch;
     readonly now: string;
-  }) => Promise<Product | null>;
+  }) => Promise<ProductStoreUpdateOutcome>;
   readonly duplicate: (
     input: ProductStoreCreateInput & {
       readonly sourceProductId: string;
+      readonly expectedSourceRevision: number;
     }
-  ) => Promise<Product>;
+  ) => Promise<ProductStoreDuplicateOutcome>;
 };

@@ -274,6 +274,41 @@
       "when": 1786540225361,
       "tag": "0038_mobile_device_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786544311181,
+      "tag": "0039_astro_diary",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1786547675136,
+      "tag": "0040_smiling_thunderbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786555686820,
+      "tag": "0041_early_vision",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786560914145,
+      "tag": "0042_astro-diary-client-follow-up-transition",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1786562753658,
+      "tag": "0043_flawless_talisman",
+      "breakpoints": true
     }
   ]
 }

@@ -95,7 +95,10 @@ describe("client commerce public HTTP flow", () => {
   it("returns supported purchase options only to the linked client", async () => {
     await expect(getPurchaseOptions(authCookie())).resolves.toMatchObject({
       status: 200,
-      body: { astrologerUserId, products: [expect.objectContaining({ id: productId, priceMinor: 50_000 })] }
+      body: {
+        astrologerUserId,
+        products: [expect.objectContaining({ id: productId, priceMinor: 50_000 })]
+      }
     });
   });
 
@@ -119,37 +122,134 @@ async function getPurchaseOptions(cookie?: string) {
   return { status: response.status, body: await response.json() };
 }
 
-function authCookie(): string { return `${sessionCookieName}=${sessionToken}`; }
+function authCookie(): string {
+  return `${sessionCookieName}=${sessionToken}`;
+}
 
 function authStore(): AuthSessionAuthenticationStore {
   return {
     findByTokenHash: vi.fn(async (tokenHash: string) => ({
-      session: { id: "44444444-4444-4444-8444-444444444444", userId: clientUserId, tokenHash, status: "active" as const, createdAt: now.toISOString(), expiresAt: "2026-09-01T00:00:00.000Z" },
-      user: { id: clientUserId, status: "active" as const, createdAt: now.toISOString(), updatedAt: now.toISOString() },
-      roleAssignments: [{ id: "55555555-5555-4555-8555-555555555555", userId: clientUserId, role: "client" as const, assignedAt: now.toISOString() }]
+      session: {
+        id: "44444444-4444-4444-8444-444444444444",
+        userId: clientUserId,
+        tokenHash,
+        status: "active" as const,
+        createdAt: now.toISOString(),
+        expiresAt: "2026-09-01T00:00:00.000Z"
+      },
+      user: {
+        id: clientUserId,
+        status: "active" as const,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString()
+      },
+      roleAssignments: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          userId: clientUserId,
+          role: "client" as const,
+          assignedAt: now.toISOString()
+        }
+      ]
     }))
   };
 }
 
 function configService(): Pick<ConfigService, "getOrThrow"> {
-  return { getOrThrow: vi.fn((key: string) => {
-    if (key === "publicApi.sessionCookieName") return sessionCookieName;
-    throw new Error(`Unexpected config key: ${key}`);
-  }) };
+  return {
+    getOrThrow: vi.fn((key: string) => {
+      if (key === "publicApi.sessionCookieName") return sessionCookieName;
+      throw new Error(`Unexpected config key: ${key}`);
+    })
+  };
 }
 
 function tariffAuthority(): PlatformTariffEntitlementStore {
-  const tariff = { ...createPlatformTariffDraft({ tariffSeriesId: "pro", version: 1, name: "Pro", tagline: "Pro", monthlyPriceMinor: 2_500, yearlyPriceMinor: 25_000, monthlyRecurringFrequencyDays: 31, yearlyRecurringFrequencyDays: 365, clientSaleCommissionBps: 800, seatsLimit: 1, bookingsLimit: null, aiRequestsLimit: null, automationLimit: null, isPopular: false, displayOrder: 0, features: ["products"] }), lifecycle: "published" as const };
+  const tariff = {
+    ...createPlatformTariffDraft({
+      tariffSeriesId: "pro",
+      version: 1,
+      name: "Pro",
+      tagline: "Pro",
+      monthlyPriceMinor: 2_500,
+      yearlyPriceMinor: 25_000,
+      monthlyRecurringFrequencyDays: 31,
+      yearlyRecurringFrequencyDays: 365,
+      clientSaleCommissionBps: 800,
+      seatsLimit: 1,
+      bookingsLimit: null,
+      aiRequestsLimit: null,
+      automationLimit: null,
+      isPopular: false,
+      displayOrder: 0,
+      features: ["products"]
+    }),
+    lifecycle: "published" as const
+  };
   return {
-    findCurrentSubscription: vi.fn(async () => ({ subscriptionId: "66666666-6666-4666-8666-666666666666", ownerUserId: astrologerUserId, tariffSeriesId: tariff.tariffSeriesId, tariffVersion: tariff.version, tariffVersionDigest: tariff.canonicalDigest, commissionBpsSnapshot: tariff.clientSaleCommissionBps, version: 1, state: "active" as const, startsAt: "2026-08-01T00:00:00.000Z", endsAt: "2026-09-01T00:00:00.000Z" })),
-    findTariffVersion: vi.fn(async () => tariff), findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
+    findCurrentSubscription: vi.fn(async () => ({
+      subscriptionId: "66666666-6666-4666-8666-666666666666",
+      ownerUserId: astrologerUserId,
+      tariffSeriesId: tariff.tariffSeriesId,
+      tariffVersion: tariff.version,
+      tariffVersionDigest: tariff.canonicalDigest,
+      commissionBpsSnapshot: tariff.clientSaleCommissionBps,
+      version: 1,
+      state: "active" as const,
+      startsAt: "2026-08-01T00:00:00.000Z",
+      endsAt: "2026-09-01T00:00:00.000Z"
+    })),
+    findTariffVersion: vi.fn(async () => tariff),
+    findLatestHistoricalCapabilityGrant: vi.fn(async () => null)
   };
 }
 
 function financePolicies(): Pick<FinancePolicyStore, "findEffectivePolicyForAstrologer"> {
-  return { findEffectivePolicyForAstrologer: vi.fn(async () => ({ policyId: "77777777-7777-4777-8777-777777777777", policyVersion: 1, riskTier: "standard" as const, baseRiskTier: "standard" as const, profile: null, holdDurationHours: 48, reserveBps: 0, reserveReleaseDelayDays: 0, providerSettlementRequired: true })) };
+  return {
+    findEffectivePolicyForAstrologer: vi.fn(async () => ({
+      policyId: "77777777-7777-4777-8777-777777777777",
+      policyVersion: 1,
+      riskTier: "standard" as const,
+      baseRiskTier: "standard" as const,
+      profile: null,
+      holdDurationHours: 48,
+      reserveBps: 0,
+      reserveReleaseDelayDays: 0,
+      providerSettlementRequired: true
+    }))
+  };
 }
 
 const activeProduct: Product = {
-  id: productId, ownerUserId: astrologerUserId, type: "single", status: "active", title: "Natal reading", subtitle: null, priceMinor: 50_000, currency: "RUB", coverMediaId: null, introVideoUrl: null, executionMode: "async", paymentModel: "once", durationMinutes: null, durationLabel: null, slaLabel: null, packageSessionCount: null, packageDiscountPercent: null, subscriptionPeriod: null, trialDays: null, participantMode: "solo", groupSize: null, deliveryFormats: ["text"], requiredClientData: [], methods: [], accessGrants: [], includedItems: [], modifiers: [], createdAt: now.toISOString(), updatedAt: now.toISOString()
+  id: productId,
+  revision: 1,
+  ownerUserId: astrologerUserId,
+  type: "single",
+  status: "active",
+  title: "Natal reading",
+  subtitle: null,
+  priceMinor: 50_000,
+  currency: "RUB",
+  coverMediaId: null,
+  introVideoUrl: null,
+  executionMode: "async",
+  paymentModel: "once",
+  durationMinutes: null,
+  durationLabel: null,
+  slaLabel: null,
+  packageSessionCount: null,
+  packageDiscountPercent: null,
+  subscriptionPeriod: null,
+  trialDays: null,
+  participantMode: "solo",
+  groupSize: null,
+  deliveryFormats: ["text"],
+  requiredClientData: [],
+  methods: [],
+  accessGrants: [],
+  astroDiaryConfig: null,
+  includedItems: [],
+  modifiers: [],
+  createdAt: now.toISOString(),
+  updatedAt: now.toISOString()
 };

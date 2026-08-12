@@ -36,6 +36,7 @@ export type CreateOrderUseCaseInput = {
 export type CreateOrderRequestInput = {
   readonly astrologerUserId: string;
   readonly productId: string;
+  readonly expectedProductRevision: number;
   readonly directLinkIntentId: string | null;
   readonly bookingId?: string | null;
   readonly clientBirthDataId?: string | null;
@@ -56,6 +57,27 @@ export class OrderProductNotAvailableError extends Error {
   constructor() {
     super("Product is not available for order creation");
     this.name = "OrderProductNotAvailableError";
+  }
+}
+
+export class OrderProductRevisionConflictError extends Error {
+  readonly code = "order_product_revision_conflict" as const;
+
+  constructor(
+    readonly expectedRevision: number,
+    readonly currentRevision: number
+  ) {
+    super("Product revision changed before order creation");
+    this.name = "OrderProductRevisionConflictError";
+  }
+}
+
+export class OrderPurchaseAuthorityChangedError extends Error {
+  readonly code = "order_purchase_authority_changed" as const;
+
+  constructor() {
+    super("Product or relationship authority changed before order creation");
+    this.name = "OrderPurchaseAuthorityChangedError";
   }
 }
 
@@ -120,6 +142,12 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
     async () => {
       await requireActiveRelationship(input);
       const product = await requireActiveProduct(input);
+      if (product.revision !== input.request.expectedProductRevision) {
+        throw new OrderProductRevisionConflictError(
+          input.request.expectedProductRevision,
+          product.revision
+        );
+      }
       if (product.executionMode === "live" && !input.request.bookingId) {
         throw new OrderBookingHoldRequiredError();
       }
@@ -161,6 +189,7 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
         astrologerUserId: product.ownerUserId,
         productId: input.request.productId,
         productTitleSnapshot: fiscalProductTitle(product.title),
+        purchasePurpose: orderPurchasePurpose(product, input.clientUserId),
         directLinkIntentId: input.request.directLinkIntentId,
         bookingId: input.request.bookingId ?? null,
         status: "pending_payment",
@@ -183,6 +212,49 @@ export async function createOrder(input: CreateOrderUseCaseInput): Promise<Finan
   );
 
   return result.value;
+}
+
+function orderPurchasePurpose(product: Product, clientUserId: string) {
+  if (product.astroDiaryConfig === null) {
+    return {
+      kind: "standard" as const,
+      expectedProductRevision: product.revision
+    };
+  }
+  if (product.subscriptionPeriod === null) {
+    throw new OrderProductNotAvailableError();
+  }
+  return {
+    kind: "astro_diary_subscription" as const,
+    expectedProductRevision: product.revision,
+    acceptedProduct: {
+      productId: product.id,
+      revision: product.revision,
+      ownerUserId: product.ownerUserId,
+      status: product.status,
+      type: product.type,
+      paymentModel: product.paymentModel,
+      executionMode: product.executionMode,
+      participantMode: product.participantMode,
+      priceMinor: product.priceMinor,
+      currency: product.currency,
+      cadence: product.subscriptionPeriod,
+      trialDays: product.trialDays,
+      groupSize: product.groupSize,
+      packageSessionCount: product.packageSessionCount,
+      accessGrants: product.accessGrants,
+      deliveryFormats: product.deliveryFormats,
+      requiredClientData: product.requiredClientData,
+      methods: product.methods,
+      modifiers: product.modifiers,
+      astroDiaryConfig: product.astroDiaryConfig
+    },
+    acceptedRelationship: {
+      clientUserId,
+      astrologerUserId: product.ownerUserId,
+      status: "active" as const
+    }
+  };
 }
 
 async function requireActiveProduct(input: CreateOrderUseCaseInput): Promise<Product> {
@@ -234,6 +306,7 @@ function hashCreateOrderRequest(
     clientUserId,
     astrologerUserId: request.astrologerUserId,
     productId: request.productId,
+    expectedProductRevision: request.expectedProductRevision,
     directLinkIntentId: request.directLinkIntentId,
     bookingId: request.bookingId ?? null,
     clientBirthDataId: request.clientBirthDataId ?? null

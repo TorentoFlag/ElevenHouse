@@ -8,6 +8,7 @@ export * from "./platform-billing";
 export * from "./verification";
 export * from "./astro-calendar";
 export * from "./clients";
+export * from "./client-subscriptions";
 export * from "./charts";
 export * from "./matrix";
 export * from "./scheduling";

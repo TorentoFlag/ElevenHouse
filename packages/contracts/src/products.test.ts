@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as productContracts from "./products";
 import {
   createProductFromTemplateParamsSchema,
   createProductFromTemplateRequestSchema,
@@ -6,6 +7,8 @@ import {
   duplicateProductRequestSchema,
   listProductTemplatesResponseSchema,
   listProductsQuerySchema,
+  productAstroDiaryConfigSchema,
+  productStatusTransitionRequestSchema,
   productTemplateResponseSchema,
   productResponseSchema,
   updateProductRequestSchema
@@ -50,6 +53,31 @@ const validProductRequest = {
   ]
 } as const;
 
+const validAstroDiaryRequest = {
+  ...validProductRequest,
+  type: "sub",
+  title: "Астродневник",
+  subtitle: "Личное сопровождение и вопросы для рефлексии",
+  executionMode: "async",
+  paymentModel: "sub",
+  durationMinutes: undefined,
+  durationLabel: undefined,
+  subscriptionPeriod: "month",
+  participantMode: "solo",
+  deliveryFormats: ["chat", "audio", "file"],
+  requiredClientData: [],
+  methods: [],
+  accessGrants: ["journal"],
+  modifiers: [],
+  astroDiaryConfig: {
+    reflectionCyclesPerPeriod: 12,
+    responseSlaWorkingDays: 2,
+    clientResponseWindowCalendarDays: 7,
+    workingWeekdays: [1, 2, 3, 4, 5],
+    serviceTimezone: "Europe/Moscow"
+  }
+} as const;
+
 const validProductCoverMedia = {
   id: "33333333-3333-4333-8333-333333333333",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
@@ -79,6 +107,132 @@ describe("product contracts", () => {
     expect(parsed).not.toHaveProperty("status");
   });
 
+  it("accepts a complete AstroDiary-only configuration", () => {
+    expect(productAstroDiaryConfigSchema.parse(validAstroDiaryRequest.astroDiaryConfig)).toEqual({
+      reflectionCyclesPerPeriod: 12,
+      responseSlaWorkingDays: 2,
+      clientResponseWindowCalendarDays: 7,
+      workingWeekdays: [1, 2, 3, 4, 5],
+      serviceTimezone: "Europe/Moscow"
+    });
+
+    expect(createProductRequestSchema.parse(validAstroDiaryRequest)).toMatchObject({
+      type: "sub",
+      accessGrants: ["journal"],
+      astroDiaryConfig: validAstroDiaryRequest.astroDiaryConfig
+    });
+  });
+
+  it("exports typed product mutation rejection contracts", () => {
+    const contracts = productContracts as unknown as {
+      readonly productRevisionConflictResponseSchema?: { parse(value: unknown): unknown };
+      readonly productFulfillmentNotReadyResponseSchema?: { parse(value: unknown): unknown };
+      readonly productMutationRejectionSchema?: { parse(value: unknown): unknown };
+    };
+    const revisionConflict = {
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 3,
+      currentRevision: 4
+    };
+    const fulfillmentNotReady = {
+      code: "PRODUCT_FULFILLMENT_NOT_READY",
+      message: "AstroDiary subscription fulfillment is not ready"
+    };
+
+    expect(contracts.productRevisionConflictResponseSchema).toBeDefined();
+    expect(contracts.productRevisionConflictResponseSchema?.parse(revisionConflict)).toEqual(
+      revisionConflict
+    );
+    expect(contracts.productFulfillmentNotReadyResponseSchema?.parse(fulfillmentNotReady)).toEqual(
+      fulfillmentNotReady
+    );
+    expect(contracts.productMutationRejectionSchema?.parse(revisionConflict)).toEqual(
+      revisionConflict
+    );
+    expect(contracts.productMutationRejectionSchema?.parse(fulfillmentNotReady)).toEqual(
+      fulfillmentNotReady
+    );
+  });
+
+  it("requires the exact AstroDiary messaging capabilities without paid modifiers", () => {
+    expect(
+      createProductRequestSchema.parse({
+        ...validAstroDiaryRequest,
+        deliveryFormats: ["file", "chat", "audio"]
+      }).deliveryFormats
+    ).toEqual(["file", "chat", "audio"]);
+
+    for (const patch of [
+      { deliveryFormats: ["chat", "file"] },
+      { deliveryFormats: ["chat", "audio", "file", "text"] },
+      { requiredClientData: ["question"] },
+      { methods: ["natal"] },
+      {
+        modifiers: [
+          {
+            label: "Extra",
+            priceMinor: 100,
+            kind: "fixed",
+            isEnabled: true,
+            createsArtifact: false,
+            order: 10
+          }
+        ]
+      }
+    ] as const) {
+      expect(() =>
+        createProductRequestSchema.parse({ ...validAstroDiaryRequest, ...patch })
+      ).toThrow();
+    }
+  });
+
+  it.each([
+    ["reflectionCyclesPerPeriod", { reflectionCyclesPerPeriod: 0 }],
+    ["reflectionCyclesPerPeriod", { reflectionCyclesPerPeriod: 367 }],
+    ["responseSlaWorkingDays", { responseSlaWorkingDays: 0 }],
+    ["responseSlaWorkingDays", { responseSlaWorkingDays: 31 }],
+    ["clientResponseWindowCalendarDays", { clientResponseWindowCalendarDays: 0 }],
+    ["clientResponseWindowCalendarDays", { clientResponseWindowCalendarDays: 91 }],
+    ["workingWeekdays", { workingWeekdays: [] }],
+    ["workingWeekdays", { workingWeekdays: [1, 1] }],
+    ["workingWeekdays", { workingWeekdays: [0, 1] }],
+    ["serviceTimezone", { serviceTimezone: "Mars/Olympus" }]
+  ] as const)("rejects invalid AstroDiary %s", (path, configPatch) => {
+    const result = productAstroDiaryConfigSchema.safeParse({
+      ...validAstroDiaryRequest.astroDiaryConfig,
+      ...configPatch
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path[0] === path)).toBe(true);
+    }
+  });
+
+  it("requires the fixed journal product shape and rejects diary config elsewhere", () => {
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validAstroDiaryRequest,
+        participantMode: "group",
+        groupSize: 5
+      })
+    ).toThrow("AstroDiary products require solo participant mode");
+
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validProductRequest,
+        astroDiaryConfig: validAstroDiaryRequest.astroDiaryConfig
+      })
+    ).toThrow("Only AstroDiary products may define AstroDiary configuration");
+
+    expect(() =>
+      createProductRequestSchema.parse({
+        ...validAstroDiaryRequest,
+        astroDiaryConfig: undefined
+      })
+    ).toThrow("AstroDiary products require complete configuration");
+  });
+
   it("rejects caller-controlled lifecycle status on create", () => {
     expect(() =>
       createProductRequestSchema.parse({ ...validProductRequest, status: "active" })
@@ -88,14 +242,31 @@ describe("product contracts", () => {
   it("accepts a localized duplicate title without lifecycle fields", () => {
     expect(
       duplicateProductRequestSchema.parse({
+        expectedRevision: 3,
         title: "Natal reading (copy)"
       })
     ).toEqual({
+      expectedRevision: 3,
       title: "Natal reading (copy)"
     });
 
-    expect(() => duplicateProductRequestSchema.parse({ title: "x".repeat(201) })).toThrow();
+    expect(() =>
+      duplicateProductRequestSchema.parse({ expectedRevision: 3, title: "x".repeat(201) })
+    ).toThrow();
     expect(() => duplicateProductRequestSchema.parse({ status: "active" })).toThrow();
+  });
+
+  it("requires a positive expected revision for product mutations", () => {
+    expect(updateProductRequestSchema.parse({ expectedRevision: 2, title: "Синастрия" })).toEqual({
+      expectedRevision: 2,
+      title: "Синастрия"
+    });
+    expect(productStatusTransitionRequestSchema.parse({ expectedRevision: 2 })).toEqual({
+      expectedRevision: 2
+    });
+    expect(() => updateProductRequestSchema.parse({ title: "Синастрия" })).toThrow();
+    expect(() => productStatusTransitionRequestSchema.parse({ expectedRevision: 0 })).toThrow();
+    expect(() => duplicateProductRequestSchema.parse({ title: "Копия" })).toThrow();
   });
 
   it("rejects negative money", () => {
@@ -260,6 +431,7 @@ describe("product contracts", () => {
     ).toThrow();
     expect(() =>
       updateProductRequestSchema.parse({
+        expectedRevision: 1,
         methods: ["natal", "natal"]
       })
     ).toThrow();
@@ -316,7 +488,9 @@ describe("product contracts", () => {
         id: "11111111-1111-4111-8111-111111111111",
         ownerUserId: "22222222-2222-4222-8222-222222222222",
         status: "draft",
+        revision: 1,
         ...validProductRequest,
+        astroDiaryConfig: null,
         subtitle: "Полный разбор карты",
         coverMedia: validProductCoverMedia,
         slaLabel: null,
@@ -366,17 +540,25 @@ describe("product contracts", () => {
   });
 
   it("accepts partial update requests and nullable field clearing", () => {
-    expect(updateProductRequestSchema.parse({ title: "Синастрия" })).toEqual({
+    expect(updateProductRequestSchema.parse({ expectedRevision: 1, title: "Синастрия" })).toEqual({
+      expectedRevision: 1,
       title: "Синастрия"
     });
-    expect(updateProductRequestSchema.parse({ paymentModel: "pack" })).toEqual({
-      paymentModel: "pack"
-    });
-    expect(updateProductRequestSchema.parse({ participantMode: "group" })).toEqual({
+    expect(updateProductRequestSchema.parse({ expectedRevision: 1, paymentModel: "pack" })).toEqual(
+      {
+        expectedRevision: 1,
+        paymentModel: "pack"
+      }
+    );
+    expect(
+      updateProductRequestSchema.parse({ expectedRevision: 1, participantMode: "group" })
+    ).toEqual({
+      expectedRevision: 1,
       participantMode: "group"
     });
     expect(
       updateProductRequestSchema.parse({
+        expectedRevision: 1,
         subtitle: null,
         introVideoUrl: "",
         durationMinutes: null,
@@ -385,6 +567,7 @@ describe("product contracts", () => {
         groupSize: null
       })
     ).toEqual({
+      expectedRevision: 1,
       subtitle: null,
       introVideoUrl: null,
       durationMinutes: null,
@@ -400,7 +583,9 @@ describe("product contracts", () => {
         id: "11111111-1111-4111-8111-111111111111",
         ownerUserId: "22222222-2222-4222-8222-222222222222",
         status: "draft",
+        revision: 1,
         ...validProductRequest,
+        astroDiaryConfig: null,
         coverMediaId: null,
         coverMedia: null,
         subtitle: "Полный разбор карты",
@@ -429,7 +614,9 @@ describe("product contracts", () => {
         id: "11111111-1111-4111-8111-111111111111",
         ownerUserId: "22222222-2222-4222-8222-222222222222",
         status: "draft",
+        revision: 1,
         ...validProductRequest,
+        astroDiaryConfig: null,
         subtitle: "Полный разбор карты",
         slaLabel: null,
         packageSessionCount: null,
@@ -458,7 +645,9 @@ describe("product contracts", () => {
         id: "11111111-1111-4111-8111-111111111111",
         ownerUserId: "22222222-2222-4222-8222-222222222222",
         status: "draft",
+        revision: 1,
         ...validProductRequest,
+        astroDiaryConfig: null,
         durationMinutes: undefined,
         subtitle: "Полный разбор карты",
         coverMedia: validProductCoverMedia,

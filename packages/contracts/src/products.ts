@@ -3,6 +3,11 @@ import {
   collectProductCreateInvariantIssues,
   collectProductModifierInvariantIssues,
   collectProductUpdateInvariantIssues,
+  astroDiaryClientResponseWindowCalendarDaysBounds,
+  astroDiaryReflectionCyclesPerPeriodBounds,
+  astroDiaryResponseSlaWorkingDaysBounds,
+  isValidIanaTimezone,
+  isoWeekdayValues,
   productAccessGrantValues,
   productAnalyticsStatusValues,
   productCurrencyValues,
@@ -19,8 +24,10 @@ import {
   productTemplateStatusValues,
   productTypeValues,
   type ProductAccessGrantValue,
+  type ProductAstroDiaryConfigValue,
   type ProductDeliveryFormatValue,
   type ProductExecutionModeValue,
+  type IsoWeekdayValue,
   type ProductMethodValue,
   type ProductParticipantModeValue,
   type ProductPaymentModelValue,
@@ -109,6 +116,14 @@ const optionalNonNegativeIntSchema = z.number().int().min(0).optional();
 const optionalNullablePositiveIntSchema = z.number().int().positive().nullable().optional();
 const optionalNullableNonNegativeIntSchema = z.number().int().min(0).nullable().optional();
 const orderSchema = z.number().int().min(0).max(100_000);
+const productRevisionSchema = z.number().int().positive();
+const isoWeekdaySchema = z.custom<IsoWeekdayValue>(
+  (value) =>
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    isoWeekdayValues.includes(value as IsoWeekdayValue),
+  { message: "Invalid ISO weekday" }
+);
 
 export const productStatusSchema = z.enum(productStatusValues);
 export type ProductStatus = z.infer<typeof productStatusSchema>;
@@ -164,6 +179,37 @@ export const productTemplateCodeSchema = z
   .regex(/^[a-z0-9_]{3,80}$/);
 export type ProductTemplateCode = z.infer<typeof productTemplateCodeSchema>;
 
+export const productAstroDiaryConfigSchema = z
+  .object({
+    reflectionCyclesPerPeriod: z
+      .number()
+      .int()
+      .min(astroDiaryReflectionCyclesPerPeriodBounds.min)
+      .max(astroDiaryReflectionCyclesPerPeriodBounds.max),
+    responseSlaWorkingDays: z
+      .number()
+      .int()
+      .min(astroDiaryResponseSlaWorkingDaysBounds.min)
+      .max(astroDiaryResponseSlaWorkingDaysBounds.max),
+    clientResponseWindowCalendarDays: z
+      .number()
+      .int()
+      .min(astroDiaryClientResponseWindowCalendarDaysBounds.min)
+      .max(astroDiaryClientResponseWindowCalendarDaysBounds.max),
+    workingWeekdays: z
+      .array(isoWeekdaySchema)
+      .min(1)
+      .max(7)
+      .refine((weekdays) => new Set(weekdays).size === weekdays.length, {
+        message: "AstroDiary working weekdays must be unique"
+      }),
+    serviceTimezone: nonEmptyStringSchema
+      .max(100)
+      .refine(isValidIanaTimezone, { message: "Invalid IANA timezone" })
+  })
+  .strict();
+export type ProductAstroDiaryConfig = z.infer<typeof productAstroDiaryConfigSchema>;
+
 export const productIncludedItemRequestSchema = z
   .object({
     text: nonEmptyStringSchema.max(300),
@@ -211,6 +257,7 @@ const productPayloadFields = {
   requiredClientData: z.array(productRequiredClientDataSchema).max(10),
   methods: z.array(productMethodSchema).max(10),
   accessGrants: z.array(productAccessGrantSchema).max(10),
+  astroDiaryConfig: productAstroDiaryConfigSchema.optional(),
   includedItems: z.array(productIncludedItemRequestSchema).max(30),
   modifiers: z.array(productModifierRequestSchema).max(30)
 };
@@ -227,7 +274,8 @@ const updateProductPayloadFields = {
   packageDiscountPercent: z.number().int().min(0).max(100).nullable().optional(),
   subscriptionPeriod: productSubscriptionPeriodSchema.nullable().optional(),
   trialDays: optionalNullableNonNegativeIntSchema,
-  groupSize: optionalNullablePositiveIntSchema
+  groupSize: optionalNullablePositiveIntSchema,
+  astroDiaryConfig: productAstroDiaryConfigSchema.nullable().optional()
 };
 
 const addProductPayloadIssues = (
@@ -244,6 +292,7 @@ const addProductPayloadIssues = (
     readonly requiredClientData?: readonly ProductRequiredClientDataValue[];
     readonly methods?: readonly ProductMethodValue[];
     readonly accessGrants?: readonly ProductAccessGrantValue[];
+    readonly astroDiaryConfig?: ProductAstroDiaryConfigValue | null;
   },
   ctx: z.RefinementCtx
 ) => {
@@ -256,6 +305,7 @@ const addProductUpdateIssues = (
     readonly requiredClientData?: readonly ProductRequiredClientDataValue[];
     readonly methods?: readonly ProductMethodValue[];
     readonly accessGrants?: readonly ProductAccessGrantValue[];
+    readonly astroDiaryConfig?: ProductAstroDiaryConfigValue | null;
   },
   ctx: z.RefinementCtx
 ) => {
@@ -284,16 +334,50 @@ export type CreateProductRequest = z.infer<typeof createProductRequestSchema>;
 export const updateProductRequestSchema = z
   .object(updateProductPayloadFields)
   .partial()
+  .extend({ expectedRevision: productRevisionSchema })
   .strict()
   .superRefine(addProductUpdateIssues);
 export type UpdateProductRequest = z.infer<typeof updateProductRequestSchema>;
 
 export const duplicateProductRequestSchema = z
   .object({
+    expectedRevision: productRevisionSchema,
     title: nonEmptyStringSchema.max(200).optional()
   })
   .strict();
 export type DuplicateProductRequest = z.infer<typeof duplicateProductRequestSchema>;
+
+export const productStatusTransitionRequestSchema = z
+  .object({ expectedRevision: productRevisionSchema })
+  .strict();
+export type ProductStatusTransitionRequest = z.infer<typeof productStatusTransitionRequestSchema>;
+
+export const productRevisionConflictResponseSchema = z
+  .object({
+    code: z.literal("PRODUCT_REVISION_CONFLICT"),
+    expectedRevision: productRevisionSchema,
+    currentRevision: productRevisionSchema
+  })
+  .strict();
+export type ProductRevisionConflictResponse = z.infer<
+  typeof productRevisionConflictResponseSchema
+>;
+
+export const productFulfillmentNotReadyResponseSchema = z
+  .object({
+    code: z.literal("PRODUCT_FULFILLMENT_NOT_READY"),
+    message: nonEmptyStringSchema.max(500)
+  })
+  .strict();
+export type ProductFulfillmentNotReadyResponse = z.infer<
+  typeof productFulfillmentNotReadyResponseSchema
+>;
+
+export const productMutationRejectionSchema = z.discriminatedUnion("code", [
+  productRevisionConflictResponseSchema,
+  productFulfillmentNotReadyResponseSchema
+]);
+export type ProductMutationRejection = z.infer<typeof productMutationRejectionSchema>;
 
 export const productTemplateResponseSchema = z
   .object({
@@ -381,6 +465,7 @@ export const productResponseSchema = z
     id: uuidSchema,
     ownerUserId: uuidSchema,
     status: productStatusSchema,
+    revision: productRevisionSchema,
     subtitle: nullableStringSchema,
     coverMediaId: uuidSchema.nullable(),
     coverMedia: mediaAssetResponseSchema.nullable(),
@@ -393,6 +478,7 @@ export const productResponseSchema = z
     subscriptionPeriod: productSubscriptionPeriodSchema.nullable(),
     trialDays: z.number().int().min(0).nullable(),
     groupSize: z.number().int().positive().nullable(),
+    astroDiaryConfig: productAstroDiaryConfigSchema.nullable(),
     includedItems: z.array(productIncludedItemResponseSchema),
     modifiers: z.array(productModifierResponseSchema),
     analytics: productLifetimeAnalyticsResponseSchema,

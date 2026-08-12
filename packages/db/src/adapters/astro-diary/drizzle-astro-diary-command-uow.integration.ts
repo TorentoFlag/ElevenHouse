@@ -10,6 +10,7 @@ import {
   executeAstroDiaryParticipantDraftCreateCommand,
   executeAstroDiaryParticipantDraftUpdateCommand,
   executeAstroDiaryPromptCommand,
+  executeMarkAstroDiaryReadCommand,
   type AstroDiaryCommandWriteSet
 } from "@elevenhouse/domain";
 import { astroDiaryResponseObligationSchema } from "@elevenhouse/contracts";
@@ -28,6 +29,7 @@ import {
   astroDiaryEvents,
   astroDiaryJournals,
   astroDiaryMediaAuthorities,
+  astroDiaryReadCursors,
   astroDiaryResponseObligations,
   astroDiaryResponseObligationWeekdays,
   astroDiaryTimelineItemRevisions,
@@ -61,6 +63,69 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
   afterAll(async () => {
     await closeDatabase?.();
   }, 30_000);
+
+  it("creates the first server-watermark cursor, replays it body-free, and rejects a concurrent absent-head CAS", async () => {
+    const { fixture, journalId } = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const input = {
+      journalId,
+      actorUserId: fixture.authority.clientUserId,
+      actorRole: "client" as const,
+      expectedJournalVersion: 1,
+      expectedCursorVersion: null,
+      idempotencyKey: `read-${randomUUID()}`
+    };
+    const applied = await executeMarkAstroDiaryReadCommand(unitOfWork, input);
+    expect(applied).toMatchObject({
+      outcome: "applied",
+      response: { outcome: "applied", eventIds: [], resource: null }
+    });
+    const replay = await executeMarkAstroDiaryReadCommand(unitOfWork, input);
+    expect(replay).toEqual(
+      applied.outcome === "applied"
+        ? { outcome: "replayed", result: applied.receipt.result }
+        : expect.anything()
+    );
+
+    const rows = await runtime.database
+      .select()
+      .from(astroDiaryReadCursors)
+      .where(
+        and(
+          eq(astroDiaryReadCursors.journalId, journalId),
+          eq(astroDiaryReadCursors.participantUserId, fixture.authority.clientUserId)
+        )
+      );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        journalId,
+        participantUserId: fixture.authority.clientUserId,
+        lastReadCursor: 0,
+        version: 1
+      })
+    ]);
+
+    const concurrent = await Promise.all([
+      executeMarkAstroDiaryReadCommand(unitOfWork, {
+        ...input,
+        actorUserId: fixture.authority.astrologerUserId,
+        actorRole: "astrologer",
+        idempotencyKey: `read-race-a-${randomUUID()}`
+      }),
+      executeMarkAstroDiaryReadCommand(unitOfWork, {
+        ...input,
+        actorUserId: fixture.authority.astrologerUserId,
+        actorRole: "astrologer",
+        idempotencyKey: `read-race-b-${randomUUID()}`
+      })
+    ]);
+    expect(concurrent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ outcome: "applied" }),
+        expect.objectContaining({ outcome: "version_conflict", aggregate: "read_cursor" })
+      ])
+    );
+  });
 
   it("allocates and persists one draft, then replays its body-free receipt without deciding again", async () => {
     const { fixture, journalId } = await createJournalFixture(runtime);

@@ -19,6 +19,7 @@ export const productAccessGrants = pgTable(
       sql`${table.value} in ${sql.raw(formatSqlValues(productAccessGrantValues))}`
     ),
     index("product_access_grants_product_id_idx").on(table.productId),
+    uniqueIndex("product_access_grants_product_order_unique").on(table.productId, table.order),
     uniqueIndex("product_access_grants_product_value_unique").on(table.productId, table.value)
   ]
 );

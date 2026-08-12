@@ -145,10 +145,20 @@
       "import": "./dist/adapters/clients/index.js",
       "require": "./dist/adapters/clients/index.js"
     },
+    "./client-subscriptions": {
+      "types": "./dist/adapters/client-subscriptions/index.d.ts",
+      "import": "./dist/adapters/client-subscriptions/index.js",
+      "require": "./dist/adapters/client-subscriptions/index.js"
+    },
     "./adapters/clients": {
       "types": "./dist/adapters/clients/index.d.ts",
       "import": "./dist/adapters/clients/index.js",
       "require": "./dist/adapters/clients/index.js"
+    },
+    "./adapters/client-subscriptions": {
+      "types": "./dist/adapters/client-subscriptions/index.d.ts",
+      "import": "./dist/adapters/client-subscriptions/index.js",
+      "require": "./dist/adapters/client-subscriptions/index.js"
     },
     "./charts": {
       "types": "./dist/adapters/charts/index.d.ts",

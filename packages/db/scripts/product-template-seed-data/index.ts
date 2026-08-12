@@ -157,6 +157,35 @@ const expertSubscriptionPayload = {
   modifiers: []
 } satisfies CreateProductRequest;
 
+const astroDiarySubscriptionPayload = {
+  type: "sub",
+  title: "Астродневник",
+  subtitle: "Личное сопровождение и вопросы для рефлексии",
+  priceMinor: 0,
+  currency: "RUB",
+  executionMode: "async",
+  paymentModel: "sub",
+  subscriptionPeriod: "month",
+  participantMode: "solo",
+  deliveryFormats: ["chat", "audio", "file"],
+  requiredClientData: [],
+  methods: [],
+  accessGrants: ["journal"],
+  astroDiaryConfig: {
+    reflectionCyclesPerPeriod: 4,
+    responseSlaWorkingDays: 2,
+    clientResponseWindowCalendarDays: 7,
+    workingWeekdays: [1, 2, 3, 4, 5],
+    serviceTimezone: "UTC"
+  },
+  includedItems: [
+    { text: "4 цикла рефлексии в месяц", icon: "reference", order: 10 },
+    { text: "Ответ астролога в течение 2 рабочих дней", icon: "clock", order: 20 },
+    { text: "Текст, вложения и голосовые сообщения", icon: "chat", order: 30 }
+  ],
+  modifiers: []
+} satisfies CreateProductRequest;
+
 const customFormatPayload = {
   type: "custom",
   title: "Свой формат",
@@ -217,6 +246,15 @@ const miniCoursePayloadEn = localizePayload(miniCoursePayload, {
 const expertSubscriptionPayloadEn = localizePayload(expertSubscriptionPayload, {
   includedItems: ["Regular materials", "Private channel", "Monthly session or live stream"]
 });
+
+const astroDiarySubscriptionPayloadEn = {
+  ...astroDiarySubscriptionPayload,
+  includedItems: [
+    { text: "4 reflection cycles per month", icon: "reference", order: 10 },
+    { text: "Astrologer response within 2 working days", icon: "clock", order: 20 },
+    { text: "Text, attachments and voice messages", icon: "chat", order: 30 }
+  ]
+} satisfies CreateProductRequest;
 
 const customFormatPayloadEn = localizePayload(customFormatPayload, {
   durationLabel: "60 min",
@@ -284,6 +322,16 @@ export const productTemplateSeedData = [
     title: "Expert subscription",
     subtitle: "Recurring access to materials and support",
     description: "A starter for a private channel, content, sessions or community."
+  }),
+  seed("astro_diary_subscription", "ru", 65, astroDiarySubscriptionPayload, {
+    title: "Астродневник",
+    subtitle: "Личное сопровождение и вопросы для рефлексии",
+    description: "Подписка на переписку с астрологом, рефлексию и ответы по циклам."
+  }),
+  seed("astro_diary_subscription", "en", 65, astroDiarySubscriptionPayloadEn, {
+    title: "Astro journal",
+    subtitle: "Personal guidance and reflection questions",
+    description: "A subscription for reflective correspondence with an astrologer."
   }),
   seed("custom_format", "ru", 70, customFormatPayload, {
     title: "Свой формат",

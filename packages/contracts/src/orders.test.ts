@@ -49,25 +49,14 @@ describe("order contracts", () => {
       createOrderRequestSchema.parse({
         astrologerUserId: order.astrologerUserId,
         productId: order.productId,
+        expectedProductRevision: 7,
         directLinkIntentId: order.directLinkIntentId
       })
     ).toEqual({
       astrologerUserId: order.astrologerUserId,
       productId: order.productId,
+      expectedProductRevision: 7,
       directLinkIntentId: order.directLinkIntentId,
-      bookingId: null,
-      clientBirthDataId: null
-    });
-
-    expect(
-      createOrderRequestSchema.parse({
-        astrologerUserId: order.astrologerUserId,
-        productId: order.productId
-      })
-    ).toEqual({
-      astrologerUserId: order.astrologerUserId,
-      productId: order.productId,
-      directLinkIntentId: null,
       bookingId: null,
       clientBirthDataId: null
     });
@@ -75,7 +64,15 @@ describe("order contracts", () => {
     expect(() =>
       createOrderRequestSchema.parse({
         astrologerUserId: order.astrologerUserId,
+        productId: order.productId
+      })
+    ).toThrow();
+
+    expect(() =>
+      createOrderRequestSchema.parse({
+        astrologerUserId: order.astrologerUserId,
         productId: order.productId,
+        expectedProductRevision: 7,
         directLinkIntentId: order.directLinkIntentId,
         idempotencyKey: "order-create:client:request"
       })

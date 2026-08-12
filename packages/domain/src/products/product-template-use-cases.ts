@@ -76,6 +76,7 @@ function normalizeTemplatePayload(
     requiredClientData: payload.requiredClientData,
     methods: payload.methods,
     accessGrants: payload.accessGrants,
+    astroDiaryConfig: payload.astroDiaryConfig ?? null,
     includedItems: payload.includedItems,
     modifiers: payload.modifiers
   };

@@ -27,6 +27,7 @@ function orderInput(): CreateFinanceOrderRecordInput {
     astrologerUserId: "22222222-2222-4222-8222-222222222222",
     productId: "44444444-4444-4444-8444-444444444444",
     productTitleSnapshot: "Natal consultation",
+    purchasePurpose: { kind: "standard", expectedProductRevision: 1 },
     directLinkIntentId: null,
     bookingId: null,
     status: "pending_payment",

@@ -4,6 +4,23 @@ import type {
   FinanceIdempotentCommandResult
 } from "../finance/shared/idempotent-command";
 import type { RiskTier } from "../finance-policies";
+import type { ClientSubscriptionProductSnapshot } from "../client-subscriptions/client-subscription-types";
+
+export type OrderPurchasePurpose =
+  | Readonly<{
+      kind: "standard";
+      expectedProductRevision: number;
+    }>
+  | Readonly<{
+      kind: "astro_diary_subscription";
+      expectedProductRevision: number;
+      acceptedProduct: ClientSubscriptionProductSnapshot;
+      acceptedRelationship: Readonly<{
+        clientUserId: string;
+        astrologerUserId: string;
+        status: "active";
+      }>;
+    }>;
 
 export type OrderStatus =
   | "draft"
@@ -49,6 +66,7 @@ export type CreateFinanceOrderRecordInput = {
   readonly astrologerUserId: string;
   readonly productId: string;
   readonly productTitleSnapshot: string;
+  readonly purchasePurpose: OrderPurchasePurpose;
   readonly directLinkIntentId: string | null;
   readonly bookingId?: string | null;
   readonly status?: OrderStatus;

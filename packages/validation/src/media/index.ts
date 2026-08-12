@@ -5,7 +5,10 @@ export const mediaPurposeValues = [
   "verification_identity_document",
   "verification_qualification_document",
   "calculation_report_pdf",
-  "messaging_attachment"
+  "messaging_attachment",
+  "astro_diary_attachment",
+  "astro_diary_voice",
+  "astro_diary_export_pdf"
 ] as const;
 export type MediaPurposeValue = (typeof mediaPurposeValues)[number];
 
@@ -17,6 +20,19 @@ export const mediaUploadPurposeValues = [
   "verification_qualification_document"
 ] as const;
 export type MediaUploadPurposeValue = (typeof mediaUploadPurposeValues)[number];
+
+export const astroDiaryMediaUploadPurposeValues = [
+  "astro_diary_attachment",
+  "astro_diary_voice"
+] as const;
+export type AstroDiaryMediaUploadPurposeValue = (typeof astroDiaryMediaUploadPurposeValues)[number];
+
+export const mediaStoragePurposeValues = [
+  "calculation_report_pdf",
+  "messaging_attachment",
+  "astro_diary_export_pdf"
+] as const;
+export type MediaStoragePurposeValue = (typeof mediaStoragePurposeValues)[number];
 
 export const mediaStatusValues = ["uploading", "processing", "ready", "failed", "deleted"] as const;
 export type MediaStatusValue = (typeof mediaStatusValues)[number];
@@ -87,6 +103,26 @@ export const mediaPurposeUploadLimits = {
   }
 >;
 
+export const astroDiaryMediaPurposeUploadLimits = {
+  astro_diary_attachment: {
+    maxSizeBytes: 20 * 1024 * 1024,
+    allowedMimeTypes: [...mediaImageMimeTypeValues, ...mediaDocumentMimeTypeValues],
+    visibility: "private"
+  },
+  astro_diary_voice: {
+    maxSizeBytes: 20 * 1024 * 1024,
+    allowedMimeTypes: mediaAudioMimeTypeValues,
+    visibility: "private"
+  }
+} satisfies Record<
+  AstroDiaryMediaUploadPurposeValue,
+  {
+    readonly maxSizeBytes: number;
+    readonly allowedMimeTypes: readonly MediaMimeTypeValue[];
+    readonly visibility: "private";
+  }
+>;
+
 export const mediaPurposeStorageLimits = {
   calculation_report_pdf: {
     maxSizeBytes: 20_000_000,
@@ -101,9 +137,14 @@ export const mediaPurposeStorageLimits = {
       ...mediaVideoMimeTypeValues
     ],
     visibility: "private"
+  },
+  astro_diary_export_pdf: {
+    maxSizeBytes: 20 * 1024 * 1024,
+    allowedMimeTypes: mediaDocumentMimeTypeValues,
+    visibility: "private"
   }
 } satisfies Record<
-  Exclude<MediaPurposeValue, MediaUploadPurposeValue>,
+  MediaStoragePurposeValue,
   {
     readonly maxSizeBytes: number;
     readonly allowedMimeTypes: readonly MediaMimeTypeValue[];

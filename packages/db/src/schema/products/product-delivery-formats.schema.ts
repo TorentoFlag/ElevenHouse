@@ -19,6 +19,7 @@ export const productDeliveryFormats = pgTable(
       sql`${table.value} in ${sql.raw(formatSqlValues(productDeliveryFormatValues))}`
     ),
     index("product_delivery_formats_product_id_idx").on(table.productId),
+    uniqueIndex("product_delivery_formats_product_order_unique").on(table.productId, table.order),
     uniqueIndex("product_delivery_formats_product_value_unique").on(table.productId, table.value)
   ]
 );

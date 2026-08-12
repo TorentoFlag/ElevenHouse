@@ -5941,7 +5941,7 @@
       "checkConstraints": {
         "media_assets_purpose_check": {
           "name": "media_assets_purpose_check",
-          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf', 'messaging_attachment', 'astro_diary_attachment', 'astro_diary_voice', 'astro_diary_export_pdf')"
+          "value": "\"media_assets\".\"purpose\" in ('product_cover', 'profile_avatar', 'profile_cover', 'verification_identity_document', 'verification_qualification_document', 'calculation_report_pdf', 'messaging_attachment')"
         },
         "media_assets_status_check": {
           "name": "media_assets_status_check",
