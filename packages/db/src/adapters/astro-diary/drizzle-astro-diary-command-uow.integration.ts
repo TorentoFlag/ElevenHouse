@@ -1460,8 +1460,11 @@ describe.sequential("Drizzle AstroDiary command UOW", () => {
         }
       }
     };
-    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toMatchObject({
-      outcome: "applied"
+    const applied = await executeAstroDiaryPromptCommand(unitOfWork, input);
+    expect(applied).toMatchObject({ outcome: "applied" });
+    await expect(executeAstroDiaryPromptCommand(unitOfWork, input)).resolves.toEqual({
+      outcome: "replayed",
+      result: applied.outcome === "applied" ? applied.receipt.result : expect.anything()
     });
     await expect(
       runtime.database.select().from(astroDiaryCycles).where(eq(astroDiaryCycles.id, cycleId))
