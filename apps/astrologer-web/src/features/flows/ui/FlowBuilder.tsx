@@ -488,11 +488,13 @@ export function FlowBuilder({
               >
                 {copy.addStep}
               </button>
-              {selectedNode ? (
-                <button type="button" onClick={() => setMobileInspectorOpen(true)}>
-                  {copy.configureStep}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                disabled={!selectedNode}
+                onClick={() => setMobileInspectorOpen(true)}
+              >
+                {copy.configureStep}
+              </button>
             </div>
             <FlowMobileDagProjection
               graph={draftGraph}
@@ -516,6 +518,7 @@ export function FlowBuilder({
               title={copy.addStep}
               closeLabel={copy.closeSheet}
               open={mobilePaletteOpen}
+              backdropClassName={classNames?.builderMobileDialogBackdrop}
               className={classNames?.builderMobileDialog}
               contentClassName={classNames?.builderMobileDialogContent}
               onClose={() => setMobilePaletteOpen(false)}
@@ -535,6 +538,7 @@ export function FlowBuilder({
               title={copy.configureStep}
               closeLabel={copy.closeSheet}
               open={mobileInspectorOpen}
+              backdropClassName={classNames?.builderMobileDialogBackdrop}
               className={classNames?.builderMobileDialog}
               contentClassName={classNames?.builderMobileDialogContent}
               onClose={() => setMobileInspectorOpen(false)}
@@ -643,7 +647,7 @@ function sameDraft(
 const emptyValidationIssues: readonly FlowDefinitionValidationIssue[] = [];
 
 function useIsMobileFlowViewport(): boolean {
-  const mediaQuery = "(max-width: 760px)";
+  const mediaQuery = "(max-width: 700px)";
   const [matches, setMatches] = useState(
     () => typeof window !== "undefined" && window.matchMedia?.(mediaQuery).matches === true
   );

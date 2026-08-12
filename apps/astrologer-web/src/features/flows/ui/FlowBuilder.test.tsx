@@ -312,7 +312,7 @@ describe("FlowBuilder", () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       value: vi.fn().mockImplementation((query: string) => ({
-        matches: query === "(max-width: 760px)",
+        matches: query === "(max-width: 700px)",
         media: query,
         onchange: null,
         addEventListener: vi.fn(),
@@ -324,18 +324,25 @@ describe("FlowBuilder", () => {
     });
 
     try {
-      renderBuilder();
+      renderBuilder({
+        classNames: { builderMobileDialogBackdrop: "builderMobileDialogBackdrop" }
+      });
 
       expect(screen.getByRole("region", { name: "Мобильная схема воронки" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Добавить шаг" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Настроить узел" })).toBeTruthy();
       expect(
         screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })
       ).toBeTruthy();
+      expect(screen.queryByRole("region", { name: "Схема воронки" })).toBeNull();
       expect(screen.queryByRole("button", { name: /Сместить вправо/ })).toBeNull();
       expect(screen.queryByLabelText("Название узла")).toBeNull();
 
       fireEvent.click(screen.getByRole("button", { name: "Добавить шаг" }));
-      expect(screen.getByRole("dialog", { name: "Добавить шаг" })).toBeTruthy();
+      const addDialog = screen.getByRole("dialog", { name: "Добавить шаг" });
+      expect(addDialog).toBeTruthy();
+      expect(addDialog.parentElement?.className).toContain("builderMobileDialogBackdrop");
+      expect(screen.getByRole("button", { name: "Закрыть" })).toBeTruthy();
       expect(
         screen.getByRole("button", { name: "Добавить узел: Данные рождения заполнены?" })
       ).toBeTruthy();
@@ -350,6 +357,54 @@ describe("FlowBuilder", () => {
       );
       expect(screen.getByRole("dialog", { name: "Настроить узел" })).toBeTruthy();
       expect(screen.getByLabelText("Название узла")).toBeTruthy();
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: originalMatchMedia
+      });
+    }
+  });
+
+  it("keeps a published mobile flow inspectable with runtime history above the app navigation", () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 700px)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    });
+
+    try {
+      renderBuilder({
+        flow: activeManualVersion(),
+        runHistory: <section aria-label="История запусков">Последний запуск</section>,
+        validationError: new Error("Проверка временно недоступна")
+      });
+
+      expect(screen.queryByRole("region", { name: "Схема воронки" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Добавить шаг" })).toHaveProperty(
+        "disabled",
+        true
+      );
+      expect(screen.getByRole("button", { name: "Настроить узел" })).toHaveProperty(
+        "disabled",
+        true
+      );
+      expect(screen.getByRole("region", { name: "История запусков" })).toBeTruthy();
+      expect(screen.getByRole("alert").textContent).toContain("Проверка временно недоступна");
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Настроить узел: Клиент выбран вручную" })
+      );
+      expect(screen.getByRole("dialog", { name: "Настроить узел" })).toBeTruthy();
+      expect(screen.getByLabelText("Название узла")).toHaveProperty("disabled", true);
     } finally {
       Object.defineProperty(window, "matchMedia", {
         configurable: true,

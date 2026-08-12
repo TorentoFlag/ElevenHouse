@@ -1,6 +1,9 @@
 .projection {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
-  padding: 12px 14px 20px;
+  overflow-x: hidden;
+  padding: 8px 10px 12px;
   background:
     linear-gradient(rgb(13 12 32 / 0.82), rgb(13 12 32 / 0.94)),
     radial-gradient(rgb(216 212 236 / 0.09) 1px, transparent 1px);
@@ -9,7 +12,8 @@
 
 .nodes {
   display: grid;
-  gap: 10px;
+  min-width: 0;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -17,9 +21,10 @@
 
 .node {
   position: relative;
-  border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
-  border-radius: 14px;
+  min-width: 0;
   overflow: hidden;
+  border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
+  border-radius: 12px;
   background: var(--flows-surface-strong, rgb(30 27 62 / 0.92));
 }
 
@@ -37,10 +42,12 @@
 .nodeSelect {
   display: grid;
   min-width: 0;
+  min-height: 44px;
   flex: 1 1 auto;
-  gap: 5px;
+  align-content: center;
+  gap: 2px;
   border: 0;
-  padding: 14px;
+  padding: 7px 10px;
   background: transparent;
   color: var(--eh-color-moon-120);
   cursor: pointer;
@@ -58,8 +65,8 @@
 
 .nodeSelect strong {
   overflow: hidden;
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 13px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -67,11 +74,11 @@
 .nodeEdit {
   align-self: center;
   flex: 0 0 auto;
-  min-height: 32px;
-  margin-right: 12px;
+  min-height: 44px;
+  margin-right: 8px;
   border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
   border-radius: 8px;
-  padding: 0 9px;
+  padding: 0 8px;
   background: rgb(13 12 32 / 0.68);
   color: var(--eh-color-moon-120);
   cursor: pointer;
@@ -81,13 +88,13 @@
 .handles {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   border-top: 1px solid var(--flows-line, rgb(216 212 236 / 0.14));
-  padding: 9px 12px;
+  padding: 4px 8px;
 }
 
 .handles button {
-  min-height: 30px;
+  min-height: 44px;
   flex: 1 1 92px;
   border: 1px solid var(--flows-line-strong, rgb(216 212 236 / 0.2));
   border-radius: 8px;
@@ -111,17 +118,19 @@
 
 .connections {
   display: grid;
-  gap: 6px;
+  min-width: 0;
+  gap: 4px;
   margin: 0;
   border-top: 1px solid var(--flows-line, rgb(216 212 236 / 0.14));
-  padding: 9px 12px 12px;
+  padding: 6px 10px 8px;
   list-style: none;
 }
 
 .connections li {
   display: grid;
-  grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
-  gap: 9px;
+  min-width: 0;
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   color: var(--eh-color-moon-120);
   font-size: 12px;
@@ -134,6 +143,7 @@
 }
 
 .connections strong {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

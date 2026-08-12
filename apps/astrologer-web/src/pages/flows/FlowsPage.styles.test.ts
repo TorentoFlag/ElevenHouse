@@ -52,7 +52,7 @@ describe("FlowsPage gallery geometry", () => {
       /\.mobileCard\s*\{[^}]*width:\s*calc\(100% - 20px\)[^}]*margin:\s*0 10px[^}]*border-radius:\s*16px/s
     );
     expect(styles).toMatch(
-      /@media \(max-width:\s*720px\)[\s\S]*\.automationToggle\s*\{[^}]*min-height:\s*44px/s
+      /@media \(max-width:\s*700px\)[\s\S]*\.automationToggle\s*\{[^}]*min-height:\s*44px/s
     );
     expect(styles).toMatch(
       /\.mobileCard \.automationToggle::before\s*\{[^}]*inset:\s*8\.75px 0/s
@@ -63,7 +63,7 @@ describe("FlowsPage gallery geometry", () => {
 describe("FlowsPage create dialog geometry", () => {
   it("keeps the mobile blank command fluid below the 390px reference viewport", () => {
     expect(styles).toMatch(
-      /@media \(max-width:\s*720px\)[\s\S]*\.createDialogBlank\s*\{[^}]*width:\s*100%[^}]*max-width:\s*316px/s
+      /@media \(max-width:\s*700px\)[\s\S]*\.createDialogBlank\s*\{[^}]*width:\s*100%[^}]*max-width:\s*316px/s
     );
   });
 });
@@ -75,6 +75,39 @@ describe("FlowsPage builder controls geometry", () => {
     );
     expect(styles).toMatch(
       /\.builderCanvasControls button:first-child\s*\{[^}]*font-size:\s*20px/s
+    );
+  });
+});
+
+describe("FlowsPage mobile builder geometry", () => {
+  it("keeps the builder within the 390px workspace and assigns every header item", () => {
+    expect(styles).toMatch(
+      /@media \(max-width:\s*700px\)[\s\S]*\.builderPage\s*\{[^}]*max-width:\s*100vw[^}]*margin:\s*-16px -14px 0/s
+    );
+    expect(styles).not.toContain("@media (max-width: 720px)");
+    expect(styles).toMatch(
+      /\.builderHeader\s*\{[^}]*grid-template-areas:\s*"back title"\s*"status actions"/s
+    );
+    expect(styles).toMatch(/\.builderHeaderStatus\s*\{[^}]*grid-area:\s*status/s);
+    expect(styles).toMatch(/\.builderActions\s*\{[^}]*grid-area:\s*actions/s);
+    expect(styles).toMatch(/\.builderActions\s*\{[^}]*overflow:\s*visible/s);
+  });
+
+  it("keeps mobile commands and sheets clear of the fixed navigation", () => {
+    expect(styles).toMatch(
+      /\.builderMobileActions button\s*\{[^}]*min-height:\s*44px/s
+    );
+    expect(styles).toMatch(
+      /\.builderMobileDialogBackdrop\s*\{[^}]*box-sizing:\s*border-box[^}]*inset:\s*0[^}]*padding:\s*10px 10px calc\(64px \+ env\(safe-area-inset-bottom\)\)/s
+    );
+    expect(styles).toMatch(
+      /\.builderMobileDialog\s*\{[^}]*max-height:\s*calc\(100dvh - 88px - env\(safe-area-inset-bottom\)\)/s
+    );
+    expect(styles).toMatch(
+      /\.builderMobileHistory\s*\{[^}]*padding-bottom:\s*calc\(12px \+ env\(safe-area-inset-bottom\)\)/s
+    );
+    expect(styles).toMatch(
+      /\.builderMobileDialog\s+:global\(\.ehModal__closeButton\)\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px/s
     );
   });
 });
