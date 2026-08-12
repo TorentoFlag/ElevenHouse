@@ -309,6 +309,20 @@
       "when": 1786562753658,
       "tag": "0043_flawless_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1786572673813,
+      "tag": "0045_thankful_sister_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786573291984,
+      "tag": "0046_stiff_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

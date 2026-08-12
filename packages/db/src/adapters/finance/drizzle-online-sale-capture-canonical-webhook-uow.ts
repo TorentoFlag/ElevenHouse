@@ -9,8 +9,13 @@ import type {
 } from "@elevenhouse/domain/finance-core";
 import { createHash } from "node:crypto";
 import {
+  FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
+  createProductPurchasedFlowEnrollmentRequestedPayload
+} from "@elevenhouse/domain";
+import {
   createCapturedProviderPaymentSemanticSourceId,
   digestFinanceCanonicalValueV1,
+  FINANCE_CLIENT_ORDER_CAPTURE_APPLIED_EVENT,
   hasAsciiControlCharacter
 } from "@elevenhouse/domain/finance-core";
 import { and, eq, sql } from "drizzle-orm";
@@ -27,6 +32,7 @@ import {
   financeOnlineSaleCaptureJournalProofs
 } from "../../schema/finance/online-sale-capture.schema";
 import { orders } from "../../schema/finance/orders.schema";
+import { outboxEvents } from "../../schema/outbox/outbox-events.schema";
 import { confirmPaidBooking } from "../scheduling";
 import type { FinanceTransaction } from "./drizzle-finance-command-store";
 import { markFinanceOrderPaid } from "./drizzle-order-store";
@@ -301,7 +307,13 @@ export async function applyOnlineSaleCaptureEconomicEffectsInTransaction(
   }
 
   const [order] = await transaction
-    .select({ id: orders.id, bookingId: orders.bookingId })
+    .select({
+      id: orders.id,
+      bookingId: orders.bookingId,
+      astrologerUserId: orders.astrologerUserId,
+      clientUserId: orders.clientUserId,
+      productId: orders.productId
+    })
     .from(orders)
     .where(eq(orders.id, persistenceCommand.receipt.orderEconomics.orderId))
     .limit(1)
@@ -397,6 +409,22 @@ export async function applyOnlineSaleCaptureEconomicEffectsInTransaction(
     })
     .returning({ id: financeOnlineSaleCaptureApplications.id });
   if (!application) fail("persistence_write_incomplete");
+  await transaction.insert(outboxEvents).values({
+    eventType: FINANCE_CLIENT_ORDER_CAPTURE_APPLIED_EVENT,
+    aggregateId: application.id,
+    payload: { captureApplicationReceiptId: application.id }
+  });
+  await transaction.insert(outboxEvents).values({
+    eventType: FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
+    aggregateId: order.clientUserId,
+    payload: createProductPurchasedFlowEnrollmentRequestedPayload({
+      orderId: order.id,
+      ownerUserId: order.astrologerUserId,
+      clientUserId: order.clientUserId,
+      productId: order.productId,
+      capturedAt: observedAt.toISOString()
+    })
+  });
 }
 
 function assertEconomicCaptureAuthority(

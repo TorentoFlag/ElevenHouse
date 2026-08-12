@@ -36,6 +36,9 @@ export const FLOW_GRAPH_V2_MAX_EDGES = 400;
 export const flowNodeKindV2Values = [
   "booking_confirmed",
   "manual_client",
+  "product_purchased",
+  "first_inbound_message",
+  "client_lifecycle_changed",
   "birth_data_available",
   "natal_chart_request",
   "natal_chart_ai_draft",
@@ -49,7 +52,13 @@ export const flowNodeKindV2Values = [
 export const flowNodeKindV2Schema = z.enum(flowNodeKindV2Values);
 export type FlowNodeKindV2 = z.infer<typeof flowNodeKindV2Schema>;
 
-export const flowTriggerNodeKindV2Values = ["booking_confirmed", "manual_client"] as const;
+export const flowTriggerNodeKindV2Values = [
+  "booking_confirmed",
+  "manual_client",
+  "product_purchased",
+  "first_inbound_message",
+  "client_lifecycle_changed"
+] as const;
 export const flowTriggerNodeKindV2Schema = z.enum(flowTriggerNodeKindV2Values);
 export type FlowTriggerNodeKindV2 = z.infer<typeof flowTriggerNodeKindV2Schema>;
 
@@ -102,6 +111,23 @@ const bookingConfirmedConfigSchema = z
     }
   });
 
+export const flowEnrollmentPolicyKeyValues = [
+  "once_per_client",
+  "each_occurrence",
+  "after_previous_terminal"
+] as const;
+export const flowEnrollmentPolicyKeySchema = z.enum(flowEnrollmentPolicyKeyValues);
+export type FlowEnrollmentPolicyKey = z.infer<typeof flowEnrollmentPolicyKeySchema>;
+
+const clientLifecycleStatusValues = [
+  "new",
+  "active",
+  "waiting_for_client",
+  "in_service",
+  "inactive"
+] as const;
+const clientLifecycleStatusSchema = z.enum(clientLifecycleStatusValues);
+
 export const flowBookingConfirmedNodeV2Schema = z
   .object({
     ...nodeBaseShape,
@@ -119,6 +145,48 @@ export const flowManualClientNodeV2Schema = z
   })
   .strict();
 export type FlowManualClientNodeV2 = z.infer<typeof flowManualClientNodeV2Schema>;
+
+export const flowProductPurchasedNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("product_purchased"),
+    config: bookingConfirmedConfigSchema.extend({ enrollmentPolicy: flowEnrollmentPolicyKeySchema })
+  })
+  .strict();
+export type FlowProductPurchasedNodeV2 = z.infer<typeof flowProductPurchasedNodeV2Schema>;
+
+export const flowFirstInboundMessageNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("first_inbound_message"),
+    config: z.object({ enrollmentPolicy: flowEnrollmentPolicyKeySchema }).strict()
+  })
+  .strict();
+export type FlowFirstInboundMessageNodeV2 = z.infer<typeof flowFirstInboundMessageNodeV2Schema>;
+
+export const flowClientLifecycleChangedNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("client_lifecycle_changed"),
+    config: z
+      .object({
+        fromStatus: clientLifecycleStatusSchema.nullable(),
+        toStatus: clientLifecycleStatusSchema.nullable(),
+        enrollmentPolicy: flowEnrollmentPolicyKeySchema
+      })
+      .strict()
+      .superRefine((config, context) => {
+        if (config.fromStatus === null && config.toStatus === null) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [],
+            message: "Lifecycle trigger must filter by a source or target status"
+          });
+        }
+      })
+  })
+  .strict();
+export type FlowClientLifecycleChangedNodeV2 = z.infer<typeof flowClientLifecycleChangedNodeV2Schema>;
 
 export const flowBirthDataAvailableNodeV2Schema = z
   .object({
@@ -302,6 +370,9 @@ export type FlowFailedNodeV2 = z.infer<typeof flowFailedNodeV2Schema>;
 export const flowNodeV2Schema = z.discriminatedUnion("kind", [
   flowBookingConfirmedNodeV2Schema,
   flowManualClientNodeV2Schema,
+  flowProductPurchasedNodeV2Schema,
+  flowFirstInboundMessageNodeV2Schema,
+  flowClientLifecycleChangedNodeV2Schema,
   flowBirthDataAvailableNodeV2Schema,
   flowNatalChartRequestNodeV2Schema,
   flowNatalChartAiDraftNodeV2Schema,
@@ -364,6 +435,9 @@ export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssue
 
 export const flowCapabilityRequirementValues = [
   "bookings.events.booking_confirmed",
+  "finance.events.client_order_captured",
+  "messaging.events.first_inbound_message",
+  "clients.events.lifecycle_changed",
   "clients.birth_data.read.service_preparation",
   "products.read",
   "charts.calculate.natal.booking_context",

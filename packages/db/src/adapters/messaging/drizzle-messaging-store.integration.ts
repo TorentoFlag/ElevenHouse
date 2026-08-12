@@ -99,6 +99,54 @@ describe("messaging Drizzle/PostgreSQL integration", () => {
     expect(events.rows).toEqual([{ count: "1" }]);
   });
 
+  it("emits a first-inbound-message Flow outbox event for the first linked client inbound only", async () => {
+    const fixture = await createFixture();
+    const clientUserId = await createUser();
+    const relationshipId = randomUUID();
+    await runtime.pool.query(
+      `insert into client_astrologer_relationships (
+         id, client_user_id, astrologer_user_id, source, status, first_linked_at, last_linked_at
+       ) values ($1, $2, $3, 'manual', 'active', '2026-07-22T09:00:00.000Z', '2026-07-22T09:00:00.000Z')`,
+      [relationshipId, clientUserId, fixture.astrologerUserId]
+    );
+    await runtime.pool.query(
+      "update messaging_threads set client_user_id = $1 where id = $2",
+      [clientUserId, fixture.threadId]
+    );
+    const store = createDrizzleMessagingStore(runtime.database);
+    const firstMessageId = randomUUID();
+
+    await store.recordInboundProviderMessage(
+      inboundInput(fixture, firstMessageId, `provider-${randomUUID()}`)
+    );
+    await store.recordInboundProviderMessage(
+      inboundInput(fixture, randomUUID(), `provider-${randomUUID()}`)
+    );
+
+    const outbox = await runtime.pool.query<{
+      aggregate_id: string;
+      payload: {
+        eventKind: string;
+        subjectId: string;
+        payload: { messageId: string; relationshipId: string };
+      };
+    }>(
+      `select aggregate_id, payload
+         from outbox_events
+        where event_type = 'flows.first_inbound_message.enrollment_requested.v1'`
+    );
+    expect(outbox.rows).toMatchObject([
+      {
+        aggregate_id: clientUserId,
+        payload: {
+          eventKind: "first_inbound_message",
+          subjectId: clientUserId,
+          payload: { messageId: firstMessageId, relationshipId }
+        }
+      }
+    ]);
+  });
+
   it("creates an outbound message and identifier-only delivery outbox event", async () => {
     const fixture = await createFixture();
     const store = createDrizzleMessagingStore(runtime.database);

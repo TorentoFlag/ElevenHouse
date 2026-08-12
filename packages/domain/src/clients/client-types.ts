@@ -1,4 +1,5 @@
 import { z } from "@elevenhouse/validation";
+import type { ClientLifecycleMode, ClientLifecycleStatus } from "./client-lifecycle";
 
 export type ClientBirthTimePrecision = "exact" | "approximate" | "unknown";
 export type ClientBirthTimeDstOccurrence = "first" | "second";
@@ -35,6 +36,16 @@ export type ClientRelationshipSource =
   | "manual";
 
 export type ClientRelationshipStatus = "active" | "archived" | "blocked";
+
+export type ClientLifecycle = {
+  readonly relationshipId: string;
+  readonly status: ClientLifecycleStatus;
+  readonly mode: ClientLifecycleMode;
+  readonly latestAutomaticCandidateStatus: ClientLifecycleStatus | null;
+  readonly revision: number;
+  readonly lastActivityAt: string;
+  readonly updatedAt: string;
+};
 
 export type ClientJoinIntentStatus = "pending" | "claimed" | "expired";
 

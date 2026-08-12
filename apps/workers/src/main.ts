@@ -4,6 +4,7 @@ import { createClient } from "redis";
 import { createLogger } from "@elevenhouse/observability";
 import {
   createDrizzleFlowBookingEnrollmentStore,
+  createDrizzleFlowClientEventEnrollmentStore,
   createDrizzleFlowBirthDataReadinessReader,
   createDrizzleFlowBirthProfileRecheckStore,
   createDrizzleFlowBookingLifecycleStore,
@@ -108,6 +109,9 @@ const flowExecutionSignalStore = createDrizzleFlowExecutionSignalStore(postgres.
 const flowBookingEnrollmentStore = createDrizzleFlowBookingEnrollmentStore(
   postgres.database,
   flowWorkerIdentity
+);
+const flowClientEventEnrollmentStore = createDrizzleFlowClientEventEnrollmentStore(
+  postgres.database
 );
 const flowBookingLifecycleStore = createDrizzleFlowBookingLifecycleStore(
   postgres.database,
@@ -331,6 +335,8 @@ const relay = createCalculationPdfOutboxRelay({
           latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
           futureSkewToleranceMs: config.flowBookingEnrollment.futureSkewToleranceMs
         }),
+      enrollClientEvent: (request) =>
+        flowClientEventEnrollmentStore.enrollClientEvent({ request }),
       processBookingLifecycleEvent: (lifecycleEventId) =>
         flowBookingLifecycleStore.processBookingLifecycleEvent({
           lifecycleEventId,

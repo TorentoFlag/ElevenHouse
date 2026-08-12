@@ -150,6 +150,12 @@ describe("Flows persistence schema", () => {
     expect(versionManifestSql).toContain("flow-capability-manifest.v2");
     expect(versionManifestSql).toContain("executionSemanticsVersion");
     expect(versionManifestSql).toContain("triggerMatcher");
+    const triggerMatcherSql = versionManifestSql.slice(
+      versionManifestSql.indexOf("capability_manifest->'triggerMatcher'->>'kind'")
+    );
+    expect(triggerMatcherSql).toContain("product_purchased");
+    expect(triggerMatcherSql).toContain("first_inbound_message");
+    expect(triggerMatcherSql).toContain("client_lifecycle_changed");
     expect(versionManifestSql).toContain("eventSchemaVersion");
     expect(versionManifestSql).toContain("jsonb_typeof");
     expect(versionManifestSql).toContain("?&");

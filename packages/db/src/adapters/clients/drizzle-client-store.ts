@@ -26,6 +26,7 @@ import {
   userRoleAssignments
 } from "../../schema";
 import { insertReturningOne } from "../../shared";
+import { createDrizzleClientLifecycleStore } from "./drizzle-client-lifecycle-store";
 
 type ClientProfileRow = typeof clientProfiles.$inferSelect;
 type ClientBirthDataRow = typeof clientBirthData.$inferSelect;
@@ -357,6 +358,15 @@ async function ensureRelationship(
       .returning();
     if (!row) {
       throw new ClientAstrologerRelationshipBlockedError();
+    }
+
+    if (!existingRelationship) {
+      await createDrizzleClientLifecycleStore(transaction).applyTransition({
+        relationshipId: row.id,
+        sourceEventId: `relationship:${row.id}:created`,
+        cause: { kind: "relationship_created", occurredAt: input.now },
+        actorUserId: null
+      });
     }
 
     return toClientAstrologerRelationship(row);

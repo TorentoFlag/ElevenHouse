@@ -23,6 +23,8 @@ export * from "./flow-runtime-control";
 export * from "./flow-runtime-control-command";
 export * from "./flow-booking-enrollment";
 export * from "./flow-manual-client-enrollment";
+export * from "./flow-event-enrollment";
+export * from "./flow-client-event-enrollment-plan";
 export * from "./flow-booking-lifecycle";
 export * from "./flow-booking-reschedule";
 export * from "./flow-booking-execution-context";

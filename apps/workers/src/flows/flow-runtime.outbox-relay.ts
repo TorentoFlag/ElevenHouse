@@ -3,11 +3,16 @@ import {
   CHART_CALCULATION_TERMINAL_EVENT,
   CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
   messagingMessageDeliveryTerminalEventType,
   messagingMessageDeliveryTerminalPayloadSchema,
   FlowExecutionIntegrityError,
   FlowBookingEnrollmentDeferredError,
   FlowBookingEnrollmentIntegrityError,
+  FlowClientEventEnrollmentDeferredError,
+  FlowClientEventEnrollmentIntegrityError,
   FlowBookingLifecycleDeferredError,
   FlowBookingLifecycleIntegrityError,
   FlowBookingLifecycleRuntimeDeferredError,
@@ -15,11 +20,16 @@ import {
   chartCalculationTerminalPayloadSchema,
   clientBirthProfileUpdatedEventSchema,
   flowBookingConfirmedEnrollmentRequestedPayloadV1Schema,
+  flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema,
+  flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema,
+  flowProductPurchasedEnrollmentRequestedPayloadV1Schema,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type ChartCalculationTerminalPayload,
   type ClientBirthProfileUpdatedEvent,
   type FlowBookingConfirmedEnrollmentRequestedPayloadV1,
   type FlowBookingEnrollmentResult,
+  type FlowClientEventEnrollmentRequestedPayloadV1,
+  type FlowClientEventEnrollmentResult,
   type FlowBookingLifecycleProcessingResult,
   type FlowBirthProfileRecheckResult,
   type FlowRuntimeDispatchOutboxReason,
@@ -30,6 +40,10 @@ import type { Logger } from "@elevenhouse/observability";
 export type FlowBookingEnrollmentDispatcher = (
   input: FlowBookingConfirmedEnrollmentRequestedPayloadV1
 ) => Promise<FlowBookingEnrollmentResult>;
+
+export type FlowClientEventEnrollmentDispatcher = (
+  input: FlowClientEventEnrollmentRequestedPayloadV1
+) => Promise<FlowClientEventEnrollmentResult>;
 
 export type FlowBookingLifecycleDispatcher = (
   lifecycleEventId: string
@@ -55,6 +69,7 @@ export type FlowBirthProfileRecheckDispatcher = (input: {
 type FlowRuntimeOutboxRelayInput = {
   readonly store: FlowRuntimeDispatchOutboxStore;
   readonly enrollBookingConfirmed: FlowBookingEnrollmentDispatcher;
+  readonly enrollClientEvent: FlowClientEventEnrollmentDispatcher;
   readonly processBookingLifecycleEvent: FlowBookingLifecycleDispatcher;
   readonly deliverChartTerminalSignal: FlowChartTerminalSignalDispatcher;
   readonly deliverMessagingTerminalSignal: FlowMessagingTerminalSignalDispatcher;
@@ -99,6 +114,14 @@ export async function relayPendingFlowRuntimeDispatchEvents(
       await relayBookingEnrollment(input, event);
       continue;
     }
+    if (
+      event.eventType === FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT ||
+      event.eventType === FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT ||
+      event.eventType === FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT
+    ) {
+      await relayClientEventEnrollment(input, event);
+      continue;
+    }
     if (event.eventType === CHART_CALCULATION_TERMINAL_EVENT) {
       await relayChartTerminalSignal(input, event);
       continue;
@@ -115,6 +138,65 @@ export async function relayPendingFlowRuntimeDispatchEvents(
   }
 
   return batch.claimed.length + batch.quarantined.length;
+}
+
+async function relayClientEventEnrollment(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const parsedPayload = parseClientEventEnrollmentPayload(event);
+  if (!parsedPayload) {
+    await quarantine(input, event, "FLOW_CLIENT_EVENT_ENROLLMENT_PAYLOAD_INVALID");
+    return;
+  }
+  if (parsedPayload.subjectId !== event.aggregateId) {
+    await quarantine(input, event, "FLOW_CLIENT_EVENT_ENROLLMENT_AGGREGATE_MISMATCH");
+    return;
+  }
+
+  let result: FlowClientEventEnrollmentResult;
+  try {
+    result = await input.enrollClientEvent(parsedPayload);
+  } catch (error) {
+    if (error instanceof FlowClientEventEnrollmentDeferredError) {
+      await deferClientEventEnrollment(input, event);
+      return;
+    }
+    if (error instanceof FlowClientEventEnrollmentIntegrityError) {
+      await quarantine(input, event, error.code);
+      return;
+    }
+    await handleTransientFailure(input, event);
+    return;
+  }
+
+  if (!(await markPublished(input, event))) return;
+  input.logger?.info("flow client event enrollment outbox event published", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    outcome: result.status,
+    replayed: result.replayed,
+    runCount: result.runs.length
+  });
+}
+
+function parseClientEventEnrollmentPayload(
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): FlowClientEventEnrollmentRequestedPayloadV1 | null {
+  if (event.eventType === FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT) {
+    const parsed = flowProductPurchasedEnrollmentRequestedPayloadV1Schema.safeParse(event.payload);
+    return parsed.success ? parsed.data : null;
+  }
+  if (event.eventType === FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT) {
+    const parsed = flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.safeParse(event.payload);
+    return parsed.success ? parsed.data : null;
+  }
+  if (event.eventType === FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT) {
+    const parsed = flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.safeParse(event.payload);
+    return parsed.success ? parsed.data : null;
+  }
+  return null;
 }
 
 async function relayMessagingTerminalSignal(
@@ -380,6 +462,29 @@ async function deferLifecycle(
     aggregateId: event.aggregateId,
     retryDelayMs: input.enrollmentDeferDelayMs,
     reasonCode: "FLOW_BOOKING_LIFECYCLE_DEFERRED"
+  });
+}
+
+async function deferClientEventEnrollment(
+  input: FlowRuntimeOutboxRelayInput,
+  event: ClaimedFlowRuntimeDispatchOutboxEvent
+): Promise<void> {
+  const disposition = await input.store.markDeferred({
+    eventId: event.id,
+    claimFence: event.claimFence,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_CLIENT_EVENT_ENROLLMENT_DEFERRED"
+  });
+  if (disposition.status === "stale") {
+    logStaleDisposition(input.logger, event, "deferred");
+    return;
+  }
+  input.logger?.info("flow client event enrollment outbox event deferred", {
+    outboxEventId: event.id,
+    eventType: event.eventType,
+    aggregateId: event.aggregateId,
+    retryDelayMs: input.enrollmentDeferDelayMs,
+    reasonCode: "FLOW_CLIENT_EVENT_ENROLLMENT_DEFERRED"
   });
 }
 

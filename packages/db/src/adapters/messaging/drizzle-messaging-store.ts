@@ -3,6 +3,8 @@ import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   MessagingClientRelationshipError,
   MessagingIdempotencyConflictError,
+  FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+  createFirstInboundMessageFlowEnrollmentRequestedPayload,
   messagingMessageDeletedEventType,
   messagingMessageReceivedEventType,
   messagingMessageUpdatedEventType
@@ -316,6 +318,17 @@ async function recordInboundProviderMessage(
       }
 
       const timestamp = new Date(input.now);
+      const priorInbound = await transaction
+        .select({ id: messagingMessages.id })
+        .from(messagingMessages)
+        .where(
+          and(
+            eq(messagingMessages.threadId, input.threadId),
+            eq(messagingMessages.direction, "inbound")
+          )
+        )
+        .limit(1)
+        .for("share", { of: messagingMessages });
       const [row] = await transaction
         .insert(messagingMessages)
         .values({
@@ -357,6 +370,34 @@ async function recordInboundProviderMessage(
         )
         .returning({ id: messagingThreads.id });
       if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+      if (thread.clientUserId && priorInbound.length === 0) {
+        const [relationship] = await transaction
+          .select({ id: clientAstrologerRelationships.id })
+          .from(clientAstrologerRelationships)
+          .where(
+            and(
+              eq(clientAstrologerRelationships.astrologerUserId, thread.astrologerUserId),
+              eq(clientAstrologerRelationships.clientUserId, thread.clientUserId),
+              eq(clientAstrologerRelationships.status, "active")
+            )
+          )
+          .limit(1)
+          .for("share", { of: clientAstrologerRelationships });
+        if (relationship) {
+          await transaction.insert(outboxEvents).values({
+            eventType: FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+            aggregateId: thread.clientUserId,
+            payload: createFirstInboundMessageFlowEnrollmentRequestedPayload({
+              messageId: row.id,
+              ownerUserId: thread.astrologerUserId,
+              clientUserId: thread.clientUserId,
+              relationshipId: relationship.id,
+              receivedAt: timestamp.toISOString()
+            })
+          });
+        }
+      }
 
       await appendRealtimeEvent(transaction, {
         ...input.receivedEvent,

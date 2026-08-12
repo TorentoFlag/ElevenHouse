@@ -56,9 +56,62 @@ const manualClientGraph = {
   ]
 } satisfies FlowGraphV2;
 
+const productPurchaseGraph = {
+  schemaVersion: "flow-graph.v2",
+  nodes: [
+    {
+      id: "trigger-product-purchased",
+      kind: "product_purchased",
+      displayTitle: "Продукт оплачен",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        productIds: ["55555555-5555-4555-8555-555555555555"],
+        enrollmentPolicy: "each_occurrence"
+      }
+    },
+    {
+      id: "completed",
+      kind: "completed",
+      displayTitle: "Завершено",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { goalKey: "purchase_follow_up" }
+    }
+  ],
+  edges: [
+    {
+      id: "trigger-to-completed",
+      sourceNodeId: "trigger-product-purchased",
+      targetNodeId: "completed",
+      sourceHandle: "next"
+    }
+  ]
+} satisfies FlowGraphV2;
+
 describe("flow graph v2 contracts", () => {
   it("parses a minimal strict executable graph", () => {
     expect(flowGraphV2Schema.parse(manualClientGraph)).toEqual(manualClientGraph);
+  });
+
+  it("parses a product-purchase trigger with an explicit repeat policy", () => {
+    expect(flowGraphV2Schema.parse(productPurchaseGraph)).toEqual(productPurchaseGraph);
+    const productPurchaseTrigger = productPurchaseGraph.nodes[0]!;
+    expect(
+      flowGraphV2Schema.safeParse({
+        ...productPurchaseGraph,
+        nodes: [
+          {
+            ...productPurchaseTrigger,
+            config: {
+              ...productPurchaseTrigger.config,
+              enrollmentPolicy: "sometimes"
+            }
+          },
+          productPurchaseGraph.nodes[1]
+        ]
+      }).success
+    ).toBe(false);
   });
 
   it("accepts only V2 flow graphs", () => {

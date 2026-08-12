@@ -21,6 +21,7 @@ import type {
   BookingLifecycleDispatchRequestedPayload,
   ClientBirthProfileUpdatedEvent,
   FlowBookingConfirmedEnrollmentRequestedPayloadV1,
+  FlowClientEventEnrollmentRequestedPayloadV1,
   MessagingMessageDeliveryTerminalPayload,
   MessagingMessageDeliveryReconciliationRequestedPayload,
   MessagingMessageDeliveryRequestedPayload,
@@ -28,6 +29,7 @@ import type {
 } from "@elevenhouse/domain";
 import type {
   FinanceEconomicPaymentCaptureAppliedPayload,
+  FinanceClientOrderCapturePurposeDispatchPayload,
   FinancePlatformTariffInvoiceChargePreparationRequestedPayload,
   FinanceProviderOperationDispatchRequestedPayload,
   FinanceSavedCardSetupPreparationRequestedPayload
@@ -63,9 +65,11 @@ export type OutboxEventPayload =
   | ClientBirthProfileUpdatedEvent
   | FinanceProviderOperationDispatchRequestedPayload
   | FinanceEconomicPaymentCaptureAppliedPayload
+  | FinanceClientOrderCapturePurposeDispatchPayload
   | FinanceSavedCardSetupPreparationRequestedPayload
   | FinancePlatformTariffInvoiceChargePreparationRequestedPayload
   | FlowBookingConfirmedEnrollmentRequestedPayloadV1
+  | FlowClientEventEnrollmentRequestedPayloadV1
   | MessagingMessageDeliveryTerminalPayload
   | MessagingMessageDeliveryReconciliationRequestedPayload
   | MessagingMessageDeliveryRequestedPayload
@@ -112,6 +116,15 @@ export const outboxEvents = pgTable(
     check(
       "outbox_events_finance_capture_payload_check",
       sql`${table.eventType} <> 'finance.economic_payment.capture_applied' or (
+        ${table.payload} = jsonb_build_object(
+          'captureApplicationReceiptId',
+          ${table.aggregateId}::text
+        )
+      )`
+    ),
+    check(
+      "outbox_events_finance_client_order_capture_dispatch_payload_check",
+      sql`${table.eventType} <> 'finance.client_order.capture_applied.v1' or (
         ${table.payload} = jsonb_build_object(
           'captureApplicationReceiptId',
           ${table.aggregateId}::text

@@ -9,6 +9,7 @@ export * from "./drizzle-flow-work-item-wake-store";
 export * from "./drizzle-flow-run-cancellation-store";
 export * from "./drizzle-flow-runtime-dispatch-outbox-store";
 export * from "./drizzle-flow-booking-enrollment-store";
+export * from "./drizzle-flow-client-event-enrollment-store";
 export * from "./drizzle-flow-manual-client-enrollment-store";
 export * from "./drizzle-flow-booking-lifecycle-store";
 export * from "./drizzle-flow-birth-data-readiness-reader";

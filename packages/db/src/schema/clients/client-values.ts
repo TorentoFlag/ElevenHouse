@@ -11,6 +11,26 @@ export const clientRelationshipSourceValues = [
   "manual"
 ] as const;
 export const clientRelationshipStatusValues = ["active", "archived", "blocked"] as const;
+export const clientLifecycleStatusValues = [
+  "new",
+  "active",
+  "waiting_for_client",
+  "in_service",
+  "inactive"
+] as const;
+export const clientLifecycleModeValues = ["automatic", "manual_override"] as const;
+export const clientLifecycleCauseKindValues = [
+  "relationship_created",
+  "captured_order",
+  "inbound_message",
+  "booking_started",
+  "booking_completed",
+  "inactivity_elapsed",
+  "manual_astrologer_action",
+  "manual_override",
+  "return_to_automatic"
+] as const;
+export const clientLifecycleDispositionValues = ["applied", "candidate_recorded", "no_change"] as const;
 export const clientJoinIntentStatusValues = ["pending", "claimed", "expired"] as const;
 
 export function formatClientSqlValues(values: readonly string[]): string {

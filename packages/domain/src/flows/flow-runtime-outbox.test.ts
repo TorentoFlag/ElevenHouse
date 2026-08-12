@@ -3,8 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { Booking } from "../bookings";
 import {
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  createClientLifecycleChangedFlowEnrollmentRequestedPayload,
+  createFirstInboundMessageFlowEnrollmentRequestedPayload,
   createBookingConfirmedFlowEnrollmentRequestedPayload,
-  flowBookingConfirmedEnrollmentRequestedPayloadV1Schema
+  createProductPurchasedFlowEnrollmentRequestedPayload,
+  flowBookingConfirmedEnrollmentRequestedPayloadV1Schema,
+  flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema,
+  flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema,
+  flowProductPurchasedEnrollmentRequestedPayloadV1Schema
 } from "./flow-runtime-outbox";
 
 describe("booking-confirmed Flow enrollment outbox contract", () => {
@@ -53,6 +59,96 @@ describe("booking-confirmed Flow enrollment outbox contract", () => {
       flowBookingConfirmedEnrollmentRequestedPayloadV1Schema.safeParse({
         ...payload,
         payload: {}
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("product-purchased Flow enrollment outbox contract", () => {
+  it("publishes only a source-derived order reference and product identifier", () => {
+    const payload = createProductPurchasedFlowEnrollmentRequestedPayload({
+        orderId: "11111111-1111-4111-8111-111111111111",
+        ownerUserId: "22222222-2222-4222-8222-222222222222",
+        clientUserId: "33333333-3333-4333-8333-333333333333",
+        productId: "44444444-4444-4444-8444-444444444444",
+        capturedAt: "2026-08-13T10:00:00.000Z"
+    });
+
+    expect(payload).toMatchObject({
+      eventKind: "product_purchased",
+      source: "finance",
+      sourceEventId: "order:11111111-1111-4111-8111-111111111111:captured",
+      subjectType: "client",
+      subjectId: "33333333-3333-4333-8333-333333333333",
+      occurrenceKey: "11111111-1111-4111-8111-111111111111",
+      payload: {
+        orderId: "11111111-1111-4111-8111-111111111111",
+        productId: "44444444-4444-4444-8444-444444444444"
+      }
+    });
+    expect(flowProductPurchasedEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(payload);
+    expect(
+      flowProductPurchasedEnrollmentRequestedPayloadV1Schema.safeParse({
+        ...payload,
+        sourceEventId: "order:00000000-0000-4000-8000-000000000000:captured"
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("client-scoped Flow enrollment outbox contracts", () => {
+  it("does not transport inbound message content", () => {
+    const payload = createFirstInboundMessageFlowEnrollmentRequestedPayload({
+      messageId: "11111111-1111-4111-8111-111111111111",
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      clientUserId: "33333333-3333-4333-8333-333333333333",
+      relationshipId: "44444444-4444-4444-8444-444444444444",
+      receivedAt: "2026-08-13T10:00:00.000Z"
+    });
+
+    expect(payload).toMatchObject({
+      eventKind: "first_inbound_message",
+      source: "messaging",
+      subjectType: "client",
+      subjectId: "33333333-3333-4333-8333-333333333333",
+      payload: {
+        messageId: "11111111-1111-4111-8111-111111111111",
+        relationshipId: "44444444-4444-4444-8444-444444444444"
+      }
+    });
+    expect(JSON.stringify(payload)).not.toContain("message text");
+    expect(flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(payload);
+    expect(
+      flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.safeParse({
+        ...payload,
+        payload: { ...payload.payload, messageText: "message text" }
+      }).success
+    ).toBe(false);
+  });
+
+  it("requires an exact lifecycle transition identity", () => {
+    const payload = createClientLifecycleChangedFlowEnrollmentRequestedPayload({
+        historyId: "11111111-1111-4111-8111-111111111111",
+        ownerUserId: "22222222-2222-4222-8222-222222222222",
+        clientUserId: "33333333-3333-4333-8333-333333333333",
+        relationshipId: "44444444-4444-4444-8444-444444444444",
+        fromStatus: "new",
+        toStatus: "active",
+        occurredAt: "2026-08-13T10:00:00.000Z"
+    });
+
+    expect(payload).toMatchObject({
+      eventKind: "client_lifecycle_changed",
+      source: "clients",
+      sourceEventId: "client-lifecycle:11111111-1111-4111-8111-111111111111",
+      occurrenceKey: "11111111-1111-4111-8111-111111111111",
+      payload: { fromStatus: "new", toStatus: "active" }
+    });
+    expect(flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(payload);
+    expect(
+      flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.safeParse({
+        ...payload,
+        payload: { ...payload.payload, toStatus: "new" }
       }).success
     ).toBe(false);
   });

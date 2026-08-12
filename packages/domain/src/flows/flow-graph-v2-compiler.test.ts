@@ -21,6 +21,15 @@ const bookingNode = node({
   displayTitle: "Запись подтверждена",
   config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
 });
+const productPurchaseNode = node({
+  id: "purchase",
+  kind: "product_purchased",
+  displayTitle: "Продукт оплачен",
+  config: {
+    productIds: ["11111111-1111-4111-8111-111111111111"],
+    enrollmentPolicy: "each_occurrence"
+  }
+});
 const birthDataNode = node({
   id: "birth-data",
   kind: "birth_data_available",
@@ -223,6 +232,23 @@ describe("flow graph v2 compiler", () => {
       config: {
         duePolicy: { kind: "none" },
         completionRequirements: { resultSummary: "optional" }
+      }
+    });
+  });
+
+  it("compiles a product-purchase start with finance and product requirements", () => {
+    const result = compileFlowGraphV2(
+      graphV2(
+        [productPurchaseNode, completedNode],
+        [edge("purchase-to-completed", "purchase", "completed", "next")]
+      )
+    );
+
+    expect(result).toMatchObject({
+      publishable: true,
+      capabilityManifest: {
+        triggerMatcher: { kind: "product_purchased" },
+        requiredCapabilities: ["finance.events.client_order_captured", "products.read"]
       }
     });
   });

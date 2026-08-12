@@ -3,6 +3,7 @@ import {
   CHART_CALCULATION_TERMINAL_EVENT,
   CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
   FlowBookingEnrollmentDeferredError,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type FlowRuntimeDispatchOutboxStore
@@ -14,6 +15,7 @@ import {
   type FlowChartTerminalSignalDispatcher,
   type FlowMessagingTerminalSignalDispatcher,
   type FlowBookingEnrollmentDispatcher,
+  type FlowClientEventEnrollmentDispatcher,
   type FlowBookingLifecycleDispatcher,
   type FlowBirthProfileRecheckDispatcher
 } from "./flow-runtime.outbox-relay";
@@ -26,6 +28,8 @@ const ownerUserId = "00000000-0000-4000-8000-000000000005";
 const birthDataHistoryId = "00000000-0000-4000-8000-000000000006";
 const birthDataId = "00000000-0000-4000-8000-000000000007";
 const clientUserId = "00000000-0000-4000-8000-000000000008";
+const productId = "00000000-0000-4000-8000-000000000009";
+const orderId = "00000000-0000-4000-8000-000000000010";
 const claimFence = 1n;
 
 describe("relayPendingFlowRuntimeDispatchEvents", () => {
@@ -68,6 +72,25 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
     expect(processBookingLifecycleEvent).toHaveBeenCalledWith(lifecycleEventId);
     expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
     expect(store.markRetry).not.toHaveBeenCalled();
+  });
+
+  it("publishes a product-purchased enrollment only after the durable client-event outcome", async () => {
+    const store = createStore({
+      id: eventId,
+      eventType: FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
+      aggregateId: clientUserId,
+      payload: productPurchasedPayload(),
+      attempts: 1,
+      claimFence
+    });
+    const enrollClientEvent = vi.fn(async () => clientEventEnrollmentResult("enrolled"));
+
+    await relayPendingFlowRuntimeDispatchEvents(relayInput({ store, enrollClientEvent }));
+
+    expect(enrollClientEvent).toHaveBeenCalledWith(productPurchasedPayload());
+    expect(store.markPublished).toHaveBeenCalledWith({ eventId, claimFence });
+    expect(store.markRetry).not.toHaveBeenCalled();
+    expect(store.markQuarantined).not.toHaveBeenCalled();
   });
 
   it("delivers a validated chart terminal signal before publishing its outbox event", async () => {
@@ -357,6 +380,7 @@ describe("relayPendingFlowRuntimeDispatchEvents", () => {
 function relayInput(input: {
   readonly store: FlowRuntimeDispatchOutboxStore;
   readonly enrollBookingConfirmed?: FlowBookingEnrollmentDispatcher;
+  readonly enrollClientEvent?: FlowClientEventEnrollmentDispatcher;
   readonly processBookingLifecycleEvent?: FlowBookingLifecycleDispatcher;
   readonly deliverChartTerminalSignal?: FlowChartTerminalSignalDispatcher;
   readonly deliverMessagingTerminalSignal?: FlowMessagingTerminalSignalDispatcher;
@@ -365,6 +389,7 @@ function relayInput(input: {
   return {
     store: input.store,
     enrollBookingConfirmed: input.enrollBookingConfirmed ?? (async () => enrollmentResult("no_match")),
+    enrollClientEvent: input.enrollClientEvent ?? (async () => clientEventEnrollmentResult("no_match")),
     processBookingLifecycleEvent:
       input.processBookingLifecycleEvent ?? (async () => lifecycleResult()),
     deliverChartTerminalSignal: input.deliverChartTerminalSignal ?? (async () => ({ status: "stored" })),
@@ -384,6 +409,21 @@ function relayInput(input: {
     publishingLockTimeoutMs: 60_000,
     maxAttempts: 3,
     enrollmentDeferDelayMs: 30_000
+  };
+}
+
+function productPurchasedPayload() {
+  return {
+    schemaVersion: "flow-product-purchased-enrollment-request.v1" as const,
+    eventKind: "product_purchased" as const,
+    source: "finance" as const,
+    sourceEventId: `order:${orderId}:captured`,
+    subjectType: "client" as const,
+    subjectId: clientUserId,
+    occurrenceKey: orderId,
+    occurredAt: "2026-08-05T00:00:00.000Z",
+    payloadSchemaVersion: 1 as const,
+    payload: { orderId, productId }
   };
 }
 
@@ -442,6 +482,15 @@ function lifecyclePayload() {
 }
 
 function enrollmentResult(status: "enrolled" | "no_match") {
+  return {
+    status,
+    replayed: false,
+    eventId: "00000000-0000-4000-8000-000000000004",
+    runs: []
+  } as const;
+}
+
+function clientEventEnrollmentResult(status: "enrolled" | "no_match") {
   return {
     status,
     replayed: false,

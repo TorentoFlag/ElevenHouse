@@ -81,6 +81,30 @@ const nodeRules = {
     terminal: false,
     trigger: true
   },
+  product_purchased: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["finance.events.client_order_captured", "products.read"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  first_inbound_message: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["messaging.events.first_inbound_message"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  client_lifecycle_changed: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["clients.events.lifecycle_changed"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
   birth_data_available: {
     allowedHandles: conditionHandles,
     requiredHandles: conditionHandles,
@@ -236,7 +260,7 @@ export function compileFlowGraphV2(
         addIssue(issues, {
           code: "manual_trigger_booking_context_unsupported",
           path: `nodes.${node.id}`,
-          message: "A manual-client trigger cannot use a node that requires Booking context."
+          message: "A non-booking trigger cannot use a node that requires Booking context."
         });
       }
     }
@@ -477,6 +501,15 @@ function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
       }
     };
   }
+  if (node.kind === "product_purchased") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        productIds: [...node.config.productIds].sort(compareStableText)
+      }
+    };
+  }
   if (node.kind === "astrologer_work_item") {
     return {
       ...node,
@@ -535,8 +568,24 @@ function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityM
 
 function isTriggerNode(
   node: FlowNodeV2
-): node is Extract<FlowNodeV2, { kind: "booking_confirmed" | "manual_client" }> {
-  return node.kind === "booking_confirmed" || node.kind === "manual_client";
+): node is Extract<
+  FlowNodeV2,
+  {
+    kind:
+      | "booking_confirmed"
+      | "manual_client"
+      | "product_purchased"
+      | "first_inbound_message"
+      | "client_lifecycle_changed";
+  }
+> {
+  return (
+    node.kind === "booking_confirmed" ||
+    node.kind === "manual_client" ||
+    node.kind === "product_purchased" ||
+    node.kind === "first_inbound_message" ||
+    node.kind === "client_lifecycle_changed"
+  );
 }
 
 function containsCycle(

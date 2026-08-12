@@ -3,4 +3,5 @@ export * from "./client-profiles.schema";
 export * from "./client-birth-data.schema";
 export * from "./client-astrologer-relationships.schema";
 export * from "./client-join-intents.schema";
+export * from "./client-lifecycle.schema";
 export * from "./relations.schema";

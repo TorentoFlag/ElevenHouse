@@ -8,6 +8,11 @@ import type {
   ClientRelationshipSource,
   NormalizedClientBirthDataInput
 } from "./client-types";
+import type {
+  ClientLifecycleCauseKind,
+  ClientLifecycleStatus,
+  ClientLifecycleTransitionDecision
+} from "./client-lifecycle";
 
 export type ClientStoreCreateJoinIntentInput = {
   readonly id: string;
@@ -59,6 +64,30 @@ export type ClientStoreListAstrologerClientsInput = {
 export type ClientStoreGetAstrologerClientInput = {
   readonly astrologerUserId: string;
   readonly clientUserId: string;
+};
+
+export type ClientLifecycleTransitionStoreInput = {
+  readonly relationshipId: string;
+  readonly sourceEventId: string;
+  readonly cause: {
+    readonly kind: ClientLifecycleCauseKind;
+    readonly occurredAt: string;
+    readonly manualStatus?: ClientLifecycleStatus;
+  };
+  readonly actorUserId: string | null;
+};
+
+export type ClientLifecycleTransitionStoreResult = {
+  readonly replayed: boolean;
+  readonly decision: ClientLifecycleTransitionDecision;
+  readonly revision: number;
+  readonly lastActivityAt: string;
+};
+
+export type ClientLifecycleStore = {
+  readonly applyTransition: (
+    input: ClientLifecycleTransitionStoreInput
+  ) => Promise<ClientLifecycleTransitionStoreResult>;
 };
 
 export type ClientJoinIntentClaimStore = {

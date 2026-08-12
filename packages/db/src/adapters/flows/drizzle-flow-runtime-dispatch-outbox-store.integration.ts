@@ -4,7 +4,12 @@ import { readFileSync } from "node:fs";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { CHART_CALCULATION_TERMINAL_EVENT } from "@elevenhouse/domain";
+import {
+  CHART_CALCULATION_TERMINAL_EVENT,
+  FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT
+} from "@elevenhouse/domain";
 
 import { assertFlowOutboxSafety } from "../../../scripts/flow-outbox-safety-reconciliation";
 import { assertDevelopmentDatabaseUrl } from "../../connection";
@@ -89,6 +94,15 @@ describe("flow runtime dispatch outbox store Drizzle/PostgreSQL integration", ()
         occurredAt: "2026-08-05T00:00:00.000Z"
       }
     });
+    const productPurchasedEvent = await insertEvent({
+      eventType: FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT
+    });
+    const firstInboundMessageEvent = await insertEvent({
+      eventType: FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT
+    });
+    const lifecycleChangedEvent = await insertEvent({
+      eventType: FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT
+    });
     await insertEvent({ eventType: "calculation.pdf.requested.v1" });
     const store = createDrizzleFlowRuntimeDispatchOutboxStore(runtime.database);
 
@@ -98,7 +112,7 @@ describe("flow runtime dispatch outbox store Drizzle/PostgreSQL integration", ()
     ]);
     const claims = [...first.claimed, ...second.claimed];
 
-    expect(claims).toHaveLength(3);
+    expect(claims).toHaveLength(6);
     expect(claims).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -119,6 +133,24 @@ describe("flow runtime dispatch outbox store Drizzle/PostgreSQL integration", ()
           id: chartTerminalEvent.id,
           eventType: CHART_CALCULATION_TERMINAL_EVENT,
           aggregateId: chartJobId,
+          attempts: 1,
+          claimFence: 1n
+        }),
+        expect.objectContaining({
+          id: productPurchasedEvent.id,
+          eventType: FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
+          attempts: 1,
+          claimFence: 1n
+        }),
+        expect.objectContaining({
+          id: firstInboundMessageEvent.id,
+          eventType: FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+          attempts: 1,
+          claimFence: 1n
+        }),
+        expect.objectContaining({
+          id: lifecycleChangedEvent.id,
+          eventType: FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT,
           attempts: 1,
           claimFence: 1n
         })

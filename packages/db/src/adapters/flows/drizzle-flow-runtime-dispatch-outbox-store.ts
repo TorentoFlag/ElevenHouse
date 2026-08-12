@@ -5,6 +5,9 @@ import {
   CHART_CALCULATION_TERMINAL_EVENT,
   CLIENT_BIRTH_PROFILE_UPDATED_EVENT,
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
   messagingMessageDeliveryTerminalEventType,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type FlowRuntimeDispatchOutboxDispositionResult,
@@ -51,6 +54,9 @@ export function createDrizzleFlowRuntimeDispatchOutboxStore(
               from ${outboxEvents}
              where ${outboxEvents.eventType} in (
                      ${FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT},
                      ${BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED},
                      ${CHART_CALCULATION_TERMINAL_EVENT},
                      ${messagingMessageDeliveryTerminalEventType},
@@ -100,6 +106,9 @@ export function createDrizzleFlowRuntimeDispatchOutboxStore(
               from ${outboxEvents}
              where ${outboxEvents.eventType} in (
                      ${FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT},
+                     ${FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT},
                      ${BOOKING_LIFECYCLE_EVENT_DISPATCH_REQUESTED},
                      ${CHART_CALCULATION_TERMINAL_EVENT},
                      ${messagingMessageDeliveryTerminalEventType},

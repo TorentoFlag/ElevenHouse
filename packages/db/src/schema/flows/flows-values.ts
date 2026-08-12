@@ -49,10 +49,19 @@ export const flowRuntimeEventSourceValues = [
   "message",
   "chart",
   "astro_calendar",
-  "manual"
+  "manual",
+  "finance",
+  "messaging",
+  "clients"
 ] as const;
 
-export const flowRuntimeEventKindValues = ["booking_confirmed", "manual_client"] as const;
+export const flowRuntimeEventKindValues = [
+  "booking_confirmed",
+  "manual_client",
+  "product_purchased",
+  "first_inbound_message",
+  "client_lifecycle_changed"
+] as const;
 
 export const flowRuntimeEventClassificationValues = ["personal"] as const;
 
@@ -64,7 +73,12 @@ export const flowRuntimeEventIngestionOutcomeValues = [
   "suppressed"
 ] as const;
 
-export const flowEnrollmentPolicyKeyValues = ["once_per_occurrence"] as const;
+export const flowEnrollmentPolicyKeyValues = [
+  "once_per_occurrence",
+  "once_per_client",
+  "each_occurrence",
+  "after_previous_terminal"
+] as const;
 
 export const flowExecutionAuthorityBasisValues = [
   "current_entitlement",

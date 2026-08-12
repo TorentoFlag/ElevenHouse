@@ -5,6 +5,7 @@ import {
   flowExecutableNodeKindV2Values,
   flowNodeKindV2Values,
   flowSourceHandleV2Values,
+  flowTriggerNodeKindV2Values,
 } from "@elevenhouse/contracts";
 
 const capabilityManifestColumn = "capability_manifest";
@@ -12,6 +13,7 @@ const nodeExecutors = `${capabilityManifestColumn}->'nodeExecutors'`;
 const requiredCapabilities = `${capabilityManifestColumn}->'requiredCapabilities'`;
 const graphNodes = "graph->'nodes'";
 const graphEdges = "graph->'edges'";
+const triggerMatcherKinds = flowTriggerNodeKindV2Values.map((kind) => `'${kind}'`).join(", ");
 
 const graphV2Predicate = graphEnvelopePredicate(
   "flow-graph.v2",
@@ -80,7 +82,7 @@ export const flowCapabilityManifestSchemaPredicate = `(
           ]::text[] = '{}'::jsonb
           AND jsonb_typeof(capability_manifest->'triggerMatcher'->'kind') = 'string'
           AND capability_manifest->'triggerMatcher'->>'kind'
-            IN ('booking_confirmed', 'manual_client')
+            IN (${triggerMatcherKinds})
           AND jsonb_typeof(
             capability_manifest->'triggerMatcher'->'configSchemaVersion'
           ) = 'number'
