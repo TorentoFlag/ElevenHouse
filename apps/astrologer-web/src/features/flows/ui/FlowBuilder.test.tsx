@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { FlowDefinitionDetail, FlowRuntimeAvailability } from "@elevenhouse/contracts";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowBuilder } from "./FlowBuilder";
 
@@ -175,28 +175,38 @@ describe("FlowBuilder", () => {
     ).toHaveProperty("disabled", true);
   });
 
-  it("keeps edits local and saves graph plus presentation with optimistic revision", () => {
+  it("autosaves graph edits with the optimistic revision", async () => {
     const onSaveDraft = vi.fn();
-    renderBuilder({ onSaveDraft });
+    vi.useFakeTimers();
+    try {
+      renderBuilder({ onSaveDraft });
 
-    fireEvent.change(screen.getByLabelText("Название узла"), {
-      target: { value: "Выбрать клиента" }
-    });
-    expect(onSaveDraft).not.toHaveBeenCalled();
-    expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("Название узла"), {
+        target: { value: "Выбрать клиента" }
+      });
+      expect(onSaveDraft).not.toHaveBeenCalled();
+      expect(screen.getByText("Есть несохранённые изменения")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    expect(onSaveDraft).toHaveBeenCalledWith({
-      flowId: flow.id,
-      expectedRevision: 4,
-      graph: expect.objectContaining({
-        nodes: [expect.objectContaining({ id: "manual-client", displayTitle: "Выбрать клиента" })]
-      }),
-      presentation: flow.draftPresentation
-    });
+      await act(async () => {
+        vi.advanceTimersByTime(1_000);
+      });
+
+      expect(onSaveDraft).toHaveBeenCalledWith({
+        flowId: flow.id,
+        expectedRevision: 4,
+        graph: expect.objectContaining({
+          nodes: [
+            expect.objectContaining({ id: "manual-client", displayTitle: "Выбрать клиента" })
+          ]
+        }),
+        presentation: flow.draftPresentation
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("stores a completed draft viewport interaction with the next explicit save", () => {
+  it("keeps manual save as an immediate fallback for graph and presentation changes", () => {
     const onSaveDraft = vi.fn();
     renderBuilder({ onSaveDraft });
 

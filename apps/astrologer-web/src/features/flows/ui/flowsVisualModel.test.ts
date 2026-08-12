@@ -66,6 +66,36 @@ describe("flows visual model", () => {
     });
   });
 
+  it("derives the user-facing lifecycle status from definition and enrollment state", () => {
+    const inactivePublished = {
+      ...flow,
+      state: "versioned",
+      draftBaseVersionId: null
+    } satisfies FlowDefinitionSummary;
+    const activePublished = {
+      ...inactivePublished,
+      enrollment: {
+        ...inactivePublished.enrollment,
+        control: {
+          ...inactivePublished.enrollment.control,
+          state: "active",
+          enrollmentRevision: 1,
+          activeVersionId: inactivePublished.latestPublishedVersionId,
+          activeActivationEpochId: "55555555-5555-4555-8555-555555555555",
+          activeSince: "2026-07-28T09:00:00.000Z"
+        }
+      }
+    } satisfies FlowDefinitionSummary;
+
+    expect(buildFlowGalleryCard(inactivePublished, "ru").definitionStateLabel).toBe("Отключена");
+    expect(buildFlowGalleryCard(inactivePublished, "en").definitionStateLabel).toBe("Disabled");
+    expect(buildFlowGalleryCard(activePublished, "ru").definitionStateLabel).toBe("Активна");
+    expect(buildFlowGalleryCard(activePublished, "en").definitionStateLabel).toBe("Active");
+    expect(buildFlowGalleryCard({ ...flow, state: "archived" }, "ru").definitionStateLabel).toBe(
+      "В архиве"
+    );
+  });
+
   it("defines an explicit visual tone and localized label for every supported node kind", () => {
     const expectedVisuals = {
       booking_confirmed: ["trigger", "Запись подтверждена", "Booking confirmed"],

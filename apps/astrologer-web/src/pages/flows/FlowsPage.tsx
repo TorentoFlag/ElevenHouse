@@ -191,6 +191,8 @@ export function FlowsPage() {
   };
 
   const saveDraft = (input: FlowDraftCommandPayload) => {
+    validationMutation.reset();
+    setValidationResult(null);
     const body = {
       expectedRevision: input.expectedRevision,
       graph: input.graph,

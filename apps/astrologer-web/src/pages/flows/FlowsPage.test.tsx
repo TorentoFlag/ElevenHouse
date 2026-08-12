@@ -609,6 +609,49 @@ describe("FlowsPage", () => {
     );
   });
 
+  it("does not remount stale validation issues after a corrected draft is saved", () => {
+    const validate = vi.fn((_input, options) =>
+      options?.onSuccess({
+        ...validValidation(),
+        publishable: false,
+        activatable: false,
+        issues: [
+          {
+            code: "missing_required_source_handle",
+            severity: "error",
+            blocking: true,
+            path: "nodes.manual-client.next",
+            message: "Node manual_client requires exactly one next edge."
+          }
+        ],
+        activationBlockers: ["FLOW_GRAPH_NOT_PUBLISHABLE"],
+        normalizedGraph: null,
+        capabilityManifest: null
+      })
+    );
+    const updateDraft = vi.fn();
+    mocks.useValidateFlowDefinitionMutation.mockReturnValue(mutation(validate));
+    mocks.useUpdateFlowDraftMutation.mockReturnValue(mutation(updateDraft));
+    renderFlowsPage();
+
+    openFlow(flow.name);
+    fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
+    expect(screen.getByRole("alert", { name: "Проверка схемы" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить узел: Завершено" }));
+    expect(screen.queryByRole("alert", { name: "Проверка схемы" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(updateDraft).toHaveBeenCalled();
+    act(() => updateDraft.mock.calls[0]![1].onSuccess({ ...flowDetail, revision: 4 }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Все воронки" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выйти без сохранения" }));
+    openFlow(flow.name);
+
+    expect(screen.queryByRole("alert", { name: "Проверка схемы" })).toBeNull();
+  });
+
   it("opens an AstroCalendar recommendation without inventing unsupported graph context", () => {
     const unavailableTemplate: FlowDefinitionTemplateDescriptorV2 = {
       ...availableTemplate,

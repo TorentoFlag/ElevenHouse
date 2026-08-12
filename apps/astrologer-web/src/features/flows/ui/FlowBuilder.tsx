@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Modal } from "@elevenhouse/design-system/components/Modal";
 import "@elevenhouse/design-system/components/Modal.css";
 import {
@@ -128,6 +128,7 @@ export function FlowBuilder({
   const interactionLocked =
     isSaving || isPublishing || isCreatingNextDraft || isReloadingServer || isValidating;
   const selectedNode = draftGraph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const lastAutosavedDraftSignature = useRef<string | null>(null);
   const runtime = buildFlowRuntimePresentation(runtimeAvailability, locale);
   const hasActiveManualClientTrigger =
     flow.state === "versioned" &&
@@ -247,12 +248,58 @@ export function FlowBuilder({
     setVisibleValidationIssues(emptyValidationIssues);
   };
 
-  const commandPayload = (expectedRevision = draftBaseRevision): FlowDraftCommandPayload => ({
+  const commandPayload = useCallback(
+    (expectedRevision = draftBaseRevision): FlowDraftCommandPayload => ({
+      flowId: flow.id,
+      expectedRevision,
+      graph: draftGraph,
+      presentation: draftPresentation
+    }),
+    [draftBaseRevision, draftGraph, draftPresentation, flow.id]
+  );
+  const draftSignature = JSON.stringify({
     flowId: flow.id,
-    expectedRevision,
+    expectedRevision: draftBaseRevision,
     graph: draftGraph,
     presentation: draftPresentation
   });
+
+  useEffect(() => {
+    if (
+      !dirty ||
+      !editable ||
+      isSaving ||
+      isPublishing ||
+      isCreatingNextDraft ||
+      isReloadingServer ||
+      isValidating ||
+      effectiveConflict ||
+      !transportValidation.success ||
+      lastAutosavedDraftSignature.current === draftSignature
+    ) {
+      return;
+    }
+
+    const autosaveTimer = window.setTimeout(() => {
+      lastAutosavedDraftSignature.current = draftSignature;
+      onSaveDraft(commandPayload());
+    }, 1_000);
+
+    return () => window.clearTimeout(autosaveTimer);
+  }, [
+    commandPayload,
+    dirty,
+    draftSignature,
+    editable,
+    effectiveConflict,
+    isCreatingNextDraft,
+    isPublishing,
+    isReloadingServer,
+    isSaving,
+    isValidating,
+    onSaveDraft,
+    transportValidation.success
+  ]);
 
   const reloadServerDraft = async () => {
     if (!onReloadServer) return;

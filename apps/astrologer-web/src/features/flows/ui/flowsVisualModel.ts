@@ -46,7 +46,7 @@ export function buildFlowGalleryCard(
   return {
     id: flow.id,
     title: flow.name,
-    definitionStateLabel: flowDefinitionStateLabel(flow.state, locale),
+    definitionStateLabel: userFacingLifecycleStateLabel(flow, locale),
     automationStatusLabel: flowAutomationStateLabel(flow, locale),
     automationControlLabel: compactAutomationControlLabel(flow, locale),
     approvalModeLabel: compactApprovalModeLabel(flow.approvalMode, locale),
@@ -70,6 +70,20 @@ export function buildFlowGalleryCard(
         ? `Клиентов внутри: ${flow.activeRunCount}`
         : `Clients inside: ${flow.activeRunCount}`
   };
+}
+
+function userFacingLifecycleStateLabel(
+  flow: FlowDefinitionSummary,
+  locale: FlowDisplayLocale
+): string {
+  const ru = locale === "ru";
+  if (flow.state === "versioned") {
+    if (flow.enrollment.control.state === "active") {
+      return ru ? "Активна" : "Active";
+    }
+    return ru ? "Отключена" : "Disabled";
+  }
+  return flowDefinitionStateLabel(flow.state, locale);
 }
 
 function compactAutomationControlLabel(

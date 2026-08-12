@@ -107,7 +107,7 @@ describe("FlowsMobileList", () => {
     );
 
     expect(screen.getByText(/активны 1/)).toBeTruthy();
-    expect(screen.getByText("Активна")).toBeTruthy();
+    expect(screen.getAllByText("Активна").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders the empty state after the mobile header", () => {
