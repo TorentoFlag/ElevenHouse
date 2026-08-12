@@ -18,7 +18,8 @@ import {
   type FlowWorkItemCommand,
   type FlowWorkItemCommandRejectionResponse,
   type FlowWorkItemCommandResult,
-  type FlowWorkItemStore
+  type FlowWorkItemStore,
+  type MobileSessionAuthenticationStore
 } from "@elevenhouse/domain";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -26,6 +27,7 @@ import { ClockModule } from "../clock/clock.module";
 import { SystemClock } from "../clock/system-clock.service";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import { AUTH_SESSION_AUTHENTICATION_STORE } from "../identity/auth/identity-auth.tokens";
+import { MOBILE_SESSION_AUTHENTICATION_STORE } from "../identity/mobile/mobile-session.tokens";
 import { createIdentityConfigServiceStub } from "../identity/testing/identity-config-service.stub";
 import { IdentityCurrentSessionService } from "../identity/session/identity-current-session.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
@@ -117,6 +119,7 @@ describe("flow work item HTTP routes", () => {
         IdentityCurrentSessionService,
         FlowWorkItemsService,
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: createAuthStore() },
+        { provide: MOBILE_SESSION_AUTHENTICATION_STORE, useValue: createMobileAuthStore() },
         { provide: FLOW_WORK_ITEM_STORE, useValue: store }
       ]
     })
@@ -593,6 +596,12 @@ function createAuthStore(): AuthSessionAuthenticationStore {
         ]
       };
     }
+  };
+}
+
+function createMobileAuthStore(): MobileSessionAuthenticationStore {
+  return {
+    findByAccessTokenHash: async () => null
   };
 }
 

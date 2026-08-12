@@ -150,6 +150,7 @@ describe("flow graph v2 contracts", () => {
       createdAt: "2026-08-02T18:00:00.000Z",
       updatedAt: "2026-08-02T18:00:00.000Z",
       publishedAt: null,
+      activeRunCount: 0,
       graphSchemaVersion: "flow-graph.v2",
       origin: { schemaVersion: "flow-definition-origin.v1", type: "blank" }
     } as const;
@@ -222,7 +223,8 @@ describe("flow graph v2 contracts", () => {
       latestPublishedVersion: null,
       createdAt: "2026-08-02T18:00:00.000Z",
       updatedAt: "2026-08-02T18:00:00.000Z",
-      publishedAt: null
+      publishedAt: null,
+      activeRunCount: 0
     } as const;
     const current = {
       ...common,
