@@ -50,6 +50,7 @@ const eligibleProduct = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "active",
+  revision: 1,
   title: "Натальная консультация",
   subtitle: null,
   priceMinor: 490000,
@@ -72,6 +73,7 @@ const eligibleProduct = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [],
   modifiers: [],
   analytics: {

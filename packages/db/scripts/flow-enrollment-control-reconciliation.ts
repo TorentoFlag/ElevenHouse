@@ -90,7 +90,7 @@ const generatedBaselineCatalog = {
 } as const satisfies CatalogFingerprint;
 
 const currentRuntimeExtensionCatalog = {
-  hash: "58364e10edcf4d8147fba70c186590c3789647ff2944b9dcfbaf2c05cc5de030",
+  hash: "3c96a1012f30acfc52058b8700f3320cc11a21078a22a669e6f82d6ccf750986",
   columns: 16,
   constraints: 4,
   indexes: 2,
