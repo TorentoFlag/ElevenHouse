@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SystemClock } from "../../common/system-clock.js";
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "../identity/auth/identity-auth.tokens";
+import {
+  AUTH_SESSION_AUTHENTICATION_STORE,
+  MOBILE_SESSION_AUTHENTICATION_STORE
+} from "../identity/auth/identity-auth.tokens";
 import { IdentityCurrentSessionService } from "../identity/session/identity-current-session.service";
 import { PublicCsrfTokenService } from "../security/csrf/public-csrf-token.service";
 import { CsrfGuard } from "../security/csrf/csrf.guard";
@@ -76,6 +79,7 @@ describe("refund candidates public HTTP flow", () => {
           }
         },
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: authStore() },
+        { provide: MOBILE_SESSION_AUTHENTICATION_STORE, useValue: { findByAccessTokenHash: vi.fn(async () => null) } },
         {
           provide: REFUND_CANDIDATES_ORDER_STORE,
           useValue: { findById: vi.fn(async () => paidOrder()) } satisfies Pick<

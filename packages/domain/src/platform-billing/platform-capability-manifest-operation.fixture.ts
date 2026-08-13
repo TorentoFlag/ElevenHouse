@@ -550,6 +550,22 @@ export const expectedPlatformCapabilityOperationContracts = {
     semanticKind: "mutation",
     requirement: { kind: "all_of", capabilities: ["funnels"] }
   },
+  "funnels.archive": {
+    semanticKind: "mutation",
+    requirement: { kind: "all_of", capabilities: ["funnels"] }
+  },
+  "funnels.restore": {
+    semanticKind: "mutation",
+    requirement: { kind: "all_of", capabilities: ["funnels"] }
+  },
+  "funnels.duplicate": {
+    semanticKind: "mutation",
+    requirement: { kind: "all_of", capabilities: ["funnels"] }
+  },
+  "funnels.delete": {
+    semanticKind: "mutation",
+    requirement: { kind: "all_of", capabilities: ["funnels"] }
+  },
   "funnels.activate": {
     semanticKind: "mutation",
     requirement: { kind: "all_of", capabilities: ["funnels"] }

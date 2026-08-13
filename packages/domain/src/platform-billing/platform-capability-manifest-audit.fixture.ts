@@ -826,6 +826,38 @@ const expectedAuditedSurfaces: readonly AuditedSurface[] = [
   audited(
     "funnels",
     "mutationOperations",
+    "funnels.archive",
+    "astrologer-api.FlowsModule",
+    "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+    "POST /flows/:flowId/archive"
+  ),
+  audited(
+    "funnels",
+    "mutationOperations",
+    "funnels.restore",
+    "astrologer-api.FlowsModule",
+    "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+    "POST /flows/:flowId/restore"
+  ),
+  audited(
+    "funnels",
+    "mutationOperations",
+    "funnels.duplicate",
+    "astrologer-api.FlowsModule",
+    "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+    "POST /flows/:flowId/duplicate"
+  ),
+  audited(
+    "funnels",
+    "mutationOperations",
+    "funnels.delete",
+    "astrologer-api.FlowsModule",
+    "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+    "POST /flows/:flowId/delete"
+  ),
+  audited(
+    "funnels",
+    "mutationOperations",
     "funnels.activate",
     "astrologer-api.FlowsModule",
     "apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts",

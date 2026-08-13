@@ -33,7 +33,8 @@ describe("relayPendingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => undefined),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = {
       add: vi.fn(async () => undefined)
@@ -125,7 +126,8 @@ describe("relayPendingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => undefined),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = {
       add: vi.fn(async () => undefined)
@@ -201,7 +203,8 @@ describe("relayPendingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => Promise.reject(staleClaimError)),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = { add: vi.fn(async () => undefined) } as unknown as AuthCodeDeliveryQueue;
 

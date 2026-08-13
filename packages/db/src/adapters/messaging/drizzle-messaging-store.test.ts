@@ -2097,7 +2097,9 @@ function selectChain(rows: readonly Record<string, unknown>[], onWhere?: (where:
       if (where) onWhere?.(where);
       return query;
     },
-    limit: async () => rows
+    limit: () => query,
+    for: async () => rows,
+    then: (resolve: (value: readonly Record<string, unknown>[]) => unknown) => resolve(rows)
   };
   return query;
 }

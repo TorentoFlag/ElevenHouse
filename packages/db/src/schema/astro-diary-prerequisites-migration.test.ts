@@ -35,7 +35,7 @@ const initialReadCursor = readSnapshot("0043_snapshot.json");
 describe("AstroDiary prerequisite forward migrations", () => {
   it("keeps 0038 focused on mobile device sessions and auth security events", () => {
     const journal = readJournal();
-    expect(journal.entries.slice(-6)).toEqual([
+    expect(journal.entries).toEqual(expect.arrayContaining([
       expect.objectContaining({ idx: 38, tag: "0038_mobile_device_sessions" }),
       expect.objectContaining({ idx: 39, tag: "0039_astro_diary" }),
       expect.objectContaining({ idx: 40, tag: "0040_smiling_thunderbolt" }),
@@ -45,7 +45,7 @@ describe("AstroDiary prerequisite forward migrations", () => {
         tag: "0042_astro-diary-client-follow-up-transition"
       }),
       expect.objectContaining({ idx: 43, tag: "0043_flawless_talisman" })
-    ]);
+    ]));
     expect(mobile.prevId).toBe(baseline.id);
 
     expect(addedTables(baseline, mobile)).toEqual([

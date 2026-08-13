@@ -12,7 +12,7 @@ import {
   type FlowClientEventEnrollmentStore,
   type FlowNormalizedClientEventV1
 } from "@elevenhouse/domain";
-import { and, asc, eq, gt, inArray, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, lte, notInArray, or, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import { clientAstrologerRelationships, clientLifecycleHistory } from "../../schema/clients";

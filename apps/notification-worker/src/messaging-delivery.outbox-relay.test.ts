@@ -30,7 +30,8 @@ describe("relayPendingMessagingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => undefined),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = { add: vi.fn(async () => undefined) } as unknown as MessagingDeliveryQueue;
     const logRecords: LogRecord[] = [];
@@ -90,7 +91,8 @@ describe("relayPendingMessagingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => undefined),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = {
       add: vi.fn(async () => {
@@ -140,7 +142,8 @@ describe("relayPendingMessagingOutboxEvents", () => {
         }
       ]),
       markPublished: vi.fn(async () => Promise.reject(staleClaimError)),
-      markPublishFailed: vi.fn(async () => undefined)
+      markPublishFailed: vi.fn(async () => undefined),
+      markQuarantined: vi.fn(async () => undefined)
     };
     const queue = { add: vi.fn(async () => undefined) } as unknown as MessagingDeliveryQueue;
 

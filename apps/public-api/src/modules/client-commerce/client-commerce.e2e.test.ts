@@ -15,7 +15,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SystemClock } from "../../common/system-clock.js";
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
-import { AUTH_SESSION_AUTHENTICATION_STORE } from "../identity/auth/identity-auth.tokens";
+import {
+  AUTH_SESSION_AUTHENTICATION_STORE,
+  MOBILE_SESSION_AUTHENTICATION_STORE
+} from "../identity/auth/identity-auth.tokens";
 import { IdentityCurrentSessionService } from "../identity/session/identity-current-session.service";
 import { ClientCommerceController } from "./client-commerce.controller";
 import { ClientCommerceService } from "./client-commerce.service";
@@ -63,6 +66,7 @@ describe("client commerce public HTTP flow", () => {
         { provide: SystemClock, useValue: { now: () => now } },
         { provide: ConfigService, useValue: configService() },
         { provide: AUTH_SESSION_AUTHENTICATION_STORE, useValue: authStore() },
+        { provide: MOBILE_SESSION_AUTHENTICATION_STORE, useValue: { findByAccessTokenHash: vi.fn(async () => null) } },
         { provide: CLIENT_COMMERCE_RELATIONSHIP_READER, useValue: relationshipReader },
         { provide: CLIENT_COMMERCE_PRODUCT_STORE, useValue: productStore },
         { provide: CLIENT_COMMERCE_TARIFF_AUTHORITY_STORE, useValue: tariffAuthority() },

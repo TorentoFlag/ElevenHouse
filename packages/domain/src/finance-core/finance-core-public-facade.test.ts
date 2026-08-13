@@ -21,7 +21,13 @@ describe("finance-core package boundary", () => {
       require: "./dist/finance-core/reconciliation.js"
     });
     expect(manifest.exports).not.toHaveProperty("./finance-core/*");
-    expect(rootIndex).not.toMatch(/finance-core/);
+    expect(rootIndex).toContain(
+      'export * from "./finance-core/client-order-capture-purpose-dispatch";'
+    );
+    expect(rootIndex).toContain(
+      'export * from "./finance-core/ports/client-order-capture-purpose-dispatch-uow";'
+    );
+    expect(rootIndex).not.toMatch(/export \* from "\.\/finance-core";/);
   });
 
   it("keeps the finance domain boundary out of browser applications", () => {

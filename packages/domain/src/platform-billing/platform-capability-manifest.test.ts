@@ -793,6 +793,7 @@ describe("platform capability manifest", () => {
       "/human-design",
       "/astro-calendar",
       "/chart-engine",
+      "/sessions/:sessionId",
       "/settings",
       "*"
     ]);
@@ -801,7 +802,14 @@ describe("platform capability manifest", () => {
       redirectTo: "/auth",
       replace: true
     });
-    expect(clientRouteModule.clientRoutePaths).toEqual(["/", "/auth", "/a/:handle", "/me", "*"]);
+    expect(clientRouteModule.clientRoutePaths).toEqual([
+      "/",
+      "/auth",
+      "/a/:handle",
+      "/me",
+      "/sessions/:sessionId",
+      "*"
+    ]);
     expect(clientRouteModule.clientRouteContract.publicAstrologer).toBe("/a/:handle");
   });
 

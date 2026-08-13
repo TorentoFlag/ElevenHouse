@@ -26,7 +26,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn(),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
     const queue = { add: vi.fn().mockResolvedValue(queueDelivery("waiting")) };
     const chartJobs = {
@@ -78,7 +79,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn(),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
     const queue = { add: vi.fn().mockResolvedValue(queueDelivery("waiting")) };
     const chartJobs = { getQueueDispatch: vi.fn() };
@@ -124,7 +126,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn(),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
     const queue = { add: vi.fn().mockResolvedValue(queueDelivery("waiting")) };
     const chartJobs = { getQueueDispatch: vi.fn().mockResolvedValue(null) };
@@ -165,7 +168,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn(),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
     const queue = { add: vi.fn().mockRejectedValue(new Error(sensitive)) };
     const chartJobs = {
@@ -217,7 +221,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn(),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
 
     await relayPendingChartCalculationEvents({
@@ -264,7 +269,8 @@ describe("relayPendingChartCalculationEvents", () => {
         }
       ]),
       markPublished: vi.fn().mockRejectedValue(staleClaimError),
-      markPublishFailed: vi.fn()
+      markPublishFailed: vi.fn(),
+      markQuarantined: vi.fn()
     };
 
     await expect(

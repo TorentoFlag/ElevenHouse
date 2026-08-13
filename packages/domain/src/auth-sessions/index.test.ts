@@ -18,7 +18,9 @@ describe("auth-sessions module exports", () => {
       "login_succeeded",
       "login_failed",
       "logout_succeeded",
-      "session_revoked"
+      "session_revoked",
+      "refresh_succeeded",
+      "refresh_token_reuse_detected"
     ]);
     expect(isAuthSessionUsable).toBeTypeOf("function");
     expect(normalizeAuthSessionCreationInput).toBeTypeOf("function");

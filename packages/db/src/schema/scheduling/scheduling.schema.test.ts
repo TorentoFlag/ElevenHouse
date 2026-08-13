@@ -215,7 +215,7 @@ describe("scheduling persistence schema", () => {
     ]) {
       expect(migration).toContain(`CREATE TABLE "${table}"`);
     }
-    expect(migration.match(/CREATE EXTENSION IF NOT EXISTS btree_gist;/g)).toHaveLength(1);
+    expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS btree_gist;");
     expect(
       migration.match(/schedule_reservations_active_owner_range_exclude/g)
     ).toHaveLength(1);

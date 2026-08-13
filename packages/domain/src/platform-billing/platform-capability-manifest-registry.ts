@@ -1479,6 +1479,38 @@ export const rawPlatformCapabilityManifest = {
         direct("funnels")
       ),
       api(
+        "funnels.archive",
+        owners.flows,
+        "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+        "POST /flows/:flowId/archive",
+        "mutation",
+        direct("funnels")
+      ),
+      api(
+        "funnels.restore",
+        owners.flows,
+        "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+        "POST /flows/:flowId/restore",
+        "mutation",
+        direct("funnels")
+      ),
+      api(
+        "funnels.duplicate",
+        owners.flows,
+        "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+        "POST /flows/:flowId/duplicate",
+        "mutation",
+        direct("funnels")
+      ),
+      api(
+        "funnels.delete",
+        owners.flows,
+        "apps/astrologer-api/src/modules/flows/flows.controller.ts",
+        "POST /flows/:flowId/delete",
+        "mutation",
+        direct("funnels")
+      ),
+      api(
         "funnels.activate",
         owners.flows,
         "apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts",
