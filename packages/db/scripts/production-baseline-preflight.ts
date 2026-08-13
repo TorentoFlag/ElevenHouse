@@ -5,6 +5,7 @@ import { assertFlowBookingLifecycleSafety } from "./flow-booking-lifecycle-safet
 import { assertFlowEnrollmentControl } from "./flow-enrollment-control-reconciliation";
 import { assertFlowOutboxSafety } from "./flow-outbox-safety-reconciliation";
 import {
+  isApprovedBaselinePrefix,
   isCurrentBaselineHistory,
   type MigrationLedgerRow
 } from "./production-baseline-plan";
@@ -17,7 +18,8 @@ export type ProductionBaselinePreflightInput = {
 
 export type ProductionBaselinePreflightResult =
   | { readonly kind: "fresh" }
-  | { readonly kind: "current" };
+  | { readonly kind: "current" }
+  | { readonly kind: "approved-prefix" };
 
 export function assessProductionBaselinePreflight(
   input: ProductionBaselinePreflightInput
@@ -29,12 +31,16 @@ export function assessProductionBaselinePreflight(
     return { kind: "fresh" };
   }
 
-  if (!isCurrentBaselineHistory(input.migrations)) {
+  if (isCurrentBaselineHistory(input.migrations)) {
+    return { kind: "current" };
+  }
+
+  if (!isApprovedBaselinePrefix(input.migrations)) {
     throw new Error(
       `PRODUCTION_BASELINE_PREFLIGHT_UNKNOWN_HISTORY ${formatMigrationHistory(input.migrations)}`
     );
   }
-  return { kind: "current" };
+  return { kind: "approved-prefix" };
 }
 
 async function main(): Promise<void> {
@@ -56,7 +62,9 @@ async function main(): Promise<void> {
     console.log(
       result.kind === "fresh"
         ? "Production baseline preflight accepted a fresh database"
-        : "Production baseline preflight accepted the current baseline"
+        : result.kind === "current"
+          ? "Production baseline preflight accepted the current baseline"
+          : "Production baseline preflight accepted an approved migration prefix"
     );
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);

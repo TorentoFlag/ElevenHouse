@@ -7,10 +7,13 @@ import {
 import { approvedLineage } from "./production-baseline-plan";
 
 describe("production baseline read-only preflight", () => {
-  it("accepts a fresh database and the exact current ledger", () => {
+  it("accepts a fresh database, an approved prefix and the exact current ledger", () => {
     expect(
       assessProductionBaselinePreflight(input({ ledgerExists: false, usersExists: false }))
     ).toEqual({ kind: "fresh" });
+    expect(
+      assessProductionBaselinePreflight(input({ migrations: approvedLineage.slice(0, 17).map(row) }))
+    ).toEqual({ kind: "approved-prefix" });
     expect(
       assessProductionBaselinePreflight(input({ migrations: approvedLineage.map(row) }))
     ).toEqual({ kind: "current" });

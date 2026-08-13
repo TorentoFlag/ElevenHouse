@@ -70,6 +70,18 @@ export function isCurrentBaselineHistory(migrations: readonly MigrationLedgerRow
   );
 }
 
+export function isApprovedBaselinePrefix(migrations: readonly MigrationLedgerRow[]): boolean {
+  return (
+    migrations.length > 0 &&
+    migrations.length <= approvedLineage.length &&
+    migrations.every(
+      (migration, index) =>
+        migration.hash === approvedLineage[index]?.hash &&
+        migration.created_at === approvedLineage[index]?.createdAt
+    )
+  );
+}
+
 export const schedulingBaselineDdl = `
   CREATE EXTENSION IF NOT EXISTS btree_gist;
   DO $$
