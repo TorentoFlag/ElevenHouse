@@ -4,6 +4,7 @@ import {
   appendFlowNodeFromPalette,
   flowPaletteNodeGroups,
   getAvailableSourceHandles,
+  getRequiredSourceHandles,
   moveFlowNodePresentation,
   renameFlowNode,
   updateFlowNodeConfig
@@ -138,6 +139,59 @@ describe("flowDraftEditor V2", () => {
       nodeId: "astrologer-work-item",
       position: { x: 400, y: 120 }
     });
+  });
+
+  it("exposes the semantic next handle for every supported start event", () => {
+    const startNodes: FlowGraphV2["nodes"] = [
+      {
+        id: "booking-confirmed",
+        kind: "booking_confirmed",
+        displayTitle: "Запись подтверждена",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: ["11111111-1111-4111-8111-111111111111"] }
+      },
+      graph.nodes[0]!,
+      {
+        id: "product-purchased",
+        kind: "product_purchased",
+        displayTitle: "Куплен продукт",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          productIds: ["11111111-1111-4111-8111-111111111111"],
+          enrollmentPolicy: "once_per_client"
+        }
+      },
+      {
+        id: "first-inbound-message",
+        kind: "first_inbound_message",
+        displayTitle: "Первое сообщение",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "once_per_client" }
+      },
+      {
+        id: "client-lifecycle-changed",
+        kind: "client_lifecycle_changed",
+        displayTitle: "Изменение статуса клиента",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          fromStatus: "new",
+          toStatus: "active",
+          enrollmentPolicy: "once_per_client"
+        }
+      }
+    ];
+
+    expect(startNodes.map((node) => [node.kind, getRequiredSourceHandles(node)])).toEqual([
+      ["booking_confirmed", ["next"]],
+      ["manual_client", ["next"]],
+      ["product_purchased", ["next"]],
+      ["first_inbound_message", ["next"]],
+      ["client_lifecycle_changed", ["next"]]
+    ]);
   });
 
   it("adds a natal AI draft with its direct natal-chart source", () => {

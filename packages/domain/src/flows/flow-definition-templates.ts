@@ -207,18 +207,18 @@ function createBlankDraft(locale: FlowDefinitionTemplateLocale): {
   readonly graph: FlowGraphV2;
   readonly presentation: FlowPresentationV1;
 } {
-  const nodeId = "manual-client";
+  const nodeId = "first-inbound-message";
   return {
     graph: flowGraphV2Schema.parse({
       schemaVersion: "flow-graph.v2",
       nodes: [
         {
           id: nodeId,
-          kind: "manual_client",
-          displayTitle: locale === "ru" ? "Клиент выбран вручную" : "Client selected manually",
+          kind: "first_inbound_message",
+          displayTitle: locale === "ru" ? "Первое сообщение клиента" : "Client first message",
           configSchemaVersion: 1,
           executorContractVersion: 1,
-          config: {}
+          config: { enrollmentPolicy: "once_per_client" }
         }
       ],
       edges: []
@@ -363,7 +363,10 @@ function createBookingNatalPreparationTemplate(
         config: {
           chartRequestNodeId: "natal-chart-request",
           locale,
-          approvalTitle: locale === "ru" ? "Проверить AI-черновик натальной карты" : "Review natal chart AI draft",
+          approvalTitle:
+            locale === "ru"
+              ? "Проверить AI-черновик натальной карты"
+              : "Review natal chart AI draft",
           expiresAfterMinutes: 1_440
         }
       },
@@ -376,7 +379,10 @@ function createBookingNatalPreparationTemplate(
         config: {
           taskKind: "consultation_preparation",
           taskTitle: locale === "ru" ? "Подготовить консультацию" : "Prepare consultation",
-          instructions: locale === "ru" ? "Используйте одобренный AI-черновик как материал подготовки." : "Use the approved AI draft as preparation material.",
+          instructions:
+            locale === "ru"
+              ? "Используйте одобренный AI-черновик как материал подготовки."
+              : "Use the approved AI draft as preparation material.",
           priority: "high",
           completionRequirements: { resultSummary: "required" }
         }
@@ -512,9 +518,15 @@ function invalidTemplateParameterPaths(
   return [...paths].sort();
 }
 
-function requireProductIds(parameters: Record<string, string | number | boolean | string[]>): readonly string[] {
+function requireProductIds(
+  parameters: Record<string, string | number | boolean | string[]>
+): readonly string[] {
   const productIds = parameters.product_ids;
-  if (!Array.isArray(productIds) || productIds.length === 0 || productIds.some((id) => !isUuid(id))) {
+  if (
+    !Array.isArray(productIds) ||
+    productIds.length === 0 ||
+    productIds.some((id) => !isUuid(id))
+  ) {
     throw new TypeError("Flow natal template requires validated product ids");
   }
   return [...productIds].sort();

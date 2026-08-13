@@ -40,9 +40,7 @@ export function FlowBuilderInspector({
           <Icon iconName={visual.iconName} size={18} />
         </span>
         <div>
-          <p className={classNames?.builderInspectorCategory ?? ""}>
-            {visual.label}
-          </p>
+          <p className={classNames?.builderInspectorCategory ?? ""}>{visual.label}</p>
           <h2>{selectedNode.displayTitle}</h2>
           <p className={classNames?.builderInspectorId ?? ""}>id: {selectedNode.id}</p>
         </div>
@@ -105,36 +103,85 @@ function NodeConfigFields({
 
   if (node.kind === "booking_confirmed") {
     return (
-      <label className={className}>
-        <span>{copy.productIds}</span>
-        <textarea
-          name="flowProductIds"
-          value={node.config.productIds.join("\n")}
-          disabled={!editable}
-          onChange={(event) =>
-            onChangeNode({
-              ...node,
-              config: {
-                productIds: event.target.value
-                  .split(/\s+/)
-                  .map((value) => value.trim())
-                  .filter(Boolean)
-              }
-            })
-          }
-        />
-      </label>
+      <ProductIdsField
+        className={className}
+        label={copy.bookingProductIds}
+        value={node.config.productIds}
+        editable={editable}
+        onChange={(productIds) => onChangeNode({ ...node, config: { productIds } })}
+      />
     );
   }
   if (node.kind === "manual_client") {
     return <p className={className}>{copy.manualTrigger}</p>;
   }
-  if (
-    node.kind === "product_purchased" ||
-    node.kind === "first_inbound_message" ||
-    node.kind === "client_lifecycle_changed"
-  ) {
-    return null;
+  if (node.kind === "product_purchased") {
+    return (
+      <>
+        <ProductIdsField
+          className={className}
+          label={copy.purchasedProductIds}
+          value={node.config.productIds}
+          editable={editable}
+          onChange={(productIds) =>
+            onChangeNode({ ...node, config: { ...node.config, productIds } })
+          }
+        />
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
+  }
+  if (node.kind === "first_inbound_message") {
+    return (
+      <EnrollmentPolicyField
+        className={className}
+        copy={copy}
+        value={node.config.enrollmentPolicy}
+        editable={editable}
+        onChange={(enrollmentPolicy) => onChangeNode({ ...node, config: { enrollmentPolicy } })}
+      />
+    );
+  }
+  if (node.kind === "client_lifecycle_changed") {
+    return (
+      <>
+        <StatusField
+          className={className}
+          label={copy.fromStatus}
+          value={node.config.fromStatus}
+          editable={editable}
+          copy={copy}
+          onChange={(fromStatus) =>
+            onChangeNode({ ...node, config: { ...node.config, fromStatus } })
+          }
+        />
+        <StatusField
+          className={className}
+          label={copy.toStatus}
+          value={node.config.toStatus}
+          editable={editable}
+          copy={copy}
+          onChange={(toStatus) => onChangeNode({ ...node, config: { ...node.config, toStatus } })}
+        />
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
   }
   if (node.kind === "birth_data_available") {
     return (
@@ -237,7 +284,9 @@ function NodeConfigFields({
             value={node.config.expiresAfterMinutes ?? ""}
             disabled={!editable}
             onChange={(event) => {
-              const expiresAfterMinutes = event.target.value ? Number(event.target.value) : undefined;
+              const expiresAfterMinutes = event.target.value
+                ? Number(event.target.value)
+                : undefined;
               const configWithoutExpiry = { ...node.config };
               delete configWithoutExpiry.expiresAfterMinutes;
               onChangeNode({
@@ -404,6 +453,122 @@ function NodeConfigFields({
   );
 }
 
+function ProductIdsField({
+  className,
+  label,
+  value,
+  editable,
+  onChange
+}: {
+  readonly className: string;
+  readonly label: string;
+  readonly value: readonly string[];
+  readonly editable: boolean;
+  readonly onChange: (productIds: string[]) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{label}</span>
+      <textarea
+        name="flowProductIds"
+        value={value.join("\n")}
+        disabled={!editable}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+              .split(/\s+/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          )
+        }
+      />
+    </label>
+  );
+}
+
+function EnrollmentPolicyField({
+  className,
+  copy,
+  value,
+  editable,
+  onChange
+}: {
+  readonly className: string;
+  readonly copy: (typeof inspectorCopy)["ru" | "en"];
+  readonly value: "once_per_client" | "each_occurrence" | "after_previous_terminal";
+  readonly editable: boolean;
+  readonly onChange: (
+    value: "once_per_client" | "each_occurrence" | "after_previous_terminal"
+  ) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{copy.enrollmentPolicy}</span>
+      <select
+        name="flowEnrollmentPolicy"
+        value={value}
+        disabled={!editable}
+        onChange={(event) =>
+          onChange(
+            event.target.value as "once_per_client" | "each_occurrence" | "after_previous_terminal"
+          )
+        }
+      >
+        <option value="once_per_client">{copy.enrollmentOncePerClient}</option>
+        <option value="each_occurrence">{copy.enrollmentEachOccurrence}</option>
+        <option value="after_previous_terminal">{copy.enrollmentAfterPreviousTerminal}</option>
+      </select>
+    </label>
+  );
+}
+
+const lifecycleStatuses = [
+  "new",
+  "active",
+  "waiting_for_client",
+  "in_service",
+  "inactive"
+] as const;
+
+function StatusField({
+  className,
+  label,
+  value,
+  editable,
+  copy,
+  onChange
+}: {
+  readonly className: string;
+  readonly label: string;
+  readonly value: (typeof lifecycleStatuses)[number] | null;
+  readonly editable: boolean;
+  readonly copy: (typeof inspectorCopy)["ru" | "en"];
+  readonly onChange: (value: (typeof lifecycleStatuses)[number] | null) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{label}</span>
+      <select
+        name="flowLifecycleStatus"
+        value={value ?? ""}
+        disabled={!editable}
+        onChange={(event) =>
+          onChange(
+            event.target.value ? (event.target.value as (typeof lifecycleStatuses)[number]) : null
+          )
+        }
+      >
+        <option value="">{copy.anyStatus}</option>
+        {lifecycleStatuses.map((status) => (
+          <option key={status} value={status}>
+            {copy.lifecycleStatusLabels[status]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function formatConnections(incoming: number, outgoing: number, locale: "ru" | "en"): string {
   if (locale === "en") return `${incoming} input · ${outgoing} output`;
   return `${incoming} ${pluralRu(incoming, "вход", "входа", "входов")} · ${outgoing} ${pluralRu(
@@ -430,7 +595,22 @@ const inspectorCopy = {
     contract: "Контракт",
     connections: "Связи",
     title: "Название узла",
-    productIds: "Продукты записи",
+    bookingProductIds: "Продукты записи",
+    purchasedProductIds: "Купленные продукты",
+    enrollmentPolicy: "Сколько раз запускать",
+    enrollmentOncePerClient: "Один раз на клиента",
+    enrollmentEachOccurrence: "Каждый раз по событию",
+    enrollmentAfterPreviousTerminal: "После завершения предыдущего запуска",
+    fromStatus: "Статус был",
+    toStatus: "Статус стал",
+    anyStatus: "Любой",
+    lifecycleStatusLabels: {
+      new: "Новый",
+      active: "Активный",
+      waiting_for_client: "Ждём клиента",
+      in_service: "В услуге",
+      inactive: "Неактивный"
+    },
     manualTrigger: "Ручной запуск получает выбранного астрологом клиента.",
     purpose: "Назначение данных",
     servicePreparation: "Подготовка услуги",
@@ -460,7 +640,22 @@ const inspectorCopy = {
     contract: "Contract",
     connections: "Connections",
     title: "Node title",
-    productIds: "Booking products",
+    bookingProductIds: "Booking products",
+    purchasedProductIds: "Purchased products",
+    enrollmentPolicy: "How often to start",
+    enrollmentOncePerClient: "Once per client",
+    enrollmentEachOccurrence: "Every event occurrence",
+    enrollmentAfterPreviousTerminal: "After the previous run finishes",
+    fromStatus: "Previous status",
+    toStatus: "New status",
+    anyStatus: "Any",
+    lifecycleStatusLabels: {
+      new: "New",
+      active: "Active",
+      waiting_for_client: "Waiting for client",
+      in_service: "In service",
+      inactive: "Inactive"
+    },
     manualTrigger: "A manual start receives a client selected by the astrologer.",
     purpose: "Data purpose",
     servicePreparation: "Service preparation",

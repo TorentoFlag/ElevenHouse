@@ -7,13 +7,13 @@ import {
   restoreFlowDefinitionV2,
   type FlowDefinitionControlStore
 } from "./flow-definition-control-plane";
-import type { FlowDefinitionV2 } from "@elevenhouse/contracts";
+import type { FlowDefinitionV2, FlowGraphV2 } from "@elevenhouse/contracts";
 
 const ownerUserId = "22222222-2222-4222-8222-222222222222";
 const flowId = "11111111-1111-4111-8111-111111111111";
 const otherFlowId = "33333333-3333-4333-8333-333333333333";
 
-const graph = {
+const graph: FlowGraphV2 = {
   schemaVersion: "flow-graph.v2",
   nodes: [
     {
@@ -41,7 +41,7 @@ const graph = {
       sourceHandle: "next"
     }
   ]
-} as const;
+};
 
 describe("flow definition lifecycle control plane", () => {
   it("archives with revision CAS and normalized command time", async () => {

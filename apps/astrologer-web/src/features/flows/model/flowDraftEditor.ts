@@ -176,12 +176,22 @@ export function moveFlowNodePresentation(
 }
 
 export function getRequiredSourceHandles(node: FlowNodeV2): readonly FlowSourceHandleV2[] {
-  if (node.kind === "booking_confirmed" || node.kind === "manual_client") return ["next"];
+  if (
+    node.kind === "booking_confirmed" ||
+    node.kind === "manual_client" ||
+    node.kind === "product_purchased" ||
+    node.kind === "first_inbound_message" ||
+    node.kind === "client_lifecycle_changed"
+  ) {
+    return ["next"];
+  }
   if (node.kind === "birth_data_available") return ["true", "false"];
   if (node.kind === "natal_chart_request") return ["next"];
   if (node.kind === "send_message") return ["success", "error"];
   if (node.kind === "natal_chart_ai_draft") {
-    return node.config.expiresAfterMinutes ? ["approved", "rejected", "timeout"] : ["approved", "rejected"];
+    return node.config.expiresAfterMinutes
+      ? ["approved", "rejected", "timeout"]
+      : ["approved", "rejected"];
   }
   if (node.kind === "astrologer_work_item") return ["success"];
   if (node.kind === "astrologer_approval") {
@@ -338,7 +348,9 @@ function createPaletteNode(
       kind,
       config: {
         textTemplate:
-          locale === "ru" ? "Здравствуйте! Напоминаем о вашем следующем шаге." : "Hello! Here is your next step."
+          locale === "ru"
+            ? "Здравствуйте! Напоминаем о вашем следующем шаге."
+            : "Hello! Here is your next step."
       }
     };
   }

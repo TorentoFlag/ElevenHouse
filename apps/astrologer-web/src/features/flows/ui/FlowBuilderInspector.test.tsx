@@ -57,9 +57,7 @@ describe("FlowBuilderInspector", () => {
 
     expect(screen.queryByLabelText("Конфигурация")).toBeNull();
     expect(screen.getByLabelText("Название задачи").getAttribute("name")).toBe("flowTaskTitle");
-    expect(screen.getByLabelText("Инструкции").getAttribute("name")).toBe(
-      "flowTaskInstructions"
-    );
+    expect(screen.getByLabelText("Инструкции").getAttribute("name")).toBe("flowTaskInstructions");
     expect(screen.getByLabelText("Приоритет").getAttribute("name")).toBe("flowTaskPriority");
     fireEvent.change(screen.getByLabelText("Название узла"), {
       target: { value: "Собрать материалы" }
@@ -73,6 +71,86 @@ describe("FlowBuilderInspector", () => {
       expect.objectContaining({
         kind: "astrologer_work_item",
         config: expect.objectContaining({ priority: "high" })
+      })
+    );
+  });
+
+  it("configures event-based start nodes without requiring a manually selected client", () => {
+    const startNode: FlowGraphV2["nodes"][number] = {
+      id: "first-inbound-message",
+      kind: "first_inbound_message",
+      displayTitle: "Первое сообщение клиента",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { enrollmentPolicy: "once_per_client" }
+    };
+    const onChangeNode = vi.fn();
+    render(
+      <FlowBuilderInspector
+        graph={{ ...graph, nodes: [startNode] }}
+        selectedNode={startNode}
+        locale="ru"
+        editable
+        onChangeNode={onChangeNode}
+      />
+    );
+
+    expect(screen.getByLabelText("Сколько раз запускать")).toHaveProperty(
+      "value",
+      "once_per_client"
+    );
+    expect(screen.queryByText("Ручной запуск получает выбранного астрологом клиента.")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Сколько раз запускать"), {
+      target: { value: "after_previous_terminal" }
+    });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "first_inbound_message",
+        config: { enrollmentPolicy: "after_previous_terminal" }
+      })
+    );
+  });
+
+  it("configures fixed client-status change starts with explicit from and to statuses", () => {
+    const statusNode: FlowGraphV2["nodes"][number] = {
+      id: "client-status",
+      kind: "client_lifecycle_changed",
+      displayTitle: "Изменение статуса клиента",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: {
+        fromStatus: "new",
+        toStatus: "active",
+        enrollmentPolicy: "once_per_client"
+      }
+    };
+    const onChangeNode = vi.fn();
+    render(
+      <FlowBuilderInspector
+        graph={{ ...graph, nodes: [statusNode] }}
+        selectedNode={statusNode}
+        locale="ru"
+        editable
+        onChangeNode={onChangeNode}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Статус был"), {
+      target: { value: "waiting_for_client" }
+    });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "client_lifecycle_changed",
+        config: expect.objectContaining({ fromStatus: "waiting_for_client", toStatus: "active" })
+      })
+    );
+
+    fireEvent.change(screen.getByLabelText("Статус стал"), { target: { value: "" } });
+    expect(onChangeNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "client_lifecycle_changed",
+        config: expect.objectContaining({ fromStatus: "new", toStatus: null })
       })
     );
   });

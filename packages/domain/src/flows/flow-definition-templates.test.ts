@@ -67,7 +67,14 @@ describe("flow definition V2 server-owned templates", () => {
         origin: { type: "blank" },
         graph: {
           schemaVersion: "flow-graph.v2",
-          nodes: [expect.objectContaining({ kind: "manual_client" })],
+          nodes: [
+            expect.objectContaining({
+              id: "first-inbound-message",
+              kind: "first_inbound_message",
+              displayTitle: "Первое сообщение клиента",
+              config: { enrollmentPolicy: "once_per_client" }
+            })
+          ],
           edges: []
         }
       }
