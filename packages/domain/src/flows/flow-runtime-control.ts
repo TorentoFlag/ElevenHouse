@@ -241,6 +241,18 @@ export function createFlowManualClientEnrollmentWorkerRequirementKeys(): readonl
   ];
 }
 
+export function createFlowClientEventEnrollmentWorkerRequirementKeys(): readonly string[] {
+  return [
+    "capability:clients.events.lifecycle_changed",
+    "capability:finance.events.client_order_captured",
+    "capability:messaging.events.first_inbound_message",
+    `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
+    "trigger:client_lifecycle_changed:1:1:1",
+    "trigger:first_inbound_message:1:1:1",
+    "trigger:product_purchased:1:1:1"
+  ];
+}
+
 export function createFlowRuntimeRolloutPolicyEvidence(
   input: FlowRuntimeRolloutPolicy
 ): FlowRuntimeRolloutPolicyEvidence {

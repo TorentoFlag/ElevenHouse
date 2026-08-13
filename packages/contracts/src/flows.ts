@@ -125,7 +125,12 @@ export const flowRunSnapshotV2Schema = z
         activationEpochId: uuidSchema,
         triggerNodeId: stableIdSchema,
         occurrenceKey: z.union([uuidSchema, z.string().regex(/^sha256:[a-f0-9]{64}$/)]),
-        policyKey: z.literal("once_per_occurrence"),
+        policyKey: z.enum([
+          "once_per_occurrence",
+          "once_per_client",
+          "each_occurrence",
+          "after_previous_terminal"
+        ]),
         policyRevision: z.literal(1),
         rolloutPolicyRevision: z.number().int().positive(),
         eventOccurredAt: instantSchema,

@@ -41,6 +41,7 @@ import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import {
   createBuiltInFlowNodeExecutorRegistry,
   createFlowBookingEnrollmentWorkerRequirementKeys,
+  createFlowClientEventEnrollmentWorkerRequirementKeys,
   createFlowManualClientEnrollmentWorkerRequirementKeys,
   createFlowExecutionWorkerRequirementKeys,
   type AiUsageResourceEvidence,
@@ -461,6 +462,7 @@ async function initializeFlowWorkerControl() {
       requirementKeys: [
         ...new Set([
           ...createFlowBookingEnrollmentWorkerRequirementKeys(),
+          ...createFlowClientEventEnrollmentWorkerRequirementKeys(),
           ...createFlowManualClientEnrollmentWorkerRequirementKeys(),
           ...createFlowExecutionWorkerRequirementKeys(
             flowNodeExecutorRegistry.executorKeys,

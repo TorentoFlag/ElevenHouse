@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createFlowBookingEnrollmentWorkerRequirementKeys,
+  createFlowClientEventEnrollmentWorkerRequirementKeys,
   createFlowManualClientEnrollmentWorkerRequirementKeys,
   evaluateFlowRuntimeEnrollmentAdmission,
   type FlowRuntimeRolloutPolicy,
@@ -29,6 +30,18 @@ describe("evaluateFlowRuntimeEnrollmentAdmission", () => {
     expect(createFlowManualClientEnrollmentWorkerRequirementKeys()).toEqual([
       "runtime:flow-interpreter.v1",
       "trigger:manual_client:1:1:1"
+    ]);
+  });
+
+  it("declares the exact worker protocol requirements for client event enrollment", () => {
+    expect(createFlowClientEventEnrollmentWorkerRequirementKeys()).toEqual([
+      "capability:clients.events.lifecycle_changed",
+      "capability:finance.events.client_order_captured",
+      "capability:messaging.events.first_inbound_message",
+      "runtime:flow-interpreter.v1",
+      "trigger:client_lifecycle_changed:1:1:1",
+      "trigger:first_inbound_message:1:1:1",
+      "trigger:product_purchased:1:1:1"
     ]);
   });
 
