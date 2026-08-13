@@ -111,7 +111,7 @@ const nodeBaseShape = {
 
 const bookingConfirmedConfigSchema = z
   .object({
-    productIds: z.array(uuidSchema).min(1).max(100)
+    productIds: z.array(uuidSchema).max(100)
   })
   .strict()
   .superRefine((config, context) => {
@@ -205,7 +205,7 @@ export const flowAstroEventNodeV2Schema = z
     kind: z.literal("astro_event"),
     config: z
       .object({
-        eventCodes: z.array(stableIdSchema).min(1).max(100),
+        eventCodes: z.array(stableIdSchema).max(100),
         enrollmentPolicy: flowEnrollmentPolicyKeySchema
       })
       .strict()
@@ -254,7 +254,7 @@ export const flowScheduleTimeNodeV2Schema = z
     kind: z.literal("schedule_time"),
     config: z
       .object({
-        scheduleKey: stableIdSchema,
+        scheduleKey: z.string().trim().max(160).regex(/^$|^[a-z0-9][a-z0-9_-]*$/),
         enrollmentPolicy: flowEnrollmentPolicyKeySchema
       })
       .strict()
@@ -287,7 +287,7 @@ export const flowSubscriptionEventNodeV2Schema = z
     kind: z.literal("subscription_event"),
     config: z
       .object({
-        eventTypes: z.array(flowSubscriptionEventTypeV2Schema).min(1).max(20),
+        eventTypes: z.array(flowSubscriptionEventTypeV2Schema).max(20),
         enrollmentPolicy: flowEnrollmentPolicyKeySchema
       })
       .strict()
@@ -555,7 +555,8 @@ export const flowGraphV2CompileIssueCodeValues = [
   "unterminated_path",
   "work_item_due_policy_requires_booking_trigger",
   "manual_trigger_booking_context_unsupported",
-  "chart_ai_draft_source_invalid"
+  "chart_ai_draft_source_invalid",
+  "trigger_configuration_incomplete"
 ] as const;
 export const flowGraphV2CompileIssueCodeSchema = z.enum(flowGraphV2CompileIssueCodeValues);
 export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssueCodeSchema>;

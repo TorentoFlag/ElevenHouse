@@ -95,6 +95,27 @@ describe("FlowBuilderInspector", () => {
       />
     );
 
+    expect(screen.getByLabelText("Событие запуска")).toHaveProperty(
+      "value",
+      "first_inbound_message"
+    );
+    expect(
+      Array.from((screen.getByLabelText("Событие запуска") as HTMLSelectElement).options).map(
+        (option) => option.value
+      )
+    ).toEqual([
+      "booking_confirmed",
+      "manual_client",
+      "new_lead",
+      "free_product_received",
+      "product_purchased",
+      "first_inbound_message",
+      "astro_event",
+      "client_lifecycle_changed",
+      "schedule_time",
+      "review_received",
+      "subscription_event"
+    ]);
     expect(screen.getByLabelText("Сколько раз запускать")).toHaveProperty(
       "value",
       "once_per_client"
@@ -110,6 +131,39 @@ describe("FlowBuilderInspector", () => {
         config: { enrollmentPolicy: "after_previous_terminal" }
       })
     );
+  });
+
+  it("switches the start event kind while keeping the same node identity", () => {
+    const startNode: FlowGraphV2["nodes"][number] = {
+      id: "flow-start",
+      kind: "first_inbound_message",
+      displayTitle: "Первое сообщение клиента",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { enrollmentPolicy: "once_per_client" }
+    };
+    const onChangeNode = vi.fn();
+    render(
+      <FlowBuilderInspector
+        graph={{ ...graph, nodes: [startNode] }}
+        selectedNode={startNode}
+        locale="ru"
+        editable
+        onChangeNode={onChangeNode}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Событие запуска"), {
+      target: { value: "schedule_time" }
+    });
+    expect(onChangeNode).toHaveBeenCalledWith({
+      id: "flow-start",
+      kind: "schedule_time",
+      displayTitle: "Дата / расписание",
+      configSchemaVersion: 1,
+      executorContractVersion: 1,
+      config: { scheduleKey: "", enrollmentPolicy: "once_per_client" }
+    });
   });
 
   it("configures fixed client-status change starts with explicit from and to statuses", () => {

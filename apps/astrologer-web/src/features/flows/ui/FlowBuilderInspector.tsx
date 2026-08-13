@@ -1,4 +1,9 @@
-import type { FlowGraphV2, FlowNodeV2 } from "@elevenhouse/contracts";
+import {
+  flowTriggerNodeKindV2Values,
+  type FlowGraphV2,
+  type FlowNodeV2,
+  type FlowTriggerNodeKindV2
+} from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { getFlowNodeVisual } from "./flowsVisualModel";
 
@@ -93,6 +98,55 @@ function NodeConfigFields({
   className
 }: {
   readonly graph: FlowGraphV2;
+  readonly node: FlowNodeV2;
+  readonly locale: "ru" | "en";
+  readonly editable: boolean;
+  readonly onChangeNode: (node: FlowNodeV2) => void;
+  readonly className: string;
+}) {
+  const copy = inspectorCopy[locale];
+
+  if ((flowTriggerNodeKindV2Values as readonly string[]).includes(node.kind)) {
+    return (
+      <>
+        <StartEventKindField
+          className={className}
+          copy={copy}
+          locale={locale}
+          value={node.kind as FlowTriggerNodeKindV2}
+          editable={editable}
+          onChange={(kind) => onChangeNode(createStartNodeFromKind(node, kind, locale))}
+        />
+        <StartNodeConfigFields
+          node={node}
+          locale={locale}
+          editable={editable}
+          onChangeNode={onChangeNode}
+          className={className}
+        />
+      </>
+    );
+  }
+
+  return (
+    <ExecutableNodeConfigFields
+      graph={graph}
+      node={node}
+      locale={locale}
+      editable={editable}
+      onChangeNode={onChangeNode}
+      className={className}
+    />
+  );
+}
+
+function StartNodeConfigFields({
+  node,
+  locale,
+  editable,
+  onChangeNode,
+  className
+}: {
   readonly node: FlowNodeV2;
   readonly locale: "ru" | "en";
   readonly editable: boolean;
@@ -248,6 +302,7 @@ function NodeConfigFields({
         <label className={className}>
           <span>{copy.scheduleKey}</span>
           <input
+            name="flowScheduleKey"
             value={node.config.scheduleKey}
             disabled={!editable}
             pattern={"[a-z0-9][a-z0-9_\\-]*"}
@@ -295,6 +350,26 @@ function NodeConfigFields({
       </>
     );
   }
+  return null;
+}
+
+function ExecutableNodeConfigFields({
+  graph,
+  node,
+  locale,
+  editable,
+  onChangeNode,
+  className
+}: {
+  readonly graph: FlowGraphV2;
+  readonly node: FlowNodeV2;
+  readonly locale: "ru" | "en";
+  readonly editable: boolean;
+  readonly onChangeNode: (node: FlowNodeV2) => void;
+  readonly className: string;
+}) {
+  const copy = inspectorCopy[locale];
+
   if (node.kind === "birth_data_available") {
     return (
       <label className={className}>
@@ -534,12 +609,12 @@ function NodeConfigFields({
     );
   }
 
+  if (node.kind !== "completed" && node.kind !== "suppressed" && node.kind !== "failed") {
+    return null;
+  }
+
   const label =
-    node.kind === "completed"
-      ? copy.goalKey
-      : node.kind === "suppressed"
-        ? copy.reasonCode
-        : copy.errorCode;
+    node.kind === "completed" ? copy.goalKey : node.kind === "suppressed" ? copy.reasonCode : copy.errorCode;
   const value =
     node.kind === "completed"
       ? node.config.goalKey
@@ -667,6 +742,80 @@ function EnrollmentPolicyField({
   );
 }
 
+function StartEventKindField({
+  className,
+  copy,
+  locale,
+  value,
+  editable,
+  onChange
+}: {
+  readonly className: string;
+  readonly copy: (typeof inspectorCopy)["ru" | "en"];
+  readonly locale: "ru" | "en";
+  readonly value: FlowTriggerNodeKindV2;
+  readonly editable: boolean;
+  readonly onChange: (value: FlowTriggerNodeKindV2) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{copy.startEventKind}</span>
+      <select
+        name="flowStartEventKind"
+        value={value}
+        disabled={!editable}
+        onChange={(event) => onChange(event.target.value as FlowTriggerNodeKindV2)}
+      >
+        {flowTriggerNodeKindV2Values.map((kind) => (
+          <option key={kind} value={kind}>
+            {startEventKindLabels[locale][kind]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function createStartNodeFromKind(
+  currentNode: FlowNodeV2,
+  kind: FlowTriggerNodeKindV2,
+  locale: "ru" | "en"
+): FlowNodeV2 {
+  const base = {
+    id: currentNode.id,
+    displayTitle: startEventKindLabels[locale][kind],
+    configSchemaVersion: 1 as const,
+    executorContractVersion: 1 as const
+  };
+  const enrollmentPolicy = "once_per_client" as const;
+
+  if (kind === "booking_confirmed") return { ...base, kind, config: { productIds: [] } };
+  if (kind === "manual_client") return { ...base, kind, config: {} };
+  if (kind === "new_lead") return { ...base, kind, config: { enrollmentPolicy } };
+  if (kind === "free_product_received") {
+    return { ...base, kind, config: { productIds: [], enrollmentPolicy } };
+  }
+  if (kind === "product_purchased") {
+    return { ...base, kind, config: { productIds: [], enrollmentPolicy } };
+  }
+  if (kind === "first_inbound_message") return { ...base, kind, config: { enrollmentPolicy } };
+  if (kind === "astro_event") {
+    return { ...base, kind, config: { eventCodes: [], enrollmentPolicy } };
+  }
+  if (kind === "client_lifecycle_changed") {
+    return {
+      ...base,
+      kind,
+      config: { fromStatus: "new", toStatus: "active", enrollmentPolicy }
+    };
+  }
+  if (kind === "schedule_time") {
+    return { ...base, kind, config: { scheduleKey: "", enrollmentPolicy } };
+  }
+  if (kind === "review_received") return { ...base, kind, config: { enrollmentPolicy } };
+  return { ...base, kind: "subscription_event", config: { eventTypes: [], enrollmentPolicy } };
+}
+
 const subscriptionEventTypes = [
   "started",
   "renewed",
@@ -674,6 +823,35 @@ const subscriptionEventTypes = [
   "expired",
   "payment_failed"
 ] as const;
+
+const startEventKindLabels = {
+  ru: {
+    booking_confirmed: "Событие записи",
+    manual_client: "Ручной запуск",
+    new_lead: "Новый лид",
+    free_product_received: "Бесплатный продукт",
+    product_purchased: "Куплен продукт",
+    first_inbound_message: "Первое сообщение",
+    astro_event: "Астрособытие",
+    client_lifecycle_changed: "Изменение статуса",
+    schedule_time: "Дата / расписание",
+    review_received: "Получен отзыв",
+    subscription_event: "Событие подписки"
+  },
+  en: {
+    booking_confirmed: "Booking event",
+    manual_client: "Manual start",
+    new_lead: "New lead",
+    free_product_received: "Free product",
+    product_purchased: "Product purchased",
+    first_inbound_message: "First message",
+    astro_event: "Astro event",
+    client_lifecycle_changed: "Status changed",
+    schedule_time: "Date / schedule",
+    review_received: "Review received",
+    subscription_event: "Subscription event"
+  }
+} satisfies Record<"ru" | "en", Record<FlowTriggerNodeKindV2, string>>;
 
 function SubscriptionEventTypesField({
   className,
@@ -793,6 +971,7 @@ const inspectorCopy = {
     astroEventCodes: "Коды астрособытий",
     scheduleKey: "Ключ расписания",
     subscriptionEventTypes: "События подписки",
+    startEventKind: "Событие запуска",
     subscriptionEventTypeLabels: {
       started: "Началась",
       renewed: "Продлилась",
@@ -849,6 +1028,7 @@ const inspectorCopy = {
     astroEventCodes: "Astro event codes",
     scheduleKey: "Schedule key",
     subscriptionEventTypes: "Subscription events",
+    startEventKind: "Start event",
     subscriptionEventTypeLabels: {
       started: "Started",
       renewed: "Renewed",

@@ -328,6 +328,59 @@ describe("flow graph v2 compiler", () => {
     });
   });
 
+  it.each([
+    node({
+      id: "booking",
+      kind: "booking_confirmed",
+      displayTitle: "Запись подтверждена",
+      config: { productIds: [] }
+    }),
+    node({
+      id: "free-product",
+      kind: "free_product_received",
+      displayTitle: "Бесплатный продукт",
+      config: { productIds: [], enrollmentPolicy: "once_per_client" }
+    }),
+    node({
+      id: "purchase",
+      kind: "product_purchased",
+      displayTitle: "Куплен продукт",
+      config: { productIds: [], enrollmentPolicy: "once_per_client" }
+    }),
+    node({
+      id: "astro-event",
+      kind: "astro_event",
+      displayTitle: "Астрособытие",
+      config: { eventCodes: [], enrollmentPolicy: "once_per_client" }
+    }),
+    node({
+      id: "schedule",
+      kind: "schedule_time",
+      displayTitle: "Дата / расписание",
+      config: { scheduleKey: "", enrollmentPolicy: "once_per_client" }
+    }),
+    node({
+      id: "subscription",
+      kind: "subscription_event",
+      displayTitle: "Событие подписки",
+      config: { eventTypes: [], enrollmentPolicy: "once_per_client" }
+    })
+  ])("keeps incomplete %s trigger drafts unpublished", (trigger) => {
+    const result = compileFlowGraphV2(
+      graphV2(
+        [trigger, completedNode],
+        [edge(`${trigger.id}-to-completed`, trigger.id, "completed", "next")]
+      )
+    );
+
+    expect(result).toMatchObject({
+      publishable: false,
+      normalizedGraph: null,
+      capabilityManifest: null,
+      issues: [expect.objectContaining({ code: "trigger_configuration_incomplete" })]
+    });
+  });
+
   it("allows only a human-gated birth-data recheck loop before a natal calculation", () => {
     const birthDataCollection = node({
       id: "request-birth-data",

@@ -562,6 +562,49 @@ describe("flow graph v2 contracts", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("allows incomplete trigger settings in draft graphs for editor configuration", () => {
+    const result = flowGraphV2Schema.safeParse({
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        {
+          id: "schedule",
+          kind: "schedule_time",
+          displayTitle: "Дата / расписание",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { scheduleKey: "", enrollmentPolicy: "once_per_client" }
+        },
+        {
+          id: "purchase",
+          kind: "product_purchased",
+          displayTitle: "Куплен продукт",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { productIds: [], enrollmentPolicy: "once_per_client" }
+        },
+        {
+          id: "astro",
+          kind: "astro_event",
+          displayTitle: "Астрособытие",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { eventCodes: [], enrollmentPolicy: "once_per_client" }
+        },
+        {
+          id: "subscription",
+          kind: "subscription_event",
+          displayTitle: "Событие подписки",
+          configSchemaVersion: 1,
+          executorContractVersion: 1,
+          config: { eventTypes: [], enrollmentPolicy: "once_per_client" }
+        }
+      ],
+      edges: []
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("flow presentation v1 contracts", () => {

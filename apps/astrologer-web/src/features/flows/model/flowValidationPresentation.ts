@@ -44,7 +44,8 @@ const issueMessagesRu = {
   manual_trigger_booking_context_unsupported:
     "Ручной запуск по клиенту не поддерживает узлы, которым нужна контекстная запись.",
   chart_ai_draft_source_invalid:
-    "AI-черновик должен непосредственно следовать за указанным узлом расчёта натальной карты."
+    "AI-черновик должен непосредственно следовать за указанным узлом расчёта натальной карты.",
+  trigger_configuration_incomplete: "Заполните обязательные настройки стартового события."
 } satisfies Record<FlowDefinitionValidationIssueCode, string>;
 
 function nodeIdFromPath(path: string): string | null {

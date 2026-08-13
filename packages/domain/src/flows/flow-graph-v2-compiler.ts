@@ -288,6 +288,13 @@ export function compileFlowGraphV2(
     });
   }
 
+  for (const triggerNode of triggerNodes) {
+    const triggerConfigIssue = validateTriggerConfiguration(triggerNode);
+    if (triggerConfigIssue) {
+      addIssue(issues, triggerConfigIssue);
+    }
+  }
+
   if (triggerNodes.length === 1 && triggerNodes[0]?.kind !== "booking_confirmed") {
     for (const node of nodesById.values()) {
       if (
@@ -601,6 +608,44 @@ function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
     };
   }
   return node;
+}
+
+function validateTriggerConfiguration(
+  node: FlowNodeV2
+): FlowGraphV2CompileIssue | null {
+  if (node.kind === "booking_confirmed" && node.config.productIds.length === 0) {
+    return incompleteTriggerIssue(node.id, "config.productIds", "Booking trigger requires at least one product.");
+  }
+  if (node.kind === "free_product_received" && node.config.productIds.length === 0) {
+    return incompleteTriggerIssue(node.id, "config.productIds", "Free-product trigger requires at least one product.");
+  }
+  if (node.kind === "product_purchased" && node.config.productIds.length === 0) {
+    return incompleteTriggerIssue(node.id, "config.productIds", "Product-purchase trigger requires at least one product.");
+  }
+  if (node.kind === "astro_event" && node.config.eventCodes.length === 0) {
+    return incompleteTriggerIssue(node.id, "config.eventCodes", "Astro-event trigger requires at least one event code.");
+  }
+  if (node.kind === "schedule_time" && node.config.scheduleKey.trim().length === 0) {
+    return incompleteTriggerIssue(node.id, "config.scheduleKey", "Schedule trigger requires a schedule key.");
+  }
+  if (node.kind === "subscription_event" && node.config.eventTypes.length === 0) {
+    return incompleteTriggerIssue(node.id, "config.eventTypes", "Subscription trigger requires at least one event type.");
+  }
+  return null;
+}
+
+function incompleteTriggerIssue(
+  nodeId: string,
+  configPath: string,
+  message: string
+): FlowGraphV2CompileIssue {
+  return {
+    code: "trigger_configuration_incomplete",
+    severity: "error",
+    blocking: true,
+    path: `nodes.${nodeId}.${configPath}`,
+    message
+  };
 }
 
 function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityManifestV2 {
