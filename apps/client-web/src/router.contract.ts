@@ -3,6 +3,7 @@ export const clientRouteContract = {
   auth: "/auth",
   publicAstrologer: "/a/:handle",
   authenticatedProfile: "/me",
+  authenticatedSession: "/sessions/:sessionId",
   notFound: "*"
 } as const;
 

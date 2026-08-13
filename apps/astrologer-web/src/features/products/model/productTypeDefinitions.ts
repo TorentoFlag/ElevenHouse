@@ -21,6 +21,7 @@ export const productScenarioSectionIds = [
   "methods",
   "clientData",
   "accessGrants",
+  "astroDiary",
   "modifiers",
   "includedItems"
 ] as const;
@@ -101,7 +102,14 @@ const productTypeDefinitions = {
   sub: {
     type: "sub",
     mode: "guided",
-    primarySections: ["media", "basics", "subscription", "accessGrants", "includedItems"],
+    primarySections: [
+      "media",
+      "basics",
+      "subscription",
+      "accessGrants",
+      "astroDiary",
+      "includedItems"
+    ],
     advancedSections: ["format", "clientData", "modifiers"],
     fixedPaymentModel: "sub",
     fixedExecutionMode: "async",

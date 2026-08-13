@@ -3,6 +3,7 @@ import {
   updateProductRequestSchema,
   type CreateProductRequest,
   type ProductAccessGrant,
+  type ProductAstroDiaryConfig,
   type ProductCurrency,
   type ProductDeliveryFormat,
   type ProductExecutionMode,
@@ -18,6 +19,7 @@ import {
   type ProductType,
   type UpdateProductRequest
 } from "@elevenhouse/contracts/products";
+export { toggleAstroDiaryWorkingWeekday, toggleProductAccessGrant } from "./astroDiaryProductDraft";
 import { normalizeProductDraftForType } from "./productTypeDraftNormalization";
 
 export type ProductFormDraft = {
@@ -43,6 +45,7 @@ export type ProductFormDraft = {
   readonly requiredClientData: readonly ProductRequiredClientData[];
   readonly methods: readonly ProductMethod[];
   readonly accessGrants: readonly ProductAccessGrant[];
+  readonly astroDiaryConfig: ProductAstroDiaryConfig | null;
   readonly hiddenAutoIncludedKeys: readonly string[];
   readonly includedItems: readonly ProductIncludedItemRequest[];
   readonly modifiers: readonly ProductModifierRequest[];
@@ -72,6 +75,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
     requiredClientData: ["chart1"],
     methods: ["natal"],
     accessGrants: [],
+    astroDiaryConfig: null,
     hiddenAutoIncludedKeys: [],
     includedItems: [
       { text: "Полный разбор карты", icon: "check", order: 10 },
@@ -252,6 +256,12 @@ export function createProductDraftFromResponse(product: ProductResponse): Produc
     requiredClientData: [...product.requiredClientData],
     methods: [...product.methods],
     accessGrants: [...product.accessGrants],
+    astroDiaryConfig: product.astroDiaryConfig
+      ? {
+          ...product.astroDiaryConfig,
+          workingWeekdays: [...product.astroDiaryConfig.workingWeekdays]
+        }
+      : null,
     hiddenAutoIncludedKeys: [],
     includedItems: product.includedItems.map(({ text, icon, order }) => ({ text, icon, order })),
     modifiers: product.modifiers.map(
@@ -295,6 +305,12 @@ export function createProductDraftFromTemplate(
     requiredClientData: [...payload.requiredClientData],
     methods: [...payload.methods],
     accessGrants: [...payload.accessGrants],
+    astroDiaryConfig: payload.astroDiaryConfig
+      ? {
+          ...payload.astroDiaryConfig,
+          workingWeekdays: [...payload.astroDiaryConfig.workingWeekdays]
+        }
+      : null,
     hiddenAutoIncludedKeys: [],
     includedItems: payload.includedItems.map((item) => ({ ...item })),
     modifiers: payload.modifiers.map((modifier) => ({ ...modifier }))
@@ -506,8 +522,14 @@ export function toCreateProductRequest(draft: ProductFormDraft): CreateProductRe
   return createProductRequestSchema.parse(toPayload(normalizeProductDraftForType(draft), "create"));
 }
 
-export function toUpdateProductRequest(draft: ProductFormDraft): UpdateProductRequest {
-  return updateProductRequestSchema.parse(toPayload(normalizeProductDraftForType(draft), "update"));
+export function toUpdateProductRequest(
+  draft: ProductFormDraft,
+  expectedRevision: number
+): UpdateProductRequest {
+  return updateProductRequestSchema.parse({
+    ...toPayload(normalizeProductDraftForType(draft), "update"),
+    expectedRevision
+  });
 }
 
 function toPayload(draft: ProductFormDraft, mode: "create" | "update") {
@@ -551,6 +573,7 @@ function toPayload(draft: ProductFormDraft, mode: "create" | "update") {
     requiredClientData: [...draft.requiredClientData],
     methods: [...draft.methods],
     accessGrants: [...draft.accessGrants],
+    astroDiaryConfig: draft.astroDiaryConfig ?? nullOrUndefined(nullable),
     includedItems: draft.includedItems.map((item, index) => ({
       text: item.text.trim(),
       icon: item.icon.trim(),

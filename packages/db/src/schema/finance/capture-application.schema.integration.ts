@@ -69,18 +69,20 @@ describe.sequential("verified capture application PostgreSQL authority", () => {
 
     const event = await pool.query<{
       id: string;
+      event_type: string;
       aggregate_id: string;
       payload: { captureApplicationReceiptId: string };
       status: string;
       attempts: number;
     }>(
-      `select id, aggregate_id, payload, status, attempts
+      `select id, event_type, aggregate_id, payload, status, attempts
        from outbox_events where id = $1`,
       [receipt.outbox_event_id]
     );
     expect(event.rows).toEqual([
       {
         id: receipt.outbox_event_id,
+        event_type: "finance.economic_payment.capture_applied",
         aggregate_id: receipt.receipt_id,
         payload: { captureApplicationReceiptId: receipt.receipt_id },
         status: "pending",

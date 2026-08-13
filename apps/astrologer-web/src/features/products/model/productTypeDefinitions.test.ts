@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  getProductTypeDefinition,
-  productScenarioSectionIds
-} from "./productTypeDefinitions";
+import { getProductTypeDefinition, productScenarioSectionIds } from "./productTypeDefinitions";
 
 describe("productTypeDefinitions", () => {
   it("keeps custom as the full cube constructor", () => {
@@ -20,7 +17,7 @@ describe("productTypeDefinitions", () => {
     ],
     ["pack", ["media", "basics", "package", "clientData", "methods", "includedItems"]],
     ["async", ["media", "basics", "asyncResult", "clientData", "methods", "includedItems"]],
-    ["sub", ["media", "basics", "subscription", "accessGrants", "includedItems"]],
+    ["sub", ["media", "basics", "subscription", "accessGrants", "astroDiary", "includedItems"]],
     ["mini", ["media", "basics", "mini", "includedItems"]],
     ["course", ["media", "basics", "course", "accessGrants", "includedItems"]]
   ] as const)("defines primary sections for %s", (type, expectedSections) => {
@@ -39,9 +36,7 @@ describe("productTypeDefinitions", () => {
   });
 
   it("marks package, subscription, and course settings as required for their product types", () => {
-    expect(getProductTypeDefinition("pack").requiredDraftFields).toContain(
-      "packageSessionCount"
-    );
+    expect(getProductTypeDefinition("pack").requiredDraftFields).toContain("packageSessionCount");
     expect(getProductTypeDefinition("sub").requiredDraftFields).toContain("subscriptionPeriod");
     expect(getProductTypeDefinition("sub").requiredDraftFields).toContain("accessGrants");
     expect(getProductTypeDefinition("course").requiredDraftFields).toContain("accessGrants");

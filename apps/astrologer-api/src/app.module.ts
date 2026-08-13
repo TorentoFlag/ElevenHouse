@@ -26,6 +26,7 @@ import { AstrologerTariffsModule } from "./modules/platform-tariffs/platform-tar
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
 import { VerificationModule } from "./modules/verification/verification.module";
+import { SessionsModule } from "./modules/sessions/sessions.module";
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { VerificationModule } from "./modules/verification/verification.module";
     HumanDesignModule,
     MessagingModule,
     AstrologerProfileModule,
+    SessionsModule,
     HealthModule
   ]
 })

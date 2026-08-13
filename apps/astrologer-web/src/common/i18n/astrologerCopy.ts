@@ -281,6 +281,7 @@ export type AstrologerCopy = {
       emptyBestseller: string;
     };
     saveErrorLabel: string;
+    actionErrorReloadLabel: string;
     emptyLabel: string;
     loadingLabel: string;
     errorLabel: string;
@@ -805,6 +806,7 @@ export const astrologerCopyByLocale = {
         emptyBestseller: "—"
       },
       saveErrorLabel: "Не удалось сохранить продукт",
+      actionErrorReloadLabel: "Обновить продукты",
       emptyLabel: "Нет продуктов в этом статусе",
       loadingLabel: "Загружаем продукты",
       errorLabel: "Не удалось загрузить продукты"
@@ -1252,6 +1254,7 @@ export const astrologerCopyByLocale = {
         emptyBestseller: "—"
       },
       saveErrorLabel: "Could not save the product",
+      actionErrorReloadLabel: "Reload products",
       emptyLabel: "No products in this status",
       loadingLabel: "Loading products",
       errorLabel: "Could not load products"

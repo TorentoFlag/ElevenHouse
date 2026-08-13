@@ -2,6 +2,7 @@ import type { ZodType } from "@elevenhouse/validation";
 import type {
   AiGenerationMetadata,
   AiGenerationResult,
+  AiModel,
   AiModelProfile,
   AiReasoningEffort,
   AiStructuredOutputJsonSchema,
@@ -12,6 +13,8 @@ export type AiGenerationPort = {
   readonly generateStructured: <TOutput>(input: {
     readonly prompt: RenderedPrompt;
     readonly modelProfile: AiModelProfile;
+    readonly requestedModel?: AiModel;
+    readonly providerMaxRetries?: 0;
     readonly responseSchema: ZodType<TOutput>;
     readonly maxOutputTokens: number;
     readonly reasoningEffort: AiReasoningEffort;

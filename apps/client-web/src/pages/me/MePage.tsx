@@ -14,6 +14,8 @@ import {
   type BirthProfileFormState
 } from "../../features/client-profile/model/birthProfileFormModel";
 import { MePageView, type ClientCabinetSection, type ClientCabinetStatus } from "./MePageView";
+import { sessionApi } from "../../features/sessions/api/sessionApi";
+import type { SessionSummary } from "@elevenhouse/contracts";
 
 const emptyForm = createBirthProfileForm(null);
 
@@ -23,6 +25,8 @@ export function MePage() {
   const [form, setForm] = useState<BirthProfileFormState>(emptyForm);
   const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
   const [status, setStatus] = useState<ClientCabinetStatus>("loading");
+  const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
+  const [sessionsStatus, setSessionsStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useDocumentTitle("Кабинет клиента");
 
@@ -50,6 +54,24 @@ export function MePage() {
   }, []);
 
   useEffect(() => loadOverview(), [loadOverview]);
+
+  const loadSessions = useCallback(() => {
+    const now = new Date();
+    const rangeStartAt = new Date(now.getTime() - 30 * 86_400_000).toISOString();
+    const rangeEndAt = new Date(now.getTime() + 180 * 86_400_000).toISOString();
+    setSessionsStatus("loading");
+    void sessionApi
+      .list({ rangeStartAt, rangeEndAt })
+      .then((response) => {
+        setSessions(response.sessions);
+        setSessionsStatus("ready");
+      })
+      .catch(() => setSessionsStatus("error"));
+  }, []);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const searchBirthPlaces = useCallback(async (query: string, signal: AbortSignal) => {
     const response = await searchClientBirthPlaces({ limit: 5, query }, signal);
@@ -89,6 +111,8 @@ export function MePage() {
       form={form}
       overview={overview}
       status={status}
+      sessions={sessions}
+      sessionsStatus={sessionsStatus}
       onFormChange={(nextForm) => {
         setForm(nextForm);
         setStatus((currentStatus) =>
@@ -98,6 +122,7 @@ export function MePage() {
       onRetry={() => {
         loadOverview();
       }}
+      onRetrySessions={loadSessions}
       onSectionChange={setActiveSection}
       onSubmit={handleSubmit}
       purchaseFlowCopy={dictionary.purchaseFlow}

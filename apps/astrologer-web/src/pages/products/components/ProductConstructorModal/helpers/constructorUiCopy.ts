@@ -4,6 +4,7 @@ import type {
   ProductPaymentModel
 } from "@elevenhouse/contracts";
 import type { ProductLocale } from "../../../../../features/products/model/productCopy";
+import type { AstroDiaryIsoWeekday } from "../../../../../features/products/model/astroDiaryProductDraft";
 
 export type ConstructorUiCopy = {
   readonly productsBreadcrumb: string;
@@ -25,6 +26,18 @@ export type ConstructorUiCopy = {
   readonly clientDataHint: string;
   readonly accessHint: string;
   readonly freeNote: string;
+  readonly astroDiarySettingsLabel: string;
+  readonly astroDiarySettingsHint: string;
+  readonly reflectionCyclesPerPeriodLabel: string;
+  readonly responseSlaWorkingDaysLabel: string;
+  readonly clientResponseWindowCalendarDaysLabel: string;
+  readonly workingWeekdaysLabel: string;
+  readonly serviceTimezoneLabel: string;
+  readonly serviceTimezoneHint: string;
+  readonly serviceTimezoneInvalidLabel: string;
+  readonly decreaseAstroDiaryValueLabel: (fieldLabel: string) => string;
+  readonly increaseAstroDiaryValueLabel: (fieldLabel: string) => string;
+  readonly weekdayLabels: Record<AstroDiaryIsoWeekday, string>;
   readonly previewClientLabel: string;
   readonly draftStatusLabel: string;
   readonly clientGetsLabel: string;
@@ -90,6 +103,27 @@ export const constructorUiCopyByLocale = {
     clientDataHint: "Что клиент заполняет при записи.",
     accessHint: "Что открывает продукт: контент, канал, записи, курс или дневник.",
     freeNote: "Лид-магнит: продукт бесплатный, ведёт клиента в воронку. Цена игнорируется.",
+    astroDiarySettingsLabel: "Настройки астродневника",
+    astroDiarySettingsHint:
+      "Количество циклов и сроки фиксируют объём сопровождения в каждом оплаченном периоде.",
+    reflectionCyclesPerPeriodLabel: "Циклов рефлексии за период",
+    responseSlaWorkingDaysLabel: "Ответ астролога · рабочих дней",
+    clientResponseWindowCalendarDaysLabel: "Окно ответа клиента · календарных дней",
+    workingWeekdaysLabel: "Рабочие дни",
+    serviceTimezoneLabel: "Часовой пояс",
+    serviceTimezoneHint: "IANA timezone, например Europe/Moscow",
+    serviceTimezoneInvalidLabel: "Укажите корректный часовой пояс IANA.",
+    decreaseAstroDiaryValueLabel: (fieldLabel) => `Уменьшить: ${fieldLabel}`,
+    increaseAstroDiaryValueLabel: (fieldLabel) => `Увеличить: ${fieldLabel}`,
+    weekdayLabels: {
+      1: "Пн",
+      2: "Вт",
+      3: "Ср",
+      4: "Чт",
+      5: "Пт",
+      6: "Сб",
+      7: "Вс"
+    },
     previewClientLabel: "Превью · так увидит клиент",
     draftStatusLabel: "Черновик",
     clientGetsLabel: "Что получит клиент",
@@ -173,6 +207,27 @@ export const constructorUiCopyByLocale = {
     accessHint: "What the product unlocks: content, channel, recordings, course, or journal.",
     freeNote:
       "Lead magnet: this product is free and moves a client into the funnel. Price is ignored.",
+    astroDiarySettingsLabel: "Astro journal settings",
+    astroDiarySettingsHint:
+      "Cycles and response windows define the service included in each paid period.",
+    reflectionCyclesPerPeriodLabel: "Reflection cycles per period",
+    responseSlaWorkingDaysLabel: "Astrologer response · working days",
+    clientResponseWindowCalendarDaysLabel: "Client reply window · calendar days",
+    workingWeekdaysLabel: "Working days",
+    serviceTimezoneLabel: "Service timezone",
+    serviceTimezoneHint: "IANA timezone, for example Europe/London",
+    serviceTimezoneInvalidLabel: "Enter a valid IANA timezone.",
+    decreaseAstroDiaryValueLabel: (fieldLabel) => `Decrease: ${fieldLabel}`,
+    increaseAstroDiaryValueLabel: (fieldLabel) => `Increase: ${fieldLabel}`,
+    weekdayLabels: {
+      1: "Mon",
+      2: "Tue",
+      3: "Wed",
+      4: "Thu",
+      5: "Fri",
+      6: "Sat",
+      7: "Sun"
+    },
     previewClientLabel: "Preview · what the client sees",
     draftStatusLabel: "Draft",
     clientGetsLabel: "What the client gets",

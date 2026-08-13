@@ -54,6 +54,13 @@ describe("createWorkersRuntimeConfig", () => {
         deploymentId: "local-deployment",
         buildId: "local-build"
       },
+      sessions: {
+        enabled: true,
+        projectionIntervalMs: 1_000,
+        projectionBatchSize: 25,
+        maintenanceIntervalMs: 30_000,
+        maintenanceBatchSize: 25
+      },
       calculationPdfAttempts: 5,
       calculationPdfBackoffMs: 1000,
       calculationPdfJitter: 0.5,
@@ -153,6 +160,36 @@ describe("createWorkersRuntimeConfig", () => {
       enabled: true,
       openAiApiKey: "worker-ai-secret",
       rateLimits: { userPerMinute: { limit: 5, windowSeconds: 60 } }
+    });
+  });
+
+  it("maps every WORKERS_FLOW_CHART_AI setting and freezes Flow AI defaults", () => {
+    expect(
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_CHART_AI_ENABLED: "true",
+        WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-secret",
+        WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL: "https://openai.worker.internal/v1",
+        WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL: "gpt-5.5",
+        WORKERS_FLOW_CHART_AI_TIMEOUT_MS: "12345",
+        WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS: "4321",
+        WORKERS_FLOW_CHART_AI_RATE_LIMIT_REDIS_KEY_PREFIX: "elevenhouse:test:flow-ai",
+        WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: "7",
+        WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR: "70",
+        WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY: "700"
+      }).flowChartAi
+    ).toEqual({
+      enabled: true,
+      openAiApiKey: "worker-ai-secret",
+      openAiBaseUrl: "https://openai.worker.internal/v1",
+      qualityDraftModel: "gpt-5.5",
+      timeoutMs: 12345,
+      maxOutputTokens: 4321,
+      rateLimitRedisKeyPrefix: "elevenhouse:test:flow-ai",
+      rateLimits: {
+        userPerMinute: { limit: 7, windowSeconds: 60 },
+        userPerHour: { limit: 70, windowSeconds: 3600 },
+        userPerDay: { limit: 700, windowSeconds: 86400 }
+      }
     });
   });
 
@@ -375,6 +412,11 @@ function productionConfig(): Record<string, string | undefined> {
   return {
     NODE_ENV: "production",
     REDIS_URL: "redis://redis:6379",
+    WORKERS_SESSIONS_ENABLED: "true",
+    WORKERS_SESSIONS_PROJECTION_INTERVAL_MS: "1000",
+    WORKERS_SESSIONS_PROJECTION_BATCH_SIZE: "25",
+    WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS: "30000",
+    WORKERS_SESSIONS_MAINTENANCE_BATCH_SIZE: "25",
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS: "1000",
     WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE: "25",
     WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS: "60000",

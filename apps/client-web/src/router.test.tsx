@@ -31,6 +31,7 @@ describe("client routes", () => {
       "/auth",
       "/a/:handle",
       "/me",
+      "/sessions/:sessionId",
       "*"
     ]);
 

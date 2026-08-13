@@ -86,6 +86,10 @@ workflows добавляются только здесь, а не в `public-api
 - `numerology-presentation`: deterministic presentation helpers for numerology
   result rendering.
 - `observability`: logging, metrics, tracing helpers.
+- `session-infrastructure`: provider adapters for media-room credentials,
+  room termination and verified provider webhooks; no browser secrets.
+- `session-web-client`: lazy-loaded web media/chat experience and typed Session
+  HTTP client shared by the astrologer and client web apps.
 - `testing`: factories, mocks, test utilities.
 - `validation`: shared validation schemas.
 

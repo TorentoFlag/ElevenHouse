@@ -11,6 +11,7 @@
     "@elevenhouse/contracts": "workspace:*",
     "@elevenhouse/design-system": "workspace:*",
     "@elevenhouse/i18n": "workspace:*",
+    "@elevenhouse/session-web-client": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
     "react": "19.2.7",

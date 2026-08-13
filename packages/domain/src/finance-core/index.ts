@@ -27,6 +27,7 @@ export * from "./provider-operation-intent";
 export * from "./economic-payment";
 export * from "./client-checkout-preparation";
 export * from "./client-order-checkout-command-factory";
+export * from "./client-order-capture-purpose-dispatch";
 export * from "./online-sale-capture-receipt";
 export * from "./online-sale-capture-command";
 export * from "./online-wallet-hold-release";
@@ -135,6 +136,7 @@ export * from "./ports/platform-tariff-invoice-charge-terminal-reconciliation-re
 export * from "./ports/platform-tariff-invoice-canonical-capture-uow";
 export * from "./ports/client-order-canonical-capture-uow";
 export * from "./ports/client-order-canonical-webhook-capture-uow";
+export * from "./ports/client-order-capture-purpose-dispatch-uow";
 export * from "./ports/online-sale-capture-persistence-port";
 export * from "./ports/online-wallet-release-uow";
 export * from "./ports/online-wallet-payout-request-uow";

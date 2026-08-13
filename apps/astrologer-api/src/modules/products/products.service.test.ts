@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException
+} from "@nestjs/common";
 import {
   type MediaAsset,
   type MediaAssetStore,
@@ -32,6 +37,7 @@ describe("ProductsService", () => {
 
     expect(response.ownerUserId).toBe(ownerUserId);
     expect(response.status).toBe("draft");
+    expect(response.revision).toBe(1);
     expect(response.coverMedia).toMatchObject({
       id: mediaId,
       url: `https://cdn.example/${ownerUserId}/product_cover/${mediaId}/cover.webp`
@@ -72,7 +78,7 @@ describe("ProductsService", () => {
     const service = createService(store);
 
     await service.createProduct(validCreateBody(), createAuthenticatedRequest());
-    await service.publishProduct(productId, createAuthenticatedRequest());
+    await service.publishProduct(productId, { expectedRevision: 1 }, createAuthenticatedRequest());
 
     await expect(
       service.listProducts(
@@ -122,16 +128,16 @@ describe("ProductsService", () => {
     const service = createService(
       createStore({
         findByOwnerAndId: vi.fn(async () => null),
-        update: vi.fn(async () => null)
+        update: vi.fn(async () => ({ outcome: "not_found" as const }))
       })
     );
 
     await expect(service.getProduct(productId, createAuthenticatedRequest())).rejects.toThrow(
       NotFoundException
     );
-    await expect(service.publishProduct(productId, createAuthenticatedRequest())).rejects.toThrow(
-      NotFoundException
-    );
+    await expect(
+      service.publishProduct(productId, { expectedRevision: 1 }, createAuthenticatedRequest())
+    ).rejects.toThrow(NotFoundException);
   });
 
   it("maps domain validation errors to BadRequestException", async () => {
@@ -147,10 +153,55 @@ describe("ProductsService", () => {
     await expect(
       service.updateProduct(
         productId,
-        { title: "Валидный заголовок" },
+        { expectedRevision: 1, title: "Валидный заголовок" },
         createAuthenticatedRequest()
       )
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it("maps stale product revisions to ConflictException", async () => {
+    const store = createStore();
+    const service = createService(store);
+    await service.createProduct(validCreateBody(), createAuthenticatedRequest());
+    await service.updateProduct(
+      productId,
+      { expectedRevision: 1, title: "Current title" },
+      createAuthenticatedRequest()
+    );
+
+    const failure = await service
+      .updateProduct(
+        productId,
+        { expectedRevision: 1, title: "Stale title" },
+        createAuthenticatedRequest()
+      )
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ConflictException);
+    expect((failure as ConflictException).getResponse()).toEqual({
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 1,
+      currentRevision: 2
+    });
+  });
+
+  it("maps AstroDiary fulfillment readiness to a typed conflict response", async () => {
+    const service = createService(createStore());
+    const created = await service.createProduct(
+      validAstroDiaryCreateBody(),
+      createAuthenticatedRequest()
+    );
+
+    const failure = await service
+      .publishProduct(created.id, { expectedRevision: created.revision }, createAuthenticatedRequest())
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(ConflictException);
+    expect((failure as ConflictException).getStatus()).toBe(409);
+    expect((failure as ConflictException).getResponse()).toEqual({
+      code: "PRODUCT_FULFILLMENT_NOT_READY",
+      message: "AstroDiary subscription fulfillment is not ready"
+    });
   });
 
   it("rejects cover media that is not ready for product covers", async () => {
@@ -343,21 +394,32 @@ function createStore(overrides: Partial<ProductStore> = {}): ProductStore {
       const index = products.findIndex(
         (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
       );
-      if (index === -1) return null;
+      if (index === -1) return { outcome: "not_found" as const };
 
       const current = products[index] ?? raise("Expected product index to resolve");
+      if (current.revision !== input.expectedRevision) {
+        return { outcome: "revision_conflict" as const, currentRevision: current.revision };
+      }
       const next: Product = {
         ...current,
         ...input.patch,
+        revision: current.revision + 1,
         updatedAt: input.now
       };
       products[index] = next;
-      return next;
+      return { outcome: "updated" as const, product: next };
     }),
     duplicate: vi.fn(async (input) => {
+      const source = products.find(
+        (product) => product.id === input.sourceProductId && product.ownerUserId === input.ownerUserId
+      );
+      if (!source) return { outcome: "not_found" as const };
+      if (source.revision !== input.expectedSourceRevision) {
+        return { outcome: "revision_conflict" as const, currentRevision: source.revision };
+      }
       const product = toProduct("a47d6537-720b-47e4-a1ef-ed7ba82bb2f0", input);
       products.unshift(product);
-      return product;
+      return { outcome: "duplicated" as const, product };
     }),
     ...overrides
   };
@@ -472,6 +534,7 @@ function readyProductCoverMedia(): MediaAsset {
 function toProduct(id: string, input: ProductStoreCreateInput): Product {
   return {
     id,
+    revision: 1,
     ownerUserId: input.ownerUserId,
     type: input.type,
     status: input.status,
@@ -496,6 +559,7 @@ function toProduct(id: string, input: ProductStoreCreateInput): Product {
     requiredClientData: input.requiredClientData,
     methods: input.methods,
     accessGrants: input.accessGrants,
+    astroDiaryConfig: input.astroDiaryConfig,
     includedItems: input.includedItems.map((item, index) => ({
       id: `11111111-1111-4111-8111-11111111111${index}`,
       ...item
@@ -528,6 +592,30 @@ function validCreateBody(): Record<string, unknown> {
     accessGrants: [],
     includedItems: [{ text: "Полный разбор карты", icon: "check", order: 10 }],
     modifiers: []
+  };
+}
+
+function validAstroDiaryCreateBody(): Record<string, unknown> {
+  return {
+    ...validCreateBody(),
+    type: "sub",
+    title: "Астродневник",
+    executionMode: "async",
+    paymentModel: "sub",
+    durationMinutes: undefined,
+    durationLabel: undefined,
+    subscriptionPeriod: "month",
+    deliveryFormats: ["chat", "audio", "file"],
+    requiredClientData: [],
+    methods: [],
+    accessGrants: ["journal"],
+    astroDiaryConfig: {
+      reflectionCyclesPerPeriod: 12,
+      responseSlaWorkingDays: 2,
+      clientResponseWindowCalendarDays: 7,
+      workingWeekdays: [1, 2, 3, 4, 5],
+      serviceTimezone: "Europe/Moscow"
+    }
   };
 }
 

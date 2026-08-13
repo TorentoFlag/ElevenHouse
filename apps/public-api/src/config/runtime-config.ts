@@ -8,6 +8,10 @@ const localTrustedStaticPasswordlessCode = {
   identifierNormalized: "+78005553535",
   code: "777777"
 };
+const optionalTrimmedNonEmptyStringSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional()
+);
 
 const publicApiRuntimeConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -17,6 +21,10 @@ const publicApiRuntimeConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
+  LIVEKIT_URL: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_API_KEY: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_API_SECRET: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_ROOM_PREFIX: z.string().trim().min(1).max(80).default("session_"),
   PUBLIC_API_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   PUBLIC_API_SESSION_COOKIE_SECURE: z
     .enum(["true", "false"])
@@ -137,6 +145,7 @@ export type PublicApiRuntimeConfig = {
   readonly port: number;
   readonly trustProxy: boolean;
   readonly redisUrl: string;
+  readonly mediaRoom: LiveKitRuntimeOptions | null;
   readonly sessionTtlSeconds: number;
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
@@ -210,6 +219,7 @@ export function createPublicApiRuntimeConfig(
   source: Record<string, string | undefined> = process.env
 ): PublicApiRuntimeConfig {
   const config = publicApiRuntimeConfigSchema.parse(source);
+  const mediaRoom = resolveLiveKitRuntimeOptions(config);
   const sessionCookieName =
     config.PUBLIC_API_SESSION_COOKIE_NAME ??
     (config.PUBLIC_API_SESSION_COOKIE_SECURE
@@ -281,6 +291,7 @@ export function createPublicApiRuntimeConfig(
     port: config.PUBLIC_API_PORT,
     trustProxy: config.PUBLIC_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
+    mediaRoom,
     sessionTtlSeconds: config.PUBLIC_API_SESSION_TTL_SECONDS,
     sessionCookieSecure: config.PUBLIC_API_SESSION_COOKIE_SECURE,
     sessionCookieName,
@@ -352,6 +363,37 @@ export function createPublicApiRuntimeConfig(
       }
     },
     financeCheckout
+  };
+}
+
+type LiveKitRuntimeOptions = Readonly<{
+  serverUrl: string;
+  apiKey: string;
+  apiSecret: string;
+  roomPrefix: string;
+  joinTokenTtlSeconds: 300;
+}>;
+
+function resolveLiveKitRuntimeOptions(config: {
+  LIVEKIT_URL?: string;
+  LIVEKIT_API_KEY?: string;
+  LIVEKIT_API_SECRET?: string;
+  LIVEKIT_ROOM_PREFIX: string;
+}): LiveKitRuntimeOptions | null {
+  const values = [config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET];
+  if (values.every((value) => value === undefined)) return null;
+  if (values.some((value) => value === undefined)) {
+    throw new Error("LiveKit configuration is incomplete");
+  }
+  if (new URL(config.LIVEKIT_URL!).protocol !== "wss:") {
+    throw new Error("LIVEKIT_URL must use wss");
+  }
+  return {
+    serverUrl: config.LIVEKIT_URL!,
+    apiKey: config.LIVEKIT_API_KEY!,
+    apiSecret: config.LIVEKIT_API_SECRET!,
+    roomPrefix: config.LIVEKIT_ROOM_PREFIX,
+    joinTokenTtlSeconds: 300
   };
 }
 

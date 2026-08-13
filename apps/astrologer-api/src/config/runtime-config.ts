@@ -37,6 +37,10 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .default("false")
     .transform((value) => value === "true"),
   REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
+  LIVEKIT_URL: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_API_KEY: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_API_SECRET: optionalTrimmedNonEmptyStringSchema,
+  LIVEKIT_ROOM_PREFIX: z.string().trim().min(1).max(80).default("session_"),
   ASTROLOGER_API_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   ASTROLOGER_API_MOBILE_ACCESS_TOKEN_TTL_SECONDS: z.coerce
     .number()
@@ -299,6 +303,7 @@ export type AstrologerApiRuntimeConfig = {
   readonly port: number;
   readonly trustProxy: boolean;
   readonly redisUrl: string;
+  readonly mediaRoom: LiveKitRuntimeOptions | null;
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Flow runtime has no API config after V1 rollout removal.
   readonly flows: {};
   readonly sessionTtlSeconds: number;
@@ -458,6 +463,7 @@ export function createAstrologerApiRuntimeConfig(
   source: Record<string, string | undefined> = process.env
 ): AstrologerApiRuntimeConfig {
   const config = astrologerApiRuntimeConfigSchema.parse(source);
+  const mediaRoom = resolveLiveKitRuntimeOptions(config);
   if (config.ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET === config.ASTROLOGER_MEDIA_STORAGE_BUCKET) {
     throw new Error("Private and public media storage buckets must be different");
   }
@@ -612,6 +618,7 @@ export function createAstrologerApiRuntimeConfig(
     port: config.ASTROLOGER_API_PORT,
     trustProxy: config.ASTROLOGER_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
+    mediaRoom,
     flows: {
     },
     sessionTtlSeconds: config.ASTROLOGER_API_SESSION_TTL_SECONDS,
@@ -750,6 +757,37 @@ export function createAstrologerApiRuntimeConfig(
     chartAi: {
       enabled: config.ASTROLOGER_CHART_AI_ENABLED
     }
+};
+}
+
+type LiveKitRuntimeOptions = Readonly<{
+  serverUrl: string;
+  apiKey: string;
+  apiSecret: string;
+  roomPrefix: string;
+  joinTokenTtlSeconds: 300;
+}>;
+
+function resolveLiveKitRuntimeOptions(config: {
+  LIVEKIT_URL?: string;
+  LIVEKIT_API_KEY?: string;
+  LIVEKIT_API_SECRET?: string;
+  LIVEKIT_ROOM_PREFIX: string;
+}): LiveKitRuntimeOptions | null {
+  const values = [config.LIVEKIT_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET];
+  if (values.every((value) => value === undefined)) return null;
+  if (values.some((value) => value === undefined)) {
+    throw new Error("LiveKit configuration is incomplete");
+  }
+  if (new URL(config.LIVEKIT_URL!).protocol !== "wss:") {
+    throw new Error("LIVEKIT_URL must use wss");
+  }
+  return {
+    serverUrl: config.LIVEKIT_URL!,
+    apiKey: config.LIVEKIT_API_KEY!,
+    apiSecret: config.LIVEKIT_API_SECRET!,
+    roomPrefix: config.LIVEKIT_ROOM_PREFIX,
+    joinTokenTtlSeconds: 300
   };
 }
 

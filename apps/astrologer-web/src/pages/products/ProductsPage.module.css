@@ -441,6 +441,26 @@
   font-weight: 700;
 }
 
+.productActionErrorNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgb(255 159 159 / 0.28);
+  border-radius: 12px;
+  background: rgb(255 159 159 / 0.08);
+}
+
+.productActionErrorNotice p {
+  margin: 0;
+  color: var(--eh-color-danger-300, #ff9f9f);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 .emptyState {
   padding: 60px 0;
   text-align: center;

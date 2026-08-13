@@ -11,6 +11,7 @@ import {
 } from "@elevenhouse/design-system/icons";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Link } from "react-router";
 import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
 import {
   createBookingDetailViewModel,
@@ -28,6 +29,9 @@ type BookingDetailPanelProps = {
   readonly isError: boolean;
   readonly onRetry: () => unknown;
   readonly onClose: () => void;
+  readonly sessionId?: string | null;
+  readonly sessionStatus?: "loading" | "ready" | "error";
+  readonly onRetrySession?: () => void;
 };
 
 export function BookingDetailPanel(props: BookingDetailPanelProps) {
@@ -35,6 +39,7 @@ export function BookingDetailPanel(props: BookingDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const isMobileSheet = useIsMobileCalendarViewport();
+  const sessionStatus = props.sessionStatus ?? "ready";
 
   useEffect(() => {
     const activeElement =
@@ -115,34 +120,61 @@ export function BookingDetailPanel(props: BookingDetailPanelProps) {
         ) : null}
 
         {detail && !props.isLoading && !props.isError ? (
-          <dl className={styles.bookingDetailList}>
-            <BookingDetailRow
-              icon={<Box />}
-              label={props.copy.fieldLabels.productAndPrice}
-              value={
-                <span className={styles.bookingProductAndPrice}>
-                  <span className={styles.bookingDetailProduct}>{detail.productTitle}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className={styles.bookingDetailPrice}>{detail.priceLabel}</span>
+          <>
+            <dl className={styles.bookingDetailList}>
+              <BookingDetailRow
+                icon={<Box />}
+                label={props.copy.fieldLabels.productAndPrice}
+                value={
+                  <span className={styles.bookingProductAndPrice}>
+                    <span className={styles.bookingDetailProduct}>{detail.productTitle}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className={styles.bookingDetailPrice}>{detail.priceLabel}</span>
+                  </span>
+                }
+              />
+              <BookingDetailRow
+                icon={<Calendar />}
+                label={props.copy.fieldLabels.date}
+                value={detail.dateLabel}
+              />
+              <BookingDetailRow
+                icon={<Clock />}
+                label={props.copy.fieldLabels.time}
+                value={detail.timeLabel}
+              />
+              <BookingDetailRow
+                icon={<DeliveryFormatIcon format={props.booking?.deliveryFormat ?? "video"} />}
+                label={props.copy.fieldLabels.deliveryFormat}
+                value={detail.deliveryFormatLabel}
+              />
+            </dl>
+            {props.sessionId &&
+            props.booking?.deliveryFormat === "video" &&
+            sessionStatus === "ready" ? (
+              <Link className={styles.bookingSessionAction} to={`/sessions/${props.sessionId}`}>
+                <Video width={17} height={17} aria-hidden="true" />
+                {props.locale === "ru" ? "Войти в сессию" : "Join session"}
+              </Link>
+            ) : null}
+            {props.booking?.deliveryFormat === "video" && sessionStatus === "loading" ? (
+              <div className={styles.bookingDetailState} aria-live="polite">
+                {props.locale === "ru" ? "Проверяем доступ к сессии…" : "Checking session access…"}
+              </div>
+            ) : null}
+            {props.booking?.deliveryFormat === "video" && sessionStatus === "error" ? (
+              <div className={styles.bookingDetailState} role="alert">
+                <span>
+                  {props.locale === "ru"
+                    ? "Не удалось проверить доступ к сессии."
+                    : "Could not check session access."}
                 </span>
-              }
-            />
-            <BookingDetailRow
-              icon={<Calendar />}
-              label={props.copy.fieldLabels.date}
-              value={detail.dateLabel}
-            />
-            <BookingDetailRow
-              icon={<Clock />}
-              label={props.copy.fieldLabels.time}
-              value={detail.timeLabel}
-            />
-            <BookingDetailRow
-              icon={<DeliveryFormatIcon format={props.booking?.deliveryFormat ?? "video"} />}
-              label={props.copy.fieldLabels.deliveryFormat}
-              value={detail.deliveryFormatLabel}
-            />
-          </dl>
+                <button type="button" onClick={props.onRetrySession}>
+                  {props.locale === "ru" ? "Повторить" : "Retry"}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
     </aside>

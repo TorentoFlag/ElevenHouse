@@ -36,6 +36,10 @@ export const astrologerRoutes = [
     element: <RequireCurrentAccount />,
     children: [
       {
+        path: astrologerRouteContract.protected.session,
+        lazy: async () => ({ Component: (await import("./pages/session/SessionPage")).SessionPage })
+      },
+      {
         element: <AstrologerAppLayout />,
         children: [
           {

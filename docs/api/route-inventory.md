@@ -30,6 +30,12 @@ This is the current route inventory. API ownership, authorization and contract r
 | POST | `/payments/checkout` | `apps/public-api/src/modules/payments/payments.controller.ts` |
 | GET | `/payments/checkout-preparations/:checkoutPreparationId` | `apps/public-api/src/modules/payments/payments.controller.ts` |
 | GET | `/payments/checkout-preparations/:checkoutPreparationId/action` | `apps/public-api/src/modules/payments/payments.controller.ts` |
+| GET | `/sessions` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId/events` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
+| POST | `/sessions/:sessionId/join` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId/messages` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
+| POST | `/sessions/:sessionId/messages` | `apps/public-api/src/modules/sessions/sessions.controller.ts` |
 
 ## astrologer-api
 
@@ -97,23 +103,27 @@ This is the current route inventory. API ownership, authorization and contract r
 | GET | `/flow-runs/:runId` | `apps/astrologer-api/src/modules/flows/flow-runs.controller.ts` |
 | POST | `/flow-runs/:runId/cancel` | `apps/astrologer-api/src/modules/flows/flow-runs.controller.ts` |
 | GET | `/flow-templates` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| GET | `/flow-templates` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| POST | `/flow-templates` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| GET | `/flow-templates/:flowId` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| PATCH | `/flow-templates/:flowId/draft` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| POST | `/flow-templates/:flowId/next-draft` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| POST | `/flow-templates/:flowId/publish` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| GET | `/flow-templates/:flowId/runs` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
-| POST | `/flow-templates/:flowId/validate` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
 | GET | `/flow-work-items` | `apps/astrologer-api/src/modules/flows/flow-work-items.controller.ts` |
 | POST | `/flow-work-items/:workItemId/complete` | `apps/astrologer-api/src/modules/flows/flow-work-items.controller.ts` |
 | POST | `/flow-work-items/:workItemId/snooze` | `apps/astrologer-api/src/modules/flows/flow-work-items.controller.ts` |
 | POST | `/flow-work-items/:workItemId/start` | `apps/astrologer-api/src/modules/flows/flow-work-items.controller.ts` |
+| GET | `/flows` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| POST | `/flows` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| GET | `/flows/:flowId` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
 | POST | `/flows/:flowId/activate` | `apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts` |
 | GET | `/flows/:flowId/activation-review` | `apps/astrologer-api/src/modules/flows/flow-activation-review.controller.ts` |
+| POST | `/flows/:flowId/archive` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| POST | `/flows/:flowId/delete` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| PATCH | `/flows/:flowId/draft` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| POST | `/flows/:flowId/duplicate` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
 | GET | `/flows/:flowId/enrollment` | `apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts` |
 | POST | `/flows/:flowId/manual-runs` | `apps/astrologer-api/src/modules/flows/flow-manual-client-runs.controller.ts` |
+| POST | `/flows/:flowId/next-draft` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
 | POST | `/flows/:flowId/pause-enrollment` | `apps/astrologer-api/src/modules/flows/flow-enrollment.controller.ts` |
+| POST | `/flows/:flowId/publish` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| POST | `/flows/:flowId/restore` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| GET | `/flows/:flowId/runs` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
+| POST | `/flows/:flowId/validate` | `apps/astrologer-api/src/modules/flows/flows.controller.ts` |
 | GET | `/health` | `apps/astrologer-api/src/modules/health/health.controller.ts` |
 | POST | `/human-design/calculations` | `apps/astrologer-api/src/modules/human-design/human-design.controller.ts` |
 | POST | `/human-design/calculations/:calculationId/ai-draft` | `apps/astrologer-api/src/modules/human-design/human-design.controller.ts` |
@@ -188,6 +198,14 @@ This is the current route inventory. API ownership, authorization and contract r
 | GET | `/products/summary` | `apps/astrologer-api/src/modules/products/products.controller.ts` |
 | GET | `/products/templates` | `apps/astrologer-api/src/modules/products/products.controller.ts` |
 | POST | `/products/templates/:templateCode/drafts` | `apps/astrologer-api/src/modules/products/products.controller.ts` |
+| POST | `/session-provider/livekit/webhook` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| POST | `/sessions/:sessionId/end` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId/events` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| POST | `/sessions/:sessionId/join` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| GET | `/sessions/:sessionId/messages` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
+| POST | `/sessions/:sessionId/messages` | `apps/astrologer-api/src/modules/sessions/sessions.controller.ts` |
 | GET | `/tariffs` | `apps/astrologer-api/src/modules/platform-tariffs/platform-tariffs.controller.ts` |
 | GET | `/tariffs/entitlements` | `apps/astrologer-api/src/modules/platform-tariffs/platform-tariffs.controller.ts` |
 | POST | `/tariffs/invoices/:invoiceId/complete-3ds-method` | `apps/astrologer-api/src/modules/platform-tariffs/platform-tariffs.controller.ts` |

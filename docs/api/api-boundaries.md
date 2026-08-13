@@ -55,6 +55,12 @@ GET  /payments/checkout-preparations/:checkoutPreparationId
 GET  /payments/checkout-preparations/:checkoutPreparationId/action
 GET  /me/orders
 GET  /me/bookings
+GET  /sessions?rangeStartAt=<instant>&rangeEndAt=<instant>
+GET  /sessions/:sessionId
+POST /sessions/:sessionId/join
+GET  /sessions/:sessionId/messages
+POST /sessions/:sessionId/messages
+GET  /sessions/:sessionId/events
 POST /client/orders/:orderId/disputes
 GET  /client/orders/:orderId/disputes
 ```
@@ -118,6 +124,12 @@ per-booking birth-data access API in this contour. An astrologer write is
 permitted only through the owner-scoped CRM route and an active server-side
 client-astrologer relationship.
 
+Client Session routes require the `client` role and exact participant ownership.
+`join` returns a short-lived room-scoped credential, never a provider secret or
+room administration authority. Text chat is persisted by ElevenHouse and replayed
+over HTTP; LiveKit data messages are not its source of truth. Slice A has no
+recording, egress, transcription or AI summary surface.
+
 ## Astrologer API
 
 `astrologer-api` обслуживает authenticated workflows астрологов. В текущем коде
@@ -180,6 +192,14 @@ DELETE /calendar/blocks/:blockId
 POST /bookings/manual
 GET  /bookings/available-slots?productId=<uuid>&start=<instant>&end=<instant>
 GET  /bookings/:bookingId
+GET  /sessions?rangeStartAt=<instant>&rangeEndAt=<instant>
+GET  /sessions/:sessionId
+POST /sessions/:sessionId/join
+GET  /sessions/:sessionId/messages
+POST /sessions/:sessionId/messages
+GET  /sessions/:sessionId/events
+POST /sessions/:sessionId/end
+POST /session-provider/livekit/webhook
 GET  /media/assets/:mediaId
 POST /media/upload-intents
 POST /media/assets/:mediaId/complete
@@ -270,15 +290,19 @@ GET /flows/:flowId/activation-review
 POST /flows/:flowId/validate
 PATCH /flows/:flowId/draft
 POST /flows/:flowId/publish
+POST /flows/:flowId/next-draft
 POST /flows/:flowId/activate
 POST /flows/:flowId/pause-enrollment
-POST /flows/:flowId/pause
 POST /flows/:flowId/manual-runs
 GET /flows/:flowId/runs
 GET /flow-runs/:runId
 POST /flow-runs/:runId/cancel
 GET /flow-approvals
 POST /flow-approvals/:approvalId/decision
+GET /flow-work-items
+POST /flow-work-items/:workItemId/start
+POST /flow-work-items/:workItemId/snooze
+POST /flow-work-items/:workItemId/complete
 ```
 
 The internal, super-admin-only Flow runtime control surface is deliberately
@@ -408,8 +432,7 @@ its open activation epoch. It returns the terminal disposition
 not proven, creates no run/effect and lets the outbox relay consume the event
 with a sanitized ignored-event log. This prevents an unbounded payload backlog
 and stale events from being replayed after activation. The durable v2 runtime
-and activation epochs are defined in ADR 0011 and the current Flows
-production-module spec.
+and activation epochs are defined in [ADR 0011](../decisions/0011-flows-postgres-execution-authority.md).
 
 Availability, calendar and manual-booking routes are authenticated and owner
 scoped. Availability and calendar reads are side-effect free. Their mutations

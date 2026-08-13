@@ -1,4 +1,5 @@
 import type { ProductIncludedItemRequest, ProductResponse } from "@elevenhouse/contracts";
+import type { ProductStatusTransitionInput } from "../api/publishProduct";
 import type { UpdateProductInput } from "../api/updateProduct";
 import {
   toCreateProductRequest,
@@ -8,24 +9,28 @@ import {
 
 export type PersistProductDraftResult =
   | { readonly status: "saved" }
-  | { readonly status: "failed"; readonly persistedProduct?: ProductResponse };
+  | {
+      readonly status: "failed";
+      readonly persistedProduct?: ProductResponse;
+      readonly error: unknown;
+    };
 
 export type PersistProductDraftInput = {
   readonly draft: ProductFormDraft;
   readonly visibleIncludedItems?: readonly ProductIncludedItemRequest[];
-  readonly editingProductId: string | null;
+  readonly editingProduct: Pick<ProductResponse, "id" | "revision"> | null;
   readonly publish: boolean;
   readonly createProduct: (
     body: ReturnType<typeof toCreateProductRequest>
   ) => Promise<ProductResponse>;
   readonly updateProduct: (input: UpdateProductInput) => Promise<ProductResponse>;
-  readonly publishProduct: (productId: string) => Promise<ProductResponse>;
+  readonly publishProduct: (input: ProductStatusTransitionInput) => Promise<ProductResponse>;
 };
 
 export async function persistProductDraft({
   draft,
   visibleIncludedItems,
-  editingProductId,
+  editingProduct,
   publish,
   createProduct,
   updateProduct,
@@ -37,19 +42,24 @@ export async function persistProductDraft({
     : draft;
 
   try {
-    persistedProduct = editingProductId
+    persistedProduct = editingProduct
       ? await updateProduct({
-          productId: editingProductId,
-          body: toUpdateProductRequest(requestDraft)
+          productId: editingProduct.id,
+          body: toUpdateProductRequest(requestDraft, editingProduct.revision)
         })
       : await createProduct(toCreateProductRequest(requestDraft));
 
     if (publish) {
-      await publishProduct(persistedProduct.id);
+      await publishProduct({
+        productId: persistedProduct.id,
+        expectedRevision: persistedProduct.revision
+      });
     }
 
     return { status: "saved" };
-  } catch {
-    return persistedProduct ? { status: "failed", persistedProduct } : { status: "failed" };
+  } catch (error) {
+    return persistedProduct
+      ? { status: "failed", persistedProduct, error }
+      : { status: "failed", error };
   }
 }

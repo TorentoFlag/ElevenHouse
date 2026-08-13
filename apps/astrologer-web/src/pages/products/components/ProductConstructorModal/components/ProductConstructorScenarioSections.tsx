@@ -12,6 +12,7 @@ import {
 } from "./sections/BasicProductSections";
 import { IncludedItemsSection } from "./sections/IncludedItemsSection";
 import { ModifiersSection } from "./sections/ModifiersSection";
+import { AstroDiaryProductConfigSection } from "./sections/AstroDiaryProductConfigSection";
 
 export function ProductConstructorScenarioSections(props: ProductConstructorSectionProps) {
   const definition = getProductTypeDefinition(props.draft.type);
@@ -94,19 +95,15 @@ function renderScenarioSection(
         />
       );
     case "course":
-      return (
-        <BasicProductSections
-          key={section}
-          {...props}
-          visibleSections={["duration"]}
-        />
-      );
+      return <BasicProductSections key={section} {...props} visibleSections={["duration"]} />;
     case "methods":
       return <MethodsSection key={section} {...props} />;
     case "clientData":
       return <ClientDataSection key={section} {...props} />;
     case "accessGrants":
       return <AccessGrantsSection key={section} {...props} />;
+    case "astroDiary":
+      return <AstroDiaryProductConfigSection key={section} {...props} />;
     case "modifiers":
       return <ModifiersSection key={section} {...props} />;
     case "includedItems":

@@ -9,3 +9,4 @@ export * from "./adapters/finance/index";
 export * from "./adapters/audit-log/index";
 export * from "./adapters/flows/index";
 export * from "./adapters/ai/index";
+export * from "./adapters/sessions/index";

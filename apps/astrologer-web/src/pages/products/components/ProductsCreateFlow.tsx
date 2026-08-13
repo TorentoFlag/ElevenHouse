@@ -55,6 +55,7 @@ export function ProductsCreateFlow({
           isCoverUploading={flow.isCoverUploading}
           coverMediaUrl={flow.coverMediaUrl}
           error={flow.editorError}
+          requiresReload={flow.editorRequiresReload}
           coverUploadError={flow.coverUploadError}
           portalTarget={modalTarget}
           backdropClassName={styles.productScopedModalBackdrop}

@@ -16,5 +16,6 @@ export * from "./messaging";
 export * from "./finance";
 export * from "./audit-log";
 export * from "./ai";
+export * from "./sessions";
 export * from "./client-subscriptions";
 export * from "./astro-diary";

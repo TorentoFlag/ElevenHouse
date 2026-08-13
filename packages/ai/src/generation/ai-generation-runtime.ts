@@ -152,6 +152,12 @@ export function createAiGenerationRuntime<TResourceEvidence, TSafeError extends 
         const result = await input.provider.generateStructured<TOutput>({
           prompt: renderedPrompt,
           modelProfile: request.prompt.modelProfile,
+          ...(request.prompt.requestedModel
+            ? { requestedModel: request.prompt.requestedModel }
+            : {}),
+          ...(request.prompt.providerMaxRetries === undefined
+            ? {}
+            : { providerMaxRetries: request.prompt.providerMaxRetries }),
           responseSchema: request.prompt.outputSchema,
           maxOutputTokens: Math.min(request.prompt.maxOutputTokens, config.maxOutputTokens),
           reasoningEffort: request.prompt.reasoningEffort,

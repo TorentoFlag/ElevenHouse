@@ -39,5 +39,8 @@ export * from "./finance-readiness";
 export * from "./reconciliation";
 export * from "./refunds";
 export * from "./finance/shared/idempotent-command";
+export * from "./finance-core/client-order-capture-purpose-dispatch";
+export * from "./finance-core/ports/client-order-capture-purpose-dispatch-uow";
 export * from "./audit-log";
 export * from "./ai";
+export * from "./sessions";

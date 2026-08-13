@@ -29,6 +29,7 @@ const product = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "active",
+  revision: 1,
   title: "Натальный разбор",
   subtitle: null,
   priceMinor: 490000,
@@ -51,6 +52,7 @@ const product = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -723,6 +725,7 @@ describe("Products page components", () => {
       isTypeModalOpen: true,
       editorDraft: draft,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,

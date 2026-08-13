@@ -1,9 +1,6 @@
 import type { UserAccount } from "../../../accounts";
 import type { AuthIdentity } from "../../../auth-identities";
-import {
-  normalizeAuthSecurityEventInput,
-  type AuthSecurityEvent
-} from "../../../auth-sessions";
+import { normalizeAuthSecurityEventInput, type AuthSecurityEvent } from "../../../auth-sessions";
 import {
   normalizeAuthSessionCreationInput,
   type AuthSession,
@@ -12,6 +9,7 @@ import {
 import type { UserRoleAssignment } from "../../../roles";
 import {
   PasswordlessCodeVerificationError,
+  type PasswordlessVerifiedIdentity,
   type AuthChallenge,
   type PasswordlessAuthenticatedAccount
 } from "./passwordless-challenge";
@@ -44,6 +42,11 @@ export type PasswordlessVerificationStore = {
     input: ReturnType<typeof normalizeAuthSecurityEventInput>
   ) => Promise<AuthSecurityEvent>;
 };
+
+export type PasswordlessLoginVerificationStore = Omit<
+  PasswordlessVerificationStore,
+  "createSession"
+>;
 
 export type PasswordlessRegistrationChallenge = {
   readonly channel: "email" | "phone";
@@ -104,6 +107,44 @@ export async function verifyPasswordlessCode(input: {
   readonly now: Date;
   readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
 }): Promise<PasswordlessAuthenticatedAccount> {
+  const accountContext = await verifyPasswordlessCodeForLogin(input);
+  const session = await input.store.createSession(
+    normalizeAuthSessionCreationInput({
+      userId: accountContext.user.id,
+      tokenHash: input.session.tokenHash,
+      createdAt: input.session.createdAt,
+      expiresAt: input.session.expiresAt,
+      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
+      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
+    })
+  );
+  const securityEvent = await input.store.recordSecurityEvent(
+    normalizeAuthSecurityEventInput({
+      eventType: "login_succeeded",
+      occurredAt: input.now,
+      userId: accountContext.user.id,
+      sessionId: session.id,
+      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
+      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
+    })
+  );
+
+  return {
+    ...accountContext,
+    session,
+    securityEvent,
+    authenticationKind: "login"
+  };
+}
+
+export async function verifyPasswordlessCodeForLogin(input: {
+  readonly store: PasswordlessLoginVerificationStore;
+  readonly challengeId: string;
+  readonly code: string;
+  readonly codeSecret: string;
+  readonly now: Date;
+  readonly trustedStaticCode?: PasswordlessTrustedStaticCode | null;
+}): Promise<PasswordlessVerifiedIdentity> {
   const challengeId = input.challengeId.trim();
   const challenge = await verifyUsableChallengeCode({
     store: input.store,
@@ -129,40 +170,15 @@ export async function verifyPasswordlessCode(input: {
   }
 
   assertRequestedRolesAssigned({ accountContext: existingIdentity, challenge });
-  const accountContext = existingIdentity;
-  const session = await input.store.createSession(
-    normalizeAuthSessionCreationInput({
-      userId: accountContext.user.id,
-      tokenHash: input.session.tokenHash,
-      createdAt: input.session.createdAt,
-      expiresAt: input.session.expiresAt,
-      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
-      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
-    })
-  );
-  const securityEvent = await input.store.recordSecurityEvent(
-    normalizeAuthSecurityEventInput({
-      eventType: "login_succeeded",
-      occurredAt: input.now,
-      userId: accountContext.user.id,
-      sessionId: session.id,
-      ...(input.session.ipAddress === undefined ? {} : { ipAddress: input.session.ipAddress }),
-      ...(input.session.userAgent === undefined ? {} : { userAgent: input.session.userAgent })
-    })
-  );
-
   return {
-    user: accountContext.user,
-    authIdentity: accountContext.authIdentity,
-    roleAssignments: accountContext.roleAssignments,
-    session,
-    securityEvent,
-    authenticationKind: "login"
+    user: existingIdentity.user,
+    authIdentity: existingIdentity.authIdentity,
+    roleAssignments: existingIdentity.roleAssignments
   };
 }
 
 async function verifyUsableChallengeCode(input: {
-  readonly store: PasswordlessVerificationStore;
+  readonly store: PasswordlessLoginVerificationStore;
   readonly challengeId: string;
   readonly code: string;
   readonly codeSecret: string;

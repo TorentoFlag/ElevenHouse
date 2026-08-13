@@ -5,6 +5,7 @@ import type {
   ProductMethod,
   ProductModifierRequest
 } from "@elevenhouse/contracts";
+import { productAstroDiaryConfigSchema } from "@elevenhouse/contracts/products";
 import type { IconName } from "@elevenhouse/design-system/icons/Icon";
 import {
   getAccessGrantIconName,
@@ -94,6 +95,7 @@ export type ProductConstructorViewModel = {
   readonly enabledModifiers: readonly ProductModifierRequest[];
   readonly cabinetArtifacts: readonly ClientCabinetArtifact[];
   readonly previewIconName: ProductIconName;
+  readonly isProductConfigurationValid: boolean;
 };
 
 export function createProductConstructorViewModel({
@@ -120,7 +122,10 @@ export function createProductConstructorViewModel({
     preview: createProductPreview(draft, productCopy, locale, uiCopy, visibleIncludedItems),
     enabledModifiers: draft.modifiers.filter((modifier) => modifier.isEnabled),
     cabinetArtifacts: createClientCabinetArtifacts(draft, productCopy, uiCopy),
-    previewIconName: getProductPreviewIconName(draft)
+    previewIconName: getProductPreviewIconName(draft),
+    isProductConfigurationValid:
+      !draft.accessGrants.includes("journal") ||
+      productAstroDiaryConfigSchema.safeParse(draft.astroDiaryConfig).success
   };
 }
 

@@ -46,6 +46,7 @@ const createProductRequest = {
 const productResponse = {
   id: productId,
   ownerUserId: "22222222-2222-4222-8222-222222222222",
+  revision: 7,
   status: "draft",
   type: "single",
   title: "Натальный разбор",
@@ -70,6 +71,7 @@ const productResponse = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -201,6 +203,7 @@ describe("products API", () => {
       updateProduct({
         productId,
         body: {
+          expectedRevision: 7,
           subtitle: null,
           durationMinutes: null
         }
@@ -223,6 +226,7 @@ describe("products API", () => {
     expect(put).toHaveBeenCalledWith(
       `/products/${productId}`,
       {
+        expectedRevision: 7,
         subtitle: null,
         durationMinutes: null
       },
@@ -233,24 +237,48 @@ describe("products API", () => {
   it("runs product lifecycle actions through protected endpoints", async () => {
     const post = vi.spyOn(application.http, "post").mockResolvedValue(productResponse);
 
-    await publishProduct(productId);
-    await moveProductToDraft(productId);
-    await archiveProduct(productId);
-    await duplicateProduct({ productId, body: { title: "Натальный разбор (копия)" } });
+    await publishProduct({ productId, expectedRevision: 7 });
+    await moveProductToDraft({ productId, expectedRevision: 8 });
+    await archiveProduct({ productId, expectedRevision: 9 });
+    await duplicateProduct({
+      productId,
+      body: { expectedRevision: 10, title: "Натальный разбор (копия)" }
+    });
 
-    expect(post).toHaveBeenNthCalledWith(1, `/products/${productId}/publish`, undefined, {
-      csrf: true
-    });
-    expect(post).toHaveBeenNthCalledWith(2, `/products/${productId}/move-to-draft`, undefined, {
-      csrf: true
-    });
-    expect(post).toHaveBeenNthCalledWith(3, `/products/${productId}/archive`, undefined, {
-      csrf: true
-    });
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      `/products/${productId}/publish`,
+      {
+        expectedRevision: 7
+      },
+      {
+        csrf: true
+      }
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      `/products/${productId}/move-to-draft`,
+      {
+        expectedRevision: 8
+      },
+      {
+        csrf: true
+      }
+    );
+    expect(post).toHaveBeenNthCalledWith(
+      3,
+      `/products/${productId}/archive`,
+      {
+        expectedRevision: 9
+      },
+      {
+        csrf: true
+      }
+    );
     expect(post).toHaveBeenNthCalledWith(
       4,
       `/products/${productId}/duplicate`,
-      { title: "Натальный разбор (копия)" },
+      { expectedRevision: 10, title: "Натальный разбор (копия)" },
       { csrf: true }
     );
   });

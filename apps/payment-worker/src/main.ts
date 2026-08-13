@@ -56,6 +56,7 @@ import {
   createDrizzleWebhookIngressStorageUnitOfWork,
   createFinanceArtifactRegistry
 } from "@elevenhouse/db/finance";
+import { createDrizzleClientSubscriptionCaptureDispatchUnitOfWork } from "@elevenhouse/db/client-subscriptions";
 import { createDrizzleOutboxRelayStore } from "@elevenhouse/db/outbox";
 import { createDrizzlePlatformTariffAuthorityStore } from "@elevenhouse/db/platform-billing";
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
@@ -81,6 +82,10 @@ import {
   startOnlineWalletHoldReleaseInterval
 } from "./holds/online-wallet-hold-release.processor";
 import { createPaymentWorkerRuntimeConfig } from "./runtime-config";
+import {
+  createClientOrderCaptureDispatchProcessor,
+  startClientOrderCaptureDispatchInterval
+} from "./client-subscriptions/finance-client-order-capture-dispatch-processor";
 import {
   createSettlementBalanceObservationProcessor,
   startSettlementBalanceObservationInterval
@@ -214,7 +219,9 @@ async function startPaymentWorker(): Promise<void> {
         privateObjectStorage: privateStorage
       }),
       canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay),
-      correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database),
+      correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(
+        postgresRuntime.database
+      ),
       evidence: createCanonicalClientOrderCaptureEvidenceSealer({
         privateObjectStorage: privateStorage,
         artifactRegistry,
@@ -240,9 +247,57 @@ async function startPaymentWorker(): Promise<void> {
       onError: (error) =>
         logger.error("canonical client-order capture tick failed", { error: serializeError(error) })
     });
+    startClientOrderCaptureDispatchInterval({
+      processor: createClientOrderCaptureDispatchProcessor({
+        store: createDrizzleOutboxRelayStore(postgresRuntime.database),
+        unitOfWork: createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
+          postgresRuntime.database
+        ),
+        batchSize: config.financeProviderDispatch.batchSize,
+        publishingLockTimeoutMs: config.financeProviderDispatch.publishingLockTimeoutMs
+      }),
+      intervalMs: config.financeProviderDispatch.intervalMs,
+      onResult: (result) => {
+        if (result.claimed > 0)
+          logger.info("client subscription capture dispatch tick completed", result);
+      },
+      onError: (error) =>
+        logger.error("client subscription capture dispatch tick failed", {
+          error: serializeError(error)
+        })
+    });
     const canonicalClientOrderRefund = createCanonicalClientOrderRefundProcessor({
-      claims: createDrizzleRefundedClientOrderWebhookClaimPort({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund`, leaseDurationSeconds: config.canonicalClientOrderCapture.leaseDurationSeconds, retryPolicy: { maximumAttempts: config.canonicalClientOrderCapture.maximumAttempts, baseDelayMilliseconds: config.canonicalClientOrderCapture.retryBaseDelayMilliseconds, maximumDelayMilliseconds: config.canonicalClientOrderCapture.retryMaximumDelayMilliseconds } }),
-      webhookArtifacts: createClaimedWebhookArtifactResolver({ artifactRegistry, privateObjectStorage: privateStorage }), canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay), correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database), positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database), refundCases: createDrizzleApprovedOnlineWalletRefundCaseReader(postgresRuntime.database), policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database), evidence: createCanonicalClientOrderRefundEvidenceSealer({ privateObjectStorage: privateStorage, artifactRegistry, retention: config.financeProviderDispatch.canonicalReadArtifactRetention }), terminal: createDrizzleOnlineWalletRefundTerminalUnitOfWork({ database: postgresRuntime.database, workerId: `${canonicalCaptureWorkerId}:refund` }), processorVersion: 1
+      claims: createDrizzleRefundedClientOrderWebhookClaimPort({
+        database: postgresRuntime.database,
+        workerId: `${canonicalCaptureWorkerId}:refund`,
+        leaseDurationSeconds: config.canonicalClientOrderCapture.leaseDurationSeconds,
+        retryPolicy: {
+          maximumAttempts: config.canonicalClientOrderCapture.maximumAttempts,
+          baseDelayMilliseconds: config.canonicalClientOrderCapture.retryBaseDelayMilliseconds,
+          maximumDelayMilliseconds: config.canonicalClientOrderCapture.retryMaximumDelayMilliseconds
+        }
+      }),
+      webhookArtifacts: createClaimedWebhookArtifactResolver({
+        artifactRegistry,
+        privateObjectStorage: privateStorage
+      }),
+      canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay),
+      correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(
+        postgresRuntime.database
+      ),
+      positions: createDrizzleOnlineWalletRefundPositionReader(postgresRuntime.database),
+      refundCases: createDrizzleApprovedOnlineWalletRefundCaseReader(postgresRuntime.database),
+      policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
+      evidence: createCanonicalClientOrderRefundEvidenceSealer({
+        privateObjectStorage: privateStorage,
+        artifactRegistry,
+        retention: config.financeProviderDispatch.canonicalReadArtifactRetention
+      }),
+      terminal: createDrizzleOnlineWalletRefundTerminalUnitOfWork({
+        database: postgresRuntime.database,
+        workerId: `${canonicalCaptureWorkerId}:refund`
+      }),
+      processorVersion: 1
     });
     startCanonicalClientOrderRefundInterval({
       processor: canonicalClientOrderRefund,
@@ -273,7 +328,9 @@ async function startPaymentWorker(): Promise<void> {
         privateObjectStorage: privateStorage
       }),
       canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay),
-      correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(postgresRuntime.database),
+      correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(
+        postgresRuntime.database
+      ),
       policies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
       evidence: createCanonicalClientOrderChargebackEvidenceSealer({
         privateObjectStorage: privateStorage,
@@ -295,7 +352,9 @@ async function startPaymentWorker(): Promise<void> {
         }
       },
       onError: (error) =>
-        logger.error("canonical client-order chargeback tick failed", { error: serializeError(error) })
+        logger.error("canonical client-order chargeback tick failed", {
+          error: serializeError(error)
+        })
     });
     const dispatcher = createArcPayOperationDispatcher({
       checkout: createHostedCheckoutSessionDispatcher({
@@ -559,7 +618,9 @@ async function startPaymentWorker(): Promise<void> {
     startSettlementLedgerIngestionInterval({
       processor: createSettlementLedgerIngestionProcessor({
         providerAccounts: createDrizzleActiveProviderAccountReader(postgresRuntime.database),
-        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
+        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(
+          postgresRuntime.database
+        ),
         cursors: createDrizzleSettlementCursorWorkUnitOfWork({
           database: postgresRuntime.database
         }),
@@ -599,7 +660,9 @@ async function startPaymentWorker(): Promise<void> {
     startSettlementPaymentReconciliationInterval({
       processor: createSettlementPaymentReconciliationProcessor({
         providerAccounts: createDrizzleActiveProviderAccountReader(postgresRuntime.database),
-        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
+        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(
+          postgresRuntime.database
+        ),
         candidates: settlementPaymentReconciliation.candidates,
         settlementSeen: settlementPaymentReconciliation.settlementSeen,
         createMatcher(providerAccount) {
@@ -635,7 +698,9 @@ async function startPaymentWorker(): Promise<void> {
       processor: createSettlementIngestionProcessor({
         stream: "settlement_payouts",
         providerAccounts: createDrizzleActiveProviderAccountReader(postgresRuntime.database),
-        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(postgresRuntime.database),
+        operationPolicies: createDrizzleFinanceOperationResourcePolicyReader(
+          postgresRuntime.database
+        ),
         cursors: createDrizzleSettlementCursorWorkUnitOfWork({
           database: postgresRuntime.database
         }),

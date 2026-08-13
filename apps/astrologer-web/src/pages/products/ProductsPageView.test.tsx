@@ -3,6 +3,10 @@ import type { ListProductsResponse, ProductSummaryResponse } from "@elevenhouse/
 import { Button } from "@elevenhouse/design-system/components/Button";
 import { describe, expect, it, vi } from "vitest";
 import { ProductsResults } from "./components/ProductsResults";
+import {
+  ProductActionErrorNotice,
+  type ProductActionErrorNoticeProps
+} from "./components/ProductActionErrorNotice";
 import { ProductsSummaryStrip } from "./components/ProductsSummaryStrip";
 import { ProductsToolbar } from "./components/ProductsToolbar";
 import { ProductsPageView, type ProductsPageViewProps } from "./ProductsPageView";
@@ -54,7 +58,8 @@ const copy = {
   },
   emptyLabel: "Нет продуктов в этом статусе",
   loadingLabel: "Загружаем продукты",
-  errorLabel: "Не удалось загрузить продукты"
+  errorLabel: "Не удалось загрузить продукты",
+  actionErrorReloadLabel: "Обновить продукты"
 };
 
 const product = {
@@ -62,6 +67,7 @@ const product = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "active",
+  revision: 1,
   title: "Натальный разбор",
   subtitle: null,
   priceMinor: 490000,
@@ -84,6 +90,7 @@ const product = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -180,6 +187,31 @@ describe("ProductsPageView", () => {
     expect(results.props.emptyLabel).toBe("Нет продуктов в этом статусе");
   });
 
+  it("renders a page-scoped action error and disables lifecycle actions until reload", () => {
+    const onReloadProductAuthority = vi.fn();
+    const view = ProductsPageView({
+      ...createBaseProps(),
+      products: [product],
+      productActionError: "Продукт изменился. Обновите данные.",
+      isProductActionPending: true,
+      onReloadProductAuthority
+    });
+
+    const notice = findRequiredElementByType(view, ProductActionErrorNotice);
+    const alert = findRequiredElementByRole(
+      ProductActionErrorNotice(notice.props as unknown as ProductActionErrorNoticeProps),
+      "alert"
+    );
+    expect(findElementsByType(alert, "p")[0]?.props.children).toBe(
+      "Продукт изменился. Обновите данные."
+    );
+    const reloadButton = findElementsByType(alert, Button)[0];
+    expect(reloadButton?.props.title).toBe("Обновить продукты");
+    reloadButton?.props.onClick?.();
+    expect(onReloadProductAuthority).toHaveBeenCalledOnce();
+    expect(findRequiredElementByType(view, ProductsResults).props.isActionPending).toBe(true);
+  });
+
   it("replaces product actions with a tariff lock when the server denies the capability", () => {
     const onManageTariff = vi.fn();
     const view = ProductsPageView({
@@ -216,12 +248,14 @@ function createBaseProps(): ProductsPageViewProps {
     isTariffLocked: false,
     canManageProducts: true,
     isProductActionPending: false,
+    productActionError: null,
     onStatusChange: vi.fn(),
     onCreate: vi.fn(),
     onManageTariff: vi.fn(),
     onEditProduct: vi.fn(),
     onDuplicateProduct: vi.fn(),
-    onProductStatusChange: vi.fn()
+    onProductStatusChange: vi.fn(),
+    onReloadProductAuthority: vi.fn()
   };
 }
 
@@ -247,6 +281,7 @@ type TestElementProps = {
   title?: string;
   total?: number;
   "aria-labelledby"?: string;
+  role?: string;
 };
 
 function findRequiredElementByType(root: unknown, type: unknown) {
@@ -267,6 +302,19 @@ function findElementsByType(root: unknown, type: unknown): Array<{ props: TestEl
   });
 
   return matches;
+}
+
+function findRequiredElementByRole(root: unknown, role: string) {
+  let match: ReactElement<TestElementProps> | null = null;
+  visitElements(root, (element) => {
+    if (!match && element.props.role === role) {
+      match = element;
+    }
+  });
+  if (!match) {
+    throw new Error(`Expected element with role ${role}`);
+  }
+  return match;
 }
 
 function visitElements(root: unknown, visitor: (element: ReactElement<TestElementProps>) => void) {

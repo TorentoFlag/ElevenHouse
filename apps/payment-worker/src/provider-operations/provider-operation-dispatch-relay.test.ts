@@ -108,6 +108,29 @@ describe("finance provider operation dispatch relay", () => {
     expect(retryDelayMs(3)).toBe(8_000);
     expect(retryDelayMs(100)).toBe(24 * 60 * 60 * 1_000);
   });
+
+  it("characterizes the current unbounded requeue after the retry delay reaches its cap", async () => {
+    const store = createStore({ ...event(), attempts: 100 });
+    const reader = { readDispatchWorkItem: vi.fn(async () => dispatchWorkItem()) };
+    const dispatcher = { dispatch: vi.fn(async () => Promise.reject(new Error("still failing"))) };
+
+    await expect(
+      relayPendingFinanceProviderOperationDispatches({
+        store,
+        reader,
+        dispatcher,
+        now,
+        batchSize: 10,
+        publishingLockTimeoutMs: 60_000
+      })
+    ).resolves.toEqual({ claimed: 1, dispatched: 0, requeued: 1 });
+
+    expect(store.markPublishFailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nextAvailableAt: new Date(now.getTime() + 24 * 60 * 60 * 1_000)
+      })
+    );
+  });
 });
 
 function event(): ClaimedOutboxEvent {

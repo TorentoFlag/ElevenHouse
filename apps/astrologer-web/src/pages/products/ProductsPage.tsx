@@ -6,6 +6,7 @@ import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { productCopyByLocale } from "../../features/products/model/productCopy";
 import { createDuplicateProductTitle } from "../../features/products/model/productFormatting";
+import { describeProductMutationError } from "../../features/products/model/productMutationError";
 import { useArchiveProductMutation } from "../../features/products/model/useArchiveProductMutation";
 import { useDuplicateProductMutation } from "../../features/products/model/useDuplicateProductMutation";
 import { useMoveProductToDraftMutation } from "../../features/products/model/useMoveProductToDraftMutation";
@@ -37,6 +38,15 @@ export function ProductsPage() {
   const moveToDraftMutation = useMoveProductToDraftMutation();
   const archiveMutation = useArchiveProductMutation();
   const duplicateMutation = useDuplicateProductMutation();
+  const productActionFailure =
+    duplicateMutation.error ??
+    publishMutation.error ??
+    moveToDraftMutation.error ??
+    archiveMutation.error ??
+    null;
+  const productActionError = productActionFailure
+    ? describeProductMutationError(productActionFailure, locale, dictionary.products.saveErrorLabel)
+    : null;
   const products = productsQuery.data?.products ?? [];
   const counts = productsQuery.data?.counts ?? {
     all: 0,
@@ -51,11 +61,20 @@ export function ProductsPage() {
   const canManageProducts = entitlementsQuery.data?.products.mutation === "allow";
   const isError = !isTariffLocked && (productsQuery.isError || summaryQuery.isError);
   const isProductActionPending =
+    Boolean(productActionFailure) ||
     duplicateMutation.isPending ||
     publishMutation.isPending ||
     moveToDraftMutation.isPending ||
     archiveMutation.isPending;
   const handleProductStatusChange = (productId: string, status: ProductResponse["status"]) => {
+    if (productActionFailure) {
+      return;
+    }
+    const product = products.find((candidate) => candidate.id === productId);
+    if (!product) {
+      return;
+    }
+
     const mutation =
       status === "active"
         ? publishMutation
@@ -63,7 +82,14 @@ export function ProductsPage() {
           ? moveToDraftMutation
           : archiveMutation;
 
-    mutation.mutate(productId);
+    mutation.mutate({ productId, expectedRevision: product.revision });
+  };
+  const reloadProductAuthority = async () => {
+    await Promise.all([productsQuery.refetch(), summaryQuery.refetch()]);
+    duplicateMutation.reset();
+    publishMutation.reset();
+    moveToDraftMutation.reset();
+    archiveMutation.reset();
   };
 
   useDocumentTitle(dictionary.products.documentTitle);
@@ -83,19 +109,25 @@ export function ProductsPage() {
         isTariffLocked={isTariffLocked}
         canManageProducts={canManageProducts}
         isProductActionPending={isProductActionPending}
+        productActionError={productActionError}
         onStatusChange={setSelectedStatus}
         onCreate={createFlow.openTypeSelection}
         onManageTariff={() => navigate("/settings")}
         onEditProduct={createFlow.editProduct}
         onDuplicateProduct={(product) => {
+          if (productActionFailure) {
+            return;
+          }
           duplicateMutation.mutate({
             productId: product.id,
             body: {
+              expectedRevision: product.revision,
               title: createDuplicateProductTitle(product.title, productCopy)
             }
           });
         }}
         onProductStatusChange={handleProductStatusChange}
+        onReloadProductAuthority={reloadProductAuthority}
       />
       {!isTariffLocked ? (
         <ProductsCreateFlow

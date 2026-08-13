@@ -45,13 +45,49 @@ describe("platform tariff invoice terminal reconciler", () => {
     expect(deps.artifactRegistry.registerSealedArtifact).toHaveBeenCalledWith(expect.objectContaining({ artifactClass: "provider_canonical_read" }));
   });
 
-  it("does not mutate a pending provider outcome or issue another charge", async () => {
-    const deps = dependencies("pending");
+  it.each(["pending", "timeout"])("does not mutate a %s provider outcome or issue another charge", async (status) => {
+    const deps = dependencies(status);
     const reconciler = createPlatformTariffInvoiceChargeTerminalReconciler({ ...deps as any, responseArtifactRetention: { policyId: "provider", policyVersion: "1" } });
     await expect(reconciler.reconcile(candidate)).resolves.toEqual({ kind: "awaiting_provider_terminal", invoiceId: candidate.invoiceId });
     expect(deps.capture.applyCanonicalCapture).not.toHaveBeenCalled();
     expect(deps.privateObjectStorage.writeImmutable).not.toHaveBeenCalled();
   });
+
+  it.each(["created", "authorized", "expired", "voided"])(
+    "characterizes the current fail-closed but unclassified %s status gap",
+    async (status) => {
+      const deps = dependencies(status);
+      const reconciler = createPlatformTariffInvoiceChargeTerminalReconciler({
+        ...deps as any,
+        responseArtifactRetention: { policyId: "provider", policyVersion: "1" }
+      });
+
+      await expect(reconciler.reconcile(candidate)).rejects.toMatchObject({
+        reason: "canonical_amount_conflict"
+      });
+      expect(deps.capture.applyCanonicalCapture).not.toHaveBeenCalled();
+      expect(deps.failure.applyCanonicalFailure).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["refunded", "chargeback"])(
+    "routes the current %s status to reversal reconciliation without capture",
+    async (status) => {
+      const deps = dependencies(status);
+      const reconciler = createPlatformTariffInvoiceChargeTerminalReconciler({
+        ...deps as any,
+        responseArtifactRetention: { policyId: "provider", policyVersion: "1" }
+      });
+
+      await expect(reconciler.reconcile(candidate)).resolves.toEqual({
+        kind: "requires_reversal_reconciliation",
+        invoiceId: candidate.invoiceId,
+        status
+      });
+      expect(deps.capture.applyCanonicalCapture).not.toHaveBeenCalled();
+      expect(deps.failure.applyCanonicalFailure).not.toHaveBeenCalled();
+    }
+  );
 
   it("persists a sealed canonical refusal without a capture or financial posting", async () => {
     const deps = dependencies("declined");

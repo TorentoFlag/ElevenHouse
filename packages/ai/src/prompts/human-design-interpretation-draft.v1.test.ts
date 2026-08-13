@@ -5,6 +5,7 @@ import {
   type HumanDesignInterpretationDraftPromptInput,
   type HumanDesignInterpretationDraftPromptOutput
 } from "./human-design-interpretation-draft.v1";
+import { aiContractDigest } from "./prompt-characterization.test-helpers";
 
 const input: HumanDesignInterpretationDraftPromptInput = {
   locale: "ru",
@@ -78,5 +79,13 @@ describe("humanDesignInterpretationDraftPromptV1", () => {
     expect(renderHumanDesignInterpretationText(output, "ru")).toContain("ОБЗОР\nОбзор");
     expect(renderHumanDesignInterpretationText({ ...output, overview: "Overview" }, "en"))
       .toContain("OVERVIEW\nOverview");
+
+    expect(
+      aiContractDigest({
+        ruMessages: humanDesignInterpretationDraftPromptV1.render(input).messages,
+        enMessages: humanDesignInterpretationDraftPromptV1.render({ ...input, locale: "en" }).messages,
+        requestJsonSchema: humanDesignInterpretationDraftPromptV1.structuredOutputJsonSchema
+      })
+    ).toBe("sha256:2de4b9020e36d0909dea4281f6c7ae2290b6cd29f3a1f7ce315360a72aafcaa4");
   });
 });

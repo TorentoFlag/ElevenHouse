@@ -1,0 +1,43 @@
+{
+  "name": "@elevenhouse/session-web-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./api": {
+      "types": "./dist/sessionApi.d.ts",
+      "import": "./dist/sessionApi.js"
+    },
+    "./experience": {
+      "types": "./dist/VideoSessionExperience.d.ts",
+      "import": "./dist/VideoSessionExperience.js"
+    },
+    "./VideoSessionExperience.css": "./src/VideoSessionExperience.css"
+  },
+  "scripts": {
+    "build": "pnpm clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@elevenhouse/contracts": "workspace:*",
+    "livekit-client": "2.21.0"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "6.0.3"
+  }
+}

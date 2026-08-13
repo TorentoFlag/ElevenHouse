@@ -267,9 +267,15 @@ export function createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork(
   database: ElevenHouseDatabase
 ): ClientSubscriptionSourceEventApplicationUnitOfWork {
   return {
-    apply: (input) =>
-      database.transaction(
-        async (transaction): Promise<ClientSubscriptionSourceEventApplicationExecution> => {
+    apply: (input) => database.transaction((transaction) => applyDrizzleClientSubscriptionSourceEventInTransaction(transaction, input))
+  };
+}
+
+/** Composes a source event with another finance transaction without weakening its receipt guards. */
+export async function applyDrizzleClientSubscriptionSourceEventInTransaction(
+  transaction: ClientSubscriptionTransaction,
+  input: Parameters<ClientSubscriptionSourceEventApplicationUnitOfWork["apply"]>[0]
+): Promise<ClientSubscriptionSourceEventApplicationExecution> {
           await lockPersistenceScope(
             transaction,
             `client-subscription-source-event:${input.sourceEventId}`
@@ -373,9 +379,6 @@ export function createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork(
             })
           );
           return { ...decision, applicationReceipt };
-        }
-      )
-  };
 }
 
 type CommandReceiptRow = typeof clientSubscriptionCommandReceipts.$inferSelect;

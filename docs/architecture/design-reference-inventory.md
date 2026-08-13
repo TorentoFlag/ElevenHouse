@@ -37,13 +37,13 @@ files.
 
 - `public-api`: `booking`, `client-commerce`, `client-consents`, `client-join`,
   `client-profile`, `database`, `health`, `identity`, `orders`, `payments`,
-  `redis`, `refund-candidates`, `security`.
+  `redis`, `refund-candidates`, `security`, `sessions`.
 - `astrologer-api`: `ai`, `astro-calendar`, `astrologer-profile`,
   `availability`, `bookings`, `calculations`, `calendar`, `charts`, `clients`,
   `clock`, `database`, `dictionary`, `dictionary-ai`, `finance`, `flows`,
   `health`, `human-design`, `identity`, `matrix`, `media`, `messaging`,
   `numerology`, `platform-billing`, `platform-entitlements`,
-  `platform-tariffs`, `products`, `redis`, `security`, `verification`.
+  `platform-tariffs`, `products`, `redis`, `security`, `sessions`, `verification`.
 - `admin-api`: `database`, `finance-authorizations`, `finance-policies`,
   `fiscal-profiles`, `health`, `identity`, `payout-evidence`,
   `platform-tariffs`, `refund-candidates`, `saved-card-disclosures`, `security`.

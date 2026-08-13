@@ -9,6 +9,7 @@ import { parseBookingCalendarHandoff } from "../../features/bookings/model/booki
 import styles from "./CalendarPage.module.css";
 import { CalendarPageView } from "./CalendarPageView";
 import { useCalendarPageController } from "./useCalendarPageController";
+import { useSessionRangeQuery } from "../../features/sessions/model/useSessionRangeQuery";
 
 export function CalendarPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
@@ -80,5 +81,20 @@ function CalendarPageContent({
   readonly timeZone: string;
 }) {
   const calendar = useCalendarPageController({ bookingHandoff, copy, locale, timeZone });
-  return <CalendarPageView copy={copy} locale={locale} calendar={calendar} />;
+  const sessionsQuery = useSessionRangeQuery(calendar.range.start, calendar.range.end);
+  const selectedSessionId =
+    sessionsQuery.data?.sessions.find((session) => session.bookingId === calendar.selectedEntry?.id)
+      ?.id ?? null;
+  return (
+    <CalendarPageView
+      copy={copy}
+      locale={locale}
+      calendar={calendar}
+      selectedSessionId={selectedSessionId}
+      selectedSessionStatus={
+        sessionsQuery.isLoading ? "loading" : sessionsQuery.isError ? "error" : "ready"
+      }
+      onRetrySelectedSession={() => void sessionsQuery.refetch()}
+    />
+  );
 }

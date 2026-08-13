@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dictionaryEntryDraftPromptV1 } from "./dictionary-entry-draft.v1";
+import { aiContractDigest } from "./prompt-characterization.test-helpers";
 
 const validInput = {
   categoryId: "8e14390f-3db1-4d1c-9344-55679c778427",
@@ -59,6 +60,13 @@ describe("dictionary entry draft prompt v1", () => {
 
     expect(ruRendered.messages[0]?.content).toContain("Не упоминай AI");
     expect(enRendered.messages[0]?.content).toContain("Do not mention AI");
+    expect(
+      aiContractDigest({
+        ruMessages: ruRendered.messages,
+        enMessages: enRendered.messages,
+        requestJsonSchema: dictionaryEntryDraftPromptV1.structuredOutputJsonSchema
+      })
+    ).toBe("sha256:046e141a9cb538fe1783ad709cc32a8b55cce5ac397bc002505919495acb813f");
   });
 
   it("escapes delimiter-sensitive user data inside a single json object", () => {

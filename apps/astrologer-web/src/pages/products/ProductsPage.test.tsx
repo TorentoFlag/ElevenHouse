@@ -7,6 +7,8 @@ import type {
   ProductTemplateResponse
 } from "@elevenhouse/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { HttpError } from "../../common/http/HttpError";
+import { toggleProductAccessGrant } from "../../features/products/model/productDraft";
 import type { ProductConstructorModalProps } from "./components/ProductConstructorModal";
 import { ProductsPage } from "./ProductsPage";
 import type { ProductsPageViewProps } from "./ProductsPageView";
@@ -253,6 +255,7 @@ const productsCopy = {
     emptyBestseller: "—"
   },
   saveErrorLabel: "Не удалось сохранить продукт",
+  actionErrorReloadLabel: "Обновить продукты",
   emptyLabel: "Нет продуктов в этом статусе",
   loadingLabel: "Загружаем продукты",
   errorLabel: "Не удалось загрузить продукты"
@@ -263,6 +266,7 @@ const product = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "draft",
+  revision: 7,
   title: "Натальный разбор",
   subtitle: null,
   priceMinor: 490000,
@@ -285,6 +289,7 @@ const product = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -358,18 +363,22 @@ describe("ProductsPage", () => {
     });
     mocks.usePublishProductMutation.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false
     });
     mocks.useMoveProductToDraftMutation.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false
     });
     mocks.useArchiveProductMutation.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false
     });
     mocks.useDuplicateProductMutation.mockReturnValue({
       mutate: vi.fn(),
+      reset: vi.fn(),
       isPending: false
     });
     mocks.useI18n.mockReturnValue({
@@ -381,12 +390,14 @@ describe("ProductsPage", () => {
     mocks.useProductListQuery.mockReturnValue({
       data: productsResponse,
       isLoading: false,
-      isError: false
+      isError: false,
+      refetch: vi.fn()
     });
     mocks.useProductSummaryQuery.mockReturnValue({
       data: summaryResponse,
       isLoading: false,
-      isError: false
+      isError: false,
+      refetch: vi.fn()
     });
     mocks.useAstrologerTariffEntitlementsQuery.mockReturnValue({
       data: { products: { read: "allow", mutation: "allow" } }
@@ -458,6 +469,93 @@ describe("ProductsPage", () => {
 
     renderPage();
     expect(getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).isError).toBe(true);
+  });
+
+  it("renders a typed stale card-action error and reloads server authority before retry", async () => {
+    const listRefetch = vi.fn().mockResolvedValue(undefined);
+    const summaryRefetch = vi.fn().mockResolvedValue(undefined);
+    const publishReset = vi.fn();
+    const moveReset = vi.fn();
+    const archiveReset = vi.fn();
+    const duplicateReset = vi.fn();
+    const publishMutate = vi.fn();
+    const duplicateMutate = vi.fn();
+    mocks.useProductListQuery.mockReturnValue({
+      data: productsResponse,
+      isLoading: false,
+      isError: false,
+      refetch: listRefetch
+    });
+    mocks.useProductSummaryQuery.mockReturnValue({
+      data: summaryResponse,
+      isLoading: false,
+      isError: false,
+      refetch: summaryRefetch
+    });
+    mocks.usePublishProductMutation.mockReturnValue({
+      mutate: publishMutate,
+      reset: publishReset,
+      isPending: false,
+      error: new HttpError(409, {
+        code: "PRODUCT_REVISION_CONFLICT",
+        expectedRevision: 7,
+        currentRevision: 8
+      })
+    });
+    mocks.useMoveProductToDraftMutation.mockReturnValue({
+      mutate: vi.fn(),
+      reset: moveReset,
+      isPending: false
+    });
+    mocks.useArchiveProductMutation.mockReturnValue({
+      mutate: vi.fn(),
+      reset: archiveReset,
+      isPending: false
+    });
+    mocks.useDuplicateProductMutation.mockReturnValue({
+      mutate: duplicateMutate,
+      reset: duplicateReset,
+      isPending: false
+    });
+
+    renderPage();
+    const props = getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView);
+
+    expect(props.productActionError).toBe(
+      "Продукт изменился в другой вкладке: текущая редакция 8. Обновите страницу перед повторной правкой."
+    );
+    expect(props.isProductActionPending).toBe(true);
+    props.onProductStatusChange(product.id, "active");
+    props.onDuplicateProduct(product);
+    expect(publishMutate).not.toHaveBeenCalled();
+    expect(duplicateMutate).not.toHaveBeenCalled();
+    await props.onReloadProductAuthority();
+    expect(listRefetch).toHaveBeenCalledOnce();
+    expect(summaryRefetch).toHaveBeenCalledOnce();
+    expect(publishReset).toHaveBeenCalledOnce();
+    expect(moveReset).toHaveBeenCalledOnce();
+    expect(archiveReset).toHaveBeenCalledOnce();
+    expect(duplicateReset).toHaveBeenCalledOnce();
+  });
+
+  it("renders the typed fulfillment blocker from a card duplicate/lifecycle mutation", () => {
+    mocks.useDuplicateProductMutation.mockReturnValue({
+      mutate: vi.fn(),
+      reset: vi.fn(),
+      isPending: false,
+      error: new HttpError(409, {
+        code: "PRODUCT_FULFILLMENT_NOT_READY",
+        message: "AstroDiary subscription fulfillment is not ready"
+      })
+    });
+
+    renderPage();
+
+    expect(
+      getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).productActionError
+    ).toBe(
+      "Подписку на Астродневник пока нельзя активировать: платежи и выдача доступа еще не подключены. Сохраните продукт как черновик."
+    );
   });
 
   it("turns the server entitlement projection into a tariff-management route gate", () => {
@@ -687,7 +785,79 @@ describe("ProductsPage", () => {
         title: "Натальный разбор"
       }) satisfies Partial<CreateProductRequest>
     );
-    expect(publishMutateAsync).toHaveBeenCalledWith("created-product-id");
+    expect(publishMutateAsync).toHaveBeenCalledWith({
+      productId: "created-product-id",
+      expectedRevision: product.revision
+    });
+  });
+
+  it("keeps the created AstroDiary draft open when activation fulfillment is unavailable", async () => {
+    const diaryProduct = {
+      ...product,
+      id: "created-diary-product-id",
+      type: "sub" as const,
+      title: "Астродневник",
+      executionMode: "async" as const,
+      paymentModel: "sub" as const,
+      durationMinutes: null,
+      durationLabel: null,
+      subscriptionPeriod: "month" as const,
+      trialDays: null,
+      deliveryFormats: ["chat", "audio", "file"] as const,
+      requiredClientData: [],
+      methods: [],
+      accessGrants: ["journal"] as const,
+      astroDiaryConfig: {
+        reflectionCyclesPerPeriod: 4,
+        responseSlaWorkingDays: 2,
+        clientResponseWindowCalendarDays: 7,
+        workingWeekdays: [1, 2, 3, 4, 5] as const,
+        serviceTimezone: "UTC"
+      }
+    };
+    mocks.useCreateProductMutation.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(diaryProduct),
+      isPending: false
+    });
+    mocks.usePublishProductMutation.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(
+        new HttpError(409, {
+          code: "PRODUCT_FULFILLMENT_NOT_READY",
+          message: "AstroDiary subscription fulfillment is not ready"
+        })
+      ),
+      mutate: vi.fn(),
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onCreate();
+    renderPage();
+    getLatestMockProps<{ onSelect: (type: "sub") => void }>(mocks.productCreateTypeModal).onSelect(
+      "sub"
+    );
+    renderPage();
+
+    let constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    constructorProps.onDraftChange(
+      toggleProductAccessGrant({ ...constructorProps.draft, title: diaryProduct.title }, "journal")
+    );
+    renderPage();
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    await constructorProps.onPublish();
+    renderPage();
+
+    constructorProps = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(constructorProps.error).toBe(
+      "Подписку на Астродневник пока нельзя активировать: платежи и выдача доступа еще не подключены. Сохраните продукт как черновик."
+    );
+    expect(constructorProps.draft.title).toBe("Астродневник");
   });
 
   it("opens an existing product in the constructor and saves it through the update mutation", async () => {
@@ -719,9 +889,48 @@ describe("ProductsPage", () => {
     expect(mutateAsync).toHaveBeenCalledWith({
       productId: product.id,
       body: expect.objectContaining({
+        expectedRevision: product.revision,
         title: "Обновленный натальный разбор"
       })
     });
+  });
+
+  it("keeps a stale edit open and explains that the product must be reloaded", async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(
+      new HttpError(409, {
+        code: "PRODUCT_REVISION_CONFLICT",
+        expectedRevision: product.revision,
+        currentRevision: product.revision + 1
+      })
+    );
+    mocks.useUpdateProductMutation.mockReturnValue({
+      mutateAsync,
+      isPending: false
+    });
+
+    renderPage();
+    getLatestMockProps<ProductsPageViewProps>(mocks.productsPageView).onEditProduct!(product);
+    renderPage();
+
+    await getLatestMockProps<ProductConstructorModalProps>(mocks.productConstructorModal).onSave();
+    renderPage();
+
+    let staleConstructor = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(staleConstructor.error).toBe(
+      "Продукт изменился в другой вкладке: текущая редакция 8. Обновите страницу перед повторной правкой."
+    );
+    expect(staleConstructor.draft.title).toBe(product.title);
+
+    staleConstructor.onDraftChange({ ...staleConstructor.draft, title: "Еще одна правка" });
+    renderPage();
+    staleConstructor = getLatestMockProps<ProductConstructorModalProps>(
+      mocks.productConstructorModal
+    );
+    expect(staleConstructor.error).toContain("Обновите страницу");
+    await staleConstructor.onSave();
+    expect(mutateAsync).toHaveBeenCalledOnce();
   });
 
   it("updates an existing product and publishes it from the constructor publish action", async () => {
@@ -757,10 +966,14 @@ describe("ProductsPage", () => {
     expect(updateMutateAsync).toHaveBeenCalledWith({
       productId: product.id,
       body: expect.objectContaining({
+        expectedRevision: product.revision,
         title: "Опубликованный натальный разбор"
       })
     });
-    expect(publishMutateAsync).toHaveBeenCalledWith(product.id);
+    expect(publishMutateAsync).toHaveBeenCalledWith({
+      productId: product.id,
+      expectedRevision: product.revision
+    });
   });
 
   it("clears the edited draft when opening type selection from edit flow", () => {
@@ -802,7 +1015,10 @@ describe("ProductsPage", () => {
         status
       );
 
-      expect(mutate).toHaveBeenCalledWith(product.id);
+      expect(mutate).toHaveBeenCalledWith({
+        productId: product.id,
+        expectedRevision: product.revision
+      });
     }
   );
 
@@ -819,6 +1035,7 @@ describe("ProductsPage", () => {
     expect(mutate).toHaveBeenCalledWith({
       productId: product.id,
       body: {
+        expectedRevision: product.revision,
         title: "Натальный разбор (копия)"
       }
     });

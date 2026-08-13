@@ -1,10 +1,12 @@
-import type { ProductDeliveryFormat } from "@elevenhouse/contracts";
+import type { ProductAccessGrant, ProductDeliveryFormat } from "@elevenhouse/contracts";
 import {
   addProductModifier,
   applyProductDraftPatch,
   moveProductIncludedItem,
   removeProductIncludedItem,
   removeProductModifier,
+  toggleAstroDiaryWorkingWeekday,
+  toggleProductAccessGrant,
   toggleProductDraftArrayValue,
   updateProductIncludedItem,
   updateProductModifier,
@@ -79,6 +81,14 @@ export function useProductConstructorController({
         value: ProductDraftArrayValue<TKey>
       ) {
         onDraftChange(toggleProductDraftArrayValue(draft, key, value));
+      },
+      toggleAccessGrant(value: ProductAccessGrant) {
+        onDraftChange(toggleProductAccessGrant(draft, value));
+      },
+      toggleAstroDiaryWorkingWeekday(
+        weekday: Parameters<typeof toggleAstroDiaryWorkingWeekday>[1]
+      ) {
+        onDraftChange(toggleAstroDiaryWorkingWeekday(draft, weekday));
       },
       updateIncludedItem(index: number, patch: Parameters<typeof updateProductIncludedItem>[2]) {
         onDraftChange(updateProductIncludedItem(draft, index, patch));

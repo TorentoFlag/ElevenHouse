@@ -65,6 +65,7 @@ export type ProductConstructorModalProps = {
   readonly isCoverUploading: boolean;
   readonly coverMediaUrl: string | null;
   readonly error: string | null;
+  readonly requiresReload?: boolean;
   readonly coverUploadError: string | null;
   readonly portalTarget?: Element | null;
   readonly backdropClassName?: string;

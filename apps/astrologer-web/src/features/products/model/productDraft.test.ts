@@ -2,7 +2,8 @@ import {
   createProductRequestSchema,
   productTypeSchema,
   updateProductRequestSchema,
-  type ProductResponse
+  type ProductResponse,
+  type ProductTemplateResponse
 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
 import { productIconNames } from "./productConstructorOptions";
@@ -12,9 +13,12 @@ import {
   applyProductDraftPatch,
   createDefaultProductDraft,
   createProductDraftFromResponse,
+  createProductDraftFromTemplate,
   moveProductIncludedItem,
   removeProductIncludedItem,
   removeProductModifier,
+  toggleAstroDiaryWorkingWeekday,
+  toggleProductAccessGrant,
   toggleProductDraftArrayValue,
   toCreateProductRequest,
   toUpdateProductRequest,
@@ -28,6 +32,7 @@ const productResponse = {
   ownerUserId: "22222222-2222-4222-8222-222222222222",
   type: "single",
   status: "draft",
+  revision: 7,
   title: "Натальный разбор",
   subtitle: "Полный разбор карты",
   priceMinor: 490000,
@@ -66,6 +71,7 @@ const productResponse = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -183,7 +189,7 @@ describe("product draft helpers", () => {
 
   it("creates edit drafts from product responses without leaking response-only ids into requests", () => {
     const draft = createProductDraftFromResponse(productResponse);
-    const updateRequest = toUpdateProductRequest(draft);
+    const updateRequest = toUpdateProductRequest(draft, productResponse.revision);
 
     expect(draft.includedItems).toEqual([
       { text: "Полный разбор карты", icon: "check", order: 10 }
@@ -199,6 +205,7 @@ describe("product draft helpers", () => {
       }
     ]);
     expect(updateProductRequestSchema.parse(updateRequest)).toMatchObject({
+      expectedRevision: 7,
       title: "Натальный разбор",
       subtitle: "Полный разбор карты",
       coverMediaId: "55555555-5555-4555-8555-555555555555",
@@ -206,6 +213,108 @@ describe("product draft helpers", () => {
     });
     expect(JSON.stringify(updateRequest)).not.toContain("33333333-3333-4333-8333-333333333333");
     expect(JSON.stringify(updateRequest)).not.toContain("44444444-4444-4444-8444-444444444444");
+  });
+
+  it("turns the journal grant into a complete AstroDiary subscription and removes it on switch", () => {
+    const genericSubscription = {
+      ...createDefaultProductDraft("sub"),
+      trialDays: 14,
+      durationMinutes: 30,
+      durationLabel: "30 мин",
+      slaLabel: "3 дня",
+      packageSessionCount: 4,
+      packageDiscountPercent: 10,
+      participantMode: "group" as const,
+      groupSize: 8
+    };
+
+    const astroDiary = toggleProductAccessGrant(genericSubscription, "journal");
+
+    expect(astroDiary).toMatchObject({
+      type: "sub",
+      paymentModel: "sub",
+      executionMode: "async",
+      participantMode: "solo",
+      deliveryFormats: ["chat", "audio", "file"],
+      requiredClientData: [],
+      methods: [],
+      accessGrants: ["journal"],
+      modifiers: [],
+      trialDays: null,
+      durationMinutes: null,
+      durationLabel: "",
+      slaLabel: "",
+      packageSessionCount: null,
+      packageDiscountPercent: null,
+      groupSize: null,
+      astroDiaryConfig: {
+        reflectionCyclesPerPeriod: 4,
+        responseSlaWorkingDays: 2,
+        clientResponseWindowCalendarDays: 7,
+        workingWeekdays: [1, 2, 3, 4, 5],
+        serviceTimezone: "UTC"
+      }
+    });
+    expect(toCreateProductRequest({ ...astroDiary, title: "Астродневник" })).toMatchObject({
+      accessGrants: ["journal"],
+      astroDiaryConfig: astroDiary.astroDiaryConfig
+    });
+
+    const regularSubscription = toggleProductAccessGrant(astroDiary, "channel");
+    expect(regularSubscription.accessGrants).toEqual(["channel"]);
+    expect(regularSubscription.astroDiaryConfig).toBeNull();
+    expect(regularSubscription.trialDays).toBe(0);
+  });
+
+  it("keeps AstroDiary working weekdays unique and never removes the last day", () => {
+    const astroDiary = toggleProductAccessGrant(createDefaultProductDraft("sub"), "journal");
+
+    const withoutMonday = toggleAstroDiaryWorkingWeekday(astroDiary, 1);
+    expect(withoutMonday.astroDiaryConfig?.workingWeekdays).toEqual([2, 3, 4, 5]);
+
+    const oneWorkingDay: ProductFormDraft = {
+      ...astroDiary,
+      astroDiaryConfig: {
+        ...astroDiary.astroDiaryConfig!,
+        workingWeekdays: [5]
+      }
+    };
+    expect(toggleAstroDiaryWorkingWeekday(oneWorkingDay, 5)).toBe(oneWorkingDay);
+    expect(
+      toggleAstroDiaryWorkingWeekday(oneWorkingDay, 1).astroDiaryConfig?.workingWeekdays
+    ).toEqual([1, 5]);
+  });
+
+  it("hydrates AstroDiary configuration from the fixed product template", () => {
+    const configuredDraft = {
+      ...toggleProductAccessGrant(createDefaultProductDraft("sub"), "journal"),
+      title: "Астродневник",
+      astroDiaryConfig: {
+        reflectionCyclesPerPeriod: 12,
+        responseSlaWorkingDays: 3,
+        clientResponseWindowCalendarDays: 10,
+        workingWeekdays: [1, 3, 5],
+        serviceTimezone: "Europe/Moscow"
+      }
+    } satisfies ProductFormDraft;
+    const template = {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      code: "astro_diary_subscription",
+      locale: "ru",
+      type: "sub",
+      status: "active",
+      title: "Астродневник",
+      subtitle: "Личное сопровождение",
+      description: "Шаблон подписки на астродневник",
+      sortOrder: 65,
+      payload: toCreateProductRequest(configuredDraft),
+      createdAt: "2026-08-11T00:00:00.000Z",
+      updatedAt: "2026-08-11T00:00:00.000Z"
+    } satisfies ProductTemplateResponse;
+
+    expect(createProductDraftFromTemplate(template).astroDiaryConfig).toEqual(
+      configuredDraft.astroDiaryConfig
+    );
   });
 
   it("toggles array values without duplicates", () => {

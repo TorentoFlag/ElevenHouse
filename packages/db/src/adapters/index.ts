@@ -14,6 +14,7 @@ export * from "./matrix";
 export * from "./scheduling";
 export * from "./messaging";
 export * from "./finance";
+export * from "./sessions";
 export * from "./audit-log";
 export * from "./flows";
 export * from "./ai";

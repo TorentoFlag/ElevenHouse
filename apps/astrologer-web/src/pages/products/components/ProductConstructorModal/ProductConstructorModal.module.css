@@ -420,6 +420,70 @@
   font-weight: 600;
 }
 
+.astroDiaryNumericSettings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.astroDiaryWeekdays {
+  min-width: 0;
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.astroDiaryWeekdays .fieldLabel,
+.astroDiaryTimezoneField .fieldLabel {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.astroDiaryWeekdayButton {
+  min-width: 42px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 10px;
+  background: rgb(22 20 47);
+  color: rgb(167 162 200);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.astroDiaryWeekdayButton[data-selected="true"] {
+  border-color: var(--eh-color-gold);
+  background: rgb(244 196 48 / 0.14);
+  color: var(--eh-color-gold);
+}
+
+.astroDiaryWeekdayButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(244 196 48 / 0.16);
+}
+
+.astroDiaryTimezoneField {
+  display: flex;
+  max-width: 360px;
+  flex-direction: column;
+  margin-top: 16px;
+}
+
+.astroDiaryTimezoneField .constructorHint,
+.astroDiaryFieldError {
+  margin-top: 6px;
+}
+
+.astroDiaryFieldError {
+  color: rgb(255 159 159);
+  font-size: 12px;
+}
+
+.astroDiaryTimezoneField input[aria-invalid="true"] {
+  border-color: rgb(255 159 159 / 0.72);
+}
+
 .constructorRows {
   display: flex;
   min-width: 0;
@@ -1194,6 +1258,10 @@
 }
 
 @media (max-width: 820px) {
+  .astroDiaryNumericSettings {
+    grid-template-columns: 1fr;
+  }
+
   .constructorFieldsGrid {
     grid-template-columns: 1fr;
   }

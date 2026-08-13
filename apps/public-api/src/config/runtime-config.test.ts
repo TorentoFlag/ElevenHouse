@@ -14,6 +14,7 @@ const requiredSecurityConfig = {
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey
 };
 const defaultCsrfConfig = {
+  mediaRoom: null,
   csrfSecret: "elevenhouse-dev-public-api-csrf-secret-change-before-production",
   csrfCookieName: "elevenhouse_public_csrf",
   csrfHeaderName: "x-csrf-token",
@@ -44,6 +45,20 @@ const defaultTrustedStaticCode = {
 };
 
 describe("createPublicApiRuntimeConfig", () => {
+  it("requires complete LiveKit configuration and never accepts a partial secret", () => {
+    expect(() =>
+      createPublicApiRuntimeConfig({ ...requiredSecurityConfig, LIVEKIT_API_KEY: "only-key" })
+    ).toThrow("LiveKit configuration is incomplete");
+    expect(
+      createPublicApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        LIVEKIT_URL: "wss://example.livekit.cloud",
+        LIVEKIT_API_KEY: "api-key",
+        LIVEKIT_API_SECRET: "api-secret"
+      }).mediaRoom
+    ).toMatchObject({ serverUrl: "wss://example.livekit.cloud", joinTokenTtlSeconds: 300 });
+  });
+
   it("keeps checkout preparation disabled until payment methods are explicitly configured", () => {
     expect(createPublicApiRuntimeConfig(requiredSecurityConfig).financeCheckout).toBeNull();
     expect(() => createPublicApiRuntimeConfig({

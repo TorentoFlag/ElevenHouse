@@ -13,6 +13,7 @@ import { PublicCsrfTokenService, type CsrfRequest } from "./public-csrf-token.se
 
 type CookieAuthRequest = CsrfRequest & {
   readonly headers?: Record<string, string | readonly string[] | undefined>;
+  readonly currentMobileSessionId?: string;
 };
 
 @Injectable()
@@ -39,6 +40,9 @@ export class CsrfGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<CookieAuthRequest>();
+    if (request.currentMobileSessionId) {
+      return true;
+    }
     const sessionToken = readCookieValue(
       normalizeHeaderValue(request.headers?.cookie),
       this.configService.getOrThrow<string>("publicApi.sessionCookieName")

@@ -37,15 +37,16 @@ async function collectAppRoutes(rootDir, appName) {
 
   for (const filePath of controllerFiles) {
     const content = await readFile(filePath, "utf8");
-    const controllerPath = parseControllerPath(content);
     const relativeController = path.relative(rootDir, filePath);
 
-    for (const route of parseMethodRoutes(content)) {
-      routes.push({
-        ...route,
-        route: joinRoute(controllerPath, route.path),
-        controller: relativeController
-      });
+    for (const controller of parseControllers(content)) {
+      for (const route of parseMethodRoutes(controller.body)) {
+        routes.push({
+          ...route,
+          route: joinRoute(controller.path, route.path),
+          controller: relativeController
+        });
+      }
     }
   }
 
@@ -75,9 +76,14 @@ async function collectControllerFiles(directory) {
   return nested.flat().sort();
 }
 
-function parseControllerPath(content) {
-  const match = content.match(/@Controller\(\s*(?:["']([^"']*)["'])?\s*\)/);
-  return match?.[1] ?? "";
+function parseControllers(content) {
+  const matches = Array.from(
+    content.matchAll(/@Controller\(\s*(?:["']([^"']*)["'])?\s*\)/g)
+  );
+  return matches.map((match, index) => ({
+    path: match[1] ?? "",
+    body: content.slice(match.index, matches[index + 1]?.index)
+  }));
 }
 
 function parseMethodRoutes(content) {

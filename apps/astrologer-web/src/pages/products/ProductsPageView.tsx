@@ -11,6 +11,7 @@ import type { ProductLocale } from "../../features/products/model/productCopy";
 import { productCopyByLocale } from "../../features/products/model/productCopy";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { ProductsResults } from "./components/ProductsResults";
+import { ProductActionErrorNotice } from "./components/ProductActionErrorNotice";
 import { ProductsSummaryStrip } from "./components/ProductsSummaryStrip";
 import { ProductsToolbar } from "./components/ProductsToolbar";
 import styles from "./ProductsPage.module.css";
@@ -24,6 +25,7 @@ type ProductsPageCopy = {
   readonly emptyLabel: string;
   readonly loadingLabel: string;
   readonly errorLabel: string;
+  readonly actionErrorReloadLabel: string;
 };
 
 export type ProductsPageViewProps = {
@@ -39,12 +41,14 @@ export type ProductsPageViewProps = {
   readonly isTariffLocked: boolean;
   readonly canManageProducts: boolean;
   readonly isProductActionPending: boolean;
+  readonly productActionError: string | null;
   readonly onStatusChange: (status: ProductStatusFilter) => void;
   readonly onCreate: () => void;
   readonly onManageTariff: () => void;
   readonly onEditProduct: (product: ProductResponse) => void;
   readonly onDuplicateProduct: (product: ProductResponse) => void;
   readonly onProductStatusChange: (productId: string, status: ProductResponse["status"]) => void;
+  readonly onReloadProductAuthority: () => Promise<void> | void;
 };
 
 export function ProductsPageView({
@@ -60,12 +64,14 @@ export function ProductsPageView({
   isTariffLocked,
   canManageProducts,
   isProductActionPending,
+  productActionError,
   onStatusChange,
   onCreate,
   onManageTariff,
   onEditProduct,
   onDuplicateProduct,
-  onProductStatusChange
+  onProductStatusChange,
+  onReloadProductAuthority
 }: ProductsPageViewProps) {
   const productCopy = productCopyByLocale[locale];
 
@@ -109,6 +115,13 @@ export function ProductsPageView({
         canCreate={canManageProducts}
       />
       <div className={styles.content}>
+        {productActionError ? (
+          <ProductActionErrorNotice
+            message={productActionError}
+            reloadLabel={copy.actionErrorReloadLabel}
+            onReload={onReloadProductAuthority}
+          />
+        ) : null}
         <ProductsSummaryStrip copy={copy.summary} locale={locale} summary={summary} />
         <ProductsResults
           products={products}

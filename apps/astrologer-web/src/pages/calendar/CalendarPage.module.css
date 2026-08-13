@@ -936,6 +936,26 @@ button.monthEntry {
   background: rgb(17 15 38 / 0.88);
 }
 
+.bookingSessionAction {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  border-radius: 12px;
+  background: #8468b5;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.bookingSessionAction:focus-visible {
+  outline: 3px solid rgba(132, 104, 181, 0.3);
+  outline-offset: 3px;
+}
+
 .bookingDetailRow {
   display: flex;
   align-items: center;

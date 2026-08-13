@@ -65,3 +65,38 @@ test("renders an unprefixed controller route", async () => {
   assert.match(inventory, /## admin-api/);
   assert.match(inventory, /\| GET \| `\/health` \|/);
 });
+
+test("assigns routes to each controller when a source file exports multiple controllers", async () => {
+  const rootDir = await mkdtemp(path.join(tmpdir(), "elevenhouse-route-inventory-"));
+  const controllerPath = path.join(
+    rootDir,
+    "apps/astrologer-api/src/modules/flows/flows.controller.ts"
+  );
+  await mkdir(path.dirname(controllerPath), { recursive: true });
+  await writeFile(
+    controllerPath,
+    [
+      'import { Controller, Get, Post } from "@nestjs/common";',
+      "",
+      '@Controller("flow-templates")',
+      "export class FlowTemplatesController {",
+      "  @Get()",
+      "  list() {}",
+      "}",
+      "",
+      '@Controller("flows")',
+      "export class FlowsController {",
+      '  @Post(":flowId/next-draft")',
+      "  createNextDraft() {}",
+      "}",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  const inventory = await renderRouteInventory({ rootDir });
+
+  assert.match(inventory, /\| GET \| `\/flow-templates` \|/);
+  assert.match(inventory, /\| POST \| `\/flows\/:flowId\/next-draft` \|/);
+  assert.doesNotMatch(inventory, /\/flow-templates\/:flowId\/next-draft/);
+});

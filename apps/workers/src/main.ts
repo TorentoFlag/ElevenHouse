@@ -22,7 +22,8 @@ import {
   runFlowRuntimeControlOutcomeRetention,
   runFlowWorkerRegistrationRetention,
   createDrizzleAiUsageRecorder,
-  createDrizzleAiUsageStore
+  createDrizzleAiUsageStore,
+  createDrizzleSessionLifecycleStore
 } from "@elevenhouse/db";
 import {
   createDrizzleChartAiDraftCommandStore,
@@ -85,12 +86,16 @@ import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness"
 import { relayPendingFlowRuntimeDispatchEvents } from "./flows/flow-runtime.outbox-relay";
 import { createWorkersRuntimeConfig } from "./runtime-config";
 import { shutdownWorkerRuntime } from "./worker-shutdown";
+import { processSessionBookingLifecycleEvents } from "./sessions/session-booking-lifecycle.processor";
+import { maintainSessions } from "./sessions/session-maintenance";
+import { createSessionRuntime } from "./sessions/session-runtime";
 
 const service = "workers";
 const logger = createLogger(service);
 const config = createWorkersRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
+const sessionLifecycleStore = createDrizzleSessionLifecycleStore(postgres.database);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
 const flowWorkerSessionId = randomUUID();
 const flowWorkerIdentity = {
@@ -282,6 +287,25 @@ const flowExecutionRuntime = createFlowExecutionRuntime({
     }),
   logger
 });
+const sessionRuntime = createSessionRuntime({
+  projectionIntervalMs: config.sessions.projectionIntervalMs,
+  maintenanceIntervalMs: config.sessions.maintenanceIntervalMs,
+  project: () => config.sessions.enabled
+    ? processSessionBookingLifecycleEvents({
+        store: sessionLifecycleStore,
+        now: new Date(),
+        batchSize: config.sessions.projectionBatchSize
+      })
+    : Promise.resolve(),
+  maintain: () => config.sessions.enabled
+    ? maintainSessions({
+        store: sessionLifecycleStore,
+        now: new Date(),
+        batchSize: config.sessions.maintenanceBatchSize
+      })
+    : Promise.resolve(),
+  onError: (operation, error) => logger.error("session runtime operation failed", { operation, error })
+});
 const readinessChecks = {
   postgres: async () => {
     await postgres.pool.query("select 1");
@@ -305,6 +329,10 @@ const readinessChecks = {
     if (!readiness || readiness.status !== "ready") {
       throw new Error(readiness?.errorCode ?? "flow_worker_readiness_not_initialized");
     }
+  },
+  sessions: async () => {
+    const readiness = sessionRuntime.getOperationalReadiness();
+    if (readiness.status !== "ready") throw new Error(readiness.errorCode);
   }
 };
 const healthServer = createWorkerReadinessServer({
@@ -416,6 +444,7 @@ async function startup(): Promise<void> {
   ]);
   await flowExecutionRuntime.runRecoveryOnce();
   await flowRuntimeControlMaintenance.runOnce();
+  await sessionRuntime.runOnce();
   flowWorkerControl = await initializeFlowWorkerControl();
   flowWorkerControl.start();
   await flowExecutionRuntime.runWorkItemWakeOnce();
@@ -436,6 +465,7 @@ async function startup(): Promise<void> {
   await relay.runOnce();
   relay.start();
   flowRuntimeControlMaintenance.start();
+  sessionRuntime.start();
   logger.info("worker runtime ready", {
     ...readiness,
     flowExecutionDeploymentCeiling: config.flowExecution.deploymentCeiling.mode,
@@ -507,6 +537,7 @@ async function shutdownOnce(): Promise<void> {
       () => flowExecutionRuntime.stop(),
       () => flowWorkerControl?.stop() ?? Promise.resolve(),
       () => flowRuntimeControlMaintenance.stop(),
+      () => sessionRuntime.stop(),
       () => relay.stop(),
       () => flowChartAiRedis?.close() ?? Promise.resolve()
     ],

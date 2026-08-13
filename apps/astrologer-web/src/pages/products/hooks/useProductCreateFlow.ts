@@ -13,6 +13,10 @@ import {
   type ProductFormDraft
 } from "../../../features/products/model/productDraft";
 import { persistProductDraft } from "../../../features/products/model/productCreateFlowPersistence";
+import {
+  describeProductMutationError,
+  isProductRevisionConflict
+} from "../../../features/products/model/productMutationError";
 import { uploadMediaFile } from "../../../features/media/api/uploadMediaFile";
 import { useCreateProductMutation } from "../../../features/products/model/useCreateProductMutation";
 import { useProductTemplatesQuery } from "../../../features/products/model/useProductTemplatesQuery";
@@ -22,8 +26,9 @@ import { useUpdateProductMutation } from "../../../features/products/model/useUp
 type ProductCreateFlowState = {
   readonly isTypeModalOpen: boolean;
   readonly editorDraft: ProductFormDraft | null;
-  readonly editingProductId: string | null;
+  readonly editingProduct: Pick<ProductResponse, "id" | "revision"> | null;
   readonly editorError: string | null;
+  readonly editorRequiresReload: boolean;
   readonly coverMediaUrl: string | null;
   readonly isCoverUploading: boolean;
   readonly coverUploadError: string | null;
@@ -44,8 +49,13 @@ type ProductCreateFlowAction =
       readonly type: "saveFailedWithPersistedProduct";
       readonly product: ProductResponse;
       readonly error: string;
+      readonly requiresReload: boolean;
     }
-  | { readonly type: "saveFailed"; readonly error: string }
+  | {
+      readonly type: "saveFailed";
+      readonly error: string;
+      readonly requiresReload: boolean;
+    }
   | { readonly type: "coverUploadStarted"; readonly previewUrl: string | null }
   | { readonly type: "coverUploadSucceeded"; readonly mediaId: string; readonly url: string }
   | {
@@ -61,8 +71,9 @@ type ProductCreateFlowAction =
 const initialProductCreateFlowState: ProductCreateFlowState = {
   isTypeModalOpen: false,
   editorDraft: null,
-  editingProductId: null,
+  editingProduct: null,
   editorError: null,
+  editorRequiresReload: false,
   coverMediaUrl: null,
   isCoverUploading: false,
   coverUploadError: null,
@@ -73,6 +84,7 @@ export type ProductCreateFlow = {
   readonly isTypeModalOpen: boolean;
   readonly editorDraft: ProductFormDraft | null;
   readonly editorError: string | null;
+  readonly editorRequiresReload: boolean;
   readonly coverMediaUrl: string | null;
   readonly isCoverUploading: boolean;
   readonly coverUploadError: string | null;
@@ -117,7 +129,12 @@ export function useProductCreateFlow(
     publish: boolean,
     visibleIncludedItems?: readonly ProductIncludedItemRequest[]
   ) => {
-    if (isSaving || state.isCoverUploading || !state.editorDraft?.title.trim()) {
+    if (
+      isSaving ||
+      state.editorRequiresReload ||
+      state.isCoverUploading ||
+      !state.editorDraft?.title.trim()
+    ) {
       return;
     }
 
@@ -126,7 +143,7 @@ export function useProductCreateFlow(
     const result = await persistProductDraft({
       draft: state.editorDraft,
       visibleIncludedItems,
-      editingProductId: state.editingProductId,
+      editingProduct: state.editingProduct,
       publish,
       createProduct: createProductMutation.mutateAsync,
       updateProduct: updateProductMutation.mutateAsync,
@@ -138,16 +155,20 @@ export function useProductCreateFlow(
       return;
     }
 
+    const error = describeProductMutationError(result.error, locale, genericError);
+    const requiresReload = isProductRevisionConflict(result.error);
+
     if (result.persistedProduct) {
       dispatch({
         type: "saveFailedWithPersistedProduct",
         product: result.persistedProduct,
-        error: genericError
+        error,
+        requiresReload
       });
       return;
     }
 
-    dispatch({ type: "saveFailed", error: genericError });
+    dispatch({ type: "saveFailed", error, requiresReload });
   };
   const selectTemplate = (templateCode: string) => {
     if (isSaving || state.isCoverUploading) {
@@ -165,7 +186,7 @@ export function useProductCreateFlow(
     dispatch({ type: "selectTemplate", template });
   };
   const uploadProductCover = async (file: File) => {
-    if (!state.editorDraft || state.isCoverUploading) {
+    if (!state.editorDraft || state.editorRequiresReload || state.isCoverUploading) {
       return;
     }
 
@@ -202,7 +223,11 @@ export function useProductCreateFlow(
     editProduct: (product) => dispatch({ type: "editProduct", product }),
     updateDraft: (draft) => dispatch({ type: "updateDraft", draft }),
     uploadProductCover,
-    removeProductCover: () => dispatch({ type: "removeCover" }),
+    removeProductCover: () => {
+      if (!state.editorRequiresReload) {
+        dispatch({ type: "removeCover" });
+      }
+    },
     saveDraft: (visibleIncludedItems) => persistDraft(false, visibleIncludedItems),
     publishDraft: (visibleIncludedItems) => persistDraft(true, visibleIncludedItems),
     closeEditor: () => {
@@ -232,8 +257,9 @@ function productCreateFlowReducer(
       ...state,
       isTypeModalOpen: true,
       editorDraft: null,
-      editingProductId: null,
+      editingProduct: null,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -253,8 +279,9 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: false,
       editorDraft: createDefaultProductDraft(action.productType),
-      editingProductId: null,
+      editingProduct: null,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -273,8 +300,9 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: false,
       editorDraft: createProductDraftFromTemplate(action.template),
-      editingProductId: null,
+      editingProduct: null,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -286,8 +314,9 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: false,
       editorDraft: createProductDraftFromResponse(action.product),
-      editingProductId: action.product.id,
+      editingProduct: { id: action.product.id, revision: action.product.revision },
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: action.product.coverMedia?.url ?? null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -299,7 +328,7 @@ function productCreateFlowReducer(
     return {
       ...state,
       editorDraft: action.draft,
-      editorError: null,
+      editorError: state.editorRequiresReload ? state.editorError : null,
       coverUploadError: null
     };
   }
@@ -371,8 +400,9 @@ function productCreateFlowReducer(
     return {
       ...state,
       editorDraft: null,
-      editingProductId: null,
+      editingProduct: null,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -383,7 +413,8 @@ function productCreateFlowReducer(
   if (action.type === "saveFailed") {
     return {
       ...state,
-      editorError: action.error
+      editorError: action.error,
+      editorRequiresReload: action.requiresReload
     };
   }
 
@@ -391,8 +422,9 @@ function productCreateFlowReducer(
     return {
       ...state,
       editorDraft: createProductDraftFromResponse(action.product),
-      editingProductId: action.product.id,
+      editingProduct: { id: action.product.id, revision: action.product.revision },
       editorError: action.error,
+      editorRequiresReload: action.requiresReload,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -404,8 +436,9 @@ function productCreateFlowReducer(
     return {
       isTypeModalOpen: true,
       editorDraft: null,
-      editingProductId: null,
+      editingProduct: null,
       editorError: null,
+      editorRequiresReload: false,
       coverMediaUrl: null,
       isCoverUploading: false,
       coverUploadError: null,
@@ -420,8 +453,9 @@ function productCreateFlowReducer(
   return {
     ...state,
     editorDraft: null,
-    editingProductId: null,
+    editingProduct: null,
     editorError: null,
+    editorRequiresReload: false,
     coverMediaUrl: null,
     isCoverUploading: false,
     coverUploadError: null,

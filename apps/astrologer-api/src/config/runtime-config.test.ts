@@ -28,6 +28,7 @@ const defaultTrustedStaticCode = {
   identifierNormalized: "+78005553535"
 };
 const defaultSecurityConfig = {
+  mediaRoom: null,
   flows: {},
   trustProxy: false,
   sessionTtlSeconds: 604800,
@@ -103,6 +104,27 @@ const defaultSecurityConfig = {
 };
 
 describe("createAstrologerApiRuntimeConfig", () => {
+  it("requires complete LiveKit configuration and never echoes a partial secret", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({ ...requiredSecurityConfig, LIVEKIT_API_KEY: "only-key" })
+    ).toThrow("LiveKit configuration is incomplete");
+    expect(
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        LIVEKIT_URL: "wss://example.livekit.cloud",
+        LIVEKIT_API_KEY: "api-key",
+        LIVEKIT_API_SECRET: "api-secret",
+        LIVEKIT_ROOM_PREFIX: "session_"
+      }).mediaRoom
+    ).toEqual({
+      serverUrl: "wss://example.livekit.cloud",
+      apiKey: "api-key",
+      apiSecret: "api-secret",
+      roomPrefix: "session_",
+      joinTokenTtlSeconds: 300
+    });
+  });
+
   it("maps mobile access and idle session lifetimes from env", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,

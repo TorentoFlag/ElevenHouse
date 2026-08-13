@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  UseGuards
+} from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
@@ -93,17 +105,23 @@ export class ProductsController {
   }
 
   @Post(":productId/publish")
+  @HttpCode(HttpStatus.OK)
   @RequirePlatformTariffCapability({
     surfaceId: "products.publish",
     capability: "products",
     operation: "mutation"
   })
   @RequireCsrf()
-  publishProduct(@Param("productId") productId: string, @Req() request: AstrologerSessionRequest) {
-    return this.productsService.publishProduct(productId, request);
+  publishProduct(
+    @Param("productId") productId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.productsService.publishProduct(productId, body, request);
   }
 
   @Post(":productId/move-to-draft")
+  @HttpCode(HttpStatus.OK)
   @RequirePlatformTariffCapability({
     surfaceId: "products.move-to-draft",
     capability: "products",
@@ -112,20 +130,26 @@ export class ProductsController {
   @RequireCsrf()
   moveProductToDraft(
     @Param("productId") productId: string,
+    @Body() body: unknown,
     @Req() request: AstrologerSessionRequest
   ) {
-    return this.productsService.moveProductToDraft(productId, request);
+    return this.productsService.moveProductToDraft(productId, body, request);
   }
 
   @Post(":productId/archive")
+  @HttpCode(HttpStatus.OK)
   @RequirePlatformTariffCapability({
     surfaceId: "products.archive",
     capability: "products",
     operation: "mutation"
   })
   @RequireCsrf()
-  archiveProduct(@Param("productId") productId: string, @Req() request: AstrologerSessionRequest) {
-    return this.productsService.archiveProduct(productId, request);
+  archiveProduct(
+    @Param("productId") productId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.productsService.archiveProduct(productId, body, request);
   }
 
   @Post(":productId/duplicate")

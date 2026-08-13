@@ -70,6 +70,30 @@ describe("client order checkout command factory", () => {
     });
   });
 
+  it("keeps a booking-bound client order on the existing hosted-checkout authority", async () => {
+    const bookingOrder: FinanceOrder = { ...order, bookingId: "booking-1" };
+    const result = await createClientOrderCheckoutCommandFactory(dependenciesFor()).prepare({
+      order: bookingOrder,
+      clientUserId: "client-1",
+      buyerContact: { kind: "email", value: "client@example.test" },
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      successUrl: "https://client.elevenhouse.test/payments/success",
+      failureUrl: "https://client.elevenhouse.test/payments/failure",
+      cancelUrl: "https://client.elevenhouse.test/payments/cancel"
+    });
+
+    expect(result.dispatchEnvelope).toMatchObject({
+      kind: "checkout_session_create",
+      captureMode: "one_stage",
+      orderId: bookingOrder.id,
+      externalId: bookingOrder.id
+    });
+    expect(result.captureAuthority.fulfillmentDecision).toMatchObject({
+      registryKey: "single.once.live.solo",
+      registryRevision: 1
+    });
+  });
+
   it("fails before provider persistence if verified contact or published resource policy is unavailable", async () => {
     const dependencies = dependenciesFor({ contact: null });
     const factory = createClientOrderCheckoutCommandFactory(dependencies);

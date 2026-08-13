@@ -17,6 +17,7 @@ import { listProducts } from "../api/listProducts";
 import { listProductTemplates } from "../api/listProductTemplates";
 import { moveProductToDraft } from "../api/moveProductToDraft";
 import { publishProduct } from "../api/publishProduct";
+import type { ProductStatusTransitionInput } from "../api/publishProduct";
 import { updateProduct, type UpdateProductInput } from "../api/updateProduct";
 
 export const productsQueryKeys = {
@@ -81,7 +82,7 @@ export function updateProductMutationOptions(queryClient: Pick<QueryClient, "inv
 
 export function publishProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
-    mutationFn: (productId: string) => publishProduct(productId),
+    mutationFn: (input: ProductStatusTransitionInput) => publishProduct(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }
@@ -90,14 +91,14 @@ export function moveProductToDraftMutationOptions(
   queryClient: Pick<QueryClient, "invalidateQueries">
 ) {
   return {
-    mutationFn: (productId: string) => moveProductToDraft(productId),
+    mutationFn: (input: ProductStatusTransitionInput) => moveProductToDraft(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }
 
 export function archiveProductMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
   return {
-    mutationFn: (productId: string) => archiveProduct(productId),
+    mutationFn: (input: ProductStatusTransitionInput) => archiveProduct(input),
     onSuccess: () => invalidateProducts(queryClient)
   };
 }

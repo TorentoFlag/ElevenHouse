@@ -13,7 +13,8 @@ describe("workers readiness", () => {
           calculationPdfWorker: vi.fn(async () => undefined),
           privateObjectStorage: vi.fn(async () => undefined),
           flowExecutionRuntime: vi.fn(async () => undefined),
-          flowWorkerControl: vi.fn(async () => undefined)
+          flowWorkerControl: vi.fn(async () => undefined),
+          sessions: vi.fn(async () => undefined)
         }
       })
     ).resolves.toEqual({
@@ -26,7 +27,8 @@ describe("workers readiness", () => {
         calculationPdfWorker: { status: "ready" },
         privateObjectStorage: { status: "ready" },
         flowExecutionRuntime: { status: "ready" },
-        flowWorkerControl: { status: "ready" }
+        flowWorkerControl: { status: "ready" },
+        sessions: { status: "ready" }
       }
     });
   });
@@ -47,6 +49,9 @@ describe("workers readiness", () => {
           }),
           flowWorkerControl: vi.fn(async () => {
             throw new Error("flow_worker_readiness_heartbeat_failed");
+          }),
+          sessions: vi.fn(async () => {
+            throw new Error("session_projection_failed");
           })
         }
       })
@@ -64,6 +69,10 @@ describe("workers readiness", () => {
         flowWorkerControl: {
           status: "unready",
           error: "flow_worker_readiness_heartbeat_failed"
+        },
+        sessions: {
+          status: "unready",
+          error: "session_projection_failed"
         }
       }
     });

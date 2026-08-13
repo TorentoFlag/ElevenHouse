@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../../common/i18n/astrologerCopy";
 import { BookingDetailPanel } from "./BookingDetailPanel";
+import { MemoryRouter } from "react-router";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -57,17 +58,19 @@ const booking: ManualBooking = {
 describe("BookingDetailPanel", () => {
   it("renders the server-backed first-slice snapshot and omits unsupported actions", () => {
     const markup = renderToStaticMarkup(
-      <BookingDetailPanel
-        copy={astrologerCopyByLocale.ru.calendar.bookingDetail}
-        locale="ru"
-        timeZone="Europe/Moscow"
-        entry={entry}
-        booking={booking}
-        isLoading={false}
-        isError={false}
-        onRetry={vi.fn()}
-        onClose={vi.fn()}
-      />
+      <MemoryRouter>
+        <BookingDetailPanel
+          copy={astrologerCopyByLocale.ru.calendar.bookingDetail}
+          locale="ru"
+          timeZone="Europe/Moscow"
+          entry={entry}
+          booking={booking}
+          isLoading={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>
     );
 
     expect(markup).toContain('aria-label="Детали записи"');
@@ -83,6 +86,52 @@ describe("BookingDetailPanel", () => {
     expect(markup).not.toContain("Перенести");
     expect(markup).not.toContain("Отменить");
     expect(markup).not.toContain("неявку");
+  });
+
+  it("links a confirmed video booking to its authorized Session", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <BookingDetailPanel
+          copy={astrologerCopyByLocale.ru.calendar.bookingDetail}
+          locale="ru"
+          timeZone="Europe/Moscow"
+          entry={entry}
+          booking={booking}
+          sessionId="22222222-2222-4222-8222-222222222222"
+          isLoading={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(markup).toContain('href="/sessions/22222222-2222-4222-8222-222222222222"');
+    expect(markup).toContain("Войти в сессию");
+  });
+
+  it("renders a retry state when Session authorization lookup fails", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <BookingDetailPanel
+          copy={astrologerCopyByLocale.ru.calendar.bookingDetail}
+          locale="ru"
+          timeZone="Europe/Moscow"
+          entry={entry}
+          booking={booking}
+          sessionStatus="error"
+          onRetrySession={vi.fn()}
+          isLoading={false}
+          isError={false}
+          onRetry={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    expect(markup).toContain("Не удалось проверить доступ к сессии.");
+    expect(markup).toContain("Повторить");
+    expect(markup).not.toContain("Войти в сессию");
   });
 
   it("keeps the panel closable while the detail query is loading", () => {

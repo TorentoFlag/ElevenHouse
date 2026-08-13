@@ -19,6 +19,7 @@ export function ProductConstructorModal({
   isCoverUploading,
   coverMediaUrl,
   error,
+  requiresReload = false,
   coverUploadError,
   portalTarget,
   backdropClassName,
@@ -30,7 +31,12 @@ export function ProductConstructorModal({
   onClose
 }: ProductConstructorModalProps) {
   const controller = useProductConstructorController({ draft, productCopy, locale, onDraftChange });
-  const canSave = !isSaving && !isCoverUploading && Boolean(draft.title.trim());
+  const canSave =
+    !isSaving &&
+    !requiresReload &&
+    !isCoverUploading &&
+    Boolean(draft.title.trim()) &&
+    controller.viewModel.isProductConfigurationValid;
 
   return (
     <Modal

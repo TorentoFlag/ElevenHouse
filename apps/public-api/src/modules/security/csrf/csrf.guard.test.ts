@@ -5,12 +5,15 @@ import { describe, expect, it, vi } from "vitest";
 import { CsrfGuard } from "./csrf.guard";
 import type { PublicCsrfTokenService } from "./public-csrf-token.service";
 
-function createContext(headers: Record<string, string | undefined>): ExecutionContext {
+function createContext(
+  headers: Record<string, string | undefined>,
+  currentMobileSessionId?: string
+): ExecutionContext {
   return {
     getHandler: vi.fn(),
     getClass: vi.fn(),
     switchToHttp: vi.fn(() => ({
-      getRequest: () => ({ headers })
+      getRequest: () => ({ headers, currentMobileSessionId })
     }))
   } as unknown as ExecutionContext;
 }
@@ -52,6 +55,14 @@ describe("CsrfGuard", () => {
     const guard = createGuard({ csrfRequired: true });
 
     expect(() => guard.canActivate(createContext({}))).toThrow(UnauthorizedException);
+  });
+
+  it("allows a mobile bearer session without a CSRF cookie", () => {
+    const assertValidRequest = vi.fn();
+    const guard = createGuard({ csrfRequired: true, assertValidRequest });
+
+    expect(guard.canActivate(createContext({}, "mobile-session-id"))).toBe(true);
+    expect(assertValidRequest).not.toHaveBeenCalled();
   });
 
   it("delegates CSRF validation when a session cookie is present", () => {

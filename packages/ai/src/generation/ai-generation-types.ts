@@ -59,6 +59,10 @@ export type AiPromptDefinition<TInput, TOutput> = {
   readonly version: number;
   readonly locales: readonly AiPromptLocale[];
   readonly modelProfile: AiModelProfile;
+  /** Optional purpose-bound model override. Existing prompts keep profile-based selection. */
+  readonly requestedModel?: AiModel;
+  /** Optional per-request SDK retry override. Existing prompts keep SDK defaults. */
+  readonly providerMaxRetries?: 0;
   readonly responseFormat: AiPromptResponseFormat;
   readonly reasoningEffort: AiReasoningEffort;
   readonly maxOutputTokens: number;

@@ -323,6 +323,13 @@
       "when": 1786573291984,
       "tag": "0046_stiff_thaddeus_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1786624432697,
+      "tag": "0047_nebulous_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

@@ -13,9 +13,19 @@ export type CalendarPageViewProps = {
   readonly copy: AstrologerCopy["calendar"];
   readonly locale: SupportedLocale;
   readonly calendar: ReturnType<typeof useCalendarPageController>;
+  readonly selectedSessionId?: string | null;
+  readonly selectedSessionStatus?: "loading" | "ready" | "error";
+  readonly onRetrySelectedSession?: () => void;
 };
 
-export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewProps) {
+export function CalendarPageView({
+  copy,
+  locale,
+  calendar,
+  selectedSessionId = null,
+  selectedSessionStatus = "ready",
+  onRetrySelectedSession = () => undefined
+}: CalendarPageViewProps) {
   return (
     <section className={styles.calendarPage} aria-label={copy.title}>
       <CalendarToolbar
@@ -88,6 +98,9 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
               isError={calendar.isBookingDetailError}
               onRetry={calendar.onRetryBookingDetail}
               onClose={calendar.onCloseDialog}
+              sessionId={selectedSessionId}
+              sessionStatus={selectedSessionStatus}
+              onRetrySession={onRetrySelectedSession}
             />
           </>
         ) : calendar.isSummaryPanelOpen ? (
@@ -120,9 +133,7 @@ export function CalendarPageView({ copy, locale, calendar }: CalendarPageViewPro
           isProductsLoading={
             calendar.isAvailabilityLoading || calendar.isAvailabilityProductsLoading
           }
-          isProductsError={
-            calendar.isAvailabilityError || calendar.isAvailabilityProductsError
-          }
+          isProductsError={calendar.isAvailabilityError || calendar.isAvailabilityProductsError}
           isCreating={calendar.isBookingCreating}
           conflictMessage={calendar.conflictMessage}
           onRetryProducts={calendar.onRetryManualBookingResources}

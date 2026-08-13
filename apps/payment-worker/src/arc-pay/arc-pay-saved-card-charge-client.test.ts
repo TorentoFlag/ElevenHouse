@@ -26,7 +26,8 @@ describe("ArcPay saved-card charge client", () => {
   });
 
   it("serializes the sealed recurring charge into ArcPay's documented MIT request", async () => {
-    const fetchImpl = vi.fn(async (_url: URL | string, init?: RequestInit) => {
+    const fetchImpl = vi.fn(async (url: URL | string, init?: RequestInit) => {
+      expect(String(url)).toBe("https://api.arcpay.space/v1/payments/saved-card");
       expect(init?.method).toBe("POST");
       expect(init?.headers).toMatchObject({
         authorization: "Bearer test-secret",

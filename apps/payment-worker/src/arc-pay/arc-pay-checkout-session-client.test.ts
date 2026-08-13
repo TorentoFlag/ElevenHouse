@@ -65,7 +65,11 @@ describe("ArcPay hosted checkout session client", () => {
       ],
       metadata: { order_id: "order-1", fiscal_profile: "client-purchase-profile:3" }
     });
-    expect(JSON.parse(String(calls[0]?.options?.body))).not.toHaveProperty("merchant_inn");
+    const body = JSON.parse(String(calls[0]?.options?.body));
+    expect(body).not.toHaveProperty("merchant_inn");
+    expect(body).not.toHaveProperty("card_token_id");
+    expect(body).not.toHaveProperty("stored_credential_reason");
+    expect(body).not.toHaveProperty("recurring_frequency_days");
   });
 
   it("maps an immutable E.164 buyer phone without adding an unsupported HPP merchant identity field", async () => {

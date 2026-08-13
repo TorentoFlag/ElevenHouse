@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@elevenhouse/contracts/sessions": fileURLToPath(
+        new URL("../../packages/contracts/src/sessions.ts", import.meta.url)
+      ),
       "@elevenhouse/auth/roles": fileURLToPath(
         new URL("../../packages/auth/src/roles.ts", import.meta.url)
       ),

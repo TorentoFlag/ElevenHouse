@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -17,7 +18,9 @@ import {
   MediaNotFoundError,
   MediaValidationError,
   moveProductToDraft,
+  ProductFulfillmentNotReadyError,
   ProductNotFoundError,
+  ProductRevisionConflictError,
   ProductTemplateNotFoundError,
   ProductTemplateValidationError,
   ProductValidationError,
@@ -43,6 +46,7 @@ import {
   listProductsResponseSchema,
   productIdParamSchema,
   productResponseSchema,
+  productStatusTransitionRequestSchema,
   productSummaryResponseSchema,
   productTemplateResponseSchema,
   updateProductRequestSchema,
@@ -51,6 +55,8 @@ import {
   type ListProductsResponse,
   type MediaAssetResponse,
   type ProductResponse,
+  type ProductFulfillmentNotReadyResponse,
+  type ProductRevisionConflictResponse,
   type ProductSummaryResponse,
   type ProductTemplateResponse,
   type UpdateProductRequest
@@ -198,6 +204,7 @@ export class ProductsService {
         store: this.store,
         ownerUserId,
         productId: params.productId,
+        expectedRevision: patch.expectedRevision,
         patch: toUpdatePatch(patch),
         now: this.clock.now()
       });
@@ -206,19 +213,28 @@ export class ProductsService {
     });
   }
 
-  publishProduct(productId: string, request: AstrologerSessionRequest): Promise<ProductResponse> {
-    return this.transitionProduct(productId, request, publishProduct);
+  publishProduct(
+    productId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ProductResponse> {
+    return this.transitionProduct(productId, body, request, publishProduct);
   }
 
   moveProductToDraft(
     productId: string,
+    body: unknown,
     request: AstrologerSessionRequest
   ): Promise<ProductResponse> {
-    return this.transitionProduct(productId, request, moveProductToDraft);
+    return this.transitionProduct(productId, body, request, moveProductToDraft);
   }
 
-  archiveProduct(productId: string, request: AstrologerSessionRequest): Promise<ProductResponse> {
-    return this.transitionProduct(productId, request, archiveProduct);
+  archiveProduct(
+    productId: string,
+    body: unknown,
+    request: AstrologerSessionRequest
+  ): Promise<ProductResponse> {
+    return this.transitionProduct(productId, body, request, archiveProduct);
   }
 
   async duplicateProduct(
@@ -235,6 +251,7 @@ export class ProductsService {
         store: this.store,
         ownerUserId,
         productId: params.productId,
+        expectedRevision: parsedBody.expectedRevision,
         title: parsedBody.title,
         now: this.clock.now()
       });
@@ -245,15 +262,18 @@ export class ProductsService {
 
   private async transitionProduct(
     productId: string,
+    body: unknown,
     request: AstrologerSessionRequest,
     transition: (input: {
       readonly store: ProductStore;
       readonly ownerUserId: string;
       readonly productId: string;
+      readonly expectedRevision: number;
       readonly now: Date;
     }) => Promise<Product>
   ): Promise<ProductResponse> {
     const params = parseContract(productIdParamSchema, { productId });
+    const parsedBody = parseContract(productStatusTransitionRequestSchema, body);
     const ownerUserId = requireOwnerUserId(request);
 
     return mapProductErrors(async () => {
@@ -261,6 +281,7 @@ export class ProductsService {
         store: this.store,
         ownerUserId,
         productId: params.productId,
+        expectedRevision: parsedBody.expectedRevision,
         now: this.clock.now()
       });
       const [response] = await this.mapProducts(ownerUserId, [product]);
@@ -301,6 +322,12 @@ export class ProductsService {
       requiredClientData: [...product.requiredClientData],
       methods: [...product.methods],
       accessGrants: [...product.accessGrants],
+      astroDiaryConfig: product.astroDiaryConfig
+        ? {
+            ...product.astroDiaryConfig,
+            workingWeekdays: [...product.astroDiaryConfig.workingWeekdays]
+          }
+        : null,
       includedItems: product.includedItems.map((item) => ({ ...item })),
       modifiers: product.modifiers.map((modifier) => ({ ...modifier })),
       analytics: analytics.get(product.id) ?? {
@@ -371,6 +398,7 @@ function toCreateInput(body: CreateProductRequest, ownerUserId: string): Product
     requiredClientData: body.requiredClientData,
     methods: body.methods,
     accessGrants: body.accessGrants,
+    astroDiaryConfig: body.astroDiaryConfig ?? null,
     includedItems: body.includedItems,
     modifiers: body.modifiers
   };
@@ -400,6 +428,7 @@ function toUpdatePatch(body: UpdateProductRequest): ProductUpdatePatch {
     requiredClientData: body.requiredClientData,
     methods: body.methods,
     accessGrants: body.accessGrants,
+    astroDiaryConfig: body.astroDiaryConfig,
     includedItems: body.includedItems,
     modifiers: body.modifiers
   });
@@ -429,6 +458,19 @@ async function mapProductErrors<T>(operation: () => Promise<T>): Promise<T> {
   } catch (error) {
     if (error instanceof ProductNotFoundError) {
       throw new NotFoundException("Product not found");
+    }
+    if (error instanceof ProductRevisionConflictError) {
+      throw new ConflictException({
+        code: error.code,
+        expectedRevision: error.expectedRevision,
+        currentRevision: error.currentRevision
+      } satisfies ProductRevisionConflictResponse);
+    }
+    if (error instanceof ProductFulfillmentNotReadyError) {
+      throw new ConflictException({
+        code: error.code,
+        message: error.message
+      } satisfies ProductFulfillmentNotReadyResponse);
     }
     if (error instanceof ProductTemplateNotFoundError) {
       throw new NotFoundException("Product template not found");

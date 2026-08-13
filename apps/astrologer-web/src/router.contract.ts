@@ -18,6 +18,7 @@ export const astrologerRouteContract = {
     humanDesign: "/human-design",
     astroCalendar: "/astro-calendar",
     chartEngine: "/chart-engine",
+    session: "/sessions/:sessionId",
     settings: "/settings"
   },
   notFound: "*"

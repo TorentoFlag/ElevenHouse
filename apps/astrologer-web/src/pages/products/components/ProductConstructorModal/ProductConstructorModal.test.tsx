@@ -4,7 +4,10 @@ import { Modal } from "@elevenhouse/design-system/components/Modal";
 import { NumberStepper } from "@elevenhouse/design-system/components/NumberStepper";
 import { SelectableTile } from "@elevenhouse/design-system/components/SelectableTile";
 import { describe, expect, it, vi } from "vitest";
-import { createDefaultProductDraft } from "../../../../features/products/model/productDraft";
+import {
+  createDefaultProductDraft,
+  toggleProductAccessGrant
+} from "../../../../features/products/model/productDraft";
 import { productCopyByLocale } from "../../../../features/products/model/productCopy";
 import { ProductConstructorModal } from "./ProductConstructorModal";
 import styles from "./ProductConstructorModal.module.css";
@@ -250,6 +253,76 @@ describe("ProductConstructorModal", () => {
     expect(serialized).not.toContain("Допы · модификаторы");
   });
 
+  it("renders bounded accessible AstroDiary settings and blocks an invalid timezone", () => {
+    const onDraftChange = vi.fn();
+    const diaryDraft = {
+      ...toggleProductAccessGrant(createDefaultProductDraft("sub"), "journal"),
+      title: "Астродневник"
+    };
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: diaryDraft,
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange,
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const serialized = serializeRendered(modal);
+    expect(serialized).toContain("Настройки астродневника");
+    expect(serialized).toContain("Циклов рефлексии за период");
+    expect(serialized).toContain("Ответ астролога · рабочих дней");
+    expect(serialized).toContain("Окно ответа клиента · календарных дней");
+    expect(serialized).toContain("Рабочие дни");
+    expect(serialized).toContain("Часовой пояс");
+    expect(serialized).not.toContain("Пробный период");
+    expect(serialized).not.toContain("Формат поставки");
+    expect(serialized).not.toContain("Метод / система");
+    expect(serialized).not.toContain("Данные от клиента");
+    expect(serialized).not.toContain("Допы · модификаторы");
+
+    findByProp(modal, "data-astro-diary-timezone").props.onChange({
+      currentTarget: { value: "Europe/Moscow" }
+    });
+    expect(onDraftChange).toHaveBeenCalledWith({
+      ...diaryDraft,
+      astroDiaryConfig: {
+        ...diaryDraft.astroDiaryConfig!,
+        serviceTimezone: "Europe/Moscow"
+      }
+    });
+
+    const invalidModal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: {
+        ...diaryDraft,
+        astroDiaryConfig: { ...diaryDraft.astroDiaryConfig!, serviceTimezone: "Mars/Olympus" }
+      },
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+    const buttons = findAllByType(invalidModal, Button);
+    expect(findByProp(invalidModal, "data-astro-diary-timezone").props["aria-invalid"]).toBe(true);
+    expect(
+      buttons.find((button) => button.props.title === copy.saveDraftLabel)?.props.disabled
+    ).toBe(true);
+    expect(buttons.find((button) => button.props.title === "Опубликовать")?.props.disabled).toBe(
+      true
+    );
+  });
+
   it("renders media, client-facing preview, enabled modifiers and cabinet artifacts", () => {
     const draft = {
       ...createDefaultProductDraft("single"),
@@ -346,6 +419,34 @@ describe("ProductConstructorModal", () => {
       ...defaultCoverUploadProps,
       isCoverUploading: true,
       error: null,
+      onDraftChange: vi.fn(),
+      onSave: vi.fn(),
+      onPublish: vi.fn(),
+      onClose: vi.fn()
+    });
+
+    const buttons = findAllByType(modal, Button);
+    expect(
+      buttons.find((button) => button.props.title === copy.saveDraftLabel)?.props.disabled
+    ).toBe(true);
+    expect(buttons.find((button) => button.props.title === "Опубликовать")?.props.disabled).toBe(
+      true
+    );
+  });
+
+  it("disables stale save and publish actions until the product is reloaded", () => {
+    const modal = ProductConstructorModal({
+      copy,
+      productCopy: productCopyByLocale.ru,
+      locale: "ru",
+      draft: {
+        ...createDefaultProductDraft("single"),
+        title: "Натальный разбор"
+      },
+      isSaving: false,
+      ...defaultCoverUploadProps,
+      error: "Обновите страницу",
+      requiresReload: true,
       onDraftChange: vi.fn(),
       onSave: vi.fn(),
       onPublish: vi.fn(),
@@ -624,6 +725,8 @@ type TestElementProps = {
   value?: string | number;
   disabled?: boolean;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
+  "data-astro-diary-timezone"?: string;
   "data-product-constructor-add-included-button"?: string;
   "data-product-constructor-add-included-input"?: string;
   "data-product-constructor-cabinet-artifact"?: string;

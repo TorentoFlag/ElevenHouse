@@ -49,6 +49,20 @@ describe("mapProviderOperationDispatchWorkItem", () => {
     );
   });
 
+  it("characterizes provider_unknown as currently dispatch-readable with the original request", () => {
+    const row = validRow();
+    row.operation.status = "provider_unknown";
+
+    expect(mapProviderOperationDispatchWorkItem(row as never)).toMatchObject({
+      status: "provider_unknown",
+      dispatch: {
+        providerOperationIntentId: row.operation.id,
+        idempotencyKey: row.operation.idempotencyKey,
+        canonicalRequestDigest: row.operation.canonicalRequestDigest
+      }
+    });
+  });
+
   it("rejects an artifact digest that is not exactly the receipt's canonical dispatch", () => {
     const row = validRow();
     row.privateArtifact.sha256Digest = otherDigest;

@@ -217,27 +217,37 @@ describe("products HTTP routes", () => {
     const createdProductId = String(createResponse.body.id);
     const updateResponse = await putJson(
       `/products/${createdProductId}`,
-      { subtitle: null, durationMinutes: null },
+      { expectedRevision: 1, subtitle: null, durationMinutes: null },
+      csrfHeaders()
+    );
+    const staleUpdateResponse = await putJson(
+      `/products/${createdProductId}`,
+      { expectedRevision: 1, title: "Stale title" },
       csrfHeaders()
     );
     const invalidUpdateResponse = await putJson(
       `/products/${createdProductId}`,
-      { paymentModel: "pack" },
+      { expectedRevision: 2, paymentModel: "pack" },
       csrfHeaders()
     );
     const publishResponse = await postJson(
       `/products/${createdProductId}/publish`,
-      {},
+      { expectedRevision: 2 },
+      csrfHeaders()
+    );
+    const moveToDraftResponse = await postJson(
+      `/products/${createdProductId}/move-to-draft`,
+      { expectedRevision: 3 },
       csrfHeaders()
     );
     const archiveResponse = await postJson(
       `/products/${createdProductId}/archive`,
-      {},
+      { expectedRevision: 4 },
       csrfHeaders()
     );
     const duplicateResponse = await postJson(
       `/products/${createdProductId}/duplicate`,
-      { title: "Natal reading (copy)" },
+      { expectedRevision: 5, title: "Natal reading (copy)" },
       csrfHeaders()
     );
     const summaryResponse = await getJson("/products/summary");
@@ -248,6 +258,7 @@ describe("products HTTP routes", () => {
     expect(createResponse.body).toMatchObject({
       ownerUserId,
       status: "draft",
+      revision: 1,
       title: "Натальный разбор",
       analytics: {
         salesCount: 0,
@@ -262,14 +273,36 @@ describe("products HTTP routes", () => {
       subtitle: null,
       durationMinutes: null
     });
+    expect(updateResponse.body.revision).toBe(2);
+    expect(staleUpdateResponse.status).toBe(409);
+    expect(staleUpdateResponse.body).toEqual({
+      code: "PRODUCT_REVISION_CONFLICT",
+      expectedRevision: 1,
+      currentRevision: 2
+    });
     expect(invalidUpdateResponse.status).toBe(400);
-    expect(publishResponse.status).toBe(201);
-    expect(publishResponse.body).toMatchObject({ id: createdProductId, status: "active" });
-    expect(archiveResponse.status).toBe(201);
-    expect(archiveResponse.body).toMatchObject({ id: createdProductId, status: "archived" });
+    expect(publishResponse.status).toBe(200);
+    expect(publishResponse.body).toMatchObject({
+      id: createdProductId,
+      status: "active",
+      revision: 3
+    });
+    expect(moveToDraftResponse.status).toBe(200);
+    expect(moveToDraftResponse.body).toMatchObject({
+      id: createdProductId,
+      status: "draft",
+      revision: 4
+    });
+    expect(archiveResponse.status).toBe(200);
+    expect(archiveResponse.body).toMatchObject({
+      id: createdProductId,
+      status: "archived",
+      revision: 5
+    });
     expect(duplicateResponse.status).toBe(201);
     expect(duplicateResponse.body).toMatchObject({
       status: "draft",
+      revision: 1,
       title: "Natal reading (copy)"
     });
     productSummaryResponseSchema.parse(summaryResponse.body);
@@ -283,6 +316,26 @@ describe("products HTTP routes", () => {
       grossRevenueMinor: 0,
       currency: "RUB",
       bestseller: null
+    });
+  });
+
+  it("returns a typed conflict when AstroDiary fulfillment is not ready", async () => {
+    const createResponse = await postJson(
+      "/products",
+      validAstroDiaryCreateBody(),
+      csrfHeaders()
+    );
+    const publishResponse = await postJson(
+      `/products/${String(createResponse.body.id)}/publish`,
+      { expectedRevision: createResponse.body.revision },
+      csrfHeaders()
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(publishResponse.status).toBe(409);
+    expect(publishResponse.body).toEqual({
+      code: "PRODUCT_FULFILLMENT_NOT_READY",
+      message: "AstroDiary subscription fulfillment is not ready"
     });
   });
 
@@ -446,9 +499,9 @@ function createEntitlementStore() {
     ),
     findTariffVersion: vi.fn(async () => tariff),
     findLatestHistoricalCapabilityGrant: vi.fn(
-      async (): Promise<Awaited<
-        ReturnType<PlatformTariffEntitlementStore["findLatestHistoricalCapabilityGrant"]>
-      >> => null
+      async (): Promise<
+        Awaited<ReturnType<PlatformTariffEntitlementStore["findLatestHistoricalCapabilityGrant"]>>
+      > => null
     )
   } satisfies PlatformTariffEntitlementStore;
 }
@@ -529,21 +582,32 @@ function createProductStore(): ProductStore {
       const index = products.findIndex(
         (product) => product.ownerUserId === input.ownerUserId && product.id === input.productId
       );
-      if (index === -1) return null;
+      if (index === -1) return { outcome: "not_found" as const };
 
       const current = products[index] ?? raise("Expected product index to resolve");
+      if (current.revision !== input.expectedRevision) {
+        return { outcome: "revision_conflict" as const, currentRevision: current.revision };
+      }
       const next: Product = {
         ...current,
         ...input.patch,
+        revision: current.revision + 1,
         updatedAt: input.now
       };
       products[index] = next;
-      return next;
+      return { outcome: "updated" as const, product: next };
     }),
     duplicate: vi.fn(async (input) => {
+      const source = products.find(
+        (product) => product.id === input.sourceProductId && product.ownerUserId === input.ownerUserId
+      );
+      if (!source) return { outcome: "not_found" as const };
+      if (source.revision !== input.expectedSourceRevision) {
+        return { outcome: "revision_conflict" as const, currentRevision: source.revision };
+      }
       const product = toProduct(nextProductId(products.length), input);
       products.unshift(product);
-      return product;
+      return { outcome: "duplicated" as const, product };
     })
   };
 }
@@ -640,6 +704,7 @@ function readyProductCoverMedia(): MediaAsset {
 function toProduct(id: string, input: ProductStoreCreateInput): Product {
   return {
     id,
+    revision: 1,
     ownerUserId: input.ownerUserId,
     type: input.type,
     status: input.status,
@@ -664,6 +729,7 @@ function toProduct(id: string, input: ProductStoreCreateInput): Product {
     requiredClientData: input.requiredClientData,
     methods: input.methods,
     accessGrants: input.accessGrants,
+    astroDiaryConfig: input.astroDiaryConfig,
     includedItems: input.includedItems.map((item, index) => ({
       id: `11111111-1111-4111-8111-11111111111${index}`,
       ...item
@@ -702,6 +768,30 @@ function validCreateBody(): Record<string, unknown> {
     accessGrants: [],
     includedItems: [{ text: "Полный разбор карты", icon: "check", order: 10 }],
     modifiers: []
+  };
+}
+
+function validAstroDiaryCreateBody(): Record<string, unknown> {
+  return {
+    ...validCreateBody(),
+    type: "sub",
+    title: "Астродневник",
+    executionMode: "async",
+    paymentModel: "sub",
+    durationMinutes: undefined,
+    durationLabel: undefined,
+    subscriptionPeriod: "month",
+    deliveryFormats: ["chat", "audio", "file"],
+    requiredClientData: [],
+    methods: [],
+    accessGrants: ["journal"],
+    astroDiaryConfig: {
+      reflectionCyclesPerPeriod: 12,
+      responseSlaWorkingDays: 2,
+      clientResponseWindowCalendarDays: 7,
+      workingWeekdays: [1, 2, 3, 4, 5],
+      serviceTimezone: "Europe/Moscow"
+    }
   };
 }
 

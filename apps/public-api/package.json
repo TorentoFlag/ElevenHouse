@@ -15,6 +15,7 @@
     "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/finance-infrastructure": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
+    "@elevenhouse/session-infrastructure": "workspace:*",
     "@elevenhouse/validation": "workspace:*",
     "@nestjs/common": "11.1.26",
     "@nestjs/config": "4.0.4",

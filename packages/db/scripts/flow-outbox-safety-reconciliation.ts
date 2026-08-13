@@ -45,12 +45,12 @@ const predecessorOutboxSafetyCatalog = {
 } as const satisfies OutboxSafetyCatalogFingerprint;
 
 const currentOutboxSafetyCatalog = {
-  hash: "46f10ace3c834dc6a6c56595f0ebddda9faf98748f0f89e2f13af15cb2ed1546",
+  hash: "8b6de59a4e7cd814ad1a82c3b9f7cede932c6725451de698dde10f5cc355c2ec",
   relations: 1,
   columns: 15,
-  constraints: 6,
+  constraints: 7,
   indexes: 5,
-  triggers: 0,
+  triggers: 1,
   unvalidatedConstraints: 0,
   invalidIndexes: 0
 } as const satisfies OutboxSafetyCatalogFingerprint;

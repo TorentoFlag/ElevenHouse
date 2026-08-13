@@ -129,6 +129,9 @@ describe("verified capture cross-contour receipt schema", () => {
       "new.outbox_event_id := gen_random_uuid()"
     );
     expect(financeVerifiedCaptureApplicationIntegritySql).toContain("insert into outbox_events");
+    expect(financeVerifiedCaptureApplicationIntegritySql).toContain(
+      "finance.economic_payment.capture_applied"
+    );
     expect(financeVerifiedCaptureApplicationIntegritySql).toContain("finance_canonical_jsonb_v1");
     expect(financeVerifiedCaptureApplicationIntegritySql).toContain(
       "verified capture application receipts are immutable"

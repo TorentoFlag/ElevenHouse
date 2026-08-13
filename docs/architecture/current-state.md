@@ -34,6 +34,8 @@ Use this for current structural facts. Ownership, policy, contracts and readines
 - `i18n`
 - `numerology-presentation`
 - `observability`
+- `session-infrastructure`
+- `session-web-client`
 - `testing`
 - `validation`
 
@@ -54,6 +56,7 @@ Use this for current structural facts. Ownership, policy, contracts and readines
 | public-api | `redis` |
 | public-api | `refund-candidates` |
 | public-api | `security` |
+| public-api | `sessions` |
 | astrologer-api | `ai` |
 | astrologer-api | `astro-calendar` |
 | astrologer-api | `astrologer-profile` |
@@ -82,6 +85,7 @@ Use this for current structural facts. Ownership, policy, contracts and readines
 | astrologer-api | `products` |
 | astrologer-api | `redis` |
 | astrologer-api | `security` |
+| astrologer-api | `sessions` |
 | astrologer-api | `verification` |
 | admin-api | `chargeback-resolutions` |
 | admin-api | `database` |

@@ -52,6 +52,12 @@ export type PasswordlessAuthenticatedAccount = {
   readonly authenticationKind: "registration" | "login";
 };
 
+export type PasswordlessVerifiedIdentity = {
+  readonly user: UserAccount;
+  readonly authIdentity: AuthIdentity;
+  readonly roleAssignments: readonly UserRoleAssignment[];
+};
+
 export class PasswordlessCodeRequestCooldownError extends Error {
   constructor(readonly resendAvailableAt: string) {
     super("Passwordless code request is on cooldown");

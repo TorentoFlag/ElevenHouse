@@ -3,6 +3,7 @@ import {
   chartInterpretationDraftPromptV1,
   renderChartInterpretationText
 } from "./chart-interpretation-draft.v1";
+import { aiContractDigest } from "./prompt-characterization.test-helpers";
 
 const input = {
   locale: "ru" as const,
@@ -128,5 +129,12 @@ describe("chart interpretation draft prompt", () => {
     expect(renderChartInterpretationText(output, "en")).toContain("CORE THEMES");
     expect(renderChartInterpretationText(output, "ru")).not.toContain("ВАЖНО");
     expect(renderChartInterpretationText(output, "en")).not.toContain("IMPORTANT");
+    expect(
+      aiContractDigest({
+        ruMessages: chartInterpretationDraftPromptV1.render(input).messages,
+        enMessages: en.messages,
+        requestJsonSchema: chartInterpretationDraftPromptV1.structuredOutputJsonSchema
+      })
+    ).toBe("sha256:638049363059c281ab81d0c2009691fd8e7bdfc70e713e1773f5f199607652a9");
   });
 });

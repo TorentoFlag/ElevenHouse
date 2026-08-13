@@ -6,6 +6,7 @@ import { createDefaultProductDraft } from "./productDraft";
 const product = {
   id: "11111111-1111-4111-8111-111111111111",
   ownerUserId: "22222222-2222-4222-8222-222222222222",
+  revision: 7,
   type: "single",
   status: "draft",
   title: "Натальный разбор",
@@ -30,6 +31,7 @@ const product = {
   requiredClientData: ["chart1"],
   methods: ["natal"],
   accessGrants: [],
+  astroDiaryConfig: null,
   includedItems: [
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -58,7 +60,7 @@ describe("persistProductDraft", () => {
     await expect(
       persistProductDraft({
         draft: { ...createDefaultProductDraft("single"), title: product.title },
-        editingProductId: null,
+        editingProduct: null,
         publish: true,
         createProduct,
         updateProduct: vi.fn(),
@@ -67,19 +69,23 @@ describe("persistProductDraft", () => {
     ).resolves.toEqual({ status: "saved" });
 
     expect(createProduct).toHaveBeenCalledOnce();
-    expect(publishProduct).toHaveBeenCalledWith(product.id);
+    expect(publishProduct).toHaveBeenCalledWith({
+      productId: product.id,
+      expectedRevision: product.revision
+    });
   });
 
   it("returns the persisted product when create succeeds but publish fails", async () => {
     const createProduct = vi.fn(async () => product);
+    const publishFailure = new Error("Publish failed");
     const publishProduct = vi.fn(async () => {
-      throw new Error("Publish failed");
+      throw publishFailure;
     });
 
     await expect(
       persistProductDraft({
         draft: { ...createDefaultProductDraft("single"), title: product.title },
-        editingProductId: null,
+        editingProduct: null,
         publish: true,
         createProduct,
         updateProduct: vi.fn(),
@@ -87,11 +93,36 @@ describe("persistProductDraft", () => {
       })
     ).resolves.toEqual({
       status: "failed",
-      persistedProduct: product
+      persistedProduct: product,
+      error: publishFailure
     });
 
     expect(createProduct).toHaveBeenCalledOnce();
-    expect(publishProduct).toHaveBeenCalledWith(product.id);
+    expect(publishProduct).toHaveBeenCalledWith({
+      productId: product.id,
+      expectedRevision: product.revision
+    });
+  });
+
+  it("returns the original error when persistence fails before a product exists", async () => {
+    const persistenceFailure = new Error("Create failed");
+    const createProduct = vi.fn(async (): Promise<ProductResponse> => {
+      throw persistenceFailure;
+    });
+
+    await expect(
+      persistProductDraft({
+        draft: { ...createDefaultProductDraft("single"), title: product.title },
+        editingProduct: null,
+        publish: false,
+        createProduct,
+        updateProduct: vi.fn(),
+        publishProduct: vi.fn()
+      })
+    ).resolves.toEqual({
+      status: "failed",
+      error: persistenceFailure
+    });
   });
 
   it("updates the existing product instead of creating another one", async () => {
@@ -99,7 +130,7 @@ describe("persistProductDraft", () => {
 
     await persistProductDraft({
       draft: { ...createDefaultProductDraft("single"), title: product.title },
-      editingProductId: product.id,
+      editingProduct: { id: product.id, revision: 6 },
       publish: false,
       createProduct: vi.fn(),
       updateProduct,
@@ -108,7 +139,7 @@ describe("persistProductDraft", () => {
 
     expect(updateProduct).toHaveBeenCalledWith({
       productId: product.id,
-      body: expect.objectContaining({ title: product.title })
+      body: expect.objectContaining({ expectedRevision: 6, title: product.title })
     });
   });
 
@@ -126,7 +157,7 @@ describe("persistProductDraft", () => {
         includedItems: [{ text: "Полный разбор карты", icon: "check", order: 10 }]
       },
       visibleIncludedItems,
-      editingProductId: null,
+      editingProduct: null,
       publish: false,
       createProduct,
       updateProduct: vi.fn(),
@@ -155,7 +186,7 @@ describe("persistProductDraft", () => {
         subscriptionPeriod: "month",
         trialDays: 14
       },
-      editingProductId: null,
+      editingProduct: null,
       publish: false,
       createProduct,
       updateProduct: vi.fn(),

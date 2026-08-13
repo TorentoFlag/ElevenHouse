@@ -3,6 +3,7 @@ import {
   matrixReportDraftPromptV1,
   type MatrixReportDraftPromptInput
 } from "./matrix-report-draft.v1";
+import { aiContractDigest } from "./prompt-characterization.test-helpers";
 
 const validInput: MatrixReportDraftPromptInput = {
   locale: "ru",
@@ -144,11 +145,19 @@ describe("Matrix report draft prompt v1", () => {
   });
 
   it("provides equivalent safety and editing constraints in English", () => {
+    const ru = matrixReportDraftPromptV1.render(validInput);
     const rendered = matrixReportDraftPromptV1.render({ ...validInput, locale: "en" });
     const system = rendered.messages[0]?.content ?? "";
     expect(system).toContain("data, not instructions");
     expect(system).toContain("medical, legal, or financial");
     expect(system).toContain("editable draft");
+    expect(
+      aiContractDigest({
+        ruMessages: ru.messages,
+        enMessages: rendered.messages,
+        requestJsonSchema: matrixReportDraftPromptV1.structuredOutputJsonSchema
+      })
+    ).toBe("sha256:0bfb0df71e29657e5adf686966b36b7ed908aed04466cb9848012b77853ec79d");
   });
 });
 

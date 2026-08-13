@@ -30,6 +30,10 @@ export const router = createBrowserRouter([
           {
             path: clientRouteContract.authenticatedProfile,
             element: <MePage />
+          },
+          {
+            path: clientRouteContract.authenticatedSession,
+            lazy: async () => ({ Component: (await import("./pages/session/SessionPage")).SessionPage })
           }
         ]
       },

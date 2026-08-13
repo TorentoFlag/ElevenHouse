@@ -146,28 +146,26 @@ describe("OpenAiProvider", () => {
       }
     });
 
-    expect(client.responses.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: "gpt-5.4-mini",
-        store: false,
-        safety_identifier: createAiSafetyIdentifier("owner"),
-        max_output_tokens: 900,
-        reasoning: { effort: "low" },
-        input: [
-          { role: "system", content: "Return JSON." },
-          { role: "user", content: "Title: Sun in Aries" }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "dictionary_entry_draft_v1",
-            schema: structuredOutputJsonSchema,
-            strict: true
-          }
-        },
-        tools: undefined
-      })
-    );
+    expect(client.responses.create).toHaveBeenCalledWith({
+      model: "gpt-5.4-mini",
+      store: false,
+      safety_identifier: createAiSafetyIdentifier("owner"),
+      max_output_tokens: 900,
+      reasoning: { effort: "low" },
+      input: [
+        { role: "system", content: "Return JSON." },
+        { role: "user", content: "Title: Sun in Aries" }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "dictionary_entry_draft_v1",
+          schema: structuredOutputJsonSchema,
+          strict: true
+        }
+      },
+      tools: undefined
+    });
   });
 
   it("passes no reasoning setting when prompt reasoning is none", async () => {

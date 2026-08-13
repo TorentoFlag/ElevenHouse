@@ -161,7 +161,9 @@ describe("MePageView", () => {
 
     expect(markup).toContain("Выберите услугу связанного астролога");
     expect(markup).toContain("Алиса Вега");
-    expect(markup).toContain("показываем только услуги астрологов, с которыми у вас уже есть связь");
+    expect(markup).toContain(
+      "показываем только услуги астрологов, с которыми у вас уже есть связь"
+    );
     expect(markup).toContain("Данные для записи");
     expect(markup).toMatch(
       /<button class="[^"]*primaryButton[^"]*" type="button"><svg[\s\S]* Записаться<\/button>/
@@ -239,6 +241,41 @@ describe("MePageView", () => {
     );
 
     expect(markup).toContain(clientCopyByLocale.ru.birthPlaceSearch.selectionRequired);
+  });
+
+  it("renders an explicit retry state when sessions cannot be loaded", () => {
+    const markup = renderToStaticMarkup(
+      <MePageView
+        activeSection="sessions"
+        birthPlaceSearch={defaultBirthPlaceSearch}
+        birthTimeOccurrenceCopy={clientCopyByLocale.ru.birthTimeOccurrence}
+        clientLocale="ru"
+        purchaseFlowCopy={clientCopyByLocale.ru.purchaseFlow}
+        form={defaultForm}
+        overview={{
+          astrologers: [],
+          birthData: null,
+          summary: {
+            directLinkOnly: true,
+            upcomingBookingCount: 0,
+            availableMaterialCount: 0,
+            unreadNotificationCount: 0,
+            activeSubscriptionCount: 0
+          }
+        }}
+        status="ready"
+        sessionsStatus="error"
+        onFormChange={vi.fn()}
+        onRetry={vi.fn()}
+        onRetrySessions={vi.fn()}
+        onSectionChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Не удалось загрузить консультации");
+    expect(markup).toContain("Повторить");
+    expect(markup).not.toContain("Пока нет предстоящих консультаций");
   });
 });
 

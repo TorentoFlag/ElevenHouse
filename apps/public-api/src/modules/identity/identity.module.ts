@@ -4,10 +4,9 @@ import {
   createDrizzleAuthSessionAuthenticationStore,
   createDrizzleAuthSessionRevocationUnitOfWork
 } from "@elevenhouse/db/auth-sessions";
-import {
-  createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork
-} from "@elevenhouse/db/account-registration";
+import { createDrizzlePasswordlessCustomerAccountRegistrationSessionUnitOfWork } from "@elevenhouse/db/account-registration";
 import { createDrizzlePasswordlessAuthUnitOfWork } from "@elevenhouse/db/passwordless-auth";
+import { createDrizzleMobileSessionAuthenticationStore } from "@elevenhouse/db/mobile-sessions";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { RedisModule } from "../redis/redis.module";
@@ -18,7 +17,8 @@ import { IdentityCurrentSessionService } from "./session/identity-current-sessio
 import { PublicSessionAuthGuard } from "./auth/identity-auth.guard";
 import {
   AUTH_SESSION_AUTHENTICATION_STORE,
-  AUTH_SESSION_REVOCATION_UNIT_OF_WORK
+  AUTH_SESSION_REVOCATION_UNIT_OF_WORK,
+  MOBILE_SESSION_AUTHENTICATION_STORE
 } from "./auth/identity-auth.tokens";
 import { IdentityLogoutService } from "./session/identity-logout.service";
 import { IdentityPasswordlessController } from "./passwordless/identity-passwordless.controller";
@@ -89,6 +89,12 @@ import {
       provide: AUTH_SESSION_AUTHENTICATION_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleAuthSessionAuthenticationStore(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: MOBILE_SESSION_AUTHENTICATION_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleMobileSessionAuthenticationStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {

@@ -3,6 +3,7 @@ import {
   numerologyInterpretationDraftPromptV1,
   renderNumerologyInterpretationText
 } from "./numerology-interpretation-draft.v1";
+import { aiContractDigest } from "./prompt-characterization.test-helpers";
 
 const strengthLines = [
   "goal",
@@ -79,5 +80,12 @@ describe("numerology interpretation draft prompt", () => {
     expect(renderNumerologyInterpretationText(output, "en")).toContain(
       "OVERVIEW\nОбщий обзор."
     );
+    expect(
+      aiContractDigest({
+        ruMessages: ru.messages,
+        enMessages: en.messages,
+        requestJsonSchema: numerologyInterpretationDraftPromptV1.structuredOutputJsonSchema
+      })
+    ).toBe("sha256:efae14c2ec2f1e257d1cde3448f4d9224519c50ffce2a5a7bf4178098fa02916");
   });
 });

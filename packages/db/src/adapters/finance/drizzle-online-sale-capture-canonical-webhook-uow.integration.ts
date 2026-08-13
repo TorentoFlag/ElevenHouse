@@ -7,6 +7,7 @@ import {
   createOrderEconomicsSnapshot,
   createRiskPolicySnapshot,
   digestFinanceCanonicalValueV1,
+  FINANCE_CLIENT_ORDER_CAPTURE_APPLIED_EVENT,
   hashFinanceCommandPayload
 } from "@elevenhouse/domain/finance-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -49,6 +50,7 @@ import { createDrizzleOnlineWalletChargebackResolutionUnitOfWork, OnlineWalletCh
 import { createDrizzleOnlineWalletRefundPositionReader } from "./drizzle-online-wallet-refund-position-reader";
 import { createDrizzleWebhookIngressStorageUnitOfWork } from "./drizzle-webhook-ingress-storage-uow";
 import { createDrizzleBookingCommandStore } from "../scheduling/drizzle-booking-command-store";
+import { createDrizzleClientSubscriptionCaptureDispatchUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-capture-dispatch-uow";
 import { createFinanceArtifactRegistry, type FinanceArtifactRegistry } from "./finance-artifact-registry";
 
 const baseDatabaseUrl = integrationDatabaseUrl(process.env.INTEGRATION_DATABASE_URL);
@@ -178,6 +180,44 @@ describe.sequential("canonical online-sale capture on the full PostgreSQL baseli
     } as never);
 
     expect(receipt.effect).toBe("applied_once");
+    await expect(
+      runtime.pool.query(
+        `select event.event_type,
+                event.aggregate_id::text as aggregate_id,
+                event.payload = jsonb_build_object(
+                  'captureApplicationReceiptId', event.aggregate_id::text
+                ) as exact_payload
+           from outbox_events event
+           join finance_online_sale_capture_applications application
+             on application.id = event.aggregate_id
+          where application.economic_payment_intent_id = $1
+            and event.event_type = $2`,
+        [fixture.intentId, FINANCE_CLIENT_ORDER_CAPTURE_APPLIED_EVENT]
+      )
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          event_type: FINANCE_CLIENT_ORDER_CAPTURE_APPLIED_EVENT,
+          exact_payload: true
+        }
+      ]
+    });
+    const captureApplication = (
+      await runtime.pool.query<Readonly<{ capture_application_id: string }>>(
+        `select id::text as capture_application_id
+           from finance_online_sale_capture_applications
+          where economic_payment_intent_id = $1`,
+        [fixture.intentId]
+      )
+    ).rows[0];
+    if (!captureApplication) throw new Error("Expected canonical online-sale capture application");
+    await expect(
+      createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
+        runtime.database
+      ).rehydrateAndDispatchClientOrderCapture({
+        captureApplicationReceiptId: captureApplication.capture_application_id
+      })
+    ).resolves.toEqual({ outcome: "not_client_subscription" });
     await expect(
       runtime.pool.query(
         `select

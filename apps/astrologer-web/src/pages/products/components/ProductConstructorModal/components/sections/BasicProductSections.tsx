@@ -297,6 +297,7 @@ function PaymentSection({
   const { uiCopy, actions } = controller;
   const showPackageControls = mode === "package" || draft.paymentModel === "pack";
   const showSubscriptionControls = mode === "subscription" || draft.paymentModel === "sub";
+  const isAstroDiary = draft.accessGrants.length === 1 && draft.accessGrants[0] === "journal";
 
   return (
     <section
@@ -347,15 +348,17 @@ function PaymentSection({
               onSelect={(value) => actions.updateDraft({ subscriptionPeriod: value })}
             />
           </div>
-          <LabeledStepper label={copy.trialDaysLabel}>
-            <NumberStepper
-              value={draft.trialDays ?? 0}
-              min={0}
-              decrementLabel={copy.trialDaysLabel}
-              incrementLabel={copy.trialDaysLabel}
-              onValueChange={(value) => actions.updateDraft({ trialDays: value || null })}
-            />
-          </LabeledStepper>
+          {!isAstroDiary ? (
+            <LabeledStepper label={copy.trialDaysLabel}>
+              <NumberStepper
+                value={draft.trialDays ?? 0}
+                min={0}
+                decrementLabel={copy.trialDaysLabel}
+                incrementLabel={copy.trialDaysLabel}
+                onValueChange={(value) => actions.updateDraft({ trialDays: value || null })}
+              />
+            </LabeledStepper>
+          ) : null}
         </div>
       ) : null}
       {mode === "all" && draft.paymentModel === "free" ? (
@@ -501,7 +504,7 @@ export function AccessGrantsSection({
         options={productAccessGrantOptions}
         selectedValues={draft.accessGrants}
         copyByValue={productCopy.accessGrants}
-        onToggle={(value) => controller.actions.toggleArrayValue("accessGrants", value)}
+        onToggle={controller.actions.toggleAccessGrant}
       />
     </section>
   );

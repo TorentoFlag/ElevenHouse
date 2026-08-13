@@ -4,6 +4,11 @@ const schema = z.object({
   REDIS_URL: z.string().trim().url().default("redis://localhost:6379"),
   WORKERS_HEALTH_HOST: z.string().trim().min(1).default("0.0.0.0"),
   WORKERS_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3010),
+  WORKERS_SESSIONS_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  WORKERS_SESSIONS_PROJECTION_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1_000),
+  WORKERS_SESSIONS_PROJECTION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(25),
+  WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  WORKERS_SESSIONS_MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(25),
   WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS: z.coerce
     .number()
     .int()
@@ -166,6 +171,11 @@ export type WorkersRuntimeConfig = ReturnType<typeof createWorkersRuntimeConfig>
 
 const productionRequiredKeys = [
   "REDIS_URL",
+  "WORKERS_SESSIONS_ENABLED",
+  "WORKERS_SESSIONS_PROJECTION_INTERVAL_MS",
+  "WORKERS_SESSIONS_PROJECTION_BATCH_SIZE",
+  "WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS",
+  "WORKERS_SESSIONS_MAINTENANCE_BATCH_SIZE",
   "WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS",
   "WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE",
   "WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS",
@@ -217,6 +227,13 @@ export function createWorkersRuntimeConfig(
     redisUrl: value.REDIS_URL,
     healthHost: value.WORKERS_HEALTH_HOST,
     healthPort: value.WORKERS_HEALTH_PORT,
+    sessions: {
+      enabled: value.WORKERS_SESSIONS_ENABLED,
+      projectionIntervalMs: value.WORKERS_SESSIONS_PROJECTION_INTERVAL_MS,
+      projectionBatchSize: value.WORKERS_SESSIONS_PROJECTION_BATCH_SIZE,
+      maintenanceIntervalMs: value.WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS,
+      maintenanceBatchSize: value.WORKERS_SESSIONS_MAINTENANCE_BATCH_SIZE
+    },
     outboxRelayIntervalMs: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS,
     outboxRelayBatchSize: value.WORKERS_CALCULATION_PDF_OUTBOX_RELAY_BATCH_SIZE,
     outboxLockTimeoutMs: value.WORKERS_CALCULATION_PDF_OUTBOX_LOCK_TIMEOUT_MS,

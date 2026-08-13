@@ -4,9 +4,15 @@ import type {
   ClientBirthPlaceCandidate,
   ClientCabinetOverviewResponse
 } from "@elevenhouse/contracts";
+import type { SessionSummary } from "@elevenhouse/contracts";
+import { Link } from "react-router";
 import type { FormEvent } from "react";
 import type { SupportedLocale } from "@elevenhouse/i18n";
-import type { BirthPlaceSearchCopy, BirthTimeOccurrenceCopy, ClientPurchaseFlowCopy } from "../../common/i18n/clientCopy";
+import type {
+  BirthPlaceSearchCopy,
+  BirthTimeOccurrenceCopy,
+  ClientPurchaseFlowCopy
+} from "../../common/i18n/clientCopy";
 import { BirthPlaceAutocomplete } from "../../features/client-profile/components/BirthPlaceAutocomplete";
 import { ClientPurchaseFlow } from "../../features/client-commerce/components/ClientPurchaseFlow";
 import {
@@ -43,8 +49,11 @@ export type MePageViewProps = {
   readonly form: BirthProfileFormState;
   readonly overview: ClientCabinetOverviewResponse | null;
   readonly status: ClientCabinetStatus;
+  readonly sessions?: readonly SessionSummary[];
+  readonly sessionsStatus?: "loading" | "ready" | "error";
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
   readonly onRetry: () => void;
+  readonly onRetrySessions?: () => void;
   readonly onSectionChange: (section: ClientCabinetSection) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly purchaseFlowCopy: ClientPurchaseFlowCopy;
@@ -71,8 +80,11 @@ export function MePageView({
   form,
   overview,
   status,
+  sessions = [],
+  sessionsStatus = "ready",
   onFormChange,
   onRetry,
+  onRetrySessions = () => undefined,
   onSectionChange,
   onSubmit,
   purchaseFlowCopy
@@ -201,7 +213,12 @@ export function MePageView({
             />
           ) : null}
           {activeSection === "sessions" ? (
-            <EmptySection title="Пока нет предстоящих консультаций." />
+            <SessionsSection
+              sessions={sessions}
+              status={sessionsStatus}
+              locale={clientLocale}
+              onRetry={onRetrySessions}
+            />
           ) : null}
           {activeSection === "feed" ? (
             <EmptySection title="Лента появится после публикаций связанных астрологов." />
@@ -223,6 +240,75 @@ export function MePageView({
         </div>
       </section>
     </main>
+  );
+}
+
+function SessionsSection({
+  sessions,
+  status,
+  locale,
+  onRetry
+}: {
+  readonly sessions: readonly SessionSummary[];
+  readonly status: "loading" | "ready" | "error";
+  readonly locale: SupportedLocale;
+  readonly onRetry: () => void;
+}) {
+  if (status === "loading") {
+    return (
+      <CenteredState
+        title={locale === "ru" ? "Загружаем консультации" : "Loading sessions"}
+        text={locale === "ru" ? "Проверяем доступные сессии." : "Checking your available sessions."}
+      />
+    );
+  }
+  if (status === "error") {
+    return (
+      <CenteredState
+        title={locale === "ru" ? "Не удалось загрузить консультации" : "Could not load sessions"}
+        text={locale === "ru" ? "Повторите запрос." : "Please retry the request."}
+        action={
+          <button className={styles.primaryButton} type="button" onClick={onRetry}>
+            {locale === "ru" ? "Повторить" : "Retry"}
+          </button>
+        }
+      />
+    );
+  }
+  if (sessions.length === 0)
+    return (
+      <EmptySection
+        title={locale === "ru" ? "Пока нет предстоящих консультаций." : "No upcoming sessions yet."}
+      />
+    );
+  return (
+    <section
+      className={styles.sessionList}
+      aria-label={locale === "ru" ? "Консультации" : "Sessions"}
+    >
+      {sessions.map((session) => (
+        <article className={styles.sessionCard} key={session.id}>
+          <div>
+            <span className={styles.eyebrow}>
+              {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
+                new Date(session.scheduledStartAt)
+              )}
+            </span>
+            <h2>{session.productTitle}</h2>
+            <p>
+              {
+                session.participants.find((participant) => participant.role === "astrologer")
+                  ?.displayName
+              }
+            </p>
+          </div>
+          <Link className={styles.primaryButton} to={`/sessions/${session.id}`}>
+            <Icon iconName="video" size={17} />{" "}
+            {locale === "ru" ? "Войти в сессию" : "Join session"}
+          </Link>
+        </article>
+      ))}
+    </section>
   );
 }
 
@@ -343,7 +429,11 @@ function BookingEntrySection({
   return (
     <div className={styles.bookingGrid}>
       <section className={styles.sectionCard}>
-          <ClientPurchaseFlow astrologers={overview.astrologers} copy={purchaseFlowCopy} locale={clientLocale} />
+        <ClientPurchaseFlow
+          astrologers={overview.astrologers}
+          copy={purchaseFlowCopy}
+          locale={clientLocale}
+        />
       </section>
 
       <section className={styles.sectionCard}>

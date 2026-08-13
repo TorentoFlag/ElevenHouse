@@ -35,6 +35,9 @@ describe("astrologerRoutes", () => {
     const shellRoute = protectedRoute?.children?.find(
       (route) => isValidElement(route.element) && route.element.type === AstrologerAppLayout
     );
+    const sessionRoute = protectedRoute?.children?.find(
+      (route) => route.path === "/sessions/:sessionId"
+    );
     const dashboardRoute = shellRoute?.children?.find((route) => route.path === "/dashboard");
     const productsRoute = shellRoute?.children?.find((route) => route.path === "/products");
     const financeRoute = shellRoute?.children?.find((route) => route.path === "/finance");
@@ -58,6 +61,7 @@ describe("astrologerRoutes", () => {
     expect(isValidElement(shellRoute?.element) && shellRoute.element.type).toBe(
       AstrologerAppLayout
     );
+    expect(sessionRoute?.lazy).toBeTypeOf("function");
     expect(isValidElement(dashboardRoute?.element) && dashboardRoute.element.type).toBe(
       DashboardPage
     );

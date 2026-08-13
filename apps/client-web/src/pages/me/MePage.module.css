@@ -855,3 +855,30 @@
     grid-column: 1 / -1;
   }
 }
+.sessionList {
+  display: grid;
+  gap: 14px;
+}
+
+.sessionCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid #e8e2ef;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.sessionCard h2,
+.sessionCard p {
+  margin: 4px 0 0;
+}
+
+@media (max-width: 680px) {
+  .sessionCard {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

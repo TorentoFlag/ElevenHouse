@@ -27,6 +27,7 @@ export * from "./online-wallet-chargeback-cases.schema";
 export * from "./online-wallet-chargeback-resolutions.schema";
 export * from "./online-payouts.schema";
 export * from "./capture-application.schema";
+export * from "./client-subscription-capture-dispatch.schema";
 export * from "./wallet.schema";
 export * from "./refund-cases.schema";
 export * from "./refund-candidates.schema";

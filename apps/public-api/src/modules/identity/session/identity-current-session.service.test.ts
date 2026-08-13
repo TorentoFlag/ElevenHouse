@@ -2,7 +2,9 @@ import { ConfigService } from "@nestjs/config";
 import { hashSessionToken } from "@elevenhouse/auth";
 import type {
   AuthSessionAuthenticationStore,
-  AuthenticatedSessionContext
+  AuthenticatedMobileSessionContext,
+  AuthenticatedSessionContext,
+  MobileSessionAuthenticationStore
 } from "@elevenhouse/domain";
 import { describe, expect, it, vi } from "vitest";
 import { IdentityCurrentSessionService } from "./identity-current-session.service";
@@ -10,7 +12,8 @@ import type { SystemClock } from "../../../common/system-clock.js";
 
 function createService(
   store: AuthSessionAuthenticationStore,
-  sessionCookieName = "elevenhouse_public_session"
+  sessionCookieName = "elevenhouse_public_session",
+  mobileStore: MobileSessionAuthenticationStore = { findByAccessTokenHash: vi.fn(async () => null) }
 ): IdentityCurrentSessionService {
   const clock: SystemClock = {
     now: vi.fn(() => new Date("2026-06-15T10:00:00.000Z"))
@@ -25,10 +28,90 @@ function createService(
     })
   } as unknown as ConfigService;
 
-  return new IdentityCurrentSessionService(store, clock, configService);
+  return new IdentityCurrentSessionService(store, mobileStore, clock, configService);
 }
 
 describe("IdentityCurrentSessionService", () => {
+  it("resolves a client mobile bearer session and marks it for CSRF bypass", async () => {
+    const mobileContext = {
+      session: {
+        id: "22222222-2222-4222-8222-222222222222",
+        userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+        platform: "android",
+        deviceLabel: "Pixel",
+        status: "active",
+        accessTokenHash: hashSessionToken("raw-mobile-token"),
+        accessTokenExpiresAt: "2026-06-15T11:00:00.000Z",
+        createdAt: "2026-06-15T09:00:00.000Z",
+        lastUsedAt: "2026-06-15T09:00:00.000Z",
+        expiresAt: "2026-06-22T09:00:00.000Z"
+      },
+      user: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        createdAt: "2026-06-15T09:00:00.000Z",
+        updatedAt: "2026-06-15T09:00:00.000Z"
+      },
+      roleAssignments: [
+        {
+          id: "role_client",
+          userId: "8e14390f-3db1-4d1c-9344-55679c778427",
+          role: "client",
+          assignedAt: "2026-06-15T09:00:00.000Z"
+        }
+      ]
+    } satisfies AuthenticatedMobileSessionContext;
+    const mobileStore: MobileSessionAuthenticationStore = {
+      findByAccessTokenHash: vi.fn(async () => mobileContext)
+    };
+    const request = {
+      headers: { authorization: "Bearer raw-mobile-token" }
+    };
+
+    await expect(
+      createService(
+        { findByTokenHash: vi.fn() },
+        "elevenhouse_public_session",
+        mobileStore
+      ).resolveCurrentCustomerAccount(request)
+    ).resolves.toEqual({
+      account: {
+        id: "8e14390f-3db1-4d1c-9344-55679c778427",
+        status: "active",
+        roles: ["client"]
+      }
+    });
+    expect(request).toMatchObject({
+      currentMobileSessionId: "22222222-2222-4222-8222-222222222222"
+    });
+  });
+
+  it("does not fall back to a cookie when a bearer credential is invalid", async () => {
+    const cookieStore: AuthSessionAuthenticationStore = {
+      findByTokenHash: vi.fn()
+    };
+    const mobileStore: MobileSessionAuthenticationStore = {
+      findByAccessTokenHash: vi.fn(async () => null)
+    };
+
+    await expect(
+      createService(
+        cookieStore,
+        "elevenhouse_public_session",
+        mobileStore
+      ).resolveCurrentCustomerAccount({
+        headers: {
+          authorization: "Bearer invalid-mobile-token",
+          cookie: "elevenhouse_public_session=valid-cookie-token"
+        }
+      })
+    ).resolves.toBeNull();
+    expect(mobileStore.findByAccessTokenHash).toHaveBeenCalledWith(
+      hashSessionToken("invalid-mobile-token")
+    );
+    expect(cookieStore.findByTokenHash).not.toHaveBeenCalled();
+  });
+
   it("resolves the current account from the public session cookie", async () => {
     const authenticatedContext = {
       session: {

@@ -94,8 +94,18 @@ export function createDrizzleClientSubscriptionCreationUnitOfWork(
   database: ElevenHouseDatabase
 ): ClientSubscriptionCreationUnitOfWork {
   return {
-    execute: (input) =>
-      database.transaction(async (transaction): Promise<ClientSubscriptionCreationExecution> => {
+    execute: (input) => database.transaction((transaction) => executeDrizzleClientSubscriptionCreationInTransaction(transaction, input))
+  };
+}
+
+/**
+ * Capture-purpose dispatch composes this under its existing finance transaction. Other callers
+ * use the public UoW wrapper.
+ */
+export async function executeDrizzleClientSubscriptionCreationInTransaction(
+  transaction: CreationTransaction,
+  input: Parameters<ClientSubscriptionCreationUnitOfWork["execute"]>[0]
+): Promise<ClientSubscriptionCreationExecution> {
         await transaction.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${`client-subscription-creation:${input.orderId}:${input.idempotencyKey}`}, 0))`
         );
@@ -261,8 +271,6 @@ export function createDrizzleClientSubscriptionCreationUnitOfWork(
           createdAt: sql`clock_timestamp()`
         });
         return { ...decision, persistenceReceipt: receipt };
-      })
-  };
 }
 
 type CreationTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
