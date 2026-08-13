@@ -6,7 +6,10 @@ import {
   compileFlowGraphV2,
   completeFlowWorkItem,
   createBuiltInFlowNodeExecutorRegistry,
+  createClientLifecycleChangedFlowEnrollmentRequestedPayload,
+  createFirstInboundMessageFlowEnrollmentRequestedPayload,
   createFlowRuntimeRequirementKeys,
+  createProductPurchasedFlowEnrollmentRequestedPayload,
   decideDurableFlowApproval,
   interpretFlowExecutionClaim,
   replaceFlowRuntimeRolloutPolicy,
@@ -23,6 +26,7 @@ import {
   createDrizzleFlowApprovalStore,
   createDrizzleFlowBirthDataReadinessReader,
   createDrizzleFlowBookingLifecycleStore,
+  createDrizzleFlowClientEventEnrollmentStore,
   createDrizzleFlowEnrollmentControlStore,
   createDrizzleFlowExecutionSignalStore,
   createDrizzleFlowRuntimeControlCommandStore,
@@ -62,6 +66,9 @@ async function main() {
     await runApprovalScenario(ownerUserId, ownerSubjectId, clientUserId, "approved"),
     await runApprovalScenario(ownerUserId, ownerSubjectId, clientUserId, "rejected"),
     await runBookingConfirmedScenario(ownerUserId, ownerSubjectId, clientUserId, productId),
+    await runProductPurchasedStartScenario(ownerUserId, ownerSubjectId),
+    await runFirstInboundMessageStartScenario(ownerUserId, ownerSubjectId),
+    await runClientLifecycleChangedStartScenario(ownerUserId, ownerSubjectId),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, true),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, false),
     await runNatalChartRequestScenario(ownerUserId, ownerSubjectId),
@@ -232,6 +239,167 @@ async function runBookingConfirmedScenario(
     enrollment,
     execution,
     persisted: await runPersistence(runId)
+  };
+}
+
+async function runProductPurchasedStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const productId = await createProduct(ownerUserId);
+  const graph = productPurchasedGraph(productId);
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  await createRelationship(ownerUserId, scenarioClientUserId);
+  const order = await createPaidOrder(ownerUserId, scenarioClientUserId, productId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createProductPurchasedFlowEnrollmentRequestedPayload({
+      orderId: order.orderId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      productId,
+      capturedAt: order.updatedAt
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  const replay = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createProductPurchasedFlowEnrollmentRequestedPayload({
+      orderId: order.orderId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      productId,
+      capturedAt: order.updatedAt
+    })
+  });
+  return {
+    scenario: "product_purchased_completed",
+    orderId: order.orderId,
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    replay: { status: replay.status, replayed: replay.replayed, runCount: replay.runs.length },
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected product-purchased run"))
+  };
+}
+
+async function runFirstInboundMessageStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = firstInboundMessageGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const thread = await createMessagingThread(ownerUserId, scenarioClientUserId, true);
+  const message = await createInboundMessage(thread);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createFirstInboundMessageFlowEnrollmentRequestedPayload({
+      messageId: message.messageId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      receivedAt: message.receivedAt
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  const pastMessage = await createInboundMessage(thread);
+  const pastEnrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createFirstInboundMessageFlowEnrollmentRequestedPayload({
+      messageId: pastMessage.messageId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      receivedAt: "2000-01-01T00:00:00.000Z"
+    })
+  });
+  return {
+    scenario: "first_inbound_message_completed",
+    messageId: message.messageId,
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    pastEnrollment: {
+      status: pastEnrollment.status,
+      replayed: pastEnrollment.replayed,
+      runCount: pastEnrollment.runs.length
+    },
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected first-inbound-message run"))
+  };
+}
+
+async function runClientLifecycleChangedStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = clientLifecycleChangedGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const history = await createClientLifecycleHistory({
+    relationshipId,
+    sourceEventId: `${qaPrefix}-lifecycle-${randomUUID()}`,
+    fromStatus: "new",
+    toStatus: "active"
+  });
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createClientLifecycleChangedFlowEnrollmentRequestedPayload({
+      historyId: history.historyId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      fromStatus: "new",
+      toStatus: "active",
+      occurredAt: history.occurredAt
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  const nonMatchingHistory = await createClientLifecycleHistory({
+    relationshipId,
+    sourceEventId: `${qaPrefix}-lifecycle-${randomUUID()}`,
+    fromStatus: "active",
+    toStatus: "inactive"
+  });
+  const nonMatchingEnrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createClientLifecycleChangedFlowEnrollmentRequestedPayload({
+      historyId: nonMatchingHistory.historyId,
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      fromStatus: "active",
+      toStatus: "inactive",
+      occurredAt: nonMatchingHistory.occurredAt
+    })
+  });
+  return {
+    scenario: "client_lifecycle_changed_completed",
+    historyId: history.historyId,
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    nonMatchingEnrollment: {
+      status: nonMatchingEnrollment.status,
+      replayed: nonMatchingEnrollment.replayed,
+      runCount: nonMatchingEnrollment.runs.length
+    },
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected lifecycle run"))
   };
 }
 
@@ -855,7 +1023,34 @@ async function createMessagingThread(ownerUserId: string, clientUserId: string, 
      values ($1, $2, 'telegram', true, $3)`,
     [threadId, externalIdentityId, now]
   );
-  return { threadId, channelConnectionId };
+  return { threadId, channelConnectionId, externalIdentityId };
+}
+
+async function createInboundMessage(input: {
+  readonly threadId: string;
+  readonly channelConnectionId: string;
+  readonly externalIdentityId: string;
+}) {
+  const now = await databaseNow();
+  const message = await runtime.pool.query<{ id: string; created_at: Date }>(
+    `insert into messages
+      (thread_id, channel_connection_id, external_identity_id, direction, sender_kind,
+       provider_message_id, provider_update_id, provider_sent_at, content_type, text,
+       status, created_at, updated_at)
+     values ($1, $2, $3, 'inbound', 'client', $4, $5, $6, 'text', 'QA inbound message',
+       'received', $6, $6)
+     returning id, created_at`,
+    [
+      input.threadId,
+      input.channelConnectionId,
+      input.externalIdentityId,
+      `provider-message-${randomUUID()}`,
+      `provider-update-${randomUUID()}`,
+      now
+    ]
+  );
+  const row = message.rows[0] ?? raise("Expected inbound message");
+  return { messageId: row.id, receivedAt: row.created_at.toISOString() };
 }
 
 async function createProduct(ownerUserId: string) {
@@ -889,6 +1084,84 @@ async function createProduct(ownerUserId: string) {
   } finally {
     client.release();
   }
+}
+
+async function createPaidOrder(ownerUserId: string, clientUserId: string, productId: string) {
+  const financePolicyId = await createFinancePolicySnapshot();
+  const tariff = await runtime.pool.query<{
+    tariff_series_id: string;
+    tariff_version: number;
+    tariff_version_digest: string;
+    commission_bps_snapshot: number;
+  }>(
+    `select tariff_series_id, tariff_version, tariff_version_digest, commission_bps_snapshot
+       from platform_tariff_subscriptions
+      where owner_user_id = $1 and state = 'active'
+      order by created_at desc
+      limit 1`,
+    [ownerUserId]
+  );
+  const tariffRow = tariff.rows[0] ?? raise("Expected active tariff subscription");
+  const order = await runtime.pool.query<{ id: string; updated_at: Date }>(
+    `insert into orders
+       (client_user_id, astrologer_user_id, product_id, status, product_title_snapshot,
+        gross_amount_minor, gross_currency, platform_fee_amount_minor, platform_fee_currency,
+        astrologer_net_amount_minor, astrologer_net_currency, finance_policy_snapshot_id,
+        finance_policy_risk_tier, finance_policy_hold_duration_hours, finance_policy_reserve_bps,
+        finance_policy_reserve_release_delay_days, tariff_series_id, tariff_version,
+        tariff_version_digest, tariff_commission_bps, finance_policy_provider_settlement_required,
+        created_at, updated_at)
+     values ($1, $2, $3, 'paid', 'QA consultation', 10000, 'RUB', 0, 'RUB',
+       10000, 'RUB', $4, 'standard', 0, 0, 0, $5, $6, $7, $8, false,
+       transaction_timestamp(), transaction_timestamp())
+     returning id, updated_at`,
+    [
+      clientUserId,
+      ownerUserId,
+      productId,
+      financePolicyId,
+      tariffRow.tariff_series_id,
+      tariffRow.tariff_version,
+      tariffRow.tariff_version_digest,
+      tariffRow.commission_bps_snapshot
+    ]
+  );
+  const row = order.rows[0] ?? raise("Expected paid order");
+  return { orderId: row.id, updatedAt: row.updated_at.toISOString() };
+}
+
+async function createFinancePolicySnapshot() {
+  const version = await runtime.pool.query<{ next_version: number }>(
+    "select coalesce(max(policy_version), 0) + 1 as next_version from finance_policies"
+  );
+  const policy = await runtime.pool.query<{ id: string }>(
+    `insert into finance_policies
+       (policy_version, risk_tier, hold_duration_hours, reserve_bps,
+        reserve_release_delay_days, provider_settlement_required, is_active)
+     values ($1, 'standard', 0, 0, 0, false, false)
+     returning id`,
+    [version.rows[0]?.next_version ?? 1]
+  );
+  return policy.rows[0]?.id ?? raise("Expected finance policy");
+}
+
+async function createClientLifecycleHistory(input: {
+  readonly relationshipId: string;
+  readonly sourceEventId: string;
+  readonly fromStatus: "new" | "active" | "waiting_for_client" | "in_service" | "inactive";
+  readonly toStatus: "new" | "active" | "waiting_for_client" | "in_service" | "inactive";
+}) {
+  const history = await runtime.pool.query<{ id: string; occurred_at: Date }>(
+    `insert into client_lifecycle_history
+       (relationship_id, source_event_id, cause_kind, before_status, after_status,
+        disposition, actor_user_id, occurred_at, created_at)
+     values ($1, $2, 'manual_astrologer_action', $3, $4, 'applied', null,
+       transaction_timestamp(), transaction_timestamp())
+     returning id, occurred_at`,
+    [input.relationshipId, input.sourceEventId, input.fromStatus, input.toStatus]
+  );
+  const row = history.rows[0] ?? raise("Expected client lifecycle history");
+  return { historyId: row.id, occurredAt: row.occurred_at.toISOString() };
 }
 
 async function createActiveTariff(ownerUserId: string, automationLimit: number) {
@@ -976,6 +1249,9 @@ function compactResult(result: QaResult) {
   return {
     scenario: result.scenario,
     enrollment: summarizeEnrollment(result.enrollment),
+    replay: result.replay,
+    pastEnrollment: result.pastEnrollment,
+    nonMatchingEnrollment: result.nonMatchingEnrollment,
     firstExecution: summarizeExecution(result.firstExecution),
     execution: summarizeExecution(result.execution),
     secondExecution: summarizeExecution(result.secondExecution),
@@ -1207,6 +1483,97 @@ function bookingCompletedGraph(productId: string): FlowGraphV2 {
     ],
     edges: [
       { id: "booking-done", sourceNodeId: "booking", targetNodeId: "done", sourceHandle: "next" }
+    ]
+  });
+}
+
+function productPurchasedGraph(productId: string): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "purchase",
+        kind: "product_purchased",
+        displayTitle: "Product purchased",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: [productId], enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_product_purchased" }
+      }
+    ],
+    edges: [
+      { id: "purchase-done", sourceNodeId: "purchase", targetNodeId: "done", sourceHandle: "next" }
+    ]
+  });
+}
+
+function firstInboundMessageGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "first-message",
+        kind: "first_inbound_message",
+        displayTitle: "First inbound message",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_first_inbound_message" }
+      }
+    ],
+    edges: [
+      {
+        id: "first-message-done",
+        sourceNodeId: "first-message",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  });
+}
+
+function clientLifecycleChangedGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "lifecycle",
+        kind: "client_lifecycle_changed",
+        displayTitle: "Client lifecycle changed",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { fromStatus: "new", toStatus: "active", enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_client_lifecycle_changed" }
+      }
+    ],
+    edges: [
+      {
+        id: "lifecycle-done",
+        sourceNodeId: "lifecycle",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
     ]
   });
 }
