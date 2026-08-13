@@ -143,10 +143,12 @@ export function planFlowClientEventEnrollment(input: {
     (effectiveTo !== null && occurredAt >= effectiveTo) ||
     sha256CanonicalJson(manifest as unknown as CanonicalJson) !== input.candidate.manifestDigest ||
     !verifyFlowCapabilityManifestForGraph({ graph, capabilityManifest: manifest })
-      .valid ||
-    manifest.triggerMatcher.kind !== input.event.event.eventKind
+      .valid
   ) {
     return invalid("candidate is inconsistent with the client event");
+  }
+  if (manifest.triggerMatcher.kind !== input.event.event.eventKind) {
+    return { status: "not_matched", reason: "trigger_kind" };
   }
   const match = matchFlowClientTriggerEvent({ graph, event: input.event.event });
   if (match.status === "not_matched") return match;

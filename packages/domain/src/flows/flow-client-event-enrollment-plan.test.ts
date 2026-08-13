@@ -61,4 +61,55 @@ describe("client trigger enrollment plan", () => {
     };
     expect(planFlowClientEventEnrollment({ event, candidate: { activationEpochId: "66666666-6666-4666-8666-666666666666", flowId: "77777777-7777-4777-8777-777777777777", flowVersionId: "88888888-8888-4888-8888-888888888888", ownerUserId, effectiveFrom: "2026-08-13T09:00:00.000Z", effectiveTo: null, rolloutPolicyRevision: 1, manifestDigest: sha256CanonicalJson({ schemaVersion: "flow-capability-manifest.v2", executionSemanticsVersion: "flow-interpreter.v1", triggerMatcher: { kind: "product_purchased", configSchemaVersion: 1, matcherContractVersion: 1, eventSchemaVersion: 1 }, nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }], requiredCapabilities: ["finance.events.client_order_captured", "products.read"] }), graph, capabilityManifest: { schemaVersion: "flow-capability-manifest.v2", executionSemanticsVersion: "flow-interpreter.v1", triggerMatcher: { kind: "product_purchased", configSchemaVersion: 1, matcherContractVersion: 1, eventSchemaVersion: 1 }, nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }], requiredCapabilities: ["finance.events.client_order_captured", "products.read"] } } })).toMatchObject({ status: "matched", occurrenceKey: event.occurrenceKey, enrollmentPolicyKey: "after_previous_terminal" });
   });
+
+  it("skips active flows for other client-event trigger kinds without failing enrollment", () => {
+    const event = normalizeFlowClientEvent({
+      ownerUserId,
+      relationshipId: "44444444-4444-4444-8444-444444444444",
+      source: "finance",
+      sourceEventId: "order:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:captured",
+      event: { eventKind: "product_purchased", clientUserId, productId },
+      occurrenceKey: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      occurredAtUtc: "2026-08-13T11:00:00.000Z",
+      payloadSchemaVersion: 1,
+      allowlistedPayload: { productId, orderId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.product-purchased.v1",
+      dedupeKey: "order:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:captured"
+    });
+    const graph = {
+      schemaVersion: "flow-graph.v2",
+      nodes: [
+        { id: "first-message", kind: "first_inbound_message", displayTitle: "First", configSchemaVersion: 1, executorContractVersion: 1, config: { enrollmentPolicy: "once_per_client" } },
+        { id: "done", kind: "completed", displayTitle: "Done", configSchemaVersion: 1, executorContractVersion: 1, config: { goalKey: "done" } }
+      ],
+      edges: [{ id: "first-done", sourceNodeId: "first-message", targetNodeId: "done", sourceHandle: "next" }]
+    };
+    const capabilityManifest = {
+      schemaVersion: "flow-capability-manifest.v2",
+      executionSemanticsVersion: "flow-interpreter.v1",
+      triggerMatcher: { kind: "first_inbound_message", configSchemaVersion: 1, matcherContractVersion: 1, eventSchemaVersion: 1 },
+      nodeExecutors: [{ kind: "completed", configSchemaVersion: 1, executorContractVersion: 1 }],
+      requiredCapabilities: ["messaging.events.first_inbound_message"]
+    };
+
+    expect(
+      planFlowClientEventEnrollment({
+        event,
+        candidate: {
+          activationEpochId: "66666666-6666-4666-8666-666666666666",
+          flowId: "77777777-7777-4777-8777-777777777777",
+          flowVersionId: "88888888-8888-4888-8888-888888888888",
+          ownerUserId,
+          effectiveFrom: "2026-08-13T09:00:00.000Z",
+          effectiveTo: null,
+          rolloutPolicyRevision: 1,
+          manifestDigest: sha256CanonicalJson(capabilityManifest),
+          graph,
+          capabilityManifest
+        }
+      })
+    ).toEqual({ status: "not_matched", reason: "trigger_kind" });
+  });
 });
