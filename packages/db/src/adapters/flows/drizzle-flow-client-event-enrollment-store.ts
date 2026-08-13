@@ -127,6 +127,52 @@ function normalizeClientEventRequest(
   subject: ClientSubject
 ): FlowNormalizedClientEventV1 {
   if (request.subjectId !== subject.clientUserId) throw invalidPayload();
+  if (request.eventKind === "new_lead") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "clients",
+      sourceEventId: request.sourceEventId,
+      event: { eventKind: "new_lead", clientUserId: subject.clientUserId },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.new-lead.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
+  if (request.eventKind === "free_product_received") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "product",
+      sourceEventId: request.sourceEventId,
+      event: {
+        eventKind: "free_product_received",
+        clientUserId: subject.clientUserId,
+        productId: request.payload.productId
+      },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId,
+        receiptId: request.payload.receiptId,
+        productId: request.payload.productId
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.free-product-received.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
   if (request.eventKind === "product_purchased") {
     return normalizeFlowClientEvent({
       ownerUserId: subject.ownerUserId,
@@ -174,16 +220,116 @@ function normalizeClientEventRequest(
       dedupeKey: request.sourceEventId
     });
   }
+  if (request.eventKind === "astro_event") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "astro_calendar",
+      sourceEventId: request.sourceEventId,
+      event: {
+        eventKind: "astro_event",
+        clientUserId: subject.clientUserId,
+        eventCode: request.payload.eventCode
+      },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId,
+        astroEventId: request.payload.astroEventId,
+        eventCode: request.payload.eventCode
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.astro-event.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
+  if (request.eventKind === "client_lifecycle_changed") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "clients",
+      sourceEventId: request.sourceEventId,
+      event: {
+        eventKind: "client_lifecycle_changed",
+        clientUserId: subject.clientUserId,
+        fromStatus: request.payload.fromStatus,
+        toStatus: request.payload.toStatus
+      },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId,
+        historyId: request.payload.historyId,
+        fromStatus: request.payload.fromStatus,
+        toStatus: request.payload.toStatus
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.client-lifecycle-changed.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
+  if (request.eventKind === "schedule_time") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "crm",
+      sourceEventId: request.sourceEventId,
+      event: {
+        eventKind: "schedule_time",
+        clientUserId: subject.clientUserId,
+        scheduleKey: request.payload.scheduleKey
+      },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId,
+        scheduleOccurrenceId: request.payload.scheduleOccurrenceId,
+        scheduleKey: request.payload.scheduleKey
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.schedule-time.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
+  if (request.eventKind === "review_received") {
+    return normalizeFlowClientEvent({
+      ownerUserId: subject.ownerUserId,
+      relationshipId: subject.relationshipId,
+      source: "crm",
+      sourceEventId: request.sourceEventId,
+      event: { eventKind: "review_received", clientUserId: subject.clientUserId },
+      occurrenceKey: request.occurrenceKey,
+      occurredAtUtc: request.occurredAt,
+      payloadSchemaVersion: 1,
+      allowlistedPayload: {
+        clientUserId: subject.clientUserId,
+        relationshipId: subject.relationshipId,
+        reviewId: request.payload.reviewId
+      },
+      classification: "personal",
+      redactionVersion: 1,
+      retentionPolicyId: "flows.review-received.v1",
+      dedupeKey: request.sourceEventId
+    });
+  }
   return normalizeFlowClientEvent({
     ownerUserId: subject.ownerUserId,
     relationshipId: subject.relationshipId,
-    source: "clients",
+    source: "order",
     sourceEventId: request.sourceEventId,
     event: {
-      eventKind: "client_lifecycle_changed",
+      eventKind: "subscription_event",
       clientUserId: subject.clientUserId,
-      fromStatus: request.payload.fromStatus,
-      toStatus: request.payload.toStatus
+      eventType: request.payload.eventType
     },
     occurrenceKey: request.occurrenceKey,
     occurredAtUtc: request.occurredAt,
@@ -191,13 +337,12 @@ function normalizeClientEventRequest(
     allowlistedPayload: {
       clientUserId: subject.clientUserId,
       relationshipId: subject.relationshipId,
-      historyId: request.payload.historyId,
-      fromStatus: request.payload.fromStatus,
-      toStatus: request.payload.toStatus
+      subscriptionEventId: request.payload.subscriptionEventId,
+      eventType: request.payload.eventType
     },
     classification: "personal",
     redactionVersion: 1,
-    retentionPolicyId: "flows.client-lifecycle-changed.v1",
+    retentionPolicyId: "flows.subscription-event.v1",
     dedupeKey: request.sourceEventId
   });
 }
@@ -243,10 +388,7 @@ async function resolveClientSubject(
     };
   }
 
-  const relationshipId =
-    request.eventKind === "first_inbound_message"
-      ? request.payload.relationshipId
-      : request.payload.relationshipId;
+  const relationshipId = request.payload.relationshipId;
   const rows = await transaction
     .select({
       ownerUserId: clientAstrologerRelationships.astrologerUserId,
@@ -619,7 +761,7 @@ async function replayExistingEvent(
       activationEpochId: row.activationEpochId
     };
   });
-  if ((existing.ingestionOutcome === "enrolled") !== (runs.length > 0)) throw provenanceConflict();
+  if ((existing.ingestionOutcome === "enrolled") !== runs.length > 0) throw provenanceConflict();
   return { status: existing.ingestionOutcome, replayed: true, eventId: existing.id, runs };
 }
 
@@ -652,7 +794,10 @@ function assertExistingEventMatches(
 function createRunSnapshot(input: {
   readonly normalized: FlowNormalizedClientEventV1;
   readonly processedAt: Date;
-  readonly plan: Extract<ReturnType<typeof planFlowClientEventEnrollment>, { readonly status: "matched" }>;
+  readonly plan: Extract<
+    ReturnType<typeof planFlowClientEventEnrollment>,
+    { readonly status: "matched" }
+  >;
   readonly authority: ExecutionAuthority;
 }): FlowRunSnapshotV2 {
   return flowRunSnapshotV2Schema.parse({
@@ -676,7 +821,9 @@ function createRunSnapshot(input: {
   });
 }
 
-async function readDatabaseInstant(transaction: FlowClientEventEnrollmentTransaction): Promise<Date> {
+async function readDatabaseInstant(
+  transaction: FlowClientEventEnrollmentTransaction
+): Promise<Date> {
   const result = await transaction.execute<{ epochMilliseconds: string }>(sql`
     select (extract(epoch from clock_timestamp()) * 1000)::text as "epochMilliseconds"
   `);

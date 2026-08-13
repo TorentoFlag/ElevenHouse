@@ -16,7 +16,14 @@ export type FlowNormalizedClientEventV1 = {
   readonly schemaVersion: "flow-normalized-event.v1";
   readonly ownerUserId: string;
   readonly relationshipId: string;
-  readonly source: "finance" | "messaging" | "clients";
+  readonly source:
+    | "finance"
+    | "messaging"
+    | "clients"
+    | "product"
+    | "astro_calendar"
+    | "crm"
+    | "order";
   readonly sourceEventId: string;
   readonly event: FlowClientTriggerEvent;
   readonly occurrenceKey: string;
@@ -44,7 +51,10 @@ export type FlowClientEventEnrollmentCandidate = {
 };
 
 export type FlowClientEventEnrollmentPlan =
-  | { readonly status: "not_matched"; readonly reason: "trigger_kind" | "product_filter" | "status_filter" }
+  | {
+      readonly status: "not_matched";
+      readonly reason: "trigger_kind" | "product_filter" | "status_filter" | "event_filter";
+    }
   | {
       readonly status: "matched";
       readonly activationEpochId: string;
@@ -111,7 +121,9 @@ export class FlowClientEventEnrollmentPlanIntegrityError extends Error {
   override readonly name = "FlowClientEventEnrollmentPlanIntegrityError";
 }
 
-export function normalizeFlowClientEvent(input: Omit<FlowNormalizedClientEventV1, "schemaVersion" | "canonicalPayloadHash">): FlowNormalizedClientEventV1 {
+export function normalizeFlowClientEvent(
+  input: Omit<FlowNormalizedClientEventV1, "schemaVersion" | "canonicalPayloadHash">
+): FlowNormalizedClientEventV1 {
   const normalized = { schemaVersion: "flow-normalized-event.v1", ...input } as const;
   if (!Number.isFinite(Date.parse(normalized.occurredAtUtc))) {
     throw new FlowClientEventEnrollmentPlanIntegrityError("client trigger event time is invalid");
@@ -127,13 +139,17 @@ export function planFlowClientEventEnrollment(input: {
   readonly candidate: FlowClientEventEnrollmentCandidate;
 }): FlowClientEventEnrollmentPlan {
   const graphResult = flowGraphV2Schema.safeParse(input.candidate.graph);
-  const manifestResult = flowCapabilityManifestV2Schema.safeParse(input.candidate.capabilityManifest);
-  if (!graphResult.success || !manifestResult.success) return invalid("candidate has no valid V2 graph/manifest");
+  const manifestResult = flowCapabilityManifestV2Schema.safeParse(
+    input.candidate.capabilityManifest
+  );
+  if (!graphResult.success || !manifestResult.success)
+    return invalid("candidate has no valid V2 graph/manifest");
   const graph = graphResult.data;
   const manifest = manifestResult.data;
   const occurredAt = Date.parse(input.event.occurredAtUtc);
   const effectiveFrom = Date.parse(input.candidate.effectiveFrom);
-  const effectiveTo = input.candidate.effectiveTo === null ? null : Date.parse(input.candidate.effectiveTo);
+  const effectiveTo =
+    input.candidate.effectiveTo === null ? null : Date.parse(input.candidate.effectiveTo);
   if (
     input.candidate.ownerUserId !== input.event.ownerUserId ||
     !Number.isFinite(occurredAt) ||
@@ -142,8 +158,7 @@ export function planFlowClientEventEnrollment(input: {
     occurredAt < effectiveFrom ||
     (effectiveTo !== null && occurredAt >= effectiveTo) ||
     sha256CanonicalJson(manifest as unknown as CanonicalJson) !== input.candidate.manifestDigest ||
-    !verifyFlowCapabilityManifestForGraph({ graph, capabilityManifest: manifest })
-      .valid
+    !verifyFlowCapabilityManifestForGraph({ graph, capabilityManifest: manifest }).valid
   ) {
     return invalid("candidate is inconsistent with the client event");
   }
@@ -155,7 +170,8 @@ export function planFlowClientEventEnrollment(input: {
   const next = graph.edges.filter(
     (edge) => edge.sourceNodeId === match.triggerNodeId && edge.sourceHandle === "next"
   );
-  const target = next.length === 1 ? graph.nodes.find((node) => node.id === next[0]?.targetNodeId) : undefined;
+  const target =
+    next.length === 1 ? graph.nodes.find((node) => node.id === next[0]?.targetNodeId) : undefined;
   if (!target || !flowExecutableNodeKindV2Schema.safeParse(target.kind).success) {
     return invalid("client trigger must have one executable next target");
   }
@@ -181,7 +197,10 @@ export function planFlowClientEventEnrollment(input: {
   };
 }
 
-function enrollmentOccurrenceKey(policy: FlowEnrollmentPolicyKey, event: FlowNormalizedClientEventV1): string {
+function enrollmentOccurrenceKey(
+  policy: FlowEnrollmentPolicyKey,
+  event: FlowNormalizedClientEventV1
+): string {
   return policy === "once_per_client" ? event.event.clientUserId : event.occurrenceKey;
 }
 

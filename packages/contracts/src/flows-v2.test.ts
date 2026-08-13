@@ -114,6 +114,78 @@ describe("flow graph v2 contracts", () => {
     ).toBe(false);
   });
 
+  it("parses all event-start trigger contracts from the checklist", () => {
+    const triggerNodes: FlowGraphV2["nodes"] = [
+      {
+        id: "new-lead",
+        kind: "new_lead",
+        displayTitle: "Новый лид",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "once_per_client" }
+      },
+      {
+        id: "free-product",
+        kind: "free_product_received",
+        displayTitle: "Бесплатный продукт",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: {
+          productIds: ["55555555-5555-4555-8555-555555555555"],
+          enrollmentPolicy: "each_occurrence"
+        }
+      },
+      {
+        id: "astro-event",
+        kind: "astro_event",
+        displayTitle: "Астрособытие",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { eventCodes: ["full_moon"], enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "schedule",
+        kind: "schedule_time",
+        displayTitle: "Расписание",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { scheduleKey: "weekly_digest", enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "review",
+        kind: "review_received",
+        displayTitle: "Отзыв",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "once_per_client" }
+      },
+      {
+        id: "subscription",
+        kind: "subscription_event",
+        displayTitle: "Подписка",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { eventTypes: ["renewed", "cancelled"], enrollmentPolicy: "each_occurrence" }
+      }
+    ];
+
+    for (const trigger of triggerNodes) {
+      const parsed = flowGraphV2Schema.parse({
+        schemaVersion: "flow-graph.v2",
+        nodes: [trigger, productPurchaseGraph.nodes[1]],
+        edges: [
+          {
+            id: `${trigger.id}-to-completed`,
+            sourceNodeId: trigger.id,
+            targetNodeId: "completed",
+            sourceHandle: "next"
+          }
+        ]
+      });
+      expect(parsed.nodes[0]).toEqual(trigger);
+    }
+  });
+
   it("accepts only V2 flow graphs", () => {
     expect(flowGraphReadSchema.parse(manualClientGraph)).toEqual(manualClientGraph);
     expect(
@@ -1001,5 +1073,4 @@ describe("flow definition v2 create and template contracts", () => {
       })
     ).toMatchObject({ source: { parameters: { product_id: expect.any(String) } } });
   });
-
 });

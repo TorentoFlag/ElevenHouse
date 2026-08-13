@@ -213,8 +213,7 @@ export function createFlowExecutionWorkerRequirementKeys(
     supportedCapabilities.length > 200 ||
     new Set(supportedCapabilities).size !== supportedCapabilities.length ||
     supportedCapabilities.some(
-      (capability) =>
-        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(capability)
+      (capability) => !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(capability)
     ) ||
     executorKeys.length + supportedCapabilities.length + 1 > MAX_REQUIREMENTS
   ) {
@@ -228,28 +227,35 @@ export function createFlowExecutionWorkerRequirementKeys(
 }
 
 export function createFlowBookingEnrollmentWorkerRequirementKeys(): readonly string[] {
-  return [
-    `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
-    "trigger:booking_confirmed:1:1:1"
-  ];
+  return [`runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`, "trigger:booking_confirmed:1:1:1"];
 }
 
 export function createFlowManualClientEnrollmentWorkerRequirementKeys(): readonly string[] {
-  return [
-    `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
-    "trigger:manual_client:1:1:1"
-  ];
+  return [`runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`, "trigger:manual_client:1:1:1"];
 }
 
 export function createFlowClientEventEnrollmentWorkerRequirementKeys(): readonly string[] {
   return [
+    "capability:astro.events.calendar",
     "capability:clients.events.lifecycle_changed",
+    "capability:clients.events.new_lead",
     "capability:finance.events.client_order_captured",
     "capability:messaging.events.first_inbound_message",
+    "capability:products.events.free_product_received",
+    "capability:products.read",
+    "capability:reviews.events.received",
+    "capability:schedule.events.time",
+    "capability:subscriptions.events.changed",
     `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
+    "trigger:astro_event:1:1:1",
     "trigger:client_lifecycle_changed:1:1:1",
     "trigger:first_inbound_message:1:1:1",
-    "trigger:product_purchased:1:1:1"
+    "trigger:free_product_received:1:1:1",
+    "trigger:new_lead:1:1:1",
+    "trigger:product_purchased:1:1:1",
+    "trigger:review_received:1:1:1",
+    "trigger:schedule_time:1:1:1",
+    "trigger:subscription_event:1:1:1"
   ];
 }
 

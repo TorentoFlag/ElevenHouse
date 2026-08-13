@@ -1,10 +1,6 @@
 import type { FlowDefinitionSummary, FlowNodeKindV2 } from "@elevenhouse/contracts";
 import { describe, expect, it } from "vitest";
-import {
-  buildFlowGalleryCard,
-  getFlowNodeVisual,
-  type FlowVisualTone
-} from "./flowsVisualModel";
+import { buildFlowGalleryCard, getFlowNodeVisual, type FlowVisualTone } from "./flowsVisualModel";
 
 const flow = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -56,7 +52,12 @@ describe("flows visual model", () => {
       approvalModeLabel: "Ручное",
       graphSchemaLabel: "Схема V2",
       graphSummary: "Узлы: Запись подтверждена · Данные рождения · Натальная карта",
-      graphNodeKinds: ["booking_confirmed", "birth_data_available", "natal_chart_request", "completed"],
+      graphNodeKinds: [
+        "booking_confirmed",
+        "birth_data_available",
+        "natal_chart_request",
+        "completed"
+      ],
       originLabel: "Из шаблона",
       revisionLabel: "Редакция 3",
       publishedVersionLabel: "Версия 1",
@@ -99,10 +100,16 @@ describe("flows visual model", () => {
   it("defines an explicit visual tone and localized label for every supported node kind", () => {
     const expectedVisuals = {
       booking_confirmed: ["trigger", "Запись подтверждена", "Booking confirmed"],
-      manual_client: ["trigger", "Клиент выбран", "Client selected"],
+      manual_client: ["trigger", "Ручной запуск", "Manual start"],
+      new_lead: ["trigger", "Новый лид", "New lead"],
+      free_product_received: ["trigger", "Бесплатный продукт", "Free product"],
       product_purchased: ["trigger", "Куплен продукт", "Product purchased"],
       first_inbound_message: ["trigger", "Первое сообщение", "First message"],
+      astro_event: ["trigger", "Астрособытие", "Astro event"],
       client_lifecycle_changed: ["trigger", "Статус клиента", "Client status"],
+      schedule_time: ["trigger", "Расписание", "Schedule"],
+      review_received: ["trigger", "Отзыв", "Review"],
+      subscription_event: ["trigger", "Подписка", "Subscription"],
       birth_data_available: ["logic", "Данные рождения", "Birth data"],
       natal_chart_request: ["chartAi", "Натальная карта", "Natal chart"],
       natal_chart_ai_draft: ["chartAi", "AI-черновик", "AI draft"],
@@ -112,10 +119,7 @@ describe("flows visual model", () => {
       completed: ["result", "Завершено", "Completed"],
       suppressed: ["result", "Пропущено", "Suppressed"],
       failed: ["error", "Ошибка", "Failed"]
-    } as const satisfies Record<
-      FlowNodeKindV2,
-      readonly [FlowVisualTone, string, string]
-    >;
+    } as const satisfies Record<FlowNodeKindV2, readonly [FlowVisualTone, string, string]>;
 
     expect(
       Object.fromEntries(
@@ -128,5 +132,4 @@ describe("flows visual model", () => {
       )
     ).toEqual(expectedVisuals);
   });
-
 });

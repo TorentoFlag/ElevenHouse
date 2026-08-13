@@ -253,6 +253,81 @@ describe("flow graph v2 compiler", () => {
     });
   });
 
+  it.each([
+    [
+      node({
+        id: "new-lead",
+        kind: "new_lead",
+        displayTitle: "Новый лид",
+        config: { enrollmentPolicy: "once_per_client" }
+      }),
+      ["clients.events.new_lead"]
+    ],
+    [
+      node({
+        id: "free-product",
+        kind: "free_product_received",
+        displayTitle: "Бесплатный продукт",
+        config: {
+          productIds: ["22222222-2222-4222-8222-222222222222"],
+          enrollmentPolicy: "each_occurrence"
+        }
+      }),
+      ["products.events.free_product_received", "products.read"]
+    ],
+    [
+      node({
+        id: "astro-event",
+        kind: "astro_event",
+        displayTitle: "Астрособытие",
+        config: { eventCodes: ["full_moon"], enrollmentPolicy: "each_occurrence" }
+      }),
+      ["astro.events.calendar"]
+    ],
+    [
+      node({
+        id: "schedule",
+        kind: "schedule_time",
+        displayTitle: "Расписание",
+        config: { scheduleKey: "weekly_digest", enrollmentPolicy: "each_occurrence" }
+      }),
+      ["schedule.events.time"]
+    ],
+    [
+      node({
+        id: "review",
+        kind: "review_received",
+        displayTitle: "Отзыв",
+        config: { enrollmentPolicy: "once_per_client" }
+      }),
+      ["reviews.events.received"]
+    ],
+    [
+      node({
+        id: "subscription",
+        kind: "subscription_event",
+        displayTitle: "Подписка",
+        config: { eventTypes: ["renewed"], enrollmentPolicy: "after_previous_terminal" }
+      }),
+      ["subscriptions.events.changed"]
+    ]
+  ])("compiles %s start with owning-module requirements", (trigger, requiredCapabilities) => {
+    const result = compileFlowGraphV2(
+      graphV2(
+        [trigger, completedNode],
+        [edge(`${trigger.id}-done`, trigger.id, "completed", "next")]
+      )
+    );
+
+    expect(result).toMatchObject({
+      publishable: true,
+      capabilityManifest: {
+        triggerMatcher: { kind: trigger.kind },
+        requiredCapabilities
+      }
+    });
+  });
+
   it("allows only a human-gated birth-data recheck loop before a natal calculation", () => {
     const birthDataCollection = node({
       id: "request-birth-data",
@@ -629,10 +704,13 @@ describe("flow graph v2 compiler", () => {
     expect(
       issueCodes(
         compileFlowGraphV2(
-          graphV2([manualNode, sendMessageNode, completedNode], [
-            edge("manual-to-message", "manual", "send-message", "next"),
-            edge("message-success", "send-message", "completed", "success")
-          ])
+          graphV2(
+            [manualNode, sendMessageNode, completedNode],
+            [
+              edge("manual-to-message", "manual", "send-message", "next"),
+              edge("message-success", "send-message", "completed", "success")
+            ]
+          )
         )
       )
     ).toContain("missing_required_source_handle");

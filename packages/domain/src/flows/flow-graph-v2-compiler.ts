@@ -81,6 +81,22 @@ const nodeRules = {
     terminal: false,
     trigger: true
   },
+  new_lead: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["clients.events.new_lead"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  free_product_received: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["products.events.free_product_received", "products.read"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
   product_purchased: {
     allowedHandles: nextHandle,
     requiredHandles: nextHandle,
@@ -97,10 +113,42 @@ const nodeRules = {
     terminal: false,
     trigger: true
   },
+  astro_event: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["astro.events.calendar"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
   client_lifecycle_changed: {
     allowedHandles: nextHandle,
     requiredHandles: nextHandle,
     capabilities: ["clients.events.lifecycle_changed"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  schedule_time: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["schedule.events.time"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  review_received: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["reviews.events.received"],
+    branching: false,
+    terminal: false,
+    trigger: true
+  },
+  subscription_event: {
+    allowedHandles: nextHandle,
+    requiredHandles: nextHandle,
+    capabilities: ["subscriptions.events.changed"],
     branching: false,
     terminal: false,
     trigger: true
@@ -478,17 +526,20 @@ function isHumanGatedBirthDataRecheckFanIn(
   nodesById: ReadonlyMap<string, FlowNodeV2>
 ): boolean {
   if (node.kind !== "birth_data_available" || incoming.length !== 2) return false;
-  return incoming.some((edge) => {
-    const source = nodesById.get(edge.sourceNodeId);
-    return source?.kind === "booking_confirmed" && edge.sourceHandle === "next";
-  }) && incoming.some((edge) => {
-    const source = nodesById.get(edge.sourceNodeId);
-    return (
-      source?.kind === "astrologer_work_item" &&
-      source.config.taskKind === "birth_data_collection" &&
-      edge.sourceHandle === "success"
-    );
-  });
+  return (
+    incoming.some((edge) => {
+      const source = nodesById.get(edge.sourceNodeId);
+      return source?.kind === "booking_confirmed" && edge.sourceHandle === "next";
+    }) &&
+    incoming.some((edge) => {
+      const source = nodesById.get(edge.sourceNodeId);
+      return (
+        source?.kind === "astrologer_work_item" &&
+        source.config.taskKind === "birth_data_collection" &&
+        edge.sourceHandle === "success"
+      );
+    })
+  );
 }
 
 function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
@@ -507,6 +558,33 @@ function normalizeNode(node: FlowNodeV2): FlowNodeV2 {
       config: {
         ...node.config,
         productIds: [...node.config.productIds].sort(compareStableText)
+      }
+    };
+  }
+  if (node.kind === "free_product_received") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        productIds: [...node.config.productIds].sort(compareStableText)
+      }
+    };
+  }
+  if (node.kind === "astro_event") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        eventCodes: [...node.config.eventCodes].sort(compareStableText)
+      }
+    };
+  }
+  if (node.kind === "subscription_event") {
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        eventTypes: [...node.config.eventTypes].sort(compareStableText)
       }
     };
   }
@@ -566,25 +644,35 @@ function createCapabilityManifest(nodes: readonly FlowNodeV2[]): FlowCapabilityM
   };
 }
 
-function isTriggerNode(
-  node: FlowNodeV2
-): node is Extract<
+function isTriggerNode(node: FlowNodeV2): node is Extract<
   FlowNodeV2,
   {
     kind:
       | "booking_confirmed"
       | "manual_client"
+      | "new_lead"
+      | "free_product_received"
       | "product_purchased"
       | "first_inbound_message"
-      | "client_lifecycle_changed";
+      | "astro_event"
+      | "client_lifecycle_changed"
+      | "schedule_time"
+      | "review_received"
+      | "subscription_event";
   }
 > {
   return (
     node.kind === "booking_confirmed" ||
     node.kind === "manual_client" ||
+    node.kind === "new_lead" ||
+    node.kind === "free_product_received" ||
     node.kind === "product_purchased" ||
     node.kind === "first_inbound_message" ||
-    node.kind === "client_lifecycle_changed"
+    node.kind === "astro_event" ||
+    node.kind === "client_lifecycle_changed" ||
+    node.kind === "schedule_time" ||
+    node.kind === "review_received" ||
+    node.kind === "subscription_event"
   );
 }
 

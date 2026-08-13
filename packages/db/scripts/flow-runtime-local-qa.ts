@@ -6,10 +6,16 @@ import {
   compileFlowGraphV2,
   completeFlowWorkItem,
   createBuiltInFlowNodeExecutorRegistry,
+  createAstroEventFlowEnrollmentRequestedPayload,
   createClientLifecycleChangedFlowEnrollmentRequestedPayload,
+  createFreeProductReceivedFlowEnrollmentRequestedPayload,
   createFirstInboundMessageFlowEnrollmentRequestedPayload,
   createFlowRuntimeRequirementKeys,
+  createNewLeadFlowEnrollmentRequestedPayload,
   createProductPurchasedFlowEnrollmentRequestedPayload,
+  createReviewReceivedFlowEnrollmentRequestedPayload,
+  createScheduleTimeFlowEnrollmentRequestedPayload,
+  createSubscriptionEventFlowEnrollmentRequestedPayload,
   decideDurableFlowApproval,
   interpretFlowExecutionClaim,
   replaceFlowRuntimeRolloutPolicy,
@@ -69,6 +75,12 @@ async function main() {
     await runProductPurchasedStartScenario(ownerUserId, ownerSubjectId),
     await runFirstInboundMessageStartScenario(ownerUserId, ownerSubjectId),
     await runClientLifecycleChangedStartScenario(ownerUserId, ownerSubjectId),
+    await runNewLeadStartScenario(ownerUserId, ownerSubjectId),
+    await runFreeProductReceivedStartScenario(ownerUserId, ownerSubjectId),
+    await runAstroEventStartScenario(ownerUserId, ownerSubjectId),
+    await runScheduleTimeStartScenario(ownerUserId, ownerSubjectId),
+    await runReviewReceivedStartScenario(ownerUserId, ownerSubjectId),
+    await runSubscriptionEventStartScenario(ownerUserId, ownerSubjectId),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, true),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, false),
     await runNatalChartRequestScenario(ownerUserId, ownerSubjectId),
@@ -400,6 +412,199 @@ async function runClientLifecycleChangedStartScenario(ownerUserId: string, owner
     },
     execution,
     persisted: await runPersistence(run?.runId ?? raise("Expected lifecycle run"))
+  };
+}
+
+async function runNewLeadStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = newLeadGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const occurredAt = await databaseNow();
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createNewLeadFlowEnrollmentRequestedPayload({
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      createdAt: occurredAt
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "new_lead_completed",
+    clientUserId: scenarioClientUserId,
+    relationshipId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected new-lead run"))
+  };
+}
+
+async function runFreeProductReceivedStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const productId = await createProduct(ownerUserId);
+  const graph = freeProductReceivedGraph(productId);
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createFreeProductReceivedFlowEnrollmentRequestedPayload({
+      receiptId: randomUUID(),
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      productId,
+      receivedAt: await databaseNow()
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "free_product_received_completed",
+    clientUserId: scenarioClientUserId,
+    productId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected free-product run"))
+  };
+}
+
+async function runAstroEventStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = astroEventGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createAstroEventFlowEnrollmentRequestedPayload({
+      astroEventId: randomUUID(),
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      eventCode: "full_moon",
+      occurredAt: await databaseNow()
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "astro_event_completed",
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected astro-event run"))
+  };
+}
+
+async function runScheduleTimeStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = scheduleTimeGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createScheduleTimeFlowEnrollmentRequestedPayload({
+      scheduleOccurrenceId: randomUUID(),
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      scheduleKey: "weekly_digest",
+      firedAt: await databaseNow()
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "schedule_time_completed",
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected schedule-time run"))
+  };
+}
+
+async function runReviewReceivedStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = reviewReceivedGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createReviewReceivedFlowEnrollmentRequestedPayload({
+      reviewId: randomUUID(),
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      receivedAt: await databaseNow()
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "review_received_completed",
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected review-received run"))
+  };
+}
+
+async function runSubscriptionEventStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = subscriptionEventGraph();
+  const { flowId, workerIdentity } = await publishActivateAndAdmit(
+    ownerUserId,
+    ownerSubjectId,
+    graph
+  );
+  const scenarioClientUserId = await createUser();
+  const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
+    runtime.database
+  ).enrollClientEvent({
+    request: createSubscriptionEventFlowEnrollmentRequestedPayload({
+      subscriptionEventId: randomUUID(),
+      ownerUserId,
+      clientUserId: scenarioClientUserId,
+      relationshipId,
+      eventType: "renewed",
+      occurredAt: await databaseNow()
+    })
+  });
+  const execution = await processAll(workerIdentity);
+  const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
+  return {
+    scenario: "subscription_event_completed",
+    clientUserId: scenarioClientUserId,
+    enrollment,
+    execution,
+    persisted: await runPersistence(run?.runId ?? raise("Expected subscription-event run"))
   };
 }
 
@@ -1571,6 +1776,183 @@ function clientLifecycleChangedGraph(): FlowGraphV2 {
       {
         id: "lifecycle-done",
         sourceNodeId: "lifecycle",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  });
+}
+
+function newLeadGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "new-lead",
+        kind: "new_lead",
+        displayTitle: "New lead",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_new_lead" }
+      }
+    ],
+    edges: [
+      { id: "new-lead-done", sourceNodeId: "new-lead", targetNodeId: "done", sourceHandle: "next" }
+    ]
+  });
+}
+
+function freeProductReceivedGraph(productId: string): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "free-product",
+        kind: "free_product_received",
+        displayTitle: "Free product received",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { productIds: [productId], enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_free_product_received" }
+      }
+    ],
+    edges: [
+      {
+        id: "free-product-done",
+        sourceNodeId: "free-product",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  });
+}
+
+function astroEventGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "astro-event",
+        kind: "astro_event",
+        displayTitle: "Astro event",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { eventCodes: ["full_moon"], enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_astro_event" }
+      }
+    ],
+    edges: [
+      {
+        id: "astro-event-done",
+        sourceNodeId: "astro-event",
+        targetNodeId: "done",
+        sourceHandle: "next"
+      }
+    ]
+  });
+}
+
+function scheduleTimeGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "schedule",
+        kind: "schedule_time",
+        displayTitle: "Schedule",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { scheduleKey: "weekly_digest", enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_schedule_time" }
+      }
+    ],
+    edges: [
+      { id: "schedule-done", sourceNodeId: "schedule", targetNodeId: "done", sourceHandle: "next" }
+    ]
+  });
+}
+
+function reviewReceivedGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "review",
+        kind: "review_received",
+        displayTitle: "Review received",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_review_received" }
+      }
+    ],
+    edges: [
+      { id: "review-done", sourceNodeId: "review", targetNodeId: "done", sourceHandle: "next" }
+    ]
+  });
+}
+
+function subscriptionEventGraph(): FlowGraphV2 {
+  return flowGraphV2Schema.parse({
+    schemaVersion: "flow-graph.v2",
+    nodes: [
+      {
+        id: "subscription",
+        kind: "subscription_event",
+        displayTitle: "Subscription event",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { eventTypes: ["renewed"], enrollmentPolicy: "each_occurrence" }
+      },
+      {
+        id: "done",
+        kind: "completed",
+        displayTitle: "Done",
+        configSchemaVersion: 1,
+        executorContractVersion: 1,
+        config: { goalKey: "qa_subscription_event" }
+      }
+    ],
+    edges: [
+      {
+        id: "subscription-done",
+        sourceNodeId: "subscription",
         targetNodeId: "done",
         sourceHandle: "next"
       }

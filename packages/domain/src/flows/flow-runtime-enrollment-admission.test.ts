@@ -35,13 +35,26 @@ describe("evaluateFlowRuntimeEnrollmentAdmission", () => {
 
   it("declares the exact worker protocol requirements for client event enrollment", () => {
     expect(createFlowClientEventEnrollmentWorkerRequirementKeys()).toEqual([
+      "capability:astro.events.calendar",
       "capability:clients.events.lifecycle_changed",
+      "capability:clients.events.new_lead",
       "capability:finance.events.client_order_captured",
       "capability:messaging.events.first_inbound_message",
+      "capability:products.events.free_product_received",
+      "capability:products.read",
+      "capability:reviews.events.received",
+      "capability:schedule.events.time",
+      "capability:subscriptions.events.changed",
       "runtime:flow-interpreter.v1",
+      "trigger:astro_event:1:1:1",
       "trigger:client_lifecycle_changed:1:1:1",
       "trigger:first_inbound_message:1:1:1",
-      "trigger:product_purchased:1:1:1"
+      "trigger:free_product_received:1:1:1",
+      "trigger:new_lead:1:1:1",
+      "trigger:product_purchased:1:1:1",
+      "trigger:review_received:1:1:1",
+      "trigger:schedule_time:1:1:1",
+      "trigger:subscription_event:1:1:1"
     ]);
   });
 
@@ -60,7 +73,11 @@ describe("evaluateFlowRuntimeEnrollmentAdmission", () => {
   it.each([
     {
       name: "definition-only rollout",
-      policy: policy({ mode: "definition_only", canaryOwnerSubjectIds: [], allowedRequirementKeys: [] }),
+      policy: policy({
+        mode: "definition_only",
+        canaryOwnerSubjectIds: [],
+        allowedRequirementKeys: []
+      }),
       reasonCode: "FLOW_RUNTIME_ROLLOUT_DISABLED"
     },
     {
@@ -113,9 +130,7 @@ describe("evaluateFlowRuntimeEnrollmentAdmission", () => {
     expect(
       evaluateFlowRuntimeEnrollmentAdmission({
         policy: policy({
-          allowedRequirementKeys: requirementKeys.filter(
-            (key) => key !== "executor:completed:1:1"
-          )
+          allowedRequirementKeys: requirementKeys.filter((key) => key !== "executor:completed:1:1")
         }),
         ownerSubjectId,
         requirementKeys,
@@ -180,9 +195,7 @@ function policy(
   };
 }
 
-function workerLease(
-  overrides: Partial<FlowWorkerReadinessLease> = {}
-): FlowWorkerReadinessLease {
+function workerLease(overrides: Partial<FlowWorkerReadinessLease> = {}): FlowWorkerReadinessLease {
   return {
     schemaVersion: "flow-worker-readiness-lease.v1",
     instanceId: "flows-worker-test",

@@ -3,14 +3,26 @@ import { describe, expect, it } from "vitest";
 import type { Booking } from "../bookings";
 import {
   FLOW_BOOKING_CONFIRMED_ENROLLMENT_REQUESTED_EVENT,
+  createAstroEventFlowEnrollmentRequestedPayload,
   createClientLifecycleChangedFlowEnrollmentRequestedPayload,
+  createFreeProductReceivedFlowEnrollmentRequestedPayload,
   createFirstInboundMessageFlowEnrollmentRequestedPayload,
   createBookingConfirmedFlowEnrollmentRequestedPayload,
+  createNewLeadFlowEnrollmentRequestedPayload,
   createProductPurchasedFlowEnrollmentRequestedPayload,
+  createReviewReceivedFlowEnrollmentRequestedPayload,
+  createScheduleTimeFlowEnrollmentRequestedPayload,
+  createSubscriptionEventFlowEnrollmentRequestedPayload,
+  flowAstroEventEnrollmentRequestedPayloadV1Schema,
   flowBookingConfirmedEnrollmentRequestedPayloadV1Schema,
   flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema,
+  flowFreeProductReceivedEnrollmentRequestedPayloadV1Schema,
   flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema,
-  flowProductPurchasedEnrollmentRequestedPayloadV1Schema
+  flowNewLeadEnrollmentRequestedPayloadV1Schema,
+  flowProductPurchasedEnrollmentRequestedPayloadV1Schema,
+  flowReviewReceivedEnrollmentRequestedPayloadV1Schema,
+  flowScheduleTimeEnrollmentRequestedPayloadV1Schema,
+  flowSubscriptionEventEnrollmentRequestedPayloadV1Schema
 } from "./flow-runtime-outbox";
 
 describe("booking-confirmed Flow enrollment outbox contract", () => {
@@ -67,11 +79,11 @@ describe("booking-confirmed Flow enrollment outbox contract", () => {
 describe("product-purchased Flow enrollment outbox contract", () => {
   it("publishes only a source-derived order reference and product identifier", () => {
     const payload = createProductPurchasedFlowEnrollmentRequestedPayload({
-        orderId: "11111111-1111-4111-8111-111111111111",
-        ownerUserId: "22222222-2222-4222-8222-222222222222",
-        clientUserId: "33333333-3333-4333-8333-333333333333",
-        productId: "44444444-4444-4444-8444-444444444444",
-        capturedAt: "2026-08-13T10:00:00.000Z"
+      orderId: "11111111-1111-4111-8111-111111111111",
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      clientUserId: "33333333-3333-4333-8333-333333333333",
+      productId: "44444444-4444-4444-8444-444444444444",
+      capturedAt: "2026-08-13T10:00:00.000Z"
     });
 
     expect(payload).toMatchObject({
@@ -97,6 +109,61 @@ describe("product-purchased Flow enrollment outbox contract", () => {
 });
 
 describe("client-scoped Flow enrollment outbox contracts", () => {
+  it("publishes strict envelopes for every non-purchase client event start", () => {
+    const common = {
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      clientUserId: "33333333-3333-4333-8333-333333333333",
+      relationshipId: "44444444-4444-4444-8444-444444444444"
+    };
+    const newLead = createNewLeadFlowEnrollmentRequestedPayload({
+      ...common,
+      createdAt: "2026-08-13T10:00:00.000Z"
+    });
+    const freeProduct = createFreeProductReceivedFlowEnrollmentRequestedPayload({
+      ...common,
+      receiptId: "55555555-5555-4555-8555-555555555555",
+      productId: "66666666-6666-4666-8666-666666666666",
+      receivedAt: "2026-08-13T10:01:00.000Z"
+    });
+    const astro = createAstroEventFlowEnrollmentRequestedPayload({
+      ...common,
+      astroEventId: "99999999-9999-4999-8999-999999999999",
+      eventCode: "full_moon",
+      occurredAt: "2026-08-13T10:02:00.000Z"
+    });
+    const schedule = createScheduleTimeFlowEnrollmentRequestedPayload({
+      ...common,
+      scheduleOccurrenceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      scheduleKey: "weekly_digest",
+      firedAt: "2026-08-13T10:03:00.000Z"
+    });
+    const review = createReviewReceivedFlowEnrollmentRequestedPayload({
+      ...common,
+      reviewId: "77777777-7777-4777-8777-777777777777",
+      receivedAt: "2026-08-13T10:04:00.000Z"
+    });
+    const subscription = createSubscriptionEventFlowEnrollmentRequestedPayload({
+      ...common,
+      subscriptionEventId: "88888888-8888-4888-8888-888888888888",
+      eventType: "renewed",
+      occurredAt: "2026-08-13T10:05:00.000Z"
+    });
+
+    expect(flowNewLeadEnrollmentRequestedPayloadV1Schema.parse(newLead)).toEqual(newLead);
+    expect(flowFreeProductReceivedEnrollmentRequestedPayloadV1Schema.parse(freeProduct)).toEqual(
+      freeProduct
+    );
+    expect(flowAstroEventEnrollmentRequestedPayloadV1Schema.parse(astro)).toEqual(astro);
+    expect(flowScheduleTimeEnrollmentRequestedPayloadV1Schema.parse(schedule)).toEqual(schedule);
+    expect(flowReviewReceivedEnrollmentRequestedPayloadV1Schema.parse(review)).toEqual(review);
+    expect(flowSubscriptionEventEnrollmentRequestedPayloadV1Schema.parse(subscription)).toEqual(
+      subscription
+    );
+    expect(
+      JSON.stringify([newLead, freeProduct, astro, schedule, review, subscription])
+    ).not.toContain(common.ownerUserId);
+  });
+
   it("does not transport inbound message content", () => {
     const payload = createFirstInboundMessageFlowEnrollmentRequestedPayload({
       messageId: "11111111-1111-4111-8111-111111111111",
@@ -117,7 +184,9 @@ describe("client-scoped Flow enrollment outbox contracts", () => {
       }
     });
     expect(JSON.stringify(payload)).not.toContain("message text");
-    expect(flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(payload);
+    expect(flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(
+      payload
+    );
     expect(
       flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema.safeParse({
         ...payload,
@@ -128,13 +197,13 @@ describe("client-scoped Flow enrollment outbox contracts", () => {
 
   it("requires an exact lifecycle transition identity", () => {
     const payload = createClientLifecycleChangedFlowEnrollmentRequestedPayload({
-        historyId: "11111111-1111-4111-8111-111111111111",
-        ownerUserId: "22222222-2222-4222-8222-222222222222",
-        clientUserId: "33333333-3333-4333-8333-333333333333",
-        relationshipId: "44444444-4444-4444-8444-444444444444",
-        fromStatus: "new",
-        toStatus: "active",
-        occurredAt: "2026-08-13T10:00:00.000Z"
+      historyId: "11111111-1111-4111-8111-111111111111",
+      ownerUserId: "22222222-2222-4222-8222-222222222222",
+      clientUserId: "33333333-3333-4333-8333-333333333333",
+      relationshipId: "44444444-4444-4444-8444-444444444444",
+      fromStatus: "new",
+      toStatus: "active",
+      occurredAt: "2026-08-13T10:00:00.000Z"
     });
 
     expect(payload).toMatchObject({
@@ -144,7 +213,9 @@ describe("client-scoped Flow enrollment outbox contracts", () => {
       occurrenceKey: "11111111-1111-4111-8111-111111111111",
       payload: { fromStatus: "new", toStatus: "active" }
     });
-    expect(flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(payload);
+    expect(flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.parse(payload)).toEqual(
+      payload
+    );
     expect(
       flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.safeParse({
         ...payload,

@@ -58,9 +58,15 @@ export const flowRuntimeEventSourceValues = [
 export const flowRuntimeEventKindValues = [
   "booking_confirmed",
   "manual_client",
+  "new_lead",
+  "free_product_received",
   "product_purchased",
   "first_inbound_message",
-  "client_lifecycle_changed"
+  "astro_event",
+  "client_lifecycle_changed",
+  "schedule_time",
+  "review_received",
+  "subscription_event"
 ] as const;
 
 export const flowRuntimeEventClassificationValues = ["personal"] as const;
@@ -146,11 +152,7 @@ export const flowExecutionSignalOutcomeValues = ["succeeded", "failed"] as const
 
 export const flowExecutionSignalWaitStateValues = ["waiting", "consumed", "canceled"] as const;
 
-export const flowBirthProfileRecheckReceiptOutcomeValues = [
-  "ready",
-  "not_ready",
-  "stale"
-] as const;
+export const flowBirthProfileRecheckReceiptOutcomeValues = ["ready", "not_ready", "stale"] as const;
 
 export const flowExecutionAttemptOutcomeValues = [
   "advanced",

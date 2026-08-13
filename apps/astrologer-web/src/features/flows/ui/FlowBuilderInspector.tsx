@@ -115,6 +115,41 @@ function NodeConfigFields({
   if (node.kind === "manual_client") {
     return <p className={className}>{copy.manualTrigger}</p>;
   }
+  if (node.kind === "new_lead" || node.kind === "review_received") {
+    return (
+      <EnrollmentPolicyField
+        className={className}
+        copy={copy}
+        value={node.config.enrollmentPolicy}
+        editable={editable}
+        onChange={(enrollmentPolicy) => onChangeNode({ ...node, config: { enrollmentPolicy } })}
+      />
+    );
+  }
+  if (node.kind === "free_product_received") {
+    return (
+      <>
+        <ProductIdsField
+          className={className}
+          label={copy.freeProductIds}
+          value={node.config.productIds}
+          editable={editable}
+          onChange={(productIds) =>
+            onChangeNode({ ...node, config: { ...node.config, productIds } })
+          }
+        />
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
+  }
   if (node.kind === "product_purchased") {
     return (
       <>
@@ -150,6 +185,30 @@ function NodeConfigFields({
       />
     );
   }
+  if (node.kind === "astro_event") {
+    return (
+      <>
+        <StableIdListField
+          className={className}
+          label={copy.astroEventCodes}
+          value={node.config.eventCodes}
+          editable={editable}
+          onChange={(eventCodes) =>
+            onChangeNode({ ...node, config: { ...node.config, eventCodes } })
+          }
+        />
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
+  }
   if (node.kind === "client_lifecycle_changed") {
     return (
       <>
@@ -170,6 +229,59 @@ function NodeConfigFields({
           editable={editable}
           copy={copy}
           onChange={(toStatus) => onChangeNode({ ...node, config: { ...node.config, toStatus } })}
+        />
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
+  }
+  if (node.kind === "schedule_time") {
+    return (
+      <>
+        <label className={className}>
+          <span>{copy.scheduleKey}</span>
+          <input
+            value={node.config.scheduleKey}
+            disabled={!editable}
+            pattern={"[a-z0-9][a-z0-9_\\-]*"}
+            onChange={(event) =>
+              onChangeNode({
+                ...node,
+                config: { ...node.config, scheduleKey: event.target.value }
+              })
+            }
+          />
+        </label>
+        <EnrollmentPolicyField
+          className={className}
+          copy={copy}
+          value={node.config.enrollmentPolicy}
+          editable={editable}
+          onChange={(enrollmentPolicy) =>
+            onChangeNode({ ...node, config: { ...node.config, enrollmentPolicy } })
+          }
+        />
+      </>
+    );
+  }
+  if (node.kind === "subscription_event") {
+    return (
+      <>
+        <SubscriptionEventTypesField
+          className={className}
+          copy={copy}
+          value={node.config.eventTypes}
+          editable={editable}
+          onChange={(eventTypes) =>
+            onChangeNode({ ...node, config: { ...node.config, eventTypes } })
+          }
         />
         <EnrollmentPolicyField
           className={className}
@@ -486,6 +598,39 @@ function ProductIdsField({
   );
 }
 
+function StableIdListField({
+  className,
+  label,
+  value,
+  editable,
+  onChange
+}: {
+  readonly className: string;
+  readonly label: string;
+  readonly value: readonly string[];
+  readonly editable: boolean;
+  readonly onChange: (value: string[]) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{label}</span>
+      <textarea
+        name="flowStableIds"
+        value={value.join("\n")}
+        disabled={!editable}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+              .split(/\s+/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          )
+        }
+      />
+    </label>
+  );
+}
+
 function EnrollmentPolicyField({
   className,
   copy,
@@ -517,6 +662,53 @@ function EnrollmentPolicyField({
         <option value="once_per_client">{copy.enrollmentOncePerClient}</option>
         <option value="each_occurrence">{copy.enrollmentEachOccurrence}</option>
         <option value="after_previous_terminal">{copy.enrollmentAfterPreviousTerminal}</option>
+      </select>
+    </label>
+  );
+}
+
+const subscriptionEventTypes = [
+  "started",
+  "renewed",
+  "cancelled",
+  "expired",
+  "payment_failed"
+] as const;
+
+function SubscriptionEventTypesField({
+  className,
+  copy,
+  value,
+  editable,
+  onChange
+}: {
+  readonly className: string;
+  readonly copy: (typeof inspectorCopy)["ru" | "en"];
+  readonly value: readonly (typeof subscriptionEventTypes)[number][];
+  readonly editable: boolean;
+  readonly onChange: (value: (typeof subscriptionEventTypes)[number][]) => void;
+}) {
+  return (
+    <label className={className}>
+      <span>{copy.subscriptionEventTypes}</span>
+      <select
+        name="flowSubscriptionEventTypes"
+        multiple
+        value={[...value]}
+        disabled={!editable}
+        onChange={(event) =>
+          onChange(
+            Array.from(event.currentTarget.selectedOptions).map(
+              (option) => option.value as (typeof subscriptionEventTypes)[number]
+            )
+          )
+        }
+      >
+        {subscriptionEventTypes.map((eventType) => (
+          <option key={eventType} value={eventType}>
+            {copy.subscriptionEventTypeLabels[eventType]}
+          </option>
+        ))}
       </select>
     </label>
   );
@@ -596,7 +788,18 @@ const inspectorCopy = {
     connections: "Связи",
     title: "Название узла",
     bookingProductIds: "Продукты записи",
+    freeProductIds: "Бесплатные продукты",
     purchasedProductIds: "Купленные продукты",
+    astroEventCodes: "Коды астрособытий",
+    scheduleKey: "Ключ расписания",
+    subscriptionEventTypes: "События подписки",
+    subscriptionEventTypeLabels: {
+      started: "Началась",
+      renewed: "Продлилась",
+      cancelled: "Отменилась",
+      expired: "Истекла",
+      payment_failed: "Ошибка оплаты"
+    },
     enrollmentPolicy: "Сколько раз запускать",
     enrollmentOncePerClient: "Один раз на клиента",
     enrollmentEachOccurrence: "Каждый раз по событию",
@@ -641,7 +844,18 @@ const inspectorCopy = {
     connections: "Connections",
     title: "Node title",
     bookingProductIds: "Booking products",
+    freeProductIds: "Free products",
     purchasedProductIds: "Purchased products",
+    astroEventCodes: "Astro event codes",
+    scheduleKey: "Schedule key",
+    subscriptionEventTypes: "Subscription events",
+    subscriptionEventTypeLabels: {
+      started: "Started",
+      renewed: "Renewed",
+      cancelled: "Cancelled",
+      expired: "Expired",
+      payment_failed: "Payment failed"
+    },
     enrollmentPolicy: "How often to start",
     enrollmentOncePerClient: "Once per client",
     enrollmentEachOccurrence: "Every event occurrence",

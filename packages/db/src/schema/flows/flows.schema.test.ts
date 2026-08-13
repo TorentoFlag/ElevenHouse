@@ -98,10 +98,7 @@ describe("Flows persistence schema", () => {
     const outcomeConfig = getTableConfig(flowDefinitionCommandOutcomes);
 
     expect(flowConfig.indexes.map((index) => index.config.name)).toEqual(
-      expect.arrayContaining([
-        "flows_owner_definition_state_updated_idx",
-        "flows_owner_name_idx"
-      ])
+      expect.arrayContaining(["flows_owner_definition_state_updated_idx", "flows_owner_name_idx"])
     );
     expect(versionConfig.indexes.map((index) => index.config.name)).toEqual(
       expect.arrayContaining([
@@ -153,9 +150,15 @@ describe("Flows persistence schema", () => {
     const triggerMatcherSql = versionManifestSql.slice(
       versionManifestSql.indexOf("capability_manifest->'triggerMatcher'->>'kind'")
     );
+    expect(triggerMatcherSql).toContain("new_lead");
+    expect(triggerMatcherSql).toContain("free_product_received");
     expect(triggerMatcherSql).toContain("product_purchased");
     expect(triggerMatcherSql).toContain("first_inbound_message");
+    expect(triggerMatcherSql).toContain("astro_event");
     expect(triggerMatcherSql).toContain("client_lifecycle_changed");
+    expect(triggerMatcherSql).toContain("schedule_time");
+    expect(triggerMatcherSql).toContain("review_received");
+    expect(triggerMatcherSql).toContain("subscription_event");
     expect(versionManifestSql).toContain("eventSchemaVersion");
     expect(versionManifestSql).toContain("jsonb_typeof");
     expect(versionManifestSql).toContain("?&");
@@ -529,15 +532,16 @@ describe("Flows persistence schema", () => {
       (check) => check.name === "flow_run_events_summary_schema_check"
     );
     expect(runEventSummaryCheck).toBeDefined();
-    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
-      "FLOW_WORK_ITEM_COMPLETED"
-    );
-    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
-      "FLOW_WORK_ITEM_SNOOZE_ELAPSED"
-    );
-    expect(new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql).toContain(
-      "FLOW_BOOKING_RESCHEDULED"
-    );
+    const runEventSummarySql = new PgDialect().sqlToQuery(runEventSummaryCheck!.value).sql;
+    expect(runEventSummarySql).toContain("new_lead");
+    expect(runEventSummarySql).toContain("free_product_received");
+    expect(runEventSummarySql).toContain("astro_event");
+    expect(runEventSummarySql).toContain("schedule_time");
+    expect(runEventSummarySql).toContain("review_received");
+    expect(runEventSummarySql).toContain("subscription_event");
+    expect(runEventSummarySql).toContain("FLOW_WORK_ITEM_COMPLETED");
+    expect(runEventSummarySql).toContain("FLOW_WORK_ITEM_SNOOZE_ELAPSED");
+    expect(runEventSummarySql).toContain("FLOW_BOOKING_RESCHEDULED");
 
     expect(getTableConfig(flowExecutionTokens).foreignKeys.map((key) => key.getName())).toContain(
       "flow_execution_tokens_run_version_owner_fk"
@@ -694,9 +698,7 @@ describe("Flows persistence schema", () => {
       '"flow_execution_tokens"."state" not in (\'runnable\', \'retry_scheduled\')\n          or "flow_execution_tokens"."attempt_counter" < "flow_execution_tokens"."max_attempts"'
     );
     expect(migration).not.toContain('"flow_execution_tokens"."retry_policy_key" = $1');
-    expect(migration).toContain(
-      "'FLOW_RUN_CANCELED_BY_OWNER', 'FLOW_BOOKING_CANCELED'"
-    );
+    expect(migration).toContain("'FLOW_RUN_CANCELED_BY_OWNER', 'FLOW_BOOKING_CANCELED'");
 
     for (const constraint of [
       "flows_id_owner_unique",

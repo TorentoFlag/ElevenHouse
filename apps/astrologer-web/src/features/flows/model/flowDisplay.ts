@@ -88,10 +88,7 @@ export function filterFlowDefinitionsForGallery(
   });
 }
 
-function matchesGalleryTab(
-  flow: FlowDefinitionSummary,
-  tab: FlowDefinitionGalleryTab
-): boolean {
+function matchesGalleryTab(flow: FlowDefinitionSummary, tab: FlowDefinitionGalleryTab): boolean {
   switch (tab) {
     case "all":
       return flow.state !== "archived";
@@ -157,9 +154,15 @@ const nodeKindLabels = {
   ru: {
     booking_confirmed: "Запись подтверждена",
     manual_client: "Ручной запуск",
+    new_lead: "Новый лид",
+    free_product_received: "Получен бесплатный продукт",
     product_purchased: "Куплен продукт",
     first_inbound_message: "Первое сообщение",
+    astro_event: "Астрособытие",
     client_lifecycle_changed: "Изменение статуса клиента",
+    schedule_time: "Дата / расписание",
+    review_received: "Получен отзыв",
+    subscription_event: "Событие подписки",
     birth_data_available: "Данные рождения",
     natal_chart_request: "Расчёт натальной карты",
     natal_chart_ai_draft: "AI-черновик трактовки",
@@ -173,9 +176,15 @@ const nodeKindLabels = {
   en: {
     booking_confirmed: "Booking confirmed",
     manual_client: "Manual start",
+    new_lead: "New lead",
+    free_product_received: "Free product received",
     product_purchased: "Product purchased",
     first_inbound_message: "First inbound message",
+    astro_event: "Astro event",
     client_lifecycle_changed: "Client status changed",
+    schedule_time: "Date / schedule",
+    review_received: "Review received",
+    subscription_event: "Subscription event",
     birth_data_available: "Birth data",
     natal_chart_request: "Natal chart calculation",
     natal_chart_ai_draft: "AI interpretation draft",

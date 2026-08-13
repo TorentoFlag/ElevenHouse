@@ -37,9 +37,15 @@ export const FLOW_GRAPH_V2_MAX_EDGES = 400;
 export const flowNodeKindV2Values = [
   "booking_confirmed",
   "manual_client",
+  "new_lead",
+  "free_product_received",
   "product_purchased",
   "first_inbound_message",
+  "astro_event",
   "client_lifecycle_changed",
+  "schedule_time",
+  "review_received",
+  "subscription_event",
   "birth_data_available",
   "natal_chart_request",
   "natal_chart_ai_draft",
@@ -56,9 +62,15 @@ export type FlowNodeKindV2 = z.infer<typeof flowNodeKindV2Schema>;
 export const flowTriggerNodeKindV2Values = [
   "booking_confirmed",
   "manual_client",
+  "new_lead",
+  "free_product_received",
   "product_purchased",
   "first_inbound_message",
-  "client_lifecycle_changed"
+  "astro_event",
+  "client_lifecycle_changed",
+  "schedule_time",
+  "review_received",
+  "subscription_event"
 ] as const;
 export const flowTriggerNodeKindV2Schema = z.enum(flowTriggerNodeKindV2Values);
 export type FlowTriggerNodeKindV2 = z.infer<typeof flowTriggerNodeKindV2Schema>;
@@ -147,6 +159,28 @@ export const flowManualClientNodeV2Schema = z
   .strict();
 export type FlowManualClientNodeV2 = z.infer<typeof flowManualClientNodeV2Schema>;
 
+const enrollmentPolicyConfigSchema = z
+  .object({ enrollmentPolicy: flowEnrollmentPolicyKeySchema })
+  .strict();
+
+export const flowNewLeadNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("new_lead"),
+    config: enrollmentPolicyConfigSchema
+  })
+  .strict();
+export type FlowNewLeadNodeV2 = z.infer<typeof flowNewLeadNodeV2Schema>;
+
+export const flowFreeProductReceivedNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("free_product_received"),
+    config: bookingConfirmedConfigSchema.extend({ enrollmentPolicy: flowEnrollmentPolicyKeySchema })
+  })
+  .strict();
+export type FlowFreeProductReceivedNodeV2 = z.infer<typeof flowFreeProductReceivedNodeV2Schema>;
+
 export const flowProductPurchasedNodeV2Schema = z
   .object({
     ...nodeBaseShape,
@@ -160,10 +194,33 @@ export const flowFirstInboundMessageNodeV2Schema = z
   .object({
     ...nodeBaseShape,
     kind: z.literal("first_inbound_message"),
-    config: z.object({ enrollmentPolicy: flowEnrollmentPolicyKeySchema }).strict()
+    config: enrollmentPolicyConfigSchema
   })
   .strict();
 export type FlowFirstInboundMessageNodeV2 = z.infer<typeof flowFirstInboundMessageNodeV2Schema>;
+
+export const flowAstroEventNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("astro_event"),
+    config: z
+      .object({
+        eventCodes: z.array(stableIdSchema).min(1).max(100),
+        enrollmentPolicy: flowEnrollmentPolicyKeySchema
+      })
+      .strict()
+      .superRefine((config, context) => {
+        if (new Set(config.eventCodes).size !== config.eventCodes.length) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["eventCodes"],
+            message: "Astro-event filters must be unique"
+          });
+        }
+      })
+  })
+  .strict();
+export type FlowAstroEventNodeV2 = z.infer<typeof flowAstroEventNodeV2Schema>;
 
 export const flowClientLifecycleChangedNodeV2Schema = z
   .object({
@@ -187,7 +244,65 @@ export const flowClientLifecycleChangedNodeV2Schema = z
       })
   })
   .strict();
-export type FlowClientLifecycleChangedNodeV2 = z.infer<typeof flowClientLifecycleChangedNodeV2Schema>;
+export type FlowClientLifecycleChangedNodeV2 = z.infer<
+  typeof flowClientLifecycleChangedNodeV2Schema
+>;
+
+export const flowScheduleTimeNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("schedule_time"),
+    config: z
+      .object({
+        scheduleKey: stableIdSchema,
+        enrollmentPolicy: flowEnrollmentPolicyKeySchema
+      })
+      .strict()
+  })
+  .strict();
+export type FlowScheduleTimeNodeV2 = z.infer<typeof flowScheduleTimeNodeV2Schema>;
+
+export const flowReviewReceivedNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("review_received"),
+    config: enrollmentPolicyConfigSchema
+  })
+  .strict();
+export type FlowReviewReceivedNodeV2 = z.infer<typeof flowReviewReceivedNodeV2Schema>;
+
+export const flowSubscriptionEventTypeV2Values = [
+  "started",
+  "renewed",
+  "cancelled",
+  "expired",
+  "payment_failed"
+] as const;
+export const flowSubscriptionEventTypeV2Schema = z.enum(flowSubscriptionEventTypeV2Values);
+export type FlowSubscriptionEventTypeV2 = z.infer<typeof flowSubscriptionEventTypeV2Schema>;
+
+export const flowSubscriptionEventNodeV2Schema = z
+  .object({
+    ...nodeBaseShape,
+    kind: z.literal("subscription_event"),
+    config: z
+      .object({
+        eventTypes: z.array(flowSubscriptionEventTypeV2Schema).min(1).max(20),
+        enrollmentPolicy: flowEnrollmentPolicyKeySchema
+      })
+      .strict()
+      .superRefine((config, context) => {
+        if (new Set(config.eventTypes).size !== config.eventTypes.length) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["eventTypes"],
+            message: "Subscription-event filters must be unique"
+          });
+        }
+      })
+  })
+  .strict();
+export type FlowSubscriptionEventNodeV2 = z.infer<typeof flowSubscriptionEventNodeV2Schema>;
 
 export const flowBirthDataAvailableNodeV2Schema = z
   .object({
@@ -208,7 +323,10 @@ export const flowNatalChartRequestNodeV2Schema = z
     kind: z.literal("natal_chart_request"),
     config: z
       .object({
-        interpretationMode: z.enum(["adult_natal", "child"] satisfies readonly ChartInterpretationMode[]),
+        interpretationMode: z.enum([
+          "adult_natal",
+          "child"
+        ] satisfies readonly ChartInterpretationMode[]),
         settings: chartSettingsSchema
       })
       .strict()
@@ -257,7 +375,9 @@ export const flowAstrologerWorkItemTaskKindV2Values = [
   "consultation_preparation",
   "birth_data_collection"
 ] as const;
-export const flowAstrologerWorkItemTaskKindV2Schema = z.enum(flowAstrologerWorkItemTaskKindV2Values);
+export const flowAstrologerWorkItemTaskKindV2Schema = z.enum(
+  flowAstrologerWorkItemTaskKindV2Values
+);
 export type FlowAstrologerWorkItemTaskKindV2 = z.infer<
   typeof flowAstrologerWorkItemTaskKindV2Schema
 >;
@@ -371,9 +491,15 @@ export type FlowFailedNodeV2 = z.infer<typeof flowFailedNodeV2Schema>;
 export const flowNodeV2Schema = z.discriminatedUnion("kind", [
   flowBookingConfirmedNodeV2Schema,
   flowManualClientNodeV2Schema,
+  flowNewLeadNodeV2Schema,
+  flowFreeProductReceivedNodeV2Schema,
   flowProductPurchasedNodeV2Schema,
   flowFirstInboundMessageNodeV2Schema,
+  flowAstroEventNodeV2Schema,
   flowClientLifecycleChangedNodeV2Schema,
+  flowScheduleTimeNodeV2Schema,
+  flowReviewReceivedNodeV2Schema,
+  flowSubscriptionEventNodeV2Schema,
   flowBirthDataAvailableNodeV2Schema,
   flowNatalChartRequestNodeV2Schema,
   flowNatalChartAiDraftNodeV2Schema,
@@ -436,9 +562,15 @@ export type FlowGraphV2CompileIssueCode = z.infer<typeof flowGraphV2CompileIssue
 
 export const flowCapabilityRequirementValues = [
   "bookings.events.booking_confirmed",
+  "clients.events.new_lead",
+  "products.events.free_product_received",
   "finance.events.client_order_captured",
   "messaging.events.first_inbound_message",
+  "astro.events.calendar",
   "clients.events.lifecycle_changed",
+  "schedule.events.time",
+  "reviews.events.received",
+  "subscriptions.events.changed",
   "clients.birth_data.read.service_preparation",
   "products.read",
   "charts.calculate.natal.booking_context",
@@ -693,7 +825,7 @@ export const flowDefinitionOriginV1Schema = z.discriminatedUnion("type", [
       templateKey: stableIdSchema,
       templateVersion: positiveRevisionSchema
     })
-    .strict(),
+    .strict()
 ]);
 export type FlowDefinitionOriginV1 = z.infer<typeof flowDefinitionOriginV1Schema>;
 
@@ -871,10 +1003,7 @@ export const listFlowDefinitionsV2ResponseSchema = z
   });
 export type ListFlowDefinitionsV2Response = z.infer<typeof listFlowDefinitionsV2ResponseSchema>;
 
-export const flowDefinitionTemplateAvailabilityValues = [
-  "available",
-  "unavailable"
-] as const;
+export const flowDefinitionTemplateAvailabilityValues = ["available", "unavailable"] as const;
 export const flowDefinitionTemplateAvailabilitySchema = z.enum(
   flowDefinitionTemplateAvailabilityValues
 );

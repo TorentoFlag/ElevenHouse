@@ -114,10 +114,7 @@ function compactApprovalModeLabel(
     manual_approve: ["Ручное", "Manual"],
     auto_internal: ["Авто", "Auto"],
     auto_send: ["Автодоставка", "Auto-send"]
-  } as const satisfies Record<
-    FlowDefinitionSummary["approvalMode"],
-    readonly [string, string]
-  >;
+  } as const satisfies Record<FlowDefinitionSummary["approvalMode"], readonly [string, string]>;
   return labels[mode][locale === "ru" ? 0 : 1];
 }
 
@@ -161,10 +158,7 @@ function draftChangesLabel(flow: FlowDefinitionSummary, locale: FlowDisplayLocal
   return ru ? "Без черновых правок" : "No draft changes";
 }
 
-export function getFlowNodeVisual(
-  kind: FlowNodeKindV2,
-  locale: FlowDisplayLocale
-): FlowNodeVisual {
+export function getFlowNodeVisual(kind: FlowNodeKindV2, locale: FlowDisplayLocale): FlowNodeVisual {
   const visual = flowNodeVisualByKind[kind];
   return {
     iconName: visual.iconName,
@@ -181,7 +175,17 @@ const flowNodeVisualByKind = {
   },
   manual_client: {
     iconName: "users",
-    labels: ["Клиент выбран", "Client selected"],
+    labels: ["Ручной запуск", "Manual start"],
+    tone: "trigger"
+  },
+  new_lead: {
+    iconName: "users",
+    labels: ["Новый лид", "New lead"],
+    tone: "trigger"
+  },
+  free_product_received: {
+    iconName: "gift",
+    labels: ["Бесплатный продукт", "Free product"],
     tone: "trigger"
   },
   product_purchased: {
@@ -194,9 +198,29 @@ const flowNodeVisualByKind = {
     labels: ["Первое сообщение", "First message"],
     tone: "trigger"
   },
+  astro_event: {
+    iconName: "orbit",
+    labels: ["Астрособытие", "Astro event"],
+    tone: "trigger"
+  },
   client_lifecycle_changed: {
     iconName: "users",
     labels: ["Статус клиента", "Client status"],
+    tone: "trigger"
+  },
+  schedule_time: {
+    iconName: "calendar",
+    labels: ["Расписание", "Schedule"],
+    tone: "trigger"
+  },
+  review_received: {
+    iconName: "doc",
+    labels: ["Отзыв", "Review"],
+    tone: "trigger"
+  },
+  subscription_event: {
+    iconName: "gift",
+    labels: ["Подписка", "Subscription"],
     tone: "trigger"
   },
   birth_data_available: {

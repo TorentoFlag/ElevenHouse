@@ -1,3 +1,4 @@
+import { flowTriggerNodeKindV2Values } from "@elevenhouse/contracts";
 import type {
   FlowGraphV2,
   FlowNodeKindV2,
@@ -10,11 +11,7 @@ export type FlowEditorLocale = "ru" | "en";
 
 export type FlowPaletteNodeId = Exclude<
   FlowNodeKindV2,
-  | "booking_confirmed"
-  | "manual_client"
-  | "product_purchased"
-  | "first_inbound_message"
-  | "client_lifecycle_changed"
+  (typeof flowTriggerNodeKindV2Values)[number]
 >;
 
 export type FlowPaletteNodeDefinition = {
@@ -176,13 +173,7 @@ export function moveFlowNodePresentation(
 }
 
 export function getRequiredSourceHandles(node: FlowNodeV2): readonly FlowSourceHandleV2[] {
-  if (
-    node.kind === "booking_confirmed" ||
-    node.kind === "manual_client" ||
-    node.kind === "product_purchased" ||
-    node.kind === "first_inbound_message" ||
-    node.kind === "client_lifecycle_changed"
-  ) {
+  if ((flowTriggerNodeKindV2Values as readonly FlowNodeKindV2[]).includes(node.kind)) {
     return ["next"];
   }
   if (node.kind === "birth_data_available") return ["true", "false"];
