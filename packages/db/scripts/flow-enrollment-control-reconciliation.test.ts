@@ -62,6 +62,8 @@ describe("Flow enrollment control production reconciliation", () => {
     expect(flowEnrollmentRuntimeExtensionBaselineDdl).toContain(
       "flow_runtime_events_normalized_shape_check"
     );
+    expect(flowEnrollmentRuntimeExtensionBaselineDdl).toContain("'product_purchased'");
+    expect(flowEnrollmentRuntimeExtensionBaselineDdl).toContain("'subscription_event'");
     expect(flowEnrollmentRuntimeExtensionBaselineDdl).toContain("flow_runs_activation_epoch_fk");
     expect(flowEnrollmentRuntimeExtensionBaselineDdl).toContain(
       "WHERE activation_epoch_id IS NOT NULL"

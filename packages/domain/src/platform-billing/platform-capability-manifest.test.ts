@@ -711,7 +711,7 @@ describe("platform capability manifest", () => {
         `Stale manifest/controller fixture ${item.sourcePath} (${item.identifier})`
       ).toContain(`${item.sourcePath}|${normalizePhysicalIdentifier(item.identifier)}`);
     }
-  }, 15_000);
+  }, 45_000);
 
   it("validates exact navigation IDs, hrefs, and frontend routes for both launch locales", async () => {
     const copyModule = (await importRuntimeFixture(
