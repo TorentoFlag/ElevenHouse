@@ -447,7 +447,8 @@ async function recordTelegramBusinessConnection(
     const connection =
       connections[0] ??
       (input.enabled
-        ? await findPendingTelegramBusinessConnectionByOwnerUserId(transaction, input.userId)
+        ? ((await findPendingTelegramBusinessConnectionByOwnerUserId(transaction, input.userId)) ??
+          (await findOnlyUnboundPendingTelegramBusinessConnection(transaction)))
         : null);
     if (!connection) return { kind: "unmatched" };
 
@@ -1023,6 +1024,30 @@ async function findPendingTelegramBusinessConnectionByOwnerUserId(
         eq(messagingChannelConnections.status, "connecting"),
         isNull(messagingChannelConnections.externalAccountId),
         eq(messagingChannelConnections.externalOwnerUserId, telegramUserId)
+      )
+    )
+    .limit(2);
+
+  const row = rows[0];
+  return rows.length === 1 && row ? row : null;
+}
+
+async function findOnlyUnboundPendingTelegramBusinessConnection(
+  database: MessagingDatabase
+): Promise<{ readonly id: string; readonly astrologerUserId: string } | null> {
+  const rows = await database
+    .select({
+      id: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.provider, "telegram"),
+        eq(messagingChannelConnections.mode, "telegram_business_bot"),
+        eq(messagingChannelConnections.status, "connecting"),
+        isNull(messagingChannelConnections.externalAccountId),
+        isNull(messagingChannelConnections.externalOwnerUserId)
       )
     )
     .limit(2);

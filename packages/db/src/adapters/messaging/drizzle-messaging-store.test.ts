@@ -817,8 +817,60 @@ describe("createDrizzleMessagingStore", () => {
     ]);
   });
 
-  it("does not claim an unbound pending Telegram Business connection", async () => {
-    const fake = createUnboundPendingTelegramBusinessConnectionDatabase();
+  it("claims the only unbound pending Telegram Business connection when Telegram connects before setup start", async () => {
+    const fake = createSingleUnboundPendingTelegramBusinessConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessConnection({
+        businessConnectionId: "bc_real",
+        userId: "987654321",
+        userChatId: "123456789",
+        username: "alisa_astro",
+        displayName: "Alisa",
+        connectedAt: now.toISOString(),
+        enabled: true,
+        rights: {
+          canReply: true,
+          canReadMessages: true,
+          canDeleteSentMessages: false,
+          canDeleteAllMessages: false,
+          canEditName: false,
+          canEditBio: false,
+          canEditProfilePhoto: false,
+          canEditUsername: false,
+          canChangeGiftSettings: false,
+          canViewGiftsAndStars: false,
+          canConvertGiftsToStars: false,
+          canTransferAndUpgradeGifts: false,
+          canTransferStars: false,
+          canManageStories: false
+        },
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(fake.updates).toContainEqual({
+      table: messagingChannelConnections,
+      value: expect.objectContaining({
+        status: "active",
+        externalAccountId: "bc_real",
+        externalOwnerUserId: "987654321",
+        displayNameSnapshot: "Alisa",
+        usernameSnapshot: "alisa_astro"
+      })
+    });
+    expect(fake.realtimeEventInserts).toEqual([
+      expect.objectContaining({
+        astrologerUserId,
+        type: "channelConnection.updated",
+        channelConnectionId,
+        createdAt: now
+      })
+    ]);
+  });
+
+  it("does not claim ambiguous unbound pending Telegram Business connections", async () => {
+    const fake = createAmbiguousUnboundPendingTelegramBusinessConnectionDatabase();
 
     await expect(
       createDrizzleMessagingStore(fake.database as never).recordTelegramBusinessConnection({
@@ -1790,7 +1842,40 @@ function createPendingTelegramBusinessConnectionDatabase() {
   return { database, updates, realtimeEventInserts };
 }
 
-function createUnboundPendingTelegramBusinessConnectionDatabase() {
+function createSingleUnboundPendingTelegramBusinessConnectionDatabase() {
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const realtimeEventInserts: Record<string, unknown>[] = [];
+  let selectCount = 0;
+  const database = {
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => {
+        if (table === messagingRealtimeEvents) realtimeEventInserts.push(value);
+        return {
+          returning: async () =>
+            table === messagingRealtimeEvents ? [realtimeEventRow(value)] : []
+        };
+      }
+    }),
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return { returning: async () => [{ id: channelConnectionId }] };
+        }
+      })
+    }),
+    select: () => {
+      const rows = selectCount === 2 ? [{ id: channelConnectionId, astrologerUserId }] : [];
+      selectCount += 1;
+      return selectChain(rows);
+    },
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(database)
+  };
+
+  return { database, updates, realtimeEventInserts };
+}
+
+function createAmbiguousUnboundPendingTelegramBusinessConnectionDatabase() {
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   let selectCount = 0;
   const database = {
@@ -1806,8 +1891,18 @@ function createUnboundPendingTelegramBusinessConnectionDatabase() {
       })
     }),
     select: () => {
+      const rows =
+        selectCount === 2
+          ? [
+              { id: channelConnectionId, astrologerUserId },
+              {
+                id: "00000000-0000-4000-8000-000000000020",
+                astrologerUserId: "00000000-0000-4000-8000-000000000021"
+              }
+            ]
+          : [];
       selectCount += 1;
-      return selectChain([], (where) => {
+      return selectChain(rows, (where) => {
         const rendered = renderWhere(where);
         if (selectCount === 2 && !rendered.sql.includes("external_owner_user_id")) {
           throw new Error("Unbound Telegram Business pending lookup must use owner user id");
