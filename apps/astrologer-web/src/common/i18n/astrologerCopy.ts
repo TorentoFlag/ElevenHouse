@@ -90,6 +90,11 @@ export type AstrologerCopy = {
     errorDescription: string;
     journalCountLabel: (count: number) => string;
     accessModeLabel: (mode: string) => string;
+    journalListTitle: string;
+    clientLabel: (clientIdPrefix: string) => string;
+    unreadLabel: (count: number) => string;
+    cursorLabel: (cursor: number) => string;
+    accessLabel: (mode: string) => string;
     sections: ReadonlyArray<{
       title: string;
       description: string;
@@ -606,6 +611,11 @@ export const astrologerCopyByLocale = {
       journalCountLabel: (count) =>
         `${count} ${count === 1 ? "журнал доступен" : "журналов доступно"}`,
       accessModeLabel: (mode) => `Маркер доступа: ${mode}`,
+      journalListTitle: "Доступные журналы",
+      clientLabel: (clientIdPrefix) => `Клиент ${clientIdPrefix}`,
+      unreadLabel: (count) => `Непрочитано: ${count}`,
+      cursorLabel: (cursor) => `Курсор: ${cursor}`,
+      accessLabel: (mode) => `Доступ: ${mode}`,
       sections: [
         {
           title: "Лента записей",
@@ -1095,6 +1105,11 @@ export const astrologerCopyByLocale = {
       journalCountLabel: (count) =>
         `${count} ${count === 1 ? "journal available" : "journals available"}`,
       accessModeLabel: (mode) => `Access marker: ${mode}`,
+      journalListTitle: "Available journals",
+      clientLabel: (clientIdPrefix) => `Client ${clientIdPrefix}`,
+      unreadLabel: (count) => `Unread: ${count}`,
+      cursorLabel: (cursor) => `Cursor: ${cursor}`,
+      accessLabel: (mode) => `Access: ${mode}`,
       sections: [
         {
           title: "Timeline",

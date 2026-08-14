@@ -61,6 +61,33 @@ export function AstroDiaryPage() {
           </div>
         </article>
 
+        {journalsQuery.data && journalsQuery.data.journals.length > 0 ? (
+          <section className={styles.journalList} aria-labelledby="astro-diary-journal-list-title">
+            <h2 id="astro-diary-journal-list-title" className={styles.sectionTitle}>
+              {copy.journalListTitle}
+            </h2>
+            <div className={styles.journalCards}>
+              {journalsQuery.data.journals.map((summary) => (
+                <article className={styles.journalCard} key={summary.journal.id}>
+                  <h3 className={styles.journalCardTitle}>
+                    {copy.clientLabel(summary.journal.clientUserId.slice(0, 8))}
+                  </h3>
+                  <dl className={styles.journalMeta}>
+                    <div>
+                      <dt>{copy.unreadLabel(summary.unreadCount)}</dt>
+                      <dd>{copy.cursorLabel(summary.visibleMaxCursor)}</dd>
+                    </div>
+                    <div>
+                      <dt>{copy.accessLabel(summary.access.mode)}</dt>
+                      <dd>{copy.accessModeLabel(summary.access.subscriptionState)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className={styles.sectionGrid}>
           {copy.sections.map((section) => (
             <article className={styles.sectionCard} key={section.title}>

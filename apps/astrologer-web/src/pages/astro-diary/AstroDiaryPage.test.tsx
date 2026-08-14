@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
 import { AstroDiaryPage } from "./AstroDiaryPage";
 
@@ -25,6 +25,11 @@ vi.mock("../../common/hooks/useDocumentTitle", () => ({
 vi.mock("../../features/astro-diary/model/useAstroDiaryJournalListQuery", () => ({
   useAstroDiaryJournalListQuery: mocks.useAstroDiaryJournalListQuery
 }));
+
+afterEach(() => {
+  cleanup();
+  mocks.useAstroDiaryJournalListQuery.mockReset();
+});
 
 describe("AstroDiaryPage", () => {
   it("renders an honest production connection state without fake journal data", () => {
@@ -57,9 +62,27 @@ describe("AstroDiaryPage", () => {
     expect(screen.getByText("1 журнал доступен")).toBeTruthy();
     expect(screen.getByText("Маркер доступа: read_only")).toBeTruthy();
   });
+
+  it("renders read-only journal cards from server summaries", () => {
+    mocks.locale = "ru";
+    mocks.useAstroDiaryJournalListQuery.mockReturnValue({
+      data: { journals: [journalSummary({ unreadCount: 2, visibleMaxCursor: 7 })], total: 1 },
+      isLoading: false,
+      isError: false
+    });
+
+    render(<AstroDiaryPage />);
+
+    expect(screen.getByText("Клиент 55555555")).toBeTruthy();
+    expect(screen.getByText("Непрочитано: 2")).toBeTruthy();
+    expect(screen.getByText("Курсор: 7")).toBeTruthy();
+    expect(screen.getByText("Доступ: read_only")).toBeTruthy();
+  });
 });
 
-function journalSummary() {
+function journalSummary(
+  overrides: Partial<{ readonly unreadCount: number; readonly visibleMaxCursor: number }> = {}
+) {
   return {
     journal: {
       id: "22222222-2222-4222-8222-222222222222",
@@ -80,7 +103,7 @@ function journalSummary() {
       currentPeriod: null,
       allowance: null
     },
-    unreadCount: 0,
-    visibleMaxCursor: 0
+    unreadCount: overrides.unreadCount ?? 0,
+    visibleMaxCursor: overrides.visibleMaxCursor ?? 0
   };
 }
