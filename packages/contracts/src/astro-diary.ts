@@ -702,6 +702,23 @@ export type AstroDiaryJournalSummaryResponse = z.infer<
   typeof astroDiaryJournalSummaryResponseSchema
 >;
 
+export const astroDiaryJournalListResponseSchema = z
+  .object({
+    journals: z.array(astroDiaryJournalSummaryResponseSchema).max(100),
+    total: z.number().int().nonnegative()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.total < value.journals.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["total"],
+        message: "Journal total cannot be lower than returned journals"
+      });
+    }
+  });
+export type AstroDiaryJournalListResponse = z.infer<typeof astroDiaryJournalListResponseSchema>;
+
 export const astroDiaryTimelineQuerySchema = z
   .object({
     afterCursor: queryIntegerSchema(0, Number.MAX_SAFE_INTEGER).optional().default(0),

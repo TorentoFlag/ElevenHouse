@@ -1,11 +1,14 @@
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
+import { useAstroDiaryJournalListQuery } from "../../features/astro-diary/model/useAstroDiaryJournalListQuery";
 import styles from "./AstroDiaryPage.module.css";
 
 export function AstroDiaryPage() {
   const { dictionary } = useI18n<AstrologerCopy>();
   const copy = dictionary.astroDiary;
+  const journalsQuery = useAstroDiaryJournalListQuery();
+  const primaryJournal = journalsQuery.data?.journals[0];
 
   useDocumentTitle(copy.documentTitle);
 
@@ -32,6 +35,30 @@ export function AstroDiaryPage() {
             {copy.connectionTitle}
           </h2>
           <p className={styles.connectionDescription}>{copy.connectionDescription}</p>
+          <div className={styles.journalStatus} aria-live="polite">
+            {journalsQuery.isLoading ? (
+              <p className={styles.statusText}>{copy.loadingLabel}</p>
+            ) : journalsQuery.isError ? (
+              <>
+                <p className={styles.statusTitle}>{copy.errorTitle}</p>
+                <p className={styles.statusText}>{copy.errorDescription}</p>
+              </>
+            ) : journalsQuery.data && journalsQuery.data.total > 0 && primaryJournal ? (
+              <>
+                <p className={styles.statusTitle}>
+                  {copy.journalCountLabel(journalsQuery.data.total)}
+                </p>
+                <p className={styles.statusText}>
+                  {copy.accessModeLabel(primaryJournal.access.mode)}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className={styles.statusTitle}>{copy.emptyTitle}</p>
+                <p className={styles.statusText}>{copy.emptyDescription}</p>
+              </>
+            )}
+          </div>
         </article>
 
         <div className={styles.sectionGrid}>

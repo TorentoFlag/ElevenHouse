@@ -1,6 +1,7 @@
 export * from "./schema/index";
 export * from "./connection/index";
 export * from "./adapters/astro-calendar/index";
+export * from "./adapters/astro-diary/index";
 export * from "./adapters/client-subscriptions/index";
 export * from "./adapters/matrix/index";
 export * from "./adapters/scheduling/index";

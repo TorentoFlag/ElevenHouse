@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config";
 import { createAstrologerApiRuntimeConfig } from "./config/runtime-config";
 import { AiModule } from "./modules/ai/ai.module";
 import { AstroCalendarModule } from "./modules/astro-calendar/astro-calendar.module";
+import { AstroDiaryModule } from "./modules/astro-diary/astro-diary.module";
 import { AvailabilityModule } from "./modules/availability/availability.module";
 import { AstrologerProfileModule } from "./modules/astrologer-profile/astrologer-profile.module";
 import { BookingsModule } from "./modules/bookings/bookings.module";
@@ -44,6 +45,7 @@ import { SessionsModule } from "./modules/sessions/sessions.module";
     AiModule,
     DictionaryModule,
     DictionaryAiModule,
+    AstroDiaryModule,
     FinanceModule,
     FlowsModule,
     MediaModule,

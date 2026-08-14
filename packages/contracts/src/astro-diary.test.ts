@@ -6,6 +6,7 @@ import {
   astroDiaryDraftSchema,
   astroDiaryEventSchema,
   astroDiaryJournalSchema,
+  astroDiaryJournalListResponseSchema,
   astroDiaryMoodIdSchema,
   astroDiaryRealtimeEventSchema,
   astroDiaryResponseObligationSchema,
@@ -31,6 +32,27 @@ describe("AstroDiary contracts", () => {
     expect(astroDiaryJournalSchema.safeParse({ ...journal, subscriptionId: id(6) }).success).toBe(
       false
     );
+  });
+
+  it("returns an exact list envelope for astrologer journal summaries", () => {
+    const summary = journalSummary();
+
+    expect(
+      astroDiaryJournalListResponseSchema.parse({
+        journals: [summary],
+        total: 1
+      })
+    ).toEqual({
+      journals: [summary],
+      total: 1
+    });
+    expect(
+      astroDiaryJournalListResponseSchema.safeParse({
+        journals: [summary],
+        total: 1,
+        actorUserId: id(4)
+      }).success
+    ).toBe(false);
   });
 
   it("keeps open and closed cycle shapes disjoint", () => {
@@ -357,3 +379,41 @@ describe("AstroDiary contracts", () => {
     ).toBe(false);
   });
 });
+
+function journalSummary() {
+  return {
+    journal: {
+      id: id(1),
+      relationshipId: id(2),
+      journalEpochId: id(3),
+      astrologerUserId: id(4),
+      clientUserId: id(5),
+      state: "active",
+      version: 1,
+      createdAt: "2026-08-12T09:00:00Z"
+    },
+    currentCycle: null,
+    currentObligation: null,
+    access: {
+      mode: "active",
+      subscriptionId: id(6),
+      subscriptionState: "active",
+      currentPeriod: {
+        id: id(7),
+        sequence: 1,
+        startsAt: "2026-08-12T09:00:00Z",
+        endsAt: "2026-09-12T09:00:00Z"
+      },
+      allowance: {
+        periodId: id(7),
+        total: 3,
+        available: 3,
+        reserved: 0,
+        consumed: 0,
+        released: 0
+      }
+    },
+    unreadCount: 0,
+    visibleMaxCursor: 0
+  } as const;
+}

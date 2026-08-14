@@ -83,6 +83,13 @@ export type AstrologerCopy = {
     eyebrow: string;
     connectionTitle: string;
     connectionDescription: string;
+    loadingLabel: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    errorTitle: string;
+    errorDescription: string;
+    journalCountLabel: (count: number) => string;
+    accessModeLabel: (mode: string) => string;
     sections: ReadonlyArray<{
       title: string;
       description: string;
@@ -588,9 +595,17 @@ export const astrologerCopyByLocale = {
       documentTitle: "Астродневник",
       title: "Астродневник",
       eyebrow: "Дневник клиента",
-      connectionTitle: "Контур журнала подключается",
+      connectionTitle: "Журналы клиентов",
       connectionDescription:
-        "Записи, голосовые заметки, файлы и ответы по подписке появятся здесь только после подключения реального API журнала. Сейчас раздел добавлен в рабочее пространство без тестовых данных.",
+        "Раздел читает реальные журналы из API. Лента записей, медиа, ответы и AI-черновики будут открыты следующими командами без локальных тестовых данных.",
+      loadingLabel: "Загружаем журналы",
+      emptyTitle: "Журналов пока нет",
+      emptyDescription: "Астродневник появится здесь после первой активированной подписки клиента.",
+      errorTitle: "Не удалось загрузить журналы",
+      errorDescription: "Обновите страницу или повторите позже. Данные не подменяются локально.",
+      journalCountLabel: (count) =>
+        `${count} ${count === 1 ? "журнал доступен" : "журналов доступно"}`,
+      accessModeLabel: (mode) => `Маркер доступа: ${mode}`,
       sections: [
         {
           title: "Лента записей",
@@ -1068,9 +1083,18 @@ export const astrologerCopyByLocale = {
       documentTitle: "Astro journal",
       title: "Astro journal",
       eyebrow: "Client journal",
-      connectionTitle: "Journal contour is being connected",
+      connectionTitle: "Client journals",
       connectionDescription:
-        "Entries, voice notes, files, and subscription replies will appear here only after the real journal API is connected. The workspace section is visible now without test data.",
+        "This section reads real journals from the API. Timeline entries, media, replies, and AI drafts will be opened by the next commands without local test data.",
+      loadingLabel: "Loading journals",
+      emptyTitle: "No journals yet",
+      emptyDescription:
+        "Astro journal will appear here after the first activated client subscription.",
+      errorTitle: "Could not load journals",
+      errorDescription: "Refresh the page or try again later. Data is not substituted locally.",
+      journalCountLabel: (count) =>
+        `${count} ${count === 1 ? "journal available" : "journals available"}`,
+      accessModeLabel: (mode) => `Access marker: ${mode}`,
       sections: [
         {
           title: "Timeline",

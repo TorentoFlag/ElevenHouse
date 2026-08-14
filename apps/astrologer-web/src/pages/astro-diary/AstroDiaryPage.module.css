@@ -124,6 +124,33 @@
   line-height: 1.55;
 }
 
+.journalStatus {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+  border: 1px solid var(--astro-diary-line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgb(33 29 61 / 0.58);
+}
+
+.statusTitle,
+.statusText {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.statusTitle {
+  color: var(--astro-diary-text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.statusText {
+  color: var(--astro-diary-muted);
+  font-size: 13px;
+}
+
 .sectionGrid {
   display: grid;
   max-width: 980px;
