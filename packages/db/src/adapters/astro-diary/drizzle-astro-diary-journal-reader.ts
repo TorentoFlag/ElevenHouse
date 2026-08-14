@@ -1,11 +1,14 @@
-import { and, asc, desc, eq, max, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, max, ne } from "drizzle-orm";
 import {
   astroDiaryCycleSchema,
   astroDiaryJournalListResponseSchema,
   astroDiaryJournalSchema,
   astroDiaryResponseObligationSchema,
+  astroDiaryTimelineItemSchema,
+  astroDiaryTimelinePageSchema,
   type AstroDiaryJournalListResponse,
-  type AstroDiaryJournalSummaryResponse
+  type AstroDiaryJournalSummaryResponse,
+  type AstroDiaryTimelinePage
 } from "@elevenhouse/contracts";
 import type { AstroDiaryJournalReader } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
@@ -16,6 +19,7 @@ import {
   astroDiaryResponseObligations,
   astroDiaryResponseObligationWeekdays,
   astroDiaryTimelineItems,
+  astroDiaryTimelineRevisionAttachments,
   clientSubscriptions
 } from "../../schema";
 import { findClientSubscriptionPeriodAllowance } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
@@ -26,7 +30,8 @@ export function createDrizzleAstroDiaryJournalReader(
   database: ElevenHouseDatabase
 ): AstroDiaryJournalReader {
   return {
-    listAstrologerJournals: (input) => listAstrologerJournals(database, input)
+    listAstrologerJournals: (input) => listAstrologerJournals(database, input),
+    getJournalTimeline: (input) => getJournalTimeline(database, input)
   };
 }
 
@@ -184,6 +189,109 @@ async function toJournalSummary(
     access,
     unreadCount: Math.max(0, visibleMaxCursor - (readCursorRow?.lastReadCursor ?? 0)),
     visibleMaxCursor
+  });
+}
+
+async function getJournalTimeline(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getJournalTimeline"]>[0]
+): Promise<AstroDiaryTimelinePage | null> {
+  return database.transaction((transaction) => getJournalTimelineInTransaction(transaction, input));
+}
+
+async function getJournalTimelineInTransaction(
+  database: ClientSubscriptionTransaction,
+  input: Parameters<AstroDiaryJournalReader["getJournalTimeline"]>[0]
+): Promise<AstroDiaryTimelinePage | null> {
+  const [journalRow] = await database
+    .select({ id: astroDiaryJournals.id })
+    .from(astroDiaryJournals)
+    .where(
+      and(
+        eq(astroDiaryJournals.id, input.journalId),
+        eq(astroDiaryJournals.astrologerUserId, input.astrologerUserId),
+        ne(astroDiaryJournals.state, "erased")
+      )
+    )
+    .limit(1);
+  if (!journalRow) return null;
+
+  const [cursorRow] = await database
+    .select({ visibleMaxCursor: max(astroDiaryTimelineItems.cursor) })
+    .from(astroDiaryTimelineItems)
+    .where(eq(astroDiaryTimelineItems.journalId, input.journalId));
+  const visibleMaxCursor = cursorRow?.visibleMaxCursor ?? 0;
+  const timelineRows = await database
+    .select()
+    .from(astroDiaryTimelineItems)
+    .where(
+      and(
+        eq(astroDiaryTimelineItems.journalId, input.journalId),
+        gt(astroDiaryTimelineItems.cursor, input.afterCursor)
+      )
+    )
+    .orderBy(asc(astroDiaryTimelineItems.cursor), asc(astroDiaryTimelineItems.id))
+    .limit(input.limit);
+
+  const items = [];
+  for (const itemRow of timelineRows) {
+    items.push(await toTimelineItem(database, itemRow));
+  }
+  const nextCursor = items.at(-1)?.cursor ?? null;
+
+  return astroDiaryTimelinePageSchema.parse({
+    items,
+    nextCursor,
+    visibleMaxCursor,
+    hasMore: nextCursor !== null && nextCursor < visibleMaxCursor
+  });
+}
+
+async function toTimelineItem(
+  database: ClientSubscriptionTransaction,
+  itemRow: typeof astroDiaryTimelineItems.$inferSelect
+) {
+  const base = {
+    id: itemRow.id,
+    journalId: itemRow.journalId,
+    cycleId: itemRow.cycleId,
+    authorUserId: itemRow.authorUserId,
+    revision: itemRow.currentRevision,
+    occurredAt: itemRow.occurredAt.toISOString(),
+    cursor: itemRow.cursor
+  };
+
+  if (itemRow.kind === "tombstone") {
+    return astroDiaryTimelineItemSchema.parse({
+      ...base,
+      kind: "tombstone",
+      originalKind: itemRow.originalKind,
+      authorRole: itemRow.authorRole,
+      reason: itemRow.tombstoneReason
+    });
+  }
+
+  const attachmentRows = await database
+    .select({ mediaId: astroDiaryTimelineRevisionAttachments.mediaId })
+    .from(astroDiaryTimelineRevisionAttachments)
+    .where(
+      and(
+        eq(astroDiaryTimelineRevisionAttachments.itemId, itemRow.id),
+        eq(astroDiaryTimelineRevisionAttachments.revision, itemRow.currentRevision)
+      )
+    )
+    .orderBy(asc(astroDiaryTimelineRevisionAttachments.ordinal));
+
+  return astroDiaryTimelineItemSchema.parse({
+    ...base,
+    kind: itemRow.kind,
+    authorRole: itemRow.authorRole,
+    body: itemRow.body,
+    attachmentIds: attachmentRows.map((row) => row.mediaId),
+    editedAt: itemRow.editedAt?.toISOString() ?? null,
+    moodId: itemRow.moodId,
+    contextStatus: itemRow.contextStatus,
+    correctsItemId: itemRow.correctsItemId
   });
 }
 

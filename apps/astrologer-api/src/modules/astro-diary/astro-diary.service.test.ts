@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { AstroDiaryJournalReader } from "@elevenhouse/domain";
 import type { SystemClock } from "../clock/system-clock.service";
@@ -37,11 +37,55 @@ describe("AstroDiaryService", () => {
       service.listJournals({ currentAstrologerAccount: undefined })
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it("loads a journal timeline page for the current astrologer", async () => {
+    const reader = createReader({
+      getJournalTimeline: vi.fn(async () => ({
+        items: [],
+        nextCursor: null,
+        visibleMaxCursor: 0,
+        hasMore: false
+      }))
+    });
+    const service = new AstroDiaryService(reader, clock());
+
+    await expect(
+      service.getTimeline(request(), journalId, { afterCursor: "3", limit: "25" })
+    ).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+      visibleMaxCursor: 0,
+      hasMore: false
+    });
+    expect(reader.getJournalTimeline).toHaveBeenCalledWith({
+      astrologerUserId,
+      journalId,
+      afterCursor: 3,
+      limit: 25
+    });
+  });
+
+  it("hides timelines for foreign or missing journals", async () => {
+    const reader = createReader({
+      getJournalTimeline: vi.fn(async () => null)
+    });
+    const service = new AstroDiaryService(reader, clock());
+
+    await expect(service.getTimeline(request(), journalId, {})).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
 });
 
 function createReader(overrides: Partial<AstroDiaryJournalReader> = {}): AstroDiaryJournalReader {
   return {
     listAstrologerJournals: vi.fn(async () => ({ journals: [], total: 0 })),
+    getJournalTimeline: vi.fn(async () => ({
+      items: [],
+      nextCursor: null,
+      visibleMaxCursor: 0,
+      hasMore: false
+    })),
     ...overrides
   };
 }
