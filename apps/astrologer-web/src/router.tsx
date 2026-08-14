@@ -15,6 +15,7 @@ import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
 import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage";
+import { AstroDiaryPage } from "./pages/astro-diary/AstroDiaryPage";
 import { FlowsPage } from "./pages/flows/FlowsPage";
 import { astrologerRouteContract } from "./router.contract";
 
@@ -85,6 +86,10 @@ export const astrologerRoutes = [
           {
             path: astrologerRouteContract.protected.astroCalendar,
             element: <AstroCalendarPage />
+          },
+          {
+            path: astrologerRouteContract.protected.astroDiary,
+            element: <AstroDiaryPage />
           },
           {
             path: astrologerRouteContract.protected.chartEngine,

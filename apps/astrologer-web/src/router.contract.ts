@@ -17,6 +17,7 @@ export const astrologerRouteContract = {
     matrix: "/matrix",
     humanDesign: "/human-design",
     astroCalendar: "/astro-calendar",
+    astroDiary: "/astro-diary",
     chartEngine: "/chart-engine",
     session: "/sessions/:sessionId",
     settings: "/settings"

@@ -77,6 +77,17 @@ export type AstrologerCopy = {
     documentTitle: string;
     title: string;
   };
+  astroDiary: {
+    documentTitle: string;
+    title: string;
+    eyebrow: string;
+    connectionTitle: string;
+    connectionDescription: string;
+    sections: ReadonlyArray<{
+      title: string;
+      description: string;
+    }>;
+  };
   calendar: {
     documentTitle: string;
     title: string;
@@ -551,6 +562,7 @@ export const astrologerCopyByLocale = {
           { id: "destinyMatrix", title: "Матрица судьбы", href: "/matrix" },
           { id: "humanDesign", title: "Дизайн человека", href: "/human-design" },
           { id: "astroCalendar", title: "Астрокалендарь", href: "/astro-calendar" },
+          { id: "astroDiary", title: "Астродневник", href: "/astro-diary" },
           { id: "reference", title: "Справочники", href: "/reference" },
           { id: "inbox", title: "Сообщения", href: "/inbox" }
         ],
@@ -571,6 +583,29 @@ export const astrologerCopyByLocale = {
     finance: {
       documentTitle: "ElevenHouse | Финансы",
       title: "Финансы"
+    },
+    astroDiary: {
+      documentTitle: "Астродневник",
+      title: "Астродневник",
+      eyebrow: "Дневник клиента",
+      connectionTitle: "Контур журнала подключается",
+      connectionDescription:
+        "Записи, голосовые заметки, файлы и ответы по подписке появятся здесь только после подключения реального API журнала. Сейчас раздел добавлен в рабочее пространство без тестовых данных.",
+      sections: [
+        {
+          title: "Лента записей",
+          description:
+            "Клиентские записи и ответы астролога будут открываться из реального журнала."
+        },
+        {
+          title: "Медиа и вложения",
+          description: "Файлы дневника будут доступны только через приватный контур доступа."
+        },
+        {
+          title: "AI-черновики",
+          description: "Черновики останутся приватными до ручной публикации астрологом."
+        }
+      ]
     },
     calendar: {
       documentTitle: "ElevenHouse | Календарь",
@@ -1007,6 +1042,7 @@ export const astrologerCopyByLocale = {
           { id: "destinyMatrix", title: "Destiny Matrix", href: "/matrix" },
           { id: "humanDesign", title: "Human Design", href: "/human-design" },
           { id: "astroCalendar", title: "Astro calendar", href: "/astro-calendar" },
+          { id: "astroDiary", title: "Astro journal", href: "/astro-diary" },
           { id: "reference", title: "References", href: "/reference" },
           { id: "inbox", title: "Messages", href: "/inbox" }
         ],
@@ -1027,6 +1063,28 @@ export const astrologerCopyByLocale = {
     finance: {
       documentTitle: "ElevenHouse | Finance",
       title: "Finance"
+    },
+    astroDiary: {
+      documentTitle: "Astro journal",
+      title: "Astro journal",
+      eyebrow: "Client journal",
+      connectionTitle: "Journal contour is being connected",
+      connectionDescription:
+        "Entries, voice notes, files, and subscription replies will appear here only after the real journal API is connected. The workspace section is visible now without test data.",
+      sections: [
+        {
+          title: "Timeline",
+          description: "Client entries and astrologer replies will open from the real journal."
+        },
+        {
+          title: "Media and attachments",
+          description: "Diary files will use the private access contour only."
+        },
+        {
+          title: "AI drafts",
+          description: "Drafts stay private until the astrologer publishes them manually."
+        }
+      ]
     },
     calendar: {
       documentTitle: "ElevenHouse | Calendar",

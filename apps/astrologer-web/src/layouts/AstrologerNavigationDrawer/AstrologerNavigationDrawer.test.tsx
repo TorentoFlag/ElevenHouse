@@ -27,7 +27,7 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.footerItems).toBeUndefined();
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Личная страница");
     expect(JSON.stringify(renderElement(element.props.footer))).toContain("Настройки");
-    expect(element.props.items).toHaveLength(12);
+    expect(element.props.items).toHaveLength(13);
     expect(element.props.items[0]).toMatchObject({
       id: "dashboard",
       title: "Дашборд",
@@ -95,19 +95,26 @@ describe("AstrologerNavigationDrawerView", () => {
     expect(element.props.items[9].icon.type).toBe(Icon);
     expect(element.props.items[9].icon.props.iconName).toBe("orbit");
     expect(element.props.items[10]).toMatchObject({
+      id: "astroDiary",
+      title: "Астродневник",
+      href: "/astro-diary"
+    });
+    expect(element.props.items[10].icon.type).toBe(Icon);
+    expect(element.props.items[10].icon.props.iconName).toBe("content");
+    expect(element.props.items[11]).toMatchObject({
       id: "reference",
       title: "Справочники",
       href: "/reference"
     });
-    expect(element.props.items[10].icon.type).toBe(Icon);
-    expect(element.props.items[10].icon.props.iconName).toBe("reference");
-    expect(element.props.items[11]).toMatchObject({
+    expect(element.props.items[11].icon.type).toBe(Icon);
+    expect(element.props.items[11].icon.props.iconName).toBe("reference");
+    expect(element.props.items[12]).toMatchObject({
       id: "inbox",
       title: "Сообщения",
       href: "/inbox"
     });
-    expect(element.props.items[11].icon.type).toBe(Icon);
-    expect(element.props.items[11].icon.props.iconName).toBe("chat");
+    expect(element.props.items[12].icon.type).toBe(Icon);
+    expect(element.props.items[12].icon.props.iconName).toBe("chat");
     const settingsCopy = astrologerCopyByLocale.ru.appShell.navigation.footerItems[0];
     if (!settingsCopy) {
       throw new Error("Expected settings footer navigation item to be present");
