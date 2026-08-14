@@ -164,6 +164,46 @@
   gap: 12px;
 }
 
+.timelinePanel {
+  display: grid;
+  max-width: 980px;
+  gap: 12px;
+  border: 1px solid var(--astro-diary-line);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgb(23 20 47 / 0.66);
+}
+
+.timelineItems {
+  display: grid;
+  gap: 10px;
+}
+
+.timelineItem {
+  border: 1px solid var(--astro-diary-line);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgb(33 29 61 / 0.62);
+}
+
+.timelineMeta,
+.timelineBody {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.timelineMeta {
+  color: var(--astro-diary-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.timelineBody {
+  margin-top: 8px;
+  color: var(--astro-diary-text);
+  font-size: 14px;
+}
+
 .journalCards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

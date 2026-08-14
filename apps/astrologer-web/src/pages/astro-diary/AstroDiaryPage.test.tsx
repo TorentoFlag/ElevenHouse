@@ -8,7 +8,8 @@ import { AstroDiaryPage } from "./AstroDiaryPage";
 const mocks = vi.hoisted(() => ({
   locale: "ru" as "ru" | "en",
   useDocumentTitle: vi.fn(),
-  useAstroDiaryJournalListQuery: vi.fn()
+  useAstroDiaryJournalListQuery: vi.fn(),
+  useAstroDiaryTimelineQuery: vi.fn()
 }));
 
 vi.mock("@elevenhouse/i18n", () => ({
@@ -26,9 +27,14 @@ vi.mock("../../features/astro-diary/model/useAstroDiaryJournalListQuery", () => 
   useAstroDiaryJournalListQuery: mocks.useAstroDiaryJournalListQuery
 }));
 
+vi.mock("../../features/astro-diary/model/useAstroDiaryTimelineQuery", () => ({
+  useAstroDiaryTimelineQuery: mocks.useAstroDiaryTimelineQuery
+}));
+
 afterEach(() => {
   cleanup();
   mocks.useAstroDiaryJournalListQuery.mockReset();
+  mocks.useAstroDiaryTimelineQuery.mockReset();
 });
 
 describe("AstroDiaryPage", () => {
@@ -37,6 +43,11 @@ describe("AstroDiaryPage", () => {
     mocks.useAstroDiaryJournalListQuery.mockReturnValue({
       data: undefined,
       isLoading: true,
+      isError: false
+    });
+    mocks.useAstroDiaryTimelineQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
       isError: false
     });
 
@@ -56,6 +67,11 @@ describe("AstroDiaryPage", () => {
       isLoading: false,
       isError: false
     });
+    mocks.useAstroDiaryTimelineQuery.mockReturnValue({
+      data: { items: [], nextCursor: null, visibleMaxCursor: 0, hasMore: false },
+      isLoading: false,
+      isError: false
+    });
 
     render(<AstroDiaryPage />);
 
@@ -70,6 +86,11 @@ describe("AstroDiaryPage", () => {
       isLoading: false,
       isError: false
     });
+    mocks.useAstroDiaryTimelineQuery.mockReturnValue({
+      data: { items: [], nextCursor: null, visibleMaxCursor: 0, hasMore: false },
+      isLoading: false,
+      isError: false
+    });
 
     render(<AstroDiaryPage />);
 
@@ -77,6 +98,33 @@ describe("AstroDiaryPage", () => {
     expect(screen.getByText("Непрочитано: 2")).toBeTruthy();
     expect(screen.getByText("Курсор: 7")).toBeTruthy();
     expect(screen.getByText("Доступ: read_only")).toBeTruthy();
+  });
+
+  it("renders the first journal timeline from the read endpoint", () => {
+    mocks.locale = "ru";
+    mocks.useAstroDiaryJournalListQuery.mockReturnValue({
+      data: { journals: [journalSummary()], total: 1 },
+      isLoading: false,
+      isError: false
+    });
+    mocks.useAstroDiaryTimelineQuery.mockReturnValue({
+      data: {
+        items: [timelineItem()],
+        nextCursor: 1,
+        visibleMaxCursor: 1,
+        hasMore: false
+      },
+      isLoading: false,
+      isError: false
+    });
+
+    render(<AstroDiaryPage />);
+
+    expect(mocks.useAstroDiaryTimelineQuery).toHaveBeenCalledWith(
+      "22222222-2222-4222-8222-222222222222"
+    );
+    expect(screen.getByText("Первая запись клиента")).toBeTruthy();
+    expect(screen.getByText("client_entry · #1")).toBeTruthy();
   });
 });
 
@@ -105,5 +153,25 @@ function journalSummary(
     },
     unreadCount: overrides.unreadCount ?? 0,
     visibleMaxCursor: overrides.visibleMaxCursor ?? 0
+  };
+}
+
+function timelineItem() {
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    journalId: "22222222-2222-4222-8222-222222222222",
+    cycleId: "88888888-8888-4888-8888-888888888888",
+    authorUserId: "55555555-5555-4555-8555-555555555555",
+    revision: 1,
+    occurredAt: "2026-08-12T10:00:00Z",
+    cursor: 1,
+    kind: "client_entry",
+    authorRole: "client",
+    body: "Первая запись клиента",
+    attachmentIds: [],
+    editedAt: null,
+    moodId: null,
+    contextStatus: "pending",
+    correctsItemId: null
   };
 }

@@ -2,6 +2,7 @@ import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import { useAstroDiaryJournalListQuery } from "../../features/astro-diary/model/useAstroDiaryJournalListQuery";
+import { useAstroDiaryTimelineQuery } from "../../features/astro-diary/model/useAstroDiaryTimelineQuery";
 import styles from "./AstroDiaryPage.module.css";
 
 export function AstroDiaryPage() {
@@ -9,6 +10,7 @@ export function AstroDiaryPage() {
   const copy = dictionary.astroDiary;
   const journalsQuery = useAstroDiaryJournalListQuery();
   const primaryJournal = journalsQuery.data?.journals[0];
+  const timelineQuery = useAstroDiaryTimelineQuery(primaryJournal?.journal.id);
 
   useDocumentTitle(copy.documentTitle);
 
@@ -85,6 +87,36 @@ export function AstroDiaryPage() {
                 </article>
               ))}
             </div>
+          </section>
+        ) : null}
+
+        {primaryJournal ? (
+          <section className={styles.timelinePanel} aria-labelledby="astro-diary-timeline-title">
+            <h2 id="astro-diary-timeline-title" className={styles.sectionTitle}>
+              {copy.timelineTitle}
+            </h2>
+            {timelineQuery.isLoading ? (
+              <p className={styles.sectionDescription}>{copy.timelineLoadingLabel}</p>
+            ) : timelineQuery.isError ? (
+              <p className={styles.sectionDescription}>{copy.timelineErrorLabel}</p>
+            ) : timelineQuery.data && timelineQuery.data.items.length > 0 ? (
+              <div className={styles.timelineItems}>
+                {timelineQuery.data.items.map((item) => (
+                  <article className={styles.timelineItem} key={item.id}>
+                    <p className={styles.timelineMeta}>
+                      {copy.timelineItemMetaLabel(item.kind, item.cursor)}
+                    </p>
+                    {"body" in item ? (
+                      <p className={styles.timelineBody}>{item.body}</p>
+                    ) : (
+                      <p className={styles.timelineBody}>{item.reason}</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.sectionDescription}>{copy.timelineEmptyLabel}</p>
+            )}
           </section>
         ) : null}
 

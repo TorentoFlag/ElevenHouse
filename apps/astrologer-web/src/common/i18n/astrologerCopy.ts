@@ -95,6 +95,11 @@ export type AstrologerCopy = {
     unreadLabel: (count: number) => string;
     cursorLabel: (cursor: number) => string;
     accessLabel: (mode: string) => string;
+    timelineTitle: string;
+    timelineLoadingLabel: string;
+    timelineEmptyLabel: string;
+    timelineErrorLabel: string;
+    timelineItemMetaLabel: (kind: string, cursor: number) => string;
     sections: ReadonlyArray<{
       title: string;
       description: string;
@@ -616,6 +621,11 @@ export const astrologerCopyByLocale = {
       unreadLabel: (count) => `Непрочитано: ${count}`,
       cursorLabel: (cursor) => `Курсор: ${cursor}`,
       accessLabel: (mode) => `Доступ: ${mode}`,
+      timelineTitle: "Последние записи",
+      timelineLoadingLabel: "Загружаем ленту",
+      timelineEmptyLabel: "В этом журнале пока нет видимых записей",
+      timelineErrorLabel: "Не удалось загрузить ленту журнала",
+      timelineItemMetaLabel: (kind, cursor) => `${kind} · #${cursor}`,
       sections: [
         {
           title: "Лента записей",
@@ -1110,6 +1120,11 @@ export const astrologerCopyByLocale = {
       unreadLabel: (count) => `Unread: ${count}`,
       cursorLabel: (cursor) => `Cursor: ${cursor}`,
       accessLabel: (mode) => `Access: ${mode}`,
+      timelineTitle: "Recent entries",
+      timelineLoadingLabel: "Loading timeline",
+      timelineEmptyLabel: "This journal has no visible entries yet",
+      timelineErrorLabel: "Could not load journal timeline",
+      timelineItemMetaLabel: (kind, cursor) => `${kind} · #${cursor}`,
       sections: [
         {
           title: "Timeline",
