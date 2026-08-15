@@ -644,19 +644,6 @@
 .warningText {
   color: #ffcf8b;
 }
-.warningStack {
-  display: grid;
-  gap: 8px;
-}
-.chartWarning {
-  padding: 9px 11px;
-  border: 1px solid rgb(246 210 102 / 0.22);
-  border-radius: 11px;
-  background: var(--chart-gold-soft);
-  color: #ffdf9b;
-  font-size: 12px;
-  line-height: 1.42;
-}
 .summaryCard {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);

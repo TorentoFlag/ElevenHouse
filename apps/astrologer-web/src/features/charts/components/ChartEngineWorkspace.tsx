@@ -13,7 +13,6 @@ import {
   formatHouseSignDisplay,
   getChartPointDisplayLabel,
   getChartPointSymbol,
-  getChartWarnings,
   getPrimaryChartRenderResult
 } from "../model/chartDisplay";
 import type { ChartBirthDataReadiness } from "../model/chartEngineState";
@@ -388,7 +387,6 @@ function ChartSummaryRail({
 }) {
   const astroResult = displayResult?.method === "astrocartography" ? displayResult : null;
   const wheelResult = astroResult ? null : displayResult;
-  const warnings = displayResult ? getChartWarnings(displayResult) : [];
 
   return (
     <aside className={styles.rail} aria-label={copy.rail.ariaLabel}>
@@ -396,18 +394,6 @@ function ChartSummaryRail({
         <section className={styles.railGroup}>
           <h2>{copy.rail.birthData}</h2>
           <p className={styles.warningText}>{copy.rail.missing(readiness.missing)}</p>
-        </section>
-      ) : null}
-      {warnings.length ? (
-        <section className={styles.railGroup}>
-          <h2>{copy.rail.warnings}</h2>
-          <div className={styles.warningStack}>
-            {warnings.map((warning) => (
-              <div className={styles.chartWarning} key={warning.code}>
-                {formatChartWarning(warning, copy)}
-              </div>
-            ))}
-          </div>
         </section>
       ) : null}
       <section className={styles.railGroup}>
@@ -706,11 +692,4 @@ function getDominantPoints(result: ChartResult, locale: DictionaryLocale) {
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
     .sort((a, b) => b.count - a.count || (pointOrder.get(a.id) ?? 0) - (pointOrder.get(b.id) ?? 0))
     .slice(0, 3);
-}
-
-function formatChartWarning(
-  warning: ReturnType<typeof getChartWarnings>[number],
-  copy: ChartEngineCopy
-) {
-  return warning.code === "BIRTH_TIME_APPROXIMATE" ? copy.rail.approximateWarning : warning.message;
 }

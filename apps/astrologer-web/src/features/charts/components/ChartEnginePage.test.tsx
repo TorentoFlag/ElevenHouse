@@ -1369,7 +1369,7 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText("I дом")).toBeInTheDocument();
   });
 
-  it("renders canonical warnings and distribution summaries", () => {
+  it("omits chart warning blocks while keeping distribution summaries", () => {
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -1390,7 +1390,11 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByText(/время рождения указано примерно/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Предупреждения" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/время рождения указано примерно/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Chart calculated with approximate birth time.")
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /стихии/i })).toBeInTheDocument();
     expect(screen.getByText(/огонь/i)).toBeInTheDocument();
     expect(screen.getByText(/кардинальный/i)).toBeInTheDocument();
