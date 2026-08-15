@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@elevenhouse/i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chartMethodVersions } from "@elevenhouse/contracts";
+import { chartMethodVersions, chartResultSchema } from "@elevenhouse/contracts";
 import type {
   CalculationRecordResponse,
   ChartCalculationCapability,
@@ -21,7 +21,8 @@ import type {
   StoredChartNatalCalculationPayload,
   StoredChartSolarReturnCalculationPayload,
   StoredChartProgressionCalculationPayload,
-  StoredChartSynastryCalculationPayload
+  StoredChartSynastryCalculationPayload,
+  StoredChartTransitCalculationPayload
 } from "@elevenhouse/contracts";
 import { application } from "../../Application";
 import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
@@ -524,7 +525,7 @@ describe("chart engine recovery orchestration", () => {
       selectedPartnerClientId: null,
       chartCalculation: chartCalculationRead(
         current,
-        ["view_current", "recalculate", "link"],
+        ["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"],
         "child"
       ),
       savedCalculation: savedCalculation(current, "child")
@@ -533,10 +534,33 @@ describe("chart engine recovery orchestration", () => {
     expect(state.mode).toBe("child_chart");
     expect(state.interpretationMode).toBe("child");
     expect(state.capabilities).toMatchObject({
-      canRequestAi: false,
-      canRequestPdf: false,
+      canRequestAi: true,
+      canRequestPdf: true,
       canLink: true,
-      canPublish: false
+      canPublish: true
+    });
+  });
+
+  it("accepts the API AI capability for a reproducible transit calculation", () => {
+    const current = transitResultV2();
+    expect(chartResultSchema.safeParse(current).success).toBe(true);
+    const state = resolveChartEngineCalculationState({
+      mode: "transit",
+      selectedClientId: clientId,
+      selectedPartnerClientId: null,
+      chartCalculation: chartCalculationRead(
+        current,
+        ["view_current", "recalculate", "link", "publish", "ai_draft"]
+      ),
+      savedCalculation: savedCalculation(current)
+    });
+
+    expect(state.mode).toBe("transit");
+    expect(state.result).toEqual(current);
+    expect(state.capabilities).toMatchObject({
+      canRequestAi: true,
+      canRequestPdf: false,
+      canRecalculate: true
     });
   });
 
@@ -675,7 +699,11 @@ describe("chart engine controller hook recovery", () => {
     const current = natalResultV2();
     vi.spyOn(application.http, "get").mockImplementation(async (url) => {
       if (url === `/charts/calculations/${calculationId}`) {
-        return chartCalculationRead(current, ["view_current", "recalculate", "link"], "child");
+        return chartCalculationRead(
+          current,
+          ["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"],
+          "child"
+        );
       }
       if (url === `/calculations/${calculationId}`) return savedCalculation(current, "child");
       if (url === `/clients/${clientId}`) return astrologerClientResponse();
@@ -688,7 +716,7 @@ describe("chart engine controller hook recovery", () => {
 
     await waitFor(() => expect(result.current.mode).toBe("child_chart"));
     expect(result.current.interpretationMode).toBe("child");
-    expect(result.current.capabilities.canRequestAi).toBe(false);
+    expect(result.current.capabilities.canRequestAi).toBe(true);
     expect(window.location.search).toContain("mode=child_chart");
     unmount();
   });
@@ -1568,6 +1596,37 @@ function transitResult(): StoredChartCalculationPayload {
       transit: emptyRenderResult(),
       aspectsToNatal: [],
       warnings: []
+    }
+  };
+}
+
+function transitResultV2(): Extract<
+  ChartResult,
+  { readonly schemaVersion: "chart-result.v2"; readonly method: "transit" }
+> {
+  const transit = transitResult() as StoredChartTransitCalculationPayload;
+  const distributions = {
+    elements: { fire: 10, earth: 0, air: 0, water: 0 },
+    modalities: { cardinal: 10, fixed: 0, mutable: 0 },
+    polarity: { masculine: 10, feminine: 0 }
+  };
+  return {
+    ...transit,
+    schemaVersion: "chart-result.v2",
+    methodVersion: chartMethodVersions.transit,
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier",
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"d".repeat(64)}`,
+    result: {
+      ...transit.result,
+      natal: { ...transit.result.natal, distributions },
+      transit: { ...transit.result.transit, distributions }
     }
   };
 }

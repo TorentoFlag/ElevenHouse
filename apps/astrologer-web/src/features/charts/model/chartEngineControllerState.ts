@@ -411,15 +411,14 @@ function backendCapabilitiesMatchResult(
       ? ["view_legacy", "recalculate"]
       : result.method === "natal" && interpretationMode === "legacy_unclassified"
         ? ["view_current", "recalculate"]
-        : result.method === "natal" && interpretationMode === "child"
-          ? ["view_current", "recalculate", "link"]
-          : [
-              "view_current",
-              "recalculate",
-              "link",
-              "publish",
-              ...(result.method === "natal" ? (["ai_draft", "pdf"] as const) : [])
-            ];
+        : [
+            "view_current",
+            "recalculate",
+            "link",
+            "publish",
+            "ai_draft",
+            ...(result.method === "natal" ? (["pdf"] as const) : [])
+          ];
   return (
     capabilities.length === expected.length &&
     new Set(capabilities).size === capabilities.length &&
