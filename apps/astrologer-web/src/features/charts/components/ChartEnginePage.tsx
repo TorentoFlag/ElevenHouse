@@ -290,7 +290,7 @@ export function ChartEnginePage({
   };
   const horarySetup = isHorarySetup ? (
     <ChartHorarySetup
-      calculateAction={<ChartEngineActionBar {...actionBarProps} showUtilities={false} />}
+      calculateAction={<ChartEngineActionBar {...actionBarProps} />}
       copy={copy}
       readinessMessage={copy.horary.calculateHint}
     >
@@ -302,11 +302,9 @@ export function ChartEnginePage({
     <main className={styles.page}>
       <ChartEngineHeader
         actionBar={
-          <ChartEngineActionBar
-            {...actionBarProps}
-            compactUtilities={isHorarySetup}
-            showCalculate={!isHorarySetup}
-          />
+          isHorarySetup ? null : (
+            <ChartEngineActionBar {...actionBarProps} showCalculate />
+          )
         }
         activeMode={activeMode}
         copy={copy}

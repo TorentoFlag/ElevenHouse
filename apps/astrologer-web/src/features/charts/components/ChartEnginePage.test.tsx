@@ -525,8 +525,8 @@ describe("ChartEnginePage", () => {
 
     expect(screen.getByRole("region", { name: "Подготовка хорара" })).toBeInTheDocument();
     expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("");
-    expect(screen.getByLabelText("Дата вопроса")).toHaveValue("2026-07-23");
-    expect(screen.getByLabelText("Время вопроса")).toHaveValue("14:30");
+    expect(screen.getByRole("button", { name: "Дата: 23.07.2026" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Время: 14:30" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Вопрос хорара"), {
@@ -588,6 +588,10 @@ describe("ChartEnginePage", () => {
     expect(within(setupPanel).getByText("Уточнить координаты вручную")).toBeInTheDocument();
     expect(setupPanel.querySelector("details")?.open).toBe(false);
     expect(within(setupPanel).getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
+    expect(within(setupPanel).getByRole("button", { name: "Экспорт карты" })).toBeDisabled();
+    expect(within(setupPanel).getByRole("button", { name: "Привязать" })).toBeDisabled();
+    expect(within(setupPanel).getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(within(setupPanel).getByRole("button", { name: "Настройки" })).toBeEnabled();
     const preparation = screen.getByRole("region", { name: "Подготовка хорара" });
 
     expect(preparation).toHaveTextContent("Предпросмотр карты");
@@ -601,6 +605,45 @@ describe("ChartEnginePage", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Сводка карты" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
+  });
+
+  it("opens calculation settings from the horary setup footer", async () => {
+    const user = userEvent.setup();
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="horary"
+        horaryQuestion={{
+          question: "",
+          category: "other",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: "",
+          longitude: ""
+        }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateHoraryJob={vi.fn()}
+      />
+    );
+
+    const setupPanel = screen.getByRole("complementary", { name: "Параметры хорара" });
+
+    expect(screen.queryByRole("region", { name: "Настройки расчёта" })).not.toBeInTheDocument();
+
+    await user.click(within(setupPanel).getByRole("button", { name: "Настройки" }));
+
+    expect(screen.getByRole("region", { name: "Настройки расчёта" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Закрыть настройки расчёта" }));
+
+    expect(screen.queryByRole("region", { name: "Настройки расчёта" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Подготовка хорара" })).toBeInTheDocument();
   });
 
   it("renders English repeated-hour copy and clears the horary occurrence on timezone change", () => {

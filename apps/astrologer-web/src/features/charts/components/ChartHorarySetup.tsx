@@ -23,7 +23,7 @@ export function ChartHorarySetup({
       <div className={styles.controls}>{children}</div>
       <footer className={styles.footer}>
         <p className={styles.readinessMessage}>{readinessMessage}</p>
-        {calculateAction}
+        <div className={styles.actions}>{calculateAction}</div>
       </footer>
     </aside>
   );

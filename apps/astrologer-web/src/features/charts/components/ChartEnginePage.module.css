@@ -381,6 +381,18 @@
   font-size: 11px;
 }
 
+.horaryPreparationSettings {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 520px);
+  max-height: min(620px, calc(100% - 32px));
+  overflow: auto;
+  border: 1px solid rgb(216 212 236 / 10%);
+  border-radius: 18px;
+  background: rgb(16 14 40 / 0.88);
+  box-shadow: 0 22px 72px rgb(0 0 0 / 0.26);
+}
+
 .horaryPreparationStatusGrid {
   position: absolute;
   top: 82px;

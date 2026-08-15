@@ -14,7 +14,6 @@ const horarySetupCss = readFileSync(
   new URL("./ChartHorarySetup.module.css", import.meta.url),
   "utf8"
 );
-
 describe("Chart Engine responsive accessibility CSS", () => {
   it("keeps mobile controls operable and the page within the viewport", () => {
     const compactContainerRules = css.slice(
@@ -60,6 +59,16 @@ describe("Chart Engine responsive accessibility CSS", () => {
     expect(compactRules).toMatch(/\.setupPanel\s*\{[\s\S]*?min-height:\s*620px/);
   });
 
+  it("keeps all horary footer actions visible instead of clipping the settings button", () => {
+    expect(horarySetupCss).toMatch(/\.actions\s*\{[\s\S]*?flex-wrap:\s*wrap/);
+    expect(horarySetupCss).toMatch(
+      /\.actions :global\(button:first-of-type\)\s*\{[\s\S]*?flex:\s*1 1 220px/
+    );
+    expect(horarySetupCss).toMatch(
+      /\.actions :global\(button:not\(:first-of-type\)\)\s*\{[\s\S]*?flex:\s*0 0 auto/
+    );
+  });
+
   it("uses the chart gold for horary input hover and focus instead of browser defaults", () => {
     expect(momentControlsCss).toMatch(
       /\.horaryQuestionFieldsSetup input:hover[^,{]*,[\s\S]*?border-color:\s*rgb\(246 210 102 \/ 0\.48\)/
@@ -90,4 +99,9 @@ describe("Chart Engine responsive accessibility CSS", () => {
     );
   });
 
+  it("allows horary pickers to overlay the preview instead of clipping them", () => {
+    expect(momentControlsCss).toMatch(
+      /\.horaryPickerOverlay\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?z-index:\s*1000/
+    );
+  });
 });

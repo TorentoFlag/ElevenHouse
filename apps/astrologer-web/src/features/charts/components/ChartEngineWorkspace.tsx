@@ -137,41 +137,69 @@ export function ChartEngineWorkspace({
             <strong>{copy.horary.previewTitle}</strong>
             <span>{copy.horary.previewPending}</span>
           </header>
-          <ol className={styles.horaryPreparationStatusGrid}>
-            <HoraryPreparationStatus
-              complete={questionReady}
-              index={1}
-              label={copy.horary.question}
-              pending={copy.horary.previewQuestionPending}
-            />
-            <HoraryPreparationStatus
-              complete={momentReady}
-              index={2}
-              label={copy.horary.preparationMoment}
-              pending={copy.horary.previewMomentPending}
-              ready={copy.horary.previewMomentReady}
-            />
-            <HoraryPreparationStatus
-              complete={placeReady}
-              index={3}
-              label={copy.horary.previewPlaceLabel}
-              pending={copy.horary.previewPlacePending}
-              ready={copy.horary.previewPlaceReady}
-            />
-          </ol>
-          <div className={styles.horaryPreparationContent}>
-            <span className={styles.horaryPreparationOrb} aria-hidden="true">
-              ☉
-            </span>
-            <p>{copy.modes.horary.title}</p>
-            <h2>{jobState === "idle" ? copy.horary.previewEmptyTitle : preparationTitle}</h2>
-            <span>{jobState === "idle" ? copy.horary.previewEmptyDetail : preparationDetail}</span>
-            <ol className={styles.horaryPreparationSteps}>
-              <li>{copy.horary.question}</li>
-              <li>{copy.horary.preparationMoment}</li>
-              <li>{copy.horary.previewPlaceLabel}</li>
-            </ol>
-          </div>
+          {isSettingsPanelOpen ? (
+            <div className={styles.horaryPreparationSettings}>
+              <div className={styles.panelSettingsHeader}>
+                <strong>{copy.panel.settingsTitle}</strong>
+                <button
+                  aria-label={copy.panel.closeSettings}
+                  className={styles.panelCloseButton}
+                  type="button"
+                  onClick={onCloseSettings}
+                >
+                  +
+                </button>
+              </div>
+              <div className={styles.panelSettings}>
+                <ChartSettingsPanel
+                  copy={copy}
+                  disabled={isBusy}
+                  settings={settings}
+                  onChange={onSettingsChange}
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <ol className={styles.horaryPreparationStatusGrid}>
+                <HoraryPreparationStatus
+                  complete={questionReady}
+                  index={1}
+                  label={copy.horary.question}
+                  pending={copy.horary.previewQuestionPending}
+                />
+                <HoraryPreparationStatus
+                  complete={momentReady}
+                  index={2}
+                  label={copy.horary.preparationMoment}
+                  pending={copy.horary.previewMomentPending}
+                  ready={copy.horary.previewMomentReady}
+                />
+                <HoraryPreparationStatus
+                  complete={placeReady}
+                  index={3}
+                  label={copy.horary.previewPlaceLabel}
+                  pending={copy.horary.previewPlacePending}
+                  ready={copy.horary.previewPlaceReady}
+                />
+              </ol>
+              <div className={styles.horaryPreparationContent}>
+                <span className={styles.horaryPreparationOrb} aria-hidden="true">
+                  ☉
+                </span>
+                <p>{copy.modes.horary.title}</p>
+                <h2>{jobState === "idle" ? copy.horary.previewEmptyTitle : preparationTitle}</h2>
+                <span>
+                  {jobState === "idle" ? copy.horary.previewEmptyDetail : preparationDetail}
+                </span>
+                <ol className={styles.horaryPreparationSteps}>
+                  <li>{copy.horary.question}</li>
+                  <li>{copy.horary.preparationMoment}</li>
+                  <li>{copy.horary.previewPlaceLabel}</li>
+                </ol>
+              </div>
+            </>
+          )}
         </section>
       </section>
     );

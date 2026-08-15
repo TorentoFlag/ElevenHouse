@@ -71,9 +71,24 @@
   content: "";
 }
 
-.footer :global(button) {
-  width: 100%;
+.actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions :global(button) {
   justify-content: center;
+}
+
+.actions :global(button:first-of-type) {
+  flex: 1 1 220px;
+}
+
+.actions :global(button:not(:first-of-type)) {
+  flex: 0 0 auto;
 }
 
 @container chart-engine-page (max-width: 760px) {

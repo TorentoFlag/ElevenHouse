@@ -135,6 +135,72 @@
   line-height: 1.4;
 }
 
+.horaryPickerField {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.horaryPickerOverlay {
+  position: fixed;
+  z-index: 1000;
+  width: 0;
+  height: 0;
+}
+
+.horaryPickerField > span {
+  overflow: hidden;
+  color: #a9a2c3;
+  font-size: 9px;
+  font-weight: 780;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.horaryPickerButton {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border: 1px solid rgb(216 212 236 / 13%);
+  border-radius: 10px;
+  background: #0c0b22;
+  color: #eceaf7;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.horaryPickerButton strong {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.horaryPickerButton svg {
+  flex: 0 0 auto;
+  color: #d3b54f;
+  stroke: currentcolor;
+}
+
+.horaryPickerButton:hover:not(:disabled),
+.horaryPickerButton:focus-visible {
+  border-color: rgb(246 210 102 / 48%);
+  background: rgb(17 15 38 / 98%);
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgb(246 210 102 / 14%);
+}
+
+.horaryPickerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .horaryQuestionFieldsSetup input,
 .horaryQuestionFieldsSetup select,
 .horaryQuestionFieldsSetup textarea {

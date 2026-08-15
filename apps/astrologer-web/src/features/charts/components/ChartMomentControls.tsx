@@ -1,4 +1,12 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject
+} from "react";
+import { createPortal } from "react-dom";
 import type {
   ChartHoraryQuestionCategory,
   ClientBirthPlaceCandidate,
@@ -12,7 +20,10 @@ import {
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model/chartEngineInput";
 import type { ChartEngineMode } from "../model/chartEngineMode";
+import { getChartTimeZoneGroups } from "../model/chartTimeZones";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import { ChartBirthDatePicker, formatBirthDateButtonLabel } from "./ChartBirthDatePicker";
+import { ChartBirthTimePicker } from "./ChartBirthTimePicker";
 import styles from "./ChartMomentControls.module.css";
 
 export function ChartMomentControls({
@@ -243,6 +254,41 @@ function HoraryQuestionFields({
   readonly placeText: string;
   readonly value: ChartHoraryQuestionInput;
 }) {
+  const [openPicker, setOpenPicker] = useState<"date" | "time" | null>(null);
+  const timeZoneGroups = getChartTimeZoneGroups(value.timezone);
+  const datePickerButtonRef = useRef<HTMLButtonElement>(null);
+  const timePickerButtonRef = useRef<HTMLButtonElement>(null);
+  const datePickerOverlayRef = useRef<HTMLDivElement>(null);
+  const timePickerOverlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openPicker) return;
+
+    const overlay =
+      openPicker === "date" ? datePickerOverlayRef.current : timePickerOverlayRef.current;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (
+        datePickerButtonRef.current?.contains(event.target) ||
+        timePickerButtonRef.current?.contains(event.target) ||
+        overlay?.contains(event.target)
+      ) {
+        return;
+      }
+      setOpenPicker(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenPicker(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openPicker]);
+
   return (
     <div
       className={
@@ -306,45 +352,128 @@ function HoraryQuestionFields({
           <Icon iconName="clock" width={15} height={15} aria-hidden="true" />
           {layout === "setup" ? copy.horary.momentTitle : copy.horary.preparationMoment}
         </p>
-        <label>
-          <span>{copy.horary.date}</span>
-          <input
-            aria-label={copy.horary.dateAria}
-            disabled={disabled}
-            name="horaryDate"
-            type="date"
-            value={value.date}
-            onChange={(event) =>
-              onChange(updateChartCivilMoment(value, { date: event.target.value }))
-            }
-          />
-        </label>
-        <label>
-          <span>{copy.horary.time}</span>
-          <input
-            aria-label={copy.horary.timeAria}
-            disabled={disabled}
-            name="horaryTime"
-            type="time"
-            value={value.time}
-            onChange={(event) =>
-              onChange(updateChartCivilMoment(value, { time: event.target.value }))
-            }
-          />
-        </label>
+        {layout === "setup" ? (
+          <div className={styles.horaryPickerField}>
+            <span>{copy.horary.date}</span>
+            <button
+              ref={datePickerButtonRef}
+              aria-expanded={openPicker === "date"}
+              aria-label={`${copy.horary.date}: ${formatBirthDateButtonLabel(value.date, copy)}`}
+              className={styles.horaryPickerButton}
+              disabled={disabled}
+              name="horaryDatePicker"
+              type="button"
+              onClick={() => setOpenPicker((current) => (current === "date" ? null : "date"))}
+            >
+              <strong>{formatBirthDateButtonLabel(value.date, copy)}</strong>
+              <Icon iconName="calendar" width={16} height={16} aria-hidden="true" />
+            </button>
+            <input name="horaryDate" type="hidden" value={value.date} />
+            {openPicker === "date" && datePickerButtonRef.current ? (
+              <HoraryPickerOverlay
+                anchor={datePickerButtonRef.current}
+                overlayRef={datePickerOverlayRef}
+              >
+                <ChartBirthDatePicker
+                  copy={copy}
+                  disabled={disabled}
+                  value={value.date}
+                  onChange={(date) => {
+                    onChange(updateChartCivilMoment(value, { date }));
+                    setOpenPicker(null);
+                  }}
+                />
+              </HoraryPickerOverlay>
+            ) : null}
+          </div>
+        ) : (
+          <label>
+            <span>{copy.horary.date}</span>
+            <input
+              aria-label={copy.horary.dateAria}
+              disabled={disabled}
+              name="horaryDate"
+              type="date"
+              value={value.date}
+              onChange={(event) =>
+                onChange(updateChartCivilMoment(value, { date: event.target.value }))
+              }
+            />
+          </label>
+        )}
+        {layout === "setup" ? (
+          <div className={styles.horaryPickerField}>
+            <span>{copy.horary.time}</span>
+            <button
+              ref={timePickerButtonRef}
+              aria-expanded={openPicker === "time"}
+              aria-label={`${copy.horary.time}: ${value.time || copy.birthData.chooseTime}`}
+              className={styles.horaryPickerButton}
+              disabled={disabled}
+              name="horaryTimePicker"
+              type="button"
+              onClick={() => setOpenPicker((current) => (current === "time" ? null : "time"))}
+            >
+              <strong>{value.time || copy.birthData.chooseTime}</strong>
+              <Icon iconName="clock" width={16} height={16} aria-hidden="true" />
+            </button>
+            <input name="horaryTime" type="hidden" value={value.time} />
+            {openPicker === "time" && timePickerButtonRef.current ? (
+              <HoraryPickerOverlay
+                anchor={timePickerButtonRef.current}
+                overlayRef={timePickerOverlayRef}
+              >
+                <ChartBirthTimePicker
+                  copy={copy}
+                  disabled={disabled}
+                  value={value.time}
+                  onChange={(time) => {
+                    onChange(updateChartCivilMoment(value, { time }));
+                    setOpenPicker(null);
+                  }}
+                />
+              </HoraryPickerOverlay>
+            ) : null}
+          </div>
+        ) : (
+          <label>
+            <span>{copy.horary.time}</span>
+            <input
+              aria-label={copy.horary.timeAria}
+              disabled={disabled}
+              name="horaryTime"
+              type="time"
+              value={value.time}
+              onChange={(event) =>
+                onChange(updateChartCivilMoment(value, { time: event.target.value }))
+              }
+            />
+          </label>
+        )}
         <label>
           <span>{copy.horary.timezone}</span>
-          <input
+          <select
             aria-label={copy.horary.timezoneAria}
             disabled={disabled}
             name="horaryTimezone"
-            placeholder="Europe/Moscow"
-            type="text"
             value={value.timezone}
             onChange={(event) =>
               onChange(updateChartCivilMoment(value, { timezone: event.target.value }))
             }
-          />
+          >
+            <option disabled value="">
+              —
+            </option>
+            {timeZoneGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.timeZones.map((timeZone) => (
+                  <option key={timeZone} value={timeZone}>
+                    {timeZone}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </label>
         {layout === "setup" ? (
           <details className={styles.horaryOccurrenceDetails}>
@@ -412,6 +541,66 @@ function HoraryQuestionFields({
   );
 }
 
+function HoraryPickerOverlay({
+  anchor,
+  children,
+  overlayRef
+}: {
+  readonly anchor: HTMLButtonElement;
+  readonly children: ReactNode;
+  readonly overlayRef: RefObject<HTMLDivElement | null>;
+}) {
+  const [position, setPosition] = useState(() => getHoraryPickerPosition(anchor));
+
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const picker = overlayRef.current?.firstElementChild;
+      const pickerBounds = picker?.getBoundingClientRect();
+      setPosition(getHoraryPickerPosition(anchor, pickerBounds));
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchor]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      ref={overlayRef}
+      className={styles.horaryPickerOverlay}
+      data-testid="chart-horary-picker-overlay"
+      style={position}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function getHoraryPickerPosition(anchor: HTMLButtonElement, pickerBounds?: DOMRect) {
+  const anchorBounds = anchor.getBoundingClientRect();
+  const offset = 8;
+  const viewportGutter = 16;
+  const pickerHeight = pickerBounds?.height ?? 0;
+  const pickerWidth = pickerBounds?.width ?? 0;
+  const spaceBelow = window.innerHeight - anchorBounds.bottom - offset - viewportGutter;
+  const spaceAbove = anchorBounds.top - offset - viewportGutter;
+  const opensAbove = pickerHeight > spaceBelow && spaceAbove >= pickerHeight;
+  const popoverTop = opensAbove
+    ? anchorBounds.top - offset - pickerHeight
+    : anchorBounds.bottom + offset;
+  const popoverLeft = Math.min(
+    Math.max(viewportGutter, anchorBounds.left),
+    Math.max(viewportGutter, window.innerWidth - pickerWidth - viewportGutter)
+  );
+
+  return { left: popoverLeft, top: popoverTop - offset };
+}
+
 function HoraryCoordinateFields({
   copy,
   disabled,
@@ -473,11 +662,16 @@ function HoraryPlaceField({
   const [query, setQuery] = useState(selectedPlaceText);
   const [candidates, setCandidates] = useState<readonly ClientBirthPlaceCandidate[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const searchRef = useRef(onSearch);
 
   useEffect(() => setQuery(selectedPlaceText), [selectedPlaceText]);
   useEffect(() => {
+    searchRef.current = onSearch;
+  }, [onSearch]);
+  useEffect(() => {
     const normalized = query.trim();
-    if (!onSearch || disabled || normalized.length < 3 || normalized === selectedPlaceText) {
+    const search = searchRef.current;
+    if (!search || disabled || normalized.length < 3 || normalized === selectedPlaceText) {
       setCandidates([]);
       setIsSearching(false);
       return;
@@ -485,7 +679,7 @@ function HoraryPlaceField({
     let active = true;
     setIsSearching(true);
     const timeout = window.setTimeout(() => {
-      void onSearch(normalized)
+      void search(normalized)
         .then((nextCandidates) => {
           if (active) setCandidates(nextCandidates);
         })
@@ -500,7 +694,7 @@ function HoraryPlaceField({
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [disabled, onSearch, query, selectedPlaceText]);
+  }, [disabled, query, selectedPlaceText]);
 
   return (
     <div className={styles.horaryPlaceField}>
