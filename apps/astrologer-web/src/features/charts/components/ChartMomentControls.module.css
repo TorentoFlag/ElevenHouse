@@ -54,6 +54,29 @@
   align-items: center;
   gap: 8px;
 }
+
+.horaryQuestionFieldsSetup {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px 10px;
+}
+
+.horaryQuestionFieldsSetup > :first-child,
+.horaryQuestionFieldsSetup > :nth-child(5),
+.horaryQuestionFieldsSetup > :nth-child(6),
+.horaryQuestionFieldsSetup > :nth-child(7) {
+  grid-column: 1 / -1;
+}
+
+.horaryQuestionFieldsSetup input,
+.horaryQuestionFieldsSetup select {
+  min-height: 38px;
+  padding: 0 10px;
+  font-size: 13px;
+}
 .horaryQuestionText {
   min-width: 0;
 }
@@ -113,7 +136,8 @@
 
 @container chart-engine-page (max-width: 760px) {
   .transitMomentFields,
-  .horaryQuestionFields {
+  .horaryQuestionFields,
+  .horaryQuestionFieldsSetup {
     width: 100%;
     min-width: 0;
     grid-template-columns: 1fr;
@@ -129,7 +153,8 @@
 
 @media (max-width: 760px) {
   .transitMomentFields,
-  .horaryQuestionFields {
+  .horaryQuestionFields,
+  .horaryQuestionFieldsSetup {
     width: 100%;
     min-width: 0;
     grid-template-columns: 1fr;

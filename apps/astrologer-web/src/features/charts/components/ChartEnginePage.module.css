@@ -291,6 +291,7 @@
   line-height: 1;
   white-space: nowrap;
 }
+
 .calculateButton {
   background: var(--chart-gold);
   color: #2e2342;
@@ -329,6 +330,92 @@
   min-height: 0;
   flex: 1;
   grid-template-columns: minmax(190px, 218px) minmax(360px, 1fr) minmax(300px, 340px);
+}
+
+.horaryPrecalculation {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.horaryPreparation {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  padding: clamp(28px, 6vw, 88px);
+  background: #0b0a20;
+}
+
+.horaryPreparationContent {
+  width: min(100%, 560px);
+  text-align: center;
+}
+
+.horaryPreparationContent > p {
+  margin: 0;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.horaryPreparationContent > h2 {
+  margin: 10px 0 8px;
+  color: var(--eh-color-moon-120);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 820;
+  line-height: 1.08;
+}
+
+.horaryPreparationContent > span {
+  display: block;
+  color: rgb(186 178 218 / 0.78);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.horaryPreparationSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 38px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--chart-line-strong);
+  list-style: none;
+}
+
+.horaryPreparationSteps li {
+  color: rgb(186 178 218 / 0.8);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.horaryPreparationSteps li::before {
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  margin-right: 7px;
+  place-items: center;
+  border: 1px solid rgb(246 210 102 / 0.44);
+  border-radius: 999px;
+  color: var(--chart-gold);
+  content: counter(list-item);
+  font-size: 10px;
+}
+
+@container chart-engine-page (max-width: 760px) {
+  .horaryPrecalculation {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .horaryPreparation {
+    min-height: 280px;
+  }
 }
 .emptyClientState {
   display: grid;

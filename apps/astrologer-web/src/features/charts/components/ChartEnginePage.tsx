@@ -21,6 +21,7 @@ import {
 } from "../model/chartEngineState";
 import { ChartEngineActionBar } from "./ChartEngineActionBar";
 import { ChartEngineHeader } from "./ChartEngineHeader";
+import { ChartHorarySetup } from "./ChartHorarySetup";
 import { ChartMomentControls } from "./ChartMomentControls";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model/chartEngineInput";
 import { ChartEngineWorkspace } from "./ChartEngineWorkspace";
@@ -181,6 +182,7 @@ export function ChartEnginePage({
   useEffect(() => setIsBirthDataEditorOpen(false), [selectedClient?.value]);
 
   const activeHoraryQuestion = localHoraryQuestion;
+  const isHoraryMode = activeMode === "horary";
   const needsBirthData = activeMode !== "horary";
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
   const expectedResultMethod = getChartResultMethodForMode(activeMode);
@@ -196,6 +198,7 @@ export function ChartEnginePage({
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
+  const isHorarySetup = isHoraryMode && !displayResult;
   const shouldShowBirthDataEditor = Boolean(
     needsBirthData &&
     selectedClient &&
@@ -226,6 +229,7 @@ export function ChartEnginePage({
       activeMode={activeMode}
       copy={copy}
       disabled={isBusy}
+      horaryLayout={isHorarySetup ? "setup" : "toolbar"}
       horaryQuestion={activeHoraryQuestion}
       horaryPlaceErrorMessage={horaryPlaceErrorMessage}
       horaryPlaceText={horaryPlaceText}
@@ -251,50 +255,56 @@ export function ChartEnginePage({
       }}
     />
   );
+  const actionBarProps = {
+    activeMode,
+    birthDataEditorAvailable: Boolean(
+      needsBirthData && selectedClient && readiness.ready && onSaveBirthData
+    ),
+    calculateLabel: viewState.actionLabel,
+    canCalculate: viewState.canCalculate,
+    copy,
+    isBirthDataEditorOpen,
+    isCalculationLinked,
+    isSettingsPanelOpen,
+    linkDisabled,
+    pdfDisabled,
+    pdfErrorMessage,
+    pdfLabel,
+    pdfTitle: pdfTitle ?? copy.actionBar.defaultPdfUnavailable,
+    onCalculate: () =>
+      void runChartCalculationAction({
+        activeMode,
+        onCreateAstrocartographyJob,
+        onCreateCompositeJob,
+        onCreateHoraryJob,
+        onCreateNatalJob,
+        onCreateProgressionJob,
+        onCreateSolarReturnJob,
+        onCreateSynastryJob,
+        onCreateTransitJob
+      }),
+    onLink,
+    onPdf,
+    onToggleBirthDataEditor: () => setIsBirthDataEditorOpen((open) => !open),
+    onToggleSettings: () => setIsSettingsPanelOpen((open) => !open)
+  };
+  const horarySetup = isHorarySetup ? (
+    <ChartHorarySetup
+      calculateAction={<ChartEngineActionBar {...actionBarProps} showUtilities={false} />}
+      copy={copy}
+    >
+      {momentControls}
+    </ChartHorarySetup>
+  ) : undefined;
 
   return (
     <main className={styles.page}>
       <ChartEngineHeader
-        actionBar={
-          <ChartEngineActionBar
-            activeMode={activeMode}
-            birthDataEditorAvailable={Boolean(
-              needsBirthData && selectedClient && readiness.ready && onSaveBirthData
-            )}
-            calculateLabel={viewState.actionLabel}
-            canCalculate={viewState.canCalculate}
-            copy={copy}
-            isBirthDataEditorOpen={isBirthDataEditorOpen}
-            isCalculationLinked={isCalculationLinked}
-            isSettingsPanelOpen={isSettingsPanelOpen}
-            linkDisabled={linkDisabled}
-            pdfDisabled={pdfDisabled}
-            pdfErrorMessage={pdfErrorMessage}
-            pdfLabel={pdfLabel}
-            pdfTitle={pdfTitle ?? copy.actionBar.defaultPdfUnavailable}
-            onCalculate={() =>
-              void runChartCalculationAction({
-                activeMode,
-                onCreateAstrocartographyJob,
-                onCreateCompositeJob,
-                onCreateHoraryJob,
-                onCreateNatalJob,
-                onCreateProgressionJob,
-                onCreateSolarReturnJob,
-                onCreateSynastryJob,
-                onCreateTransitJob
-              })
-            }
-            onLink={onLink}
-            onPdf={onPdf}
-            onToggleBirthDataEditor={() => setIsBirthDataEditorOpen((open) => !open)}
-            onToggleSettings={() => setIsSettingsPanelOpen((open) => !open)}
-          />
-        }
+        actionBar={<ChartEngineActionBar {...actionBarProps} showCalculate={!isHorarySetup} />}
         activeMode={activeMode}
         copy={copy}
         isBusy={isBusy}
-        momentControls={momentControls}
+        momentControls={isHorarySetup ? undefined : momentControls}
         selectedClient={selectedClient}
         selectedPartnerClient={selectedPartnerClient}
         onSelectClient={onSelectClient}
@@ -330,6 +340,7 @@ export function ChartEnginePage({
         isSavingBirthData={isSavingBirthData}
         isSettingsPanelOpen={isSettingsPanelOpen}
         jobState={jobState}
+        horarySetup={horarySetup}
         locale={locale}
         partnerReadiness={partnerReadiness}
         readiness={readiness}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   ChartInterpretationMode,
   ChartResult,
@@ -43,6 +43,7 @@ export function ChartEngineWorkspace({
   isSavingBirthData,
   isSettingsPanelOpen,
   jobState,
+  horarySetup,
   locale,
   onCloseSettings,
   onSaveBirthData,
@@ -68,6 +69,7 @@ export function ChartEngineWorkspace({
   readonly isSavingBirthData: boolean;
   readonly isSettingsPanelOpen: boolean;
   readonly jobState: ChartEnginePageJobState;
+  readonly horarySetup?: ReactNode;
   readonly locale: DictionaryLocale;
   readonly onCloseSettings: () => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
@@ -103,6 +105,37 @@ export function ChartEngineWorkspace({
   const visiblePanelTab = visiblePanelTabs.includes(activePanelTab)
     ? activePanelTab
     : "interpretations";
+
+  if (activeMode === "horary" && selectedClient && !displayResult && horarySetup) {
+    const preparationTitle =
+      jobState === "calculating"
+        ? copy.modes.horary.calculating
+        : jobState === "failed"
+          ? copy.status.failed
+          : copy.horary.preparationTitle;
+    const preparationDetail =
+      jobState === "failed"
+        ? (errorMessage ?? copy.status.defaultFailure)
+        : copy.horary.preparationDetail;
+
+    return (
+      <section className={styles.horaryPrecalculation}>
+        {horarySetup}
+        <section className={styles.horaryPreparation} aria-label={copy.horary.preparationTitle}>
+          <div className={styles.horaryPreparationContent}>
+            <p>{copy.modes.horary.title}</p>
+            <h2>{preparationTitle}</h2>
+            <span>{preparationDetail}</span>
+            <ol className={styles.horaryPreparationSteps}>
+              <li>{copy.horary.question}</li>
+              <li>{copy.horary.preparationMoment}</li>
+              <li>{copy.horary.place}</li>
+            </ol>
+          </div>
+        </section>
+      </section>
+    );
+  }
 
   return (
     <section className={styles.body}>

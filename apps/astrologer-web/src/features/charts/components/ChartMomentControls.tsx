@@ -19,6 +19,7 @@ export function ChartMomentControls({
   copy,
   disabled,
   horaryPlaceErrorMessage,
+  horaryLayout = "toolbar",
   horaryPlaceText,
   horaryQuestion,
   locale,
@@ -38,6 +39,7 @@ export function ChartMomentControls({
   readonly disabled: boolean;
   readonly horaryQuestion: ChartHoraryQuestionInput;
   readonly horaryPlaceErrorMessage: string | null;
+  readonly horaryLayout?: "setup" | "toolbar";
   readonly horaryPlaceText: string;
   readonly locale: DictionaryLocale;
   readonly onHoraryQuestionChange: (question: ChartHoraryQuestionInput) => void;
@@ -87,6 +89,7 @@ export function ChartMomentControls({
       <HoraryQuestionFields
         copy={copy}
         disabled={disabled}
+        layout={horaryLayout}
         locale={locale}
         placeErrorMessage={horaryPlaceErrorMessage}
         placeText={horaryPlaceText}
@@ -217,6 +220,7 @@ function ProgressionTargetDateField({
 function HoraryQuestionFields({
   copy,
   disabled,
+  layout,
   locale,
   onChange,
   onClearPlace,
@@ -228,6 +232,7 @@ function HoraryQuestionFields({
 }: {
   readonly copy: ChartEngineCopy;
   readonly disabled: boolean;
+  readonly layout: "setup" | "toolbar";
   readonly locale: DictionaryLocale;
   readonly onChange: (question: ChartHoraryQuestionInput) => void;
   readonly onClearPlace?: () => void;
@@ -238,7 +243,13 @@ function HoraryQuestionFields({
   readonly value: ChartHoraryQuestionInput;
 }) {
   return (
-    <div className={styles.horaryQuestionFields}>
+    <div
+      className={
+        layout === "setup"
+          ? `${styles.horaryQuestionFields} ${styles.horaryQuestionFieldsSetup}`
+          : styles.horaryQuestionFields
+      }
+    >
       <label className={styles.horaryQuestionText}>
         <span>{copy.horary.question}</span>
         <input

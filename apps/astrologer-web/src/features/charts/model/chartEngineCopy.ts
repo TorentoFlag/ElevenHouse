@@ -346,6 +346,10 @@ const ruChartEngineCopy = {
     progressionDate: "Дата прогрессии"
   },
   horary: {
+    setupTitle: "Параметры хорара",
+    preparationTitle: "Подготовка хорара",
+    preparationDetail: "Заполните вопрос, момент и место — здесь появится карта вопроса.",
+    preparationMoment: "Момент",
     question: "Вопрос",
     questionAria: "Вопрос хорара",
     questionPlaceholder: "Что именно нужно решить?",
@@ -964,6 +968,11 @@ const enChartEngineCopy: ChartEngineCopy = {
     progressionDate: "Progression date"
   },
   horary: {
+    setupTitle: "Horary parameters",
+    preparationTitle: "Preparing horary",
+    preparationDetail:
+      "Enter the question, moment, and place — the question chart will appear here.",
+    preparationMoment: "Moment",
     question: "Question",
     questionAria: "Horary question",
     questionPlaceholder: "What exactly needs to be decided?",

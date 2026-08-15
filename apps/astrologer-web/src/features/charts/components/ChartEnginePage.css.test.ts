@@ -10,6 +10,10 @@ const momentControlsCss = readFileSync(
   new URL("./ChartMomentControls.module.css", import.meta.url),
   "utf8"
 );
+const horarySetupCss = readFileSync(
+  new URL("./ChartHorarySetup.module.css", import.meta.url),
+  "utf8"
+);
 
 describe("Chart Engine responsive accessibility CSS", () => {
   it("keeps mobile controls operable and the page within the viewport", () => {
@@ -46,5 +50,13 @@ describe("Chart Engine responsive accessibility CSS", () => {
     expect(css).toMatch(/\.toolButton:focus-visible/);
     expect(css).toMatch(/\.panelTab:focus-visible/);
     expect(css).toMatch(/\.chartAiPrimaryButton:focus-visible/);
+  });
+
+  it("keeps the horary setup panel reachable before the preparation canvas at compact widths", () => {
+    const compactRules = horarySetupCss.slice(
+      horarySetupCss.indexOf("@container chart-engine-page (max-width: 760px)")
+    );
+
+    expect(compactRules).toMatch(/\.setupPanel\s*\{[\s\S]*?min-height:\s*620px/);
   });
 });

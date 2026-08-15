@@ -523,7 +523,7 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
     await user.click(screen.getByRole("menuitem", { name: "Хорар" }));
 
-    expect(screen.getAllByText("Готово к хорару").length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "Подготовка хорара" })).toBeInTheDocument();
     expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("");
     expect(screen.getByLabelText("Дата вопроса")).toHaveValue("2026-07-23");
     expect(screen.getByLabelText("Время вопроса")).toHaveValue("14:30");
@@ -552,6 +552,42 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Рассчитать хорар" }));
 
     expect(onCreateHoraryJob).toHaveBeenCalledOnce();
+  });
+
+  it("keeps incomplete horary input in a dedicated setup panel before rendering results", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        mode="horary"
+        horaryQuestion={{
+          question: "",
+          category: "other",
+          date: "2026-07-23",
+          time: "14:30",
+          timezone: "Europe/Moscow",
+          latitude: "",
+          longitude: ""
+        }}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onCreateHoraryJob={vi.fn()}
+      />
+    );
+
+    const setupPanel = screen.getByRole("complementary", { name: "Параметры хорара" });
+
+    expect(within(setupPanel).getByLabelText("Вопрос хорара")).toBeInTheDocument();
+    expect(within(setupPanel).getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
+    expect(screen.getByRole("region", { name: "Подготовка хорара" })).toHaveTextContent(
+      "Заполните вопрос, момент и место"
+    );
+    expect(screen.queryByRole("complementary", { name: "Сводка карты" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
   });
 
   it("renders English repeated-hour copy and clears the horary occurrence on timezone change", () => {
@@ -672,6 +708,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.queryByText("Хорар рассчитан")).not.toBeInTheDocument();
     expect(screen.getByTestId("chart-point-sun")).toBeInTheDocument();
+    expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("Стоит ли принимать предложение?");
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
   });
 
