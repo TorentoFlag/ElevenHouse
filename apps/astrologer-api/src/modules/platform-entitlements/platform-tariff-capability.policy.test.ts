@@ -65,16 +65,31 @@ const historicalAndSafetyHandlers = [
 ] as const satisfies readonly (readonly [ControllerClass, string])[];
 
 const aiGenerationHandlers = [
-  [ChartsController, "createAiDraft", "ai.chart.draft", ["ai", "natal"]],
-  [MatrixReportController, "generateAiDraft", "ai.matrix.draft", ["ai", "matrix"]],
-  [NumerologyController, "createAiDraft", "ai.numerology.draft", ["ai", "numerology"]],
-  [HumanDesignController, "createAiDraft", "ai.hd.draft", ["ai", "hd"]],
-  [DictionaryAiController, "createAiDraft", "ai.refs.draft", ["ai", "refs"]]
+  [ChartsController, "createAiDraft", { surfaceId: "ai.chart.draft", capability: "ai" }],
+  [
+    MatrixReportController,
+    "generateAiDraft",
+    { surfaceId: "ai.matrix.draft", capabilities: ["ai", "matrix"] }
+  ],
+  [
+    NumerologyController,
+    "createAiDraft",
+    { surfaceId: "ai.numerology.draft", capabilities: ["ai", "numerology"] }
+  ],
+  [
+    HumanDesignController,
+    "createAiDraft",
+    { surfaceId: "ai.hd.draft", capabilities: ["ai", "hd"] }
+  ],
+  [
+    DictionaryAiController,
+    "createAiDraft",
+    { surfaceId: "ai.refs.draft", capabilities: ["ai", "refs"] }
+  ]
 ] as const satisfies readonly (readonly [
   ControllerClass,
   string,
-  string,
-  readonly [string, string]
+  Omit<PlatformTariffCapabilityPolicy, "operation">
 ])[];
 
 describe("platform tariff capability policies", () => {
@@ -99,11 +114,10 @@ describe("platform tariff capability policies", () => {
     }
   });
 
-  it("requires both AI and its resource-owning capability for every provider-backed generation", () => {
-    for (const [controller, methodName, surfaceId, capabilities] of aiGenerationHandlers) {
+  it("requires the AI capability guard for every provider-backed generation endpoint", () => {
+    for (const [controller, methodName, expectedPolicy] of aiGenerationHandlers) {
       expect(handlerPolicy(controller, methodName)).toEqual({
-        surfaceId,
-        capabilities,
+        ...expectedPolicy,
         operation: "generation"
       });
       const guards = Reflect.getMetadata(GUARDS_METADATA, controller) as readonly unknown[];

@@ -726,10 +726,10 @@ describe("createAstrologerApiRuntimeConfig", () => {
   });
 
   it("rejects a missing OpenAI API key", () => {
-    const { ASTROLOGER_OPENAI_API_KEY: _removed, ...withoutOpenAiKey } = requiredSecurityConfig;
     expect(() =>
       createAstrologerApiRuntimeConfig({
-        ...withoutOpenAiKey
+        ...requiredSecurityConfig,
+        ASTROLOGER_OPENAI_API_KEY: undefined
       })
     ).toThrow("ASTROLOGER_OPENAI_API_KEY is required");
   });

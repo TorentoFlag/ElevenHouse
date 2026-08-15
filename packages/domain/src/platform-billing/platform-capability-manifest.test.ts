@@ -765,6 +765,7 @@ describe("platform capability manifest", () => {
       ["destinyMatrix", "/matrix"],
       ["humanDesign", "/human-design"],
       ["astroCalendar", "/astro-calendar"],
+      ["astroDiary", "/astro-diary"],
       ["reference", "/reference"],
       ["inbox", "/inbox"],
       ["settings", "/settings"]
@@ -792,6 +793,7 @@ describe("platform capability manifest", () => {
       "/matrix",
       "/human-design",
       "/astro-calendar",
+      "/astro-diary",
       "/chart-engine",
       "/sessions/:sessionId",
       "/settings",
