@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ElevenHouse** (35298 symbols, 91176 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ElevenHouse** (36486 symbols, 93820 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -40,5 +40,25 @@ This project is indexed by GitNexus as **ElevenHouse** (35298 symbols, 91176 rel
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Work in the Finance area (1571 symbols) | `.claude/skills/generated/finance/SKILL.md` |
+| Work in the Finance-core area (964 symbols) | `.claude/skills/generated/finance-core/SKILL.md` |
+| Work in the Flows area (757 symbols) | `.claude/skills/generated/flows/SKILL.md` |
+| Work in the Model area (738 symbols) | `.claude/skills/generated/model/SKILL.md` |
+| Work in the Postings area (661 symbols) | `.claude/skills/generated/postings/SKILL.md` |
+| Work in the Charts area (264 symbols) | `.claude/skills/generated/charts/SKILL.md` |
+| Work in the Scripts area (254 symbols) | `.claude/skills/generated/scripts/SKILL.md` |
+| Work in the Api area (231 symbols) | `.claude/skills/generated/api/SKILL.md` |
+| Work in the Components area (210 symbols) | `.claude/skills/generated/components/SKILL.md` |
+| Work in the Messaging area (203 symbols) | `.claude/skills/generated/messaging/SKILL.md` |
+| Work in the Astro-diary area (184 symbols) | `.claude/skills/generated/astro-diary/SKILL.md` |
+| Work in the Ui area (176 symbols) | `.claude/skills/generated/ui/SKILL.md` |
+| Work in the Provider-operations area (155 symbols) | `.claude/skills/generated/provider-operations/SKILL.md` |
+| Work in the Human-design area (139 symbols) | `.claude/skills/generated/human-design/SKILL.md` |
+| Work in the Arc-pay area (133 symbols) | `.claude/skills/generated/arc-pay/SKILL.md` |
+| Work in the Chart_engine area (109 symbols) | `.claude/skills/generated/chart-engine/SKILL.md` |
+| Work in the Calculation-pdf area (108 symbols) | `.claude/skills/generated/calculation-pdf/SKILL.md` |
+| Work in the Numerology area (98 symbols) | `.claude/skills/generated/numerology/SKILL.md` |
+| Work in the Matrix area (97 symbols) | `.claude/skills/generated/matrix/SKILL.md` |
+| Work in the Calculations area (94 symbols) | `.claude/skills/generated/calculations/SKILL.md` |
 
 <!-- gitnexus:end -->
