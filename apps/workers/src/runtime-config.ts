@@ -4,10 +4,23 @@ const schema = z.object({
   REDIS_URL: z.string().trim().url().default("redis://localhost:6379"),
   WORKERS_HEALTH_HOST: z.string().trim().min(1).default("0.0.0.0"),
   WORKERS_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3010),
-  WORKERS_SESSIONS_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
-  WORKERS_SESSIONS_PROJECTION_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1_000),
+  WORKERS_SESSIONS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  WORKERS_SESSIONS_PROJECTION_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(60_000)
+    .default(1_000),
   WORKERS_SESSIONS_PROJECTION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(25),
-  WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  WORKERS_SESSIONS_MAINTENANCE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(300_000)
+    .default(30_000),
   WORKERS_SESSIONS_MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(25),
   WORKERS_CALCULATION_PDF_OUTBOX_RELAY_INTERVAL_MS: z.coerce
     .number()
@@ -79,23 +92,46 @@ const schema = z.object({
     .max(300_000)
     .default(5_000),
   WORKERS_FLOW_APPROVAL_WAKE_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(25),
-  WORKERS_FLOW_CHART_AI_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
-  WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: z.string().trim().min(1).optional(),
-  WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL: z.string().trim().url().default("https://api.openai.com/v1"),
+  WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: z.string().trim().min(1),
+  WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default("https://api.openai.com/v1"),
   WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL: z
     .enum(["gpt-5.4-mini", "gpt-5.5"])
     .default("gpt-5.4-mini"),
   WORKERS_FLOW_CHART_AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(180_000).default(90_000),
-  WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(256).max(8_000).default(5_000),
+  WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS: z.coerce
+    .number()
+    .int()
+    .min(256)
+    .max(8_000)
+    .default(5_000),
   WORKERS_FLOW_CHART_AI_RATE_LIMIT_REDIS_KEY_PREFIX: z
     .string()
     .trim()
     .min(1)
     .max(120)
     .default("elevenhouse:flow-chart-ai"),
-  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce.number().int().min(1).max(100).default(3),
-  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce.number().int().min(1).max(1_000).default(30),
-  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY: z.coerce.number().int().min(1).max(10_000).default(150),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(3),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1_000)
+    .default(30),
+  WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_000)
+    .default(150),
   WORKERS_FLOW_EXECUTION_OPERATION_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -245,7 +281,6 @@ export function createWorkersRuntimeConfig(
     },
     flowExecution,
     flowChartAi: {
-      enabled: value.WORKERS_FLOW_CHART_AI_ENABLED,
       openAiApiKey: value.WORKERS_FLOW_CHART_AI_OPENAI_API_KEY,
       openAiBaseUrl: value.WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL,
       qualityDraftModel: value.WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL,
@@ -253,9 +288,18 @@ export function createWorkersRuntimeConfig(
       maxOutputTokens: value.WORKERS_FLOW_CHART_AI_MAX_OUTPUT_TOKENS,
       rateLimitRedisKeyPrefix: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_REDIS_KEY_PREFIX,
       rateLimits: {
-        userPerMinute: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE, windowSeconds: 60 },
-        userPerHour: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR, windowSeconds: 3600 },
-        userPerDay: { limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY, windowSeconds: 86400 }
+        userPerMinute: {
+          limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE,
+          windowSeconds: 60
+        },
+        userPerHour: {
+          limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_HOUR,
+          windowSeconds: 3600
+        },
+        userPerDay: {
+          limit: value.WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY,
+          windowSeconds: 86400
+        }
       }
     },
     flowRuntimeControl: {
@@ -346,10 +390,6 @@ function createFlowExecutionConfig(value: z.infer<typeof schema>) {
 }
 
 function assertFlowChartAiConfig(value: z.infer<typeof schema>, isProduction: boolean): void {
-  if (!value.WORKERS_FLOW_CHART_AI_ENABLED) return;
-  if (!value.WORKERS_FLOW_CHART_AI_OPENAI_API_KEY) {
-    throw new Error("WORKERS_FLOW_CHART_AI_OPENAI_API_KEY is required when WORKERS_FLOW_CHART_AI_ENABLED=true");
-  }
   if (isProduction && new URL(value.WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL).protocol !== "https:") {
     throw new Error("WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL must use HTTPS in production");
   }

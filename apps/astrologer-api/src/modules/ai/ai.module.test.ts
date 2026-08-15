@@ -24,7 +24,6 @@ describe("AiModule", () => {
         new ConfigService({
           astrologerApi: {
             ai: {
-              enabled: true,
               openAiApiKey: "openai-secret",
               openAiBaseUrl: "https://api.openai.com/v1",
               fastDraftModel: "gpt-5.4-mini",

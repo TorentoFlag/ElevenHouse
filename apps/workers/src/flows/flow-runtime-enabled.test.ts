@@ -6,7 +6,10 @@ import { createFlowExecutionRuntime } from "./flow-execution.runtime";
 describe("global Flow execution deployment ceiling", () => {
   it("allows the enabled ceiling without a canary owner list", async () => {
     expect(
-      createWorkersRuntimeConfig({ WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled" }).flowExecution
+      createWorkersRuntimeConfig({
+        WORKERS_FLOW_EXECUTION_MAX_MODE: "enabled",
+        WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-test-key"
+      }).flowExecution
         .deploymentCeiling
     ).toEqual({ mode: "enabled" });
 

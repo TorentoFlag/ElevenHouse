@@ -2,9 +2,8 @@ import { HttpException, HttpStatus, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "node:crypto";
 import {
-  AiGenerationFeatureUnavailableError,
+  AiGenerationUnsupportedFeatureError,
   AiGenerationRateLimitedError,
-  AiGenerationUnavailableError,
   AiGenerationUsageEvidenceError,
   createAiGenerationRuntime,
   type AiGenerationResult,
@@ -13,7 +12,7 @@ import {
 import type { AiUsageResourceEvidence, AiUsageSafeErrorCode } from "@elevenhouse/domain";
 import { normalizeAiUsageResourceEvidence } from "@elevenhouse/domain";
 import { AI_GENERATION_PROVIDER, AI_RATE_LIMITER, AI_USAGE_RECORDER } from "./ai.tokens";
-import { getAiFeaturePolicy } from "./ai-feature-policy";
+import { getAiUsageEvidenceRequirement } from "./ai-usage-evidence-requirements";
 import type { AiRateLimiterPort } from "./ai-rate-limiter";
 import { createAiSafetyIdentifier } from "./ai-safety-identifier";
 import {
@@ -31,7 +30,6 @@ import {
 import type { AiUsageRecorderPort } from "./ai-usage-recorder";
 
 type AiGenerationRuntimeConfig = {
-  readonly enabled: boolean;
   readonly maxOutputTokens: number;
 };
 
@@ -40,7 +38,8 @@ export class AiGenerationService {
   private readonly runtime;
 
   constructor(
-    @Inject(AI_GENERATION_PROVIDER) private readonly provider: import("@elevenhouse/ai").AiGenerationPort,
+    @Inject(AI_GENERATION_PROVIDER)
+    private readonly provider: import("@elevenhouse/ai").AiGenerationPort,
     @Inject(AI_RATE_LIMITER) private readonly rateLimiter: AiRateLimiterPort,
     @Inject(AI_USAGE_RECORDER) private readonly usageRecorder: AiUsageRecorderPort,
     private readonly configService: ConfigService
@@ -51,9 +50,8 @@ export class AiGenerationService {
       usageRecorder: this.usageRecorder,
       getRuntimeConfig: () =>
         this.configService.getOrThrow<AiGenerationRuntimeConfig>("astrologerApi.ai"),
-      getFeaturePolicy: getAiFeaturePolicy,
-      normalizeResourceEvidence: (evidence) =>
-        normalizeAiUsageResourceEvidence(evidence ?? null),
+      getUsageEvidenceRequirement: getAiUsageEvidenceRequirement,
+      normalizeResourceEvidence: (evidence) => normalizeAiUsageResourceEvidence(evidence ?? null),
       createSafetyIdentifier: createAiSafetyIdentifier,
       toSafeErrorCode: toSafeAiUsageErrorCode,
       idGenerator: randomUUID
@@ -72,15 +70,18 @@ export class AiGenerationService {
     } catch (error) {
       if (error instanceof AiGenerationRateLimitedError) {
         throw new HttpException(
-          { message: "AI generation rate limit reached", retryAfterSeconds: error.retryAfterSeconds },
+          {
+            message: "AI generation rate limit reached",
+            retryAfterSeconds: error.retryAfterSeconds
+          },
           HttpStatus.TOO_MANY_REQUESTS
         );
       }
-      if (error instanceof AiGenerationUsageEvidenceError) throw createAiUsageEvidenceHttpException();
-      if (error instanceof AiGenerationFeatureUnavailableError) {
-        throw createAiFeaturePolicyHttpException();
+      if (error instanceof AiGenerationUsageEvidenceError)
+        throw createAiUsageEvidenceHttpException();
+      if (error instanceof AiGenerationUnsupportedFeatureError) {
+        throw createAiUnsupportedFeatureHttpException();
       }
-      if (error instanceof AiGenerationUnavailableError) throw createAiProviderHttpException();
       const mapped = mapAiProviderError(error);
       if (mapped) throw mapped;
       throw createAiProviderHttpException();
@@ -135,11 +136,11 @@ function createAiUsageEvidenceHttpException(): HttpException {
   );
 }
 
-function createAiFeaturePolicyHttpException(): HttpException {
+function createAiUnsupportedFeatureHttpException(): HttpException {
   return new HttpException(
     {
-      message: "AI feature processing authority is unavailable",
-      code: "AI_FEATURE_PROCESSING_AUTHORITY_UNAVAILABLE"
+      message: "AI generation is not configured for this feature",
+      code: "AI_FEATURE_UNSUPPORTED"
     },
     HttpStatus.SERVICE_UNAVAILABLE
   );

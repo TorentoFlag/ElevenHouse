@@ -239,7 +239,12 @@ export class NumerologyService {
         prompt: numerologyInterpretationDraftPromptV1,
         input: buildNumerologyAiContext(result, locale),
         ownerUserId,
-        feature: "numerology.interpretationDraft"
+        feature: "numerology.interpretationDraft",
+        resourceEvidence: {
+          resourceType: "numerology_calculation",
+          resourceId: calculation.id,
+          sourceChecksum: calculation.resultChecksum
+        }
       });
       const saved = await saveCalculationInterpretation({
         store: this.store,

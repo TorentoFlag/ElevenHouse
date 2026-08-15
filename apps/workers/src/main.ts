@@ -131,37 +131,36 @@ const flowNatalChartRequester = createDrizzleFlowNatalChartRequester(postgres.da
   executionProfile: chartExecutionProfile
 });
 const flowMessagingRequester = createDrizzleFlowMessagingRequester(postgres.database);
-const flowChartAiRedis = config.flowChartAi.enabled ? createClient({ url: config.redisUrl }) : null;
-const flowChartAiRedisReady = flowChartAiRedis?.connect() ?? Promise.resolve();
-const flowChartAiGenerator = flowChartAiRedis
-  ? createFlowChartAiGenerator({
-      config: config.flowChartAi,
-      redis: {
-        eval: (script, options) =>
-          flowChartAiRedisReady.then(() => flowChartAiRedis.eval(script, options))
-      },
-      usageRecorder: createDrizzleAiUsageRecorder(
-        createDrizzleAiUsageStore(postgres.database)
-      ) as import("@elevenhouse/ai").AiGenerationUsageRecorder<
-        AiUsageResourceEvidence,
-        AiUsageSafeErrorCode
-      >
-    })
-  : null;
-const flowNatalChartAiDraftRequester = flowChartAiGenerator
-  ? createDrizzleFlowNatalChartAiDraftRequester(postgres.database, {
-      calculationStore,
-      dictionaryStore: createDrizzleDictionaryStore(postgres.database),
-      commandStore: createDrizzleChartAiDraftCommandStore(postgres.database),
-      executionProfile: chartExecutionProfile,
-      getDictionaryCodes: getNatalChartAiDictionaryCodes,
-      generate: ({ dictionaryCodes, ...request }) => {
-        // Dictionary retrieval is Flow-owned preparation; the provider contract must not receive it.
-        void dictionaryCodes;
-        return flowChartAiGenerator.generate(request);
-      }
-    })
-  : undefined;
+const flowChartAiRedis = createClient({ url: config.redisUrl });
+const flowChartAiRedisReady = flowChartAiRedis.connect();
+const flowChartAiGenerator = createFlowChartAiGenerator({
+  config: config.flowChartAi,
+  redis: {
+    eval: (script, options) =>
+      flowChartAiRedisReady.then(() => flowChartAiRedis.eval(script, options))
+  },
+  usageRecorder: createDrizzleAiUsageRecorder(
+    createDrizzleAiUsageStore(postgres.database)
+  ) as import("@elevenhouse/ai").AiGenerationUsageRecorder<
+    AiUsageResourceEvidence,
+    AiUsageSafeErrorCode
+  >
+});
+const flowNatalChartAiDraftRequester = createDrizzleFlowNatalChartAiDraftRequester(
+  postgres.database,
+  {
+    calculationStore,
+    dictionaryStore: createDrizzleDictionaryStore(postgres.database),
+    commandStore: createDrizzleChartAiDraftCommandStore(postgres.database),
+    executionProfile: chartExecutionProfile,
+    getDictionaryCodes: getNatalChartAiDictionaryCodes,
+    generate: ({ dictionaryCodes, ...request }) => {
+      // Dictionary retrieval is Flow-owned preparation; the provider contract must not receive it.
+      void dictionaryCodes;
+      return flowChartAiGenerator.generate(request);
+    }
+  }
+);
 const flowWorkItemWakeStore = createDrizzleFlowWorkItemWakeStore(postgres.database);
 const flowApprovalWakeStore = createDrizzleFlowApprovalWakeStore(postgres.database);
 const dictionaryStore = createDrizzleDictionaryStore(postgres.database);
@@ -290,21 +289,24 @@ const flowExecutionRuntime = createFlowExecutionRuntime({
 const sessionRuntime = createSessionRuntime({
   projectionIntervalMs: config.sessions.projectionIntervalMs,
   maintenanceIntervalMs: config.sessions.maintenanceIntervalMs,
-  project: () => config.sessions.enabled
-    ? processSessionBookingLifecycleEvents({
-        store: sessionLifecycleStore,
-        now: new Date(),
-        batchSize: config.sessions.projectionBatchSize
-      })
-    : Promise.resolve(),
-  maintain: () => config.sessions.enabled
-    ? maintainSessions({
-        store: sessionLifecycleStore,
-        now: new Date(),
-        batchSize: config.sessions.maintenanceBatchSize
-      })
-    : Promise.resolve(),
-  onError: (operation, error) => logger.error("session runtime operation failed", { operation, error })
+  project: () =>
+    config.sessions.enabled
+      ? processSessionBookingLifecycleEvents({
+          store: sessionLifecycleStore,
+          now: new Date(),
+          batchSize: config.sessions.projectionBatchSize
+        })
+      : Promise.resolve(),
+  maintain: () =>
+    config.sessions.enabled
+      ? maintainSessions({
+          store: sessionLifecycleStore,
+          now: new Date(),
+          batchSize: config.sessions.maintenanceBatchSize
+        })
+      : Promise.resolve(),
+  onError: (operation, error) =>
+    logger.error("session runtime operation failed", { operation, error })
 });
 const readinessChecks = {
   postgres: async () => {
@@ -318,7 +320,7 @@ const readinessChecks = {
   },
   privateObjectStorage: async () => storage.checkReady(),
   flowChartAi: async () => {
-    if (flowChartAiRedis) await flowChartAiRedisReady;
+    await flowChartAiRedisReady;
   },
   flowExecutionRuntime: async () => {
     const readiness = flowExecutionRuntime.getOperationalReadiness();
@@ -364,8 +366,7 @@ const relay = createCalculationPdfOutboxRelay({
           latenessHorizonMs: config.flowBookingEnrollment.latenessHorizonMs,
           futureSkewToleranceMs: config.flowBookingEnrollment.futureSkewToleranceMs
         }),
-      enrollClientEvent: (request) =>
-        flowClientEventEnrollmentStore.enrollClientEvent({ request }),
+      enrollClientEvent: (request) => flowClientEventEnrollmentStore.enrollClientEvent({ request }),
       processBookingLifecycleEvent: (lifecycleEventId) =>
         flowBookingLifecycleStore.processBookingLifecycleEvent({
           lifecycleEventId,
@@ -539,7 +540,7 @@ async function shutdownOnce(): Promise<void> {
       () => flowRuntimeControlMaintenance.stop(),
       () => sessionRuntime.stop(),
       () => relay.stop(),
-      () => flowChartAiRedis?.close() ?? Promise.resolve()
+      () => flowChartAiRedis.close()
     ],
     closeHealthServer: () =>
       healthServer.listening

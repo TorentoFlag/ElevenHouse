@@ -1095,8 +1095,7 @@ describe("ChartsService", () => {
       dictionaryStore,
       aiGeneration,
       aiDraftCommandStore,
-      locale: "en",
-      chartAiConfig: { enabled: true }
+      locale: "en"
     });
 
     const response = await service.createAiDraft(
@@ -1169,7 +1168,6 @@ describe("ChartsService", () => {
       calculationStore,
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1187,7 +1185,7 @@ describe("ChartsService", () => {
     expect(calculationStore.saveInterpretation).not.toHaveBeenCalled();
   });
 
-  it("replays terminal success while chart AI is unavailable without new processing", async () => {
+  it("replays terminal success without new AI processing", async () => {
     const calculation = chartCalculationRecord({
       resultData: natalChartResultV2(),
       interpretations: [aiInterpretation(aiDraftCommandId)]
@@ -1208,7 +1206,6 @@ describe("ChartsService", () => {
       profileStore,
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: false }
     });
 
     await expect(
@@ -1316,7 +1313,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1351,7 +1347,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1391,7 +1386,6 @@ describe("ChartsService", () => {
       calculationStore,
       aiGeneration: createAiGenerationService(),
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1424,7 +1418,6 @@ describe("ChartsService", () => {
       calculationStore,
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1459,7 +1452,6 @@ describe("ChartsService", () => {
       calculationStore,
       aiGeneration: createAiGenerationService(),
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1489,7 +1481,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1520,7 +1511,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1555,7 +1545,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1592,7 +1581,6 @@ describe("ChartsService", () => {
       profileStore,
       aiGeneration,
       locale: "en",
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1612,37 +1600,6 @@ describe("ChartsService", () => {
     expect(calculationStore.saveInterpretation).toHaveBeenCalledOnce();
   });
 
-  it("fails closed before profile and Dictionary when chart AI authority is unavailable", async () => {
-    const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
-    const dictionaryStore = createDictionaryStore();
-    const profileStore = createProfileStore("en");
-    const aiGeneration = createAiGenerationService();
-    const service = createService({
-      calculationStore: createCalculationStore(calculation),
-      dictionaryStore,
-      profileStore,
-      aiGeneration,
-      chartAiConfig: { enabled: false }
-    });
-
-    await expect(
-      service.createAiDraft(
-        calculation.id,
-        { expectedResultChecksum: calculation.resultChecksum },
-        request(),
-        aiDraftIdempotencyKey
-      )
-    ).rejects.toMatchObject({
-      status: 503,
-      response: expect.objectContaining({
-        code: "CHART_AI_UNAVAILABLE"
-      })
-    });
-    expect(profileStore.findByOwnerUserId).not.toHaveBeenCalled();
-    expect(dictionaryStore.listEntriesByCodes).not.toHaveBeenCalled();
-    expect(aiGeneration.generate).not.toHaveBeenCalled();
-  });
-
   it("persists a non-ambiguous preflight failure without poisoning the key as provider-unknown", async () => {
     const calculation = chartCalculationRecord({ resultData: natalChartResultV2() });
     const dictionaryStore = createDictionaryStore();
@@ -1656,7 +1613,6 @@ describe("ChartsService", () => {
       dictionaryStore,
       aiDraftCommandStore,
       aiGeneration,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1697,7 +1653,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
       aiDraftCommandStore,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1735,7 +1690,6 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1828,7 +1782,6 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       aiDraftCommandStore,
       aiGeneration,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1889,7 +1842,6 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      chartAiConfig: { enabled: true }
     });
 
     await expect(
@@ -1925,7 +1877,6 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      chartAiConfig: { enabled: true },
       entitlementStore: createActivePlatformTariffEntitlementStore({
         ownerUserId,
         features: ["ai", "natal"]
@@ -1958,7 +1909,6 @@ function createService(
     readonly aiGeneration?: AiGenerationService;
     readonly aiDraftCommandStore?: ChartAiDraftCommandStore;
     readonly executionProfileProvider?: { readonly getProfile: () => typeof executionProfile };
-    readonly chartAiConfig?: { readonly enabled: boolean };
     readonly entitlementStore?: ReturnType<typeof createActivePlatformTariffEntitlementStore>;
     readonly locale?: "ru" | "en";
   } = {}
@@ -1973,7 +1923,6 @@ function createService(
     { now: () => now } as SystemClock,
     input.aiGeneration ?? createAiGenerationService(),
     (input.executionProfileProvider ?? { getProfile: () => executionProfile }) as never,
-    input.chartAiConfig ?? { enabled: false },
     input.aiDraftCommandStore ?? createAiDraftCommandStore(),
     input.entitlementStore ??
       createActivePlatformTariffEntitlementStore({

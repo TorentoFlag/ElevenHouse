@@ -12,7 +12,7 @@ describe("Flow chart AI generator characterization", () => {
     expect(source).toContain("prompt: chartInterpretationDraftPromptV1");
     expect(source).toContain('feature: "chart.interpretationDraft"');
     expect(source).toContain(
-      '? { usageEvidence: "required", availability: "enabled" }'
+      '? { usageEvidence: "required" }'
     );
     expect(source).toContain(
       "promptVersion: `${chartInterpretationDraftPromptV1.id}@${chartInterpretationDraftPromptV1.version}`"

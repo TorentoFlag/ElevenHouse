@@ -29,8 +29,7 @@ import type { ReproducibleChartResult } from "@elevenhouse/contracts";
 
 type NatalChartResult = Extract<ReproducibleChartResult, { readonly method: "natal" }>;
 type FlowChartAiConfig = {
-  readonly enabled: boolean;
-  readonly openAiApiKey?: string;
+  readonly openAiApiKey: string;
   readonly openAiBaseUrl: string;
   readonly qualityDraftModel: "gpt-5.4-mini" | "gpt-5.5";
   readonly timeoutMs: number;
@@ -50,7 +49,6 @@ export function createFlowChartAiGenerator(input: {
 }) {
   const provider = createOpenAiProvider({
     getConfig: () => ({
-      enabled: input.config.enabled,
       openAiApiKey: input.config.openAiApiKey,
       openAiBaseUrl: input.config.openAiBaseUrl,
       fastDraftModel: input.config.qualityDraftModel,
@@ -72,11 +70,9 @@ export function createFlowChartAiGenerator(input: {
       userPerDay: input.config.rateLimits.userPerDay
     }),
     usageRecorder: input.usageRecorder,
-    getRuntimeConfig: () => ({ enabled: input.config.enabled, maxOutputTokens: input.config.maxOutputTokens }),
-    getFeaturePolicy: (feature) =>
-      feature === "chart.interpretationDraft"
-        ? { usageEvidence: "required", availability: "enabled" }
-        : null,
+    getRuntimeConfig: () => ({ maxOutputTokens: input.config.maxOutputTokens }),
+    getUsageEvidenceRequirement: (feature) =>
+      feature === "chart.interpretationDraft" ? { usageEvidence: "required" } : null,
     normalizeResourceEvidence: (evidence) => normalizeAiUsageResourceEvidence(evidence ?? null),
     createSafetyIdentifier: (ownerUserId) =>
       `eh_${createHash("sha256").update(ownerUserId).digest("hex").slice(0, 61)}`,

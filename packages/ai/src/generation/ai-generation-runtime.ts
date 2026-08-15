@@ -1,9 +1,8 @@
 import type { AiGenerationPort } from "./ai-generation-port";
 import type { AiGenerationResult, AiPromptDefinition } from "./ai-generation-types";
 
-export type AiGenerationFeaturePolicy = {
+export type AiUsageEvidenceRequirement = {
   readonly usageEvidence: "forbidden" | "required";
-  readonly availability: "enabled" | "blocked_pending_purpose_authority";
 };
 
 export type AiGenerationRateLimitDecision =
@@ -11,7 +10,9 @@ export type AiGenerationRateLimitDecision =
   | { readonly allowed: false; readonly retryAfterSeconds: number };
 
 export type AiGenerationRateLimiter = {
-  readonly consume: (input: { readonly ownerUserId: string }) => Promise<AiGenerationRateLimitDecision>;
+  readonly consume: (input: {
+    readonly ownerUserId: string;
+  }) => Promise<AiGenerationRateLimitDecision>;
 };
 
 export type AiGenerationUsageRecorder<TResourceEvidence, TSafeError extends string> = {
@@ -41,17 +42,10 @@ export type AiGenerationUsageRecorder<TResourceEvidence, TSafeError extends stri
   }) => Promise<void>;
 };
 
-export class AiGenerationUnavailableError extends Error {
+export class AiGenerationUnsupportedFeatureError extends Error {
   constructor() {
-    super("AI generation is temporarily unavailable");
-    this.name = "AiGenerationUnavailableError";
-  }
-}
-
-export class AiGenerationFeatureUnavailableError extends Error {
-  constructor() {
-    super("AI feature processing authority is unavailable");
-    this.name = "AiGenerationFeatureUnavailableError";
+    super("AI generation is not configured for this feature");
+    this.name = "AiGenerationUnsupportedFeatureError";
   }
 }
 
@@ -73,8 +67,8 @@ export function createAiGenerationRuntime<TResourceEvidence, TSafeError extends 
   readonly provider: AiGenerationPort;
   readonly rateLimiter: AiGenerationRateLimiter;
   readonly usageRecorder: AiGenerationUsageRecorder<TResourceEvidence, TSafeError>;
-  readonly getRuntimeConfig: () => { readonly enabled: boolean; readonly maxOutputTokens: number };
-  readonly getFeaturePolicy: (feature: string) => AiGenerationFeaturePolicy | null;
+  readonly getRuntimeConfig: () => { readonly maxOutputTokens: number };
+  readonly getUsageEvidenceRequirement: (feature: string) => AiUsageEvidenceRequirement | null;
   readonly normalizeResourceEvidence: (
     evidence: TResourceEvidence | undefined
   ) => TResourceEvidence | null;
@@ -98,16 +92,14 @@ export function createAiGenerationRuntime<TResourceEvidence, TSafeError extends 
       readonly resourceEvidence?: TResourceEvidence;
     }): Promise<AiGenerationResult<TOutput>> => {
       const config = input.getRuntimeConfig();
-      if (!config.enabled) throw new AiGenerationUnavailableError();
-
-      const featurePolicy = input.getFeaturePolicy(request.feature);
-      if (!featurePolicy || featurePolicy.availability !== "enabled") {
-        throw new AiGenerationFeatureUnavailableError();
+      const usageEvidenceRequirement = input.getUsageEvidenceRequirement(request.feature);
+      if (!usageEvidenceRequirement) {
+        throw new AiGenerationUnsupportedFeatureError();
       }
       const hasUsageEvidence = request.resourceEvidence !== undefined;
       if (
-        (featurePolicy.usageEvidence === "required" && !hasUsageEvidence) ||
-        (featurePolicy.usageEvidence === "forbidden" && hasUsageEvidence)
+        (usageEvidenceRequirement.usageEvidence === "required" && !hasUsageEvidence) ||
+        (usageEvidenceRequirement.usageEvidence === "forbidden" && hasUsageEvidence)
       ) {
         throw new AiGenerationUsageEvidenceError();
       }

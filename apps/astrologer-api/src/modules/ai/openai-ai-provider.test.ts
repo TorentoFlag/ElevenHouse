@@ -21,7 +21,6 @@ import {
 } from "./openai-ai-provider";
 
 type TestAiConfig = {
-  readonly enabled: boolean;
   readonly openAiApiKey?: string;
   readonly openAiBaseUrl: string;
   readonly fastDraftModel: "gpt-5.4-mini" | "gpt-5.5";
@@ -31,7 +30,6 @@ type TestAiConfig = {
 };
 
 const baseAiConfig: TestAiConfig = {
-  enabled: true,
   openAiApiKey: "openai-secret",
   openAiBaseUrl: "https://api.openai.com/v1",
   fastDraftModel: "gpt-5.4-mini",
@@ -181,9 +179,9 @@ describe("OpenAiProvider", () => {
     );
   });
 
-  it("rejects disabled provider config before calling OpenAI", async () => {
+  it("rejects missing provider credentials before calling OpenAI", async () => {
     const client = createClient(createOpenAiResponse());
-    const provider = new OpenAiProvider(createConfigService({ enabled: false }), client);
+    const provider = new OpenAiProvider(createConfigService({ openAiApiKey: undefined }), client);
 
     await expect(provider.generateStructured(createProviderInput())).rejects.toBeInstanceOf(
       AiProviderUnavailableError

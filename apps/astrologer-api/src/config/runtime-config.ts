@@ -264,20 +264,12 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .positive()
     .default(60),
   ASTROLOGER_API_MOBILE_REFRESH_IP_LIMIT: z.coerce.number().int().positive().default(120),
-  ASTROLOGER_API_MOBILE_REFRESH_IP_WINDOW_SECONDS: z.coerce
-    .number()
-    .int()
-    .positive()
-    .default(60),
+  ASTROLOGER_API_MOBILE_REFRESH_IP_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   ASTROLOGER_API_PASSWORDLESS_RATE_LIMIT_REDIS_KEY_PREFIX: z
     .string()
     .trim()
     .min(1)
     .default("elevenhouse:astrologer-api"),
-  ASTROLOGER_AI_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
   ASTROLOGER_AI_PROVIDER: z.literal("openai").default("openai"),
   ASTROLOGER_OPENAI_API_KEY: optionalTrimmedNonEmptyStringSchema,
   ASTROLOGER_OPENAI_BASE_URL: z.string().trim().url().default(officialOpenAiApiBaseUrl),
@@ -292,11 +284,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .default("elevenhouse:astrologer-api:ai"),
-  ASTROLOGER_CHART_AI_ENABLED: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
+    .default("elevenhouse:astrologer-api:ai")
 });
 
 export type AstrologerApiRuntimeConfig = {
@@ -420,7 +408,10 @@ export type AstrologerApiRuntimeConfig = {
   };
   readonly billing: {
     readonly arcPayConfigured: boolean;
-    readonly arcPayBrowserTokenization: Readonly<{ apiBaseUrl: string; publishableKey: string }> | null;
+    readonly arcPayBrowserTokenization: Readonly<{
+      apiBaseUrl: string;
+      publishableKey: string;
+    }> | null;
     /** Local immutable finance storage; card tokens are sealed here before a DB reference is written. */
     readonly financeArtifactStorage: Readonly<{
       artifactDirectory: string;
@@ -430,7 +421,6 @@ export type AstrologerApiRuntimeConfig = {
     readonly savedCardDisclosureSeriesId: string | null;
   };
   readonly ai: {
-    readonly enabled: boolean;
     readonly provider: "openai";
     readonly openAiApiKey?: string;
     readonly openAiBaseUrl: string;
@@ -453,9 +443,6 @@ export type AstrologerApiRuntimeConfig = {
         readonly windowSeconds: number;
       };
     };
-  };
-  readonly chartAi: {
-    readonly enabled: boolean;
   };
 };
 
@@ -561,22 +548,15 @@ export function createAstrologerApiRuntimeConfig(
     );
   }
 
-  if (config.ASTROLOGER_AI_ENABLED && !config.ASTROLOGER_OPENAI_API_KEY) {
-    throw new Error("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
-  }
-
-  if (config.ASTROLOGER_CHART_AI_ENABLED && !config.ASTROLOGER_AI_ENABLED) {
-    throw new Error("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
+  if (!config.ASTROLOGER_OPENAI_API_KEY) {
+    throw new Error("ASTROLOGER_OPENAI_API_KEY is required");
   }
 
   if (
     config.NODE_ENV === "production" &&
-    config.ASTROLOGER_AI_ENABLED &&
     new URL(config.ASTROLOGER_OPENAI_BASE_URL).protocol !== "https:"
   ) {
-    throw new Error(
-      "ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
-    );
+    throw new Error("ASTROLOGER_OPENAI_BASE_URL must use https in production");
   }
 
   if (config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED && !config.ASTROLOGER_API_GEOAPIFY_API_KEY) {
@@ -619,8 +599,7 @@ export function createAstrologerApiRuntimeConfig(
     trustProxy: config.ASTROLOGER_API_TRUST_PROXY,
     redisUrl: config.REDIS_URL,
     mediaRoom,
-    flows: {
-    },
+    flows: {},
     sessionTtlSeconds: config.ASTROLOGER_API_SESSION_TTL_SECONDS,
     mobileAccessTokenTtlSeconds: config.ASTROLOGER_API_MOBILE_ACCESS_TOKEN_TTL_SECONDS,
     mobileSessionIdleTtlSeconds: config.ASTROLOGER_API_MOBILE_SESSION_IDLE_TTL_SECONDS,
@@ -730,7 +709,6 @@ export function createAstrologerApiRuntimeConfig(
       savedCardDisclosureSeriesId: config.ASTROLOGER_BILLING_SAVED_CARD_DISCLOSURE_SERIES_ID ?? null
     },
     ai: {
-      enabled: config.ASTROLOGER_AI_ENABLED,
       provider: config.ASTROLOGER_AI_PROVIDER,
       openAiApiKey: config.ASTROLOGER_OPENAI_API_KEY,
       openAiBaseUrl: config.ASTROLOGER_OPENAI_BASE_URL,
@@ -753,11 +731,8 @@ export function createAstrologerApiRuntimeConfig(
           windowSeconds: 86400
         }
       }
-    },
-    chartAi: {
-      enabled: config.ASTROLOGER_CHART_AI_ENABLED
     }
-};
+  };
 }
 
 type LiveKitRuntimeOptions = Readonly<{
@@ -804,7 +779,12 @@ function resolveArcPayBrowserTokenization(
   }
   const normalizedApiBaseUrl = stripTrailingSlashes(apiBaseUrl);
   const url = new URL(normalizedApiBaseUrl);
-  if (url.protocol !== "https:" || url.username || url.password || url.origin !== normalizedApiBaseUrl) {
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.origin !== normalizedApiBaseUrl
+  ) {
     throw new Error("ASTROLOGER_BILLING_ARC_PAY_API_BASE_URL must be an HTTPS origin");
   }
   return Object.freeze({ apiBaseUrl: normalizedApiBaseUrl, publishableKey });

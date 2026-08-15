@@ -57,7 +57,6 @@ import { createActivePlatformTariffEntitlementStore } from "../platform-entitlem
 import { RedisRuntimeService } from "../redis/redis-runtime.service";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import {
-  CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
   CHART_COMMAND_STORE,
   CHART_JOB_STORE
@@ -160,8 +159,6 @@ describe("charts HTTP routes", () => {
       .useValue(createCommandStore())
       .overrideProvider(CHART_JOB_STORE)
       .useValue(createJobStore())
-      .overrideProvider(CHART_AI_CONFIG)
-      .useValue({ enabled: true })
       .overrideProvider(CHART_AI_DRAFT_COMMAND_STORE)
       .useValue(createAiDraftCommandStore(() => currentCalculation))
       .overrideProvider(AiGenerationService)

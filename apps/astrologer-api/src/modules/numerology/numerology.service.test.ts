@@ -245,7 +245,14 @@ describe("NumerologyService", () => {
       })
     );
     const generationInput = vi.mocked(aiGeneration.generate).mock.calls[0]?.[0];
-    expect(generationInput).toMatchObject({ feature: "numerology.interpretationDraft" });
+    expect(generationInput).toMatchObject({
+      feature: "numerology.interpretationDraft",
+      resourceEvidence: {
+        resourceType: "numerology_calculation",
+        resourceId: saved.calculation.id,
+        sourceChecksum: saved.calculation.resultChecksum
+      }
+    });
     expect(JSON.stringify(generationInput?.input)).not.toContain("Голубев");
     expect(JSON.stringify(generationInput?.input)).not.toContain("2000-08-19");
     expect(generationInput?.input).toMatchObject({ locale: "en", mode: "individual" });

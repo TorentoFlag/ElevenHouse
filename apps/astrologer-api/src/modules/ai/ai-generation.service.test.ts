@@ -50,11 +50,10 @@ const prompt = definePrompt({
 const astrologerUserId = "44444444-4444-4444-8444-444444444444";
 const safetyIdentifier = createAiSafetyIdentifier(astrologerUserId);
 
-function createConfigService(enabled: boolean, maxOutputTokens = 900): ConfigService {
+function createConfigService(maxOutputTokens = 900): ConfigService {
   return new ConfigService({
     astrologerApi: {
       ai: {
-        enabled,
         maxOutputTokens
       }
     }
@@ -62,37 +61,6 @@ function createConfigService(enabled: boolean, maxOutputTokens = 900): ConfigSer
 }
 
 describe("AiGenerationService", () => {
-  it("rejects disabled AI before consuming rate limits or calling the provider", async () => {
-    const provider = { generateStructured: vi.fn() };
-    const rateLimiter = {
-      consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
-    };
-    const service = new AiGenerationService(
-      provider,
-      rateLimiter,
-      createUsageRecorder(),
-      createConfigService(false)
-    );
-
-    let error: unknown;
-
-    try {
-      await service.generate({
-        prompt,
-        input: { title: "Sun in Aries" },
-        ownerUserId: "owner",
-        feature: "dictionary.aiDraft"
-      });
-    } catch (caught) {
-      error = caught;
-    }
-
-    expect(error).toBeInstanceOf(HttpException);
-    expect((error as HttpException).getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
-    expect(rateLimiter.consume).not.toHaveBeenCalled();
-    expect(provider.generateStructured).not.toHaveBeenCalled();
-  });
-
   it("rate-limits before calling the provider", async () => {
     const provider = { generateStructured: vi.fn() };
     const service = new AiGenerationService(
@@ -106,7 +74,7 @@ describe("AiGenerationService", () => {
         )
       },
       createUsageRecorder(),
-      createConfigService(true)
+      createConfigService()
     );
 
     let error: unknown;
@@ -131,12 +99,7 @@ describe("AiGenerationService", () => {
     expect(provider.generateStructured).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "matrix.reportDraft",
-    "numerology.interpretationDraft",
-    "humanDesign.interpretationDraft",
-    "unknown.clientFeature"
-  ])("fails closed for unavailable client-derived feature %s", async (feature) => {
+  it("fails closed only for an unknown feature", async () => {
     const provider = { generateStructured: vi.fn() };
     const rateLimiter = {
       consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true }))
@@ -146,7 +109,7 @@ describe("AiGenerationService", () => {
       provider,
       rateLimiter,
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -154,11 +117,11 @@ describe("AiGenerationService", () => {
         prompt,
         input: { title: "Client-derived context" },
         ownerUserId: astrologerUserId,
-        feature
+        feature: "unknown.clientFeature"
       })
     ).rejects.toMatchObject({
       status: HttpStatus.SERVICE_UNAVAILABLE,
-      response: { code: "AI_FEATURE_PROCESSING_AUTHORITY_UNAVAILABLE" }
+      response: { code: "AI_FEATURE_UNSUPPORTED" }
     });
     expect(rateLimiter.consume).not.toHaveBeenCalled();
     expect(usageRecorder.start).not.toHaveBeenCalled();
@@ -175,7 +138,7 @@ describe("AiGenerationService", () => {
       provider,
       rateLimiter,
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -209,7 +172,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -254,7 +217,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -336,7 +299,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       createUsageRecorder(),
-      createConfigService(true, 300)
+      createConfigService(300)
     );
 
     await service.generate({
@@ -374,7 +337,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       createUsageRecorder(),
-      createConfigService(true)
+      createConfigService()
     );
 
     let error: unknown;
@@ -408,7 +371,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -448,7 +411,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -486,7 +449,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -529,7 +492,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -568,7 +531,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -601,7 +564,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     await expect(
@@ -644,7 +607,7 @@ describe("AiGenerationService", () => {
       provider,
       { consume: vi.fn(async (): Promise<AiRateLimitDecision> => ({ allowed: true })) },
       usageRecorder,
-      createConfigService(true)
+      createConfigService()
     );
 
     try {

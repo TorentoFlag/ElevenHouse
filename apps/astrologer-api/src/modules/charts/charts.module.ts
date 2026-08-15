@@ -1,11 +1,10 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ConfigModule } from "@nestjs/config";
 import {
   createDrizzleChartAiDraftCommandStore,
   createDrizzleChartCalculationCommandStore,
   createDrizzleChartCalculationJobStore
 } from "@elevenhouse/db/charts";
-import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { AiModule } from "../ai/ai.module";
 import { AstrologerProfileModule } from "../astrologer-profile/astrologer-profile.module";
@@ -23,7 +22,6 @@ import { ChartsPdfService } from "./charts-pdf.service";
 import { ChartAiDraftCommandReconciliationService } from "./chart-ai-draft-command-reconciliation.service";
 import { ChartsService } from "./charts.service";
 import {
-  CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
   CHART_COMMAND_STORE,
   CHART_JOB_STORE
@@ -34,9 +32,9 @@ import {
     AiModule,
     AstrologerProfileModule,
     CalculationsModule,
-    ConfigModule,
     ClockModule,
     ClientsModule,
+    ConfigModule,
     DatabaseModule,
     DictionaryStoreModule,
     IdentityModule,
@@ -65,12 +63,6 @@ import {
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleChartAiDraftCommandStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
-    },
-    {
-      provide: CHART_AI_CONFIG,
-      useFactory: (configService: ConfigService) =>
-        configService.getOrThrow<AstrologerApiRuntimeConfig["chartAi"]>("astrologerApi.chartAi"),
-      inject: [ConfigService]
     }
   ]
 })

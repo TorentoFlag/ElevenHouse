@@ -107,11 +107,9 @@ import { chartHttpError, mapChartError } from "./chart-http-errors";
 import { buildChartAiDraftContext, getChartAiDictionaryCodes } from "./chart-ai-context";
 import { ChartExecutionProfileProvider } from "./chart-execution-profile.provider";
 import {
-  CHART_AI_CONFIG,
   CHART_AI_DRAFT_COMMAND_STORE,
   CHART_COMMAND_STORE,
-  CHART_JOB_STORE,
-  type ChartAiConfig
+  CHART_JOB_STORE
 } from "./charts.tokens";
 import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
 
@@ -140,7 +138,6 @@ export class ChartsService {
     private readonly clock: SystemClock,
     private readonly aiGeneration: AiGenerationService,
     private readonly executionProfile: ChartExecutionProfileProvider,
-    @Inject(CHART_AI_CONFIG) private readonly chartAiConfig: ChartAiConfig,
     @Inject(CHART_AI_DRAFT_COMMAND_STORE)
     private readonly aiDraftCommandStore: ChartAiDraftCommandStore,
     @Inject(PLATFORM_TARIFF_ENTITLEMENT_STORE)
@@ -876,9 +873,6 @@ export class ChartsService {
           calculation,
           expectedExecutionProfile: this.executionProfile.getProfile()
         });
-        if (!this.chartAiConfig.enabled) {
-          throw chartHttpError(503, "CHART_AI_UNAVAILABLE", "Chart AI is unavailable");
-        }
         const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
         locale = profile?.locale === "en" ? "en" : "ru";
         dictionary = await listDictionaryEntriesByCodes({

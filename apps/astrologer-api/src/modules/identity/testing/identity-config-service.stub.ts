@@ -161,7 +161,7 @@ export function createIdentityConfigServiceStub(input: {
 
       if (key === "astrologerApi.ai") {
         return {
-          enabled: false,
+          openAiApiKey: "test-openai-key",
           openAiBaseUrl: "https://api.openai.com/v1",
           fastDraftModel: "gpt-5.4-mini",
           qualityDraftModel: "gpt-5.5",
@@ -173,12 +173,6 @@ export function createIdentityConfigServiceStub(input: {
             userPerHour: { limit: 30, windowSeconds: 3_600 },
             userPerDay: { limit: 150, windowSeconds: 86_400 }
           }
-        };
-      }
-
-      if (key === "astrologerApi.chartAi") {
-        return {
-          enabled: false
         };
       }
 

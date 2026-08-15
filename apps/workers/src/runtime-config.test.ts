@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createWorkersRuntimeConfig } from "./runtime-config";
+import { createWorkersRuntimeConfig as buildWorkersRuntimeConfig } from "./runtime-config";
+
+function createWorkersRuntimeConfig(source: Record<string, string | undefined> = {}) {
+  return buildWorkersRuntimeConfig({
+    WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-test-key",
+    ...source
+  });
+}
 
 describe("createWorkersRuntimeConfig", () => {
   it("uses safe local defaults and the private media bucket", () => {
@@ -18,8 +25,7 @@ describe("createWorkersRuntimeConfig", () => {
         deferDelayMs: 30_000
       },
       flowChartAi: {
-        enabled: false,
-        openAiApiKey: undefined,
+        openAiApiKey: "worker-ai-test-key",
         openAiBaseUrl: "https://api.openai.com/v1",
         qualityDraftModel: "gpt-5.4-mini",
         timeoutMs: 90_000,
@@ -145,19 +151,17 @@ describe("createWorkersRuntimeConfig", () => {
     ).toThrow();
   });
 
-  it("requires an explicit provider credential before enabling Flow chart AI", () => {
+  it("requires a Flow chart AI provider credential", () => {
     expect(() =>
-      createWorkersRuntimeConfig({ WORKERS_FLOW_CHART_AI_ENABLED: "true" })
+      buildWorkersRuntimeConfig({})
     ).toThrow("WORKERS_FLOW_CHART_AI_OPENAI_API_KEY");
 
     expect(
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_CHART_AI_ENABLED: "true",
         WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-secret",
         WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_MINUTE: "5"
       }).flowChartAi
     ).toMatchObject({
-      enabled: true,
       openAiApiKey: "worker-ai-secret",
       rateLimits: { userPerMinute: { limit: 5, windowSeconds: 60 } }
     });
@@ -166,7 +170,6 @@ describe("createWorkersRuntimeConfig", () => {
   it("maps every WORKERS_FLOW_CHART_AI setting and freezes Flow AI defaults", () => {
     expect(
       createWorkersRuntimeConfig({
-        WORKERS_FLOW_CHART_AI_ENABLED: "true",
         WORKERS_FLOW_CHART_AI_OPENAI_API_KEY: "worker-ai-secret",
         WORKERS_FLOW_CHART_AI_OPENAI_BASE_URL: "https://openai.worker.internal/v1",
         WORKERS_FLOW_CHART_AI_QUALITY_DRAFT_MODEL: "gpt-5.5",
@@ -178,7 +181,6 @@ describe("createWorkersRuntimeConfig", () => {
         WORKERS_FLOW_CHART_AI_RATE_LIMIT_USER_PER_DAY: "700"
       }).flowChartAi
     ).toEqual({
-      enabled: true,
       openAiApiKey: "worker-ai-secret",
       openAiBaseUrl: "https://openai.worker.internal/v1",
       qualityDraftModel: "gpt-5.5",

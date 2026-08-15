@@ -4,12 +4,12 @@ import { createAstrologerApiRuntimeConfig } from "./runtime-config";
 const testEncryptionKey = Buffer.alloc(32, 1).toString("base64");
 const requiredSecurityConfig = {
   AUTH_CODE_DELIVERY_ENCRYPTION_KEY: testEncryptionKey,
-  ASTROLOGER_API_GEOAPIFY_API_KEY: "test-geoapify-key"
+  ASTROLOGER_API_GEOAPIFY_API_KEY: "test-geoapify-key",
+  ASTROLOGER_OPENAI_API_KEY: "test-openai-key"
 };
 const defaultAiConfig = {
-  enabled: false,
   provider: "openai",
-  openAiApiKey: undefined,
+  openAiApiKey: "test-openai-key",
   openAiBaseUrl: "https://api.openai.com/v1",
   fastDraftModel: "gpt-5.4-mini",
   qualityDraftModel: "gpt-5.5",
@@ -97,10 +97,7 @@ const defaultSecurityConfig = {
     financeArtifactStorage: null,
     savedCardDisclosureSeriesId: null
   },
-  ai: defaultAiConfig,
-  chartAi: {
-    enabled: false
-  }
+  ai: defaultAiConfig
 };
 
 describe("createAstrologerApiRuntimeConfig", () => {
@@ -720,42 +717,30 @@ describe("createAstrologerApiRuntimeConfig", () => {
     expect(() => createAstrologerApiRuntimeConfig({})).toThrow("AUTH_CODE_DELIVERY_ENCRYPTION_KEY");
   });
 
-  it("parses disabled AI runtime config without requiring an OpenAI key", () => {
+  it("parses AI config without an AI enable switch", () => {
     const config = createAstrologerApiRuntimeConfig({
-      ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "false"
+      ...requiredSecurityConfig
     });
 
     expect(config.ai).toEqual(defaultAiConfig);
   });
 
-  it("normalizes a blank OpenAI API key to undefined when AI is disabled", () => {
-    const config = createAstrologerApiRuntimeConfig({
+  it("rejects a missing OpenAI API key", () => {
+    const { ASTROLOGER_OPENAI_API_KEY: _removed, ...withoutOpenAiKey } = requiredSecurityConfig;
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...withoutOpenAiKey
+      })
+    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required");
+  });
+
+  it("rejects a blank OpenAI API key", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "false",
       ASTROLOGER_OPENAI_API_KEY: "   "
-    });
-
-    expect(config.ai.openAiApiKey).toBeUndefined();
-  });
-
-  it("requires an OpenAI API key when AI is enabled", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_AI_ENABLED: "true"
       })
-    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
-  });
-
-  it("requires an OpenAI API key when AI is enabled and the key is blank", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_AI_ENABLED: "true",
-        ASTROLOGER_OPENAI_API_KEY: "   "
-      })
-    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required when ASTROLOGER_AI_ENABLED=true");
+    ).toThrow("ASTROLOGER_OPENAI_API_KEY is required");
   });
 
   it("rejects cleartext OpenAI base URLs in production when AI is enabled", () => {
@@ -770,25 +755,20 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.com",
-        ASTROLOGER_AI_ENABLED: "true",
         ASTROLOGER_OPENAI_API_KEY: "openai-secret",
         ASTROLOGER_OPENAI_BASE_URL: "http://openai.internal",
         CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
       })
-    ).toThrow(
-      "ASTROLOGER_OPENAI_BASE_URL must use https in production when ASTROLOGER_AI_ENABLED=true"
-    );
+    ).toThrow("ASTROLOGER_OPENAI_BASE_URL must use https in production");
   });
 
   it("parses enabled AI runtime config", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "true",
       ASTROLOGER_OPENAI_API_KEY: "openai-secret",
       ASTROLOGER_AI_RATE_LIMIT_USER_PER_MINUTE: "5"
     });
 
-    expect(config.ai.enabled).toBe(true);
     expect(config.ai.openAiApiKey).toBe("openai-secret");
     expect(config.ai.rateLimits.userPerMinute).toEqual({ limit: 5, windowSeconds: 60 });
   });
@@ -796,7 +776,6 @@ describe("createAstrologerApiRuntimeConfig", () => {
   it("maps every ASTROLOGER_AI provider setting without changing its env contract", () => {
     const config = createAstrologerApiRuntimeConfig({
       ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "true",
       ASTROLOGER_AI_PROVIDER: "openai",
       ASTROLOGER_OPENAI_API_KEY: "openai-secret",
       ASTROLOGER_OPENAI_BASE_URL: "https://openai.internal/v1/",
@@ -811,7 +790,6 @@ describe("createAstrologerApiRuntimeConfig", () => {
     });
 
     expect(config.ai).toEqual({
-      enabled: true,
       provider: "openai",
       openAiApiKey: "openai-secret",
       openAiBaseUrl: "https://openai.internal/v1/",
@@ -828,33 +806,12 @@ describe("createAstrologerApiRuntimeConfig", () => {
     });
   });
 
-  it("keeps chart AI disabled by default", () => {
+  it("does not expose a chart-specific AI kill switch", () => {
     const config = createAstrologerApiRuntimeConfig({
-      ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "false"
+      ...requiredSecurityConfig
     });
 
-    expect(config.chartAi).toEqual({ enabled: false });
-  });
-
-  it("requires the global provider contour before chart AI can be enabled", () => {
-    expect(() =>
-      createAstrologerApiRuntimeConfig({
-        ...requiredSecurityConfig,
-        ASTROLOGER_CHART_AI_ENABLED: "true"
-      })
-    ).toThrow("ASTROLOGER_AI_ENABLED=true is required when ASTROLOGER_CHART_AI_ENABLED=true");
-  });
-
-  it("enables chart AI with the configured provider contour only", () => {
-    const config = createAstrologerApiRuntimeConfig({
-      ...requiredSecurityConfig,
-      ASTROLOGER_AI_ENABLED: "true",
-      ASTROLOGER_OPENAI_API_KEY: "openai-secret",
-      ASTROLOGER_CHART_AI_ENABLED: "true"
-    });
-
-    expect(config.chartAi).toEqual({ enabled: true });
+    expect(config).not.toHaveProperty("chartAi");
   });
 });
 

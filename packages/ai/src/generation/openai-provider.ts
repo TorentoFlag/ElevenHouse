@@ -20,7 +20,6 @@ export type OpenAiClient = {
 };
 
 export type OpenAiRuntimeConfig = {
-  readonly enabled: boolean;
   readonly openAiApiKey?: string;
   readonly openAiBaseUrl: string;
   readonly fastDraftModel: AiModel;
@@ -83,7 +82,7 @@ export function createOpenAiProvider(input: {
       readonly metadata: AiGenerationMetadata;
     }): Promise<AiGenerationResult<TOutput>> => {
       const config = input.getConfig();
-      if (!config.enabled || !config.openAiApiKey) {
+      if (!config.openAiApiKey) {
         throw new AiProviderUnavailableError("AI provider is disabled");
       }
       const model =

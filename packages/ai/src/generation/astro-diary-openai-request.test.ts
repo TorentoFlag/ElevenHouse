@@ -21,7 +21,6 @@ describe("AstroDiary OpenAI request policy", () => {
     }));
     const provider = createOpenAiProvider({
       getConfig: () => ({
-        enabled: true,
         openAiApiKey: "test-key",
         openAiBaseUrl: "https://api.openai.com/v1",
         fastDraftModel: "gpt-5.4-mini",
@@ -38,8 +37,8 @@ describe("AstroDiary OpenAI request policy", () => {
         complete: vi.fn(async () => undefined),
         fail: vi.fn(async () => undefined)
       },
-      getRuntimeConfig: () => ({ enabled: true, maxOutputTokens: 900 }),
-      getFeaturePolicy: () => ({ usageEvidence: "forbidden", availability: "enabled" }),
+      getRuntimeConfig: () => ({ maxOutputTokens: 900 }),
+      getUsageEvidenceRequirement: () => ({ usageEvidence: "forbidden" }),
       normalizeResourceEvidence: () => null,
       createSafetyIdentifier: () => "safe-owner",
       toSafeErrorCode: () => "AI_OUTCOME_UNKNOWN",
@@ -80,7 +79,6 @@ describe("AstroDiary OpenAI request policy", () => {
     };
     const provider = createOpenAiProvider({
       getConfig: () => ({
-        enabled: true,
         openAiApiKey: "test-key",
         openAiBaseUrl: "https://api.openai.com/v1",
         fastDraftModel: "gpt-5.4-mini",
@@ -137,7 +135,6 @@ describe("AstroDiary OpenAI request policy", () => {
     }));
     const provider = createOpenAiProvider({
       getConfig: () => ({
-        enabled: true,
         openAiApiKey: "test-key",
         openAiBaseUrl: "https://api.openai.com/v1",
         fastDraftModel: "gpt-5.4-mini",
@@ -154,8 +151,8 @@ describe("AstroDiary OpenAI request policy", () => {
         complete: vi.fn(async () => undefined),
         fail: vi.fn(async () => undefined)
       },
-      getRuntimeConfig: () => ({ enabled: true, maxOutputTokens: 900 }),
-      getFeaturePolicy: () => ({ usageEvidence: "forbidden", availability: "enabled" }),
+      getRuntimeConfig: () => ({ maxOutputTokens: 900 }),
+      getUsageEvidenceRequirement: () => ({ usageEvidence: "forbidden" }),
       normalizeResourceEvidence: () => null,
       createSafetyIdentifier: () => "safe-owner",
       toSafeErrorCode: () => "AI_OUTCOME_UNKNOWN",
@@ -192,7 +189,6 @@ describe("AstroDiary OpenAI request policy", () => {
       });
       const provider = createOpenAiProvider({
         getConfig: () => ({
-          enabled: true,
           openAiApiKey: "test-key",
           openAiBaseUrl: "https://api.openai.com/v1",
           fastDraftModel: "gpt-5.4-mini",
@@ -245,7 +241,6 @@ describe("AstroDiary OpenAI request policy", () => {
     });
     const provider = createOpenAiProvider({
       getConfig: () => ({
-        enabled: true,
         openAiApiKey: "test-key",
         openAiBaseUrl: "https://api.openai.com/v1",
         fastDraftModel: "gpt-5.4-mini",
