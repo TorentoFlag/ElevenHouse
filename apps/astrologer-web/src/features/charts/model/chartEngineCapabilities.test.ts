@@ -117,7 +117,7 @@ describe("chartEngineCapabilities", () => {
         calculationStatus: "calculated",
         identity: readyIdentity
       }).canRequestAi
-    ).toBe(false);
+    ).toBe(true);
     expect(
       getChartEngineCapabilities({
         mode: "natal",
@@ -135,7 +135,7 @@ describe("chartEngineCapabilities", () => {
         calculationStatus: "calculated",
         identity: readyIdentity
       }).canRequestPdf
-    ).toBe(false);
+    ).toBe(true);
     expect(
       getChartEngineCapabilities({
         mode: "child_chart",
@@ -156,7 +156,7 @@ describe("chartEngineCapabilities", () => {
     ).toBe("none");
   });
 
-  it("does not invent AI or PDF support for provider modes without those product contours", () => {
+  it("exposes AI for a reproducible non-natal chart without adding PDF scope", () => {
     expect(
       getChartEngineCapabilities({
         mode: "transit",
@@ -165,7 +165,7 @@ describe("chartEngineCapabilities", () => {
         calculationStatus: "calculated",
         identity: readyIdentity
       })
-    ).toMatchObject({ canRequestAi: false, canRequestPdf: false });
+    ).toMatchObject({ canRequestAi: true, canRequestPdf: false });
   });
 
   it("names every approximate participant in pair warnings", () => {

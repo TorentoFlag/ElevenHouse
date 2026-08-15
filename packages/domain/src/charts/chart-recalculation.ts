@@ -30,6 +30,29 @@ import { assertStoredChartCalculationIntegrity } from "./chart-stored-result-int
 export const chartCalculationCapabilities = chartCalculationCapabilityValues;
 export type ChartCalculationCapability = ContractChartCalculationCapability;
 
+const chartTariffOwnerCapabilityByMethod = {
+  natal: "natal",
+  astrocartography: "forecast",
+  transit: "forecast",
+  synastry: "synastry",
+  composite: "synastry",
+  solar_return: "solar",
+  progression: "forecast",
+  horary: "horar"
+} as const satisfies Readonly<Record<ChartCalculationMethod, string>>;
+
+export function resolveChartTariffOwnerCapability(
+  method: ChartCalculationMethod
+): (typeof chartTariffOwnerCapabilityByMethod)[ChartCalculationMethod] {
+  return chartTariffOwnerCapabilityByMethod[method];
+}
+
+export function resolveChartAiDraftTariffCapabilities(
+  method: ChartCalculationMethod
+): readonly ["ai", (typeof chartTariffOwnerCapabilityByMethod)[ChartCalculationMethod]] {
+  return ["ai", resolveChartTariffOwnerCapability(method)];
+}
+
 type ChartRecalculationTargetBase = {
   readonly calculationId: string;
   readonly expectedSourceChecksum: string;
@@ -164,12 +187,10 @@ export function deriveChartCalculationCapabilities(input: {
     if (interpretationMode === "legacy_unclassified") {
       return ["view_current", "recalculate"];
     }
-    if (interpretationMode === "child") {
-      return ["view_current", "recalculate", "link"];
-    }
   }
   const common: ChartCalculationCapability[] = ["view_current", "recalculate", "link", "publish"];
-  if (result.method === "natal") common.push("ai_draft", "pdf");
+  common.push("ai_draft");
+  if (result.method === "natal") common.push("pdf");
   return common;
 }
 

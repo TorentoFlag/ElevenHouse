@@ -1,8 +1,15 @@
 import { performance } from "node:perf_hooks";
-import { HttpException, Inject, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import {
-  chartInterpretationDraftPromptV1,
-  renderChartInterpretationText,
+  ForbiddenException,
+  HttpException,
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException
+} from "@nestjs/common";
+import {
+  chartInterpretationDraftPromptV2,
+  renderChartInterpretationV2Text,
   type AiGenerationResult,
   type ChartInterpretationDraftPromptOutput
 } from "@elevenhouse/ai";
@@ -23,7 +30,9 @@ import {
   assertStoredChartCalculationSelfIntegrity,
   listDictionaryEntriesByCodes,
   prepareChartRecalculation,
+  resolveChartAiDraftTariffCapabilities,
   resolveChartInterpretationMode,
+  resolvePlatformTariffCapabilities,
   saveCalculationInterpretation,
   ChartStoredResultIntegrityError,
   type AstrologerProfileStore,
@@ -42,7 +51,8 @@ import {
   type ChartRecalculationTarget,
   type ChartReadyBirthData,
   type ClientStore,
-  type DictionaryStore
+  type DictionaryStore,
+  type PlatformTariffEntitlementStore
 } from "@elevenhouse/domain";
 import {
   chartAstrocartographyJobCreateRequestSchema,
@@ -56,7 +66,6 @@ import {
   chartJobResponseSchema,
   chartNatalJobCreateRequestSchema,
   chartNatalJobCreateResponseSchema,
-  chartNatalResultV2Schema,
   chartProgressionJobCreateRequestSchema,
   chartProgressionJobInputSnapshotSchema,
   chartRecalculateRequestSchema,
@@ -67,6 +76,7 @@ import {
   chartTransitJobCreateRequestSchema,
   chartTransitJobInputSnapshotSchema,
   chartMethodVersions,
+  reproducibleChartResultSchema,
   chartResultSchema,
   type ChartCalculationMethod,
   type CalculationRecordResponse,
@@ -94,7 +104,7 @@ import { CLIENT_STORE } from "../clients/clients.tokens";
 import { DICTIONARY_STORE } from "../dictionary/dictionary.tokens";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { chartHttpError, mapChartError } from "./chart-http-errors";
-import { buildNatalChartAiContext, getNatalChartAiDictionaryCodes } from "./chart-ai-context";
+import { buildChartAiDraftContext, getChartAiDictionaryCodes } from "./chart-ai-context";
 import { ChartExecutionProfileProvider } from "./chart-execution-profile.provider";
 import {
   CHART_AI_CONFIG,
@@ -103,6 +113,7 @@ import {
   CHART_JOB_STORE,
   type ChartAiConfig
 } from "./charts.tokens";
+import { PLATFORM_TARIFF_ENTITLEMENT_STORE } from "../platform-entitlements/platform-entitlements.tokens";
 
 const calculationIdParamSchema = z.object({ calculationId: z.string().uuid() }).strict();
 const jobIdParamSchema = z.object({ jobId: z.string().uuid() }).strict();
@@ -131,7 +142,9 @@ export class ChartsService {
     private readonly executionProfile: ChartExecutionProfileProvider,
     @Inject(CHART_AI_CONFIG) private readonly chartAiConfig: ChartAiConfig,
     @Inject(CHART_AI_DRAFT_COMMAND_STORE)
-    private readonly aiDraftCommandStore: ChartAiDraftCommandStore
+    private readonly aiDraftCommandStore: ChartAiDraftCommandStore,
+    @Inject(PLATFORM_TARIFF_ENTITLEMENT_STORE)
+    private readonly entitlementStore: PlatformTariffEntitlementStore
   ) {}
 
   async createNatalJob(
@@ -817,8 +830,9 @@ export class ChartsService {
         ownerUserId,
         calculationId: params.calculationId
       });
-      assertAdultNatalInterpretationMode(calculation);
-      const result = assertNatalChartAiCalculation(calculation);
+      const result = assertChartAiCalculation(calculation);
+      const subjectKind = resolveChartAiDraftSubjectKind(calculation, result.method);
+      await this.assertChartAiDraftEntitlement(ownerUserId, result.method);
       if (calculation.resultChecksum !== parsedBody.expectedResultChecksum) {
         throw chartHttpError(409, "CHART_RESULT_CHANGED", "Chart result changed; reload and retry");
       }
@@ -863,11 +877,7 @@ export class ChartsService {
           expectedExecutionProfile: this.executionProfile.getProfile()
         });
         if (!this.chartAiConfig.enabled) {
-          throw chartHttpError(
-            503,
-            "CHART_AI_UNAVAILABLE",
-            "Chart AI is unavailable"
-          );
+          throw chartHttpError(503, "CHART_AI_UNAVAILABLE", "Chart AI is unavailable");
         }
         const profile = await this.profileStore.findByOwnerUserId({ ownerUserId });
         locale = profile?.locale === "en" ? "en" : "ru";
@@ -875,7 +885,7 @@ export class ChartsService {
           store: this.dictionaryStore,
           ownerUserId,
           locale,
-          codes: getNatalChartAiDictionaryCodes(result)
+          codes: getChartAiDictionaryCodes(result)
         });
       } catch (error) {
         const mapped = await mapChartAiPreflightError(error);
@@ -900,11 +910,12 @@ export class ChartsService {
       let generated: AiGenerationResult<ChartInterpretationDraftPromptOutput>;
       try {
         generated = await this.aiGeneration.generate({
-          prompt: chartInterpretationDraftPromptV1,
-          input: chartInterpretationDraftPromptV1.inputSchema.parse(
-            buildNatalChartAiContext({
+          prompt: chartInterpretationDraftPromptV2,
+          input: chartInterpretationDraftPromptV2.inputSchema.parse(
+            buildChartAiDraftContext({
               locale,
               result,
+              subjectKind,
               dictionaryEntries: dictionary.entries
             })
           ),
@@ -943,9 +954,9 @@ export class ChartsService {
         calculationId: calculation.id,
         expectedResultChecksum: parsedBody.expectedResultChecksum,
         source: "ai" as const,
-        text: renderChartInterpretationText(generated.output, locale),
+        text: renderChartInterpretationV2Text(generated.output, locale),
         modelId: generated.model,
-        promptVersion: `${chartInterpretationDraftPromptV1.id}@${chartInterpretationDraftPromptV1.version}`,
+        promptVersion: `${chartInterpretationDraftPromptV2.id}@${chartInterpretationDraftPromptV2.version}`,
         interpretationIdGenerator: () => command.commandId,
         now: this.clock.now()
       };
@@ -997,6 +1008,31 @@ export class ChartsService {
         throw new ChartAiDraftOutcomeUnknownError();
       }
       return toCalculationResponse(saved);
+    });
+  }
+
+  private async assertChartAiDraftEntitlement(
+    ownerUserId: string,
+    method: ChartCalculationMethod
+  ): Promise<void> {
+    const resolutions = await resolvePlatformTariffCapabilities({
+      store: this.entitlementStore,
+      ownerUserId,
+      capabilities: resolveChartAiDraftTariffCapabilities(method),
+      operation: "generation",
+      now: this.clock.now().toISOString()
+    });
+    const denied = resolutions.find(({ decision }) => decision !== "allow");
+    if (!denied) return;
+    throw new ForbiddenException({
+      statusCode: 403,
+      error: "entitlement_required",
+      code: "entitlement_required",
+      surfaceId: "ai.chart.draft",
+      capability: denied.capability,
+      operation: "generation",
+      access: denied.decision,
+      message: "The current tariff entitlement does not permit this operation"
     });
   }
 
@@ -1297,19 +1333,12 @@ function requireOwnerUserId(request: AstrologerSessionRequest): string {
   return ownerUserId;
 }
 
-function assertNatalChartAiCalculation(calculation: CalculationRecord) {
+function assertChartAiCalculation(calculation: CalculationRecord) {
   if (calculation.status === "archived") {
     throw chartHttpError(409, "CHART_CALCULATION_ARCHIVED", "Chart calculation is archived");
   }
   if (calculation.module !== "chart") {
     throw chartHttpError(409, "CHART_CALCULATION_MISMATCH", "Calculation is not a chart result");
-  }
-  if (calculation.methodCode !== "natal") {
-    throw chartHttpError(
-      409,
-      "CHART_UNSUPPORTED_AI_METHOD",
-      "AI draft is available for natal chart calculations first"
-    );
   }
   const readable = chartResultSchema.safeParse(calculation.resultData);
   if (readable.success && readable.data.schemaVersion === "chart-result.v1") {
@@ -1319,7 +1348,7 @@ function assertNatalChartAiCalculation(calculation: CalculationRecord) {
       "Legacy chart calculation must be recalculated before AI generation"
     );
   }
-  const parsed = chartNatalResultV2Schema.safeParse(calculation.resultData);
+  const parsed = reproducibleChartResultSchema.safeParse(calculation.resultData);
   if (!parsed.success) {
     throw chartHttpError(
       409,
@@ -1328,18 +1357,30 @@ function assertNatalChartAiCalculation(calculation: CalculationRecord) {
     );
   }
   const result = assertStoredChartCalculationSelfIntegrity({ calculation });
-  if (result.schemaVersion !== "chart-result.v2" || result.method !== "natal") {
+  if (
+    result.schemaVersion !== "chart-result.v2" ||
+    result.method !== calculation.methodCode ||
+    result.method !== parsed.data.method
+  ) {
     throw new ChartStoredResultIntegrityError();
   }
-  return result;
-}
-
-function assertAdultNatalInterpretationMode(calculation: CalculationRecord): void {
-  if ((calculation.interpretationMode ?? "legacy_unclassified") !== "adult_natal") {
+  if (
+    result.method === "natal" &&
+    resolveChartInterpretationMode(calculation, result.method) === "legacy_unclassified"
+  ) {
     throw new CalculationInterpretationModeUnavailableError(
       "Chart AI draft is unavailable for this interpretation mode"
     );
   }
+  return result;
+}
+
+function resolveChartAiDraftSubjectKind(
+  calculation: CalculationRecord,
+  method: ChartCalculationMethod
+): "adult" | "child" {
+  if (method !== "natal") return "adult";
+  return resolveChartInterpretationMode(calculation, method) === "child" ? "child" : "adult";
 }
 
 function assertReadableChartCalculation(

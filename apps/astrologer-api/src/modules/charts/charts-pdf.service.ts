@@ -122,7 +122,7 @@ export class ChartsPdfService {
         "Calculation is not a supported natal chart record"
       );
     }
-    if (resolveChartInterpretationMode(calculation, "natal") !== "adult_natal") {
+    if (resolveChartInterpretationMode(calculation, "natal") === "legacy_unclassified") {
       throw new CalculationInterpretationModeUnavailableError(
         "Chart PDF is unavailable for this interpretation mode"
       );

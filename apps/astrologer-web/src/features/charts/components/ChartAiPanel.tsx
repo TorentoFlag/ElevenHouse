@@ -56,13 +56,11 @@ export function ChartAiPanel({
     () => getLatestInterpretation(calculation?.interpretations ?? []),
     [calculation]
   );
-  const unsupportedMethod = result && result.method !== "natal";
   const disabledReason = getDisabledReason({
     copy,
     calculationId,
     isResultStale,
-    result,
-    unsupportedMethod: Boolean(unsupportedMethod)
+    result
   });
 
   useEffect(() => {
@@ -301,14 +299,10 @@ function getDisabledReason(input: {
   readonly calculationId: string | null;
   readonly isResultStale: boolean;
   readonly result: ChartResult | null;
-  readonly unsupportedMethod: boolean;
 }): string | null {
   if (!input.result) return input.copy.noResult;
   if (input.isResultStale) return input.copy.stale;
   if (!input.calculationId) return input.copy.saveCalculation;
-  if (input.unsupportedMethod) {
-    return input.copy.unsupported;
-  }
   return null;
 }
 

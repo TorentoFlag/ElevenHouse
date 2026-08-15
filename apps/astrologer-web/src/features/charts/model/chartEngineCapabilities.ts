@@ -90,22 +90,11 @@ export function getChartEngineCapabilities(input: {
         warnings
       };
     }
-    if (input.interpretationMode === "child") {
-      return {
-        view: "current",
-        canRecalculate: true,
-        canRequestAi: false,
-        canRequestPdf: false,
-        canLink: true,
-        canPublish: false,
-        warnings
-      };
-    }
   }
   return {
     view: "current",
     canRecalculate: true,
-    canRequestAi: result.method === "natal",
+    canRequestAi: true,
     canRequestPdf: result.method === "natal",
     canLink: true,
     canPublish: true,

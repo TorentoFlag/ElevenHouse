@@ -169,7 +169,9 @@ describe("charts HTTP routes", () => {
       .overrideProvider(AI_USAGE_RECORDER)
       .useValue(createAiUsageRecorderStub())
       .overrideProvider(PLATFORM_TARIFF_ENTITLEMENT_STORE)
-      .useValue(createActivePlatformTariffEntitlementStore({ ownerUserId, features: ["ai", "natal"] }))
+      .useValue(
+        createActivePlatformTariffEntitlementStore({ ownerUserId, features: ["ai", "natal"] })
+      )
       .compile();
 
     currentCsrfToken = moduleRef.get(AstrologerCsrfTokenService).setCsrfCookie({
@@ -281,7 +283,7 @@ describe("charts HTTP routes", () => {
       body: {
         calculationId,
         interpretationMode: "child",
-        capabilities: ["view_current", "recalculate", "link"]
+        capabilities: ["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"]
       }
     });
   });
@@ -303,33 +305,37 @@ describe("charts HTTP routes", () => {
     expect(aiGenerate).toHaveBeenCalledOnce();
   });
 
-  it.each(["child", "legacy_unclassified"] as const)(
-    "blocks %s natal AI and PDF over HTTP before downstream work",
-    async (interpretationMode) => {
-      currentCalculation = { ...currentCalculation, interpretationMode };
+  it("generates a child natal AI draft over HTTP with the shared draft lifecycle", async () => {
+    currentCalculation = { ...currentCalculation, interpretationMode: "child" };
 
-      const aiResponse = await postJson(
-        `/charts/calculations/${calculationId}/ai-draft`,
-        { expectedResultChecksum: checksum },
-        aiDraftHeaders(`chart-ai:test-${interpretationMode}`)
-      );
-      const pdfResponse = await postJson(
-        `/charts/calculations/${calculationId}/report/pdf`,
-        { expectedResultChecksum: checksum, locale: "ru" },
-        csrfHeaders()
-      );
+    const response = await postJson(
+      `/charts/calculations/${calculationId}/ai-draft`,
+      { expectedResultChecksum: checksum },
+      aiDraftHeaders("chart-ai:test-child")
+    );
 
-      expect(aiResponse).toMatchObject({
-        status: 409,
-        body: { code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" }
-      });
-      expect(pdfResponse).toMatchObject({
-        status: 409,
-        body: { code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" }
-      });
-      expect(aiGenerate).not.toHaveBeenCalled();
-    }
-  );
+    expect(response).toMatchObject({
+      status: 201,
+      body: { interpretations: [expect.objectContaining({ status: "draft" })] }
+    });
+    expect(aiGenerate).toHaveBeenCalledOnce();
+  });
+
+  it("keeps legacy-unclassified natal AI unavailable before downstream work", async () => {
+    currentCalculation = { ...currentCalculation, interpretationMode: "legacy_unclassified" };
+
+    const response = await postJson(
+      `/charts/calculations/${calculationId}/ai-draft`,
+      { expectedResultChecksum: checksum },
+      aiDraftHeaders("chart-ai:test-legacy")
+    );
+
+    expect(response).toMatchObject({
+      status: 409,
+      body: { code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" }
+    });
+    expect(aiGenerate).not.toHaveBeenCalled();
+  });
 
   it("generates and conditionally saves a chart AI draft over HTTP", async () => {
     const response = await postJson(

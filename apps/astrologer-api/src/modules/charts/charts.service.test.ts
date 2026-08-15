@@ -20,6 +20,7 @@ import type {
 import type { AiGenerationService } from "../ai/ai-generation.service";
 import type { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { createActivePlatformTariffEntitlementStore } from "../platform-entitlements/testing/active-platform-tariff-entitlement-store";
 import { ChartsService } from "./charts.service";
 
 const now = new Date("2026-07-20T12:00:00.000Z");
@@ -1142,7 +1143,7 @@ describe("ChartsService", () => {
       expect.objectContaining({
         source: "ai",
         modelId: "gpt-test",
-        promptVersion: "chart.interpretationDraft@3",
+        promptVersion: "chart.interpretationDraft@4",
         expectedResultChecksum: calculation.resultChecksum
       })
     );
@@ -1774,7 +1775,7 @@ describe("ChartsService", () => {
 
   it("rejects legacy and archived AI before consent or downstream work", async () => {
     for (const candidate of [
-      { calculation: chartCalculationRecord(), code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" },
+      { calculation: chartCalculationRecord(), code: "CHART_RECALCULATION_REQUIRED" },
       {
         calculation: chartCalculationRecord({
           resultData: {
@@ -1816,7 +1817,7 @@ describe("ChartsService", () => {
     }
   });
 
-  it("does not let valid adult consent unlock child AI or acquire an idempotency command", async () => {
+  it("generates a child natal AI draft with the child prompt and unchanged draft lifecycle", async () => {
     const calculation = chartCalculationRecord({
       resultData: natalChartResultV2(),
       interpretationMode: "child"
@@ -1837,15 +1838,19 @@ describe("ChartsService", () => {
         request(),
         aiDraftIdempotencyKey
       )
-    ).rejects.toMatchObject({
-      status: 409,
-      response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
+    ).resolves.toMatchObject({
+      id: calculation.id,
+      interpretations: [expect.objectContaining({ status: "draft" })]
     });
-    expect(aiDraftCommandStore.acquire).not.toHaveBeenCalled();
-    expect(aiGeneration.generate).not.toHaveBeenCalled();
+    expect(aiDraftCommandStore.acquire).toHaveBeenCalledOnce();
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ methodCode: "natal", subjectKind: "child" })
+      })
+    );
   });
 
-  it("rejects unsupported chart AI methods without calling the provider", async () => {
+  it("requires recalculation for a legacy non-natal chart before calling the provider", async () => {
     const calculation = chartCalculationRecord({ methodCode: "transit" });
     const aiGeneration = createAiGenerationService();
     const service = createService({
@@ -1861,7 +1866,82 @@ describe("ChartsService", () => {
         aiDraftIdempotencyKey
       )
     ).rejects.toMatchObject({
-      response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
+      response: expect.objectContaining({ code: "CHART_RECALCULATION_REQUIRED" })
+    });
+    expect(aiGeneration.generate).not.toHaveBeenCalled();
+  });
+
+  it("generates an astrocartography AI draft through the generic profile", async () => {
+    const result = toV2ChartResult(astrocartographyResult());
+    const inputSnapshot = (
+      result as Extract<ReproducibleChartResult, { method: "astrocartography" }>
+    ).inputSnapshot;
+    const calculation = chartCalculationRecord({
+      methodCode: "astrocartography",
+      inputData: {
+        inputSnapshot: { inputSnapshot },
+        settings: result.settings
+      },
+      resultData: result,
+      resultSummary: { method: "astrocartography" }
+    });
+    const aiGeneration = createAiGenerationService();
+    const service = createService({
+      calculationStore: createCalculationStore(calculation),
+      aiGeneration,
+      chartAiConfig: { enabled: true }
+    });
+
+    await expect(
+      service.createAiDraft(
+        calculation.id,
+        { expectedResultChecksum: calculation.resultChecksum },
+        request(),
+        aiDraftIdempotencyKey
+      )
+    ).resolves.toMatchObject({
+      id: calculation.id,
+      interpretations: [expect.objectContaining({ status: "draft" })]
+    });
+    expect(aiGeneration.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ methodCode: "astrocartography" })
+      })
+    );
+  });
+
+  it("denies a method whose resource tariff capability is absent before provider work", async () => {
+    const result = toV2ChartResult(astrocartographyResult());
+    const inputSnapshot = (
+      result as Extract<ReproducibleChartResult, { method: "astrocartography" }>
+    ).inputSnapshot;
+    const calculation = chartCalculationRecord({
+      methodCode: "astrocartography",
+      inputData: { inputSnapshot: { inputSnapshot }, settings: result.settings },
+      resultData: result,
+      resultSummary: { method: "astrocartography" }
+    });
+    const aiGeneration = createAiGenerationService();
+    const service = createService({
+      calculationStore: createCalculationStore(calculation),
+      aiGeneration,
+      chartAiConfig: { enabled: true },
+      entitlementStore: createActivePlatformTariffEntitlementStore({
+        ownerUserId,
+        features: ["ai", "natal"]
+      })
+    });
+
+    await expect(
+      service.createAiDraft(
+        calculation.id,
+        { expectedResultChecksum: calculation.resultChecksum },
+        request(),
+        aiDraftIdempotencyKey
+      )
+    ).rejects.toMatchObject({
+      status: 403,
+      response: expect.objectContaining({ code: "entitlement_required", capability: "forecast" })
     });
     expect(aiGeneration.generate).not.toHaveBeenCalled();
   });
@@ -1879,6 +1959,7 @@ function createService(
     readonly aiDraftCommandStore?: ChartAiDraftCommandStore;
     readonly executionProfileProvider?: { readonly getProfile: () => typeof executionProfile };
     readonly chartAiConfig?: { readonly enabled: boolean };
+    readonly entitlementStore?: ReturnType<typeof createActivePlatformTariffEntitlementStore>;
     readonly locale?: "ru" | "en";
   } = {}
 ): ChartsService {
@@ -1893,7 +1974,12 @@ function createService(
     input.aiGeneration ?? createAiGenerationService(),
     (input.executionProfileProvider ?? { getProfile: () => executionProfile }) as never,
     input.chartAiConfig ?? { enabled: false },
-    input.aiDraftCommandStore ?? createAiDraftCommandStore()
+    input.aiDraftCommandStore ?? createAiDraftCommandStore(),
+    input.entitlementStore ??
+      createActivePlatformTariffEntitlementStore({
+        ownerUserId,
+        features: ["ai", "natal", "forecast", "synastry", "solar", "horar"]
+      })
   );
 }
 

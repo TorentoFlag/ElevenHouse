@@ -152,26 +152,35 @@ describe("ChartsPdfService", () => {
     expect(harness.calculationPdf.download).not.toHaveBeenCalled();
   });
 
-  it("hard-disables child and legacy PDF before queue, storage or lookup work", async () => {
-    for (const interpretationMode of ["child", "legacy_unclassified"] as const) {
-      const harness = createHarness({
-        calculation: calculation({ interpretationMode })
-      });
+  it("keeps child natal PDF lifecycle identical to adult natal", async () => {
+    const harness = createHarness({ calculation: calculation({ interpretationMode: "child" }) });
 
-      await expect(
-        harness.service.enqueue(
-          calculationId,
-          { expectedResultChecksum: checksum, locale: "ru" },
-          request()
-        )
-      ).rejects.toMatchObject({
-        status: 409,
-        response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
-      });
-      expect(harness.calculationPdf.request).not.toHaveBeenCalled();
-      expect(harness.calculationPdf.latest).not.toHaveBeenCalled();
-      expect(harness.calculationPdf.download).not.toHaveBeenCalled();
-    }
+    await expect(
+      harness.service.enqueue(
+        calculationId,
+        { expectedResultChecksum: checksum, locale: "ru" },
+        request()
+      )
+    ).resolves.toMatchObject({ job: { status: "queued" } });
+    expect(harness.calculationPdf.request).toHaveBeenCalledOnce();
+  });
+
+  it("keeps legacy-unclassified natal PDF unavailable before queue work", async () => {
+    const harness = createHarness({
+      calculation: calculation({ interpretationMode: "legacy_unclassified" })
+    });
+
+    await expect(
+      harness.service.enqueue(
+        calculationId,
+        { expectedResultChecksum: checksum, locale: "ru" },
+        request()
+      )
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: "CHART_INTERPRETATION_MODE_UNAVAILABLE" })
+    });
+    expect(harness.calculationPdf.request).not.toHaveBeenCalled();
   });
 
   it("requires recalculation for a legacy natal chart before PDF side effects", async () => {

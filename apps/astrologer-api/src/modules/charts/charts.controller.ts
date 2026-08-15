@@ -3,7 +3,7 @@ import { chartAiDraftCommandScope } from "@elevenhouse/domain";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
-import { RequirePlatformTariffCapabilities } from "../platform-entitlements/platform-tariff-capability.policy";
+import { RequirePlatformTariffCapability } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { ChartsService } from "./charts.service";
 
@@ -84,9 +84,9 @@ export class ChartsController {
   }
 
   @Post("calculations/:calculationId/ai-draft")
-  @RequirePlatformTariffCapabilities({
+  @RequirePlatformTariffCapability({
     surfaceId: "ai.chart.draft",
-    capabilities: ["ai", "natal"],
+    capability: "ai",
     operation: "generation"
   })
   @RequireCsrf()

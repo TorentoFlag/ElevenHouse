@@ -1056,6 +1056,13 @@ describe("ChartEnginePage", () => {
       />
     );
 
+    expect(
+      screen
+        .getAllByRole("button")
+        .filter((button) => ["Трактовки", "AI"].includes(button.textContent ?? ""))
+        .map((button) => button.textContent)
+    ).toEqual(["Трактовки", "AI"]);
+
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
 
     const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
@@ -1784,7 +1791,7 @@ describe("ChartEnginePage", () => {
     ).toHaveLength(2);
   });
 
-  it("shows natal result in child mode with child dictionary anchors and disabled PDF", async () => {
+  it("shows child natal result with child dictionary anchors and an AI tab", async () => {
     const user = userEvent.setup();
     const get = vi.spyOn(application.http, "get").mockResolvedValue({
       entries: [],
@@ -1847,7 +1854,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.queryByText("Детская карта рассчитана")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "AI" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
 
@@ -1871,7 +1878,7 @@ describe("ChartEnginePage", () => {
     );
   });
 
-  it("closes an active AI surface when the persisted calculation switches to child mode", async () => {
+  it("keeps an active AI surface when the persisted calculation switches to child mode", async () => {
     const user = userEvent.setup();
     const page = ({
       canRequestAi,
@@ -1904,14 +1911,11 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "AI" }));
     expect(screen.getByRole("heading", { name: "Черновик трактовки" })).toBeInTheDocument();
 
-    rerender(page({ canRequestAi: false, interpretationMode: "child", mode: "child_chart" }));
+    rerender(page({ canRequestAi: true, interpretationMode: "child", mode: "child_chart" }));
 
-    expect(screen.queryByRole("button", { name: "AI" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Черновик трактовки" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Трактовки" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    expect(screen.getByRole("button", { name: "AI" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Черновик трактовки" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("derives Dictionary copy from persisted adult authority instead of child URL state", async () => {

@@ -17,7 +17,8 @@ import { ChartStoredResultIntegrityError } from "./chart-errors";
 import { buildChartResultReproducibilityFingerprint } from "./chart-execution-profile";
 import {
   deriveChartCalculationCapabilities,
-  prepareChartRecalculation as prepareChartRecalculationWithProfile
+  prepareChartRecalculation as prepareChartRecalculationWithProfile,
+  resolveChartAiDraftTariffCapabilities
 } from "./chart-recalculation";
 
 const ownerUserId = "11111111-1111-4111-8111-111111111111";
@@ -413,7 +414,7 @@ describe("chart recalculation preparation", () => {
     ).toEqual(["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"]);
   });
 
-  it("keeps child and unclassified natal capabilities fail-closed", () => {
+  it("keeps only unclassified natal capabilities fail-closed", () => {
     const current = v2NatalResult();
     const currentChecksum = sha256CanonicalJson(current as unknown as CanonicalJson);
     const calculation = {
@@ -427,7 +428,7 @@ describe("chart recalculation preparation", () => {
         calculation: { ...calculation, interpretationMode: "child" },
         expectedExecutionProfile
       })
-    ).toEqual(["view_current", "recalculate", "link"]);
+    ).toEqual(["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"]);
     expect(
       deriveChartCalculationCapabilities({
         calculation: { ...calculation, interpretationMode: "legacy_unclassified" },
@@ -435,6 +436,22 @@ describe("chart recalculation preparation", () => {
       })
     ).toEqual(["view_current", "recalculate"]);
   });
+
+  it.each([
+    ["natal", ["ai", "natal"]],
+    ["astrocartography", ["ai", "forecast"]],
+    ["transit", ["ai", "forecast"]],
+    ["synastry", ["ai", "synastry"]],
+    ["composite", ["ai", "synastry"]],
+    ["solar_return", ["ai", "solar"]],
+    ["progression", ["ai", "forecast"]],
+    ["horary", ["ai", "horar"]]
+  ] satisfies readonly (readonly [ChartCalculationMethod, readonly string[]])[])(
+    "resolves %s AI draft tariff requirements from the canonical chart method map",
+    (method, expectedCapabilities) => {
+      expect(resolveChartAiDraftTariffCapabilities(method)).toEqual(expectedCapabilities);
+    }
+  );
 
   it("fails closed when a format-valid v2 result has a forged reproducibility fingerprint", () => {
     const current = v2NatalResult();

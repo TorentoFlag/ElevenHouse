@@ -695,13 +695,15 @@ export const expectedPlatformCapabilityOperationContracts = {
       selector: "persisted CalculationRecord.module + CalculationRecord.methodCode",
       capabilityMap: {
         "chart:natal": ["engine", "natal"],
+        "chart:astrocartography": ["engine", "forecast"],
         "chart:synastry": ["engine", "synastry"],
+        "chart:composite": ["engine", "synastry"],
         "chart:transit": ["engine", "forecast"],
         "chart:progression": ["engine", "forecast"],
         "chart:solar_return": ["engine", "solar"],
         "chart:horary": ["engine", "horar"]
       },
-      unresolvedValues: ["chart:astrocartography", "chart:composite"],
+      unresolvedValues: [],
       unknownValuePolicy: "deny"
     }
   },

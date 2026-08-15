@@ -15,6 +15,7 @@ import {
   PlatformCapabilityWorkerOperationSurface,
   RawPlatformCapabilityManifestEntry
 } from "./platform-capability-manifest-model";
+import { resolveChartTariffOwnerCapability } from "../charts/chart-recalculation";
 
 type PlatformPlanFeatureCode = RawPlatformCapabilityManifestEntry["code"];
 
@@ -98,6 +99,17 @@ const chartJobCapabilityMap = {
   progression: ["engine", "forecast"],
   solar_return: ["engine", "solar"],
   horary: ["engine", "horar"]
+} as const satisfies Readonly<Record<string, readonly PlatformPlanFeatureCode[]>>;
+
+const chartAiCapabilityMap = {
+  "chart:natal": ["engine", resolveChartTariffOwnerCapability("natal")],
+  "chart:astrocartography": ["engine", resolveChartTariffOwnerCapability("astrocartography")],
+  "chart:synastry": ["engine", resolveChartTariffOwnerCapability("synastry")],
+  "chart:composite": ["engine", resolveChartTariffOwnerCapability("composite")],
+  "chart:transit": ["engine", resolveChartTariffOwnerCapability("transit")],
+  "chart:progression": ["engine", resolveChartTariffOwnerCapability("progression")],
+  "chart:solar_return": ["engine", resolveChartTariffOwnerCapability("solar_return")],
+  "chart:horary": ["engine", resolveChartTariffOwnerCapability("horary")]
 } as const satisfies Readonly<Record<string, readonly PlatformPlanFeatureCode[]>>;
 
 const calculationCapabilityMap = {
@@ -208,8 +220,7 @@ const job = (
   requirement: PlatformCapabilityRequirement,
   processor: PlatformCapabilityWorkerOperationSurface["processor"],
   persistedOwnerSelector: string,
-  entitlementSubjectAuthority: WorkerEntitlementSubjectAuthorityState =
-    unwiredWorkerEntitlementSubjectAuthority
+  entitlementSubjectAuthority: WorkerEntitlementSubjectAuthorityState = unwiredWorkerEntitlementSubjectAuthority
 ): PlatformCapabilityWorkerOperationSurface => ({
   ...surface(id, ownerModule, sourcePath, identifier),
   semanticKind: "worker",
@@ -1670,8 +1681,8 @@ export const rawPlatformCapabilityManifest = {
           kind: "shared_with_resource_owner",
           sharedCapability: "ai",
           selector: "persisted CalculationRecord.module + CalculationRecord.methodCode",
-          capabilityMap: chartCapabilityMap,
-          unresolvedValues: ["chart:astrocartography", "chart:composite"],
+          capabilityMap: chartAiCapabilityMap,
+          unresolvedValues: [],
           unknownValuePolicy: "deny"
         }
       ),
@@ -2095,5 +2106,5 @@ export const platformCapabilityGuardDeclarations = [
       surfaceFingerprint: platformCapabilitySurfaceFingerprint(operation),
       semanticKind: operation.semanticKind,
       requirementFingerprint: platformCapabilityRequirementFingerprint(operation.requirement)
-    })),
+    }))
 ] as const satisfies readonly PlatformCapabilityGuardDeclaration[];

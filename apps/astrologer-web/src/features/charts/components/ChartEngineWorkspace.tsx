@@ -92,9 +92,11 @@ export function ChartEngineWorkspace({
   const astrocartographyResult =
     displayResult?.method === "astrocartography" ? displayResult : null;
   const wheelResult = astrocartographyResult ? null : displayResult;
-  const canShowAiPanel = canRequestAi && interpretationMode !== "child";
+  const canShowAiPanel = canRequestAi;
   const visiblePanelTabs: readonly ChartPanelTab[] = isAstrocartographyMode
-    ? ["interpretations"]
+    ? canShowAiPanel
+      ? ["interpretations", "ai"]
+      : ["interpretations"]
     : canShowAiPanel
       ? ["planets", "aspects", "houses", "interpretations", "ai"]
       : ["planets", "aspects", "houses", "interpretations"];
