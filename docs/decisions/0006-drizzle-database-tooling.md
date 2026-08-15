@@ -49,4 +49,12 @@ Drizzle хорошо подходит текущей modular-first архите�
   state deploy выполняет отдельный fail-closed reconciliation с approved
   lineage, schema/data guards, transactional data/DDL transition и advisory
   lock.
+- New compatibility or lineage shortcuts are forbidden by default. Do not add
+  ad hoc `v1`/`v2`/`vN` labels, alternate cache namespaces, legacy columns,
+  backfill scripts, fallback readers, silent converters, old-data migrations or
+  backward-compatible data paths to make predecessor data keep working. A
+  version label is allowed only when it is an accepted product/API/ADR contract
+  with explicit persistence ownership, transition authority, reconciliation
+  tests and deploy/rollback behavior. Otherwise the change must fail closed and
+  require a new architecture decision before implementation.
 - Бизнес-таблицы добавляются отдельными focused feature changes вместе с domain/use-case кодом.

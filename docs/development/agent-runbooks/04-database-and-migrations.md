@@ -44,6 +44,25 @@ fresh-database rehearsal и точной проверки host/database/containe
 разрешение использовать `db:reset` с локальными defaults против production;
 rollout обязан иметь отдельную fail-before-delete проверку target identity.
 
+## Compatibility And Version Labels
+
+Запрещено добавлять ad hoc `v1`/`v2`/`vN`, новый cache namespace, legacy column,
+fallback reader, silent converter, backfill script, old-data migration или
+backward-compatible data path только ради того, чтобы старые данные продолжали
+работать. Нельзя маскировать изменение поведения через `cache:v2`, `result.v2`,
+`schemaVersion = 2` или похожий label без принятого product/API/ADR контракта.
+
+Новый version label допустим только как явный контракт, где заранее описаны:
+persisted ownership, какие старые данные принимаются или отвергаются,
+transition authority, fail-closed guards, reconciliation tests, повторный no-op
+run, deploy behavior и rollback behavior. Если такого контракта нет, агент
+останавливается до новой architecture decision; default outcome — fail closed,
+а не compatibility shim.
+
+Known legacy state не мигрируется "по дороге" и не чинится скрытым
+преобразованием. Для него нужен отдельный approved reconciliation contour по
+этому runbook; unknown или divergent history всегда reject/fail closed.
+
 ## Пошаговая процедура
 
 1. Confirm domain ownership in `docs/architecture/backend-modules.md`.
