@@ -16,7 +16,7 @@
 .transitMomentFields span,
 .horaryQuestionFields span {
   overflow: hidden;
-  color: rgb(186 178 218 / 0.62);
+  color: #a9a2c3;
   font-size: 9px;
   font-weight: 780;
   line-height: 1;
@@ -27,15 +27,16 @@
 .transitMomentFields input,
 .transitMomentFields select,
 .horaryQuestionFields input,
-.horaryQuestionFields select {
+.horaryQuestionFields select,
+.horaryQuestionFields textarea {
   box-sizing: border-box;
   width: 100%;
   min-height: 32px;
   min-width: 0;
   padding: 0 8px;
-  border: 1px solid var(--chart-line-strong);
+  border: 1px solid rgb(216 212 236 / 13%);
   border-radius: 10px;
-  background: rgb(13 12 32 / 0.78);
+  background: #0c0b22;
   color: var(--eh-color-moon-120);
   font: inherit;
   font-size: 12px;
@@ -43,7 +44,8 @@
 .transitMomentFields input:disabled,
 .transitMomentFields select:disabled,
 .horaryQuestionFields input:disabled,
-.horaryQuestionFields select:disabled {
+.horaryQuestionFields select:disabled,
+.horaryQuestionFields textarea:disabled {
   opacity: 0.52;
 }
 .horaryQuestionFields {
@@ -85,35 +87,61 @@
   border-bottom: 1px solid rgb(216 212 236 / 0.1);
 }
 
+.horarySetupMomentGroup {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+}
+
 .horarySetupPlaceGroup {
   padding-bottom: 0;
   border-bottom: 0;
 }
 
 .horarySetupGroupTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   grid-column: 1 / -1;
   margin: 0 0 1px;
-  color: rgb(246 210 102 / 0.72);
-  font-size: 10px;
+  color: #d7d1e9;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
   line-height: 1.2;
   text-transform: uppercase;
 }
 
+.horarySetupGroupTitle svg {
+  flex: 0 0 auto;
+  color: #d3b54f;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .horarySetupQuestionGroup > :nth-child(2),
 .horarySetupMomentGroup > :nth-child(4),
 .horarySetupMomentGroup > :nth-child(5),
-.horarySetupPlaceGroup > :nth-child(2) {
+.horarySetupPlaceGroup > :nth-child(2),
+.horarySetupPlaceGroup > :nth-child(3) {
   grid-column: 1 / -1;
 }
 
+.horaryQuestionHint {
+  align-self: end;
+  margin: 0;
+  color: rgb(126 119 156 / 0.92);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .horaryQuestionFieldsSetup input,
-.horaryQuestionFieldsSetup select {
+.horaryQuestionFieldsSetup select,
+.horaryQuestionFieldsSetup textarea {
   min-height: 42px;
   padding: 0 12px;
-  border-color: rgb(216 212 236 / 0.18);
-  background: rgb(11 10 32 / 0.96);
+  border-color: rgb(216 212 236 / 13%);
+  background: #0c0b22;
   font-size: 13px;
   transition:
     border-color 140ms ease,
@@ -121,20 +149,25 @@
     background 140ms ease;
 }
 
-.horarySetupQuestionGroup input {
-  min-height: 46px;
-  font-size: 14px;
-  font-weight: 620;
+.horarySetupQuestionGroup textarea {
+  min-height: 88px;
+  padding-block: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  resize: none;
 }
 
 .horaryQuestionFieldsSetup input:hover:not(:disabled),
-.horaryQuestionFieldsSetup select:hover:not(:disabled) {
+.horaryQuestionFieldsSetup select:hover:not(:disabled),
+.horaryQuestionFieldsSetup textarea:hover:not(:disabled) {
   border-color: rgb(246 210 102 / 0.48);
   background: rgb(17 15 38 / 0.98);
 }
 
 .horaryQuestionFieldsSetup input:focus,
-.horaryQuestionFieldsSetup select:focus {
+.horaryQuestionFieldsSetup select:focus,
+.horaryQuestionFieldsSetup textarea:focus {
   border-color: var(--chart-gold);
   outline: 2px solid var(--chart-gold);
   outline-offset: 1px;
@@ -142,7 +175,8 @@
 }
 
 .horaryQuestionFieldsSetup input:focus-visible,
-.horaryQuestionFieldsSetup select:focus-visible {
+.horaryQuestionFieldsSetup select:focus-visible,
+.horaryQuestionFieldsSetup textarea:focus-visible {
   border-color: var(--chart-gold);
   outline: 2px solid var(--chart-gold);
   outline-offset: 1px;
@@ -156,6 +190,17 @@
   display: grid;
   min-width: 150px;
   gap: 3px;
+}
+.horaryPlaceSearchIcon {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  color: rgb(143 135 173 / 0.96);
+  pointer-events: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
 }
 .horaryPlaceField > small {
   color: rgb(186 178 218 / 0.72);
@@ -198,6 +243,60 @@
 .horaryPlaceError {
   color: #ffb5b5 !important;
 }
+.horaryManualCoordinates {
+  grid-column: 1 / -1;
+  margin-top: 1px;
+}
+.horaryManualCoordinates summary {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  color: rgb(186 178 218 / 0.78);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+.horaryManualCoordinates summary::-webkit-details-marker {
+  display: none;
+}
+.horaryManualCoordinates summary::after {
+  color: var(--chart-gold);
+  content: "+";
+  font-size: 18px;
+  font-weight: 500;
+}
+.horaryManualCoordinates[open] summary {
+  margin-bottom: 10px;
+}
+.horaryManualCoordinates[open] summary::after {
+  content: "−";
+}
+.horaryManualCoordinatesFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 0 2px;
+}
+
+.horaryOccurrenceDetails {
+  grid-column: 1 / -1;
+}
+
+.horaryOccurrenceDetails summary {
+  color: rgb(126 119 156 / 0.92);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.horaryOccurrenceDetails .civilTimeOccurrenceField {
+  display: grid;
+  margin-top: 10px;
+  gap: 3px;
+}
 .civilTimeOccurrenceField small {
   color: rgb(186 178 218 / 0.62);
   font-size: 9px;
@@ -220,7 +319,8 @@
   .transitMomentFields input,
   .transitMomentFields select,
   .horaryQuestionFields input,
-  .horaryQuestionFields select {
+  .horaryQuestionFields select,
+  .horaryQuestionFields textarea {
     min-height: 44px;
   }
 }
@@ -240,7 +340,8 @@
   .transitMomentFields input,
   .transitMomentFields select,
   .horaryQuestionFields input,
-  .horaryQuestionFields select {
+  .horaryQuestionFields select,
+  .horaryQuestionFields textarea {
     min-height: 44px;
   }
 }

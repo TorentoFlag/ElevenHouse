@@ -43,6 +43,7 @@ export function ChartEngineWorkspace({
   isSavingBirthData,
   isSettingsPanelOpen,
   jobState,
+  horaryReadiness,
   horarySetup,
   locale,
   onCloseSettings,
@@ -69,6 +70,7 @@ export function ChartEngineWorkspace({
   readonly isSavingBirthData: boolean;
   readonly isSettingsPanelOpen: boolean;
   readonly jobState: ChartEnginePageJobState;
+  readonly horaryReadiness?: ChartBirthDataReadiness;
   readonly horarySetup?: ReactNode;
   readonly locale: DictionaryLocale;
   readonly onCloseSettings: () => void;
@@ -117,19 +119,57 @@ export function ChartEngineWorkspace({
       jobState === "failed"
         ? (errorMessage ?? copy.status.defaultFailure)
         : copy.horary.preparationDetail;
+    const missing = horaryReadiness?.ready === false ? horaryReadiness.missing : [];
+    const questionReady = !missing.includes(copy.missing.question);
+    const momentReady =
+      !missing.includes(copy.missing.questionDate) &&
+      !missing.includes(copy.missing.questionTime) &&
+      !missing.includes(copy.missing.timezone);
+    const placeReady =
+      !missing.includes(copy.missing.questionLatitude) &&
+      !missing.includes(copy.missing.questionLongitude);
 
     return (
       <section className={styles.horaryPrecalculation}>
         {horarySetup}
         <section className={styles.horaryPreparation} aria-label={copy.horary.preparationTitle}>
+          <header className={styles.horaryPreparationHeader}>
+            <strong>{copy.horary.previewTitle}</strong>
+            <span>{copy.horary.previewPending}</span>
+          </header>
+          <ol className={styles.horaryPreparationStatusGrid}>
+            <HoraryPreparationStatus
+              complete={questionReady}
+              index={1}
+              label={copy.horary.question}
+              pending={copy.horary.previewQuestionPending}
+            />
+            <HoraryPreparationStatus
+              complete={momentReady}
+              index={2}
+              label={copy.horary.preparationMoment}
+              pending={copy.horary.previewMomentPending}
+              ready={copy.horary.previewMomentReady}
+            />
+            <HoraryPreparationStatus
+              complete={placeReady}
+              index={3}
+              label={copy.horary.previewPlaceLabel}
+              pending={copy.horary.previewPlacePending}
+              ready={copy.horary.previewPlaceReady}
+            />
+          </ol>
           <div className={styles.horaryPreparationContent}>
+            <span className={styles.horaryPreparationOrb} aria-hidden="true">
+              ☉
+            </span>
             <p>{copy.modes.horary.title}</p>
-            <h2>{preparationTitle}</h2>
-            <span>{preparationDetail}</span>
+            <h2>{jobState === "idle" ? copy.horary.previewEmptyTitle : preparationTitle}</h2>
+            <span>{jobState === "idle" ? copy.horary.previewEmptyDetail : preparationDetail}</span>
             <ol className={styles.horaryPreparationSteps}>
               <li>{copy.horary.question}</li>
               <li>{copy.horary.preparationMoment}</li>
-              <li>{copy.horary.place}</li>
+              <li>{copy.horary.previewPlaceLabel}</li>
             </ol>
           </div>
         </section>
@@ -276,6 +316,30 @@ export function ChartEngineWorkspace({
         </>
       )}
     </section>
+  );
+}
+
+function HoraryPreparationStatus({
+  complete,
+  index,
+  label,
+  pending,
+  ready
+}: {
+  readonly complete: boolean;
+  readonly index: number;
+  readonly label: string;
+  readonly pending: string;
+  readonly ready?: string;
+}) {
+  return (
+    <li>
+      <span>{`${index} · ${label}`}</span>
+      <strong>
+        <i aria-hidden="true">{complete ? "✓" : "○"}</i>
+        {complete ? (ready ?? label) : pending}
+      </strong>
+    </li>
   );
 }
 

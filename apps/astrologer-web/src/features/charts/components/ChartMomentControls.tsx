@@ -12,6 +12,7 @@ import {
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model/chartEngineInput";
 import type { ChartEngineMode } from "../model/chartEngineMode";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import styles from "./ChartMomentControls.module.css";
 
 export function ChartMomentControls({
@@ -254,16 +255,18 @@ function HoraryQuestionFields({
         aria-label={copy.horary.question}
         className={layout === "setup" ? styles.horarySetupQuestionGroup : styles.horaryToolbarGroup}
       >
-        <p className={styles.horarySetupGroupTitle}>{copy.horary.question}</p>
+        <p className={styles.horarySetupGroupTitle}>
+          <Icon iconName="chat" width={15} height={15} aria-hidden="true" />
+          {copy.horary.question}
+        </p>
         <label className={styles.horaryQuestionText}>
-          <span>{copy.horary.question}</span>
-          <input
+          <span>{layout === "setup" ? copy.horary.questionPrompt : copy.horary.question}</span>
+          <textarea
             aria-label={copy.horary.questionAria}
             disabled={disabled}
             maxLength={500}
             name="horaryQuestion"
             placeholder={copy.horary.questionPlaceholder}
-            type="text"
             value={value.question}
             onChange={(event) => onChange({ ...value, question: event.target.value })}
           />
@@ -291,12 +294,18 @@ function HoraryQuestionFields({
             )}
           </select>
         </label>
+        {layout === "setup" ? (
+          <p className={styles.horaryQuestionHint}>{copy.horary.questionHint}</p>
+        ) : null}
       </section>
       <section
         aria-label={copy.horary.preparationMoment}
         className={layout === "setup" ? styles.horarySetupMomentGroup : styles.horaryToolbarGroup}
       >
-        <p className={styles.horarySetupGroupTitle}>{copy.horary.preparationMoment}</p>
+        <p className={styles.horarySetupGroupTitle}>
+          <Icon iconName="clock" width={15} height={15} aria-hidden="true" />
+          {layout === "setup" ? copy.horary.momentTitle : copy.horary.preparationMoment}
+        </p>
         <label>
           <span>{copy.horary.date}</span>
           <input
@@ -337,19 +346,38 @@ function HoraryQuestionFields({
             }
           />
         </label>
-        <OccurrenceField
-          disabled={disabled}
-          id="chart-horary-occurrence-helper"
-          locale={locale}
-          value={value.dstOccurrence}
-          onChange={(dstOccurrence) => onChange(updateChartCivilMoment(value, { dstOccurrence }))}
-        />
+        {layout === "setup" ? (
+          <details className={styles.horaryOccurrenceDetails}>
+            <summary>{chartDstOccurrenceCopyByLocale[locale].helper}</summary>
+            <OccurrenceField
+              showHelper={false}
+              disabled={disabled}
+              id="chart-horary-occurrence-helper"
+              locale={locale}
+              value={value.dstOccurrence}
+              onChange={(dstOccurrence) =>
+                onChange(updateChartCivilMoment(value, { dstOccurrence }))
+              }
+            />
+          </details>
+        ) : (
+          <OccurrenceField
+            disabled={disabled}
+            id="chart-horary-occurrence-helper"
+            locale={locale}
+            value={value.dstOccurrence}
+            onChange={(dstOccurrence) => onChange(updateChartCivilMoment(value, { dstOccurrence }))}
+          />
+        )}
       </section>
       <section
         aria-label={copy.horary.placeGroup}
         className={layout === "setup" ? styles.horarySetupPlaceGroup : styles.horaryToolbarGroup}
       >
-        <p className={styles.horarySetupGroupTitle}>{copy.horary.place}</p>
+        <p className={styles.horarySetupGroupTitle}>
+          <Icon iconName="pin" width={15} height={15} aria-hidden="true" />
+          {copy.horary.place}
+        </p>
         <HoraryPlaceField
           copy={copy}
           disabled={disabled}
@@ -359,32 +387,69 @@ function HoraryQuestionFields({
           onSearch={onSearchBirthPlaces}
           onSelect={onSelectPlace}
         />
-        <label>
-          <span>{copy.horary.latitude}</span>
-          <input
-            aria-label={copy.horary.latitudeAria}
+        {layout === "setup" ? (
+          <details className={styles.horaryManualCoordinates}>
+            <summary>{copy.horary.manualCoordinates}</summary>
+            <div className={styles.horaryManualCoordinatesFields}>
+              <HoraryCoordinateFields
+                disabled={disabled}
+                copy={copy}
+                value={value}
+                onChange={onChange}
+              />
+            </div>
+          </details>
+        ) : (
+          <HoraryCoordinateFields
             disabled={disabled}
-            name="horaryLatitude"
-            step="0.0001"
-            type="number"
-            value={value.latitude}
-            onChange={(event) => onChange({ ...value, latitude: event.target.value })}
+            copy={copy}
+            value={value}
+            onChange={onChange}
           />
-        </label>
-        <label>
-          <span>{copy.horary.longitude}</span>
-          <input
-            aria-label={copy.horary.longitudeAria}
-            disabled={disabled}
-            name="horaryLongitude"
-            step="0.0001"
-            type="number"
-            value={value.longitude}
-            onChange={(event) => onChange({ ...value, longitude: event.target.value })}
-          />
-        </label>
+        )}
       </section>
     </div>
+  );
+}
+
+function HoraryCoordinateFields({
+  copy,
+  disabled,
+  onChange,
+  value
+}: {
+  readonly copy: ChartEngineCopy;
+  readonly disabled: boolean;
+  readonly onChange: (question: ChartHoraryQuestionInput) => void;
+  readonly value: ChartHoraryQuestionInput;
+}) {
+  return (
+    <>
+      <label>
+        <span>{copy.horary.latitude}</span>
+        <input
+          aria-label={copy.horary.latitudeAria}
+          disabled={disabled}
+          name="horaryLatitude"
+          step="0.0001"
+          type="number"
+          value={value.latitude}
+          onChange={(event) => onChange({ ...value, latitude: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>{copy.horary.longitude}</span>
+        <input
+          aria-label={copy.horary.longitudeAria}
+          disabled={disabled}
+          name="horaryLongitude"
+          step="0.0001"
+          type="number"
+          value={value.longitude}
+          onChange={(event) => onChange({ ...value, longitude: event.target.value })}
+        />
+      </label>
+    </>
   );
 }
 
@@ -455,6 +520,13 @@ function HoraryPlaceField({
           }}
         />
       </label>
+      <Icon
+        iconName="search"
+        className={styles.horaryPlaceSearchIcon}
+        width={17}
+        height={17}
+        aria-hidden="true"
+      />
       {isSearching ? <small>{copy.horary.placeSearching}</small> : null}
       {candidates.length > 0 ? (
         <div
@@ -493,12 +565,14 @@ function OccurrenceField({
   id,
   locale,
   onChange,
+  showHelper = true,
   value
 }: {
   readonly disabled: boolean;
   readonly id: string;
   readonly locale: DictionaryLocale;
   readonly onChange: (value: ChartDstOccurrence | undefined) => void;
+  readonly showHelper?: boolean;
   readonly value?: ChartDstOccurrence;
 }) {
   const copy = chartDstOccurrenceCopyByLocale[locale];
@@ -506,7 +580,7 @@ function OccurrenceField({
     <label className={styles.civilTimeOccurrenceField}>
       <span>{copy.label}</span>
       <select
-        aria-describedby={id}
+        aria-describedby={showHelper ? id : undefined}
         aria-label={copy.label}
         disabled={disabled}
         value={value ?? ""}
@@ -522,7 +596,7 @@ function OccurrenceField({
         <option value="first">{copy.first}</option>
         <option value="second">{copy.second}</option>
       </select>
-      <small id={id}>{copy.helper}</small>
+      {showHelper ? <small id={id}>{copy.helper}</small> : null}
     </label>
   );
 }

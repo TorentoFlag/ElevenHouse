@@ -37,6 +37,7 @@ describe("ChartMomentControls", () => {
     expect(screen.getByRole("region", { name: "Place and coordinates" })).toContainElement(
       screen.getByRole("textbox", { name: "Question place" })
     );
+    expect(document.querySelectorAll("svg")).toHaveLength(4);
   });
 
   it("delegates progression date changes in the active locale", async () => {

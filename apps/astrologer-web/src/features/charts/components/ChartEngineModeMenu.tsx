@@ -62,6 +62,11 @@ export function ChartEngineModeMenu({
           <span className={styles.modeTabLabel}>{copy.modes[mode].tab}</span>
         </button>
       ))}
+      {isOverflowModeActive ? (
+        <button className={styles.modeActive} type="button" onClick={() => onSelect(activeMode)}>
+          <span className={styles.modeTabLabel}>{copy.modes[activeMode].tab}</span>
+        </button>
+      ) : null}
       <div
         className={styles.modeOverflow}
         onBlur={(event) => {
@@ -72,7 +77,7 @@ export function ChartEngineModeMenu({
       >
         <button
           ref={triggerRef}
-          className={isOverflowModeActive ? styles.modeActive : styles.modeButton}
+          className={styles.modeButton}
           type="button"
           aria-haspopup="menu"
           aria-expanded={isOpen}

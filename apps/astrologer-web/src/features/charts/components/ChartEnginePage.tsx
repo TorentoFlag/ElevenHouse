@@ -292,6 +292,7 @@ export function ChartEnginePage({
     <ChartHorarySetup
       calculateAction={<ChartEngineActionBar {...actionBarProps} showUtilities={false} />}
       copy={copy}
+      readinessMessage={copy.horary.calculateHint}
     >
       {momentControls}
     </ChartHorarySetup>
@@ -300,9 +301,16 @@ export function ChartEnginePage({
   return (
     <main className={styles.page}>
       <ChartEngineHeader
-        actionBar={<ChartEngineActionBar {...actionBarProps} showCalculate={!isHorarySetup} />}
+        actionBar={
+          <ChartEngineActionBar
+            {...actionBarProps}
+            compactUtilities={isHorarySetup}
+            showCalculate={!isHorarySetup}
+          />
+        }
         activeMode={activeMode}
         copy={copy}
+        isHorarySetup={isHorarySetup}
         isBusy={isBusy}
         momentControls={isHorarySetup ? undefined : momentControls}
         selectedClient={selectedClient}
@@ -340,6 +348,7 @@ export function ChartEnginePage({
         isSavingBirthData={isSavingBirthData}
         isSettingsPanelOpen={isSettingsPanelOpen}
         jobState={jobState}
+        horaryReadiness={horaryReadiness}
         horarySetup={horarySetup}
         locale={locale}
         partnerReadiness={partnerReadiness}

@@ -10,6 +10,7 @@ export function ChartEngineHeader({
   actionBar,
   activeMode,
   copy,
+  isHorarySetup = false,
   isBusy,
   momentControls,
   onSelectClient,
@@ -21,6 +22,7 @@ export function ChartEngineHeader({
   readonly actionBar: ReactNode;
   readonly activeMode: ChartEngineMode;
   readonly copy: ChartEngineCopy;
+  readonly isHorarySetup?: boolean;
   readonly isBusy: boolean;
   readonly momentControls?: ReactNode;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
@@ -32,7 +34,9 @@ export function ChartEngineHeader({
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
 
   return (
-    <header className={styles.toolbar}>
+    <header
+      className={isHorarySetup ? `${styles.toolbar} ${styles.horaryToolbar}` : styles.toolbar}
+    >
       <div className={styles.titleGroup}>
         <span className={styles.iconBox} aria-hidden="true">
           ☉

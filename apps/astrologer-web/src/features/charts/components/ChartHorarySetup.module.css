@@ -4,12 +4,12 @@
   min-height: 0;
   flex-direction: column;
   border-right: 1px solid var(--chart-line);
-  background: rgb(20 17 47 / 0.96);
+  background: #100e28;
 }
 
 .header {
-  padding: 20px 18px 17px;
-  border-bottom: 1px solid var(--chart-line);
+  padding: 26px 28px 18px;
+  border-bottom: 1px solid rgb(216 212 236 / 8%);
 }
 
 .header p,
@@ -18,7 +18,7 @@
 }
 
 .header p {
-  color: rgb(186 178 218 / 0.62);
+  color: #e1c263;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -27,21 +27,48 @@
 
 .header h2 {
   margin-top: 6px;
-  font-size: 17px;
-  font-weight: 780;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.header span {
+  display: block;
+  margin-top: 7px;
+  color: #a7a2c8;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .controls {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  padding: 20px 18px;
+  padding: 20px 28px 24px;
 }
 
 .footer {
-  padding: 16px 18px 18px;
-  border-top: 1px solid var(--chart-line);
-  background: rgb(13 12 32 / 0.94);
+  padding: 16px 28px 22px;
+  border-top: 1px solid rgb(216 212 236 / 13%);
+  background: #15122e;
+}
+
+.readinessMessage {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  color: rgb(145 138 173 / 0.96);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.readinessMessage::before {
+  width: 13px;
+  height: 13px;
+  border: 1px dashed rgb(145 138 173 / 0.72);
+  border-radius: 999px;
+  content: "";
 }
 
 .footer :global(button) {

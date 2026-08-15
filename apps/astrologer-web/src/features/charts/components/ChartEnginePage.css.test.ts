@@ -89,4 +89,5 @@ describe("Chart Engine responsive accessibility CSS", () => {
       /\.horaryToolbarGroup \.horarySetupGroupTitle\s*\{[\s\S]*?display:\s*none/
     );
   });
+
 });

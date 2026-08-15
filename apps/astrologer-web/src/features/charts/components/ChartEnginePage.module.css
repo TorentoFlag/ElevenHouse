@@ -28,7 +28,7 @@
   flex-wrap: wrap;
   min-width: 0;
   padding: 8px clamp(12px, 1.2vw, 20px);
-  border-bottom: 1px solid var(--chart-line);
+  border-bottom: 1px solid rgb(216 212 236 / 8%);
   background: rgb(13 12 32 / 0.94);
 }
 
@@ -263,7 +263,7 @@
 .modeOverflowItem:hover,
 .modeOverflowItem:focus-visible {
   background: rgb(111 96 172 / 0.18);
-  color: var(--eh-color-moon-120);
+  color: #eceaf7;
   outline: none;
 }
 .modeOverflowItemActive {
@@ -336,27 +336,121 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  grid-template-columns: 430px minmax(0, 1fr);
   overflow: hidden;
 }
 
 .horaryPreparation {
+  position: relative;
   display: grid;
   min-width: 0;
   min-height: 0;
   place-items: center;
   padding: clamp(28px, 6vw, 88px);
-  background: #0b0a20;
+  overflow: hidden;
+  background:
+    radial-gradient(640px 420px at 50% 42%, rgb(92 68 176 / 0.16), transparent 72%),
+    radial-gradient(circle at 16% 20%, rgb(255 255 255 / 0.22) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 78% 26%, rgb(255 255 255 / 0.16) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 33% 77%, rgb(255 255 255 / 0.12) 0 1px, transparent 1.5px), #0b0a20;
+}
+
+.horaryPreparationHeader {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--chart-line);
+  background: rgb(11 10 32 / 0.68);
+}
+
+.horaryPreparationHeader strong {
+  color: var(--eh-color-moon-120);
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.horaryPreparationHeader span {
+  color: #7d769a;
+  font-size: 11px;
+}
+
+.horaryPreparationStatusGrid {
+  position: absolute;
+  top: 82px;
+  right: 30px;
+  left: 30px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.horaryPreparationStatusGrid li {
+  padding: 12px;
+  border: 1px solid rgb(216 212 236 / 8%);
+  border-radius: 10px;
+  background: rgb(16 14 40 / 0.78);
+}
+
+.horaryPreparationStatusGrid span {
+  display: block;
+  color: #7d769a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.horaryPreparationStatusGrid strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  color: #aaa4c4;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.horaryPreparationStatusGrid i {
+  color: rgb(116 109 143 / 0.92);
+  font-size: 15px;
+  font-style: normal;
 }
 
 .horaryPreparationContent {
+  position: relative;
+  z-index: 1;
   width: min(100%, 560px);
   text-align: center;
 }
 
+.horaryPreparationOrb {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
+  place-items: center;
+  border: 1px solid rgb(244 196 48 / 28%);
+  border-radius: 999px;
+  background: rgb(244 196 48 / 12%);
+  box-shadow: 0 0 70px rgb(244 196 48 / 10%);
+  color: #f4c430;
+  font-size: 39px;
+}
+
 .horaryPreparationContent > p {
   margin: 0;
-  color: rgb(186 178 218 / 0.62);
+  color: #7d769a;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -365,17 +459,17 @@
 
 .horaryPreparationContent > h2 {
   margin: 10px 0 8px;
-  color: var(--eh-color-moon-120);
-  font-size: clamp(24px, 3vw, 34px);
+  color: #eceaf7;
+  font-size: 30px;
   font-weight: 820;
   line-height: 1.08;
 }
 
 .horaryPreparationContent > span {
   display: block;
-  color: rgb(186 178 218 / 0.78);
+  color: #a49dbc;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .horaryPreparationSteps {
@@ -384,12 +478,12 @@
   gap: 12px;
   margin: 38px 0 0;
   padding: 18px 0 0;
-  border-top: 1px solid var(--chart-line-strong);
+  border-top: 1px solid rgb(216 212 236 / 13%);
   list-style: none;
 }
 
 .horaryPreparationSteps li {
-  color: rgb(186 178 218 / 0.8);
+  color: #aaa4c4;
   font-size: 12px;
   font-weight: 720;
 }
@@ -400,11 +494,34 @@
   height: 19px;
   margin-right: 7px;
   place-items: center;
-  border: 1px solid rgb(246 210 102 / 0.44);
+  border: 1px solid rgb(244 196 48 / 44%);
   border-radius: 999px;
-  color: var(--chart-gold);
+  color: #f4c430;
   content: counter(list-item);
   font-size: 10px;
+}
+
+.horaryToolbar {
+  min-height: 72px;
+  gap: 14px;
+  padding-inline: 32px;
+  background: #100e28;
+}
+
+.horaryToolbar .clientStrip {
+  width: 270px;
+  flex-basis: 270px;
+}
+
+.horaryToolbar .toolButton,
+.horaryToolbar .toolButtonActive {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 17px;
 }
 
 @container chart-engine-page (max-width: 760px) {
@@ -415,6 +532,23 @@
 
   .horaryPreparation {
     min-height: 280px;
+    padding: 198px 24px 32px;
+  }
+
+  .horaryPreparationHeader {
+    padding-inline: 20px;
+  }
+
+  .horaryPreparationStatusGrid {
+    grid-template-columns: 1fr;
+    top: 72px;
+    right: 20px;
+    left: 20px;
+  }
+
+  .horaryToolbar {
+    min-height: auto;
+    padding-inline: 20px;
   }
 }
 .emptyClientState {

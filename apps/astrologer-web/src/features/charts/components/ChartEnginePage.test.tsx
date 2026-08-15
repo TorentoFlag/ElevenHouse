@@ -581,11 +581,24 @@ describe("ChartEnginePage", () => {
 
     const setupPanel = screen.getByRole("complementary", { name: "Параметры хорара" });
 
-    expect(within(setupPanel).getByLabelText("Вопрос хорара")).toBeInTheDocument();
-    expect(within(setupPanel).getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
-    expect(screen.getByRole("region", { name: "Подготовка хорара" })).toHaveTextContent(
-      "Заполните вопрос, момент и место"
+    expect(within(setupPanel).getByLabelText("Вопрос хорара")).toHaveProperty(
+      "tagName",
+      "TEXTAREA"
     );
+    expect(within(setupPanel).getByText("Уточнить координаты вручную")).toBeInTheDocument();
+    expect(setupPanel.querySelector("details")?.open).toBe(false);
+    expect(within(setupPanel).getByRole("button", { name: "Заполните хорар" })).toBeDisabled();
+    const preparation = screen.getByRole("region", { name: "Подготовка хорара" });
+
+    expect(preparation).toHaveTextContent("Предпросмотр карты");
+    expect(preparation).toHaveTextContent("Карта появится здесь");
+    expect(preparation).toHaveTextContent("Заполните три группы слева");
+    expect(preparation).toHaveTextContent("Вопрос");
+    expect(preparation).toHaveTextContent("Момент");
+    expect(preparation).toHaveTextContent("Место");
+    expect(
+      within(setupPanel).getByText("Заполните вопрос и место, чтобы начать расчёт")
+    ).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Сводка карты" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
   });
