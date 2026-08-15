@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChartAspect,
   ChartPoint,
@@ -34,6 +34,7 @@ import {
   type ChartInterpretationMode
 } from "../model/chartInterpretations";
 import { chartEngineCopyByLocale, type ChartEngineCopy } from "../model/chartEngineCopy";
+import { ChartInterpretationCreateForm } from "./ChartInterpretationCreateForm";
 import styles from "./ChartEnginePage.module.css";
 
 export type ChartPanelTab = "planets" | "aspects" | "houses" | "interpretations" | "ai";
@@ -618,6 +619,10 @@ function InterpretationSummary({
     isLoading: lookupCodes.length > 0,
     errorMessage: null
   });
+  const [creationAnchor, setCreationAnchor] = useState<ChartInterpretationAnchor | null>(null);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const creationTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusAnchorIdRef = useRef<string | null>(null);
   useEffect(() => {
     let isMounted = true;
 
@@ -664,7 +669,7 @@ function InterpretationSummary({
     return () => {
       isMounted = false;
     };
-  }, [copy.dictionaryLoadError, locale, lookupCodes]);
+  }, [copy.dictionaryLoadError, locale, lookupCodes, refreshVersion]);
 
   const dictionaryEntriesByCode = new Map(
     dictionaryState.entries.map((entry) => [entry.code, entry])
@@ -675,46 +680,76 @@ function InterpretationSummary({
   return (
     <section className={styles.tableSection} aria-labelledby="chart-interpretations-heading">
       <h2 id="chart-interpretations-heading">{copy.interpretations}</h2>
-      <div>
-        <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
-        <div className={styles.interpretationGroupStack}>
-          {anchorGroups.map((group) => (
-            <section className={styles.interpretationGroup} key={group.id}>
-              <h3 className={styles.interpretationGroupTitle}>{group.title}</h3>
-              <div className={styles.interpretationAnchorStack}>
-                {group.anchors.map((anchor) => {
-                  const entry = dictionaryEntriesByCode.get(anchor.code);
-                  const isMissingEntry = isDictionaryInterpretationMissing({
-                    entry,
-                    state: dictionaryState
-                  });
+      {creationAnchor ? (
+        <ChartInterpretationCreateForm
+          anchor={creationAnchor}
+          copy={copy.interpretationEditor}
+          locale={locale}
+          onCancel={() => {
+            setCreationAnchor(null);
+            requestAnimationFrame(() => creationTriggerRef.current?.focus());
+          }}
+          onSaved={() => {
+            setCreationAnchor(null);
+            setRefreshVersion((current) => current + 1);
+          }}
+        />
+      ) : (
+        <div>
+          <div className={styles.interpretationKicker}>{interpretationCopy.kicker}</div>
+          <div className={styles.interpretationGroupStack}>
+            {anchorGroups.map((group) => (
+              <section className={styles.interpretationGroup} key={group.id}>
+                <h3 className={styles.interpretationGroupTitle}>{group.title}</h3>
+                <div className={styles.interpretationAnchorStack}>
+                  {group.anchors.map((anchor) => {
+                    const entry = dictionaryEntriesByCode.get(anchor.code);
+                    const isMissingEntry = isDictionaryInterpretationMissing({
+                      entry,
+                      state: dictionaryState
+                    });
 
-                  return (
-                    <div className={styles.interpretationAnchorCard} key={anchor.id}>
-                      <strong>{anchor.label}</strong>
-                      <small>{anchor.meta}</small>
-                      <span>{anchor.position}</span>
-                      <p>
-                        {getDictionaryInterpretationText({ anchor, entry }, dictionaryState, copy)}
-                      </p>
-                      {entry ? <em>{copy.dictionarySource(entry.source)}</em> : null}
-                      {isMissingEntry ? (
-                        <a
-                          aria-label={copy.createInterpretationAria(anchor.code)}
-                          className={styles.interpretationMissingAction}
-                          href={getReferenceCreateInterpretationHref(anchor)}
-                        >
-                          {copy.createInterpretation}
-                        </a>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                    return (
+                      <div className={styles.interpretationAnchorCard} key={anchor.id}>
+                        <strong>{anchor.label}</strong>
+                        <small>{anchor.meta}</small>
+                        <span>{anchor.position}</span>
+                        <p>
+                          {getDictionaryInterpretationText(
+                            { anchor, entry },
+                            dictionaryState,
+                            copy
+                          )}
+                        </p>
+                        {entry ? <em>{copy.dictionarySource(entry.source)}</em> : null}
+                        {isMissingEntry ? (
+                          <button
+                            ref={(element) => {
+                              if (element && returnFocusAnchorIdRef.current === anchor.id) {
+                                creationTriggerRef.current = element;
+                              }
+                            }}
+                            aria-label={copy.addInterpretationAria(anchor.label)}
+                            className={styles.interpretationMissingAction}
+                            type="button"
+                            onClick={(event) => {
+                              returnFocusAnchorIdRef.current = anchor.id;
+                              creationTriggerRef.current = event.currentTarget;
+                              setCreationAnchor(anchor);
+                            }}
+                          >
+                            {copy.addInterpretation}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }
@@ -774,7 +809,7 @@ function getDictionaryInterpretationText(
     return input.entry.content;
   }
 
-  return copy.dictionaryMissing(input.anchor.code);
+  return copy.dictionaryMissing;
 }
 
 function isDictionaryInterpretationMissing(input: {
@@ -785,17 +820,6 @@ function isDictionaryInterpretationMissing(input: {
   };
 }): boolean {
   return !input.entry && !input.state.isLoading && !input.state.errorMessage;
-}
-
-function getReferenceCreateInterpretationHref(anchor: ChartInterpretationAnchor): string {
-  const searchParams = new URLSearchParams({
-    category: anchor.categoryCode,
-    create: anchor.code,
-    search: anchor.code,
-    title: anchor.label
-  });
-
-  return `/reference?${searchParams.toString()}`;
 }
 
 function getInterpretationAnchorGroups(

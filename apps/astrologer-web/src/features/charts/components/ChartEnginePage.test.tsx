@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../../../common/http/HttpError";
 import type {
@@ -722,9 +723,7 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText("Появится после расчёта линий.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Трактовки" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Планеты" })).not.toBeInTheDocument();
-    expect(
-      screen.getByText("После расчёта здесь появятся трактовки.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("После расчёта здесь появятся трактовки.")).toBeInTheDocument();
   });
 
   it("renders astrocartography map result and keeps PDF disabled", () => {
@@ -777,15 +776,13 @@ describe("ChartEnginePage", () => {
     const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
     expect(within(interpretationsPanel).getByText("Хорар · библиотека")).toBeInTheDocument();
     expect(
-      await within(interpretationsPanel).findByText(
-        "В справочнике пока нет записи horary.sun.cancer."
-      )
-    ).toBeInTheDocument();
+      await within(interpretationsPanel).findAllByText("Для этого элемента еще нет трактовки")
+    ).not.toHaveLength(0);
     expect(
-      within(interpretationsPanel).getByRole("link", {
-        name: "Создать трактовку horary.sun.cancer в справочнике"
+      within(interpretationsPanel).getByRole("button", {
+        name: "Добавить трактовку для Солнце в Раке"
       })
-    ).toHaveAttribute("href", expect.stringContaining("create=horary.sun.cancer"));
+    ).toBeInTheDocument();
     expect(within(interpretationsPanel).queryByText(/AI-трактовка/u)).not.toBeInTheDocument();
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=horary.question.career%2Chorary.sun.cancer%2Chorary.sun.house.10%2Chorary.house.1"
@@ -1066,15 +1063,13 @@ describe("ChartEnginePage", () => {
       within(interpretationsPanel).getByText("Астрокартография · библиотека")
     ).toBeInTheDocument();
     expect(
-      await within(interpretationsPanel).findByText(
-        "В справочнике пока нет записи astrocartography.sun.mc."
-      )
-    ).toBeInTheDocument();
+      await within(interpretationsPanel).findAllByText("Для этого элемента еще нет трактовки")
+    ).not.toHaveLength(0);
     expect(
-      within(interpretationsPanel).getByRole("link", {
-        name: "Создать трактовку astrocartography.sun.mc в справочнике"
+      within(interpretationsPanel).getByRole("button", {
+        name: "Добавить трактовку для Солнце MC"
       })
-    ).toHaveAttribute("href", expect.stringContaining("create=astrocartography.sun.mc"));
+    ).toBeInTheDocument();
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=astrocartography.sun.mc%2Castrocartography.moon.asc"
     );
@@ -1608,21 +1603,13 @@ describe("ChartEnginePage", () => {
     expect(within(interpretationsPanel).getByText("Плутон · VII дом")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Плутон в VII доме/i)).toBeInTheDocument();
     expect(
-      within(interpretationsPanel).getByText("В справочнике пока нет записи sun_house_11.")
+      within(interpretationsPanel).getAllByText("Для этого элемента еще нет трактовки")
+    ).not.toHaveLength(0);
+    expect(
+      within(interpretationsPanel).getByRole("button", {
+        name: "Добавить трактовку для Солнце · XI дом"
+      })
     ).toBeInTheDocument();
-    const createMissingInterpretationLink = within(interpretationsPanel).getByRole("link", {
-      name: "Создать трактовку sun_house_11 в справочнике"
-    });
-    const createMissingInterpretationHref =
-      createMissingInterpretationLink.getAttribute("href") ?? "";
-    const createMissingInterpretationParams = new URLSearchParams(
-      createMissingInterpretationHref.split("?")[1] ?? ""
-    );
-    expect(createMissingInterpretationHref).toContain("/reference?");
-    expect(createMissingInterpretationParams.get("category")).toBe("planets_in_houses");
-    expect(createMissingInterpretationParams.get("create")).toBe("sun_house_11");
-    expect(createMissingInterpretationParams.get("search")).toBe("sun_house_11");
-    expect(createMissingInterpretationParams.get("title")).toBe("Солнце · XI дом");
     expect(within(interpretationsPanel).getByText("I дом")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText(/Дева 16°37'/)).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Квадрат")).toBeInTheDocument();
@@ -1636,6 +1623,165 @@ describe("ChartEnginePage", () => {
     expect(
       within(interpretationsPanel).queryByText(/интерпретационный контур не подключён/i)
     ).not.toBeInTheDocument();
+  });
+
+  it("creates a missing interpretation in the chart panel and refreshes its card", async () => {
+    const user = userEvent.setup();
+    const categoryId = "8e14390f-3db1-4d1c-9344-55679c778427";
+    const get = vi.spyOn(application.http, "get").mockImplementation(async (url) => {
+      if (url === "/dictionary/categories?locale=ru") {
+        return {
+          categories: [
+            {
+              id: categoryId,
+              code: "planets_in_houses",
+              name: "Планеты в домах",
+              order: 20,
+              count: 0,
+              createdAt: "2026-08-15T00:00:00.000Z",
+              updatedAt: "2026-08-15T00:00:00.000Z"
+            }
+          ],
+          total: 0
+        };
+      }
+
+      if (url.startsWith("/dictionary/entries/by-codes?locale=ru")) {
+        const hasCreatedEntry =
+          get.mock.calls.filter(([requestUrl]) =>
+            String(requestUrl).startsWith("/dictionary/entries/by-codes?locale=ru")
+          ).length > 1;
+
+        return {
+          entries: hasCreatedEntry
+            ? [
+                {
+                  id: "9e14390f-3db1-4d1c-9344-55679c778427",
+                  categoryId,
+                  categoryCode: "planets_in_houses",
+                  code: "sun_house_11",
+                  locale: "ru",
+                  source: "custom",
+                  title: "Солнце · XI дом",
+                  content: "Авторская трактовка Солнца в XI доме.",
+                  astrologerEntryId: "9e14390f-3db1-4d1c-9344-55679c778427",
+                  createdAt: "2026-08-15T00:00:00.000Z",
+                  updatedAt: "2026-08-15T00:00:00.000Z"
+                }
+              ]
+            : [],
+          total: hasCreatedEntry ? 1 : 0,
+          counts: {
+            sources: {
+              all: hasCreatedEntry ? 1 : 0,
+              platform: 0,
+              modified: 0,
+              custom: hasCreatedEntry ? 1 : 0
+            }
+          }
+        } satisfies DictionaryEntriesResponse;
+      }
+
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const post = vi.spyOn(application.http, "post").mockResolvedValue({
+      id: "9e14390f-3db1-4d1c-9344-55679c778427",
+      ownerUserId: "11111111-1111-4111-8111-111111111111",
+      categoryId,
+      code: "sun_house_11",
+      locale: "ru",
+      entryType: "custom",
+      title: "Солнце · XI дом",
+      content: "Авторская трактовка Солнца в XI доме.",
+      createdAt: "2026-08-15T00:00:00.000Z",
+      updatedAt: "2026-08-15T00:00:00.000Z"
+    });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ChartEnginePage
+          selectedClient={client}
+          jobState="succeeded"
+          result={chartResult({
+            points: [
+              {
+                id: "sun",
+                label: "Sun",
+                longitude: 113.1,
+                sign: "cancer",
+                signDegree: 22.6,
+                house: 11,
+                retrograde: false
+              }
+            ]
+          })}
+          errorMessage={null}
+          isBusy={false}
+          settings={settings()}
+          onSettingsChange={vi.fn()}
+          onCreateNatalJob={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    await user.click(screen.getByRole("button", { name: "Трактовки" }));
+
+    const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
+    const addButton = await within(interpretationsPanel).findByRole("button", {
+      name: "Добавить трактовку для Солнце · XI дом"
+    });
+    expect(
+      within(addButton.parentElement as HTMLElement).getByText(
+        "Для этого элемента еще нет трактовки"
+      )
+    ).toBeInTheDocument();
+
+    await user.click(addButton);
+
+    expect(
+      within(interpretationsPanel).getByRole("heading", { name: "Солнце · XI дом" })
+    ).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByDisplayValue("Солнце · XI дом")).toBeInTheDocument();
+    await user.click(within(interpretationsPanel).getByRole("button", { name: "Отмена" }));
+    const restoredAddButton = await within(interpretationsPanel).findByRole("button", {
+      name: "Добавить трактовку для Солнце · XI дом"
+    });
+    await waitFor(() => expect(restoredAddButton).toHaveFocus());
+
+    await user.click(restoredAddButton);
+    await user.type(
+      within(interpretationsPanel).getByLabelText("Текст трактовки"),
+      "Авторская трактовка Солнца в XI доме."
+    );
+    await user.click(within(interpretationsPanel).getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        "/dictionary/custom-entries",
+        {
+          categoryId,
+          locale: "ru",
+          code: "sun_house_11",
+          title: "Солнце · XI дом",
+          content: "Авторская трактовка Солнца в XI доме."
+        },
+        { csrf: true }
+      )
+    );
+    expect(
+      await within(interpretationsPanel).findByText("Авторская трактовка Солнца в XI доме.")
+    ).toBeInTheDocument();
+    expect(
+      within(interpretationsPanel).queryByRole("button", {
+        name: "Добавить трактовку для Солнце · XI дом"
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      get.mock.calls.filter(([url]) =>
+        String(url).startsWith("/dictionary/entries/by-codes?locale=ru")
+      )
+    ).toHaveLength(2);
   });
 
   it("shows natal result in child mode with child dictionary anchors and disabled PDF", async () => {
@@ -1713,19 +1859,13 @@ describe("ChartEnginePage", () => {
       await within(interpretationsPanel).findAllByText("Детская карта · планета в знаке")
     ).toHaveLength(3);
     expect(
-      within(interpretationsPanel).getByText("В справочнике пока нет записи child.sun.house.11.")
+      within(interpretationsPanel).getAllByText("Для этого элемента еще нет трактовки")
+    ).not.toHaveLength(0);
+    expect(
+      within(interpretationsPanel).getByRole("button", {
+        name: "Добавить трактовку для Солнце · XI дом"
+      })
     ).toBeInTheDocument();
-    const createMissingInterpretationLink = within(interpretationsPanel).getByRole("link", {
-      name: "Создать трактовку child.sun.house.11 в справочнике"
-    });
-    const createMissingInterpretationHref =
-      createMissingInterpretationLink.getAttribute("href") ?? "";
-    const createMissingInterpretationParams = new URLSearchParams(
-      createMissingInterpretationHref.split("?")[1] ?? ""
-    );
-    expect(createMissingInterpretationParams.get("category")).toBe("planets_in_houses");
-    expect(createMissingInterpretationParams.get("create")).toBe("child.sun.house.11");
-    expect(createMissingInterpretationParams.get("search")).toBe("child.sun.house.11");
     expect(get).toHaveBeenCalledWith(
       "/dictionary/entries/by-codes?locale=ru&codes=child.sun.cancer%2Cchild.sun.house.11%2Cchild.moon.aries%2Cchild.moon.house.8%2Cchild.pluto.scorpio%2Cchild.pluto.house.7%2Cchild.house.1%2Cchild.house.7%2Cchild.aspect.sun.square.moon%2Cchild.aspect.moon.trine.pluto"
     );

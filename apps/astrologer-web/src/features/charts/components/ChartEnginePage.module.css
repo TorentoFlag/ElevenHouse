@@ -1176,6 +1176,8 @@
   border-radius: 999px;
   background: rgb(246 210 102 / 0.1);
   color: var(--chart-gold);
+  cursor: pointer;
+  font: inherit;
   font-size: 11px;
   font-weight: 780;
   text-decoration: none;
@@ -1186,6 +1188,135 @@
 }
 .interpretationMissingAction:focus-visible {
   outline: 2px solid rgb(131 180 255 / 0.88);
+  outline-offset: 2px;
+}
+.interpretationEditor {
+  display: grid;
+  gap: 16px;
+  padding: 2px 0;
+}
+.interpretationEditorHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.interpretationEditorHeader p,
+.interpretationEditorHeader h2,
+.interpretationEditorDescription,
+.interpretationEditorStatus,
+.interpretationEditorError,
+.interpretationEditorCategory {
+  margin: 0;
+}
+.interpretationEditorHeader p,
+.interpretationEditorCategory span {
+  color: rgb(186 178 218 / 0.58);
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.interpretationEditorHeader h2 {
+  margin-top: 3px;
+  color: rgb(229 225 244 / 0.94);
+  font-size: 16px;
+}
+.interpretationEditorBack {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 9px;
+  background: rgb(30 27 62 / 0.72);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+}
+.interpretationEditorDescription,
+.interpretationEditorStatus,
+.interpretationEditorCategory {
+  color: rgb(186 178 218 / 0.74);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.interpretationEditorError {
+  color: #ffb0b0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.interpretationEditorForm {
+  display: grid;
+  gap: 14px;
+}
+.interpretationEditorCategory {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--chart-line);
+  border-radius: 10px;
+  background: rgb(30 27 62 / 0.56);
+}
+.interpretationEditorField {
+  display: grid;
+  gap: 6px;
+  color: rgb(229 225 244 / 0.84);
+  font-size: 12px;
+  font-weight: 720;
+}
+.interpretationEditorField input,
+.interpretationEditorField textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(30 27 62 / 0.82);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.interpretationEditorField input {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+.interpretationEditorField textarea {
+  min-height: 160px;
+  padding: 10px;
+  resize: vertical;
+}
+.interpretationEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.interpretationEditorActions button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 9px;
+  background: rgb(30 27 62 / 0.82);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+}
+.interpretationEditorActions button[type="submit"] {
+  border-color: rgb(246 210 102 / 0.38);
+  background: rgb(246 210 102 / 0.16);
+  color: var(--chart-gold);
+}
+.interpretationEditorActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.interpretationEditorBack:focus-visible,
+.interpretationEditorField input:focus-visible,
+.interpretationEditorField textarea:focus-visible,
+.interpretationEditorActions button:focus-visible {
+  outline: 2px solid var(--chart-gold);
   outline-offset: 2px;
 }
 .chartAiPanel {

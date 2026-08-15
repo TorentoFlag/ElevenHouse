@@ -416,10 +416,26 @@ const ruChartEngineCopy = {
     groupTitles: { points: "Положения", houses: "Дома", aspects: "Аспекты" },
     dictionaryLoadError: "Не удалось загрузить трактовки из справочника.",
     dictionaryLoading: "Загружаем трактовку из справочника...",
-    dictionaryMissing: (code: string) => `В справочнике пока нет записи ${code}.`,
+    dictionaryMissing: "Для этого элемента еще нет трактовки",
     dictionarySource: (source: string) => `Справочник · ${source}`,
-    createInterpretation: "Создать трактовку",
-    createInterpretationAria: (code: string) => `Создать трактовку ${code} в справочнике`
+    addInterpretation: "Добавить трактовку",
+    addInterpretationAria: (title: string) => `Добавить трактовку для ${title}`,
+    interpretationEditor: {
+      ariaLabel: (title: string) => `Новая трактовка: ${title}`,
+      backAriaLabel: "Вернуться к трактовкам",
+      kicker: "Новая трактовка",
+      description: "Заполните свою трактовку для выбранного элемента карты.",
+      categoriesLoading: "Подготавливаем форму...",
+      categoriesError: "Не удалось подготовить форму. Повторите попытку.",
+      categoryLabel: "Категория",
+      titleLabel: "Название",
+      contentLabel: "Текст трактовки",
+      contentPlaceholder: "Ваша трактовка...",
+      cancel: "Отмена",
+      save: "Сохранить",
+      saving: "Сохраняем...",
+      saveError: "Не удалось сохранить трактовку. Повторите попытку."
+    }
   },
   interpretationAnchors: {
     house: (roman: string) => `${roman} дом`,
@@ -524,8 +540,7 @@ const ruChartEngineCopy = {
     noResult: "После расчёта натальной карты здесь появится AI-черновик.",
     stale: "Результат устарел. Пересчитайте карту перед AI-черновиком.",
     saveCalculation: "Сначала сохраните расчёт карты.",
-    unsupported:
-      "AI-черновик пока доступен только для натальной карты.",
+    unsupported: "AI-черновик пока доступен только для натальной карты.",
     loadError: "Не удалось загрузить расчёт карты. Обновите страницу и повторите",
     saveError: "Не удалось сохранить черновик",
     approveError: "Не удалось утвердить трактовку",
@@ -985,10 +1000,8 @@ const enChartEngineCopy: ChartEngineCopy = {
     }
   },
   tables: {
-    emptyInterpretations:
-      "Interpretations appear here after calculation.",
-    emptyTables:
-      "Planets, aspects, and houses appear here after calculation.",
+    emptyInterpretations: "Interpretations appear here after calculation.",
+    emptyTables: "Planets, aspects, and houses appear here after calculation.",
     planets: "Planets",
     transitPlanets: "Transit planets",
     solarPlanets: "Solar-return planets",
@@ -1021,10 +1034,26 @@ const enChartEngineCopy: ChartEngineCopy = {
     groupTitles: { points: "Placements", houses: "Houses", aspects: "Aspects" },
     dictionaryLoadError: "Could not load interpretations from the reference library.",
     dictionaryLoading: "Loading interpretation from the reference library...",
-    dictionaryMissing: (code) => `The reference library has no ${code} entry yet.`,
+    dictionaryMissing: "There is no interpretation for this item yet.",
     dictionarySource: (source) => `Reference · ${source}`,
-    createInterpretation: "Create interpretation",
-    createInterpretationAria: (code) => `Create ${code} interpretation in the reference library`
+    addInterpretation: "Add interpretation",
+    addInterpretationAria: (title) => `Add interpretation for ${title}`,
+    interpretationEditor: {
+      ariaLabel: (title) => `New interpretation: ${title}`,
+      backAriaLabel: "Return to interpretations",
+      kicker: "New interpretation",
+      description: "Write your interpretation for the selected chart item.",
+      categoriesLoading: "Preparing the form...",
+      categoriesError: "Could not prepare the form. Try again.",
+      categoryLabel: "Category",
+      titleLabel: "Title",
+      contentLabel: "Interpretation text",
+      contentPlaceholder: "Your interpretation...",
+      cancel: "Cancel",
+      save: "Save",
+      saving: "Saving...",
+      saveError: "Could not save the interpretation. Try again."
+    }
   },
   interpretationAnchors: {
     house: (roman) => `${roman} house`,
@@ -1129,8 +1158,7 @@ const enChartEngineCopy: ChartEngineCopy = {
     noResult: "An AI draft appears here after a natal chart calculation.",
     stale: "The result is outdated. Recalculate the chart before generating an AI draft.",
     saveCalculation: "Save the chart calculation first.",
-    unsupported:
-      "AI drafts are currently available for natal charts only.",
+    unsupported: "AI drafts are currently available for natal charts only.",
     loadError: "Could not load the chart calculation. Refresh the page and try again",
     saveError: "Could not save the draft",
     approveError: "Could not approve the interpretation",
