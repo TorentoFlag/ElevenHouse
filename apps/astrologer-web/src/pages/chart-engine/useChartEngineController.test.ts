@@ -541,17 +541,21 @@ describe("chart engine recovery orchestration", () => {
     });
   });
 
-  it("accepts the API AI capability for a reproducible transit calculation", () => {
+  it("accepts the API AI and PDF capabilities for a reproducible transit calculation", () => {
     const current = transitResultV2();
     expect(chartResultSchema.safeParse(current).success).toBe(true);
     const state = resolveChartEngineCalculationState({
       mode: "transit",
       selectedClientId: clientId,
       selectedPartnerClientId: null,
-      chartCalculation: chartCalculationRead(
-        current,
-        ["view_current", "recalculate", "link", "publish", "ai_draft"]
-      ),
+      chartCalculation: chartCalculationRead(current, [
+        "view_current",
+        "recalculate",
+        "link",
+        "publish",
+        "ai_draft",
+        "pdf"
+      ]),
       savedCalculation: savedCalculation(current)
     });
 
@@ -559,7 +563,34 @@ describe("chart engine recovery orchestration", () => {
     expect(state.result).toEqual(current);
     expect(state.capabilities).toMatchObject({
       canRequestAi: true,
-      canRequestPdf: false,
+      canRequestPdf: true,
+      canRecalculate: true
+    });
+  });
+
+  it("accepts the API PDF capability for a reproducible astrocartography calculation", () => {
+    const current = astrocartographyResultV2();
+    expect(chartResultSchema.safeParse(current).success).toBe(true);
+    const state = resolveChartEngineCalculationState({
+      mode: "astrocartography",
+      selectedClientId: clientId,
+      selectedPartnerClientId: null,
+      chartCalculation: chartCalculationRead(current, [
+        "view_current",
+        "recalculate",
+        "link",
+        "publish",
+        "ai_draft",
+        "pdf"
+      ]),
+      savedCalculation: savedCalculation(current)
+    });
+
+    expect(state.mode).toBe("astrocartography");
+    expect(state.result).toEqual(current);
+    expect(state.capabilities).toMatchObject({
+      canRequestAi: true,
+      canRequestPdf: true,
       canRecalculate: true
     });
   });
@@ -1258,6 +1289,86 @@ describe("chart engine controller hook recovery", () => {
     expect(result.current.jobState).toBe("succeeded");
     unmount();
   });
+
+  it("enables current astrocartography PDF requests while PDF status is still loading", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/chart-engine?mode=astrocartography&clientId=${clientId}&calculationId=${calculationId}`
+    );
+    const currentResult = astrocartographyResultV2();
+    const pendingPdfStatus = deferred<{ job: null; currentResultChecksum: string }>();
+    vi.spyOn(application.http, "get").mockImplementation(async (url) => {
+      if (url === `/charts/calculations/${calculationId}`) {
+        return chartCalculationRead(currentResult, [
+          "view_current",
+          "recalculate",
+          "link",
+          "publish",
+          "ai_draft",
+          "pdf"
+        ]);
+      }
+      if (url === `/calculations/${calculationId}`) {
+        return savedCalculation(currentResult);
+      }
+      if (url === `/clients/${clientId}`) return astrologerClientResponse();
+      if (url === `/charts/calculations/${calculationId}/report/pdf?locale=ru`) {
+        return pendingPdfStatus.promise;
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+
+    const { result, unmount } = renderHook(() => useChartEngineController(), {
+      wrapper: chartControllerWrapper()
+    });
+
+    await waitFor(() => expect(result.current.result?.method).toBe("astrocartography"));
+    expect(result.current.pdfDisabled).toBe(false);
+    expect(result.current.pdfLabel).toBe("PDF");
+
+    pendingPdfStatus.resolve({ job: null, currentResultChecksum: checksum });
+    unmount();
+  });
+
+  it("loads PDF status and enables PDF requests for current astrocartography results", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/chart-engine?mode=astrocartography&clientId=${clientId}&calculationId=${calculationId}`
+    );
+    const currentResult = astrocartographyResultV2();
+    vi.spyOn(application.http, "get").mockImplementation(async (url) => {
+      if (url === `/charts/calculations/${calculationId}`) {
+        return chartCalculationRead(currentResult, [
+          "view_current",
+          "recalculate",
+          "link",
+          "publish",
+          "ai_draft",
+          "pdf"
+        ]);
+      }
+      if (url === `/calculations/${calculationId}`) {
+        return savedCalculation(currentResult);
+      }
+      if (url === `/clients/${clientId}`) return astrologerClientResponse();
+      if (url === `/charts/calculations/${calculationId}/report/pdf?locale=ru`) {
+        return { job: null, currentResultChecksum: checksum };
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+
+    const { result, unmount } = renderHook(() => useChartEngineController(), {
+      wrapper: chartControllerWrapper()
+    });
+
+    await waitFor(() => expect(result.current.result?.method).toBe("astrocartography"));
+    await waitFor(() => expect(result.current.pdfDisabled).toBe(false));
+    expect(result.current.pdfLabel).toBe("PDF");
+    expect(result.current.pdfTitle).toBe("Сформировать PDF");
+    unmount();
+  });
 });
 
 describe("chart engine persisted result state", () => {
@@ -1268,6 +1379,9 @@ describe("chart engine persisted result state", () => {
       transitMoment: {
         date: "2026-10-25",
         time: "02:30",
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964,
         dstOccurrence: "second"
       }
     });
@@ -1758,20 +1872,59 @@ function astrocartographyResult(): StoredChartAstrocartographyCalculationPayload
     settings: settings(),
     inputSnapshot: natalResult().inputSnapshot,
     result: {
-      lines: [
-        {
-          id: "sun_mc",
-          point: "sun",
-          angle: "mc",
-          label: "Солнце MC",
-          path: [
-            { latitude: -66, longitude: 10 },
-            { latitude: 66, longitude: 10 }
-          ]
-        }
-      ],
+      lines: completeAstrocartographyLines(),
       warnings: []
     }
+  };
+}
+
+function completeAstrocartographyLines(): StoredChartAstrocartographyCalculationPayload["result"]["lines"] {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+  const angles = ["mc", "ic", "asc", "dsc"] as const;
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -66, longitude: -120 + pointIndex * 10 + angleIndex },
+        { latitude: 0, longitude: -120 + pointIndex * 10 + angleIndex },
+        { latitude: 66, longitude: -120 + pointIndex * 10 + angleIndex }
+      ]
+    }))
+  );
+}
+
+function astrocartographyResultV2(): Extract<
+  ChartResult,
+  { readonly schemaVersion: "chart-result.v2"; readonly method: "astrocartography" }
+> {
+  const current = astrocartographyResult();
+  return {
+    ...current,
+    schemaVersion: "chart-result.v2",
+    methodVersion: chartMethodVersions.astrocartography,
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier",
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"f".repeat(64)}`
   };
 }
 

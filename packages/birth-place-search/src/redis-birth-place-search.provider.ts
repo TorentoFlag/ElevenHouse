@@ -369,7 +369,9 @@ export class RedisBirthPlaceSearchProvider implements BirthPlaceProvider {
 }
 
 function hashCacheInput(input: Pick<BirthPlaceSearchInput, "query" | "limit">): string {
-  return hashKeyPart(`${normalizeCacheQuery(input.query)}:${input.limit}`);
+  return hashKeyPart(
+    `${normalizeCacheQuery(input.query)}:${input.limit}:birth-place-search:lang-aware-city-ranking`
+  );
 }
 
 function normalizeCacheQuery(query: string): string {

@@ -125,6 +125,11 @@ describe("RedisBirthPlaceSearchProvider", () => {
     ).resolves.toEqual(response);
 
     expect(upstream.search).toHaveBeenCalledTimes(1);
+    expect(redis.seenKeys).toContain(
+      `{${options.keyPrefix}}:cache:v1:${sha256(
+        "rome italy:3:birth-place-search:lang-aware-city-ranking"
+      )}`
+    );
   });
 
   it("enforces shared Redis rate limits before any provider request", async () => {

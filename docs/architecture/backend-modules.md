@@ -350,10 +350,13 @@ deterministic document, writes it to private object storage and marks the job
 ready. A renderer registry keyed by calculation module and method is the
 extension point for future methods such as a separate Vedic numerology engine;
 adding a method does not branch Pythagorean formulas or duplicate queue/storage
-infrastructure. Natal chart PDF export uses the same lifecycle and reloads the
-current `module = chart`, `method_code = natal` calculation result before
-rendering a deterministic vector wheel, chart tables, calculation settings and
-owner-scoped dictionary interpretations by exact chart codes.
+infrastructure. Chart PDF export uses the same lifecycle and reloads the
+current `module = chart` calculation result before rendering deterministic
+method-specific documents: wheel/table sections for single-wheel results, one
+combined overlay wheel plus paired data tables for relationship/event methods,
+astrocartography line maps plus angular line tables, and owner-scoped
+dictionary interpretations by exact chart codes where the document renderer
+supports them.
 
 ## Кандидаты на будущее выделение
 

@@ -7,6 +7,7 @@ import {
 } from "@elevenhouse/domain";
 import {
   chartMethodVersions,
+  chartTransitResultV2Schema,
   type ChartExecutionProfile,
   type ReproducibleChartResult
 } from "@elevenhouse/contracts";
@@ -123,6 +124,44 @@ describe("Chart PDF source", () => {
           entry: null
         })
       ])
+    });
+  });
+
+  it("loads a current reproducible non-natal chart result for PDF rendering", async () => {
+    const transit = transitResult();
+    const current = calculation({
+      methodCode: "transit",
+      interpretationMode: "legacy_unclassified",
+      resultData: transit,
+      inputData: {
+        inputSnapshot: {
+          inputSnapshot: transit.inputSnapshot,
+          transitSnapshot: transit.transitSnapshot
+        },
+        settings: transit.settings
+      },
+      resultChecksum: sha256CanonicalJson(transit as unknown as CanonicalJson),
+      interpretations: []
+    });
+    const source = createChartPdfSource(
+      {
+        findByOwnerAndId: vi.fn(async () => current)
+      } as never,
+      dictionaryStore(),
+      executionProfile
+    );
+
+    await expect(
+      source.load(
+        pdfJob({
+          methodCode: "transit",
+          resultChecksum: current.resultChecksum,
+          sourceLocator: { kind: "approved_interpretation", interpretationId: null }
+        })
+      )
+    ).resolves.toMatchObject({
+      result: { method: "transit" },
+      approvedInterpretation: null
     });
   });
 
@@ -419,6 +458,46 @@ export function chartResult(): NatalChartResultV2 {
       warnings: []
     }
   } as NatalChartResultV2;
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function transitResult() {
+  const natal = chartResult();
+  const candidate = chartTransitResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "transit",
+    methodVersion: chartMethodVersions.transit,
+    provider: natal.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    result: {
+      natal: natal.result,
+      transit: natal.result,
+      aspectsToNatal: [
+        {
+          transitPoint: "jupiter",
+          natalPoint: "sun",
+          type: "trine",
+          angle: 120,
+          orb: 1.4,
+          applying: true,
+          strength: 0.7
+        }
+      ],
+      warnings: []
+    }
+  });
   return {
     ...candidate,
     reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)

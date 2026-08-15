@@ -43,6 +43,20 @@ describe("chart AI context", () => {
     expect(child.factors).toEqual(adult.factors);
     expect(child.subjectKind).toBe("child");
   });
+
+  it("passes the horary question and category into the AI draft context", () => {
+    const context = buildChartAiDraftContext({
+      locale: "ru",
+      result: result("horary"),
+      subjectKind: "adult",
+      dictionaryEntries: []
+    });
+
+    expect(context.horaryQuestion).toEqual({
+      question: "Подпишет ли клиент договор в этом месяце?",
+      category: "career"
+    });
+  });
 });
 
 function result(method: ChartCalculationMethod): ReproducibleChartResult {
@@ -119,7 +133,13 @@ function result(method: ChartCalculationMethod): ReproducibleChartResult {
     return {
       ...base,
       result: rendered,
-      questionSnapshot: { category: "career", date: "2026-08-15", time: "12:00", timezone: "UTC" }
+      questionSnapshot: {
+        question: "Подпишет ли клиент договор в этом месяце?",
+        category: "career",
+        date: "2026-08-15",
+        time: "12:00",
+        timezone: "UTC"
+      }
     } as unknown as ReproducibleChartResult;
   }
   return { ...base, result: rendered } as unknown as ReproducibleChartResult;

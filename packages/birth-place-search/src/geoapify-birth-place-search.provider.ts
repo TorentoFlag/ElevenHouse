@@ -53,7 +53,13 @@ type GeoapifyPlace = {
   readonly timezone?: {
     readonly name?: string;
   };
+  readonly rank?: {
+    readonly importance?: number;
+    readonly confidence?: number;
+  };
 };
+
+const maxAutocompleteCandidates = 20;
 
 export class GeoapifyBirthPlaceSearchProvider implements BirthPlaceUpstreamProvider {
   constructor(
@@ -80,9 +86,12 @@ export class GeoapifyBirthPlaceSearchProvider implements BirthPlaceUpstreamProvi
       );
     }
     url.searchParams.set("text", input.query);
-    url.searchParams.set("limit", String(input.limit));
+    url.searchParams.set("limit", String(getProviderSearchLimit(input)));
     url.searchParams.set("type", "city");
     url.searchParams.set("format", "json");
+    if (containsCyrillic(input.query)) {
+      url.searchParams.set("lang", "ru");
+    }
     url.searchParams.set("apiKey", this.options.apiKey);
 
     const controller = new AbortController();
@@ -107,7 +116,9 @@ export class GeoapifyBirthPlaceSearchProvider implements BirthPlaceUpstreamProvi
       }
 
       return clientBirthPlaceSearchResponseSchema.parse({
-        candidates: payload.results.slice(0, input.limit).map(toCandidate)
+        candidates: rankPlacesForQuery(payload.results, input.query)
+          .slice(0, input.limit)
+          .map(toCandidate)
       });
     } catch (error) {
       if (error instanceof BirthPlaceSearchUnavailableError) {
@@ -202,6 +213,66 @@ export class GeoapifyBirthPlaceSearchProvider implements BirthPlaceUpstreamProvi
       clearTimeout(timeout);
     }
   }
+}
+
+function getProviderSearchLimit(input: BirthPlaceSearchInput): number {
+  if (containsCyrillic(input.query)) {
+    return Math.min(maxAutocompleteCandidates, Math.max(input.limit * 4, input.limit));
+  }
+
+  return input.limit;
+}
+
+function rankPlacesForQuery(
+  places: readonly GeoapifyPlace[],
+  query: string
+): readonly GeoapifyPlace[] {
+  const normalizedQuery = normalizeSearchText(query);
+  return places
+    .map((place, index) => ({ place, index, score: scorePlace(place, normalizedQuery) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((entry) => entry.place);
+}
+
+function scorePlace(place: GeoapifyPlace, normalizedQuery: string): number {
+  const names = [
+    place.city,
+    place.town,
+    place.village,
+    place.municipality,
+    place.county,
+    place.address_line1
+  ]
+    .map((value) => normalizeSearchText(value ?? ""))
+    .filter(Boolean);
+  const formattedHead = normalizeSearchText(place.formatted?.split(",")[0] ?? "");
+  const exactNameMatch = names.some((name) => name === normalizedQuery);
+  const startsWithNameMatch = names.some((name) => name.startsWith(normalizedQuery));
+  const containsNameMatch = names.some((name) => name.includes(normalizedQuery));
+  const exactFormattedHeadMatch = formattedHead === normalizedQuery;
+  const importance = safeRankNumber(place.rank?.importance);
+  const confidence = safeRankNumber(place.rank?.confidence);
+
+  return (
+    (exactNameMatch ? 1000 : 0) +
+    (exactFormattedHeadMatch ? 500 : 0) +
+    (startsWithNameMatch ? 100 : 0) +
+    (containsNameMatch ? 25 : 0) +
+    importance * 100 +
+    confidence * 10
+  );
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/\s+/g, " ");
+}
+
+function containsCyrillic(value: string): boolean {
+  return /[\u0400-\u04ff]/.test(value);
+}
+
+function safeRankNumber(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function toCandidate(place: GeoapifyPlace): ClientBirthPlaceCandidate {

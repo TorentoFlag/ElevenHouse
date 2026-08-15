@@ -14,7 +14,10 @@ import {
 import type { CalculationRecord } from "../calculations/calculation-store";
 import { sha256CanonicalJson, type CanonicalJson } from "../calculations/canonical-json";
 import { ChartStoredResultIntegrityError } from "./chart-errors";
-import { buildChartResultReproducibilityFingerprint } from "./chart-execution-profile";
+import {
+  buildChartJobInputSnapshotForResult,
+  buildChartResultReproducibilityFingerprint
+} from "./chart-execution-profile";
 import {
   deriveChartCalculationCapabilities,
   prepareChartRecalculation as prepareChartRecalculationWithProfile,
@@ -414,6 +417,33 @@ describe("chart recalculation preparation", () => {
     ).toEqual(["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"]);
   });
 
+  it.each([
+    "astrocartography",
+    "transit",
+    "synastry",
+    "composite",
+    "solar_return",
+    "progression",
+    "horary"
+  ] as const)("exposes PDF for current reproducible %s chart calculations", (method) => {
+    const current = v2Result(method);
+
+    expect(
+      deriveChartCalculationCapabilities({
+        calculation: {
+          ...calculationRecord(method),
+          inputData: {
+            inputSnapshot: buildChartJobInputSnapshotForResult(current),
+            settings: settings()
+          },
+          resultData: current,
+          resultChecksum: sha256CanonicalJson(current as unknown as CanonicalJson)
+        },
+        expectedExecutionProfile
+      })
+    ).toContain("pdf");
+  });
+
   it("keeps only unclassified natal capabilities fail-closed", () => {
     const current = v2NatalResult();
     const currentChecksum = sha256CanonicalJson(current as unknown as CanonicalJson);
@@ -681,6 +711,74 @@ function v2NatalResult(): NatalChartResultV2 {
     ...candidate,
     reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
   };
+}
+
+function v2Result(method: Exclude<ChartCalculationMethod, "natal">) {
+  const legacy = legacyResult(method) as Record<string, unknown>;
+  if (method === "astrocartography") {
+    legacy.result = {
+      lines: astrocartographyLines(),
+      warnings: []
+    };
+  }
+  if (method === "synastry" || method === "composite") {
+    delete legacy.relationshipSnapshot;
+  }
+  if (method === "progression") {
+    legacy.calculationBasis = {
+      symbolicInstant: "1990-08-20T09:02:38Z",
+      elapsedLifeDays: 13157,
+      elapsedYears: 36.02267306523378,
+      yearLengthDays: 365.24219,
+      dayForYearRatio: 1
+    };
+  }
+  const candidate = {
+    ...legacy,
+    schemaVersion: "chart-result.v2",
+    methodVersion: chartMethodVersions[method],
+    provider: {
+      name: "kerykeion",
+      version: "5.12.9",
+      pyswissephVersion: "2.10.3.2",
+      ephemeris: "moshier",
+      ephemerisFlags: ["FLG_MOSEPH", "FLG_SPEED"],
+      ephemerisDataRevision: null
+    },
+    reproducibilityFingerprint: `sha256:${"c".repeat(64)}`
+  } as ReproducibleChartResult;
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function astrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+  const angles = ["asc", "dsc", "mc", "ic"] as const;
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -60 + pointIndex, longitude: -120 + angleIndex },
+        { latitude: 60 - pointIndex, longitude: 120 - angleIndex }
+      ]
+    }))
+  );
 }
 
 function settings() {

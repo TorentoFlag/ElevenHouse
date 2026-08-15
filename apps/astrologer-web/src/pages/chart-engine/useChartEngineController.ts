@@ -615,9 +615,14 @@ export function useChartEngineController() {
     jobQuery.isFetching ||
     calculationQuery.isFetching ||
     savedCalculationQuery.isFetching;
+  const currentPdfResultChecksum =
+    pdfQuery.data?.currentResultChecksum ??
+    (!pdfQuery.error && calculationState.capabilities.canRequestPdf && !isResultStale
+      ? (savedCalculation?.resultChecksum ?? null)
+      : null);
   const pdfAction = buildChartPdfAction({
     calculationId: calculationState.capabilities.canRequestPdf ? calculationId : null,
-    currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+    currentResultChecksum: currentPdfResultChecksum,
     job: pdfQuery.data?.job ?? null,
     isBusy,
     isResultStale: isResultStale || !calculationState.capabilities.canRequestPdf,
@@ -646,7 +651,7 @@ export function useChartEngineController() {
       await executeChartPdfAction({
         calculationId: calculationState.capabilities.canRequestPdf ? calculationId : null,
         locale: pdfLocale,
-        currentResultChecksum: pdfQuery.data?.currentResultChecksum ?? null,
+        currentResultChecksum: currentPdfResultChecksum,
         kind: pdfAction.kind,
         job: pdfQuery.data?.job ?? null,
         enqueue: (input) => enqueuePdfMutation.mutateAsync(input),

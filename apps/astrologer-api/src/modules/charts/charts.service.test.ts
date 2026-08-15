@@ -1142,7 +1142,7 @@ describe("ChartsService", () => {
       expect.objectContaining({
         source: "ai",
         modelId: "gpt-test",
-        promptVersion: "chart.interpretationDraft@4",
+        promptVersion: "chart.interpretationDraft@5",
         expectedResultChecksum: calculation.resultChecksum
       })
     );

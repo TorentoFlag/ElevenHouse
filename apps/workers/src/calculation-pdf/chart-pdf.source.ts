@@ -28,11 +28,7 @@ export function createChartPdfSource(
 ): ChartPdfSource {
   return {
     load: async (job) => {
-      if (
-        job.module !== "chart" ||
-        job.methodCode !== "natal" ||
-        job.sourceLocator.kind !== "approved_interpretation"
-      ) {
+      if (job.module !== "chart" || job.sourceLocator.kind !== "approved_interpretation") {
         throw staleSource();
       }
       const calculation = await calculationStore.findByOwnerAndId({
@@ -67,7 +63,7 @@ export function createChartPdfSource(
           "Chart PDF source result is invalid"
         );
       }
-      if (!isReproducibleChartResult(result) || result.method !== "natal") {
+      if (!isReproducibleChartResult(result) || result.method !== job.methodCode) {
         throw new CalculationPdfPermanentError(
           "invalid_source",
           "Chart PDF source result is invalid"

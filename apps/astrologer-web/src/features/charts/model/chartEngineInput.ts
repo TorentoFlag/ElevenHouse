@@ -1,14 +1,10 @@
 import type {
   ChartHoraryQuestionCategory,
-  ChartHoraryQuestionSnapshot
+  ChartHoraryQuestionSnapshot,
+  ChartTransitMoment
 } from "@elevenhouse/contracts";
-import type { ChartDstOccurrence } from "./chartCivilTimeOccurrence";
 
-export type ChartTransitMomentInput = {
-  readonly date: string;
-  readonly time: string;
-  readonly dstOccurrence?: ChartDstOccurrence;
-};
+export type ChartTransitMomentInput = ChartTransitMoment;
 
 export type ChartHoraryQuestionInput = Omit<
   ChartHoraryQuestionSnapshot,

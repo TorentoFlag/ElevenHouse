@@ -63,6 +63,104 @@ describe("GeoapifyBirthPlaceSearchProvider", () => {
     expect(request.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("keeps the exact Moscow city match above similar Cyrillic candidates", async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({
+        results: [
+          geoapifyCity({
+            place_id: "meneuz-moscow",
+            formatted: "Менеуз-Москва, Башкортостан, Россия",
+            city: "Менеуз-Москва",
+            state: "Башкортостан",
+            country: "Россия",
+            lat: 53.875698,
+            lon: 54.320431,
+            timezone: "Asia/Yekaterinburg",
+            importance: 0.36615672375168384,
+            confidence: 1
+          }),
+          geoapifyCity({
+            place_id: "kirov-moscow",
+            formatted: "Москва, Кировская область, Россия",
+            city: "Москва",
+            state: "Кировская область",
+            country: "Россия",
+            lat: 57.9669597,
+            lon: 49.1080071,
+            timezone: "Europe/Kirov",
+            importance: 0.2702882353650111,
+            confidence: 1
+          }),
+          geoapifyCity({
+            place_id: "moika",
+            formatted: "Мойка, Новгородская область, Россия",
+            city: "Мойка",
+            state: "Новгородская область",
+            country: "Россия",
+            lat: 58.6250759,
+            lon: 30.6336569,
+            timezone: "Europe/Moscow",
+            importance: 0.3692588589939114,
+            confidence: 0.95
+          }),
+          geoapifyCity({
+            place_id: "moskovo",
+            formatted: "Москово, Башкортостан, Россия",
+            city: "Москово",
+            state: "Башкортостан",
+            country: "Россия",
+            lat: 53.9788105,
+            lon: 59.1037886,
+            timezone: "Asia/Yekaterinburg",
+            importance: 0.3701845356649174,
+            confidence: 0.95
+          }),
+          geoapifyCity({
+            place_id: "mokra",
+            formatted: "Мокра, Приднестровская Молдавская Республика, Молдова",
+            city: "Мокра",
+            state: "Приднестровская Молдавская Республика",
+            country: "Молдова",
+            country_code: "md",
+            lat: 47.6298751,
+            lon: 29.1506225,
+            timezone: "Europe/Chisinau",
+            importance: 0.3583819294050449,
+            confidence: 0.95
+          }),
+          geoapifyCity({
+            place_id: "moscow-capital",
+            formatted: "Москва, Россия",
+            city: "Москва",
+            state: "Москва",
+            country: "Россия",
+            lat: 55.7505412,
+            lon: 37.6174782,
+            timezone: "Europe/Moscow",
+            importance: 0.871311709597481,
+            confidence: 1
+          })
+        ]
+      })
+    );
+    const provider = new GeoapifyBirthPlaceSearchProvider(config(), fetcher);
+
+    const result = await provider.search({ ownerUserId: "owner", query: "Москва", limit: 5 });
+
+    expect(result.candidates[0]).toMatchObject({
+      providerPlaceId: "moscow-capital",
+      label: "Москва, Россия",
+      city: "Москва",
+      latitude: 55.7505412,
+      longitude: 37.6174782
+    });
+    expect(result.candidates).toHaveLength(5);
+
+    const [[url]] = fetcher.mock.calls as unknown as [[URL, RequestInit]];
+    expect(url.searchParams.get("lang")).toBe("ru");
+    expect(Number(url.searchParams.get("limit"))).toBeGreaterThan(5);
+  });
+
   it("resolves one opaque Geoapify place id through place details without caller location data", async () => {
     const providerPlaceId = "5132009123fa5a244059c72f70125fb04840f00102f9014496730800000000";
     const fetcher = vi.fn(async () =>
@@ -348,4 +446,41 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" }
   });
+}
+
+function geoapifyCity({
+  country_code = "ru",
+  confidence,
+  importance,
+  lat,
+  lon,
+  timezone,
+  ...place
+}: {
+  readonly place_id: string;
+  readonly formatted: string;
+  readonly city: string;
+  readonly state: string;
+  readonly country: string;
+  readonly country_code?: string;
+  readonly lat: number;
+  readonly lon: number;
+  readonly timezone: string;
+  readonly importance: number;
+  readonly confidence: number;
+}) {
+  return {
+    ...place,
+    country_code,
+    lat,
+    lon,
+    timezone: { name: timezone },
+    result_type: "city",
+    rank: {
+      importance,
+      confidence,
+      confidence_city_level: confidence,
+      match_type: "full_match"
+    }
+  };
 }

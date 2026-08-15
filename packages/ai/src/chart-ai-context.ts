@@ -94,6 +94,14 @@ export function buildChartAiDraftContext(input: {
     locale: input.locale,
     methodCode: input.result.method,
     subjectKind: input.subjectKind,
+    ...(input.result.method === "horary"
+      ? {
+          horaryQuestion: {
+            question: input.result.questionSnapshot.question,
+            category: input.result.questionSnapshot.category
+          }
+        }
+      : {}),
     factors: buildChartAiFactorSections(input.result),
     warnings: [...collectWarnings(input.result)],
     dictionaryGrounding

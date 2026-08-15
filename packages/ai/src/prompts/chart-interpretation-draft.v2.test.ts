@@ -45,4 +45,27 @@ describe("chart interpretation draft prompt v2", () => {
       })
     ).toThrow();
   });
+
+  it("renders horary-specific instructions and question context without boilerplate caveats", () => {
+    const horaryInput = {
+      ...transitInput,
+      methodCode: "horary" as const,
+      horaryQuestion: {
+        question: "Подпишет ли клиент договор в этом месяце?",
+        category: "career" as const
+      }
+    };
+
+    expect(chartInterpretationDraftPromptV2.inputSchema.parse(horaryInput)).toEqual(horaryInput);
+
+    const rendered = chartInterpretationDraftPromptV2.render(horaryInput);
+    expect(chartInterpretationDraftPromptV2.version).toBe(5);
+    expect(chartInterpretationDraftPromptV2.structuredOutputName).toBe(
+      "chart_interpretation_draft_v5"
+    );
+    expect(rendered.messages[0]?.content).toContain("дай прямой рабочий ответ на вопрос");
+    expect(rendered.messages[0]?.content).toContain("Не добавляй дисклеймеры");
+    expect(rendered.messages[1]?.content).toContain("Подпишет ли клиент договор");
+    expect(rendered.messages[1]?.content).toContain('"category": "career"');
+  });
 });

@@ -4,7 +4,9 @@ import {
   calculationPdfJobIdParamSchema,
   calculationPdfLatestQuerySchema,
   chartResultSchema,
+  isReproducibleChartResult,
   requestCalculationPdfSchema,
+  type ChartCalculationMethod,
   type CalculationPdfDownloadResponse,
   type CalculationPdfJobResponse,
   type CalculationPdfLatestQuery,
@@ -48,13 +50,16 @@ export class ChartsPdfService {
     const parsedQuery = parseLatestQuery(query);
     const ownerUserId = requireOwnerUserId(request);
     return mapChartPdfErrors(async () => {
-      const calculation = await this.ownedNatalChart(ownerUserId, params.calculationId);
+      const { calculation, result } = await this.ownedSupportedChart(
+        ownerUserId,
+        params.calculationId
+      );
       return this.calculationPdf.latest({
         ownerUserId,
         calculationId: params.calculationId,
         locale: parsedQuery.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v3"
+        renderContract: chartPdfRenderContract(result.method)
       });
     });
   }
@@ -68,15 +73,22 @@ export class ChartsPdfService {
     const parsedBody = parseRequest(body);
     const ownerUserId = requireOwnerUserId(request);
     return mapChartPdfErrors(async () => {
-      const calculation = await this.ownedNatalChart(ownerUserId, params.calculationId);
+      const { calculation, result } = await this.ownedSupportedChart(
+        ownerUserId,
+        params.calculationId
+      );
       return this.calculationPdf.request({
         ownerUserId,
         calculationId: calculation.id,
         expectedResultChecksum: parsedBody.expectedResultChecksum,
         locale: parsedBody.locale,
         sourceLocator: chartPdfSourceLocator(calculation),
-        renderContract: "chart-natal-v3",
-        originalFileName: parsedBody.locale === "ru" ? "Натальная карта.pdf" : "Natal chart.pdf"
+        renderContract: chartPdfRenderContract(result.method),
+        originalFileName: chartPdfFileName(
+          result.method,
+          calculation.interpretationMode,
+          parsedBody.locale
+        )
       });
     });
   }
@@ -92,19 +104,30 @@ export class ChartsPdfService {
     }
     const ownerUserId = requireOwnerUserId(request);
     return mapChartPdfErrors(async () => {
-      await this.ownedNatalChart(ownerUserId, parsed.data.calculationId);
+      const { calculation, result } = await this.ownedSupportedChart(
+        ownerUserId,
+        parsed.data.calculationId
+      );
       return this.calculationPdf.download({
         ownerUserId,
         calculationId: parsed.data.calculationId,
-        jobId: parsed.data.jobId
+        jobId: parsed.data.jobId,
+        sourceLocator: chartPdfSourceLocator(calculation),
+        renderContract: chartPdfRenderContract(result.method)
       });
     });
   }
 
-  private async ownedNatalChart(
+  private async ownedSupportedChart(
     ownerUserId: string,
     calculationId: string
-  ): Promise<CalculationRecord> {
+  ): Promise<{
+    readonly calculation: CalculationRecord;
+    readonly result: Extract<
+      ReturnType<typeof chartResultSchema.parse>,
+      { readonly schemaVersion: "chart-result.v2" }
+    >;
+  }> {
     const calculation = await this.calculationStore.findByOwnerAndId({
       ownerUserId,
       calculationId
@@ -115,16 +138,11 @@ export class ChartsPdfService {
     if (calculation.status === "archived") {
       throw chartHttpError(409, "CHART_CALCULATION_ARCHIVED", "Chart calculation is archived");
     }
-    if (calculation.module !== "chart" || calculation.methodCode !== "natal") {
+    if (calculation.module !== "chart") {
       throw chartHttpError(
         409,
         "CHART_CALCULATION_MISMATCH",
-        "Calculation is not a supported natal chart record"
-      );
-    }
-    if (resolveChartInterpretationMode(calculation, "natal") === "legacy_unclassified") {
-      throw new CalculationInterpretationModeUnavailableError(
-        "Chart PDF is unavailable for this interpretation mode"
+        "Calculation is not a supported chart record"
       );
     }
     const readable = chartResultSchema.safeParse(calculation.resultData);
@@ -135,29 +153,47 @@ export class ChartsPdfService {
         "Legacy chart calculation must be recalculated before PDF rendering"
       );
     }
-    if (!readable.success || readable.data.method !== "natal") {
+    if (!readable.success || readable.data.method !== calculation.methodCode) {
       throw chartHttpError(
         409,
         "CHART_CALCULATION_MISMATCH",
         "Stored chart calculation result is invalid"
       );
     }
-    try {
-      const result = assertStoredChartCalculationIntegrity({
-        calculation,
-        expectedExecutionProfile: this.executionProfile.getProfile()
-      });
-      if (result.schemaVersion !== "chart-result.v2" || result.method !== "natal") {
-        throw new Error("CHART_PDF_V2_NATAL_REQUIRED");
+    const result = (() => {
+      try {
+        return assertStoredChartCalculationIntegrity({
+          calculation,
+          expectedExecutionProfile: this.executionProfile.getProfile()
+        });
+      } catch {
+        throw chartHttpError(
+          409,
+          "CHART_STORED_RESULT_INTEGRITY_INVALID",
+          "Stored chart result failed integrity validation"
+        );
       }
-    } catch {
+    })();
+    if (
+      !isReproducibleChartResult(result) ||
+      result.schemaVersion !== "chart-result.v2" ||
+      result.method !== calculation.methodCode
+    ) {
       throw chartHttpError(
         409,
         "CHART_STORED_RESULT_INTEGRITY_INVALID",
         "Stored chart result failed integrity validation"
       );
     }
-    return calculation;
+    if (
+      result.method === "natal" &&
+      resolveChartInterpretationMode(calculation, "natal") === "legacy_unclassified"
+    ) {
+      throw new CalculationInterpretationModeUnavailableError(
+        "Chart PDF is unavailable for this interpretation mode"
+      );
+    }
+    return { calculation, result };
   }
 }
 
@@ -193,6 +229,41 @@ function parseRequest(body: unknown): RequestCalculationPdf {
     throw chartHttpError(400, "CHART_VALIDATION_FAILED", "Invalid chart PDF request");
   }
   return parsed.data;
+}
+
+function chartPdfRenderContract(method: ChartCalculationMethod): string {
+  const contracts: Record<ChartCalculationMethod, string> = {
+    natal: "chart-natal-v3",
+    astrocartography: "chart-astrocartography-map-report-v1",
+    transit: "chart-transit-combined-wheel-v1",
+    synastry: "chart-synastry-combined-wheel-v1",
+    composite: "chart-composite-wheel-v1",
+    solar_return: "chart-solar-return-combined-wheel-v1",
+    progression: "chart-progression-combined-wheel-v1",
+    horary: "chart-horary-report-v1"
+  };
+  return contracts[method];
+}
+
+function chartPdfFileName(
+  method: ChartCalculationMethod,
+  interpretationMode: CalculationRecord["interpretationMode"],
+  locale: "ru" | "en"
+): string {
+  if (method === "natal" && interpretationMode === "child") {
+    return locale === "ru" ? "Детская карта.pdf" : "Child chart.pdf";
+  }
+  const names: Record<ChartCalculationMethod, { readonly ru: string; readonly en: string }> = {
+    natal: { ru: "Натальная карта.pdf", en: "Natal chart.pdf" },
+    astrocartography: { ru: "Астрокарта.pdf", en: "Astrocartography.pdf" },
+    transit: { ru: "Транзиты.pdf", en: "Transits.pdf" },
+    synastry: { ru: "Синастрия.pdf", en: "Synastry.pdf" },
+    composite: { ru: "Композит.pdf", en: "Composite chart.pdf" },
+    solar_return: { ru: "Соляр.pdf", en: "Solar return.pdf" },
+    progression: { ru: "Прогрессии.pdf", en: "Progressions.pdf" },
+    horary: { ru: "Хорар.pdf", en: "Horary chart.pdf" }
+  };
+  return names[method][locale];
 }
 
 async function mapChartPdfErrors<T>(operation: () => Promise<T>): Promise<T> {

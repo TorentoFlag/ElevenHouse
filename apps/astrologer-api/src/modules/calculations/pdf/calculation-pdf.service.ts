@@ -37,7 +37,9 @@ type LatestCalculationPdfInput = {
   readonly ownerUserId: string;
   readonly calculationId: string;
   readonly locale: CalculationPdfLocale;
-} & (
+} & CalculationPdfDocumentIdentityInput;
+
+type CalculationPdfDocumentIdentityInput =
   | {
       readonly sourceLocator?: undefined;
       readonly renderContract?: undefined;
@@ -45,8 +47,13 @@ type LatestCalculationPdfInput = {
   | {
       readonly sourceLocator: CalculationPdfSourceLocator;
       readonly renderContract: string;
-    }
-);
+    };
+
+type DownloadCalculationPdfInput = {
+  readonly ownerUserId: string;
+  readonly calculationId: string;
+  readonly jobId: string;
+} & CalculationPdfDocumentIdentityInput;
 
 @Injectable()
 export class CalculationPdfService {
@@ -83,7 +90,8 @@ export class CalculationPdfService {
       calculation,
       job:
         job?.resultChecksum === calculation.resultChecksum &&
-        (expectedDocumentFingerprint === null || job.documentFingerprint === expectedDocumentFingerprint)
+        (expectedDocumentFingerprint === null ||
+          job.documentFingerprint === expectedDocumentFingerprint)
           ? job
           : null
     };
@@ -145,18 +153,20 @@ export class CalculationPdfService {
     });
   }
 
-  async download(input: {
-    readonly ownerUserId: string;
-    readonly calculationId: string;
-    readonly jobId: string;
-  }): Promise<CalculationPdfDownloadResponse> {
+  async download(input: DownloadCalculationPdfInput): Promise<CalculationPdfDownloadResponse> {
     const calculation = await this.currentCalculation(input.ownerUserId, input.calculationId);
     const job = await this.pdfJobStore.findById(input);
     if (!job) throw new CalculationPdfNotFoundError();
+    const expectedDocumentFingerprint = this.expectedDocumentFingerprint(
+      { ...input, locale: job.locale },
+      calculation
+    );
     if (
       job.resultChecksum !== calculation.resultChecksum ||
       job.module !== calculation.module ||
-      job.methodCode !== calculation.methodCode
+      job.methodCode !== calculation.methodCode ||
+      (expectedDocumentFingerprint !== null &&
+        job.documentFingerprint !== expectedDocumentFingerprint)
     ) {
       throw new CalculationPdfResultChangedError();
     }

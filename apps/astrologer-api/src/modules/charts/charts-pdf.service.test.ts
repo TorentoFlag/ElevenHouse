@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   chartMethodVersions,
   chartNatalResultV2Schema,
+  chartSynastryResultV2Schema,
+  chartTransitResultV2Schema,
   type ChartExecutionProfile
 } from "@elevenhouse/contracts";
 import {
@@ -120,6 +122,118 @@ describe("ChartsPdfService", () => {
         interpretationId: "00000000-0000-4000-8000-000000000007"
       },
       renderContract: "chart-natal-v3"
+    });
+  });
+
+  it("requests a current non-natal chart PDF through the shared chart PDF contour", async () => {
+    const transit = currentTransitResult();
+    const harness = createHarness({
+      calculation: calculation({
+        interpretationMode: "legacy_unclassified",
+        methodCode: "transit",
+        resultData: transit,
+        inputData: {
+          inputSnapshot: {
+            inputSnapshot: transit.inputSnapshot,
+            transitSnapshot: transit.transitSnapshot
+          },
+          settings: transit.settings
+        },
+        resultChecksum: sha256CanonicalJson(transit as unknown as CanonicalJson)
+      })
+    });
+
+    await expect(
+      harness.service.enqueue(
+        calculationId,
+        {
+          expectedResultChecksum: sha256CanonicalJson(transit as unknown as CanonicalJson),
+          locale: "ru"
+        },
+        request()
+      )
+    ).resolves.toMatchObject({ job: { id: jobId } });
+
+    expect(harness.calculationPdf.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUserId,
+        calculationId,
+        locale: "ru",
+        sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+        renderContract: "chart-transit-combined-wheel-v1",
+        originalFileName: "Транзиты.pdf"
+      })
+    );
+  });
+
+  it("uses the canonical synastry PDF render contract without legacy-version branching", async () => {
+    const synastry = currentSynastryResult();
+    const harness = createHarness({
+      calculation: calculation({
+        mode: "compatibility",
+        interpretationMode: "legacy_unclassified",
+        methodCode: "synastry",
+        title: "Синастрия",
+        participants: relationshipParticipants(),
+        resultData: synastry,
+        inputData: {
+          inputSnapshot: {
+            inputSnapshot: synastry.inputSnapshot,
+            partnerInputSnapshot: synastry.partnerInputSnapshot
+          },
+          settings: synastry.settings
+        },
+        resultChecksum: sha256CanonicalJson(synastry as unknown as CanonicalJson)
+      })
+    });
+
+    await expect(
+      harness.service.enqueue(
+        calculationId,
+        {
+          expectedResultChecksum: sha256CanonicalJson(synastry as unknown as CanonicalJson),
+          locale: "ru"
+        },
+        request()
+      )
+    ).resolves.toMatchObject({ job: { id: jobId } });
+
+    expect(harness.calculationPdf.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        renderContract: "chart-synastry-combined-wheel-v1",
+        originalFileName: "Синастрия.pdf"
+      })
+    );
+  });
+
+  it("downloads chart PDFs only through the current method-specific render contract", async () => {
+    const transit = currentTransitResult();
+    const harness = createHarness({
+      calculation: calculation({
+        interpretationMode: "legacy_unclassified",
+        methodCode: "transit",
+        resultData: transit,
+        inputData: {
+          inputSnapshot: {
+            inputSnapshot: transit.inputSnapshot,
+            transitSnapshot: transit.transitSnapshot
+          },
+          settings: transit.settings
+        },
+        resultChecksum: sha256CanonicalJson(transit as unknown as CanonicalJson)
+      })
+    });
+
+    await expect(harness.service.download(calculationId, jobId, request())).resolves.toMatchObject({
+      url: "https://storage.example/chart.pdf?signature=abc"
+    });
+
+    expect(harness.calculationPdf.download).toHaveBeenCalledWith({
+      ownerUserId,
+      calculationId,
+      jobId,
+      sourceLocator: { kind: "approved_interpretation", interpretationId: null },
+      renderContract: "chart-transit-combined-wheel-v1"
     });
   });
 
@@ -438,6 +552,117 @@ function legacyNatalResult() {
     inputSnapshot: current.inputSnapshot,
     result: current.result
   };
+}
+
+function currentTransitResult() {
+  const natal = currentNatalResult();
+  const candidate = chartTransitResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "transit",
+    methodVersion: chartMethodVersions.transit,
+    provider: natal.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    result: {
+      natal: natal.result,
+      transit: natal.result,
+      aspectsToNatal: [
+        {
+          transitPoint: "jupiter",
+          natalPoint: "sun",
+          type: "trine",
+          angle: 120,
+          orb: 1.4,
+          applying: true,
+          strength: 0.7
+        }
+      ],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function currentSynastryResult() {
+  const primary = currentNatalResult();
+  const partnerBase = currentNatalResult();
+  const partner = {
+    ...partnerBase.result,
+    points: partnerBase.result.points.map((point, index) => ({
+      ...point,
+      longitude: normalizeTestLongitude(point.longitude + 46 + index)
+    }))
+  };
+  const candidate = chartSynastryResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "synastry",
+    methodVersion: chartMethodVersions.synastry,
+    provider: primary.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: primary.settings,
+    inputSnapshot: primary.inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    result: {
+      primary: primary.result,
+      partner,
+      aspectsBetween: [
+        {
+          primaryPoint: "sun",
+          partnerPoint: "mars",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true,
+          strength: 0.64
+        }
+      ],
+      houseOverlays: [],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function relationshipParticipants(): CalculationRecord["participants"] {
+  return [
+    {
+      role: "subject",
+      source: "crm_client",
+      clientId: "00000000-0000-4000-8000-000000000010",
+      displayName: "Мария Иванова"
+    },
+    {
+      role: "partner",
+      source: "crm_client",
+      clientId: "00000000-0000-4000-8000-000000000011",
+      displayName: "Партнёр"
+    }
+  ];
+}
+
+function normalizeTestLongitude(longitude: number): number {
+  return ((longitude % 360) + 360) % 360;
 }
 
 function interpretation(

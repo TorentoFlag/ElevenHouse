@@ -1,7 +1,12 @@
 import { PDFDocument } from "pdf-lib";
 import {
+  chartAstrocartographyResultV2Schema,
   chartMethodVersions,
   chartNatalResultV2Schema,
+  chartProgressionResultV2Schema,
+  chartSolarReturnResultV2Schema,
+  chartSynastryResultV2Schema,
+  chartTransitResultV2Schema,
   type ReproducibleChartResult
 } from "@elevenhouse/contracts";
 import { buildChartResultReproducibilityFingerprint } from "@elevenhouse/domain";
@@ -162,7 +167,159 @@ describe("Chart PDF renderer", () => {
     expect(first.bytes.toString("latin1")).not.toContain("/JS");
     expect(JSON.stringify(buildChartPdfContent(document("en")))).toContain("Planets and points");
   });
+
+  it("renders valid non-natal PDFs for chart methods with different result shapes", async () => {
+    const renderer = createChartPdfRenderer();
+    const transit = await renderer.render(
+      document("ru", {
+        calculationTitle: "Транзит",
+        result: transitResult()
+      })
+    );
+    const astrocartography = await renderer.render(
+      document("ru", {
+        calculationTitle: "Астрокарта",
+        result: astrocartographyResult()
+      })
+    );
+    const transitDocument = await PDFDocument.load(transit.bytes);
+    const astrocartographyDocument = await PDFDocument.load(astrocartography.bytes);
+
+    expect(transit.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(astrocartography.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(transitDocument.getPageCount()).toBeGreaterThan(0);
+    expect(astrocartographyDocument.getPageCount()).toBeGreaterThan(0);
+    expect(transitDocument.getTitle()).toBe("Транзит");
+    expect(astrocartographyDocument.getTitle()).toBe("Астрокарта");
+    expect(transit.bytes.toString("latin1")).not.toContain("/JavaScript");
+    expect(astrocartography.bytes.toString("latin1")).not.toContain("/JavaScript");
+  });
+
+  it("composes a transit PDF as one combined overlay wheel before natal and transit tables", () => {
+    const content = buildChartPdfContent(
+      document("ru", {
+        calculationTitle: "Транзит",
+        result: transitResult()
+      })
+    );
+
+    expect(keyValues(content, "Расчёт")).toContainEqual({
+      label: "Тип карты",
+      value: "Транзиты"
+    });
+    expect(content.find((block) => block.kind === "overlay_wheel")).toMatchObject({
+      kind: "overlay_wheel",
+      heading: "Транзиты · Колесо карты"
+    });
+    expect(content.filter((block) => block.kind === "wheel").map((block) => block.heading)).toEqual(
+      []
+    );
+    expect(table(content, "Натальная карта · Планеты и точки").rows).toHaveLength(14);
+    expect(table(content, "Транзитная карта · Планеты и точки").rows).toHaveLength(14);
+    expect(table(content, "Аспекты к натальной карте").rows[0]).toEqual([
+      "Юпитер",
+      "Трин",
+      "Солнце",
+      "1°24'",
+      "70%"
+    ]);
+  });
+
+  it.each([
+    {
+      title: "Соляр",
+      heading: "Соляр · Колесо карты",
+      primaryTable: "Натальная карта · Планеты и точки",
+      overlayTable: "Карта соляра · Планеты и точки",
+      result: solarReturnResult()
+    },
+    {
+      title: "Прогрессии",
+      heading: "Прогрессии · Колесо карты",
+      primaryTable: "Натальная карта · Планеты и точки",
+      overlayTable: "Прогрессивная карта · Планеты и точки",
+      result: progressionResult()
+    }
+  ])(
+    "composes $title PDF as one combined overlay wheel before both data tables",
+    ({ heading, overlayTable, primaryTable, result, title }) => {
+      const content = buildChartPdfContent(
+        document("ru", {
+          calculationTitle: title,
+          result
+        })
+      );
+
+      expect(content.find((block) => block.kind === "overlay_wheel")).toMatchObject({
+        kind: "overlay_wheel",
+        heading
+      });
+      expect(
+        content.filter((block) => block.kind === "wheel").map((block) => block.heading)
+      ).toEqual([]);
+      expect(table(content, primaryTable).rows).toHaveLength(14);
+      expect(table(content, overlayTable).rows).toHaveLength(14);
+      expect(table(content, "Аспекты к натальной карте").rows).toHaveLength(1);
+    }
+  );
+
+  it("composes an astrocartography PDF without assuming wheel-shaped result data", () => {
+    const content = buildChartPdfContent(
+      document("ru", {
+        calculationTitle: "Астрокарта",
+        result: astrocartographyResult()
+      })
+    );
+
+    expect(keyValues(content, "Расчёт")).toContainEqual({
+      label: "Тип карты",
+      value: "Астрокарта"
+    });
+    expect(content[0]).toMatchObject({
+      kind: "astrocartography_map",
+      heading: "Астрокарта · Карта линий"
+    });
+    expect(table(content, "Линии астрокарты").rows).toHaveLength(40);
+  });
+
+  it("composes synastry PDF as one combined dual-wheel before client and partner tables", async () => {
+    const renderer = createChartPdfRenderer();
+    const content = buildChartPdfContent(
+      document("ru", {
+        calculationTitle: "Синастрия",
+        result: synastryResult()
+      })
+    );
+    const pdf = await renderer.render(
+      document("ru", {
+        calculationTitle: "Синастрия",
+        result: synastryResult()
+      })
+    );
+    const parsed = await PDFDocument.load(pdf.bytes);
+
+    expect(content[0]).toMatchObject({
+      kind: "synastry_wheel",
+      heading: "Синастрия · Колесо карты"
+    });
+    expect(content.filter((block) => block.kind === "wheel").map((block) => block.heading)).toEqual(
+      []
+    );
+    expect(table(content, "Карта клиента · Планеты и точки").rows).toHaveLength(14);
+    expect(table(content, "Карта партнёра · Планеты и точки").rows).toHaveLength(14);
+    expect(table(content, "Аспекты между картами").rows[0]).toEqual([
+      "Солнце",
+      "Оппозиция",
+      "Марс",
+      "1°12'",
+      "64%"
+    ]);
+    expect(pdf.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(parsed.getTitle()).toBe("Синастрия");
+  });
 });
+
+type NatalChartResultV2 = Extract<ReproducibleChartResult, { readonly method: "natal" }>;
 
 function document(
   locale: "ru" | "en" = "ru",
@@ -173,7 +330,7 @@ function document(
     locale,
     createdAt: "2026-07-22T12:00:00.000Z",
     calculationTitle: "Natal chart",
-    result: chartNatalResultV2Schema.parse(chartResult()),
+    result: chartResult(),
     approvedInterpretation: null,
     interpretations: [],
     ...overrides
@@ -181,33 +338,34 @@ function document(
 }
 
 function rolloverDocument(locale: "ru" | "en" = "ru"): ChartPdfDocument {
-  const current = document(locale);
-  const firstPoint = current.result.result.points[0]!;
-  const firstHouse = current.result.result.houses[0]!;
-  const firstAspect = current.result.result.aspects[0]!;
+  const currentResult = chartResult();
+  const current = document(locale, { result: currentResult });
+  const firstPoint = currentResult.result.points[0]!;
+  const firstHouse = currentResult.result.houses[0]!;
+  const firstAspect = currentResult.result.aspects[0]!;
 
   return {
     ...current,
     result: {
-      ...current.result,
+      ...currentResult,
       result: {
-        ...current.result.result,
+        ...currentResult.result,
         points: [
           { ...firstPoint, longitude: 359.999, sign: "pisces", signDegree: 29.999 },
-          ...current.result.result.points.slice(1)
+          ...currentResult.result.points.slice(1)
         ],
         houses: [
           { ...firstHouse, longitude: 359.999, sign: "pisces", signDegree: 29.999 },
-          ...current.result.result.houses.slice(1)
+          ...currentResult.result.houses.slice(1)
         ],
-        aspects: [{ ...firstAspect, orb: 1.999 }, ...current.result.result.aspects.slice(1)]
+        aspects: [{ ...firstAspect, orb: 1.999 }, ...currentResult.result.aspects.slice(1)]
       }
     }
   };
 }
 
-function chartResult() {
-  const candidate = {
+function chartResult(): NatalChartResultV2 {
+  const candidate = chartNatalResultV2Schema.parse({
     schemaVersion: "chart-result.v2",
     method: "natal",
     methodVersion: chartMethodVersions.natal,
@@ -284,11 +442,258 @@ function chartResult() {
       },
       warnings: []
     }
-  } as ReproducibleChartResult;
+  });
   return {
     ...candidate,
     reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
   };
+}
+
+function transitResult() {
+  const natal = chartResult();
+  const candidate = chartTransitResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "transit",
+    methodVersion: chartMethodVersions.transit,
+    provider: natal.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    transitSnapshot: {
+      date: "2026-07-23",
+      time: "14:30",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173
+    },
+    result: {
+      natal: natal.result,
+      transit: natal.result,
+      aspectsToNatal: [
+        {
+          transitPoint: "jupiter",
+          natalPoint: "sun",
+          type: "trine",
+          angle: 120,
+          orb: 1.4,
+          applying: true,
+          strength: 0.7
+        }
+      ],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function solarReturnResult() {
+  const natal = chartResult();
+  const candidate = chartSolarReturnResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "solar_return",
+    methodVersion: chartMethodVersions.solar_return,
+    provider: natal.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    solarReturnSnapshot: {
+      year: 2026,
+      returnType: "solar",
+      location: {
+        timezone: "Europe/Rome",
+        latitude: 41.9028,
+        longitude: 12.4964
+      },
+      resolvedAt: "2026-07-15T08:42:11Z"
+    },
+    result: {
+      natal: natal.result,
+      solarReturn: natal.result,
+      aspectsToNatal: [
+        {
+          solarReturnPoint: "sun",
+          natalPoint: "sun",
+          type: "conjunction",
+          angle: 0,
+          orb: 0.01,
+          applying: null,
+          strength: 1
+        }
+      ],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function progressionResult() {
+  const natal = chartResult();
+  const candidate = chartProgressionResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "progression",
+    methodVersion: chartMethodVersions.progression,
+    provider: natal.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    progressionSnapshot: {
+      targetDate: "2026-07-23",
+      progressionType: "secondary",
+      calculationBasis: {
+        symbolicDate: "1990-08-20",
+        ageDays: 36,
+        dayForYearRatio: 1
+      }
+    },
+    calculationBasis: {
+      symbolicInstant: "1990-08-20T09:02:38Z",
+      elapsedLifeDays: 13157,
+      elapsedYears: 36.02267306523378,
+      yearLengthDays: 365.24219,
+      dayForYearRatio: 1
+    },
+    result: {
+      natal: natal.result,
+      progressed: natal.result,
+      aspectsToNatal: [
+        {
+          progressedPoint: "moon",
+          natalPoint: "sun",
+          type: "trine",
+          angle: 120,
+          orb: 1.2,
+          applying: true,
+          strength: 0.76
+        }
+      ],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function synastryResult() {
+  const primary = chartResult();
+  const partnerBase = chartResult();
+  const partner = {
+    ...partnerBase.result,
+    points: partnerBase.result.points.map((point, index) => ({
+      ...point,
+      longitude: normalizeTestLongitude(point.longitude + 46 + index)
+    }))
+  };
+  const candidate = chartSynastryResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "synastry",
+    methodVersion: chartMethodVersions.synastry,
+    provider: primary.provider,
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: primary.settings,
+    inputSnapshot: primary.inputSnapshot,
+    partnerInputSnapshot: {
+      birthDate: "1992-08-11",
+      birthTime: "08:15",
+      timezone: "Europe/Moscow",
+      latitude: 55.7558,
+      longitude: 37.6173,
+      birthTimePrecision: "exact"
+    },
+    result: {
+      primary: primary.result,
+      partner,
+      aspectsBetween: [
+        {
+          primaryPoint: "sun",
+          partnerPoint: "mars",
+          type: "opposition",
+          angle: 180,
+          orb: 1.2,
+          applying: true,
+          strength: 0.64
+        }
+      ],
+      houseOverlays: [
+        {
+          owner: "primary",
+          point: "venus",
+          projectedHouseOwner: "partner",
+          projectedHouse: 7
+        }
+      ],
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function normalizeTestLongitude(longitude: number): number {
+  return ((longitude % 360) + 360) % 360;
+}
+
+function astrocartographyResult() {
+  const natal = chartResult();
+  const candidate = chartAstrocartographyResultV2Schema.parse({
+    schemaVersion: "chart-result.v2",
+    method: "astrocartography",
+    methodVersion: chartMethodVersions.astrocartography,
+    provider: {
+      ...natal.provider,
+      ephemeris: "swiss-ephemeris",
+      ephemerisFlags: ["FLG_SWIEPH", "FLG_SPEED"],
+      ephemerisDataRevision: `sha256:${"1".repeat(64)}`
+    },
+    reproducibilityFingerprint: `sha256:${"0".repeat(64)}`,
+    settings: natal.settings,
+    inputSnapshot: natal.inputSnapshot,
+    result: {
+      lines: astrocartographyLines(),
+      warnings: []
+    }
+  });
+  return {
+    ...candidate,
+    reproducibilityFingerprint: buildChartResultReproducibilityFingerprint(candidate)
+  };
+}
+
+function astrocartographyLines() {
+  const points = [
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto"
+  ] as const;
+  const angles = ["asc", "dsc", "mc", "ic"] as const;
+  return points.flatMap((point, pointIndex) =>
+    angles.map((angle, angleIndex) => ({
+      id: `${point}_${angle}`,
+      point,
+      angle,
+      label: `${point} ${angle}`,
+      path: [
+        { latitude: -60 + pointIndex, longitude: -120 + angleIndex },
+        { latitude: 60 - pointIndex, longitude: 120 - angleIndex }
+      ]
+    }))
+  );
 }
 
 function keyValues(content: ReturnType<typeof buildChartPdfContent>, heading: string) {

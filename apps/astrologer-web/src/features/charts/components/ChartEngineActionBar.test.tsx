@@ -44,12 +44,26 @@ describe("ChartEngineActionBar", () => {
     expect(onPdf).toHaveBeenCalledOnce();
     expect(onToggleSettings).toHaveBeenCalledOnce();
   });
+
+  it("does not block PDF solely because the active chart mode is non-natal", async () => {
+    const user = userEvent.setup();
+    const onPdf = vi.fn();
+    renderActionBar({
+      canCalculate: true,
+      pdfDisabled: false,
+      pdfTitle: "PDF",
+      onPdf
+    });
+
+    await user.click(screen.getByRole("button", { name: "PDF" }));
+
+    expect(onPdf).toHaveBeenCalledOnce();
+  });
 });
 
 function renderActionBar(overrides: Partial<Parameters<typeof ChartEngineActionBar>[0]> = {}) {
   return render(
     <ChartEngineActionBar
-      activeMode="natal"
       birthDataEditorAvailable={false}
       calculateLabel="Calculate"
       canCalculate={false}

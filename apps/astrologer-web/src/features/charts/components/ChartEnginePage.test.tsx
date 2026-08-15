@@ -745,7 +745,7 @@ describe("ChartEnginePage", () => {
     expect(screen.getByLabelText("Место вопроса")).toHaveValue("Rome, Italy");
   });
 
-  it("renders horary single-wheel result and keeps PDF disabled", () => {
+  it("renders horary single-wheel result and keeps PDF available", () => {
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -765,7 +765,7 @@ describe("ChartEnginePage", () => {
     expect(screen.queryByText("Хорар рассчитан")).not.toBeInTheDocument();
     expect(screen.getByTestId("chart-point-sun")).toBeInTheDocument();
     expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("Стоит ли принимать предложение?");
-    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
   });
 
   it("switches to astrocartography mode and submits the map calculation", async () => {
@@ -819,7 +819,7 @@ describe("ChartEnginePage", () => {
     expect(screen.getByText("После расчёта здесь появятся трактовки.")).toBeInTheDocument();
   });
 
-  it("renders astrocartography map result and keeps PDF disabled", () => {
+  it("renders astrocartography map result and keeps PDF available", () => {
     render(
       <ChartEnginePage
         selectedClient={client}
@@ -838,7 +838,7 @@ describe("ChartEnginePage", () => {
     expect(screen.queryByText("Астрокарта рассчитана")).not.toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-map")).toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-line-sun_mc")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
   });
 
   it("loads horary-specific dictionary anchors without natal fallback", async () => {
@@ -1950,7 +1950,7 @@ describe("ChartEnginePage", () => {
     );
 
     expect(screen.queryByText("Детская карта рассчитана")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "PDF" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "AI" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Трактовки" }));

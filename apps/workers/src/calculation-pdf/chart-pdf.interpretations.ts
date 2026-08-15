@@ -1,4 +1,5 @@
-import type { ChartAspect, ChartPoint } from "@elevenhouse/contracts";
+import { getChartAiDictionaryCodes } from "@elevenhouse/ai";
+import type { ChartAspect, ChartPoint, ReproducibleChartResult } from "@elevenhouse/contracts";
 import type { DictionaryEffectiveEntry } from "@elevenhouse/domain";
 import type { ChartNatalPdfResult, ChartPdfInterpretation } from "./calculation-pdf.documents";
 import { formatZodiacPosition } from "./chart-pdf.position";
@@ -43,14 +44,18 @@ const houseDictionaryPointIds = new Set([...pointOrder.slice(0, 10), "north_node
 const planetAspectPointIds = new Set(pointOrder.slice(0, 10));
 const maxPlanetAspectAnchors = 12;
 
-export function buildChartPdfInterpretationCodes(result: ChartNatalPdfResult): readonly string[] {
+export function buildChartPdfInterpretationCodes(
+  result: ReproducibleChartResult
+): readonly string[] {
+  if (result.method !== "natal") return getChartAiDictionaryCodes(result);
   return Array.from(new Set(buildChartInterpretationAnchors(result).map((anchor) => anchor.code)));
 }
 
 export function buildChartPdfInterpretations(input: {
-  readonly result: ChartNatalPdfResult;
+  readonly result: ReproducibleChartResult;
   readonly entries: readonly DictionaryEffectiveEntry[];
 }): readonly ChartPdfInterpretation[] {
+  if (input.result.method !== "natal") return [];
   const entriesByCode = new Map(input.entries.map((entry) => [entry.code, entry]));
 
   return buildChartInterpretationAnchors(input.result).map((anchor) => {

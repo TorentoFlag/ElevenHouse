@@ -29,7 +29,7 @@ export type ChartPdfDocument = {
   readonly locale: "ru" | "en";
   readonly createdAt: string;
   readonly calculationTitle: string;
-  readonly result: ChartNatalPdfResult;
+  readonly result: ReproducibleChartResult;
   readonly approvedInterpretation: string | null;
   readonly interpretations: readonly ChartPdfInterpretation[];
 };

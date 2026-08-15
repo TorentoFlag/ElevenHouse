@@ -47,6 +47,7 @@ import {
   createFlowExecutionWorkerRequirementKeys,
   type AiUsageResourceEvidence,
   type AiUsageSafeErrorCode,
+  type CalculationPdfJob,
   resolveChartExecutionProfile
 } from "@elevenhouse/domain";
 import { getNatalChartAiDictionaryCodes } from "@elevenhouse/ai";
@@ -176,6 +177,16 @@ const chartSource = createChartPdfSource(calculationStore, dictionaryStore, char
 const chartRenderer = createChartPdfRenderer();
 const humanDesignSource = createHumanDesignPdfSource(calculationStore);
 const humanDesignRenderer = createHumanDesignPdfRenderer();
+const chartPdfMethodCodes = [
+  "natal",
+  "astrocartography",
+  "transit",
+  "synastry",
+  "composite",
+  "solar_return",
+  "progression",
+  "horary"
+] as const;
 const registry = createCalculationPdfRegistry([
   {
     module: "matrix",
@@ -187,11 +198,11 @@ const registry = createCalculationPdfRegistry([
     methodCode: "pythagorean",
     render: async (job) => numerologyRenderer.render(await numerologySource.load(job))
   },
-  {
-    module: "chart",
-    methodCode: "natal",
-    render: async (job) => chartRenderer.render(await chartSource.load(job))
-  },
+  ...chartPdfMethodCodes.map((methodCode) => ({
+    module: "chart" as const,
+    methodCode,
+    render: async (job: CalculationPdfJob) => chartRenderer.render(await chartSource.load(job))
+  })),
   {
     module: "human_design",
     methodCode: "human_design_classic",

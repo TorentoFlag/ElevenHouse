@@ -167,6 +167,34 @@ describe("CalculationPdfService", () => {
     ).rejects.toBeInstanceOf(CalculationPdfNotFoundError);
   });
 
+  it("rejects ready downloads whose document fingerprint no longer matches the requested source", async () => {
+    const currentSourceLocator = {
+      kind: "approved_interpretation",
+      interpretationId: "00000000-0000-4000-8000-000000000010"
+    } as const;
+    const currentRenderContract = "chart-transit-overlay-wheel-v1";
+    const stale = createHarness({
+      job: {
+        ...pdfJob(),
+        documentFingerprint: fingerprint(
+          { kind: "approved_interpretation", interpretationId: null },
+          "chart-transit-v1"
+        )
+      }
+    });
+
+    await expect(
+      stale.service.download({
+        ownerUserId,
+        calculationId,
+        jobId,
+        sourceLocator: currentSourceLocator,
+        renderContract: currentRenderContract
+      })
+    ).rejects.toBeInstanceOf(CalculationPdfResultChangedError);
+    expect(stale.privateStorage.createPresignedDownload).not.toHaveBeenCalled();
+  });
+
   it("returns only a short-lived authorized URL for a ready current PDF", async () => {
     const harness = createHarness();
 

@@ -190,7 +190,7 @@ export function deriveChartCalculationCapabilities(input: {
   }
   const common: ChartCalculationCapability[] = ["view_current", "recalculate", "link", "publish"];
   common.push("ai_draft");
-  if (result.method === "natal") common.push("pdf");
+  common.push("pdf");
   return common;
 }
 

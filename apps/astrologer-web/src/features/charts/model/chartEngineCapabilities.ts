@@ -95,7 +95,7 @@ export function getChartEngineCapabilities(input: {
     view: "current",
     canRecalculate: true,
     canRequestAi: true,
-    canRequestPdf: result.method === "natal",
+    canRequestPdf: true,
     canLink: true,
     canPublish: true,
     warnings

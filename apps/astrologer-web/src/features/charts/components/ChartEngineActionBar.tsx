@@ -1,9 +1,7 @@
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
-import type { ChartEngineMode } from "../model/chartEngineMode";
 import styles from "./ChartEnginePage.module.css";
 
 export function ChartEngineActionBar({
-  activeMode,
   birthDataEditorAvailable,
   calculateLabel,
   canCalculate,
@@ -24,7 +22,6 @@ export function ChartEngineActionBar({
   showCalculate = true,
   showUtilities = true
 }: {
-  readonly activeMode: ChartEngineMode;
   readonly birthDataEditorAvailable: boolean;
   readonly calculateLabel: string;
   readonly canCalculate: boolean;
@@ -46,12 +43,10 @@ export function ChartEngineActionBar({
   readonly showUtilities?: boolean;
 }) {
   const pdfReason = getPdfDisabledReason({
-    activeMode,
-    copy,
     pdfErrorMessage,
     pdfTitle
   });
-  const isPdfDisabled = activeMode !== "natal" || pdfDisabled;
+  const isPdfDisabled = pdfDisabled;
   const isLinkDisabled = isCalculationLinked || linkDisabled;
 
   return (
@@ -138,18 +133,11 @@ export function ChartEngineActionBar({
 }
 
 function getPdfDisabledReason({
-  activeMode,
-  copy,
   pdfErrorMessage,
   pdfTitle
 }: {
-  readonly activeMode: ChartEngineMode;
-  readonly copy: ChartEngineCopy;
   readonly pdfErrorMessage: string | null;
   readonly pdfTitle: string;
 }): string {
-  if (activeMode === "child_chart") return copy.actionBar.childPdfUnavailable;
-  if (activeMode === "horary") return copy.actionBar.horaryPdfUnavailable;
-  if (activeMode !== "natal") return copy.actionBar.methodPdfUnavailable;
   return pdfErrorMessage ?? pdfTitle;
 }

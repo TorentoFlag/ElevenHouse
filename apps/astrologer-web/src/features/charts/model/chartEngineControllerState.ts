@@ -317,6 +317,9 @@ export function restoreChartEngineViewState(
     transitMoment: {
       date: result.transitSnapshot.date,
       time: result.transitSnapshot.time,
+      timezone: result.transitSnapshot.timezone,
+      latitude: result.transitSnapshot.latitude,
+      longitude: result.transitSnapshot.longitude,
       ...(result.transitSnapshot.dstOccurrence
         ? { dstOccurrence: result.transitSnapshot.dstOccurrence }
         : {})
@@ -411,14 +414,7 @@ function backendCapabilitiesMatchResult(
       ? ["view_legacy", "recalculate"]
       : result.method === "natal" && interpretationMode === "legacy_unclassified"
         ? ["view_current", "recalculate"]
-        : [
-            "view_current",
-            "recalculate",
-            "link",
-            "publish",
-            "ai_draft",
-            ...(result.method === "natal" ? (["pdf"] as const) : [])
-          ];
+        : ["view_current", "recalculate", "link", "publish", "ai_draft", "pdf"];
   return (
     capabilities.length === expected.length &&
     new Set(capabilities).size === capabilities.length &&

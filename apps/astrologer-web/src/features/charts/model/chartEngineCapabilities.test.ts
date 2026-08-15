@@ -156,7 +156,7 @@ describe("chartEngineCapabilities", () => {
     ).toBe("none");
   });
 
-  it("exposes AI for a reproducible non-natal chart without adding PDF scope", () => {
+  it("exposes PDF for a reproducible non-natal chart after authoritative identity is ready", () => {
     expect(
       getChartEngineCapabilities({
         mode: "transit",
@@ -165,7 +165,7 @@ describe("chartEngineCapabilities", () => {
         calculationStatus: "calculated",
         identity: readyIdentity
       })
-    ).toMatchObject({ canRequestAi: true, canRequestPdf: false });
+    ).toMatchObject({ canRequestAi: true, canRequestPdf: true });
   });
 
   it("names every approximate participant in pair warnings", () => {

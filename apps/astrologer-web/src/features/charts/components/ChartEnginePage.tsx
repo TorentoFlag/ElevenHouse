@@ -256,7 +256,6 @@ export function ChartEnginePage({
     />
   );
   const actionBarProps = {
-    activeMode,
     birthDataEditorAvailable: Boolean(
       needsBirthData && selectedClient && readiness.ready && onSaveBirthData
     ),
@@ -302,9 +301,7 @@ export function ChartEnginePage({
     <main className={styles.page}>
       <ChartEngineHeader
         actionBar={
-          isHorarySetup ? null : (
-            <ChartEngineActionBar {...actionBarProps} showCalculate />
-          )
+          isHorarySetup ? null : <ChartEngineActionBar {...actionBarProps} showCalculate />
         }
         activeMode={activeMode}
         copy={copy}

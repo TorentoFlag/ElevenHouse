@@ -97,57 +97,65 @@
 - [x] Chart Engine transits first slice: single-moment dual-wheel transit
       calculations for owner-scoped CRM clients, canonical transit result
       payload, worker/provider integration, `/chart-engine` transit mode and
-      real browser reload proof. Transit PDF/export and range AstroCalendar
-      remain separate future contours.
+      real browser reload proof. Private checksum-safe PDF export renders the
+      same combined natal + transit wheel through the shared chart PDF contour;
+      range AstroCalendar remains a separate future contour.
 - [x] Chart Engine synastry first slice: two owner-scoped CRM clients, canonical
       relationship result, private primary/partner input snapshots, worker and
       provider integration, `/chart-engine` partner selector, dual-wheel
       rendering, aspects-between tables and Dictionary-backed `synastry.*`
       interpretation lookup with honest missing-entry creation affordances.
-      Synastry PDF/export, public sharing and AI relationship text remain
-      separate future contours.
+      Private checksum-safe PDF export is available through the shared chart
+      PDF contour; public sharing and AI relationship text remain separate
+      future contours.
 - [x] Chart Engine solar return first slice: owner-scoped CRM client, explicit
       target year, natal location/timezone, canonical `solar_return` result
       with private input snapshot, Kerykeion provider/worker/API integration,
       `/chart-engine` `Соляр` mode, dual natal + solar-return wheel, solar
       point/aspect tables and Dictionary-backed `solar_return.*` missing-entry
-      creation affordances. Solar PDF/export, relocated return, public sharing
-      and AI solar text remain separate future contours.
+      creation affordances. Private checksum-safe PDF export renders the same
+      combined natal + solar-return wheel through the shared chart PDF contour;
+      relocated return, public sharing and AI solar text remain separate future
+      contours.
 - [x] Chart Engine composite first slice: two owner-scoped CRM clients,
       canonical single-wheel relationship result, private primary/partner input
       snapshots, Kerykeion `CompositeSubjectFactory` provider path, worker/API
       integration, `/chart-engine` `Композит` mode, partner selector,
       single-wheel rendering and Dictionary-backed `composite.*` anchors with
-      authenticated browser calculate/reload evidence. Composite PDF/export,
-      public sharing and AI relationship text remain separate future contours.
+      authenticated browser calculate/reload evidence. Private checksum-safe
+      PDF export is available through the shared chart PDF contour; public
+      sharing and AI relationship text remain separate future contours.
 - [x] Chart Engine child chart first slice: owner-scoped CRM client,
       natal-backed calculation result, `/chart-engine` `Детская` view mode,
       soft parent-facing copy, child-specific `child.*` Dictionary anchors,
       honest missing-entry creation affordances and authenticated browser
-      calculate/reload evidence. Child-chart PDF/export, AI child text and
-      client delivery remain separate future contours.
+      calculate/reload evidence. Private checksum-safe PDF export is available
+      through the shared chart PDF contour; AI child text and client delivery
+      remain separate future contours.
 - [x] Chart Engine progressions first slice: owner-scoped CRM client,
       explicit progression date, canonical secondary-progression result,
       worker/provider integration, `/chart-engine` `Прогрессии` controls,
       rendering and Dictionary-backed `progression.*` anchors plus
       authenticated browser evidence for mode availability and reload.
-      Progression PDF/export, public sharing and AI progression text remain
-      separate future contours.
+      Private checksum-safe PDF export renders the same combined natal +
+      progressed wheel through the shared chart PDF contour; public sharing and
+      AI progression text remain separate future contours.
 - [x] Chart Engine horary first slice: owner-scoped CRM client context,
       explicit question/category/date/time/timezone/place input, private
       question snapshot, canonical single-wheel `horary` result,
       `POST /charts/horary/jobs`, worker/provider integration,
-      `/chart-engine` `Хорар` mode, RU state copy, disabled PDF and
+      `/chart-engine` `Хорар` mode, RU state copy, private PDF export and
       Dictionary-backed `horary.*` anchors with honest missing-entry creation
-      affordances. Horary PDF/export, automated judgement/verdict and AI
-      horary answer remain separate future contours.
+      affordances. AI draft generation receives the private question snapshot
+      and prepares a direct editable answer draft for astrologer review;
+      automated final judgement/verdict remains a separate future contour.
 - [x] Chart Engine astrocartography first slice: owner-scoped CRM client,
       canonical `astrocartography` result with 10 planets x 4 angular lines,
       worker/provider integration over Swiss Ephemeris primitives,
       `/chart-engine` `Астрокарта` mode, map visualization, RU state copy,
-      disabled PDF and Dictionary-backed `astrocartography.<point>.<angle>`
-      anchors with honest missing-entry creation affordances. Relocation
-      charts, city scoring/crossings, public sharing, PDF/export and AI text
+      private PDF export with a line map and Dictionary-backed
+      `astrocartography.<point>.<angle>` anchors with honest missing-entry
+      creation affordances. Relocation charts, city scoring/crossings, public sharing and AI text
       remain separate future contours.
 - [x] Human Design individual v1: owner-scoped CRM client input only, exact
       chart-engine personality/design longitude resolution, deterministic
