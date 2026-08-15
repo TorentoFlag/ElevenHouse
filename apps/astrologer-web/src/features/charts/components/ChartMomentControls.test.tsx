@@ -8,6 +8,37 @@ import { ChartMomentControls } from "./ChartMomentControls";
 afterEach(cleanup);
 
 describe("ChartMomentControls", () => {
+  it("groups horary setup fields by the order in which an astrologer completes them", () => {
+    render(
+      <ChartMomentControls
+        activeMode="horary"
+        copy={chartEngineCopyByLocale.en}
+        disabled={false}
+        horaryLayout="setup"
+        horaryPlaceErrorMessage={null}
+        horaryPlaceText=""
+        horaryQuestion={horaryQuestion}
+        locale="en"
+        progressionTargetDate="2026-08-03"
+        solarReturnYear={2026}
+        transitMoment={{ date: "2026-08-03", time: "12:00" }}
+        onHoraryQuestionChange={vi.fn()}
+        onProgressionTargetDateChange={vi.fn()}
+        onTransitMomentChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "Question" })).toContainElement(
+      screen.getByLabelText("Horary question")
+    );
+    expect(screen.getByRole("region", { name: "Moment" })).toContainElement(
+      screen.getByLabelText("Question time")
+    );
+    expect(screen.getByRole("region", { name: "Place and coordinates" })).toContainElement(
+      screen.getByRole("textbox", { name: "Question place" })
+    );
+  });
+
   it("delegates progression date changes in the active locale", async () => {
     const onProgressionTargetDateChange = vi.fn();
     render(

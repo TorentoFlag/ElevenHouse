@@ -250,122 +250,140 @@ function HoraryQuestionFields({
           : styles.horaryQuestionFields
       }
     >
-      <label className={styles.horaryQuestionText}>
-        <span>{copy.horary.question}</span>
-        <input
-          aria-label={copy.horary.questionAria}
+      <section
+        aria-label={copy.horary.question}
+        className={layout === "setup" ? styles.horarySetupQuestionGroup : styles.horaryToolbarGroup}
+      >
+        <p className={styles.horarySetupGroupTitle}>{copy.horary.question}</p>
+        <label className={styles.horaryQuestionText}>
+          <span>{copy.horary.question}</span>
+          <input
+            aria-label={copy.horary.questionAria}
+            disabled={disabled}
+            maxLength={500}
+            name="horaryQuestion"
+            placeholder={copy.horary.questionPlaceholder}
+            type="text"
+            value={value.question}
+            onChange={(event) => onChange({ ...value, question: event.target.value })}
+          />
+        </label>
+        <label>
+          <span>{copy.horary.category}</span>
+          <select
+            aria-label={copy.horary.categoryAria}
+            disabled={disabled}
+            name="horaryCategory"
+            value={value.category}
+            onChange={(event) =>
+              onChange({
+                ...value,
+                category: event.target.value as ChartHoraryQuestionCategory
+              })
+            }
+          >
+            {(Object.keys(copy.horary.categories) as ChartHoraryQuestionCategory[]).map(
+              (category) => (
+                <option key={category} value={category}>
+                  {copy.horary.categories[category]}
+                </option>
+              )
+            )}
+          </select>
+        </label>
+      </section>
+      <section
+        aria-label={copy.horary.preparationMoment}
+        className={layout === "setup" ? styles.horarySetupMomentGroup : styles.horaryToolbarGroup}
+      >
+        <p className={styles.horarySetupGroupTitle}>{copy.horary.preparationMoment}</p>
+        <label>
+          <span>{copy.horary.date}</span>
+          <input
+            aria-label={copy.horary.dateAria}
+            disabled={disabled}
+            name="horaryDate"
+            type="date"
+            value={value.date}
+            onChange={(event) =>
+              onChange(updateChartCivilMoment(value, { date: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          <span>{copy.horary.time}</span>
+          <input
+            aria-label={copy.horary.timeAria}
+            disabled={disabled}
+            name="horaryTime"
+            type="time"
+            value={value.time}
+            onChange={(event) =>
+              onChange(updateChartCivilMoment(value, { time: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          <span>{copy.horary.timezone}</span>
+          <input
+            aria-label={copy.horary.timezoneAria}
+            disabled={disabled}
+            name="horaryTimezone"
+            placeholder="Europe/Moscow"
+            type="text"
+            value={value.timezone}
+            onChange={(event) =>
+              onChange(updateChartCivilMoment(value, { timezone: event.target.value }))
+            }
+          />
+        </label>
+        <OccurrenceField
           disabled={disabled}
-          maxLength={500}
-          name="horaryQuestion"
-          placeholder={copy.horary.questionPlaceholder}
-          type="text"
-          value={value.question}
-          onChange={(event) => onChange({ ...value, question: event.target.value })}
+          id="chart-horary-occurrence-helper"
+          locale={locale}
+          value={value.dstOccurrence}
+          onChange={(dstOccurrence) => onChange(updateChartCivilMoment(value, { dstOccurrence }))}
         />
-      </label>
-      <label>
-        <span>{copy.horary.category}</span>
-        <select
-          aria-label={copy.horary.categoryAria}
+      </section>
+      <section
+        aria-label={copy.horary.placeGroup}
+        className={layout === "setup" ? styles.horarySetupPlaceGroup : styles.horaryToolbarGroup}
+      >
+        <p className={styles.horarySetupGroupTitle}>{copy.horary.place}</p>
+        <HoraryPlaceField
+          copy={copy}
           disabled={disabled}
-          name="horaryCategory"
-          value={value.category}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              category: event.target.value as ChartHoraryQuestionCategory
-            })
-          }
-        >
-          {(Object.keys(copy.horary.categories) as ChartHoraryQuestionCategory[]).map(
-            (category) => (
-              <option key={category} value={category}>
-                {copy.horary.categories[category]}
-              </option>
-            )
-          )}
-        </select>
-      </label>
-      <label>
-        <span>{copy.horary.date}</span>
-        <input
-          aria-label={copy.horary.dateAria}
-          disabled={disabled}
-          name="horaryDate"
-          type="date"
-          value={value.date}
-          onChange={(event) =>
-            onChange(updateChartCivilMoment(value, { date: event.target.value }))
-          }
+          errorMessage={placeErrorMessage}
+          selectedPlaceText={placeText}
+          onClear={onClearPlace}
+          onSearch={onSearchBirthPlaces}
+          onSelect={onSelectPlace}
         />
-      </label>
-      <label>
-        <span>{copy.horary.time}</span>
-        <input
-          aria-label={copy.horary.timeAria}
-          disabled={disabled}
-          name="horaryTime"
-          type="time"
-          value={value.time}
-          onChange={(event) =>
-            onChange(updateChartCivilMoment(value, { time: event.target.value }))
-          }
-        />
-      </label>
-      <HoraryPlaceField
-        copy={copy}
-        disabled={disabled}
-        errorMessage={placeErrorMessage}
-        selectedPlaceText={placeText}
-        onClear={onClearPlace}
-        onSearch={onSearchBirthPlaces}
-        onSelect={onSelectPlace}
-      />
-      <label>
-        <span>{copy.horary.timezone}</span>
-        <input
-          aria-label={copy.horary.timezoneAria}
-          disabled={disabled}
-          name="horaryTimezone"
-          placeholder="Europe/Moscow"
-          type="text"
-          value={value.timezone}
-          onChange={(event) =>
-            onChange(updateChartCivilMoment(value, { timezone: event.target.value }))
-          }
-        />
-      </label>
-      <OccurrenceField
-        disabled={disabled}
-        id="chart-horary-occurrence-helper"
-        locale={locale}
-        value={value.dstOccurrence}
-        onChange={(dstOccurrence) => onChange(updateChartCivilMoment(value, { dstOccurrence }))}
-      />
-      <label>
-        <span>{copy.horary.latitude}</span>
-        <input
-          aria-label={copy.horary.latitudeAria}
-          disabled={disabled}
-          name="horaryLatitude"
-          step="0.0001"
-          type="number"
-          value={value.latitude}
-          onChange={(event) => onChange({ ...value, latitude: event.target.value })}
-        />
-      </label>
-      <label>
-        <span>{copy.horary.longitude}</span>
-        <input
-          aria-label={copy.horary.longitudeAria}
-          disabled={disabled}
-          name="horaryLongitude"
-          step="0.0001"
-          type="number"
-          value={value.longitude}
-          onChange={(event) => onChange({ ...value, longitude: event.target.value })}
-        />
-      </label>
+        <label>
+          <span>{copy.horary.latitude}</span>
+          <input
+            aria-label={copy.horary.latitudeAria}
+            disabled={disabled}
+            name="horaryLatitude"
+            step="0.0001"
+            type="number"
+            value={value.latitude}
+            onChange={(event) => onChange({ ...value, latitude: event.target.value })}
+          />
+        </label>
+        <label>
+          <span>{copy.horary.longitude}</span>
+          <input
+            aria-label={copy.horary.longitudeAria}
+            disabled={disabled}
+            name="horaryLongitude"
+            step="0.0001"
+            type="number"
+            value={value.longitude}
+            onChange={(event) => onChange({ ...value, longitude: event.target.value })}
+          />
+        </label>
+      </section>
     </div>
   );
 }

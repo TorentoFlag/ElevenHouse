@@ -59,4 +59,34 @@ describe("Chart Engine responsive accessibility CSS", () => {
 
     expect(compactRules).toMatch(/\.setupPanel\s*\{[\s\S]*?min-height:\s*620px/);
   });
+
+  it("uses the chart gold for horary input hover and focus instead of browser defaults", () => {
+    expect(momentControlsCss).toMatch(
+      /\.horaryQuestionFieldsSetup input:hover[^,{]*,[\s\S]*?border-color:\s*rgb\(246 210 102 \/ 0\.48\)/
+    );
+    expect(momentControlsCss).toMatch(
+      /\.horaryQuestionFieldsSetup input:focus,[\s\S]*?border-color:\s*var\(--chart-gold\)/
+    );
+    expect(momentControlsCss).toMatch(
+      /\.horaryQuestionFieldsSetup input:focus,[\s\S]*?outline:\s*2px solid var\(--chart-gold\)/
+    );
+    expect(momentControlsCss).toMatch(
+      /\.horaryQuestionFieldsSetup input:focus,[\s\S]*?box-shadow:\s*0 0 0 4px rgb\(246 210 102 \/ 0\.14\)/
+    );
+  });
+
+  it("stacks the three horary setup sections instead of inheriting the toolbar grid", () => {
+    const setupRules = momentControlsCss.slice(
+      momentControlsCss.indexOf(".horaryQuestionFieldsSetup"),
+      momentControlsCss.indexOf(".horaryToolbarGroup")
+    );
+
+    expect(setupRules).toMatch(/grid-template-columns:\s*1fr/);
+  });
+
+  it("keeps setup-only group headings out of the compact horary toolbar", () => {
+    expect(momentControlsCss).toMatch(
+      /\.horaryToolbarGroup \.horarySetupGroupTitle\s*\{[\s\S]*?display:\s*none/
+    );
+  });
 });

@@ -59,23 +59,94 @@
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   align-items: start;
-  gap: 14px 10px;
+  gap: 18px;
 }
 
-.horaryQuestionFieldsSetup > :first-child,
-.horaryQuestionFieldsSetup > :nth-child(5),
-.horaryQuestionFieldsSetup > :nth-child(6),
-.horaryQuestionFieldsSetup > :nth-child(7) {
+.horaryToolbarGroup {
+  display: contents;
+}
+
+.horaryToolbarGroup .horarySetupGroupTitle {
+  display: none;
+}
+
+.horarySetupQuestionGroup,
+.horarySetupMomentGroup,
+.horarySetupPlaceGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid rgb(216 212 236 / 0.1);
+}
+
+.horarySetupPlaceGroup {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.horarySetupGroupTitle {
+  grid-column: 1 / -1;
+  margin: 0 0 1px;
+  color: rgb(246 210 102 / 0.72);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.horarySetupQuestionGroup > :nth-child(2),
+.horarySetupMomentGroup > :nth-child(4),
+.horarySetupMomentGroup > :nth-child(5),
+.horarySetupPlaceGroup > :nth-child(2) {
   grid-column: 1 / -1;
 }
 
 .horaryQuestionFieldsSetup input,
 .horaryQuestionFieldsSetup select {
-  min-height: 38px;
-  padding: 0 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-color: rgb(216 212 236 / 0.18);
+  background: rgb(11 10 32 / 0.96);
   font-size: 13px;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.horarySetupQuestionGroup input {
+  min-height: 46px;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.horaryQuestionFieldsSetup input:hover:not(:disabled),
+.horaryQuestionFieldsSetup select:hover:not(:disabled) {
+  border-color: rgb(246 210 102 / 0.48);
+  background: rgb(17 15 38 / 0.98);
+}
+
+.horaryQuestionFieldsSetup input:focus,
+.horaryQuestionFieldsSetup select:focus {
+  border-color: var(--chart-gold);
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgb(246 210 102 / 0.14);
+}
+
+.horaryQuestionFieldsSetup input:focus-visible,
+.horaryQuestionFieldsSetup select:focus-visible {
+  border-color: var(--chart-gold);
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgb(246 210 102 / 0.14);
 }
 .horaryQuestionText {
   min-width: 0;
@@ -137,7 +208,10 @@
 @container chart-engine-page (max-width: 760px) {
   .transitMomentFields,
   .horaryQuestionFields,
-  .horaryQuestionFieldsSetup {
+  .horaryQuestionFieldsSetup,
+  .horarySetupQuestionGroup,
+  .horarySetupMomentGroup,
+  .horarySetupPlaceGroup {
     width: 100%;
     min-width: 0;
     grid-template-columns: 1fr;
@@ -154,7 +228,10 @@
 @media (max-width: 760px) {
   .transitMomentFields,
   .horaryQuestionFields,
-  .horaryQuestionFieldsSetup {
+  .horaryQuestionFieldsSetup,
+  .horarySetupQuestionGroup,
+  .horarySetupMomentGroup,
+  .horarySetupPlaceGroup {
     width: 100%;
     min-width: 0;
     grid-template-columns: 1fr;
