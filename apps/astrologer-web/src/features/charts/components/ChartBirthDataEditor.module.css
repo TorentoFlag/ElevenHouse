@@ -35,8 +35,10 @@
   font-size: 13px;
 }
 .birthDataFormHeader {
+  position: relative;
   display: grid;
   gap: 7px;
+  padding-right: 44px;
   padding-bottom: 4px;
 }
 .birthDataFormHeader > strong {
@@ -55,6 +57,29 @@
   color: rgb(186 178 218 / 0.84);
   font-size: 14px;
   line-height: 1.45;
+}
+.birthDataCloseButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid rgb(216 212 236 / 0.22);
+  border-radius: 999px;
+  background: rgb(30 27 62 / 0.72);
+  color: rgb(229 225 244 / 0.88);
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+}
+.birthDataCloseButton:hover,
+.birthDataCloseButton:focus-visible {
+  border-color: rgb(246 210 102 / 0.42);
+  background: rgb(246 210 102 / 0.14);
+  color: var(--chart-gold);
+  outline: none;
 }
 .birthDataOccurrenceHelper {
   color: rgb(167 162 200 / 0.78);

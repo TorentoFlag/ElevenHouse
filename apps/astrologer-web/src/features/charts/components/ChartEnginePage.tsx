@@ -171,6 +171,7 @@ export function ChartEnginePage({
     horaryQuestion ?? getEmptyHoraryQuestion()
   );
   const [isBirthDataEditorOpen, setIsBirthDataEditorOpen] = useState(false);
+  const [isBirthDataEditorDismissed, setIsBirthDataEditorDismissed] = useState(false);
   const [isHoraryContextEditorOpen, setIsHoraryContextEditorOpen] = useState(false);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -182,7 +183,10 @@ export function ChartEnginePage({
   useEffect(() => {
     if (horaryQuestion) setLocalHoraryQuestion(horaryQuestion);
   }, [horaryQuestion]);
-  useEffect(() => setIsBirthDataEditorOpen(false), [selectedClient?.value]);
+  useEffect(() => {
+    setIsBirthDataEditorOpen(false);
+    setIsBirthDataEditorDismissed(false);
+  }, [selectedClient?.value]);
   useEffect(() => setIsHoraryContextEditorOpen(false), [activeMode, calculationId]);
 
   const activeHoraryQuestion = localHoraryQuestion;
@@ -210,12 +214,15 @@ export function ChartEnginePage({
   const shouldShowHoraryContextSummary = Boolean(isHoraryMode && displayResult);
   const horaryContextPlaceText =
     horaryPlaceText || getHoraryPlaceTextFallback(activeHoraryQuestion, selectedClient);
+  const birthDataEditorAvailable = Boolean(needsBirthData && selectedClient && onSaveBirthData);
   const shouldShowBirthDataEditor = Boolean(
-    needsBirthData &&
-    selectedClient &&
-    onSaveBirthData &&
-    (!readiness.ready || isBirthDataEditorOpen)
+    birthDataEditorAvailable &&
+      (isBirthDataEditorOpen || (!readiness.ready && !isBirthDataEditorDismissed))
   );
+  const closeBirthDataEditor = () => {
+    setIsBirthDataEditorOpen(false);
+    setIsBirthDataEditorDismissed(true);
+  };
   const viewState = getChartViewState({
     copy,
     displayResult,
@@ -267,13 +274,11 @@ export function ChartEnginePage({
     />
   );
   const actionBarProps = {
-    birthDataEditorAvailable: Boolean(
-      needsBirthData && selectedClient && readiness.ready && onSaveBirthData
-    ),
+    birthDataEditorAvailable,
     calculateLabel: viewState.actionLabel,
     canCalculate: viewState.canCalculate,
     copy,
-    isBirthDataEditorOpen,
+    isBirthDataEditorOpen: shouldShowBirthDataEditor,
     isCalculationLinked,
     isSettingsPanelOpen,
     linkDisabled,
@@ -296,7 +301,14 @@ export function ChartEnginePage({
     onLink,
     onPdf,
     onPresentation: () => setIsPresentationOpen(true),
-    onToggleBirthDataEditor: () => setIsBirthDataEditorOpen((open) => !open),
+    onToggleBirthDataEditor: () => {
+      if (shouldShowBirthDataEditor) {
+        closeBirthDataEditor();
+        return;
+      }
+      setIsBirthDataEditorOpen(true);
+      setIsBirthDataEditorDismissed(false);
+    },
     onToggleSettings: () => setIsSettingsPanelOpen((open) => !open),
     presentationDisabled
   };
@@ -365,6 +377,7 @@ export function ChartEnginePage({
         horarySetup={horarySetup}
         isHoraryContextEditorOpen={isHoraryContextEditorOpen}
         locale={locale}
+        onCloseBirthDataEditor={closeBirthDataEditor}
         partnerReadiness={partnerReadiness}
         readiness={readiness}
         selectedClient={selectedClient}

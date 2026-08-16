@@ -23,6 +23,7 @@ export function ChartBirthDataEditor({
   isSaving,
   layout = "rail",
   locale,
+  onClose,
   onSave,
   onSearchBirthPlaces
 }: {
@@ -33,6 +34,7 @@ export function ChartBirthDataEditor({
   readonly isSaving: boolean;
   readonly layout?: "rail" | "workspace";
   readonly locale: DictionaryLocale;
+  readonly onClose?: () => void;
   readonly onSave: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
 }) {
@@ -155,6 +157,16 @@ export function ChartBirthDataEditor({
       <div className={styles.birthDataFormHeader}>
         <strong>{copy.birthData.title}</strong>
         <span>{copy.birthData.description}</span>
+        {onClose ? (
+          <button
+            aria-label={copy.birthData.close}
+            className={styles.birthDataCloseButton}
+            type="button"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        ) : null}
       </div>
       <div className={styles.birthDataPickerField}>
         <span className={styles.birthDataLabel}>{copy.birthData.date}</span>

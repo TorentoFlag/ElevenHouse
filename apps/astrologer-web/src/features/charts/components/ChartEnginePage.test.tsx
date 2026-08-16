@@ -2463,6 +2463,89 @@ describe("ChartEnginePage", () => {
     });
   });
 
+  it("closes the birth data editor from the close button and reopens it from the toolbar", async () => {
+    const user = userEvent.setup();
+    const onSaveBirthData = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={onSaveBirthData}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "Заполнение данных рождения" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Закрыть форму данных рождения" }));
+
+    expect(screen.queryByRole("region", { name: "Заполнение данных рождения" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Данные рождения" }));
+
+    expect(screen.getByRole("region", { name: "Заполнение данных рождения" })).toBeInTheDocument();
+  });
+
+  it("closes the birth data editor when the workspace backdrop is clicked", async () => {
+    const onSaveBirthData = vi.fn(async () => undefined);
+    render(
+      <ChartEnginePage
+        selectedClient={{
+          ...client,
+          birthDateDisplay: "—",
+          hasBirthDate: false,
+          birthData: {
+            ...client.birthData,
+            birthDate: null,
+            birthTime: null,
+            birthTimePrecision: "unknown",
+            birthTimezone: null,
+            birthLatitude: null,
+            birthLongitude: null
+          }
+        }}
+        jobState="idle"
+        result={null}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+        onSaveBirthData={onSaveBirthData}
+        isSavingBirthData={false}
+        birthDataError={null}
+      />
+    );
+
+    const birthDataWorkspace = screen.getByRole("region", {
+      name: "Заполнение данных рождения"
+    });
+
+    fireEvent.mouseDown(birthDataWorkspace);
+
+    expect(screen.queryByRole("region", { name: "Заполнение данных рождения" })).not.toBeInTheDocument();
+  });
+
   it("edits a complete client birth occurrence and clears it when the timezone changes", async () => {
     const user = userEvent.setup();
     const onSaveBirthData = vi.fn(async () => undefined);

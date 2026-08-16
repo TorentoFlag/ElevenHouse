@@ -51,6 +51,7 @@ export function ChartEngineWorkspace({
   horarySetup,
   isHoraryContextEditorOpen,
   locale,
+  onCloseBirthDataEditor,
   onCloseSettings,
   onSaveBirthData,
   onSearchBirthPlaces,
@@ -83,6 +84,7 @@ export function ChartEngineWorkspace({
   readonly horarySetup?: ReactNode;
   readonly isHoraryContextEditorOpen?: boolean;
   readonly locale: DictionaryLocale;
+  readonly onCloseBirthDataEditor?: () => void;
   readonly onCloseSettings: () => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
@@ -243,6 +245,9 @@ export function ChartEngineWorkspace({
               <section
                 className={styles.birthDataWorkspace}
                 aria-label={copy.birthData.workspaceLabel}
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) onCloseBirthDataEditor?.();
+                }}
               >
                 <ChartBirthDataEditor
                   key={selectedClient.value}
@@ -253,6 +258,7 @@ export function ChartEngineWorkspace({
                   isSaving={isSavingBirthData}
                   layout="workspace"
                   locale={locale}
+                  onClose={onCloseBirthDataEditor}
                   onSave={onSaveBirthData}
                   onSearchBirthPlaces={onSearchBirthPlaces}
                 />
