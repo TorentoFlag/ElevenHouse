@@ -21,6 +21,10 @@ describe("ChartEngineActionBar", () => {
     expect(screen.getByRole("button", { name: "PDF" })).toHaveAccessibleDescription(
       "PDF is available after chart calculation"
     );
+    expect(screen.getByRole("button", { name: "Link" })).toHaveAttribute(
+      "title",
+      "Link to client"
+    );
   });
 
   it("delegates enabled calculation, presentation, PDF and panel actions", async () => {

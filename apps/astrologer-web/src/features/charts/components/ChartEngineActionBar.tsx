@@ -91,6 +91,7 @@ export function ChartEngineActionBar({
             className={styles.toolButton}
             type="button"
             disabled={isLinkDisabled}
+            title={copy.actionBar.linkTitle}
             onClick={() => void onLink?.()}
           >
             {isCalculationLinked ? copy.actionBar.linked : copy.actionBar.link}
