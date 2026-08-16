@@ -443,7 +443,7 @@ const ruChartEngineCopy = {
     dictionaryLoadError: "Не удалось загрузить трактовки из справочника.",
     dictionaryLoading: "Загружаем трактовку из справочника...",
     dictionaryMissing: "Для этого элемента еще нет трактовки",
-    dictionarySource: (source: string) => `Справочник · ${source}`,
+    dictionarySource: () => "Справочник",
     addInterpretation: "Добавить трактовку",
     addInterpretationAria: (title: string) => `Добавить трактовку для ${title}`,
     interpretationEditor: {
@@ -1087,7 +1087,7 @@ const enChartEngineCopy: ChartEngineCopy = {
     dictionaryLoadError: "Could not load interpretations from the reference library.",
     dictionaryLoading: "Loading interpretation from the reference library...",
     dictionaryMissing: "There is no interpretation for this item yet.",
-    dictionarySource: (source) => `Reference · ${source}`,
+    dictionarySource: () => "Reference",
     addInterpretation: "Add interpretation",
     addInterpretationAria: (title) => `Add interpretation for ${title}`,
     interpretationEditor: {

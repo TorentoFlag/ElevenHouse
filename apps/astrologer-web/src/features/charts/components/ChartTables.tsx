@@ -721,7 +721,7 @@ function InterpretationSummary({
                             copy
                           )}
                         </p>
-                        {entry ? <em>{copy.dictionarySource(entry.source)}</em> : null}
+                        {entry ? <em>{copy.dictionarySource()}</em> : null}
                         {isMissingEntry ? (
                           <button
                             ref={(element) => {

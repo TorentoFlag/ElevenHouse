@@ -1702,9 +1702,10 @@ describe("ChartEnginePage", () => {
     expect(await within(interpretationsPanel).findByText(/Солнце · XI дом/i)).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Аспекты")).toBeInTheDocument();
     expect(within(interpretationsPanel).getByText("Дома")).toBeInTheDocument();
-    expect(
-      within(interpretationsPanel).getAllByText(/Справочник · platform/i).length
-    ).toBeGreaterThanOrEqual(5);
+    expect(within(interpretationsPanel).queryByText(/platform/i)).not.toBeInTheDocument();
+    expect(within(interpretationsPanel).getAllByText("Справочник").length).toBeGreaterThanOrEqual(
+      5
+    );
     expect(
       within(interpretationsPanel).getByText(/Справочная трактовка Солнца в Раке/i)
     ).toBeInTheDocument();
