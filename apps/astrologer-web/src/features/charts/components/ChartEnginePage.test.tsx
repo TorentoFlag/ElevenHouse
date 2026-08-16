@@ -155,7 +155,7 @@ describe("ChartEnginePage", () => {
     const onCreateNatalJob = vi.fn(async () => undefined);
     render(
       <ChartEnginePage
-        selectedClient={client}
+        selectedClient={partnerClient}
         jobState="idle"
         result={null}
         errorMessage={null}
@@ -748,7 +748,7 @@ describe("ChartEnginePage", () => {
   it("renders horary single-wheel result and keeps PDF available", () => {
     render(
       <ChartEnginePage
-        selectedClient={client}
+        selectedClient={partnerClient}
         jobState="succeeded"
         result={horaryResult()}
         errorMessage={null}
@@ -764,7 +764,17 @@ describe("ChartEnginePage", () => {
 
     expect(screen.queryByText("Хорар рассчитан")).not.toBeInTheDocument();
     expect(screen.getByTestId("chart-point-sun")).toBeInTheDocument();
-    expect(screen.getByLabelText("Вопрос хорара")).toHaveValue("Стоит ли принимать предложение?");
+    expect(screen.queryByLabelText("Вопрос хорара")).not.toBeInTheDocument();
+    const context = screen.getByRole("region", { name: "Контекст вопроса" });
+    expect(context).toHaveTextContent("Стоит ли принимать предложение?");
+    expect(context).toHaveTextContent("Работа");
+    expect(context).toHaveTextContent("23.07.2026 · 14:30");
+    expect(context).toHaveTextContent("Europe/Moscow");
+    expect(context).toHaveTextContent("Москва, Россия");
+    expect(context).toHaveTextContent("55.7558 / 37.6173");
+    expect(
+      within(context).getByRole("button", { name: "Изменить данные хорара" })
+    ).toBeEnabled();
     expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
   });
 

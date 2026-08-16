@@ -7,6 +7,7 @@ import type {
   ClientBirthPlaceCandidate,
   DictionaryLocale
 } from "@elevenhouse/contracts";
+import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import {
   formatChartPointPosition,
@@ -16,6 +17,7 @@ import {
   getPrimaryChartRenderResult
 } from "../model/chartDisplay";
 import type { ChartBirthDataReadiness } from "../model/chartEngineState";
+import type { ChartHoraryQuestionInput } from "../model/chartEngineInput";
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
 import type { ChartEngineMode, ChartEnginePageJobState } from "../model/chartEngineMode";
 import { AstrocartographyMap } from "./AstrocartographyMap";
@@ -42,13 +44,18 @@ export function ChartEngineWorkspace({
   isSavingBirthData,
   isSettingsPanelOpen,
   jobState,
+  horaryContextEditor,
+  horaryPlaceText,
+  horaryQuestion,
   horaryReadiness,
   horarySetup,
+  isHoraryContextEditorOpen,
   locale,
   onCloseSettings,
   onSaveBirthData,
   onSearchBirthPlaces,
   onSettingsChange,
+  onToggleHoraryContextEditor,
   partnerReadiness,
   readiness,
   selectedClient,
@@ -69,13 +76,18 @@ export function ChartEngineWorkspace({
   readonly isSavingBirthData: boolean;
   readonly isSettingsPanelOpen: boolean;
   readonly jobState: ChartEnginePageJobState;
+  readonly horaryContextEditor?: ReactNode;
+  readonly horaryPlaceText?: string;
+  readonly horaryQuestion?: ChartHoraryQuestionInput;
   readonly horaryReadiness?: ChartBirthDataReadiness;
   readonly horarySetup?: ReactNode;
+  readonly isHoraryContextEditorOpen?: boolean;
   readonly locale: DictionaryLocale;
   readonly onCloseSettings: () => void;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
   readonly onSettingsChange: (settings: ChartSettings) => void;
+  readonly onToggleHoraryContextEditor?: () => void;
   readonly partnerReadiness: ChartBirthDataReadiness;
   readonly readiness: ChartBirthDataReadiness;
   readonly selectedClient: ClientSelectOption | null;
@@ -272,9 +284,14 @@ export function ChartEngineWorkspace({
           <ChartSummaryRail
             copy={copy}
             displayResult={displayResult}
+            horaryContextEditor={horaryContextEditor}
+            horaryPlaceText={horaryPlaceText}
+            horaryQuestion={horaryQuestion}
+            isHoraryContextEditorOpen={isHoraryContextEditorOpen}
             isAstrocartographyMode={isAstrocartographyMode}
             locale={locale}
             needsBirthData={needsBirthData}
+            onToggleHoraryContextEditor={onToggleHoraryContextEditor}
             readiness={readiness}
           />
           {shouldShowBirthDataEditor ? null : (
@@ -373,16 +390,26 @@ function HoraryPreparationStatus({
 function ChartSummaryRail({
   copy,
   displayResult,
+  horaryContextEditor,
+  horaryPlaceText,
+  horaryQuestion,
+  isHoraryContextEditorOpen = false,
   isAstrocartographyMode,
   locale,
   needsBirthData,
+  onToggleHoraryContextEditor,
   readiness
 }: {
   readonly copy: ChartEngineCopy;
   readonly displayResult: ChartResult | null;
+  readonly horaryContextEditor?: ReactNode;
+  readonly horaryPlaceText?: string;
+  readonly horaryQuestion?: ChartHoraryQuestionInput;
+  readonly isHoraryContextEditorOpen?: boolean;
   readonly isAstrocartographyMode: boolean;
   readonly locale: DictionaryLocale;
   readonly needsBirthData: boolean;
+  readonly onToggleHoraryContextEditor?: () => void;
   readonly readiness: ChartBirthDataReadiness;
 }) {
   const astroResult = displayResult?.method === "astrocartography" ? displayResult : null;
@@ -390,6 +417,17 @@ function ChartSummaryRail({
 
   return (
     <aside className={styles.rail} aria-label={copy.rail.ariaLabel}>
+      {horaryQuestion ? (
+        <HoraryContextSummary
+          contextEditor={horaryContextEditor}
+          copy={copy}
+          isEditorOpen={isHoraryContextEditorOpen}
+          locale={locale}
+          placeText={horaryPlaceText}
+          value={horaryQuestion}
+          onToggleEditor={onToggleHoraryContextEditor}
+        />
+      ) : null}
       {needsBirthData && !readiness.ready ? (
         <section className={styles.railGroup}>
           <h2>{copy.rail.birthData}</h2>
@@ -434,6 +472,91 @@ function ChartSummaryRail({
   );
 }
 
+function HoraryContextSummary({
+  contextEditor,
+  copy,
+  isEditorOpen,
+  locale,
+  placeText,
+  value,
+  onToggleEditor
+}: {
+  readonly contextEditor?: ReactNode;
+  readonly copy: ChartEngineCopy;
+  readonly isEditorOpen: boolean;
+  readonly locale: DictionaryLocale;
+  readonly placeText?: string;
+  readonly value: ChartHoraryQuestionInput;
+  readonly onToggleEditor?: () => void;
+}) {
+  const categoryLabel = copy.horary.categories[value.category] ?? value.category;
+  const momentLabel = `${formatHoraryDate(value.date, locale)} · ${value.time || "—"}`;
+  const coordinatesLabel = `${formatHoraryCoordinate(value.latitude)} / ${formatHoraryCoordinate(
+    value.longitude
+  )}`;
+
+  return (
+    <section
+      className={styles.horaryContextCard}
+      aria-label={copy.horary.contextTitle}
+      role="region"
+    >
+      <header className={styles.horaryContextHeader}>
+        <div>
+          <span>{copy.modes.horary.title}</span>
+          <h2>{copy.horary.contextTitle}</h2>
+        </div>
+        {onToggleEditor ? (
+          <button
+            aria-expanded={isEditorOpen}
+            aria-label={copy.horary.editContext}
+            className={styles.horaryContextEditButton}
+            type="button"
+            onClick={onToggleEditor}
+          >
+            <Icon iconName="edit" width={13} height={13} aria-hidden="true" />
+            {copy.horary.editContextShort}
+          </button>
+        ) : null}
+      </header>
+      <p className={styles.horaryContextQuestion}>{value.question || copy.horary.question}</p>
+      <div className={styles.horaryContextChips} aria-label={copy.horary.momentTitle}>
+        <span className={styles.horaryContextChip}>{categoryLabel}</span>
+        <span className={styles.horaryContextChipGold}>
+          <Icon iconName="calendar" width={13} height={13} aria-hidden="true" />
+          {momentLabel}
+        </span>
+      </div>
+      <dl className={styles.horaryContextMeta}>
+        <div>
+          <dt>
+            <Icon iconName="clock" width={13} height={13} aria-hidden="true" />
+            {copy.horary.timezone}
+          </dt>
+          <dd>{value.timezone || "—"}</dd>
+        </div>
+        <div>
+          <dt>
+            <Icon iconName="pin" width={13} height={13} aria-hidden="true" />
+            {copy.horary.previewPlaceLabel}
+          </dt>
+          <dd>{placeText || "—"}</dd>
+        </div>
+        <div>
+          <dt>
+            <Icon iconName="map" width={13} height={13} aria-hidden="true" />
+            {copy.horary.coordinates}
+          </dt>
+          <dd className={styles.horaryContextCoordinates}>{coordinatesLabel}</dd>
+        </div>
+      </dl>
+      {isEditorOpen && contextEditor ? (
+        <div className={styles.horaryContextEditor}>{contextEditor}</div>
+      ) : null}
+    </section>
+  );
+}
+
 function SummaryCard({ label, symbol, value }: { label: string; symbol: string; value: string }) {
   return (
     <div className={styles.summaryCard}>
@@ -446,6 +569,19 @@ function SummaryCard({ label, symbol, value }: { label: string; symbol: string; 
       </div>
     </div>
   );
+}
+
+function formatHoraryDate(value: string, locale: DictionaryLocale): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value || "—";
+  const [, year, month, day] = match;
+  return locale === "ru" ? `${day}.${month}.${year}` : `${month}/${day}/${year}`;
+}
+
+function formatHoraryCoordinate(value: string | number): string {
+  if (value === "") return "—";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "—";
+  return value.trim() || "—";
 }
 
 function DistributionSummary({ copy, result }: { copy: ChartEngineCopy; result: ChartResult }) {

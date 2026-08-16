@@ -671,6 +671,138 @@
   color: rgb(229 225 244 / 0.7);
   font-size: 12px;
 }
+.horaryContextCard {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px;
+  border: 1px solid rgb(246 210 102 / 0.32);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgb(246 210 102 / 0.16), rgb(30 27 62 / 0.84) 46%),
+    rgb(22 20 48 / 0.92);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 18px 36px rgb(6 4 20 / 0.28);
+}
+.horaryContextHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.horaryContextHeader div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.horaryContextHeader span {
+  color: rgb(246 210 102 / 0.74);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.horaryContextHeader h2 {
+  margin: 0;
+  color: rgb(245 241 255 / 0.94);
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+.horaryContextEditButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgb(246 210 102 / 0.26);
+  border-radius: 999px;
+  background: rgb(246 210 102 / 0.14);
+  color: var(--chart-gold);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.horaryContextEditButton:hover:not(:disabled) {
+  border-color: rgb(246 210 102 / 0.48);
+  background: rgb(246 210 102 / 0.2);
+}
+.horaryContextQuestion {
+  margin: 0;
+  color: rgb(245 241 255 / 0.9);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+.horaryContextChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.horaryContextChip,
+.horaryContextChipGold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.horaryContextChip {
+  border: 1px solid rgb(186 178 218 / 0.18);
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(229 225 244 / 0.78);
+}
+.horaryContextChipGold {
+  border: 1px solid rgb(246 210 102 / 0.25);
+  background: rgb(246 210 102 / 0.11);
+  color: rgb(255 225 137 / 0.94);
+}
+.horaryContextMeta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.horaryContextMeta div {
+  display: grid;
+  grid-template-columns: minmax(78px, 0.72fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.horaryContextMeta dt,
+.horaryContextMeta dd {
+  min-width: 0;
+  margin: 0;
+}
+.horaryContextMeta dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(186 178 218 / 0.66);
+  font-size: 11px;
+  font-weight: 800;
+}
+.horaryContextMeta dd {
+  color: rgb(229 225 244 / 0.82);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.horaryContextCoordinates {
+  font-variant-numeric: tabular-nums;
+}
+.horaryContextEditor {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgb(246 210 102 / 0.18);
+}
 .retroPill {
   display: inline-flex;
   width: fit-content;

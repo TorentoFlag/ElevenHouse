@@ -170,6 +170,7 @@ export function ChartEnginePage({
     horaryQuestion ?? getEmptyHoraryQuestion()
   );
   const [isBirthDataEditorOpen, setIsBirthDataEditorOpen] = useState(false);
+  const [isHoraryContextEditorOpen, setIsHoraryContextEditorOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
@@ -180,6 +181,7 @@ export function ChartEnginePage({
     if (horaryQuestion) setLocalHoraryQuestion(horaryQuestion);
   }, [horaryQuestion]);
   useEffect(() => setIsBirthDataEditorOpen(false), [selectedClient?.value]);
+  useEffect(() => setIsHoraryContextEditorOpen(false), [activeMode, calculationId]);
 
   const activeHoraryQuestion = localHoraryQuestion;
   const isHoraryMode = activeMode === "horary";
@@ -199,6 +201,9 @@ export function ChartEnginePage({
     displayResult && !isResultStale && jobState === "succeeded"
   );
   const isHorarySetup = isHoraryMode && !displayResult;
+  const shouldShowHoraryContextSummary = Boolean(isHoraryMode && displayResult);
+  const horaryContextPlaceText =
+    horaryPlaceText || getHoraryPlaceTextFallback(activeHoraryQuestion, selectedClient);
   const shouldShowBirthDataEditor = Boolean(
     needsBirthData &&
     selectedClient &&
@@ -307,7 +312,9 @@ export function ChartEnginePage({
         copy={copy}
         isHorarySetup={isHorarySetup}
         isBusy={isBusy}
-        momentControls={isHorarySetup ? undefined : momentControls}
+        momentControls={
+          isHorarySetup || shouldShowHoraryContextSummary ? undefined : momentControls
+        }
         selectedClient={selectedClient}
         selectedPartnerClient={selectedPartnerClient}
         onSelectClient={onSelectClient}
@@ -343,8 +350,12 @@ export function ChartEnginePage({
         isSavingBirthData={isSavingBirthData}
         isSettingsPanelOpen={isSettingsPanelOpen}
         jobState={jobState}
+        horaryContextEditor={isHoraryContextEditorOpen ? momentControls : undefined}
+        horaryPlaceText={horaryContextPlaceText}
+        horaryQuestion={shouldShowHoraryContextSummary ? activeHoraryQuestion : undefined}
         horaryReadiness={horaryReadiness}
         horarySetup={horarySetup}
+        isHoraryContextEditorOpen={isHoraryContextEditorOpen}
         locale={locale}
         partnerReadiness={partnerReadiness}
         readiness={readiness}
@@ -353,6 +364,7 @@ export function ChartEnginePage({
         settings={settings}
         shouldShowBirthDataEditor={shouldShowBirthDataEditor}
         onCloseSettings={() => setIsSettingsPanelOpen(false)}
+        onToggleHoraryContextEditor={() => setIsHoraryContextEditorOpen((open) => !open)}
         onSaveBirthData={onSaveBirthData}
         onSearchBirthPlaces={onSearchBirthPlaces}
         onSettingsChange={onSettingsChange}
@@ -542,6 +554,23 @@ function getEmptyHoraryQuestion(): ChartHoraryQuestionInput {
     latitude: "",
     longitude: ""
   };
+}
+
+function getHoraryPlaceTextFallback(
+  question: ChartHoraryQuestionInput,
+  selectedClient: ClientSelectOption | null
+): string {
+  const birthData = selectedClient?.birthData;
+  if (!birthData?.birthPlaceText) return "";
+  if (birthData.birthLatitude === null || birthData.birthLongitude === null) return "";
+  const latitude =
+    typeof question.latitude === "number" ? question.latitude : Number(question.latitude);
+  const longitude =
+    typeof question.longitude === "number" ? question.longitude : Number(question.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
+  const sameLatitude = Math.abs(latitude - birthData.birthLatitude) < 0.0001;
+  const sameLongitude = Math.abs(longitude - birthData.birthLongitude) < 0.0001;
+  return sameLatitude && sameLongitude ? birthData.birthPlaceText : "";
 }
 
 function formatLocalCalendarDate(date: Date): string {
