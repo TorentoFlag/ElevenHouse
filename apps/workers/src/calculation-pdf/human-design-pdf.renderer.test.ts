@@ -23,6 +23,27 @@ describe("Human Design PDF renderer", () => {
     expect(serialized).toContain("Утверждённая трактовка");
   });
 
+  it("adds a bodygraph and richer mechanics to the Human Design report", () => {
+    const blocks = buildHumanDesignPdfContent({
+      kind: "human_design",
+      locale: "ru",
+      createdAt: "2026-07-23T12:00:00.000Z",
+      calculationTitle: "Марина Краснова — Дизайн человека",
+      approvedInterpretation: null,
+      result: individualResult()
+    });
+    const kinds = blocks.map((block) => block.kind as string);
+    const serialized = JSON.stringify(blocks);
+
+    expect(kinds).toContain("bodygraph");
+    expect(kinds).toContain("table");
+    expect(serialized).toContain("Подпись");
+    expect(serialized).toContain("Тема не-себя");
+    expect(serialized).toContain("Инкарнационный крест");
+    expect(serialized).toContain("Почему выбран авторитет");
+    expect(serialized).toContain("Солнце");
+  });
+
   it("renders a valid non-empty PDF buffer", async () => {
     const rendered = await createHumanDesignPdfRenderer().render({
       kind: "human_design",

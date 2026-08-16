@@ -254,11 +254,8 @@ class DefaultPdfLayout implements PdfLayout {
     this.y -= 15;
   }
 
-  drawGraphic(
-    heading: string,
-    height: number,
-    draw: (context: PdfGraphicContext) => void
-  ): void {
+  drawGraphic(heading: string, height: number, draw: (context: PdfGraphicContext) => void): void {
+    this.ensureSpace(height + 62);
     this.drawHeading(heading);
     this.ensureSpace(height);
     const top = this.y;
