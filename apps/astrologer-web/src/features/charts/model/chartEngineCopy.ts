@@ -233,7 +233,7 @@ const ruChartEngineCopy = {
     retryCalculation: "Повторить расчёт",
     staleStatus: "Требуется пересчёт",
     currentStatus: "Актуальная карта",
-    currentAction: "Актуальна",
+    currentAction: "Рассчитано",
     readyStatus: "Готово к расчёту",
     approximateStatus: "Время примерно",
     approximateDetail: "Расчёт доступен, но карта получит предупреждение о точности времени.",
@@ -891,7 +891,7 @@ const enChartEngineCopy: ChartEngineCopy = {
     retryCalculation: "Retry calculation",
     staleStatus: "Recalculation required",
     currentStatus: "Current chart",
-    currentAction: "Current",
+    currentAction: "Calculated",
     readyStatus: "Ready to calculate",
     approximateStatus: "Approximate time",
     approximateDetail:

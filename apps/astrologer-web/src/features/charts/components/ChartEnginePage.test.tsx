@@ -1338,7 +1338,7 @@ describe("ChartEnginePage", () => {
       },
       status: "Актуальная карта",
       detail: "Натальная карта рассчитана и привязана к клиенту.",
-      action: "Актуальна",
+      action: "Рассчитано",
       enabled: false
     }
   ])("renders explicit chart state matrix for $name", ({ action, enabled, props }) => {
@@ -2344,7 +2344,7 @@ describe("ChartEnginePage", () => {
 
     expect(screen.queryByText(/натальная карта рассчитана/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Провайдер:/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /актуальна/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /рассчитано/i })).toBeDisabled();
   });
 
   it("allows calculation with approximate birth time", () => {
