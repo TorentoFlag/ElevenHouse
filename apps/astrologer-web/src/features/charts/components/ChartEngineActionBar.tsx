@@ -13,8 +13,10 @@ export function ChartEngineActionBar({
   onCalculate,
   onLink,
   onPdf,
+  onPresentation,
   onToggleBirthDataEditor,
   onToggleSettings,
+  presentationDisabled,
   pdfDisabled,
   pdfErrorMessage,
   pdfLabel,
@@ -33,8 +35,10 @@ export function ChartEngineActionBar({
   readonly onCalculate: () => void;
   readonly onLink?: () => void | Promise<void>;
   readonly onPdf?: () => void | Promise<void>;
+  readonly onPresentation?: () => void;
   readonly onToggleBirthDataEditor: () => void;
   readonly onToggleSettings: () => void;
+  readonly presentationDisabled: boolean;
   readonly pdfDisabled: boolean;
   readonly pdfErrorMessage: string | null;
   readonly pdfLabel: string;
@@ -65,17 +69,21 @@ export function ChartEngineActionBar({
       {showUtilities ? (
         <>
           <button
-            aria-describedby="chart-export-disabled-reason"
+            aria-describedby={presentationDisabled ? "chart-export-disabled-reason" : undefined}
             aria-label={copy.actionBar.exportLabel}
             className={styles.toolButton}
             type="button"
-            disabled
+            disabled={presentationDisabled}
+            title={presentationDisabled ? undefined : copy.actionBar.exportTitle}
+            onClick={onPresentation}
           >
             ↗
           </button>
-          <span className={styles.visuallyHidden} id="chart-export-disabled-reason">
-            {copy.actionBar.exportUnavailable}
-          </span>
+          {presentationDisabled ? (
+            <span className={styles.visuallyHidden} id="chart-export-disabled-reason">
+              {copy.actionBar.exportUnavailable}
+            </span>
+          ) : null}
           <button
             aria-describedby={
               isLinkDisabled && !isCalculationLinked ? "chart-link-disabled-reason" : undefined

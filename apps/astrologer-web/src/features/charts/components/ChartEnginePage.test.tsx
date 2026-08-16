@@ -1440,6 +1440,94 @@ describe("ChartEnginePage", () => {
     expect(onPdf).toHaveBeenCalledOnce();
   });
 
+  it("opens and closes the calculated chart presentation from the toolbar", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    const presentationButton = screen.getByRole("button", { name: "Экспорт карты" });
+    expect(presentationButton).toBeEnabled();
+
+    await user.click(presentationButton);
+
+    const presentation = screen.getByRole("dialog", {
+      name: "Натальная карта · Марина Краснова"
+    });
+    expect(within(presentation).getByText("Esc · Выйти")).toBeInTheDocument();
+    expect(within(presentation).getByText("15.07.1990 · 10:30 · Рим, Италия")).toBeInTheDocument();
+    expect(within(presentation).getByText("Большая тройка")).toBeInTheDocument();
+
+    fireEvent.keyDown(presentation, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Натальная карта · Марина Краснова" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the child chart presentation from a natal-backed child result", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        mode="child_chart"
+        interpretationMode="child"
+        jobState="succeeded"
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Экспорт карты" }));
+
+    const presentation = screen.getByRole("dialog", {
+      name: "Детская карта · Марина Краснова"
+    });
+    expect(within(presentation).getByText("Большая тройка")).toBeInTheDocument();
+    expect(within(presentation).getByRole("img", { name: "Круг карты" })).toBeInTheDocument();
+  });
+
+  it("opens the astrocartography presentation with map-specific content", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        mode="astrocartography"
+        jobState="succeeded"
+        result={astrocartographyResult()}
+        errorMessage={null}
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Экспорт карты" }));
+
+    const presentation = screen.getByRole("dialog", {
+      name: "Астрокартография · Марина Краснова"
+    });
+    expect(within(presentation).getByText("Сводка линий")).toBeInTheDocument();
+    expect(within(presentation).getByTestId("astrocartography-map")).toBeInTheDocument();
+  });
+
   it("renders reference-style dominant points in the left rail after distributions", () => {
     render(
       <ChartEnginePage

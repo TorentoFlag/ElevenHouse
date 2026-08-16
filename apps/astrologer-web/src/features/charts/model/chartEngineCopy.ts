@@ -145,6 +145,7 @@ const ruChartEngineCopy = {
   actionBar: {
     exportLabel: "Экспорт карты",
     exportUnavailable: "Экспорт карты пока недоступен",
+    exportTitle: "Презентация — полноэкранный показ для сессии",
     link: "Привязать",
     linked: "✓ Привязана",
     linkUnavailable: "Рассчитайте карту, чтобы привязать её к клиенту",
@@ -211,6 +212,14 @@ const ruChartEngineCopy = {
       interpretations: "Трактовки",
       ai: "AI"
     }
+  },
+  presentation: {
+    close: "Закрыть презентацию",
+    escape: "Esc · Выйти",
+    bigThree: "Большая тройка",
+    chartSummary: "Сводка карты",
+    astrocartographySummary: "Сводка линий",
+    noData: "—"
   },
   view: {
     selectClientStatus: "Выберите клиента",
@@ -796,6 +805,7 @@ const enChartEngineCopy: ChartEngineCopy = {
   actionBar: {
     exportLabel: "Export chart",
     exportUnavailable: "Chart export is not available yet",
+    exportTitle: "Presentation — full-screen session view",
     link: "Link",
     linked: "✓ Linked",
     linkUnavailable: "Calculate the chart before linking it to the client",
@@ -858,6 +868,14 @@ const enChartEngineCopy: ChartEngineCopy = {
       interpretations: "Interpretations",
       ai: "AI"
     }
+  },
+  presentation: {
+    close: "Close presentation",
+    escape: "Esc · Exit",
+    bigThree: "Big three",
+    chartSummary: "Chart summary",
+    astrocartographySummary: "Line summary",
+    noData: "—"
   },
   view: {
     selectClientStatus: "Choose a client",

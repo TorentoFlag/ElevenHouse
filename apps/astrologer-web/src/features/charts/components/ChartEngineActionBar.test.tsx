@@ -23,24 +23,29 @@ describe("ChartEngineActionBar", () => {
     );
   });
 
-  it("delegates enabled calculation, PDF and panel actions", async () => {
+  it("delegates enabled calculation, presentation, PDF and panel actions", async () => {
     const user = userEvent.setup();
     const onCalculate = vi.fn();
+    const onPresentation = vi.fn();
     const onPdf = vi.fn();
     const onToggleSettings = vi.fn();
     renderActionBar({
       canCalculate: true,
+      presentationDisabled: false,
       pdfDisabled: false,
       onCalculate,
+      onPresentation,
       onPdf,
       onToggleSettings
     });
 
     await user.click(screen.getByRole("button", { name: "Calculate" }));
+    await user.click(screen.getByRole("button", { name: "Export chart" }));
     await user.click(screen.getByRole("button", { name: "PDF" }));
     await user.click(screen.getByRole("button", { name: /Settings/u }));
 
     expect(onCalculate).toHaveBeenCalledOnce();
+    expect(onPresentation).toHaveBeenCalledOnce();
     expect(onPdf).toHaveBeenCalledOnce();
     expect(onToggleSettings).toHaveBeenCalledOnce();
   });
@@ -72,6 +77,7 @@ function renderActionBar(overrides: Partial<Parameters<typeof ChartEngineActionB
       isCalculationLinked={false}
       isSettingsPanelOpen={false}
       linkDisabled
+      presentationDisabled
       pdfDisabled
       pdfErrorMessage={null}
       pdfLabel="PDF"

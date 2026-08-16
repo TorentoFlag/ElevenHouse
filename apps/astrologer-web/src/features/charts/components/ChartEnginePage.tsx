@@ -21,6 +21,7 @@ import {
 } from "../model/chartEngineState";
 import { ChartEngineActionBar } from "./ChartEngineActionBar";
 import { ChartEngineHeader } from "./ChartEngineHeader";
+import { ChartEnginePresentation } from "./ChartEnginePresentation";
 import { ChartHorarySetup } from "./ChartHorarySetup";
 import { ChartMomentControls } from "./ChartMomentControls";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model/chartEngineInput";
@@ -171,6 +172,7 @@ export function ChartEnginePage({
   );
   const [isBirthDataEditorOpen, setIsBirthDataEditorOpen] = useState(false);
   const [isHoraryContextEditorOpen, setIsHoraryContextEditorOpen] = useState(false);
+  const [isPresentationOpen, setIsPresentationOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
@@ -200,6 +202,10 @@ export function ChartEnginePage({
   const isCurrentResultCalculated = Boolean(
     displayResult && !isResultStale && jobState === "succeeded"
   );
+  const presentationDisabled = !isCurrentResultCalculated;
+  useEffect(() => {
+    if (presentationDisabled) setIsPresentationOpen(false);
+  }, [presentationDisabled]);
   const isHorarySetup = isHoraryMode && !displayResult;
   const shouldShowHoraryContextSummary = Boolean(isHoraryMode && displayResult);
   const horaryContextPlaceText =
@@ -289,8 +295,10 @@ export function ChartEnginePage({
       }),
     onLink,
     onPdf,
+    onPresentation: () => setIsPresentationOpen(true),
     onToggleBirthDataEditor: () => setIsBirthDataEditorOpen((open) => !open),
-    onToggleSettings: () => setIsSettingsPanelOpen((open) => !open)
+    onToggleSettings: () => setIsSettingsPanelOpen((open) => !open),
+    presentationDisabled
   };
   const horarySetup = isHorarySetup ? (
     <ChartHorarySetup
@@ -369,6 +377,17 @@ export function ChartEnginePage({
         onSearchBirthPlaces={onSearchBirthPlaces}
         onSettingsChange={onSettingsChange}
       />
+      {isPresentationOpen && displayResult && selectedClient ? (
+        <ChartEnginePresentation
+          copy={copy}
+          locale={locale}
+          mode={activeMode}
+          result={displayResult}
+          selectedClient={selectedClient}
+          selectedPartnerClient={selectedPartnerClient}
+          onClose={() => setIsPresentationOpen(false)}
+        />
+      ) : null}
     </main>
   );
 }
