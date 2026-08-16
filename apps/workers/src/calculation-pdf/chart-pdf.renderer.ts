@@ -1580,7 +1580,7 @@ const ru: Labels = {
   chartType: "Тип карты",
   chartTypes: {
     natal: "Натальная карта",
-    astrocartography: "Астрокарта",
+    astrocartography: "Астрография",
     transit: "Транзиты",
     synastry: "Синастрия",
     composite: "Композит",
@@ -1676,10 +1676,10 @@ const ru: Labels = {
   feminine: "Женская",
   owner: "Владелец",
   projectedHouseOwner: "Чьи дома",
-  astrocartographyMap: "Астрокарта · Карта линий",
+  astrocartographyMap: "Астрография · Карта линий",
   astrocartographyMapCaption: (lineCount: number) =>
     `Векторная карта линий: ${lineCount} линий MC, IC, Asc и Dsc по текущему расчёту.`,
-  astrocartographyLines: "Линии астрокарты",
+  astrocartographyLines: "Линии астрографии",
   houseValue: (house: number) => `${house} дом`,
   houseSystems: {
     placidus: "Плацидус",

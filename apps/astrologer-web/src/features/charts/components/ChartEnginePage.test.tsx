@@ -797,9 +797,9 @@ describe("ChartEnginePage", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
-    await user.click(screen.getByRole("menuitem", { name: "Астрокарта" }));
+    await user.click(screen.getByRole("menuitem", { name: "Астрография" }));
 
-    expect(screen.getByText("Астрокартография")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Астрография" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Рассчитать линии" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Рассчитать линии" }));
 
@@ -821,7 +821,7 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.getByRole("img", { name: "Астрокартографическая карта" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Астрографическая карта" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "Круг карты" })).not.toBeInTheDocument();
     expect(screen.getByText("Появится после расчёта линий.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Трактовки" })).toBeInTheDocument();
@@ -845,7 +845,7 @@ describe("ChartEnginePage", () => {
       />
     );
 
-    expect(screen.queryByText("Астрокарта рассчитана")).not.toBeInTheDocument();
+    expect(screen.queryByText("Астрография рассчитана")).not.toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-map")).toBeInTheDocument();
     expect(screen.getByTestId("astrocartography-line-sun_mc")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
@@ -1170,7 +1170,7 @@ describe("ChartEnginePage", () => {
 
     const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
     expect(
-      within(interpretationsPanel).getByText("Астрокартография · библиотека")
+      within(interpretationsPanel).getByText("Астрография · библиотека")
     ).toBeInTheDocument();
     expect(
       await within(interpretationsPanel).findAllByText("Для этого элемента еще нет трактовки")
@@ -1522,7 +1522,7 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Экспорт карты" }));
 
     const presentation = screen.getByRole("dialog", {
-      name: "Астрокартография · Марина Краснова"
+      name: "Астрография · Марина Краснова"
     });
     expect(within(presentation).getByText("Сводка линий")).toBeInTheDocument();
     expect(within(presentation).getByTestId("astrocartography-map")).toBeInTheDocument();

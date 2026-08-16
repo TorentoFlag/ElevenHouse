@@ -60,7 +60,7 @@ describe("ProductConstructorModal helpers", () => {
   it("builds preview and cabinet artifacts without depending on React rendering", () => {
     const draft = {
       ...createDefaultProductDraft("custom"),
-      title: "Астрокартография",
+      title: "Астрография",
       priceMinor: 790000,
       methods: ["forecast" as const],
       accessGrants: ["records" as const],

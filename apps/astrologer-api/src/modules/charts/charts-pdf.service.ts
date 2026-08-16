@@ -255,7 +255,7 @@ function chartPdfFileName(
   }
   const names: Record<ChartCalculationMethod, { readonly ru: string; readonly en: string }> = {
     natal: { ru: "Натальная карта.pdf", en: "Natal chart.pdf" },
-    astrocartography: { ru: "Астрокарта.pdf", en: "Astrocartography.pdf" },
+    astrocartography: { ru: "Астрография.pdf", en: "Astrocartography.pdf" },
     transit: { ru: "Транзиты.pdf", en: "Transits.pdf" },
     synastry: { ru: "Синастрия.pdf", en: "Synastry.pdf" },
     composite: { ru: "Композит.pdf", en: "Composite chart.pdf" },

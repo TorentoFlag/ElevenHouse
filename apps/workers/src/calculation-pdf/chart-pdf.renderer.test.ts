@@ -178,7 +178,7 @@ describe("Chart PDF renderer", () => {
     );
     const astrocartography = await renderer.render(
       document("ru", {
-        calculationTitle: "Астрокарта",
+        calculationTitle: "Астрография",
         result: astrocartographyResult()
       })
     );
@@ -190,7 +190,7 @@ describe("Chart PDF renderer", () => {
     expect(transitDocument.getPageCount()).toBeGreaterThan(0);
     expect(astrocartographyDocument.getPageCount()).toBeGreaterThan(0);
     expect(transitDocument.getTitle()).toBe("Транзит");
-    expect(astrocartographyDocument.getTitle()).toBe("Астрокарта");
+    expect(astrocartographyDocument.getTitle()).toBe("Астрография");
     expect(transit.bytes.toString("latin1")).not.toContain("/JavaScript");
     expect(astrocartography.bytes.toString("latin1")).not.toContain("/JavaScript");
   });
@@ -266,20 +266,20 @@ describe("Chart PDF renderer", () => {
   it("composes an astrocartography PDF without assuming wheel-shaped result data", () => {
     const content = buildChartPdfContent(
       document("ru", {
-        calculationTitle: "Астрокарта",
+        calculationTitle: "Астрография",
         result: astrocartographyResult()
       })
     );
 
     expect(keyValues(content, "Расчёт")).toContainEqual({
       label: "Тип карты",
-      value: "Астрокарта"
+      value: "Астрография"
     });
     expect(content[0]).toMatchObject({
       kind: "astrocartography_map",
-      heading: "Астрокарта · Карта линий"
+      heading: "Астрография · Карта линий"
     });
-    expect(table(content, "Линии астрокарты").rows).toHaveLength(40);
+    expect(table(content, "Линии астрографии").rows).toHaveLength(40);
   });
 
   it("composes synastry PDF as one combined dual-wheel before client and partner tables", async () => {

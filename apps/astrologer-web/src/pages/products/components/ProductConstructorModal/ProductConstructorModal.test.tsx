@@ -145,7 +145,7 @@ describe("ProductConstructorModal", () => {
   it("renders the design-reference fullscreen constructor shell", () => {
     const draft = {
       ...createDefaultProductDraft("custom"),
-      title: "Астрокартография · где жить",
+      title: "Астрография · где жить",
       subtitle: "Где вам будет лучше — по карте мест",
       priceMinor: 790000,
       includedItems: [
@@ -326,7 +326,7 @@ describe("ProductConstructorModal", () => {
   it("renders media, client-facing preview, enabled modifiers and cabinet artifacts", () => {
     const draft = {
       ...createDefaultProductDraft("single"),
-      title: "Астрокартография · где жить",
+      title: "Астрография · где жить",
       subtitle: "Где вам будет лучше — по карте мест",
       priceMinor: 790000,
       deliveryFormats: ["video", "file"] as const,

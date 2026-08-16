@@ -32,7 +32,7 @@ describe("AstrocartographyMap", () => {
   it("exposes every rendered line in a complete non-visual list", () => {
     render(<AstrocartographyMap result={astrocartographyResult()} />);
 
-    const list = screen.getByRole("list", { name: "Линии астрокартографии" });
+    const list = screen.getByRole("list", { name: "Линии астрографии" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(within(list).getByText("Солнце, MC: Солнце MC")).toBeInTheDocument();
     expect(within(list).getByText("Луна, Asc: Луна Asc")).toBeInTheDocument();

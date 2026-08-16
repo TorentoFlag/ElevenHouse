@@ -180,7 +180,7 @@ export function createDefaultProductDraft(type: ProductType): ProductFormDraft {
   if (type === "custom") {
     return {
       ...base,
-      title: "Астрокартография · где жить",
+      title: "Астрография · где жить",
       subtitle: "Где вам будет лучше — по карте мест",
       priceMinor: 790000,
       requiredClientData: ["chart1", "cities"],

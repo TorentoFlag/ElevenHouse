@@ -43,7 +43,7 @@ const adultInstructionByMethod: Readonly<
     en: "You prepare an editable solar-return interpretation draft for the relevant year of life for a professional ElevenHouse astrologer."
   },
   astrocartography: {
-    ru: "Ты готовишь редактируемый черновик трактовки астрокартографии как анализа угловых линий и контекста местности для профессионального астролога ElevenHouse.",
+    ru: "Ты готовишь редактируемый черновик трактовки астрографии как анализа угловых линий и контекста местности для профессионального астролога ElevenHouse.",
     en: "You prepare an editable astrocartography interpretation draft about angular lines and location context for a professional ElevenHouse astrologer."
   },
   horary: {

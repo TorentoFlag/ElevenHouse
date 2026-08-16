@@ -9,7 +9,7 @@ describe("chart AI draft profiles", () => {
     ["synastry", "adult", "синастрии"],
     ["composite", "adult", "композитной карты"],
     ["solar_return", "adult", "соляра"],
-    ["astrocartography", "adult", "астрокартографии"],
+    ["astrocartography", "adult", "астрографии"],
     ["horary", "adult", "хорарной карты"]
   ] as const)("selects a dedicated %s profile", (method, subjectKind, expectedPhrase) => {
     const profile = resolveChartAiDraftProfile({ method, subjectKind });

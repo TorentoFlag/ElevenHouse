@@ -101,11 +101,11 @@ const ruChartEngineCopy = {
       calculateAction: "Рассчитать соляр"
     },
     astrocartography: {
-      tab: "Астрокарта",
-      title: "Астрокартография",
+      tab: "Астрография",
+      title: "Астрография",
       calculating: "Рассчитываем линии",
       calculationDetail: "Строим линии планет на карте мира по данным рождения клиента.",
-      emptyTitle: "Готово к расчёту астрокарты",
+      emptyTitle: "Готово к расчёту астрографии",
       emptyDetail: "Выберите клиента для построения линий планет на карте мира.",
       readyDetail: "Натал клиента готов для расчёта линий на карте мира.",
       successDetail: "Линии планет рассчитаны по наталу клиента.",
@@ -175,7 +175,7 @@ const ruChartEngineCopy = {
     missing: (items: readonly string[]) => `Не хватает: ${items.join(", ")}.`,
     warnings: "Предупреждения",
     approximateWarning: "Время рождения указано примерно: дома и углы могут смещаться.",
-    astrocartography: "Астрокарта",
+    astrocartography: "Астрография",
     bigThree: "Большая тройка",
     linesPending: "Появится после расчёта линий.",
     chartPending: "Появится после расчёта.",
@@ -447,7 +447,7 @@ const ruChartEngineCopy = {
     interpretationKickers: {
       child: "Детские трактовки · библиотека",
       horary: "Хорар · библиотека",
-      astrocartography: "Астрокартография · библиотека",
+      astrocartography: "Астрография · библиотека",
       default: "Опорные положения · библиотека"
     },
     groupTitles: { points: "Положения", houses: "Дома", aspects: "Аспекты" },
@@ -493,7 +493,7 @@ const ruChartEngineCopy = {
     horaryPointHouse: "Хорар · планета в доме",
     horaryHouse: "Хорар · значение дома",
     horaryAspect: "Хорар · аспект",
-    astroLine: "Астрокартография · линия планеты",
+    astroLine: "Астрография · линия планеты",
     pointsCount: (count: number) => `${count} точек`,
     pointSign: "Планета в знаке",
     pointHouse: "Планета в доме",
@@ -516,9 +516,9 @@ const ruChartEngineCopy = {
     planetConnection: "Связь планет"
   },
   map: {
-    ariaLabel: "Астрокартографическая карта",
-    legendLabel: "Легенда астрокартографии",
-    linesLabel: "Линии астрокартографии",
+    ariaLabel: "Астрографическая карта",
+    legendLabel: "Легенда астрографии",
+    linesLabel: "Линии астрографии",
     lineDescription: (point: string, angle: string, label: string) => `${point}, ${angle}: ${label}`
   },
   wheel: {
