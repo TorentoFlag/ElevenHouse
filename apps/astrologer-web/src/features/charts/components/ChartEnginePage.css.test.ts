@@ -34,6 +34,11 @@ describe("Chart Engine responsive accessibility CSS", () => {
       desktopRulesStart,
       css.indexOf(".relatedProfileEditor", desktopRulesStart)
     );
+    const actionMenuRulesStart = css.indexOf(".actionMenu {");
+    const actionMenuRules = css.slice(
+      actionMenuRulesStart,
+      css.indexOf(".calculateButton,", actionMenuRulesStart)
+    );
     const wideCompactRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1680px)"));
     const tabletRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1024px)"));
     const mobileRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 768px)"));
@@ -42,7 +47,9 @@ describe("Chart Engine responsive accessibility CSS", () => {
       /grid-template-columns:\s*minmax\(190px,\s*218px\) minmax\(0,\s*1fr\) minmax\(300px,\s*340px\)/
     );
     expect(css).toMatch(/\.panelTabs\s*\{[\s\S]*?flex-wrap:\s*wrap/);
-    expect(wideCompactRules).toMatch(/\.actionMenuTrigger\s*\{[\s\S]*?display:\s*inline-flex/);
+    expect(actionMenuRules).toMatch(/\.actionMenuTrigger\s*\{[\s\S]*?display:\s*inline-flex/);
+    expect(actionMenuRules).toMatch(/\.actionMenuPanel\s*\{[\s\S]*?position:\s*absolute/);
+    expect(wideCompactRules).toMatch(/\.toolbarSpacer\s*\{[\s\S]*?display:\s*none/);
     expect(tabletRules).toMatch(/\.body\s*\{[\s\S]*?display:\s*grid/);
     expect(tabletRules).toMatch(/\.body\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     expect(tabletRules).toMatch(/\.railToggle\s*\{[\s\S]*?display:\s*flex/);
