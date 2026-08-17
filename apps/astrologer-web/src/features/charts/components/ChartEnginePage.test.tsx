@@ -2329,6 +2329,42 @@ describe("ChartEnginePage", () => {
     expect(screen.queryByRole("complementary", { name: "Данные карты" })).not.toBeInTheDocument();
   });
 
+  it("embeds related profile birth data without a nested modal header", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(application.http, "get").mockResolvedValue({ clients: [], total: 0 });
+
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ChartEnginePage
+          selectedClient={{ ...client, relatedBirthProfiles: [] }}
+          selectedPartnerClient={null}
+          jobState="idle"
+          result={null}
+          errorMessage={null}
+          isBusy={false}
+          mode="synastry"
+          settings={settings()}
+          onSettingsChange={vi.fn()}
+          onCreateNatalJob={vi.fn()}
+          onCreateSynastryJob={vi.fn()}
+          onCreateRelatedBirthProfile={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Партнёр" }));
+    await user.click(screen.getByRole("button", { name: /добавить профиль/i }));
+
+    const editor = screen.getByRole("region", { name: "Новый профиль" });
+    expect(within(editor).getByLabelText("Заполните данные рождения")).toBeInTheDocument();
+    expect(within(editor).queryByText("Заполните данные рождения")).not.toBeInTheDocument();
+    expect(
+      within(editor).getAllByRole("button", { name: "Закрыть форму данных рождения" })
+    ).toHaveLength(1);
+  });
+
   it("keeps an already calculated current result as a disabled terminal action", () => {
     render(
       <ChartEnginePage

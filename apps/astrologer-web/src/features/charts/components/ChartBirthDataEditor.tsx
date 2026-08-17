@@ -32,7 +32,7 @@ export function ChartBirthDataEditor({
   readonly disabled: boolean;
   readonly errorMessage: string | null;
   readonly isSaving: boolean;
-  readonly layout?: "rail" | "workspace";
+  readonly layout?: "embedded" | "rail" | "workspace";
   readonly locale: DictionaryLocale;
   readonly onClose?: () => void;
   readonly onSave: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
@@ -126,9 +126,18 @@ export function ChartBirthDataEditor({
     setPlaceSearchError(null);
   };
 
+  const formClassName =
+    layout === "workspace"
+      ? styles.birthDataWorkspaceForm
+      : layout === "embedded"
+        ? styles.birthDataEmbeddedForm
+        : styles.birthDataCard;
+  const showHeader = layout !== "embedded";
+
   return (
     <form
-      className={layout === "workspace" ? styles.birthDataWorkspaceForm : styles.birthDataCard}
+      aria-label={showHeader ? undefined : copy.birthData.title}
+      className={formClassName}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) {
           setIsDatePickerOpen(false);
@@ -154,20 +163,22 @@ export function ChartBirthDataEditor({
         });
       }}
     >
-      <div className={styles.birthDataFormHeader}>
-        <strong>{copy.birthData.title}</strong>
-        <span>{copy.birthData.description}</span>
-        {onClose ? (
-          <button
-            aria-label={copy.birthData.close}
-            className={styles.birthDataCloseButton}
-            type="button"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        ) : null}
-      </div>
+      {showHeader ? (
+        <div className={styles.birthDataFormHeader}>
+          <strong>{copy.birthData.title}</strong>
+          <span>{copy.birthData.description}</span>
+          {onClose ? (
+            <button
+              aria-label={copy.birthData.close}
+              className={styles.birthDataCloseButton}
+              type="button"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className={styles.birthDataPickerField}>
         <span className={styles.birthDataLabel}>{copy.birthData.date}</span>
         <button

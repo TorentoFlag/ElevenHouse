@@ -107,9 +107,8 @@ export function ChartRelatedBirthProfileEditor({
         disabled={disabled || isSaving}
         errorMessage={errorMessage}
         isSaving={isSaving}
-        layout="workspace"
+        layout="embedded"
         locale={locale}
-        onClose={onCancel}
         onSave={createProfile}
         onSearchBirthPlaces={onSearchBirthPlaces}
       />
