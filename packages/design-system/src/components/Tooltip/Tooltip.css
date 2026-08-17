@@ -34,8 +34,42 @@
   top: calc(100% + 8px);
 }
 
+.ehTooltip--right .ehTooltip__bubble,
+.ehTooltip--left .ehTooltip__bubble {
+  top: 50%;
+  left: auto;
+  max-width: 260px;
+  text-align: left;
+}
+
+.ehTooltip--right .ehTooltip__bubble {
+  left: calc(100% + 8px);
+  transform: translate(3px, -50%);
+}
+
+.ehTooltip--left .ehTooltip__bubble {
+  right: calc(100% + 8px);
+  transform: translate(-3px, -50%);
+}
+
 .ehTooltip:hover .ehTooltip__bubble,
 .ehTooltip:focus-within .ehTooltip__bubble {
   opacity: 1;
+}
+
+.ehTooltip--top:hover .ehTooltip__bubble,
+.ehTooltip--top:focus-within .ehTooltip__bubble,
+.ehTooltip--bottom:hover .ehTooltip__bubble,
+.ehTooltip--bottom:focus-within .ehTooltip__bubble {
   transform: translate(-50%, 0);
+}
+
+.ehTooltip--right:hover .ehTooltip__bubble,
+.ehTooltip--right:focus-within .ehTooltip__bubble {
+  transform: translate(0, -50%);
+}
+
+.ehTooltip--left:hover .ehTooltip__bubble,
+.ehTooltip--left:focus-within .ehTooltip__bubble {
+  transform: translate(0, -50%);
 }

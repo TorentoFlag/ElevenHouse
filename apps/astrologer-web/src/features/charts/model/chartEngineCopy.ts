@@ -7,6 +7,7 @@ const ruChartEngineCopy = {
   modes: {
     natal: {
       tab: "Натал",
+      tooltip: "Положения планет и домов на момент рождения человека.",
       title: "Натальная карта",
       calculating: "Рассчитываем карту",
       calculationDetail: "Строим карту по данным рождения клиента.",
@@ -22,6 +23,7 @@ const ruChartEngineCopy = {
     },
     child_chart: {
       tab: "Детская",
+      tooltip: "Натальная карта с трактовками, адаптированными для детского периода.",
       title: "Детская карта",
       calculating: "Рассчитываем детскую карту",
       calculationDetail: "Строим карту и открываем бережные трактовки для детского возраста.",
@@ -36,6 +38,7 @@ const ruChartEngineCopy = {
     },
     transit: {
       tab: "Транзиты",
+      tooltip: "Влияние планет на выбранную дату относительно натальной карты.",
       title: "Транзитная карта",
       calculating: "Рассчитываем транзиты",
       calculationDetail: "Строим транзиты по данным рождения клиента и выбранному моменту.",
@@ -49,6 +52,7 @@ const ruChartEngineCopy = {
     },
     progression: {
       tab: "Прогрессии",
+      tooltip: "Символическое развитие натальной карты с течением времени.",
       title: "Прогрессии",
       calculating: "Рассчитываем прогрессии",
       calculationDetail: "Строим вторичные прогрессии на выбранную дату.",
@@ -63,6 +67,7 @@ const ruChartEngineCopy = {
     },
     synastry: {
       tab: "Синастрия",
+      tooltip: "Сравнение двух карт для анализа взаимодействия людей.",
       title: "Синастрия",
       calculating: "Рассчитываем синастрию",
       calculationDetail: "Строим карту совместимости по данным рождения двух участников.",
@@ -76,6 +81,7 @@ const ruChartEngineCopy = {
     },
     composite: {
       tab: "Композит",
+      tooltip: "Единая карта отношений, построенная по данным двух участников.",
       title: "Композит",
       calculating: "Рассчитываем композит",
       calculationDetail: "Строим общую карту отношений по данным рождения двух участников.",
@@ -89,6 +95,7 @@ const ruChartEngineCopy = {
     },
     solar_return: {
       tab: "Соляр",
+      tooltip: "Прогнозная карта на год от одного возвращения Солнца до следующего.",
       title: "Соляр",
       calculating: "Рассчитываем соляр",
       calculationDetail: "Строим соляр на выбранный год.",
@@ -102,6 +109,7 @@ const ruChartEngineCopy = {
     },
     astrocartography: {
       tab: "Астрография",
+      tooltip: "Карта мира с линиями влияния планет для разных мест.",
       title: "Астрография",
       calculating: "Рассчитываем линии",
       calculationDetail: "Строим линии планет на карте мира по данным рождения клиента.",
@@ -115,6 +123,7 @@ const ruChartEngineCopy = {
     },
     horary: {
       tab: "Хорар",
+      tooltip: "Карта момента, в который был задан конкретный вопрос.",
       title: "Хорар",
       calculating: "Рассчитываем хорар",
       calculationDetail: "Строим карту на момент вопроса.",
@@ -683,6 +692,7 @@ export type ChartEngineCopy = Widen<typeof ruChartEngineCopy>;
 const enModes: ChartEngineCopy["modes"] = {
   natal: {
     tab: "Natal",
+    tooltip: "Planet and house positions at the person's birth moment.",
     title: "Natal chart",
     calculating: "Calculating chart",
     calculationDetail: "Building a chart from the client's birth data.",
@@ -698,6 +708,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   child_chart: {
     tab: "Child",
+    tooltip: "Natal chart with interpretations adapted for childhood.",
     title: "Child chart",
     calculating: "Calculating child chart",
     calculationDetail: "Building a chart with child-friendly interpretations.",
@@ -712,6 +723,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   transit: {
     tab: "Transits",
+    tooltip: "Planetary influence on the selected date relative to the natal chart.",
     title: "Transit chart",
     calculating: "Calculating transits",
     calculationDetail: "Building transits from the client's birth data and the selected moment.",
@@ -725,6 +737,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   progression: {
     tab: "Progressions",
+    tooltip: "Symbolic development of the natal chart over time.",
     title: "Progressions",
     calculating: "Calculating progressions",
     calculationDetail: "Building secondary progressions for the selected date.",
@@ -738,6 +751,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   synastry: {
     tab: "Synastry",
+    tooltip: "Comparison of two charts to analyze how people interact.",
     title: "Synastry",
     calculating: "Calculating synastry",
     calculationDetail: "Building a compatibility chart from both participants' birth data.",
@@ -751,6 +765,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   composite: {
     tab: "Composite",
+    tooltip: "One relationship chart built from both participants' data.",
     title: "Composite",
     calculating: "Calculating composite",
     calculationDetail: "Building a shared relationship chart from both participants' birth data.",
@@ -764,6 +779,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   solar_return: {
     tab: "Solar return",
+    tooltip: "Forecast chart for the year from one solar return to the next.",
     title: "Solar return",
     calculating: "Calculating solar return",
     calculationDetail: "Building a solar return for the selected year.",
@@ -778,6 +794,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   astrocartography: {
     tab: "Astrocartography",
+    tooltip: "World map with planetary influence lines for different places.",
     title: "Astrocartography",
     calculating: "Calculating lines",
     calculationDetail: "Building planetary lines on the world map from the client's birth data.",
@@ -791,6 +808,7 @@ const enModes: ChartEngineCopy["modes"] = {
   },
   horary: {
     tab: "Horary",
+    tooltip: "Chart of the moment when a specific question was asked.",
     title: "Horary",
     calculating: "Calculating horary chart",
     calculationDetail: "Building a chart for the question moment; client birth data is not used.",

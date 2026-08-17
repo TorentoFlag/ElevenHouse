@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-export type TooltipPlacement = "top" | "bottom";
+export type TooltipPlacement = "top" | "right" | "bottom" | "left";
 
 export type TooltipProps = {
   readonly children: ReactElement<Record<string, unknown>>;

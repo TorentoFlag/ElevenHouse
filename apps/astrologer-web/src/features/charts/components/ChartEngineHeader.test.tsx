@@ -57,6 +57,49 @@ describe("ChartEngineHeader", () => {
     expect(screen.queryByText("Client profiles")).not.toBeInTheDocument();
   });
 
+  it("exposes chart type explanations through accessible tooltips", async () => {
+    const user = userEvent.setup();
+    renderHeader(
+      <ChartEngineHeader
+        actionBar={null}
+        activeMode="natal"
+        copy={chartEngineCopyByLocale.en}
+        isBusy={false}
+        selectedClient={client}
+        selectedPartnerClient={null}
+        onSelectMode={vi.fn()}
+      />
+    );
+
+    const natal = screen.getByRole("button", { name: "Natal" });
+    const natalTooltip = screen.getByText("Planet and house positions at the person's birth moment.");
+    expect(natal).toHaveAttribute("aria-describedby", natalTooltip.id);
+    expect(natalTooltip.parentElement).toHaveClass("ehTooltip--bottom");
+    expect(natal).not.toHaveAttribute("title");
+    expect(screen.getByText("Natal chart with interpretations adapted for childhood.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Planetary influence on the selected date relative to the natal chart.")
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /open other chart types/i }));
+
+    const synastry = screen.getByRole("menuitem", { name: "Synastry" });
+    const synastryTooltip = screen.getByText(
+      "Comparison of two charts to analyze how people interact."
+    );
+    expect(synastry).toHaveAttribute("aria-describedby", synastryTooltip.id);
+    expect(synastryTooltip.parentElement).toHaveClass("ehTooltip--right");
+    expect(screen.getByText("Symbolic development of the natal chart over time.")).toBeInTheDocument();
+    expect(screen.getByText("One relationship chart built from both participants' data.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Forecast chart for the year from one solar return to the next.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Chart of the moment when a specific question was asked.")).toBeInTheDocument();
+    expect(
+      screen.getByText("World map with planetary influence lines for different places.")
+    ).toBeInTheDocument();
+  });
+
   it("keeps client profiles inside the single partner picker", async () => {
     const user = userEvent.setup();
     const onSelectRelatedProfile = vi.fn();

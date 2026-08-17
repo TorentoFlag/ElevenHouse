@@ -1,4 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from "react";
+import { Tooltip } from "@elevenhouse/design-system/components/Tooltip";
+import "@elevenhouse/design-system/components/Tooltip.css";
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
 import {
   overflowChartModes,
@@ -50,23 +52,30 @@ export function ChartEngineModeMenu({
     }
   };
 
+  const renderModeButton = (mode: ChartEngineMode, kind: "active" | "primary") => (
+    <Tooltip
+      key={`${kind}-${mode}`}
+      className={styles.modeTooltip}
+      content={copy.modes[mode].tooltip}
+      id={`chart-mode-${kind}-${mode.replaceAll("_", "-")}-tooltip`}
+      placement="bottom"
+    >
+      <button
+        className={kind === "active" ? styles.modeActive : styles.modeButton}
+        type="button"
+        onClick={() => onSelect(mode)}
+      >
+        <span className={styles.modeTabLabel}>{copy.modes[mode].tab}</span>
+      </button>
+    </Tooltip>
+  );
+
   return (
     <nav className={styles.modeTabs} aria-label={copy.modeMenu.navigationLabel}>
-      {primaryChartModes.map((mode) => (
-        <button
-          key={mode}
-          className={activeMode === mode ? styles.modeActive : styles.modeButton}
-          type="button"
-          onClick={() => onSelect(mode)}
-        >
-          <span className={styles.modeTabLabel}>{copy.modes[mode].tab}</span>
-        </button>
-      ))}
-      {isOverflowModeActive ? (
-        <button className={styles.modeActive} type="button" onClick={() => onSelect(activeMode)}>
-          <span className={styles.modeTabLabel}>{copy.modes[activeMode].tab}</span>
-        </button>
-      ) : null}
+      {primaryChartModes.map((mode) =>
+        renderModeButton(mode, activeMode === mode ? "active" : "primary")
+      )}
+      {isOverflowModeActive ? renderModeButton(activeMode, "active") : null}
       <div
         className={styles.modeOverflow}
         onBlur={(event) => {
@@ -106,24 +115,31 @@ export function ChartEngineModeMenu({
         {isOpen ? (
           <div className={styles.modeOverflowMenu} role="menu" aria-label={copy.modeMenu.menuLabel}>
             {overflowChartModes.map((mode, index) => (
-              <button
-                ref={(element) => {
-                  itemRefs.current[index] = element;
-                }}
+              <Tooltip
                 key={mode}
-                className={
-                  activeMode === mode ? styles.modeOverflowItemActive : styles.modeOverflowItem
-                }
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  onSelect(mode);
-                  closeAndReturnFocus();
-                }}
-                onKeyDown={(event) => handleItemKeyDown(event, index)}
+                className={styles.modeTooltip}
+                content={copy.modes[mode].tooltip}
+                id={`chart-mode-overflow-${mode.replaceAll("_", "-")}-tooltip`}
+                placement="right"
               >
-                {copy.modes[mode].tab}
-              </button>
+                <button
+                  ref={(element) => {
+                    itemRefs.current[index] = element;
+                  }}
+                  className={
+                    activeMode === mode ? styles.modeOverflowItemActive : styles.modeOverflowItem
+                  }
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onSelect(mode);
+                    closeAndReturnFocus();
+                  }}
+                  onKeyDown={(event) => handleItemKeyDown(event, index)}
+                >
+                  {copy.modes[mode].tab}
+                </button>
+              </Tooltip>
             ))}
           </div>
         ) : null}
