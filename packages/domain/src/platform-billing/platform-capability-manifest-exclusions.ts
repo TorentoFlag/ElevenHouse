@@ -473,6 +473,20 @@ export const platformCapabilitySurfaceExclusions = [
     "Birth data is user-owned calculation input and cannot be hidden by CRM tariff state."
   ),
   excluded(
+    "exclude.clients.related-birth-profiles.create",
+    owners.clients,
+    "apps/astrologer-api/src/modules/clients/clients.controller.ts",
+    "POST /clients/:clientUserId/related-birth-profiles",
+    "Related birth profiles are user-owned relationship calculation inputs and cannot be hidden by CRM tariff state."
+  ),
+  excluded(
+    "exclude.clients.related-birth-profiles.update",
+    owners.clients,
+    "apps/astrologer-api/src/modules/clients/clients.controller.ts",
+    "PUT /clients/:clientUserId/related-birth-profiles/:relatedProfileId",
+    "Related birth profile edits are user-owned relationship calculation inputs and cannot be hidden by CRM tariff state."
+  ),
+  excluded(
     "exclude.client-profile.astrologers",
     "public-api.ClientProfileModule",
     "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
@@ -494,6 +508,13 @@ export const platformCapabilitySurfaceExclusions = [
     "Client-owned sensitive data must not be hidden by an astrologer tariff."
   ),
   excluded(
+    "exclude.client-profile.related-birth-profiles.list",
+    "public-api.ClientProfileModule",
+    "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
+    "GET /me/related-birth-profiles",
+    "Client-owned related birth profiles must not be hidden by an astrologer tariff."
+  ),
+  excluded(
     "exclude.client-profile.birth-places",
     "public-api.ClientProfileModule",
     "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
@@ -506,6 +527,20 @@ export const platformCapabilitySurfaceExclusions = [
     "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
     "PUT /me/birth-data",
     "Client control of their own data is not a tariff benefit."
+  ),
+  excluded(
+    "exclude.client-profile.related-birth-profiles.create",
+    "public-api.ClientProfileModule",
+    "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
+    "POST /me/related-birth-profiles",
+    "Client control of family and partner birth profiles is not a tariff benefit."
+  ),
+  excluded(
+    "exclude.client-profile.related-birth-profiles.update",
+    "public-api.ClientProfileModule",
+    "apps/public-api/src/modules/client-profile/client-profile.controller.ts",
+    "PUT /me/related-birth-profiles/:relatedProfileId",
+    "Client control of family and partner birth profile edits is not a tariff benefit."
   ),
   excluded(
     "exclude.client-join.create",

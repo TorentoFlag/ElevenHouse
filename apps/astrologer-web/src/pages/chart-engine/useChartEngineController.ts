@@ -740,9 +740,14 @@ export function useChartEngineController() {
     }
     const target = getSubmissionTarget();
     if (!target) return;
-    await calculationMutation.mutateAsync(
-      attachChartEngineSubmissionTarget(preparation.draft, target)
-    );
+    try {
+      await calculationMutation.mutateAsync(
+        attachChartEngineSubmissionTarget(preparation.draft, target)
+      );
+    } catch (error) {
+      console.error("Chart calculation request failed", error);
+      // The calculation mutation owns the visible retry/error state for this action.
+    }
   };
 
   return {

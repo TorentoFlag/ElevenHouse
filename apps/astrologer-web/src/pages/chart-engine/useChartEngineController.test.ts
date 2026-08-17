@@ -1008,6 +1008,47 @@ describe("chart engine controller hook recovery", () => {
     unmount();
   });
 
+  it("keeps the chart workspace local when the calculation API is temporarily unavailable", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      `/chart-engine?clientId=${clientId}&calculationId=${calculationId}`
+    );
+    const currentResult = natalResult();
+    vi.spyOn(application.http, "get").mockImplementation(async (url) => {
+      if (url === `/charts/calculations/${calculationId}`) {
+        return chartCalculationRead(currentResult, ["view_legacy", "recalculate"]);
+      }
+      if (url === `/calculations/${calculationId}`) return savedCalculation(currentResult);
+      if (url === `/clients/${clientId}`) return astrologerClientResponse();
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    vi.spyOn(application.http, "post").mockRejectedValue(
+      new Error("HTTP request failed with status 502")
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { result, unmount } = renderHook(() => useChartEngineController(), {
+      wrapper: chartControllerWrapper()
+    });
+    await waitFor(() => expect(result.current.result?.schemaVersion).toBe("chart-result.v1"));
+
+    await expect(act(async () => result.current.onCreateNatalJob())).resolves.toBeUndefined();
+
+    expect(result.current.result).toEqual(currentResult);
+    expect(result.current.calculationId).toBe(calculationId);
+    expect(result.current.errorMessage).toBe(
+      "Не удалось выполнить расчёт. Сервис временно недоступен. Попробуйте ещё раз."
+    );
+    expect(result.current.errorMessage).not.toMatch(/HTTP request failed|status 502/i);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Chart calculation request failed",
+      expect.any(Error)
+    );
+    expect(window.location.search).toContain(`calculationId=${calculationId}`);
+    unmount();
+  });
+
   it("offers safe authoritative-client recovery for an identity mismatch", async () => {
     const wrongClientId = "77777777-7777-4777-8777-777777777777";
     window.history.replaceState(

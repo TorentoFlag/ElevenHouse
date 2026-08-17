@@ -773,9 +773,7 @@ describe("ChartEnginePage", () => {
     expect(context).toHaveTextContent("Europe/Moscow");
     expect(context).toHaveTextContent("Москва, Россия");
     expect(context).toHaveTextContent("55.7558 / 37.6173");
-    expect(
-      within(context).getByRole("button", { name: "Изменить данные хорара" })
-    ).toBeEnabled();
+    expect(within(context).getByRole("button", { name: "Изменить данные хорара" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
   });
 
@@ -1170,9 +1168,7 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Трактовки" }));
 
     const interpretationsPanel = screen.getByRole("region", { name: "Трактовки" });
-    expect(
-      within(interpretationsPanel).getByText("Астрография · библиотека")
-    ).toBeInTheDocument();
+    expect(within(interpretationsPanel).getByText("Астрография · библиотека")).toBeInTheDocument();
     expect(
       await within(interpretationsPanel).findAllByText("Для этого элемента еще нет трактовки")
     ).not.toHaveLength(0);
@@ -2577,7 +2573,9 @@ describe("ChartEnginePage", () => {
 
     await user.click(screen.getByRole("button", { name: "Закрыть форму данных рождения" }));
 
-    expect(screen.queryByRole("region", { name: "Заполнение данных рождения" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Заполнение данных рождения" })
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Данные рождения" }));
 
@@ -2621,7 +2619,9 @@ describe("ChartEnginePage", () => {
 
     fireEvent.mouseDown(birthDataWorkspace);
 
-    expect(screen.queryByRole("region", { name: "Заполнение данных рождения" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Заполнение данных рождения" })
+    ).not.toBeInTheDocument();
   });
 
   it("edits a complete client birth occurrence and clears it when the timezone changes", async () => {
@@ -2892,6 +2892,34 @@ describe("ChartEnginePage", () => {
     expect(onRetryResult).toHaveBeenCalledOnce();
     expect(onRetrySavedCalculation).toHaveBeenCalledOnce();
     expect(onRetryLink).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a previous result visible while offering a retry for a failed calculation request", async () => {
+    const user = userEvent.setup();
+    const onCreateNatalJob = vi.fn(async () => undefined);
+
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage="Не удалось выполнить расчёт. Сервис временно недоступен. Попробуйте ещё раз."
+        calculationErrorMessage="Не удалось выполнить расчёт. Сервис временно недоступен. Попробуйте ещё раз."
+        isBusy={false}
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={onCreateNatalJob}
+      />
+    );
+
+    expect(screen.getByLabelText(/круг карты/i)).toBeInTheDocument();
+    expect(screen.getByText(/сервис временно недоступен/i)).toBeInTheDocument();
+    expect(screen.queryByText(/HTTP request failed/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Повторить расчёт" }));
+
+    expect(onCreateNatalJob).toHaveBeenCalledOnce();
   });
 
   it("offers a safe navigation action when the calculation identity mismatches", async () => {

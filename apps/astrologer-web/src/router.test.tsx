@@ -14,6 +14,7 @@ import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
+import { ChartEngineRouteError } from "./pages/chart-engine/ChartEngineRoute";
 import { astrologerRoutes } from "./router";
 
 vi.mock("react-router", async (importOriginal) => {
@@ -45,6 +46,7 @@ describe("astrologerRoutes", () => {
     const numerologyRoute = shellRoute?.children?.find((route) => route.path === "/numerology");
     const matrixRoute = shellRoute?.children?.find((route) => route.path === "/matrix");
     const humanDesignRoute = shellRoute?.children?.find((route) => route.path === "/human-design");
+    const chartEngineRoute = shellRoute?.children?.find((route) => route.path === "/chart-engine");
     const referenceRoute = shellRoute?.children?.find((route) => route.path === "/reference");
     const inboxRoute = shellRoute?.children?.find((route) => route.path === "/inbox");
     const settingsRoute = shellRoute?.children?.find((route) => route.path === "/settings");
@@ -79,6 +81,9 @@ describe("astrologerRoutes", () => {
       ReferencePage
     );
     expect(isValidElement(inboxRoute?.element) && inboxRoute.element.type).toBe(InboxPage);
+    expect(
+      isValidElement(chartEngineRoute?.errorElement) && chartEngineRoute.errorElement.type
+    ).toBe(ChartEngineRouteError);
     expect(isValidElement(settingsRoute?.element) && settingsRoute.element.type).toBe(SettingsPage);
   });
 });

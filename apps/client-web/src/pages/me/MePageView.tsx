@@ -35,6 +35,7 @@ export type ClientCabinetStatus =
   | "saved"
   | "validation-error"
   | "error";
+export type ClientCabinetValidationScope = "birth-profile" | "related-profile" | null;
 export type { BirthProfileFormState } from "../../features/client-profile/model/birthProfileFormModel";
 
 export type RelatedBirthProfileFormState = {
@@ -64,6 +65,7 @@ export type MePageViewProps = {
   readonly overview: ClientCabinetOverviewResponse | null;
   readonly relatedProfileForm?: RelatedBirthProfileFormState;
   readonly status: ClientCabinetStatus;
+  readonly validationScope?: ClientCabinetValidationScope;
   readonly sessions?: readonly SessionSummary[];
   readonly sessionsStatus?: "loading" | "ready" | "error";
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
@@ -98,6 +100,7 @@ export function MePageView({
   overview,
   relatedProfileForm = emptyRelatedProfileForm,
   status,
+  validationScope = null,
   sessions = [],
   sessionsStatus = "ready",
   onFormChange,
@@ -252,6 +255,7 @@ export function MePageView({
               relatedBirthProfiles={safeOverview.relatedBirthProfiles ?? []}
               relatedProfileForm={relatedProfileForm}
               status={status}
+              validationScope={validationScope}
               onFormChange={onFormChange}
               onRelatedProfileFormChange={onRelatedProfileFormChange}
               onRelatedProfileSubmit={onRelatedProfileSubmit}
@@ -494,6 +498,7 @@ function DataSection({
   relatedBirthProfiles,
   relatedProfileForm,
   status,
+  validationScope,
   onFormChange,
   onRelatedProfileFormChange,
   onRelatedProfileSubmit,
@@ -506,6 +511,7 @@ function DataSection({
   readonly relatedBirthProfiles: readonly ClientRelatedBirthProfileResponse[];
   readonly relatedProfileForm: RelatedBirthProfileFormState;
   readonly status: ClientCabinetStatus;
+  readonly validationScope: ClientCabinetValidationScope;
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
   readonly onRelatedProfileFormChange: (nextForm: RelatedBirthProfileFormState) => void;
   readonly onRelatedProfileSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -611,7 +617,9 @@ function DataSection({
             selectedPlaceText={form.selectedBirthPlaceText}
             timezone={form.birthTimezone}
             validationError={
-              status === "validation-error" ? birthPlaceSearch.copy.selectionRequired : null
+              status === "validation-error" && validationScope === "birth-profile"
+                ? birthPlaceSearch.copy.selectionRequired
+                : null
             }
             value={form.birthPlaceText}
             onQueryChange={(value) => onFormChange(updateBirthPlaceQuery(form, value))}
@@ -706,7 +714,9 @@ function DataSection({
             selectedPlaceText={relatedProfileForm.birth.selectedBirthPlaceText}
             timezone={relatedProfileForm.birth.birthTimezone}
             validationError={
-              status === "validation-error" ? birthPlaceSearch.copy.selectionRequired : null
+              status === "validation-error" && validationScope === "related-profile"
+                ? birthPlaceSearch.copy.selectionRequired
+                : null
             }
             value={relatedProfileForm.birth.birthPlaceText}
             onQueryChange={(value) =>

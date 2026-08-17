@@ -14,7 +14,12 @@ import {
   createBirthProfileForm,
   type BirthProfileFormState
 } from "../../features/client-profile/model/birthProfileFormModel";
-import { MePageView, type ClientCabinetSection, type ClientCabinetStatus } from "./MePageView";
+import {
+  MePageView,
+  type ClientCabinetSection,
+  type ClientCabinetStatus,
+  type ClientCabinetValidationScope
+} from "./MePageView";
 import { sessionApi } from "../../features/sessions/api/sessionApi";
 import type { SessionSummary } from "@elevenhouse/contracts";
 
@@ -35,6 +40,7 @@ export function MePage() {
     useState<RelatedBirthProfileFormState>(emptyRelatedProfileForm);
   const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
   const [status, setStatus] = useState<ClientCabinetStatus>("loading");
+  const [validationScope, setValidationScope] = useState<ClientCabinetValidationScope>(null);
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [sessionsStatus, setSessionsStatus] = useState<"loading" | "ready" | "error">("loading");
 
@@ -50,10 +56,12 @@ export function MePage() {
         if (isCancelled) return;
         setOverview(nextOverview);
         setForm(createBirthProfileForm(nextOverview.birthData));
+        setValidationScope(null);
         setStatus("ready");
       })
       .catch(() => {
         if (!isCancelled) {
+          setValidationScope(null);
           setStatus("error");
         }
       });
@@ -92,10 +100,12 @@ export function MePage() {
     event.preventDefault();
     const requestResult = buildBirthProfileRequest(form, overview?.birthData?.revision ?? null);
     if (!requestResult.ok) {
+      setValidationScope("birth-profile");
       setStatus("validation-error");
       return;
     }
 
+    setValidationScope(null);
     setStatus("saving");
 
     try {
@@ -117,10 +127,12 @@ export function MePage() {
       relatedProfileForm.displayName.trim().length === 0 ||
       relatedProfileForm.relationshipLabel.trim().length === 0
     ) {
+      setValidationScope("related-profile");
       setStatus("validation-error");
       return;
     }
 
+    setValidationScope(null);
     setStatus("saving");
 
     try {
@@ -151,19 +163,30 @@ export function MePage() {
       overview={overview}
       relatedProfileForm={relatedProfileForm}
       status={status}
+      validationScope={validationScope}
       sessions={sessions}
       sessionsStatus={sessionsStatus}
       onFormChange={(nextForm) => {
         setForm(nextForm);
-        setStatus((currentStatus) =>
-          currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
-        );
+        if (validationScope === "birth-profile") {
+          setValidationScope(null);
+        }
+        if (validationScope === null || validationScope === "birth-profile") {
+          setStatus((currentStatus) =>
+            currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
+          );
+        }
       }}
       onRelatedProfileFormChange={(nextForm) => {
         setRelatedProfileForm(nextForm);
-        setStatus((currentStatus) =>
-          currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
-        );
+        if (validationScope === "related-profile") {
+          setValidationScope(null);
+        }
+        if (validationScope === null || validationScope === "related-profile") {
+          setStatus((currentStatus) =>
+            currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
+          );
+        }
       }}
       onRelatedProfileSubmit={handleRelatedProfileSubmit}
       onRetry={() => {

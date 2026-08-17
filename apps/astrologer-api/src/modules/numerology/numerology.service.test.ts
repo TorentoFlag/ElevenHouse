@@ -109,7 +109,7 @@ describe("NumerologyService", () => {
       links: [{ clientId }],
       participants: [
         { role: "subject", source: "crm_client", clientId },
-        { role: "partner", source: "manual", clientId: null }
+        { role: "partner", source: "manual", clientId: null, relatedProfileId: null }
       ]
     });
     expect(store.create).toHaveBeenCalledWith(

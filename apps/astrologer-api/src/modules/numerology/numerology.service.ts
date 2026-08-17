@@ -414,6 +414,7 @@ function toCalculationParticipant(participant: HydratedParticipant): Calculation
     role: participant.role,
     source: participant.source,
     clientId: participant.clientId,
+    relatedProfileId: null,
     displayName: participant.displayName
   };
 }

@@ -233,6 +233,7 @@ describe("MePageView", () => {
           }
         }}
         status="validation-error"
+        validationScope="birth-profile"
         onFormChange={vi.fn()}
         onRetry={vi.fn()}
         onSectionChange={vi.fn()}

@@ -11,7 +11,7 @@ import { ProductsPage } from "./pages/products/ProductsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
-import { ChartEngineRoute } from "./pages/chart-engine/ChartEngineRoute";
+import { ChartEngineRoute, ChartEngineRouteError } from "./pages/chart-engine/ChartEngineRoute";
 import { HumanDesignPage } from "./pages/human-design/HumanDesignPage";
 import { InboxPage } from "./pages/inbox/InboxPage";
 import { AstroCalendarPage } from "./pages/astro-calendar/AstroCalendarPage";
@@ -93,7 +93,8 @@ export const astrologerRoutes = [
           },
           {
             path: astrologerRouteContract.protected.chartEngine,
-            element: <ChartEngineRoute />
+            element: <ChartEngineRoute />,
+            errorElement: <ChartEngineRouteError />
           },
           {
             path: astrologerRouteContract.protected.settings,

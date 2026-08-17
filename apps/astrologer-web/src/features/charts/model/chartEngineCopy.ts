@@ -658,9 +658,10 @@ const ruChartEngineCopy = {
     cannotRecalculate: "Сохранённый расчёт нельзя пересчитать в текущем состоянии",
     cannotConfirmVersion: "Не удалось подтвердить версию сохранённого расчёта",
     wrongJobTarget: "Статус задания не соответствует исходному расчёту",
-    startFailed: "Не удалось запустить расчёт карты",
+    startFailed: "Не удалось выполнить расчёт. Сервис временно недоступен. Попробуйте ещё раз.",
     recalculationChanged: "Сохранённый расчёт изменился после запуска задания",
-    calculationFailed: "Не удалось рассчитать карту",
+    calculationFailed:
+      "Не удалось выполнить расчёт. Сервис временно недоступен. Попробуйте ещё раз.",
     pdfFailed: "Не удалось выполнить PDF-действие",
     chooseClient: "Выберите клиента",
     missingBirthData: (items: readonly string[]) =>
@@ -973,7 +974,8 @@ const enChartEngineCopy: ChartEngineCopy = {
     synastryNeedsPartner: "Synastry requires a second participant.",
     compositeNeedsPartner: "Composite requires a second participant.",
     otherPartnerStatus: "Choose another partner",
-    otherPartnerDetail: (method) => `For ${method}, choose a second participant, not the current chart.`,
+    otherPartnerDetail: (method) =>
+      `For ${method}, choose a second participant, not the current chart.`,
     synastryInstrumental: "synastry",
     compositeInstrumental: "composite",
     chooseOtherAction: "Choose another",
@@ -1346,9 +1348,11 @@ const enChartEngineCopy: ChartEngineCopy = {
     cannotRecalculate: "The saved calculation cannot be recalculated in its current state",
     cannotConfirmVersion: "Could not confirm the saved calculation version",
     wrongJobTarget: "The job status does not match the original calculation",
-    startFailed: "Could not start chart calculation",
+    startFailed:
+      "Could not complete the calculation. The service is temporarily unavailable. Try again.",
     recalculationChanged: "The saved calculation changed after the job started",
-    calculationFailed: "Could not calculate the chart",
+    calculationFailed:
+      "Could not complete the calculation. The service is temporarily unavailable. Try again.",
     pdfFailed: "Could not complete the PDF action",
     chooseClient: "Choose a client",
     missingBirthData: (items) => `Missing birth data: ${items.join(", ")}`,

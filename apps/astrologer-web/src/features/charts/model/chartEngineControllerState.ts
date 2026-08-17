@@ -194,6 +194,9 @@ export function shouldCommitTerminalJobRecovery(input: {
 
 export function errorMessageFrom(error: unknown, fallbackMessage: string): string | null {
   if (error instanceof HttpError) return fallbackMessage;
+  if (error instanceof Error && /^HTTP request failed with status \d+$/i.test(error.message)) {
+    return fallbackMessage;
+  }
   return error instanceof Error ? error.message : null;
 }
 

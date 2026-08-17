@@ -29,9 +29,14 @@ describe("MePage birth profile submission", () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Мои данные" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Место рождения" }), {
-      target: { value: "Москва вручную" }
-    });
+    fireEvent.change(
+      screen.getByLabelText("Место рождения", {
+        selector: "#client-birth-profile-birth-place"
+      }),
+      {
+        target: { value: "Москва вручную" }
+      }
+    );
     fireEvent.click(screen.getByRole("button", { name: "Сохранить данные" }));
 
     expect(await screen.findByText("Выберите место рождения из найденных вариантов.")).toBeTruthy();

@@ -43,6 +43,7 @@ export type ChartEnginePageProps = {
   readonly calculationId?: string | null;
   readonly result: ChartResult | null;
   readonly errorMessage: string | null;
+  readonly calculationErrorMessage?: string | null;
   readonly pollErrorMessage?: string | null;
   readonly resultErrorMessage?: string | null;
   readonly savedCalculationErrorMessage?: string | null;
@@ -110,6 +111,7 @@ export function ChartEnginePage({
   calculationId = null,
   canRecoverCalculationIdentity = false,
   canRequestAi = true,
+  calculationErrorMessage = null,
   errorMessage,
   horaryQuestion,
   horaryPlaceErrorMessage = null,
@@ -295,6 +297,18 @@ export function ChartEnginePage({
       }}
     />
   );
+  const handleCalculate = () =>
+    void runChartCalculationAction({
+      activeMode,
+      onCreateAstrocartographyJob,
+      onCreateCompositeJob,
+      onCreateHoraryJob,
+      onCreateNatalJob,
+      onCreateProgressionJob,
+      onCreateSolarReturnJob,
+      onCreateSynastryJob,
+      onCreateTransitJob
+    });
   const actionBarProps = {
     birthDataEditorAvailable,
     calculateLabel: viewState.actionLabel,
@@ -308,18 +322,7 @@ export function ChartEnginePage({
     pdfErrorMessage,
     pdfLabel,
     pdfTitle: pdfTitle ?? copy.actionBar.defaultPdfUnavailable,
-    onCalculate: () =>
-      void runChartCalculationAction({
-        activeMode,
-        onCreateAstrocartographyJob,
-        onCreateCompositeJob,
-        onCreateHoraryJob,
-        onCreateNatalJob,
-        onCreateProgressionJob,
-        onCreateSolarReturnJob,
-        onCreateSynastryJob,
-        onCreateTransitJob
-      }),
+    onCalculate: handleCalculate,
     onLink,
     onPdf,
     onPresentation: () => setIsPresentationOpen(true),
@@ -369,6 +372,7 @@ export function ChartEnginePage({
         onSelectPartnerRelatedProfile={onSelectPartnerRelatedProfile}
       />
       <ChartEngineRecoveryNotices
+        calculationErrorMessage={calculationErrorMessage}
         canRecoverCalculationIdentity={canRecoverCalculationIdentity}
         copy={copy}
         identityErrorMessage={identityErrorMessage}
@@ -378,6 +382,7 @@ export function ChartEnginePage({
         resultErrorMessage={resultErrorMessage}
         savedCalculationErrorMessage={savedCalculationErrorMessage}
         onRecoverCalculationIdentity={onRecoverCalculationIdentity}
+        onRetryCalculation={handleCalculate}
         onRetryLink={onRetryLink}
         onRetryPoll={onRetryPoll}
         onRetryResult={onRetryResult}
@@ -449,12 +454,14 @@ export function ChartEnginePage({
 }
 
 function ChartEngineRecoveryNotices({
+  calculationErrorMessage,
   canRecoverCalculationIdentity,
   copy,
   identityErrorMessage,
   isBusy,
   linkErrorMessage,
   onRecoverCalculationIdentity,
+  onRetryCalculation,
   onRetryLink,
   onRetryPoll,
   onRetryResult,
@@ -463,12 +470,14 @@ function ChartEngineRecoveryNotices({
   resultErrorMessage,
   savedCalculationErrorMessage
 }: {
+  readonly calculationErrorMessage: string | null;
   readonly canRecoverCalculationIdentity: boolean;
   readonly copy: ChartEngineCopy;
   readonly identityErrorMessage: string | null;
   readonly isBusy: boolean;
   readonly linkErrorMessage: string | null;
   readonly onRecoverCalculationIdentity?: () => void;
+  readonly onRetryCalculation?: () => void;
   readonly onRetryLink?: () => void | Promise<void>;
   readonly onRetryPoll?: () => void | Promise<void>;
   readonly onRetryResult?: () => void | Promise<void>;
@@ -478,6 +487,12 @@ function ChartEngineRecoveryNotices({
   readonly savedCalculationErrorMessage: string | null;
 }) {
   const notices = [
+    {
+      id: "calculation",
+      message: calculationErrorMessage,
+      action: copy.view.retryCalculation,
+      retry: onRetryCalculation
+    },
     { id: "poll", message: pollErrorMessage, action: copy.recovery.retryPoll, retry: onRetryPoll },
     {
       id: "result",

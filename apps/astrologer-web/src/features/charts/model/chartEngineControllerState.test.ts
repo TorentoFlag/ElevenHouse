@@ -56,7 +56,16 @@ describe("chartEngineControllerState", () => {
 
   it("never exposes a raw HTTP failure in chart workspace copy", () => {
     expect(
-      errorMessageFrom(new HttpError(404, { message: "calculation record was not found" }), "Chart is unavailable")
+      errorMessageFrom(
+        new HttpError(404, { message: "calculation record was not found" }),
+        "Chart is unavailable"
+      )
+    ).toBe("Chart is unavailable");
+  });
+
+  it("treats transport-like plain errors as user-facing service failures", () => {
+    expect(
+      errorMessageFrom(new Error("HTTP request failed with status 502"), "Chart is unavailable")
     ).toBe("Chart is unavailable");
   });
 });
