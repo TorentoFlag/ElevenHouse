@@ -48,6 +48,13 @@ export type ChartTablesProps = {
   readonly onHoverPoint: (pointId: string | null) => void;
 };
 
+type AspectListRow = {
+  readonly key: string;
+  readonly type: string;
+  readonly label: string;
+  readonly orb: number;
+};
+
 export function ChartTables({
   activeTab,
   hoveredPointId,
@@ -417,136 +424,155 @@ function AspectsTable({
         ))}
       </div>
       <h2>{copy.tables.aspectList}</h2>
-      <div className={styles.aspectList}>
-        {renderResult.aspects.length > 0 ? (
-          renderResult.aspects.map((aspect, index) => (
-            <div className={styles.aspectRow} key={`${aspect.pointA}-${aspect.pointB}-${index}`}>
-              <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
-              <span>
-                {getPointLabel(result, aspect.pointA, locale)} —{" "}
-                {getPointLabel(result, aspect.pointB, locale)}
-              </span>
-              <span>{aspect.orb.toFixed(2)}°</span>
-            </div>
-          ))
-        ) : (
-          <div className={styles.emptyRow}>{copy.tables.noMajorAspects}</div>
-        )}
-      </div>
+      <AspectGroupList
+        emptyText={copy.tables.noMajorAspects}
+        locale={locale}
+        rows={renderResult.aspects.map((aspect, index) => ({
+          key: `${aspect.pointA}-${aspect.pointB}-${index}`,
+          type: aspect.type,
+          label: `${getPointLabel(result, aspect.pointA, locale)} — ${getPointLabel(
+            result,
+            aspect.pointB,
+            locale
+          )}`,
+          orb: aspect.orb
+        }))}
+      />
       {transitResult ? (
         <>
           <h2>{copy.tables.transitAspects}</h2>
-          <div className={styles.aspectList}>
-            {transitResult.result.aspectsToNatal.length > 0 ? (
-              transitResult.result.aspectsToNatal.map((aspect, index) => (
-                <div
-                  className={styles.aspectRow}
-                  key={`transit-${aspect.transitPoint}-${aspect.natalPoint}-${index}`}
-                >
-                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
-                  <span>
-                    {getPointLabelFromCollection(
-                      transitRenderResult?.points ?? [],
-                      aspect.transitPoint,
-                      locale
-                    )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
-                  </span>
-                  <span>{aspect.orb.toFixed(2)}°</span>
-                </div>
-              ))
-            ) : (
-              <div className={styles.emptyRow}>{copy.tables.noTransitAspects}</div>
-            )}
-          </div>
+          <AspectGroupList
+            emptyText={copy.tables.noTransitAspects}
+            locale={locale}
+            rows={transitResult.result.aspectsToNatal.map((aspect, index) => ({
+              key: `transit-${aspect.transitPoint}-${aspect.natalPoint}-${index}`,
+              type: aspect.type,
+              label: `${getPointLabelFromCollection(
+                transitRenderResult?.points ?? [],
+                aspect.transitPoint,
+                locale
+              )} — ${getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}`,
+              orb: aspect.orb
+            }))}
+          />
         </>
       ) : null}
       {solarReturnResult ? (
         <>
           <h2>{copy.tables.solarAspects}</h2>
-          <div className={styles.aspectList}>
-            {solarReturnResult.result.aspectsToNatal.length > 0 ? (
-              solarReturnResult.result.aspectsToNatal.map((aspect, index) => (
-                <div
-                  className={styles.aspectRow}
-                  key={`solar-return-${aspect.solarReturnPoint}-${aspect.natalPoint}-${index}`}
-                >
-                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
-                  <span>
-                    {getPointLabelFromCollection(
-                      solarReturnRenderResult?.points ?? [],
-                      aspect.solarReturnPoint,
-                      locale
-                    )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
-                  </span>
-                  <span>{aspect.orb.toFixed(2)}°</span>
-                </div>
-              ))
-            ) : (
-              <div className={styles.emptyRow}>{copy.tables.noSolarAspects}</div>
-            )}
-          </div>
+          <AspectGroupList
+            emptyText={copy.tables.noSolarAspects}
+            locale={locale}
+            rows={solarReturnResult.result.aspectsToNatal.map((aspect, index) => ({
+              key: `solar-return-${aspect.solarReturnPoint}-${aspect.natalPoint}-${index}`,
+              type: aspect.type,
+              label: `${getPointLabelFromCollection(
+                solarReturnRenderResult?.points ?? [],
+                aspect.solarReturnPoint,
+                locale
+              )} — ${getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}`,
+              orb: aspect.orb
+            }))}
+          />
         </>
       ) : null}
       {progressionResult ? (
         <>
           <h2>{copy.tables.progressionAspects}</h2>
-          <div className={styles.aspectList}>
-            {progressionResult.result.aspectsToNatal.length > 0 ? (
-              progressionResult.result.aspectsToNatal.map((aspect, index) => (
-                <div
-                  className={styles.aspectRow}
-                  key={`progression-${aspect.progressedPoint}-${aspect.natalPoint}-${index}`}
-                >
-                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
-                  <span>
-                    {getPointLabelFromCollection(
-                      progressionRenderResult?.points ?? [],
-                      aspect.progressedPoint,
-                      locale
-                    )}{" "}
-                    — {getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}
-                  </span>
-                  <span>{aspect.orb.toFixed(2)}°</span>
-                </div>
-              ))
-            ) : (
-              <div className={styles.emptyRow}>{copy.tables.noProgressionAspects}</div>
-            )}
-          </div>
+          <AspectGroupList
+            emptyText={copy.tables.noProgressionAspects}
+            locale={locale}
+            rows={progressionResult.result.aspectsToNatal.map((aspect, index) => ({
+              key: `progression-${aspect.progressedPoint}-${aspect.natalPoint}-${index}`,
+              type: aspect.type,
+              label: `${getPointLabelFromCollection(
+                progressionRenderResult?.points ?? [],
+                aspect.progressedPoint,
+                locale
+              )} — ${getPointLabelFromCollection(renderResult.points, aspect.natalPoint, locale)}`,
+              orb: aspect.orb
+            }))}
+          />
         </>
       ) : null}
       {synastryResult ? (
         <>
           <h2>{copy.tables.betweenAspects}</h2>
-          <div className={styles.aspectList}>
-            {synastryResult.result.aspectsBetween.length > 0 ? (
-              synastryResult.result.aspectsBetween.map((aspect, index) => (
-                <div
-                  className={styles.aspectRow}
-                  key={`synastry-${aspect.primaryPoint}-${aspect.partnerPoint}-${index}`}
-                >
-                  <span>{formatAspectTypeDisplay(aspect.type, locale)}</span>
-                  <span>
-                    {getPointLabelFromCollection(renderResult.points, aspect.primaryPoint, locale)}{" "}
-                    —{" "}
-                    {getPointLabelFromCollection(
-                      partnerRenderResult?.points ?? [],
-                      aspect.partnerPoint,
-                      locale
-                    )}
-                  </span>
-                  <span>{aspect.orb.toFixed(2)}°</span>
-                </div>
-              ))
-            ) : (
-              <div className={styles.emptyRow}>{copy.tables.noBetweenAspects}</div>
-            )}
-          </div>
+          <AspectGroupList
+            emptyText={copy.tables.noBetweenAspects}
+            locale={locale}
+            rows={synastryResult.result.aspectsBetween.map((aspect, index) => ({
+              key: `synastry-${aspect.primaryPoint}-${aspect.partnerPoint}-${index}`,
+              type: aspect.type,
+              label: `${getPointLabelFromCollection(
+                renderResult.points,
+                aspect.primaryPoint,
+                locale
+              )} — ${getPointLabelFromCollection(
+                partnerRenderResult?.points ?? [],
+                aspect.partnerPoint,
+                locale
+              )}`,
+              orb: aspect.orb
+            }))}
+          />
         </>
       ) : null}
     </section>
+  );
+}
+
+function AspectGroupList({
+  emptyText,
+  locale,
+  rows
+}: {
+  readonly emptyText: string;
+  readonly locale: DictionaryLocale;
+  readonly rows: readonly AspectListRow[];
+}) {
+  if (rows.length === 0) {
+    return <div className={styles.emptyRow}>{emptyText}</div>;
+  }
+
+  const knownTypes = new Set<string>(aspectLegendItems.map((item) => item.type));
+  const aspectTypes = [
+    ...aspectLegendItems.map((item) => item.type),
+    ...rows
+      .map((row) => row.type)
+      .filter((type, index, types) => !knownTypes.has(type) && types.indexOf(type) === index)
+  ];
+
+  return (
+    <div className={styles.aspectList}>
+      {aspectTypes.map((type) => {
+        const groupRows = rows.filter((row) => row.type === type);
+
+        if (groupRows.length === 0) {
+          return null;
+        }
+
+        const title = formatAspectTypeDisplay(type, locale);
+        const symbol = getAspectDisplaySymbol(type, locale);
+
+        return (
+          <section className={styles.aspectGroup} key={type} aria-label={title}>
+            <h3 className={styles.aspectGroupTitle}>
+              {symbol !== title ? <span aria-hidden="true">{symbol}</span> : null}
+              {title}
+            </h3>
+            <div className={styles.aspectGroupRows}>
+              {groupRows.map((row) => (
+                <div className={styles.aspectGroupedRow} key={row.key}>
+                  <span>{row.label}</span>
+                  <span>{row.orb.toFixed(2)}°</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
   );
 }
 

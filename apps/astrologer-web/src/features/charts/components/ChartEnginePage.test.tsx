@@ -1628,7 +1628,7 @@ describe("ChartEnginePage", () => {
       <ChartEnginePage
         selectedClient={client}
         jobState="succeeded"
-        result={chartResult()}
+        result={chartResult(groupedAspectsFixture())}
         errorMessage={null}
         isBusy={false}
         settings={settings()}
@@ -1643,6 +1643,15 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: "Аспекты" }));
 
     expect(screen.getByRole("heading", { name: "Аспекты" })).toBeInTheDocument();
+    const sextileGroup = screen.getByRole("heading", { name: "Секстиль" }).closest("section");
+    expect(sextileGroup).not.toBeNull();
+    expect(within(sextileGroup!).getByText(/Луна — Венера/i)).toBeInTheDocument();
+    expect(within(sextileGroup!).getByText("0.90°")).toBeInTheDocument();
+    expect(within(sextileGroup!).getByText(/Плутон — Венера/i)).toBeInTheDocument();
+    expect(within(sextileGroup!).getByText("1.10°")).toBeInTheDocument();
+    const quincunxGroup = screen.getByRole("heading", { name: "Квинконс" }).closest("section");
+    expect(quincunxGroup).not.toBeNull();
+    expect(within(quincunxGroup!).getByText(/Солнце — Венера/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Планеты" })).not.toBeInTheDocument();
   });
 
@@ -3158,6 +3167,56 @@ function chartResult(
       warnings: [],
       ...overrides
     }
+  };
+}
+
+function groupedAspectsFixture(): Partial<ChartRenderResult> {
+  return {
+    points: [
+      {
+        id: "sun",
+        label: "Sun",
+        longitude: 113.1,
+        sign: "cancer",
+        signDegree: 23.1,
+        house: 10,
+        retrograde: false
+      },
+      {
+        id: "moon",
+        label: "Moon",
+        longitude: 21.2,
+        sign: "aries",
+        signDegree: 21.2,
+        house: 8,
+        retrograde: false
+      },
+      {
+        id: "pluto",
+        label: "Pluto",
+        longitude: 227.33,
+        sign: "scorpio",
+        signDegree: 17.33,
+        house: 7,
+        retrograde: true
+      },
+      {
+        id: "venus",
+        label: "Venus",
+        longitude: 84.2,
+        sign: "gemini",
+        signDegree: 24.2,
+        house: 10,
+        retrograde: false
+      }
+    ],
+    aspects: [
+      { pointA: "moon", pointB: "sun", type: "square", angle: 90, orb: 1.4, applying: true },
+      { pointA: "moon", pointB: "pluto", type: "trine", angle: 120, orb: 2.1, applying: true },
+      { pointA: "moon", pointB: "venus", type: "sextile", angle: 60, orb: 0.9, applying: false },
+      { pointA: "pluto", pointB: "venus", type: "sextile", angle: 60, orb: 1.1, applying: false },
+      { pointA: "sun", pointB: "venus", type: "quincunx", angle: 150, orb: 2.3, applying: false }
+    ]
   };
 }
 
