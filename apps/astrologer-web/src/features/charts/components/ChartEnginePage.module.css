@@ -7,6 +7,9 @@
   --chart-gold-soft: rgb(246 210 102 / 0.13);
   --chart-violet: #b69aff;
   --chart-blue: #62a7ff;
+  --chart-scrollbar-thumb: rgb(186 178 218 / 0.36);
+  --chart-scrollbar-thumb-hover: rgb(246 210 102 / 0.48);
+  --chart-scrollbar-track: transparent;
   container: chart-engine-page / inline-size;
   display: flex;
   height: calc(100dvh - var(--astrologer-app-header-height, 68px));
@@ -16,6 +19,108 @@
   overflow: hidden;
   color: var(--eh-color-moon-120);
   background: #0b0a20;
+}
+
+.scrollSurface {
+  scrollbar-color: var(--chart-scrollbar-thumb) var(--chart-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.scrollSurface::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollSurface::-webkit-scrollbar-track {
+  background: var(--chart-scrollbar-track);
+}
+
+.scrollSurface::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--chart-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.scrollSurface::-webkit-scrollbar-thumb:hover {
+  background: var(--chart-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.scrollSurface::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.rail,
+.panel,
+.body,
+.railContent,
+.relatedProfileEditor,
+.horaryPrecalculation,
+.horaryPreparationSettings,
+.presentationBody {
+  scrollbar-color: var(--chart-scrollbar-thumb) var(--chart-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+.rail::-webkit-scrollbar,
+.panel::-webkit-scrollbar,
+.body::-webkit-scrollbar,
+.railContent::-webkit-scrollbar,
+.relatedProfileEditor::-webkit-scrollbar,
+.horaryPrecalculation::-webkit-scrollbar,
+.horaryPreparationSettings::-webkit-scrollbar,
+.presentationBody::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.rail::-webkit-scrollbar-track,
+.panel::-webkit-scrollbar-track,
+.body::-webkit-scrollbar-track,
+.railContent::-webkit-scrollbar-track,
+.relatedProfileEditor::-webkit-scrollbar-track,
+.horaryPrecalculation::-webkit-scrollbar-track,
+.horaryPreparationSettings::-webkit-scrollbar-track,
+.presentationBody::-webkit-scrollbar-track {
+  background: var(--chart-scrollbar-track);
+}
+
+.rail::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb,
+.body::-webkit-scrollbar-thumb,
+.railContent::-webkit-scrollbar-thumb,
+.relatedProfileEditor::-webkit-scrollbar-thumb,
+.horaryPrecalculation::-webkit-scrollbar-thumb,
+.horaryPreparationSettings::-webkit-scrollbar-thumb,
+.presentationBody::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--chart-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.rail::-webkit-scrollbar-thumb:hover,
+.panel::-webkit-scrollbar-thumb:hover,
+.body::-webkit-scrollbar-thumb:hover,
+.railContent::-webkit-scrollbar-thumb:hover,
+.relatedProfileEditor::-webkit-scrollbar-thumb:hover,
+.horaryPrecalculation::-webkit-scrollbar-thumb:hover,
+.horaryPreparationSettings::-webkit-scrollbar-thumb:hover,
+.presentationBody::-webkit-scrollbar-thumb:hover {
+  background: var(--chart-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.rail::-webkit-scrollbar-corner,
+.panel::-webkit-scrollbar-corner,
+.body::-webkit-scrollbar-corner,
+.railContent::-webkit-scrollbar-corner,
+.relatedProfileEditor::-webkit-scrollbar-corner,
+.horaryPrecalculation::-webkit-scrollbar-corner,
+.horaryPreparationSettings::-webkit-scrollbar-corner,
+.presentationBody::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .toolbar {
@@ -1007,6 +1112,7 @@
 .rail,
 .panel {
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   background: var(--chart-panel);
   scrollbar-width: thin;
@@ -1946,18 +2052,18 @@
 .aspectMatrix {
   display: grid;
   align-items: center;
-  gap: 5px;
-  overflow-x: auto;
+  gap: 3px;
+  overflow-x: hidden;
   padding-bottom: 2px;
 }
 .aspectMatrixHead,
 .aspectMatrixCell,
 .aspectMatrixEmpty {
   display: grid;
-  min-width: 22px;
+  min-width: 0;
   height: 24px;
   place-items: center;
-  border-radius: 7px;
+  border-radius: 6px;
   font-size: 12px;
   line-height: 1;
 }
@@ -2756,6 +2862,7 @@
   }
   .railContent {
     max-height: min(320px, 34dvh);
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 0 18px 18px;
     overscroll-behavior: contain;

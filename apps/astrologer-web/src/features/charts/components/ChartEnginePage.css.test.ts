@@ -29,7 +29,11 @@ describe("Chart Engine responsive accessibility CSS", () => {
   });
 
   it("defines the accepted responsive chart layout breakpoints", () => {
-    const desktopRules = css.slice(css.indexOf(".body"), css.indexOf(".relatedProfileEditor"));
+    const desktopRulesStart = css.indexOf(".body {");
+    const desktopRules = css.slice(
+      desktopRulesStart,
+      css.indexOf(".relatedProfileEditor", desktopRulesStart)
+    );
     const wideCompactRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1680px)"));
     const tabletRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1024px)"));
     const mobileRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 768px)"));
@@ -48,6 +52,17 @@ describe("Chart Engine responsive accessibility CSS", () => {
     expect(mobileRules).toMatch(/\.actionMenu\s*\{[\s\S]*?grid-column:\s*1 \/ -1/);
     expect(mobileRules).toMatch(/\.actionMenuTrigger\s*\{[\s\S]*?box-sizing:\s*border-box/);
     expect(mobileRules).toMatch(/\.panelTabs\s*\{[\s\S]*?overflow-x:\s*hidden/);
+  });
+
+  it("keeps chart scrollbars visually integrated with the dark interface", () => {
+    expect(css).toMatch(/--chart-scrollbar-thumb:\s*rgb\(186 178 218 \/ 0\.36\)/);
+    expect(css).toMatch(/--chart-scrollbar-track:\s*transparent/);
+    expect(css).toMatch(/\.scrollSurface\s*\{[\s\S]*?scrollbar-color:\s*var\(--chart-scrollbar-thumb\) var\(--chart-scrollbar-track\)/);
+    expect(css).toMatch(/\.scrollSurface::-webkit-scrollbar-track\s*\{[\s\S]*?background:\s*var\(--chart-scrollbar-track\)/);
+    expect(css).toMatch(/\.rail,[\s\S]*?\.panel,[\s\S]*?\.body,[\s\S]*?\.railContent,[\s\S]*?\.relatedProfileEditor,[\s\S]*?\.horaryPrecalculation,[\s\S]*?\.horaryPreparationSettings,[\s\S]*?\.presentationBody\s*\{[\s\S]*?scrollbar-color:\s*var\(--chart-scrollbar-thumb\) var\(--chart-scrollbar-track\)/);
+    expect(css).toMatch(/\.rail,[\s\S]*?\.panel\s*\{[\s\S]*?overflow-x:\s*hidden/);
+    expect(css).toMatch(/\.railContent\s*\{[\s\S]*?overflow-x:\s*hidden/);
+    expect(css).toMatch(/\.aspectMatrix\s*\{[\s\S]*?overflow-x:\s*hidden/);
   });
 
   it("keeps extracted moment and birth-data controls usable at compact widths", () => {

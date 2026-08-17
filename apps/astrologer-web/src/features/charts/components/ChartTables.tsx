@@ -392,7 +392,7 @@ function AspectsTable({
       {matrixPoints.length > 1 ? (
         <div
           className={styles.aspectMatrix}
-          style={{ gridTemplateColumns: `34px repeat(${matrixPoints.length}, minmax(22px, 1fr))` }}
+          style={{ gridTemplateColumns: `24px repeat(${matrixPoints.length}, minmax(16px, 1fr))` }}
         >
           <span aria-hidden="true" />
           {matrixPoints.map((point) => (
