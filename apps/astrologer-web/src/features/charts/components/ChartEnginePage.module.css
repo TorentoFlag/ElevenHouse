@@ -579,6 +579,15 @@
   min-width: 8px;
   flex: 1;
 }
+.actionMenu {
+  display: contents;
+}
+.actionMenuTrigger {
+  display: none;
+}
+.actionMenuPanel {
+  display: contents;
+}
 .calculateButton,
 .toolButton {
   display: inline-flex;
@@ -634,7 +643,8 @@
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(190px, 218px) minmax(360px, 1fr) minmax(300px, 340px);
+  grid-template-columns: minmax(190px, 218px) minmax(0, 1fr) minmax(300px, 340px);
+  overflow: hidden;
 }
 
 .relatedProfileEditor {
@@ -1007,9 +1017,21 @@
   padding: 16px 14px 30px;
   border-right: 1px solid var(--chart-line);
 }
+.railDisclosure {
+  display: grid;
+  min-width: 0;
+}
+.railToggle {
+  display: none;
+}
+.railContent {
+  display: grid;
+  min-width: 0;
+}
 .panel {
   grid-column: 3;
   grid-row: 1;
+  min-width: 0;
   border-left: 1px solid var(--chart-line);
 }
 .railGroup {
@@ -1365,6 +1387,7 @@
 }
 .wheelSvg {
   width: min(100%, 460px);
+  aspect-ratio: 1;
   max-height: 460px;
   overflow: visible;
 }
@@ -1737,16 +1760,18 @@
   top: 0;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
+  overflow-x: hidden;
   padding: 10px 12px 0;
   border-bottom: 1px solid var(--chart-line);
   background: rgb(13 12 32 / 0.94);
 }
 .panelTab,
 .panelTabActive {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 4px 11px;
+  flex: 0 0 auto;
+  min-width: max-content;
+  padding: 10px 10px 11px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -2615,5 +2640,264 @@
   .statusCard,
   .statusCardError {
     position: static;
+  }
+}
+
+@container chart-engine-page (max-width: 1680px) {
+  .toolbarSpacer {
+    display: none;
+  }
+  .actionMenu {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+  }
+  .actionMenuTrigger {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    border: 1px solid var(--chart-line-strong);
+    border-radius: 999px;
+    background: rgb(30 27 62);
+    color: var(--eh-color-moon-120);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 760;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .actionMenuTrigger::-webkit-details-marker {
+    display: none;
+  }
+  .actionMenuTrigger:focus-visible {
+    outline: 2px solid var(--chart-gold);
+    outline-offset: 2px;
+  }
+  .actionMenuPanel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    display: none;
+    min-width: 220px;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--chart-line-strong);
+    border-radius: 14px;
+    background: rgb(20 17 48 / 0.98);
+    box-shadow:
+      0 18px 36px rgb(0 0 0 / 0.35),
+      inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+  .actionMenu[open] .actionMenuPanel {
+    display: grid;
+  }
+  .actionMenuPanel .toolButton,
+  .actionMenuPanel .toolButtonActive {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@container chart-engine-page (max-width: 1280px) {
+  .toolbar {
+    gap: 8px;
+  }
+  .clientStrip,
+  .partnerPicker {
+    width: clamp(200px, 24vw, 300px);
+    flex-basis: clamp(200px, 24vw, 300px);
+  }
+}
+
+@container chart-engine-page (max-width: 1024px) {
+  .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .rail {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 46px;
+    padding: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--chart-line);
+    overflow: visible;
+  }
+  .railToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 46px;
+    padding: 0 18px;
+    color: rgb(229 225 244 / 0.9);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 820;
+    list-style: none;
+  }
+  .railToggle::-webkit-details-marker {
+    display: none;
+  }
+  .railToggle i {
+    color: var(--chart-gold);
+    font-style: normal;
+    transition: transform 0.16s ease;
+  }
+  .railDisclosure[open] .railToggle i {
+    transform: rotate(180deg);
+  }
+  .railContent {
+    max-height: min(320px, 34dvh);
+    overflow-y: auto;
+    padding: 0 18px 18px;
+    overscroll-behavior: contain;
+  }
+  .railDisclosure[open] {
+    min-height: calc(46px + min(320px, 34dvh));
+  }
+  .rail:has(.railDisclosure[open]) {
+    min-height: calc(46px + min(320px, 34dvh));
+  }
+  .workspace {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: auto;
+    overflow: visible;
+  }
+  .wheelStage {
+    min-height: clamp(420px, 56vw, 620px);
+    padding: 24px 20px 12px;
+  }
+  .wheelSvg {
+    width: min(100%, clamp(360px, 54vw, 560px));
+    aspect-ratio: 1;
+    max-height: min(560px, 54vw);
+  }
+  .panel {
+    grid-column: 1;
+    grid-row: 3;
+    min-height: min(420px, 52dvh);
+    max-height: min(560px, 52dvh);
+    border-top: 1px solid var(--chart-line);
+    border-left: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .panelTabs {
+    overflow-x: hidden;
+  }
+  .tableStack,
+  .chartAiPanel,
+  .panelSettings {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .aspectMatrix {
+    max-width: 100%;
+  }
+}
+
+@container chart-engine-page (max-width: 768px) {
+  .page {
+    overflow-x: hidden;
+  }
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .clientStrip,
+  .partnerPicker,
+  .modeTabs {
+    width: 100%;
+    grid-column: 1 / -1;
+    flex-basis: auto;
+  }
+  .modeTabs {
+    justify-self: stretch;
+  }
+  .modeTabs > .modeTooltip {
+    flex: 1 1 0;
+  }
+  .modeActive,
+  .modeButton,
+  .modeDisabled {
+    min-height: 42px;
+    padding-inline: 10px;
+  }
+  .calculateButton {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .actionMenu {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-self: stretch;
+  }
+  .actionMenuTrigger {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 44px;
+  }
+  .actionMenuPanel {
+    box-sizing: border-box;
+    right: 0;
+    left: auto;
+    width: min(280px, calc(100vw - 32px));
+  }
+  .railContent {
+    max-height: min(360px, 42dvh);
+    padding-inline: 16px;
+  }
+  .railDisclosure[open] {
+    min-height: calc(46px + min(360px, 42dvh));
+  }
+  .rail:has(.railDisclosure[open]) {
+    min-height: calc(46px + min(360px, 42dvh));
+  }
+  .wheelStage {
+    min-height: clamp(360px, 82vw, 520px);
+    padding: 20px 14px 10px;
+  }
+  .wheelSvg {
+    width: min(100%, clamp(300px, 82vw, 480px));
+    max-height: min(480px, 82vw);
+  }
+  .panel {
+    max-height: none;
+  }
+  .panelTabs {
+    overflow-x: hidden;
+  }
+  .panelTab,
+  .panelTabActive {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding-inline: 12px;
+  }
+  .tableStack,
+  .chartAiPanel,
+  .panelSettings {
+    padding-inline: 16px;
+  }
+  .hoverDetailCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .hoverDetailAspects {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 }

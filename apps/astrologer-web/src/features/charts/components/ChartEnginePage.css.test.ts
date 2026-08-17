@@ -28,6 +28,28 @@ describe("Chart Engine responsive accessibility CSS", () => {
     expect(mobileRules).toMatch(/\.page\s*\{[\s\S]*?overflow-x:\s*hidden/);
   });
 
+  it("defines the accepted responsive chart layout breakpoints", () => {
+    const desktopRules = css.slice(css.indexOf(".body"), css.indexOf(".relatedProfileEditor"));
+    const wideCompactRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1680px)"));
+    const tabletRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 1024px)"));
+    const mobileRules = css.slice(css.indexOf("@container chart-engine-page (max-width: 768px)"));
+
+    expect(desktopRules).toMatch(
+      /grid-template-columns:\s*minmax\(190px,\s*218px\) minmax\(0,\s*1fr\) minmax\(300px,\s*340px\)/
+    );
+    expect(css).toMatch(/\.panelTabs\s*\{[\s\S]*?flex-wrap:\s*wrap/);
+    expect(wideCompactRules).toMatch(/\.actionMenuTrigger\s*\{[\s\S]*?display:\s*inline-flex/);
+    expect(tabletRules).toMatch(/\.body\s*\{[\s\S]*?display:\s*grid/);
+    expect(tabletRules).toMatch(/\.body\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(tabletRules).toMatch(/\.railToggle\s*\{[\s\S]*?display:\s*flex/);
+    expect(tabletRules).toMatch(/\.wheelSvg\s*\{[\s\S]*?aspect-ratio:\s*1/);
+    expect(tabletRules).toMatch(/\.panel\s*\{[\s\S]*?grid-row:\s*3/);
+    expect(mobileRules).toMatch(/\.calculateButton\s*\{[\s\S]*?grid-column:\s*1 \/ -1/);
+    expect(mobileRules).toMatch(/\.actionMenu\s*\{[\s\S]*?grid-column:\s*1 \/ -1/);
+    expect(mobileRules).toMatch(/\.actionMenuTrigger\s*\{[\s\S]*?box-sizing:\s*border-box/);
+    expect(mobileRules).toMatch(/\.panelTabs\s*\{[\s\S]*?overflow-x:\s*hidden/);
+  });
+
   it("keeps extracted moment and birth-data controls usable at compact widths", () => {
     for (const responsivePrefix of [
       "@container chart-engine-page (max-width: 760px)",

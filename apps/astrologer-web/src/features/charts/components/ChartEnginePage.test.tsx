@@ -1530,7 +1530,7 @@ describe("ChartEnginePage", () => {
   });
 
   it("renders reference-style dominant points in the left rail after distributions", () => {
-    render(
+    const { container } = render(
       <ChartEnginePage
         selectedClient={client}
         jobState="succeeded"
@@ -1610,6 +1610,11 @@ describe("ChartEnginePage", () => {
     );
 
     const rail = screen.getByRole("complementary", { name: "Сводка карты" });
+    const railDisclosure = container.querySelector("[data-testid='chart-summary-disclosure']");
+    expect(railDisclosure).toBeInstanceOf(HTMLDetailsElement);
+    expect(railDisclosure).toHaveAttribute("open");
+    expect(within(rail).getByText("Сводка карты")).toBeInTheDocument();
+
     const railText = rail.textContent ?? "";
 
     const dominantsSection = within(rail)
@@ -1620,6 +1625,33 @@ describe("ChartEnginePage", () => {
     expect(dominantsSection).toHaveTextContent(/Плутон\s*2 асп\./);
     expect(railText.indexOf("Кресты")).toBeLessThan(railText.indexOf("Доминанты"));
     expect(railText.indexOf("Доминанты")).toBeLessThan(railText.indexOf("Ретроградные"));
+  });
+
+  it("keeps secondary chart actions available from a compact actions menu", () => {
+    render(
+      <ChartEnginePage
+        selectedClient={client}
+        jobState="succeeded"
+        calculationId={calculationId}
+        result={chartResult()}
+        errorMessage={null}
+        isBusy={false}
+        isCalculationLinked={false}
+        linkDisabled={false}
+        pdfDisabled={false}
+        pdfLabel="PDF"
+        settings={settings()}
+        onSettingsChange={vi.fn()}
+        onCreateNatalJob={vi.fn()}
+      />
+    );
+
+    const actionMenu = screen.getByRole("group", { name: "Действия карты" });
+    expect(within(actionMenu).getByText("Действия")).toBeInTheDocument();
+    expect(within(actionMenu).getByRole("button", { name: "Экспорт карты" })).toBeEnabled();
+    expect(within(actionMenu).getByRole("button", { name: "Привязать" })).toBeEnabled();
+    expect(within(actionMenu).getByRole("button", { name: "PDF" })).toBeEnabled();
+    expect(within(actionMenu).getByRole("button", { name: /Настройки/i })).toBeEnabled();
   });
 
   it("switches the right panel tabs without mixing table sections", async () => {

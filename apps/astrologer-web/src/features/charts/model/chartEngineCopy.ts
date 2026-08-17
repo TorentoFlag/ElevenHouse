@@ -172,6 +172,8 @@ const ruChartEngineCopy = {
     relatedRequired: "Заполните имя и кем приходится."
   },
   actionBar: {
+    actionsMenu: "Действия",
+    actionsMenuLabel: "Действия карты",
     exportLabel: "Экспорт карты",
     exportUnavailable: "Экспорт карты пока недоступен",
     exportTitle: "Презентация — полноэкранный показ для сессии",
@@ -864,6 +866,8 @@ const enChartEngineCopy: ChartEngineCopy = {
     relatedRequired: "Fill in name and relationship."
   },
   actionBar: {
+    actionsMenu: "Actions",
+    actionsMenuLabel: "Chart actions",
     exportLabel: "Export chart",
     exportUnavailable: "Chart export is not available yet",
     exportTitle: "Presentation — full-screen session view",

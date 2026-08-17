@@ -430,57 +430,67 @@ function ChartSummaryRail({
 
   return (
     <aside className={styles.rail} aria-label={copy.rail.ariaLabel}>
-      {horaryQuestion ? (
-        <HoraryContextSummary
-          contextEditor={horaryContextEditor}
-          copy={copy}
-          isEditorOpen={isHoraryContextEditorOpen}
-          locale={locale}
-          placeText={horaryPlaceText}
-          value={horaryQuestion}
-          onToggleEditor={onToggleHoraryContextEditor}
-        />
-      ) : null}
-      {needsBirthData && !readiness.ready ? (
-        <section className={styles.railGroup}>
-          <h2>{copy.rail.birthData}</h2>
-          <p className={styles.warningText}>{copy.rail.missing(readiness.missing)}</p>
-        </section>
-      ) : null}
-      <section className={styles.railGroup}>
-        <h2>{isAstrocartographyMode ? copy.rail.astrocartography : copy.rail.bigThree}</h2>
-        {astroResult ? (
-          getAstrocartographySummary(astroResult, copy).map((item) => (
-            <SummaryCard key={item.label} {...item} />
-          ))
-        ) : wheelResult ? (
-          getBigThree(wheelResult, copy, locale).map((item) => (
-            <SummaryCard key={item.label} {...item} />
-          ))
-        ) : (
-          <p className={styles.muted}>
-            {isAstrocartographyMode ? copy.rail.linesPending : copy.rail.chartPending}
-          </p>
-        )}
-      </section>
-      {wheelResult ? <DistributionSummary copy={copy} result={wheelResult} /> : null}
-      {wheelResult ? <DominantsSummary copy={copy} locale={locale} result={wheelResult} /> : null}
-      {wheelResult ? (
-        <section className={styles.railGroup}>
-          <h2>{copy.rail.retrogrades}</h2>
-          {getPrimaryChartRenderResult(wheelResult).points.some((point) => point.retrograde) ? (
-            getPrimaryChartRenderResult(wheelResult)
-              .points.filter((point) => point.retrograde)
-              .map((point) => (
-                <div className={styles.retroPill} key={point.id}>
-                  {getChartPointDisplayLabel(point.id, point.label, locale)} R
-                </div>
+      <details className={styles.railDisclosure} data-testid="chart-summary-disclosure" open>
+        <summary className={styles.railToggle}>
+          <span>{copy.rail.ariaLabel}</span>
+          <i aria-hidden="true">⌄</i>
+        </summary>
+        <div className={styles.railContent}>
+          {horaryQuestion ? (
+            <HoraryContextSummary
+              contextEditor={horaryContextEditor}
+              copy={copy}
+              isEditorOpen={isHoraryContextEditorOpen}
+              locale={locale}
+              placeText={horaryPlaceText}
+              value={horaryQuestion}
+              onToggleEditor={onToggleHoraryContextEditor}
+            />
+          ) : null}
+          {needsBirthData && !readiness.ready ? (
+            <section className={styles.railGroup}>
+              <h2>{copy.rail.birthData}</h2>
+              <p className={styles.warningText}>{copy.rail.missing(readiness.missing)}</p>
+            </section>
+          ) : null}
+          <section className={styles.railGroup}>
+            <h2>{isAstrocartographyMode ? copy.rail.astrocartography : copy.rail.bigThree}</h2>
+            {astroResult ? (
+              getAstrocartographySummary(astroResult, copy).map((item) => (
+                <SummaryCard key={item.label} {...item} />
               ))
-          ) : (
-            <p className={styles.muted}>{copy.rail.noRetrogrades}</p>
-          )}
-        </section>
-      ) : null}
+            ) : wheelResult ? (
+              getBigThree(wheelResult, copy, locale).map((item) => (
+                <SummaryCard key={item.label} {...item} />
+              ))
+            ) : (
+              <p className={styles.muted}>
+                {isAstrocartographyMode ? copy.rail.linesPending : copy.rail.chartPending}
+              </p>
+            )}
+          </section>
+          {wheelResult ? <DistributionSummary copy={copy} result={wheelResult} /> : null}
+          {wheelResult ? (
+            <DominantsSummary copy={copy} locale={locale} result={wheelResult} />
+          ) : null}
+          {wheelResult ? (
+            <section className={styles.railGroup}>
+              <h2>{copy.rail.retrogrades}</h2>
+              {getPrimaryChartRenderResult(wheelResult).points.some((point) => point.retrograde) ? (
+                getPrimaryChartRenderResult(wheelResult)
+                  .points.filter((point) => point.retrograde)
+                  .map((point) => (
+                    <div className={styles.retroPill} key={point.id}>
+                      {getChartPointDisplayLabel(point.id, point.label, locale)} R
+                    </div>
+                  ))
+              ) : (
+                <p className={styles.muted}>{copy.rail.noRetrogrades}</p>
+              )}
+            </section>
+          ) : null}
+        </div>
+      </details>
     </aside>
   );
 }
