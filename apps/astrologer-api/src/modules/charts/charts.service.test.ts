@@ -14,6 +14,7 @@ import type {
   ChartCalculationCommandStore,
   ChartCalculationJobStore,
   ClientBirthData,
+  ClientRelatedBirthProfileStore,
   ClientStore,
   DictionaryStore
 } from "@elevenhouse/domain";
@@ -1167,7 +1168,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore,
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1205,7 +1206,7 @@ describe("ChartsService", () => {
       dictionaryStore,
       profileStore,
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1312,7 +1313,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1346,7 +1347,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1385,7 +1386,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore,
       aiGeneration: createAiGenerationService(),
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1417,7 +1418,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore,
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1451,7 +1452,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore,
       aiGeneration: createAiGenerationService(),
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1480,7 +1481,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1510,7 +1511,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1544,7 +1545,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiGeneration,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1580,7 +1581,7 @@ describe("ChartsService", () => {
       dictionaryStore,
       profileStore,
       aiGeneration,
-      locale: "en",
+      locale: "en"
     });
 
     await expect(
@@ -1612,7 +1613,7 @@ describe("ChartsService", () => {
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
       aiDraftCommandStore,
-      aiGeneration,
+      aiGeneration
     });
 
     await expect(
@@ -1652,7 +1653,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       dictionaryStore,
-      aiDraftCommandStore,
+      aiDraftCommandStore
     });
 
     await expect(
@@ -1689,7 +1690,7 @@ describe("ChartsService", () => {
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      aiGeneration,
+      aiGeneration
     });
 
     await expect(
@@ -1781,7 +1782,7 @@ describe("ChartsService", () => {
     const service = createService({
       calculationStore: createCalculationStore(calculation),
       aiDraftCommandStore,
-      aiGeneration,
+      aiGeneration
     });
 
     await expect(
@@ -1841,7 +1842,7 @@ describe("ChartsService", () => {
     const aiGeneration = createAiGenerationService();
     const service = createService({
       calculationStore: createCalculationStore(calculation),
-      aiGeneration,
+      aiGeneration
     });
 
     await expect(
@@ -1914,7 +1915,8 @@ function createService(
   } = {}
 ): ChartsService {
   return new ChartsService(
-    input.clientStore ?? createClientStore(),
+    (input.clientStore ?? createClientStore()) as ClientStore &
+      Pick<ClientRelatedBirthProfileStore, "getAstrologerRelatedBirthProfile">,
     input.commandStore ?? createCommandStore(),
     input.jobStore ?? createJobStore(),
     input.calculationStore ?? createCalculationStore(null),

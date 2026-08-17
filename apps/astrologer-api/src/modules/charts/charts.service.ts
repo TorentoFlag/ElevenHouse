@@ -50,6 +50,7 @@ import {
   type ChartInterpretationMode,
   type ChartRecalculationTarget,
   type ChartReadyBirthData,
+  type ClientRelatedBirthProfileStore,
   type ClientStore,
   type DictionaryStore,
   type PlatformTariffEntitlementStore
@@ -128,7 +129,9 @@ export class ChartsService {
   private readonly logger = new Logger(ChartsService.name);
 
   constructor(
-    @Inject(CLIENT_STORE) private readonly clientStore: ClientStore,
+    @Inject(CLIENT_STORE)
+    private readonly clientStore: ClientStore &
+      Pick<ClientRelatedBirthProfileStore, "getAstrologerRelatedBirthProfile">,
     @Inject(CHART_COMMAND_STORE) private readonly commandStore: ChartCalculationCommandStore,
     @Inject(CHART_JOB_STORE) private readonly jobStore: ChartCalculationJobStore,
     @Inject(CALCULATION_STORE) private readonly calculationStore: CalculationStore,
@@ -290,13 +293,6 @@ export class ChartsService {
     const ownerUserId = requireOwnerUserId(request);
     const startedAt = performance.now();
     return mapChartError(async () => {
-      if (parsedBody.clientId === parsedBody.partnerClientId) {
-        throw chartHttpError(
-          400,
-          "CHART_SYNASTRY_PARTNER_REQUIRED",
-          "Synastry requires a different partner client"
-        );
-      }
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
         clientUserId: parsedBody.clientId
@@ -304,17 +300,9 @@ export class ChartsService {
       if (!client?.birthData) {
         throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
       }
-      const partnerClient = await this.clientStore.getAstrologerClient({
-        astrologerUserId: ownerUserId,
-        clientUserId: parsedBody.partnerClientId
-      });
-      if (!partnerClient?.birthData) {
-        throw chartHttpError(404, "CHART_PARTNER_CLIENT_NOT_FOUND", "Partner client was not found");
-      }
+      const partner = await this.resolveRelationshipPartner(ownerUserId, parsedBody, "synastry");
       const inputSnapshot = toChartInputSnapshot(assertChartBirthDataReady(client.birthData));
-      const partnerInputSnapshot = toChartInputSnapshot(
-        assertChartBirthDataReady(partnerClient.birthData)
-      );
+      const partnerInputSnapshot = partner.inputSnapshot;
       const requestSnapshot = {
         inputSnapshot,
         partnerInputSnapshot
@@ -324,10 +312,7 @@ export class ChartsService {
         method: "synastry",
         inputSnapshot: requestSnapshot,
         settingsSnapshot: parsedBody.settings,
-        participants: [
-          { role: "subject", clientId: parsedBody.clientId },
-          { role: "partner", clientId: parsedBody.partnerClientId }
-        ]
+        participants: [{ role: "subject", clientId: parsedBody.clientId }, partner.participant]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
@@ -354,13 +339,6 @@ export class ChartsService {
     const ownerUserId = requireOwnerUserId(request);
     const startedAt = performance.now();
     return mapChartError(async () => {
-      if (parsedBody.clientId === parsedBody.partnerClientId) {
-        throw chartHttpError(
-          400,
-          "CHART_COMPOSITE_PARTNER_REQUIRED",
-          "Composite requires a different partner client"
-        );
-      }
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
         clientUserId: parsedBody.clientId
@@ -368,17 +346,9 @@ export class ChartsService {
       if (!client?.birthData) {
         throw chartHttpError(404, "CHART_CLIENT_NOT_FOUND", "Client was not found");
       }
-      const partnerClient = await this.clientStore.getAstrologerClient({
-        astrologerUserId: ownerUserId,
-        clientUserId: parsedBody.partnerClientId
-      });
-      if (!partnerClient?.birthData) {
-        throw chartHttpError(404, "CHART_PARTNER_CLIENT_NOT_FOUND", "Partner client was not found");
-      }
+      const partner = await this.resolveRelationshipPartner(ownerUserId, parsedBody, "composite");
       const inputSnapshot = toChartInputSnapshot(assertChartBirthDataReady(client.birthData));
-      const partnerInputSnapshot = toChartInputSnapshot(
-        assertChartBirthDataReady(partnerClient.birthData)
-      );
+      const partnerInputSnapshot = partner.inputSnapshot;
       const requestSnapshot = {
         inputSnapshot,
         partnerInputSnapshot
@@ -388,10 +358,7 @@ export class ChartsService {
         method: "composite",
         inputSnapshot: requestSnapshot,
         settingsSnapshot: parsedBody.settings,
-        participants: [
-          { role: "subject", clientId: parsedBody.clientId },
-          { role: "partner", clientId: parsedBody.partnerClientId }
-        ]
+        participants: [{ role: "subject", clientId: parsedBody.clientId }, partner.participant]
       });
       const outcome = await createChartJobAndRequestCalculation({
         store: this.commandStore,
@@ -751,6 +718,25 @@ export class ChartsService {
   ): Promise<unknown> {
     const snapshots = new Map<"subject" | "partner", ReturnType<typeof toChartInputSnapshot>>();
     for (const participant of target.participants) {
+      if ("source" in participant && participant.source === "client_related_profile") {
+        const relatedProfile = await this.clientStore.getAstrologerRelatedBirthProfile({
+          astrologerUserId: ownerUserId,
+          clientUserId: participant.clientId,
+          relatedProfileId: participant.relatedProfileId
+        });
+        if (!relatedProfile) {
+          throw chartHttpError(
+            404,
+            "CHART_PARTNER_RELATED_PROFILE_NOT_FOUND",
+            "Partner related birth profile was not found"
+          );
+        }
+        snapshots.set(
+          participant.role,
+          toChartInputSnapshot(assertChartBirthDataReady(relatedProfile))
+        );
+        continue;
+      }
       const client = await this.clientStore.getAstrologerClient({
         astrologerUserId: ownerUserId,
         clientUserId: participant.clientId
@@ -801,6 +787,66 @@ export class ChartsService {
       inputSnapshot,
       ...target.eventSnapshot
     });
+  }
+
+  private async resolveRelationshipPartner(
+    ownerUserId: string,
+    request: ChartSynastryJobCreateRequest | ChartCompositeJobCreateRequest,
+    method: "synastry" | "composite"
+  ): Promise<{
+    readonly inputSnapshot: ReturnType<typeof toChartInputSnapshot>;
+    readonly participant: ChartCalculationParticipant;
+  }> {
+    const partner =
+      "partner" in request
+        ? request.partner
+        : { source: "crm_client" as const, clientId: request.partnerClientId };
+    if (partner.source === "crm_client") {
+      if (request.clientId === partner.clientId) {
+        throw chartHttpError(
+          400,
+          method === "synastry"
+            ? "CHART_SYNASTRY_PARTNER_REQUIRED"
+            : "CHART_COMPOSITE_PARTNER_REQUIRED",
+          method === "synastry"
+            ? "Synastry requires a different partner client"
+            : "Composite requires a different partner client"
+        );
+      }
+      const partnerClient = await this.clientStore.getAstrologerClient({
+        astrologerUserId: ownerUserId,
+        clientUserId: partner.clientId
+      });
+      if (!partnerClient?.birthData) {
+        throw chartHttpError(404, "CHART_PARTNER_CLIENT_NOT_FOUND", "Partner client was not found");
+      }
+      return {
+        inputSnapshot: toChartInputSnapshot(assertChartBirthDataReady(partnerClient.birthData)),
+        participant: { role: "partner", clientId: partner.clientId }
+      };
+    }
+
+    const relatedProfile = await this.clientStore.getAstrologerRelatedBirthProfile({
+      astrologerUserId: ownerUserId,
+      clientUserId: request.clientId,
+      relatedProfileId: partner.relatedProfileId
+    });
+    if (!relatedProfile) {
+      throw chartHttpError(
+        404,
+        "CHART_PARTNER_RELATED_PROFILE_NOT_FOUND",
+        "Partner related birth profile was not found"
+      );
+    }
+    return {
+      inputSnapshot: toChartInputSnapshot(assertChartBirthDataReady(relatedProfile)),
+      participant: {
+        role: "partner",
+        source: "client_related_profile",
+        clientId: request.clientId,
+        relatedProfileId: relatedProfile.id
+      }
+    };
   }
 
   async createAiDraft(

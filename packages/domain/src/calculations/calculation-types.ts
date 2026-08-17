@@ -4,7 +4,7 @@ export type CalculationMode = "individual" | "compatibility";
 export type CalculationStatus = "calculated" | "linked" | "published" | "archived";
 export type CalculationStatusFilter = CalculationStatus | "all";
 export type CalculationParticipantRole = "subject" | "partner";
-export type CalculationParticipantSource = "crm_client" | "manual";
+export type CalculationParticipantSource = "crm_client" | "client_related_profile" | "manual";
 export type CalculationClientVisibility = "private_to_astrologer" | "visible_to_client";
 export type CalculationInterpretationSource = "ai" | "manual";
 export type CalculationInterpretationStatus = "draft" | "approved";
@@ -13,6 +13,7 @@ export type CalculationParticipant = {
   readonly role: CalculationParticipantRole;
   readonly source: CalculationParticipantSource;
   readonly clientId: string | null;
+  readonly relatedProfileId?: string | null;
   readonly displayName: string;
 };
 

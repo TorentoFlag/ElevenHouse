@@ -8,6 +8,9 @@ import {
   clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
   clientCabinetOverviewResponseSchema,
+  clientRelatedBirthProfileListResponseSchema,
+  clientRelatedBirthProfileResponseSchema,
+  clientRelatedBirthProfileUpsertRequestSchema,
   createClientJoinIntentRequestSchema,
   createClientJoinIntentResponseSchema
 } from "./clients";
@@ -209,12 +212,58 @@ describe("client contracts", () => {
     });
   });
 
-  it("rejects a multi-profile response shape", () => {
+  it("accepts related birth profiles with separate person name and relationship label", () => {
+    expect(
+      clientRelatedBirthProfileUpsertRequestSchema.parse({
+        displayName: " Иванов Иван Иванович ",
+        relationshipLabel: " муж ",
+        birthDate: "1988-07-22",
+        birthTime: "",
+        birthTimePrecision: "unknown",
+        birthPlaceText: "Калининград, Россия",
+        birthCountryCode: "RU",
+        birthCity: "Калининград",
+        birthRegion: "Калининградская область",
+        birthTimezone: "Europe/Kaliningrad",
+        birthTimeDstOccurrence: null,
+        birthLatitude: 54.7104,
+        birthLongitude: 20.4522,
+        expectedRevision: null
+      })
+    ).toMatchObject({
+      displayName: "Иванов Иван Иванович",
+      relationshipLabel: "муж",
+      birthTime: null,
+      expectedRevision: null
+    });
+
+    expect(
+      clientRelatedBirthProfileResponseSchema.parse(
+        relatedBirthProfile({
+          displayName: "Иванов Иван Иванович",
+          relationshipLabel: "муж",
+          source: "manual",
+          lastEditedByRole: "astrologer"
+        })
+      )
+    ).toMatchObject({
+      clientUserId: "11111111-1111-4111-8111-111111111111",
+      displayName: "Иванов Иван Иванович",
+      relationshipLabel: "муж",
+      lastEditedByRole: "astrologer"
+    });
+  });
+
+  it("rejects ambiguous related profiles without owner and label fields", () => {
     expect(() =>
-      clientCabinetOverviewResponseSchema.parse({
-        astrologers: [],
-        birthProfiles: [birthProfile()],
-        summary: emptySummary()
+      clientRelatedBirthProfileListResponseSchema.parse({
+        profiles: [
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            label: "Партнёр",
+            birthDate: "1988-07-22"
+          }
+        ]
       })
     ).toThrow();
   });
@@ -233,9 +282,16 @@ describe("client contracts", () => {
           }
         ],
         birthData: birthProfile(),
+        relatedBirthProfiles: [
+          relatedBirthProfile({
+            displayName: "Иванов Иван Иванович",
+            relationshipLabel: "муж"
+          })
+        ],
         summary: emptySummary()
       })
     ).toMatchObject({
+      relatedBirthProfiles: [{ displayName: "Иванов Иван Иванович", relationshipLabel: "муж" }],
       summary: {
         directLinkOnly: true,
         upcomingBookingCount: 0
@@ -268,6 +324,42 @@ function birthProfile(
     birthTimeDstOccurrence: null,
     birthLatitude: 55.7558,
     birthLongitude: 37.6173,
+    source: overrides.source ?? "client_profile",
+    revision: overrides.revision ?? 1,
+    lastEditedByUserId: "11111111-1111-4111-8111-111111111111",
+    lastEditedByRole: overrides.lastEditedByRole ?? "client",
+    createdAt: "2026-07-06T10:00:00.000Z",
+    updatedAt: "2026-07-06T10:00:00.000Z"
+  };
+}
+
+function relatedBirthProfile(
+  overrides: Partial<{
+    id: string;
+    clientUserId: string;
+    displayName: string;
+    relationshipLabel: string;
+    revision: number;
+    source: "client_profile" | "import" | "manual";
+    lastEditedByRole: "client" | "astrologer";
+  }> = {}
+) {
+  return {
+    id: overrides.id ?? "66666666-6666-4666-8666-666666666666",
+    clientUserId: overrides.clientUserId ?? "11111111-1111-4111-8111-111111111111",
+    displayName: overrides.displayName ?? "Партнёр",
+    relationshipLabel: overrides.relationshipLabel ?? "партнер",
+    birthDate: "1988-07-22",
+    birthTime: null,
+    birthTimePrecision: "unknown",
+    birthPlaceText: "Калининград, Россия",
+    birthCountryCode: "RU",
+    birthCity: "Калининград",
+    birthRegion: "Калининградская область",
+    birthTimezone: "Europe/Kaliningrad",
+    birthTimeDstOccurrence: null,
+    birthLatitude: 54.7104,
+    birthLongitude: 20.4522,
     source: overrides.source ?? "client_profile",
     revision: overrides.revision ?? 1,
     lastEditedByUserId: "11111111-1111-4111-8111-111111111111",

@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
+import type { ClientRelatedBirthProfileResponse } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { ClientSearchCombobox } from "../../clients/components/ClientSearchCombobox";
 import type { ChartEngineCopy } from "../model/chartEngineCopy";
 import type { ChartEngineMode } from "../model/chartEngineMode";
 import { ChartEngineModeMenu } from "./ChartEngineModeMenu";
+import { ChartPartnerPicker } from "./ChartPartnerPicker";
 import styles from "./ChartEnginePage.module.css";
 
 export function ChartEngineHeader({
@@ -16,8 +18,11 @@ export function ChartEngineHeader({
   onSelectClient,
   onSelectMode,
   onSelectPartnerClient,
+  onSelectPartnerRelatedProfile,
+  onOpenRelatedProfileEditor,
   selectedClient,
-  selectedPartnerClient
+  selectedPartnerClient,
+  selectedPartnerRelatedProfile
 }: {
   readonly actionBar: ReactNode;
   readonly activeMode: ChartEngineMode;
@@ -28,8 +33,11 @@ export function ChartEngineHeader({
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectMode: (mode: ChartEngineMode) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
+  readonly onSelectPartnerRelatedProfile?: (profile: ClientRelatedBirthProfileResponse) => void;
+  readonly onOpenRelatedProfileEditor?: () => void;
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
+  readonly selectedPartnerRelatedProfile?: ClientRelatedBirthProfileResponse | null;
 }) {
   const isPartnerMode = activeMode === "synastry" || activeMode === "composite";
 
@@ -53,12 +61,15 @@ export function ChartEngineHeader({
         selectedClient={selectedClient}
       />
       {isPartnerMode ? (
-        <ClientStrip
+        <ChartPartnerPicker
           copy={copy}
           disabled={isBusy}
-          isPartner
-          onSelect={onSelectPartnerClient}
-          selectedClient={selectedPartnerClient}
+          selectedClient={selectedClient}
+          selectedPartnerClient={selectedPartnerClient}
+          selectedRelatedProfile={selectedPartnerRelatedProfile ?? null}
+          onCreateProfile={onOpenRelatedProfileEditor}
+          onSelectClient={onSelectPartnerClient}
+          onSelectRelatedProfile={onSelectPartnerRelatedProfile}
         />
       ) : null}
       <ChartEngineModeMenu activeMode={activeMode} copy={copy} onSelect={onSelectMode} />

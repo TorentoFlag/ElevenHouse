@@ -334,8 +334,9 @@ describe("ChartEnginePage", () => {
     await user.click(screen.getByRole("button", { name: /остальные типы карт/i }));
     await user.click(screen.getByRole("menuitem", { name: /синастрия/i }));
 
-    expect(screen.getByText(/Партнёр · 11\.08\.1992/)).toBeInTheDocument();
-    expect(screen.getByText("Алексей Петров")).toBeInTheDocument();
+    const partnerPicker = screen.getByRole("combobox", { name: "Партнёр" });
+    expect(partnerPicker).toHaveTextContent("Алексей Петров");
+    expect(partnerPicker).toHaveTextContent("11.08.1992 · Москва");
     expect(screen.getByRole("button", { name: /рассчитать синастрию/i })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: /рассчитать синастрию/i }));
 

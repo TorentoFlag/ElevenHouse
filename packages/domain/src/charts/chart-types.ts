@@ -18,10 +18,21 @@ export const CHART_CALCULATION_REQUESTED_EVENT = "chart.calculation.requested.v1
 export const CHART_CALCULATION_TERMINAL_EVENT = "chart.calculation.terminal.v1";
 export const DEFAULT_CHART_JOB_MAX_ATTEMPTS = 3;
 
-export type ChartCalculationParticipant = {
+export type ChartCalculationCrmParticipant = {
   readonly role: "subject" | "partner";
   readonly clientId: string;
 };
+
+export type ChartCalculationRelatedProfileParticipant = {
+  readonly role: "partner";
+  readonly source: "client_related_profile";
+  readonly clientId: string;
+  readonly relatedProfileId: string;
+};
+
+export type ChartCalculationParticipant =
+  | ChartCalculationCrmParticipant
+  | ChartCalculationRelatedProfileParticipant;
 
 export type ChartJobLease = {
   readonly lockedBy: string;

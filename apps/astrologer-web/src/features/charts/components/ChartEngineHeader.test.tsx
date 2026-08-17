@@ -2,19 +2,25 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ClientRelatedBirthProfileResponse } from "@elevenhouse/contracts";
+import { application } from "../../../Application";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
 import { chartEngineCopyByLocale } from "../model/chartEngineCopy";
 import { ChartEngineHeader } from "./ChartEngineHeader";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("ChartEngineHeader", () => {
   it("renders the selected client and delegates primary mode changes", async () => {
     const user = userEvent.setup();
     const onSelectMode = vi.fn();
 
-    render(
+    renderHeader(
       <ChartEngineHeader
         actionBar={<button type="button">Calculate</button>}
         activeMode="natal"
@@ -34,7 +40,7 @@ describe("ChartEngineHeader", () => {
   });
 
   it("renders the partner strip only for a two-client method", () => {
-    render(
+    renderHeader(
       <ChartEngineHeader
         actionBar={null}
         activeMode="synastry"
@@ -47,9 +53,50 @@ describe("ChartEngineHeader", () => {
     );
 
     expect(screen.getByText("Alex Petrov")).toBeInTheDocument();
-    expect(screen.getByText(/Partner ·/u)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Partner" })).toHaveTextContent("Alex Petrov");
+    expect(screen.queryByText("Client profiles")).not.toBeInTheDocument();
+  });
+
+  it("keeps client profiles inside the single partner picker", async () => {
+    const user = userEvent.setup();
+    const onSelectRelatedProfile = vi.fn();
+    const onOpenRelatedProfileEditor = vi.fn();
+    vi.spyOn(application.http, "get").mockResolvedValue({ clients: [], total: 0 });
+
+    renderHeader(
+      <ChartEngineHeader
+        actionBar={null}
+        activeMode="synastry"
+        copy={chartEngineCopyByLocale.en}
+        isBusy={false}
+        selectedClient={{ ...client, relatedBirthProfiles: [relatedProfile] }}
+        selectedPartnerClient={null}
+        selectedPartnerRelatedProfile={null}
+        onSelectMode={vi.fn()}
+        onSelectPartnerRelatedProfile={onSelectRelatedProfile}
+        onOpenRelatedProfileEditor={onOpenRelatedProfileEditor}
+      />
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Partner" }));
+
+    expect(screen.getByText("Client profiles")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add profile" })).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: /Ivan Ivanov/u }));
+
+    expect(onSelectRelatedProfile).toHaveBeenCalledWith(relatedProfile);
   });
 });
+
+function renderHeader(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      {ui}
+    </QueryClientProvider>
+  );
+}
 
 const client = {
   value: "22222222-2222-4222-8222-222222222222",
@@ -67,3 +114,27 @@ const partnerClient = {
   label: "Alex Petrov",
   initials: "AP"
 } satisfies ClientSelectOption;
+
+const relatedProfile = {
+  id: "99999999-9999-4999-8999-999999999999",
+  clientUserId: client.value,
+  birthDate: "1991-04-15",
+  birthTime: "09:20",
+  birthTimePrecision: "exact",
+  birthPlaceText: "Moscow, Russia",
+  birthCountryCode: "RU",
+  birthCity: "Moscow",
+  birthRegion: null,
+  birthTimezone: "Europe/Moscow",
+  birthTimeDstOccurrence: null,
+  birthLatitude: 55.7558,
+  birthLongitude: 37.6173,
+  source: "manual",
+  revision: 1,
+  lastEditedByUserId: client.value,
+  lastEditedByRole: "client",
+  createdAt: "2026-08-16T00:00:00.000Z",
+  updatedAt: "2026-08-16T00:00:00.000Z",
+  displayName: "Ivan Ivanov",
+  relationshipLabel: "husband"
+} satisfies ClientRelatedBirthProfileResponse;

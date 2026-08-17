@@ -173,6 +173,7 @@ export async function replaceCalculationResultWithInvalidation(
         role: participant.role,
         source: participant.source,
         clientId: participant.clientId,
+        relatedProfileId: participant.relatedProfileId ?? null,
         displayName: participant.displayName,
         order,
         createdAt: input.now,
@@ -295,7 +296,8 @@ function participantIdentityMatches(
         row.order === order &&
         row.role === participant.role &&
         row.source === participant.source &&
-        row.clientId === participant.clientId
+        row.clientId === participant.clientId &&
+        row.relatedProfileId === (participant.relatedProfileId ?? null)
       );
     })
   );

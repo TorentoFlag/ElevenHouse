@@ -5,8 +5,10 @@ import type {
   ClientBirthData,
   ClientBirthDataEditorRole,
   ClientJoinIntent,
+  ClientRelatedBirthProfile,
   ClientRelationshipSource,
-  NormalizedClientBirthDataInput
+  NormalizedClientBirthDataInput,
+  NormalizedClientRelatedBirthProfileInput
 } from "./client-types";
 import type {
   ClientLifecycleCauseKind,
@@ -53,6 +55,34 @@ export type ClientStoreWriteBirthProfileResult =
   | { readonly kind: "written"; readonly profile: ClientBirthData }
   | { readonly kind: "conflict" }
   | { readonly kind: "not_related" };
+
+export type ClientStoreWriteRelatedBirthProfileInput = {
+  readonly clientUserId: string;
+  readonly relatedProfileId: string | null;
+  readonly actor: {
+    readonly userId: string;
+    readonly role: ClientBirthDataEditorRole;
+  };
+  readonly expectedRevision: number | null;
+  readonly data: NormalizedClientRelatedBirthProfileInput;
+  readonly now: string;
+};
+
+export type ClientStoreWriteRelatedBirthProfileResult =
+  | { readonly kind: "written"; readonly profile: ClientRelatedBirthProfile }
+  | { readonly kind: "conflict" }
+  | { readonly kind: "not_found" }
+  | { readonly kind: "not_related" };
+
+export type ClientStoreListRelatedBirthProfilesInput = {
+  readonly clientUserId: string;
+};
+
+export type ClientStoreGetAstrologerRelatedBirthProfileInput = {
+  readonly astrologerUserId: string;
+  readonly clientUserId: string;
+  readonly relatedProfileId: string;
+};
 
 export type ClientStoreListAstrologerClientsInput = {
   readonly astrologerUserId: string;
@@ -108,12 +138,27 @@ export type ClientJoinIntentClaimStore = {
   ) => Promise<ClientAstrologerRelationship>;
 };
 
+export type ClientRelatedBirthProfileStore = {
+  readonly writeClientRelatedBirthProfile: (
+    input: ClientStoreWriteRelatedBirthProfileInput
+  ) => Promise<ClientStoreWriteRelatedBirthProfileResult>;
+  readonly listClientRelatedBirthProfiles: (
+    input: ClientStoreListRelatedBirthProfilesInput
+  ) => Promise<readonly ClientRelatedBirthProfile[]>;
+  readonly getAstrologerRelatedBirthProfile: (
+    input: ClientStoreGetAstrologerRelatedBirthProfileInput
+  ) => Promise<ClientRelatedBirthProfile | null>;
+};
+
 export type ClientStore = ClientJoinIntentClaimStore & {
   readonly createJoinIntent: (input: ClientStoreCreateJoinIntentInput) => Promise<ClientJoinIntent>;
   readonly upsertClientProfile: (input: ClientStoreUpsertProfileInput) => Promise<void>;
   readonly writeClientBirthProfile: (
     input: ClientStoreWriteBirthProfileInput
   ) => Promise<ClientStoreWriteBirthProfileResult>;
+  readonly writeClientRelatedBirthProfile?: ClientRelatedBirthProfileStore["writeClientRelatedBirthProfile"];
+  readonly listClientRelatedBirthProfiles?: ClientRelatedBirthProfileStore["listClientRelatedBirthProfiles"];
+  readonly getAstrologerRelatedBirthProfile?: ClientRelatedBirthProfileStore["getAstrologerRelatedBirthProfile"];
   readonly listAstrologerClients: (
     input: ClientStoreListAstrologerClientsInput
   ) => Promise<AstrologerClientList>;

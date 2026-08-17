@@ -5,6 +5,7 @@ import type {
   AstrologerClientListItem,
   ClientAstrologerRelationship,
   ClientJoinIntent,
+  ClientRelatedBirthProfileStore,
   ClientStore,
   ClientStoreGetAstrologerClientInput,
   ClientStoreListAstrologerClientsInput
@@ -232,7 +233,7 @@ describe("ClientsService", () => {
 });
 
 function createService(
-  store: ClientStore,
+  store: ClientStore & Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile">,
   birthPlaceSearchProvider: ClientBirthPlaceSearchProvider = createBirthPlaceSearchProvider()
 ): ClientsService {
   return new ClientsService(store, { now: () => new Date(now) }, birthPlaceSearchProvider);
@@ -275,7 +276,8 @@ function createBirthPlaceSearchProvider(): ClientBirthPlaceSearchProvider {
   };
 }
 
-function createStore(): ClientStore {
+function createStore(): ClientStore &
+  Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile"> {
   const client: AstrologerClientListItem = {
     clientUserId,
     displayName: "Марина Краснова",
@@ -321,17 +323,20 @@ function createStore(): ClientStore {
       return {
         kind: "written" as const,
         profile: {
-        id: "66666666-6666-4666-8666-666666666666",
-        clientUserId: input.clientUserId,
-        ...input.data,
-        revision: input.expectedRevision === null ? 1 : input.expectedRevision + 1,
-        lastEditedByUserId: input.actor.userId,
-        lastEditedByRole: input.actor.role,
-        createdAt: now,
-        updatedAt: input.now
+          id: "66666666-6666-4666-8666-666666666666",
+          clientUserId: input.clientUserId,
+          ...input.data,
+          revision: input.expectedRevision === null ? 1 : input.expectedRevision + 1,
+          lastEditedByUserId: input.actor.userId,
+          lastEditedByRole: input.actor.role,
+          createdAt: now,
+          updatedAt: input.now
         }
       };
     }),
+    writeClientRelatedBirthProfile: vi.fn(async () => ({
+      kind: "not_found" as const
+    })),
     listAstrologerClients: vi.fn(
       async (input: ClientStoreListAstrologerClientsInput): Promise<AstrologerClientList> => {
         const clients =

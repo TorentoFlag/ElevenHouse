@@ -159,11 +159,12 @@ function toParticipantFormState(
 ): NumerologyParticipantFormState {
   const saved = response.calculation.participants.find((participant) => participant.role === role);
   if (!saved) return createParticipantFormState("manual");
+  const source = saved.source === "client_related_profile" ? "manual" : saved.source;
   const calculationName = typeof input?.calculationName === "string" ? input.calculationName : "";
   const birthDate = typeof input?.birthDate === "string" ? input.birthDate : "";
   return {
-    ...createParticipantFormState(saved.source),
-    source: saved.source,
+    ...createParticipantFormState(source),
+    source,
     clientId: saved.clientId ?? "",
     displayName: saved.displayName,
     fullName: calculationName || saved.displayName,

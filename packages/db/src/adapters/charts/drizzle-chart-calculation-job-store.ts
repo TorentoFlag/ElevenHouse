@@ -44,6 +44,7 @@ import {
   chartCalculationJobs,
   clientAstrologerRelationships,
   clientProfiles,
+  clientRelatedBirthProfiles,
   outboxEvents
 } from "../../schema";
 import {
@@ -785,9 +786,12 @@ async function completeChartJob(
       `);
       const [updated] = finalResult.rows;
       if (!updated) throw new LeaseLostDuringCompletionError();
-      await persistChartCalculationTerminalOutbox(transaction, [
-        { jobId: job.id, ownerUserId: job.ownerUserId }
-      ], "succeeded", dbNow);
+      await persistChartCalculationTerminalOutbox(
+        transaction,
+        [{ jobId: job.id, ownerUserId: job.ownerUserId }],
+        "succeeded",
+        dbNow
+      );
       return true;
     });
   } catch (error) {
@@ -807,6 +811,8 @@ async function insertInitialChartCalculation(
   participantProfiles: readonly {
     readonly role: "subject" | "partner";
     readonly clientId: string;
+    readonly source?: "client_related_profile";
+    readonly relatedProfileId?: string;
     readonly displayName: string;
   }[],
   now: Date
@@ -846,8 +852,9 @@ async function insertInitialChartCalculation(
     participantProfiles.map((participant, order) => ({
       calculationId,
       role: participant.role,
-      source: "crm_client" as const,
+      source: participant.source ?? ("crm_client" as const),
       clientId: participant.clientId,
+      relatedProfileId: participant.relatedProfileId ?? null,
       displayName: participant.displayName,
       order,
       createdAt: now,
@@ -865,6 +872,8 @@ async function replaceTargetChartCalculation(
   participantProfiles: readonly {
     readonly role: "subject" | "partner";
     readonly clientId: string;
+    readonly source?: "client_related_profile";
+    readonly relatedProfileId?: string;
     readonly displayName: string;
   }[],
   now: Date
@@ -881,7 +890,8 @@ async function replaceTargetChartCalculation(
     expectedSourceChecksum: job.expectedSourceChecksum,
     participants: participantProfiles.map((participant) => ({
       ...participant,
-      source: "crm_client" as const
+      source: participant.source ?? ("crm_client" as const),
+      relatedProfileId: participant.relatedProfileId ?? null
     })),
     requestFingerprint: calculationRequestFingerprint(job),
     inputData: { inputSnapshot: job.inputSnapshot, settings: job.settingsSnapshot },
@@ -1044,13 +1054,18 @@ function getReusableSucceededJobResult(
       persistedParticipants.length === expectedParticipants.length &&
       persistedParticipants.every((participant, order) => {
         const expected = expectedParticipants[order];
+        const expectedSource =
+          expected && "source" in expected ? expected.source : ("crm_client" as const);
+        const expectedRelatedProfileId =
+          expected && "relatedProfileId" in expected ? expected.relatedProfileId : null;
         return (
           expected !== undefined &&
           participant.calculationId === calculation.id &&
           participant.order === order &&
           participant.role === expected.role &&
-          participant.source === "crm_client" &&
+          participant.source === expectedSource &&
           participant.clientId === expected.clientId &&
+          participant.relatedProfileId === expectedRelatedProfileId &&
           participant.displayName.trim().length > 0
         );
       }) &&
@@ -1274,7 +1289,9 @@ async function requireActiveParticipantRelationships(
   ownerUserId: string,
   participants: readonly ChartCalculationParticipant[]
 ): Promise<void> {
-  const participantIds = participants.map((participant) => participant.clientId).sort();
+  const participantIds = [
+    ...new Set(participants.map((participant) => participant.clientId))
+  ].sort();
   const rows = await database
     .select({ clientId: clientAstrologerRelationships.clientUserId })
     .from(clientAstrologerRelationships)
@@ -1298,7 +1315,9 @@ async function lockActiveParticipantProfiles(
   ownerUserId: string,
   participants: readonly ChartCalculationParticipant[]
 ) {
-  const participantIds = participants.map((participant) => participant.clientId).sort();
+  const participantIds = [
+    ...new Set(participants.map((participant) => participant.clientId))
+  ].sort();
   const rows = await database
     .select({
       clientId: clientAstrologerRelationships.clientUserId,
@@ -1319,7 +1338,35 @@ async function lockActiveParticipantProfiles(
     .orderBy(clientAstrologerRelationships.clientUserId)
     .for("update");
   const byClient = new Map(rows.map((row) => [row.clientId, row.displayName?.trim()]));
+  const relatedProfileIds = participants.flatMap((participant) =>
+    "relatedProfileId" in participant ? [participant.relatedProfileId] : []
+  );
+  const relatedRows =
+    relatedProfileIds.length === 0
+      ? []
+      : await database
+          .select({
+            id: clientRelatedBirthProfiles.id,
+            clientId: clientRelatedBirthProfiles.clientUserId,
+            displayName: clientRelatedBirthProfiles.displayName,
+            relationshipLabel: clientRelatedBirthProfiles.relationshipLabel
+          })
+          .from(clientRelatedBirthProfiles)
+          .where(inArray(clientRelatedBirthProfiles.id, relatedProfileIds))
+          .orderBy(clientRelatedBirthProfiles.id)
+          .for("update");
+  const byRelatedProfile = new Map(relatedRows.map((row) => [row.id, row]));
   return participants.map((participant) => {
+    if ("relatedProfileId" in participant) {
+      const related = byRelatedProfile.get(participant.relatedProfileId);
+      if (!related || related.clientId !== participant.clientId || !related.displayName.trim()) {
+        throw new ChartCalculationCompletionError("CHART_PARTICIPANT_PROFILE_INVALID");
+      }
+      return {
+        ...participant,
+        displayName: `${related.displayName.trim()} · ${related.relationshipLabel.trim()}`
+      };
+    }
     const displayName = byClient.get(participant.clientId);
     if (!displayName) {
       throw new ChartCalculationCompletionError("CHART_PARTICIPANT_PROFILE_INVALID");
@@ -1451,10 +1498,15 @@ async function terminalizeChartJobs(
     })
     .where(inArray(chartCalculationJobs.id, jobIds))
     .returning({ id: chartCalculationJobs.id, ownerUserId: chartCalculationJobs.ownerUserId });
-  await persistChartCalculationTerminalOutbox(transaction, finalized.map((job) => ({
-    jobId: job.id,
-    ownerUserId: job.ownerUserId
-  })), "failed", now);
+  await persistChartCalculationTerminalOutbox(
+    transaction,
+    finalized.map((job) => ({
+      jobId: job.id,
+      ownerUserId: job.ownerUserId
+    })),
+    "failed",
+    now
+  );
 }
 
 async function persistChartCalculationTerminalOutbox(

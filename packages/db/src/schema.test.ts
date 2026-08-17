@@ -17,6 +17,8 @@ import {
   clientBirthTimeDstOccurrenceValues,
   clientJoinIntents,
   clientProfiles,
+  clientRelatedBirthProfileHistory,
+  clientRelatedBirthProfiles,
   databasePlatformRoleValues,
   dictionaryAstrologerEntries,
   dictionaryAstrologerEntryTypeValues,
@@ -126,6 +128,8 @@ describe("database account schema constants", () => {
     expect(clientProfiles).toBeDefined();
     expect(clientBirthData).toBeDefined();
     expect(clientBirthDataHistory).toBeDefined();
+    expect(clientRelatedBirthProfiles).toBeDefined();
+    expect(clientRelatedBirthProfileHistory).toBeDefined();
     expect(clientBirthTimeDstOccurrenceValues).toEqual(["first", "second"]);
     expect(clientAstrologerRelationships).toBeDefined();
     expect(clientJoinIntents).toBeDefined();
@@ -136,15 +140,22 @@ describe("database account schema constants", () => {
 
     expect(migration).toContain('CREATE TABLE "client_profiles"');
     expect(migration).toContain('CREATE TABLE "client_birth_data"');
-    expect(migration).not.toContain('client_birth_data_primary_unique');
-    expect(migration).not.toContain('client_birth_data_id_client_unique');
+    expect(migration).not.toContain("client_birth_data_primary_unique");
+    expect(migration).not.toContain("client_birth_data_id_client_unique");
     expect(migration).toContain('"last_edited_by_user_id" uuid NOT NULL');
     expect(migration).toContain('CREATE TABLE "client_birth_data_history"');
+    expect(migration).toContain('CREATE TABLE "client_related_birth_profiles"');
+    expect(migration).toContain('CREATE TABLE "client_related_birth_profile_history"');
+    expect(migration).toContain('"display_name" text NOT NULL');
+    expect(migration).toContain('"relationship_label" text NOT NULL');
     expect(migration).toContain('"birth_time_dst_occurrence" text');
     expect(migration).toContain("client_birth_data_time_dst_occurrence_check");
-    expect(migration).toContain('CONSTRAINT "client_birth_data_client_unique" UNIQUE("client_user_id")');
     expect(migration).toContain(
-      'CREATE TRIGGER "client_birth_data_history_append_only"'
+      'CONSTRAINT "client_birth_data_client_unique" UNIQUE("client_user_id")'
+    );
+    expect(migration).toContain('CREATE TRIGGER "client_birth_data_history_append_only"');
+    expect(migration).toContain(
+      'CREATE TRIGGER "client_related_birth_profile_history_append_only"'
     );
     expect(migration).toContain('CREATE TABLE "client_astrologer_relationships"');
     expect(migration).toContain('CREATE TABLE "client_join_intents"');
@@ -157,12 +168,7 @@ describe("database account schema constants", () => {
   });
 
   it("keeps outbox event statuses explicit", () => {
-    expect(outboxEventStatusValues).toEqual([
-      "pending",
-      "publishing",
-      "published",
-      "quarantined"
-    ]);
+    expect(outboxEventStatusValues).toEqual(["pending", "publishing", "published", "quarantined"]);
     expect(outboxEvents).toBeDefined();
     expect(outboxEvents.claimFence).toBeDefined();
     expect(outboxEvents.quarantinedAt).toBeDefined();
@@ -504,15 +510,9 @@ describe("database account schema constants", () => {
     expect(migration).toContain('"provider_file_unique_id" text NOT NULL');
     expect(migration).toContain('"width" integer');
     expect(migration).toContain('"height" integer');
-    expect(migration).toContain(
-      'CONSTRAINT "message_media_ingestions_download_status_check"'
-    );
-    expect(migration).toContain(
-      'CONSTRAINT "message_media_ingestions_width_check"'
-    );
-    expect(migration).toContain(
-      'CONSTRAINT "message_media_ingestions_height_check"'
-    );
+    expect(migration).toContain('CONSTRAINT "message_media_ingestions_download_status_check"');
+    expect(migration).toContain('CONSTRAINT "message_media_ingestions_width_check"');
+    expect(migration).toContain('CONSTRAINT "message_media_ingestions_height_check"');
     expect(migration).toContain(
       'CREATE UNIQUE INDEX "message_media_ingestions_message_unique" ON "message_media_ingestions" USING btree ("message_id")'
     );

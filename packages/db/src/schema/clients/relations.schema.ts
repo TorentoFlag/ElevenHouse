@@ -4,6 +4,10 @@ import { clientAstrologerRelationships } from "./client-astrologer-relationships
 import { clientBirthData, clientBirthDataHistory } from "./client-birth-data.schema";
 import { clientJoinIntents } from "./client-join-intents.schema";
 import { clientProfiles } from "./client-profiles.schema";
+import {
+  clientRelatedBirthProfileHistory,
+  clientRelatedBirthProfiles
+} from "./client-related-birth-profiles.schema";
 
 export const clientProfilesRelations = relations(clientProfiles, ({ one }) => ({
   user: one(users, {
@@ -40,6 +44,41 @@ export const clientBirthDataHistoryRelations = relations(clientBirthDataHistory,
     relationName: "client_birth_data_history_actor"
   })
 }));
+
+export const clientRelatedBirthProfilesRelations = relations(
+  clientRelatedBirthProfiles,
+  ({ many, one }) => ({
+    client: one(users, {
+      fields: [clientRelatedBirthProfiles.clientUserId],
+      references: [users.id]
+    }),
+    lastEditedBy: one(users, {
+      fields: [clientRelatedBirthProfiles.lastEditedByUserId],
+      references: [users.id],
+      relationName: "client_related_birth_profiles_last_editor"
+    }),
+    history: many(clientRelatedBirthProfileHistory)
+  })
+);
+
+export const clientRelatedBirthProfileHistoryRelations = relations(
+  clientRelatedBirthProfileHistory,
+  ({ one }) => ({
+    relatedProfile: one(clientRelatedBirthProfiles, {
+      fields: [clientRelatedBirthProfileHistory.relatedProfileId],
+      references: [clientRelatedBirthProfiles.id]
+    }),
+    client: one(users, {
+      fields: [clientRelatedBirthProfileHistory.clientUserId],
+      references: [users.id]
+    }),
+    actor: one(users, {
+      fields: [clientRelatedBirthProfileHistory.actorUserId],
+      references: [users.id],
+      relationName: "client_related_birth_profile_history_actor"
+    })
+  })
+);
 
 export const clientAstrologerRelationshipsRelations = relations(
   clientAstrologerRelationships,

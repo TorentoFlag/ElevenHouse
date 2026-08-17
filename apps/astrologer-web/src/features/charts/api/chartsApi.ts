@@ -33,6 +33,7 @@ import {
   type ChartJobResponse,
   type ChartHoraryQuestionSnapshot,
   type ChartNatalJobCreateResponse,
+  type ChartRelationshipPartner,
   type ChartRecalculateRequest,
   type ReproducibleChartResult,
   type ChartSettings,
@@ -112,7 +113,8 @@ export async function createTransitChartJob(
 
 export type CreateSynastryChartJobInput = {
   readonly clientId: string;
-  readonly partnerClientId: string;
+  readonly partnerClientId?: string;
+  readonly partner?: ChartRelationshipPartner;
   readonly settings: ChartSettings;
 } & Record<string, unknown>;
 
@@ -121,7 +123,7 @@ export async function createSynastryChartJob(
 ): Promise<ChartJobSubmissionResponse> {
   const body = chartSynastryJobCreateRequestSchema.parse({
     clientId: input.clientId,
-    partnerClientId: input.partnerClientId,
+    ...(input.partner ? { partner: input.partner } : { partnerClientId: input.partnerClientId }),
     settings: input.settings
   });
 
@@ -133,7 +135,8 @@ export async function createSynastryChartJob(
 
 export type CreateCompositeChartJobInput = {
   readonly clientId: string;
-  readonly partnerClientId: string;
+  readonly partnerClientId?: string;
+  readonly partner?: ChartRelationshipPartner;
   readonly settings: ChartSettings;
 } & Record<string, unknown>;
 
@@ -142,7 +145,7 @@ export async function createCompositeChartJob(
 ): Promise<ChartJobSubmissionResponse> {
   const body = chartCompositeJobCreateRequestSchema.parse({
     clientId: input.clientId,
-    partnerClientId: input.partnerClientId,
+    ...(input.partner ? { partner: input.partner } : { partnerClientId: input.partnerClientId }),
     settings: input.settings
   });
 

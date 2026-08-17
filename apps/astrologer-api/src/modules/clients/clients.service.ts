@@ -9,9 +9,12 @@ import {
 import {
   getAstrologerClient,
   ClientBirthDataRelationshipDeniedError,
+  ClientRelatedBirthProfileNotFoundError,
   listAstrologerClients,
   ClientBirthDataRevisionConflictError,
   writeClientBirthProfile,
+  writeClientRelatedBirthProfile,
+  type ClientRelatedBirthProfileStore,
   type ClientStore
 } from "@elevenhouse/domain";
 import {
@@ -20,6 +23,9 @@ import {
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
   clientBirthDataUpsertRequestSchema,
+  clientRelatedBirthProfileParamsSchema,
+  clientRelatedBirthProfileResponseSchema,
+  clientRelatedBirthProfileUpsertRequestSchema,
   clientBirthPlaceReferenceParamsSchema,
   clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
@@ -27,7 +33,9 @@ import {
   type AstrologerClientListResponse,
   type AstrologerClientResponse,
   type ClientBirthPlaceReferenceResponse,
-  type ClientBirthPlaceSearchResponse
+  type ClientBirthPlaceSearchResponse,
+  type ClientRelatedBirthProfileUpsertRequest,
+  type ClientRelatedBirthProfileResponse
 } from "@elevenhouse/contracts";
 import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
@@ -38,7 +46,9 @@ import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
 @Injectable()
 export class ClientsService {
   constructor(
-    @Inject(CLIENT_STORE) private readonly store: ClientStore,
+    @Inject(CLIENT_STORE)
+    private readonly store: ClientStore &
+      Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile">,
     private readonly clock: SystemClock,
     @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
     private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider
@@ -156,6 +166,87 @@ export class ClientsService {
         birthData
       }
     });
+  }
+
+  async createRelatedBirthProfile(
+    clientUserId: string,
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<ClientRelatedBirthProfileResponse> {
+    const params = parseContract(astrologerClientParamsSchema, { clientUserId });
+    const data = parseContract(clientRelatedBirthProfileUpsertRequestSchema, body);
+    const astrologerUserId = requireAstrologerUserId(request);
+    await this.requireAstrologerClient(astrologerUserId, params.clientUserId);
+    return this.writeRelatedBirthProfile(astrologerUserId, params.clientUserId, null, data);
+  }
+
+  async updateRelatedBirthProfile(
+    clientUserId: string,
+    relatedProfileId: string,
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<ClientRelatedBirthProfileResponse> {
+    const params = parseContract(clientRelatedBirthProfileParamsSchema, {
+      clientUserId,
+      relatedProfileId
+    });
+    const data = parseContract(clientRelatedBirthProfileUpsertRequestSchema, body);
+    const astrologerUserId = requireAstrologerUserId(request);
+    await this.requireAstrologerClient(astrologerUserId, params.clientUserId);
+    return this.writeRelatedBirthProfile(
+      astrologerUserId,
+      params.clientUserId,
+      params.relatedProfileId,
+      data
+    );
+  }
+
+  private async requireAstrologerClient(
+    astrologerUserId: string,
+    clientUserId: string
+  ): Promise<void> {
+    const client = await getAstrologerClient({
+      store: this.store,
+      astrologerUserId,
+      clientUserId
+    });
+    if (!client) {
+      throw new NotFoundException("Client was not found");
+    }
+  }
+
+  private async writeRelatedBirthProfile(
+    astrologerUserId: string,
+    clientUserId: string,
+    relatedProfileId: string | null,
+    data: ClientRelatedBirthProfileUpsertRequest
+  ): Promise<ClientRelatedBirthProfileResponse> {
+    try {
+      const profile = await writeClientRelatedBirthProfile({
+        store: this.store,
+        clientUserId,
+        relatedProfileId,
+        actor: { userId: astrologerUserId, role: "astrologer" },
+        expectedRevision: data.expectedRevision,
+        data: { ...data, source: "manual" },
+        now: this.clock.now()
+      });
+      return clientRelatedBirthProfileResponseSchema.parse(profile);
+    } catch (error) {
+      if (error instanceof ClientBirthDataRevisionConflictError) {
+        throw new ConflictException({
+          code: "CLIENT_RELATED_BIRTH_PROFILE_REVISION_CONFLICT",
+          message: "Related birth profile was changed by another actor. Refresh and try again."
+        });
+      }
+      if (
+        error instanceof ClientBirthDataRelationshipDeniedError ||
+        error instanceof ClientRelatedBirthProfileNotFoundError
+      ) {
+        throw new NotFoundException("Client related birth profile was not found");
+      }
+      throw error;
+    }
   }
 }
 

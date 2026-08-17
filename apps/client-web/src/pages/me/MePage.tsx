@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { ClientCopy } from "../../common/i18n/clientCopy";
 import {
+  createClientRelatedBirthProfile,
   getClientCabinetOverview,
   searchClientBirthPlaces,
   upsertClientBirthData
@@ -18,11 +19,20 @@ import { sessionApi } from "../../features/sessions/api/sessionApi";
 import type { SessionSummary } from "@elevenhouse/contracts";
 
 const emptyForm = createBirthProfileForm(null);
+const emptyRelatedProfileForm = {
+  displayName: "",
+  relationshipLabel: "",
+  birth: createBirthProfileForm(null)
+};
+
+export type RelatedBirthProfileFormState = typeof emptyRelatedProfileForm;
 
 export function MePage() {
   const { dictionary, locale } = useI18n<ClientCopy>();
   const [activeSection, setActiveSection] = useState<ClientCabinetSection>("home");
   const [form, setForm] = useState<BirthProfileFormState>(emptyForm);
+  const [relatedProfileForm, setRelatedProfileForm] =
+    useState<RelatedBirthProfileFormState>(emptyRelatedProfileForm);
   const [overview, setOverview] = useState<ClientCabinetOverviewResponse | null>(null);
   const [status, setStatus] = useState<ClientCabinetStatus>("loading");
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
@@ -99,6 +109,35 @@ export function MePage() {
     }
   }
 
+  async function handleRelatedProfileSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const requestResult = buildBirthProfileRequest(relatedProfileForm.birth, null);
+    if (
+      !requestResult.ok ||
+      relatedProfileForm.displayName.trim().length === 0 ||
+      relatedProfileForm.relationshipLabel.trim().length === 0
+    ) {
+      setStatus("validation-error");
+      return;
+    }
+
+    setStatus("saving");
+
+    try {
+      const savedProfile = await createClientRelatedBirthProfile({
+        ...requestResult.request,
+        label: null,
+        displayName: relatedProfileForm.displayName,
+        relationshipLabel: relatedProfileForm.relationshipLabel
+      });
+      setOverview(mergeRelatedBirthProfile(overview, savedProfile));
+      setRelatedProfileForm(emptyRelatedProfileForm);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  }
+
   return (
     <MePageView
       activeSection={activeSection}
@@ -110,6 +149,7 @@ export function MePage() {
       clientLocale={locale}
       form={form}
       overview={overview}
+      relatedProfileForm={relatedProfileForm}
       status={status}
       sessions={sessions}
       sessionsStatus={sessionsStatus}
@@ -119,6 +159,13 @@ export function MePage() {
           currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
         );
       }}
+      onRelatedProfileFormChange={(nextForm) => {
+        setRelatedProfileForm(nextForm);
+        setStatus((currentStatus) =>
+          currentStatus === "saving" || currentStatus === "loading" ? currentStatus : "ready"
+        );
+      }}
+      onRelatedProfileSubmit={handleRelatedProfileSubmit}
       onRetry={() => {
         loadOverview();
       }}
@@ -137,6 +184,7 @@ function mergeBirthProfile(
   const currentOverview = overview ?? {
     astrologers: [],
     birthData: null,
+    relatedBirthProfiles: [],
     summary: {
       activeSubscriptionCount: 0,
       availableMaterialCount: 0,
@@ -148,5 +196,32 @@ function mergeBirthProfile(
   return {
     ...currentOverview,
     birthData: savedProfile
+  };
+}
+
+function mergeRelatedBirthProfile(
+  overview: ClientCabinetOverviewResponse | null,
+  savedProfile: NonNullable<ClientCabinetOverviewResponse["relatedBirthProfiles"]>[number]
+): ClientCabinetOverviewResponse {
+  const currentOverview = overview ?? {
+    astrologers: [],
+    birthData: null,
+    relatedBirthProfiles: [],
+    summary: {
+      activeSubscriptionCount: 0,
+      availableMaterialCount: 0,
+      directLinkOnly: true,
+      unreadNotificationCount: 0,
+      upcomingBookingCount: 0
+    }
+  };
+  return {
+    ...currentOverview,
+    relatedBirthProfiles: [
+      ...(currentOverview.relatedBirthProfiles ?? []).filter(
+        (profile) => profile.id !== savedProfile.id
+      ),
+      savedProfile
+    ]
   };
 }

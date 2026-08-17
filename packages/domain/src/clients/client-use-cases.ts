@@ -5,9 +5,14 @@ import {
   BirthDataValidationError,
   ClientBirthDataRelationshipDeniedError,
   ClientBirthDataRevisionConflictError,
+  ClientRelatedBirthProfileNotFoundError,
   ClientJoinIntentError
 } from "./client-errors";
-import type { ClientJoinIntentClaimStore, ClientStore } from "./client-store";
+import type {
+  ClientJoinIntentClaimStore,
+  ClientRelatedBirthProfileStore,
+  ClientStore
+} from "./client-store";
 import type {
   AstrologerClientList,
   AstrologerClientListItem,
@@ -18,17 +23,16 @@ import type {
   ClientBirthTimeDstOccurrence,
   ClientBirthTimePrecision,
   ClientJoinIntentCreated,
+  ClientRelatedBirthProfile,
+  ClientRelatedBirthProfileInput,
+  NormalizedClientRelatedBirthProfileInput,
   NormalizedClientBirthDataInput
 } from "./client-types";
 
 const birthDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const birthTimePattern = /^\d{2}:\d{2}$/;
 const countryCodePattern = /^[A-Z]{2}$/;
-const birthDataSources: readonly ClientBirthDataSource[] = [
-  "client_profile",
-  "import",
-  "manual"
-];
+const birthDataSources: readonly ClientBirthDataSource[] = ["client_profile", "import", "manual"];
 const birthTimePrecisions: readonly ClientBirthTimePrecision[] = [
   "exact",
   "approximate",
@@ -72,6 +76,30 @@ export function normalizeClientBirthDataInput(
       "Birth longitude is invalid"
     ),
     source: normalizeBirthDataSource(input.source)
+  };
+}
+
+export function normalizeClientRelatedBirthProfileInput(
+  input: ClientRelatedBirthProfileInput
+): NormalizedClientRelatedBirthProfileInput {
+  const displayName = normalizeRequiredString(
+    input.displayName,
+    "Related birth profile display name is required"
+  );
+  const relationshipLabel = normalizeRequiredString(
+    input.relationshipLabel,
+    "Related birth profile relationship label is required"
+  );
+  if (displayName.length > 200) {
+    throw new BirthDataValidationError("Related birth profile display name is too long");
+  }
+  if (relationshipLabel.length > 100) {
+    throw new BirthDataValidationError("Related birth profile relationship label is too long");
+  }
+  return {
+    ...normalizeClientBirthDataInput(input),
+    displayName,
+    relationshipLabel
   };
 }
 
@@ -224,6 +252,44 @@ export async function writeClientBirthProfile(input: {
   });
   if (result.kind === "conflict") {
     throw new ClientBirthDataRevisionConflictError();
+  }
+  if (result.kind === "not_related") {
+    throw new ClientBirthDataRelationshipDeniedError();
+  }
+  return result.profile;
+}
+
+export async function writeClientRelatedBirthProfile(input: {
+  readonly store: Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile">;
+  readonly clientUserId: string;
+  readonly relatedProfileId?: string | null;
+  readonly actor: {
+    readonly userId: string;
+    readonly role: "client" | "astrologer";
+  };
+  readonly expectedRevision: number | null;
+  readonly data: ClientRelatedBirthProfileInput;
+  readonly now: Date;
+}): Promise<ClientRelatedBirthProfile> {
+  const result = await input.store.writeClientRelatedBirthProfile({
+    clientUserId: normalizeRequiredString(input.clientUserId, "Client user id is required"),
+    relatedProfileId:
+      input.relatedProfileId === undefined || input.relatedProfileId === null
+        ? null
+        : normalizeRequiredString(input.relatedProfileId, "Related birth profile id is required"),
+    actor: {
+      userId: normalizeRequiredString(input.actor.userId, "Birth-data editor user id is required"),
+      role: input.actor.role
+    },
+    expectedRevision: normalizeExpectedBirthDataRevision(input.expectedRevision),
+    data: normalizeClientRelatedBirthProfileInput(input.data),
+    now: input.now.toISOString()
+  });
+  if (result.kind === "conflict") {
+    throw new ClientBirthDataRevisionConflictError();
+  }
+  if (result.kind === "not_found") {
+    throw new ClientRelatedBirthProfileNotFoundError();
   }
   if (result.kind === "not_related") {
     throw new ClientBirthDataRelationshipDeniedError();

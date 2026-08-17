@@ -1,6 +1,7 @@
 import type {
   ChartCalculationMethod,
   ChartHoraryQuestionSnapshot,
+  ChartRelationshipPartner,
   ChartSettings,
   ChartTransitMoment
 } from "@elevenhouse/contracts";
@@ -36,7 +37,8 @@ export type ChartEngineSubmission = {
   | {
       readonly mode: "synastry" | "composite";
       readonly clientId: string;
-      readonly partnerClientId: string;
+      readonly partnerClientId?: string;
+      readonly partner?: ChartRelationshipPartner;
       readonly settings: ChartSettings;
     }
   | {
@@ -173,29 +175,33 @@ export async function submitTransitCalculation({
 export async function submitSynastryCalculation({
   clientId,
   create,
+  partner,
   partnerClientId,
   settings
 }: {
   readonly clientId: string;
-  readonly partnerClientId: string;
+  readonly partnerClientId?: string;
+  readonly partner?: ChartRelationshipPartner;
   readonly settings: ChartSettings;
   readonly create: typeof createSynastryChartJob;
 }) {
-  return create({ clientId, partnerClientId, settings });
+  return create({ clientId, ...(partner ? { partner } : { partnerClientId }), settings });
 }
 
 export async function submitCompositeCalculation({
   clientId,
   create,
+  partner,
   partnerClientId,
   settings
 }: {
   readonly clientId: string;
-  readonly partnerClientId: string;
+  readonly partnerClientId?: string;
+  readonly partner?: ChartRelationshipPartner;
   readonly settings: ChartSettings;
   readonly create: typeof createCompositeChartJob;
 }) {
-  return create({ clientId, partnerClientId, settings });
+  return create({ clientId, ...(partner ? { partner } : { partnerClientId }), settings });
 }
 
 export async function submitSolarReturnCalculation({

@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   Get,
   Inject,
+  Param,
+  Post,
   Put,
   Query,
   Req,
@@ -14,6 +16,9 @@ import type {
   ClientBirthDataResponse,
   ClientBirthDataUpsertRequest,
   ClientCabinetOverviewResponse,
+  ClientRelatedBirthProfileListResponse,
+  ClientRelatedBirthProfileResponse,
+  ClientRelatedBirthProfileUpsertRequest,
   RelatedAstrologerListResponse
 } from "@elevenhouse/contracts";
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -48,6 +53,13 @@ export class ClientProfileController {
     return this.clientProfileService.getBirthData(requireClientUserId(request));
   }
 
+  @Get("related-birth-profiles")
+  listRelatedBirthProfiles(
+    @Req() request: PublicSessionRequest
+  ): Promise<ClientRelatedBirthProfileListResponse> {
+    return this.clientProfileService.listRelatedBirthProfiles(requireClientUserId(request));
+  }
+
   @Get("birth-places")
   searchBirthPlaces(@Req() request: PublicSessionRequest, @Query() query: unknown) {
     return this.clientBirthPlaceSearchService.search(requireClientUserId(request), query);
@@ -62,6 +74,28 @@ export class ClientProfileController {
     return this.clientProfileService.upsertBirthData(requireClientUserId(request), body);
   }
 
+  @Post("related-birth-profiles")
+  @RequireCsrf()
+  createRelatedBirthProfile(
+    @Req() request: PublicSessionRequest,
+    @Body() body: ClientRelatedBirthProfileUpsertRequest
+  ): Promise<ClientRelatedBirthProfileResponse> {
+    return this.clientProfileService.createRelatedBirthProfile(requireClientUserId(request), body);
+  }
+
+  @Put("related-birth-profiles/:relatedProfileId")
+  @RequireCsrf()
+  updateRelatedBirthProfile(
+    @Req() request: PublicSessionRequest,
+    @Param("relatedProfileId") relatedProfileId: string,
+    @Body() body: ClientRelatedBirthProfileUpsertRequest
+  ): Promise<ClientRelatedBirthProfileResponse> {
+    return this.clientProfileService.updateRelatedBirthProfile(
+      requireClientUserId(request),
+      relatedProfileId,
+      body
+    );
+  }
 }
 
 function requireClientUserId(request: PublicSessionRequest): string {

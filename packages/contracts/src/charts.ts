@@ -173,22 +173,48 @@ export const chartTransitJobCreateRequestSchema = z
   .strict();
 export type ChartTransitJobCreateRequest = z.infer<typeof chartTransitJobCreateRequestSchema>;
 
-export const chartSynastryJobCreateRequestSchema = z
+export const chartRelationshipPartnerSchema = z.discriminatedUnion("source", [
+  z
+    .object({
+      source: z.literal("crm_client"),
+      clientId: uuidSchema
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("client_related_profile"),
+      relatedProfileId: uuidSchema
+    })
+    .strict()
+]);
+export type ChartRelationshipPartner = z.infer<typeof chartRelationshipPartnerSchema>;
+
+const legacyChartRelationshipJobCreateRequestSchema = z
   .object({
     clientId: uuidSchema,
     partnerClientId: uuidSchema,
     settings: chartSettingsSchema
   })
   .strict();
+
+const typedChartRelationshipJobCreateRequestSchema = z
+  .object({
+    clientId: uuidSchema,
+    partner: chartRelationshipPartnerSchema,
+    settings: chartSettingsSchema
+  })
+  .strict();
+
+export const chartSynastryJobCreateRequestSchema = z.union([
+  legacyChartRelationshipJobCreateRequestSchema,
+  typedChartRelationshipJobCreateRequestSchema
+]);
 export type ChartSynastryJobCreateRequest = z.infer<typeof chartSynastryJobCreateRequestSchema>;
 
-export const chartCompositeJobCreateRequestSchema = z
-  .object({
-    clientId: uuidSchema,
-    partnerClientId: uuidSchema,
-    settings: chartSettingsSchema
-  })
-  .strict();
+export const chartCompositeJobCreateRequestSchema = z.union([
+  legacyChartRelationshipJobCreateRequestSchema,
+  typedChartRelationshipJobCreateRequestSchema
+]);
 export type ChartCompositeJobCreateRequest = z.infer<typeof chartCompositeJobCreateRequestSchema>;
 
 export const chartSolarReturnJobCreateRequestSchema = z

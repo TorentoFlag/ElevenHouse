@@ -389,6 +389,7 @@ async function insertCalculation(
         role: participant.role,
         source: participant.source,
         clientId: participant.clientId,
+        relatedProfileId: participant.relatedProfileId ?? null,
         displayName: participant.displayName,
         order,
         createdAt: new Date(input.now),
@@ -752,7 +753,8 @@ function assertParticipantIdentity(
         row.order !== index ||
         row.role !== participant.role ||
         row.source !== participant.source ||
-        row.clientId !== participant.clientId
+        row.clientId !== participant.clientId ||
+        row.relatedProfileId !== (participant.relatedProfileId ?? null)
       );
     })
   ) {
@@ -964,6 +966,7 @@ function groupParticipants(rows: readonly CalculationParticipantRow[]) {
       role: row.role as CalculationParticipant["role"],
       source: row.source as CalculationParticipant["source"],
       clientId: row.clientId,
+      relatedProfileId: row.relatedProfileId,
       displayName: row.displayName
     });
     grouped.set(row.calculationId, values);

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, integer, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { calculationRecords } from "./calculation-records.schema";
+import { clientRelatedBirthProfiles } from "../clients/client-related-birth-profiles.schema";
 import {
   calculationParticipantRoleValues,
   calculationParticipantSourceValues,
@@ -17,6 +18,7 @@ export const calculationParticipants = pgTable(
     role: text("role").notNull(),
     source: text("source").notNull(),
     clientId: uuid("client_id"),
+    relatedProfileId: uuid("related_profile_id").references(() => clientRelatedBirthProfiles.id),
     displayName: text("display_name").notNull(),
     order: integer("order").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -35,7 +37,19 @@ export const calculationParticipants = pgTable(
     ),
     check(
       "calculation_participants_source_client_check",
-      sql`(${table.source} = 'crm_client' and ${table.clientId} is not null) or (${table.source} = 'manual' and ${table.clientId} is null)`
+      sql`(
+        ${table.source} = 'crm_client'
+        and ${table.clientId} is not null
+        and ${table.relatedProfileId} is null
+      ) or (
+        ${table.source} = 'client_related_profile'
+        and ${table.clientId} is not null
+        and ${table.relatedProfileId} is not null
+      ) or (
+        ${table.source} = 'manual'
+        and ${table.clientId} is null
+        and ${table.relatedProfileId} is null
+      )`
     ),
     check("calculation_participants_order_check", sql`${table.order} >= 0 and ${table.order} < 2`),
     unique("calculation_participants_record_role_unique").on(table.calculationId, table.role),

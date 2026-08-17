@@ -1,13 +1,15 @@
-import { and, desc, eq } from "drizzle-orm";
-import type { ClientBirthData } from "@elevenhouse/domain";
+import { and, asc, desc, eq } from "drizzle-orm";
+import type { ClientBirthData, ClientRelatedBirthProfile } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   astrologerProfiles,
   clientAstrologerRelationships,
-  clientBirthData
+  clientBirthData,
+  clientRelatedBirthProfiles
 } from "../../schema";
 
 type ClientBirthDataRow = typeof clientBirthData.$inferSelect;
+type ClientRelatedBirthProfileRow = typeof clientRelatedBirthProfiles.$inferSelect;
 
 export function createDrizzleClientJoinProfileReader(database: ElevenHouseDatabase) {
   return {
@@ -75,6 +77,17 @@ export function createDrizzleClientProfileReader(database: ElevenHouseDatabase) 
         .limit(1);
 
       return row ? toClientBirthData(row) : null;
+    },
+    listRelatedBirthProfiles: async (
+      clientUserId: string
+    ): Promise<readonly ClientRelatedBirthProfile[]> => {
+      const rows = await database
+        .select()
+        .from(clientRelatedBirthProfiles)
+        .where(eq(clientRelatedBirthProfiles.clientUserId, clientUserId))
+        .orderBy(asc(clientRelatedBirthProfiles.createdAt), asc(clientRelatedBirthProfiles.id));
+
+      return rows.map(toClientRelatedBirthProfile);
     }
   };
 }
@@ -92,14 +105,40 @@ function toClientBirthData(row: ClientBirthDataRow): ClientBirthData {
     birthCity: row.birthCity,
     birthRegion: row.birthRegion,
     birthTimezone: row.birthTimezone,
-    birthTimeDstOccurrence:
-      row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
+    birthTimeDstOccurrence: row.birthTimeDstOccurrence as ClientBirthData["birthTimeDstOccurrence"],
     birthLatitude: row.birthLatitude,
     birthLongitude: row.birthLongitude,
     source: row.source as ClientBirthData["source"],
     revision: row.revision,
     lastEditedByUserId: row.lastEditedByUserId,
     lastEditedByRole: row.lastEditedByRole as ClientBirthData["lastEditedByRole"],
+    createdAt: toIsoString(row.createdAt),
+    updatedAt: toIsoString(row.updatedAt)
+  };
+}
+
+function toClientRelatedBirthProfile(row: ClientRelatedBirthProfileRow): ClientRelatedBirthProfile {
+  return {
+    id: row.id,
+    clientUserId: row.clientUserId,
+    displayName: row.displayName,
+    relationshipLabel: row.relationshipLabel,
+    birthDate: row.birthDate,
+    birthTime: row.birthTime,
+    birthTimePrecision: row.birthTimePrecision as ClientRelatedBirthProfile["birthTimePrecision"],
+    birthPlaceText: row.birthPlaceText,
+    birthCountryCode: row.birthCountryCode,
+    birthCity: row.birthCity,
+    birthRegion: row.birthRegion,
+    birthTimezone: row.birthTimezone,
+    birthTimeDstOccurrence:
+      row.birthTimeDstOccurrence as ClientRelatedBirthProfile["birthTimeDstOccurrence"],
+    birthLatitude: row.birthLatitude,
+    birthLongitude: row.birthLongitude,
+    source: row.source as ClientRelatedBirthProfile["source"],
+    revision: row.revision,
+    lastEditedByUserId: row.lastEditedByUserId,
+    lastEditedByRole: row.lastEditedByRole as ClientRelatedBirthProfile["lastEditedByRole"],
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt)
   };

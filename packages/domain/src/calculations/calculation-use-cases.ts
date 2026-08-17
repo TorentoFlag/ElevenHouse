@@ -375,7 +375,8 @@ function assertParticipantIdentityMatches(
         !candidate ||
         candidate.role !== participant.role ||
         candidate.source !== participant.source ||
-        candidate.clientId !== participant.clientId
+        candidate.clientId !== participant.clientId ||
+        candidate.relatedProfileId !== participant.relatedProfileId
       );
     })
   ) {
@@ -422,13 +423,33 @@ function normalizeCalculationParticipants(
           participant.clientId ?? "",
           "CRM calculation participant requires client id"
         ),
+        relatedProfileId: null,
+        displayName
+      };
+    }
+    if (participant.source === "client_related_profile") {
+      return {
+        ...participant,
+        clientId: required(
+          participant.clientId ?? "",
+          "Related-profile calculation participant requires owner client id"
+        ),
+        relatedProfileId: required(
+          participant.relatedProfileId ?? "",
+          "Related-profile calculation participant requires profile id"
+        ),
         displayName
       };
     }
     if (participant.clientId !== null) {
       throw new CalculationValidationError("Manual calculation participant cannot have client id");
     }
-    return { ...participant, clientId: null, displayName };
+    if (participant.relatedProfileId !== null) {
+      throw new CalculationValidationError(
+        "Manual calculation participant cannot have related profile id"
+      );
+    }
+    return { ...participant, clientId: null, relatedProfileId: null, displayName };
   });
 }
 

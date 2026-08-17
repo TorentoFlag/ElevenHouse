@@ -68,7 +68,11 @@ export type CalculationStatusFilter = z.infer<typeof calculationStatusFilterSche
 export const calculationParticipantRoleSchema = z.enum(["subject", "partner"]);
 export type CalculationParticipantRole = z.infer<typeof calculationParticipantRoleSchema>;
 
-export const calculationParticipantSourceSchema = z.enum(["crm_client", "manual"]);
+export const calculationParticipantSourceSchema = z.enum([
+  "crm_client",
+  "client_related_profile",
+  "manual"
+]);
 export type CalculationParticipantSource = z.infer<typeof calculationParticipantSourceSchema>;
 
 export const calculationClientVisibilitySchema = z.enum([
@@ -112,6 +116,7 @@ export const calculationParticipantResponseSchema = z
     role: calculationParticipantRoleSchema,
     source: calculationParticipantSourceSchema,
     clientId: uuidSchema.nullable(),
+    relatedProfileId: uuidSchema.nullable().optional(),
     displayName: z.string().trim().min(1).max(200)
   })
   .strict()
@@ -123,12 +128,43 @@ export const calculationParticipantResponseSchema = z
         message: "Manual participant clientId must be null"
       });
     }
+    const relatedProfileId = value.relatedProfileId ?? null;
+    if (value.source === "manual" && relatedProfileId !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["relatedProfileId"],
+        message: "Manual participant relatedProfileId must be null"
+      });
+    }
     if (value.source === "crm_client" && value.clientId === null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["clientId"],
         message: "CRM participant clientId is required"
       });
+    }
+    if (value.source === "crm_client" && relatedProfileId !== null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["relatedProfileId"],
+        message: "CRM participant relatedProfileId must be null"
+      });
+    }
+    if (value.source === "client_related_profile") {
+      if (value.clientId === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["clientId"],
+          message: "Related-profile participant owner clientId is required"
+        });
+      }
+      if (relatedProfileId === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["relatedProfileId"],
+          message: "Related-profile participant relatedProfileId is required"
+        });
+      }
     }
   });
 export type CalculationParticipantResponse = z.infer<typeof calculationParticipantResponseSchema>;

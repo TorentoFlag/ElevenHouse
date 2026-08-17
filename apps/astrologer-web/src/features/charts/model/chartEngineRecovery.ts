@@ -20,7 +20,7 @@ export function buildSubmissionUrlState(input: {
     clientId: submission.clientId,
     partnerClientId:
       submission.mode === "synastry" || submission.mode === "composite"
-        ? submission.partnerClientId
+        ? (submission.partnerClientId ?? null)
         : null,
     jobId: response.status === "calculating" ? response.jobId : null,
     calculationId: response.status === "succeeded" ? response.calculationId : null,

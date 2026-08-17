@@ -106,20 +106,34 @@ export const chartCalculationJobs = pgTable(
       sql`coalesce((
         jsonb_typeof(${table.participantSnapshot}) = 'array'
         and (
-          (
-            ${table.method} in ('synastry', 'composite')
-            and jsonb_array_length(${table.participantSnapshot}) = 2
-            and ${table.participantSnapshot}->0 = jsonb_build_object(
-              'role', 'subject', 'clientId', ${table.clientId}
-            )
-            and ${table.participantSnapshot}->1->>'role' = 'partner'
-            and ${table.participantSnapshot}->1 = jsonb_build_object(
-              'role', 'partner', 'clientId', ${table.participantSnapshot}->1->>'clientId'
-            )
-            and ${table.participantSnapshot}->1->>'clientId'
-              ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-            and ${table.participantSnapshot}->1->>'clientId' <> ${table.clientId}::text
-          )
+	          (
+	            ${table.method} in ('synastry', 'composite')
+	            and jsonb_array_length(${table.participantSnapshot}) = 2
+	            and ${table.participantSnapshot}->0 = jsonb_build_object(
+	              'role', 'subject', 'clientId', ${table.clientId}
+	            )
+	            and ${table.participantSnapshot}->1->>'role' = 'partner'
+	            and (
+	              (
+	                ${table.participantSnapshot}->1 = jsonb_build_object(
+	                  'role', 'partner', 'clientId', ${table.participantSnapshot}->1->>'clientId'
+	                )
+	                and ${table.participantSnapshot}->1->>'clientId'
+	                  ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+	                and ${table.participantSnapshot}->1->>'clientId' <> ${table.clientId}::text
+	              )
+	              or (
+	                ${table.participantSnapshot}->1 = jsonb_build_object(
+	                  'role', 'partner',
+	                  'source', 'client_related_profile',
+	                  'clientId', ${table.clientId},
+	                  'relatedProfileId', ${table.participantSnapshot}->1->>'relatedProfileId'
+	                )
+	                and ${table.participantSnapshot}->1->>'relatedProfileId'
+	                  ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+	              )
+	            )
+	          )
           or (
             ${table.method} not in ('synastry', 'composite')
             and ${table.participantSnapshot} = jsonb_build_array(

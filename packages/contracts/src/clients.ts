@@ -4,6 +4,8 @@ import { astrologerPublicHandleSchema } from "./astrologer-profile";
 const uuidSchema = z.string().uuid();
 const timestampSchema = z.string().datetime();
 const nullableResponseStringSchema = z.string().trim().max(500).nullable();
+const displayNameRequestSchema = z.string().trim().min(1).max(200);
+const relationshipLabelRequestSchema = z.string().trim().min(1).max(100);
 
 const birthDateSchema = z
   .string()
@@ -73,11 +75,7 @@ const nullableBirthTimeDstOccurrenceRequestSchema = z
 export const clientBirthTimePrecisionSchema = z.enum(["exact", "approximate", "unknown"]);
 export type ClientBirthTimePrecision = z.infer<typeof clientBirthTimePrecisionSchema>;
 
-export const clientBirthDataSourceSchema = z.enum([
-  "client_profile",
-  "import",
-  "manual"
-]);
+export const clientBirthDataSourceSchema = z.enum(["client_profile", "import", "manual"]);
 export type ClientBirthDataSource = z.infer<typeof clientBirthDataSourceSchema>;
 
 export const clientBirthDataEditorRoleSchema = z.enum(["client", "astrologer"]);
@@ -184,6 +182,36 @@ export const clientBirthDataResponseSchema = z
   .strict();
 export type ClientBirthDataResponse = z.infer<typeof clientBirthDataResponseSchema>;
 
+export const clientRelatedBirthProfileUpsertRequestSchema = clientBirthDataUpsertRequestSchema
+  .extend({
+    displayName: displayNameRequestSchema,
+    relationshipLabel: relationshipLabelRequestSchema
+  })
+  .strict();
+export type ClientRelatedBirthProfileUpsertRequest = z.infer<
+  typeof clientRelatedBirthProfileUpsertRequestSchema
+>;
+
+export const clientRelatedBirthProfileResponseSchema = clientBirthDataResponseSchema
+  .omit({ label: true })
+  .extend({
+    displayName: z.string().trim().min(1).max(200),
+    relationshipLabel: z.string().trim().min(1).max(100)
+  })
+  .strict();
+export type ClientRelatedBirthProfileResponse = z.infer<
+  typeof clientRelatedBirthProfileResponseSchema
+>;
+
+export const clientRelatedBirthProfileListResponseSchema = z
+  .object({
+    profiles: z.array(clientRelatedBirthProfileResponseSchema)
+  })
+  .strict();
+export type ClientRelatedBirthProfileListResponse = z.infer<
+  typeof clientRelatedBirthProfileListResponseSchema
+>;
+
 export const clientBirthPlaceSearchQuerySchema = z
   .object({
     query: z
@@ -276,6 +304,7 @@ export const clientCabinetOverviewResponseSchema = z
   .object({
     astrologers: z.array(relatedAstrologerResponseItemSchema),
     birthData: clientBirthDataResponseSchema.nullable(),
+    relatedBirthProfiles: z.array(clientRelatedBirthProfileResponseSchema).optional(),
     summary: z
       .object({
         directLinkOnly: z.literal(true),
@@ -296,7 +325,8 @@ export const astrologerClientResponseItemSchema = z
     relationshipStatus: clientRelationshipStatusSchema,
     firstLinkedAt: timestampSchema,
     lastLinkedAt: timestampSchema,
-    birthData: clientBirthDataResponseSchema.nullable()
+    birthData: clientBirthDataResponseSchema.nullable(),
+    relatedBirthProfiles: z.array(clientRelatedBirthProfileResponseSchema).optional()
   })
   .strict();
 export type AstrologerClientResponseItem = z.infer<typeof astrologerClientResponseItemSchema>;
@@ -316,6 +346,14 @@ export const astrologerClientParamsSchema = z
   })
   .strict();
 export type AstrologerClientParams = z.infer<typeof astrologerClientParamsSchema>;
+
+export const clientRelatedBirthProfileParamsSchema = z
+  .object({
+    clientUserId: uuidSchema,
+    relatedProfileId: uuidSchema
+  })
+  .strict();
+export type ClientRelatedBirthProfileParams = z.infer<typeof clientRelatedBirthProfileParamsSchema>;
 
 export const astrologerClientListResponseSchema = z
   .object({

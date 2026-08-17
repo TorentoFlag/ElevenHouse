@@ -2,7 +2,8 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type {
   ClientBirthDataResponse,
   ClientBirthPlaceCandidate,
-  ClientCabinetOverviewResponse
+  ClientCabinetOverviewResponse,
+  ClientRelatedBirthProfileResponse
 } from "@elevenhouse/contracts";
 import type { SessionSummary } from "@elevenhouse/contracts";
 import { Link } from "react-router";
@@ -17,6 +18,7 @@ import { BirthPlaceAutocomplete } from "../../features/client-profile/components
 import { ClientPurchaseFlow } from "../../features/client-commerce/components/ClientPurchaseFlow";
 import {
   applyBirthPlaceCandidate,
+  createBirthProfileForm,
   updateBirthDate,
   updateBirthPlaceQuery,
   updateBirthTime,
@@ -35,6 +37,18 @@ export type ClientCabinetStatus =
   | "error";
 export type { BirthProfileFormState } from "../../features/client-profile/model/birthProfileFormModel";
 
+export type RelatedBirthProfileFormState = {
+  readonly displayName: string;
+  readonly relationshipLabel: string;
+  readonly birth: BirthProfileFormState;
+};
+
+const emptyRelatedProfileForm: RelatedBirthProfileFormState = {
+  displayName: "",
+  relationshipLabel: "",
+  birth: createBirthProfileForm(null)
+};
+
 export type MePageViewProps = {
   readonly activeSection: ClientCabinetSection;
   readonly birthPlaceSearch: {
@@ -48,10 +62,13 @@ export type MePageViewProps = {
   readonly clientLocale: SupportedLocale;
   readonly form: BirthProfileFormState;
   readonly overview: ClientCabinetOverviewResponse | null;
+  readonly relatedProfileForm?: RelatedBirthProfileFormState;
   readonly status: ClientCabinetStatus;
   readonly sessions?: readonly SessionSummary[];
   readonly sessionsStatus?: "loading" | "ready" | "error";
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
+  readonly onRelatedProfileFormChange?: (nextForm: RelatedBirthProfileFormState) => void;
+  readonly onRelatedProfileSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   readonly onRetry: () => void;
   readonly onRetrySessions?: () => void;
   readonly onSectionChange: (section: ClientCabinetSection) => void;
@@ -79,10 +96,13 @@ export function MePageView({
   clientLocale,
   form,
   overview,
+  relatedProfileForm = emptyRelatedProfileForm,
   status,
   sessions = [],
   sessionsStatus = "ready",
   onFormChange,
+  onRelatedProfileFormChange = () => undefined,
+  onRelatedProfileSubmit = (event) => event.preventDefault(),
   onRetry,
   onRetrySessions = () => undefined,
   onSectionChange,
@@ -229,8 +249,12 @@ export function MePageView({
               birthTimeOccurrenceCopy={birthTimeOccurrenceCopy}
               form={form}
               birthData={safeOverview.birthData}
+              relatedBirthProfiles={safeOverview.relatedBirthProfiles ?? []}
+              relatedProfileForm={relatedProfileForm}
               status={status}
               onFormChange={onFormChange}
+              onRelatedProfileFormChange={onRelatedProfileFormChange}
+              onRelatedProfileSubmit={onRelatedProfileSubmit}
               onSubmit={onSubmit}
             />
           ) : null}
@@ -467,16 +491,24 @@ function DataSection({
   birthTimeOccurrenceCopy,
   form,
   birthData,
+  relatedBirthProfiles,
+  relatedProfileForm,
   status,
   onFormChange,
+  onRelatedProfileFormChange,
+  onRelatedProfileSubmit,
   onSubmit
 }: {
   readonly birthPlaceSearch: MePageViewProps["birthPlaceSearch"];
   readonly birthTimeOccurrenceCopy: BirthTimeOccurrenceCopy;
   readonly form: BirthProfileFormState;
   readonly birthData: ClientBirthDataResponse | null;
+  readonly relatedBirthProfiles: readonly ClientRelatedBirthProfileResponse[];
+  readonly relatedProfileForm: RelatedBirthProfileFormState;
   readonly status: ClientCabinetStatus;
   readonly onFormChange: (nextForm: BirthProfileFormState) => void;
+  readonly onRelatedProfileFormChange: (nextForm: RelatedBirthProfileFormState) => void;
+  readonly onRelatedProfileSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -493,6 +525,9 @@ function DataSection({
         ) : (
           <BirthProfileSummary profile={birthData} />
         )}
+        {relatedBirthProfiles.length > 0 ? (
+          <RelatedBirthProfileList profiles={relatedBirthProfiles} />
+        ) : null}
       </section>
 
       <form className={styles.sectionCard} onSubmit={onSubmit}>
@@ -592,7 +627,134 @@ function DataSection({
           <p className={styles.errorText}>Не удалось выполнить действие</p>
         ) : null}
       </form>
+
+      <form className={styles.sectionCard} onSubmit={onRelatedProfileSubmit}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Партнеры и семья</span>
+            <h2>Новый профиль</h2>
+          </div>
+        </div>
+        <div className={styles.formGrid}>
+          <label>
+            Имя
+            <input
+              disabled={status === "saving"}
+              name="relatedDisplayName"
+              value={relatedProfileForm.displayName}
+              onChange={(event) =>
+                onRelatedProfileFormChange({
+                  ...relatedProfileForm,
+                  displayName: event.target.value
+                })
+              }
+              placeholder="Иванов Иван Иванович"
+            />
+          </label>
+          <label>
+            Кем приходится
+            <input
+              disabled={status === "saving"}
+              name="relatedRelationshipLabel"
+              value={relatedProfileForm.relationshipLabel}
+              onChange={(event) =>
+                onRelatedProfileFormChange({
+                  ...relatedProfileForm,
+                  relationshipLabel: event.target.value
+                })
+              }
+              placeholder="муж"
+            />
+          </label>
+          <label>
+            Дата рождения
+            <input
+              disabled={status === "saving"}
+              name="relatedBirthDate"
+              type="date"
+              value={relatedProfileForm.birth.birthDate}
+              onChange={(event) =>
+                onRelatedProfileFormChange({
+                  ...relatedProfileForm,
+                  birth: updateBirthDate(relatedProfileForm.birth, event.target.value)
+                })
+              }
+            />
+          </label>
+          <label>
+            Время рождения
+            <input
+              disabled={status === "saving"}
+              name="relatedBirthTime"
+              type="time"
+              value={relatedProfileForm.birth.birthTime}
+              onChange={(event) =>
+                onRelatedProfileFormChange({
+                  ...relatedProfileForm,
+                  birth: updateBirthTime(relatedProfileForm.birth, event.target.value)
+                })
+              }
+            />
+          </label>
+          <BirthPlaceAutocomplete
+            copy={birthPlaceSearch.copy}
+            disabled={status === "saving"}
+            inputId="client-related-birth-profile-birth-place"
+            latitude={relatedProfileForm.birth.birthLatitude}
+            longitude={relatedProfileForm.birth.birthLongitude}
+            name="relatedBirthPlaceText"
+            selectedPlaceText={relatedProfileForm.birth.selectedBirthPlaceText}
+            timezone={relatedProfileForm.birth.birthTimezone}
+            validationError={
+              status === "validation-error" ? birthPlaceSearch.copy.selectionRequired : null
+            }
+            value={relatedProfileForm.birth.birthPlaceText}
+            onQueryChange={(value) =>
+              onRelatedProfileFormChange({
+                ...relatedProfileForm,
+                birth: updateBirthPlaceQuery(relatedProfileForm.birth, value)
+              })
+            }
+            onSearch={birthPlaceSearch.onSearch}
+            onSelect={(candidate) =>
+              onRelatedProfileFormChange({
+                ...relatedProfileForm,
+                birth: applyBirthPlaceCandidate(relatedProfileForm.birth, candidate)
+              })
+            }
+          />
+        </div>
+        <button className={styles.primaryButton} type="submit" disabled={status === "saving"}>
+          {status === "saving" ? "Сохраняем..." : "Сохранить профиль"}
+        </button>
+      </form>
     </div>
+  );
+}
+
+function RelatedBirthProfileList({
+  profiles
+}: {
+  readonly profiles: readonly ClientRelatedBirthProfileResponse[];
+}) {
+  return (
+    <ul className={styles.birthList}>
+      {profiles.map((profile) => (
+        <li key={profile.id}>
+          <span className={styles.birthIcon}>
+            <Icon iconName="users" size={18} />
+          </span>
+          <span>
+            <strong>{profile.displayName}</strong>
+            <small>
+              {profile.relationshipLabel} · {formatBirthDate(profile.birthDate)}
+              {profile.birthTime ? ` · ${profile.birthTime}` : " · время неизвестно"}
+              {profile.birthPlaceText ? ` · ${profile.birthPlaceText}` : ""}
+            </small>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -692,6 +854,7 @@ function getInitials(name: string) {
 const emptyOverview: ClientCabinetOverviewResponse = {
   astrologers: [],
   birthData: null,
+  relatedBirthProfiles: [],
   summary: {
     directLinkOnly: true,
     upcomingBookingCount: 0,

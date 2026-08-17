@@ -8,13 +8,18 @@ import {
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
   clientBirthDataUpsertRequestSchema,
+  clientRelatedBirthProfileParamsSchema,
+  clientRelatedBirthProfileResponseSchema,
+  clientRelatedBirthProfileUpsertRequestSchema,
   type AstrologerClientListQuery,
   type AstrologerClientListResponse,
   type AstrologerClientResponse,
   type ClientBirthPlaceReferenceResponse,
   type ClientBirthPlaceSearchQuery,
   type ClientBirthPlaceSearchResponse,
-  type ClientBirthDataUpsertRequest
+  type ClientBirthDataUpsertRequest,
+  type ClientRelatedBirthProfileResponse,
+  type ClientRelatedBirthProfileUpsertRequest
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -78,5 +83,36 @@ export async function updateClientBirthData(
     await application.http.put(`/clients/${params.clientUserId}/birth-data`, body, {
       csrf: true
     })
+  );
+}
+
+export async function createClientRelatedBirthProfile(
+  clientUserId: string,
+  input: ClientRelatedBirthProfileUpsertRequest
+): Promise<ClientRelatedBirthProfileResponse> {
+  const params = astrologerClientParamsSchema.parse({ clientUserId });
+  const body = clientRelatedBirthProfileUpsertRequestSchema.parse(input);
+
+  return clientRelatedBirthProfileResponseSchema.parse(
+    await application.http.post(`/clients/${params.clientUserId}/related-birth-profiles`, body, {
+      csrf: true
+    })
+  );
+}
+
+export async function updateClientRelatedBirthProfile(
+  clientUserId: string,
+  relatedProfileId: string,
+  input: ClientRelatedBirthProfileUpsertRequest
+): Promise<ClientRelatedBirthProfileResponse> {
+  const params = clientRelatedBirthProfileParamsSchema.parse({ clientUserId, relatedProfileId });
+  const body = clientRelatedBirthProfileUpsertRequestSchema.parse(input);
+
+  return clientRelatedBirthProfileResponseSchema.parse(
+    await application.http.put(
+      `/clients/${params.clientUserId}/related-birth-profiles/${params.relatedProfileId}`,
+      body,
+      { csrf: true }
+    )
   );
 }

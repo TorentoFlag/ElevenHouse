@@ -19,6 +19,13 @@ export class ClientBirthDataRelationshipDeniedError extends Error {
   }
 }
 
+export class ClientRelatedBirthProfileNotFoundError extends Error {
+  constructor(message = "Client related birth profile was not found") {
+    super(message);
+    this.name = "ClientRelatedBirthProfileNotFoundError";
+  }
+}
+
 export class ClientAstrologerRelationshipRoleError extends Error {
   constructor(message = "Client and astrologer account roles are required") {
     super(message);

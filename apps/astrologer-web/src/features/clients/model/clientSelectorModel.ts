@@ -2,7 +2,8 @@ import { keepPreviousData } from "@tanstack/react-query";
 import type {
   AstrologerClientListQuery,
   AstrologerClientResponseItem,
-  ClientBirthDataResponse
+  ClientBirthDataResponse,
+  ClientRelatedBirthProfileResponse
 } from "@elevenhouse/contracts";
 import { listAstrologerClients } from "../api/clientsApi";
 
@@ -14,6 +15,7 @@ export type ClientSelectOption = {
   readonly birthDateDisplay: string;
   readonly hasBirthDate: boolean;
   readonly birthData: ClientBirthDataResponse | null;
+  readonly relatedBirthProfiles?: readonly ClientRelatedBirthProfileResponse[];
 };
 
 export type ClientSearchComboboxKeyAction =
@@ -90,7 +92,8 @@ export function toClientSelectOptions(
         "Дата рождения не заполнена",
       birthDateDisplay: birthDateDisplay || "—",
       hasBirthDate: Boolean(birthDate),
-      birthData: client.birthData
+      birthData: client.birthData,
+      relatedBirthProfiles: client.relatedBirthProfiles ?? []
     };
   });
 }
@@ -152,10 +155,7 @@ export function getClientSearchComboboxKeyAction(input: {
   readonly hasNextPage: boolean;
   readonly requireBirthDate?: boolean;
 }): ClientSearchComboboxKeyAction {
-  const enabledClients = getSelectableClientOptions(
-    input.clients,
-    input.requireBirthDate ?? true
-  );
+  const enabledClients = getSelectableClientOptions(input.clients, input.requireBirthDate ?? true);
   if (input.key === "Escape") {
     return { kind: "close" };
   }

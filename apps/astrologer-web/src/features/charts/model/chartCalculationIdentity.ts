@@ -92,14 +92,17 @@ function resolvePairParticipants(
 
   const subject = calculation.participants[0];
   const partner = calculation.participants[1];
-  if (
+  const hasCompatiblePair =
     calculation.mode === "compatibility" &&
     calculation.participants.length === 2 &&
-    isCrmParticipant(subject, "subject") &&
-    isCrmParticipant(partner, "partner") &&
-    partner.clientId !== subject.clientId
-  ) {
+    isCrmParticipant(subject, "subject");
+  if (!hasCompatiblePair) return null;
+
+  if (isCrmParticipant(partner, "partner") && partner.clientId !== subject.clientId) {
     return { subjectClientId: subject.clientId, partnerClientId: partner.clientId };
+  }
+  if (isRelatedProfileParticipant(partner, "partner") && partner.clientId === subject.clientId) {
+    return { subjectClientId: subject.clientId, partnerClientId: null };
   }
   return null;
 }
@@ -182,6 +185,22 @@ function isCrmParticipant(
     participant?.role === role &&
     participant.source === "crm_client" &&
     typeof participant.clientId === "string"
+  );
+}
+
+function isRelatedProfileParticipant(
+  participant: CalculationRecordResponse["participants"][number] | undefined,
+  role: "partner"
+): participant is CalculationRecordResponse["participants"][number] & {
+  readonly clientId: string;
+  readonly relatedProfileId: string;
+} {
+  return (
+    participant?.role === role &&
+    participant.source === "client_related_profile" &&
+    typeof participant.clientId === "string" &&
+    typeof participant.relatedProfileId === "string" &&
+    canonicalUuidPattern.test(participant.relatedProfileId)
   );
 }
 

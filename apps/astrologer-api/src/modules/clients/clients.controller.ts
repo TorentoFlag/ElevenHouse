@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import { RequireCsrf } from "../security/route-policy/route-security-policy";
@@ -40,5 +40,31 @@ export class ClientsController {
     @Req() request: AstrologerSessionRequest
   ) {
     return this.clientsService.updateBirthData(clientUserId, body, request);
+  }
+
+  @Post(":clientUserId/related-birth-profiles")
+  @RequireCsrf()
+  createRelatedBirthProfile(
+    @Param("clientUserId") clientUserId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.clientsService.createRelatedBirthProfile(clientUserId, body, request);
+  }
+
+  @Put(":clientUserId/related-birth-profiles/:relatedProfileId")
+  @RequireCsrf()
+  updateRelatedBirthProfile(
+    @Param("clientUserId") clientUserId: string,
+    @Param("relatedProfileId") relatedProfileId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.clientsService.updateRelatedBirthProfile(
+      clientUserId,
+      relatedProfileId,
+      body,
+      request
+    );
   }
 }

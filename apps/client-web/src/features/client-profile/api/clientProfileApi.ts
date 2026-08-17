@@ -4,12 +4,16 @@ import {
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
   clientCabinetOverviewResponseSchema,
+  clientRelatedBirthProfileResponseSchema,
+  clientRelatedBirthProfileUpsertRequestSchema,
   relatedAstrologerListResponseSchema,
   type ClientBirthDataResponse,
   type ClientBirthDataUpsertRequest,
   type ClientBirthPlaceSearchQuery,
   type ClientBirthPlaceSearchResponse,
   type ClientCabinetOverviewResponse,
+  type ClientRelatedBirthProfileResponse,
+  type ClientRelatedBirthProfileUpsertRequest,
   type RelatedAstrologerListResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -50,5 +54,26 @@ export async function upsertClientBirthData(
   const request = clientBirthDataUpsertRequestSchema.parse(input);
   return clientBirthDataResponseSchema.parse(
     await application.http.put("/me/birth-data", request, { csrf: true })
+  );
+}
+
+export async function createClientRelatedBirthProfile(
+  input: ClientRelatedBirthProfileUpsertRequest
+): Promise<ClientRelatedBirthProfileResponse> {
+  const request = clientRelatedBirthProfileUpsertRequestSchema.parse(input);
+  return clientRelatedBirthProfileResponseSchema.parse(
+    await application.http.post("/me/related-birth-profiles", request, { csrf: true })
+  );
+}
+
+export async function updateClientRelatedBirthProfile(
+  relatedProfileId: string,
+  input: ClientRelatedBirthProfileUpsertRequest
+): Promise<ClientRelatedBirthProfileResponse> {
+  const request = clientRelatedBirthProfileUpsertRequestSchema.parse(input);
+  return clientRelatedBirthProfileResponseSchema.parse(
+    await application.http.put(`/me/related-birth-profiles/${relatedProfileId}`, request, {
+      csrf: true
+    })
   );
 }

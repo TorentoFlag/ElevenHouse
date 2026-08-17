@@ -46,6 +46,30 @@ describe("chartEngineSubmissionRequest", () => {
     });
   });
 
+  it("prepares a related birth profile as a typed relationship partner", () => {
+    expect(
+      prepareChartEngineSubmission({
+        ...baseInput,
+        mode: "synastry",
+        selectedPartnerOption: {
+          source: "client_related_profile",
+          profile: relatedProfile
+        }
+      })
+    ).toEqual({
+      kind: "ready",
+      draft: {
+        mode: "synastry",
+        clientId: client.value,
+        partner: {
+          source: "client_related_profile",
+          relatedProfileId: relatedProfile.id
+        },
+        settings
+      }
+    });
+  });
+
   it("keeps the exact recalculation identity when attaching the target", () => {
     const preparation = prepareChartEngineSubmission({
       ...baseInput,
@@ -104,6 +128,30 @@ const settings = {
   nodeType: "true",
   aspectPreset: "major",
   orbMultiplier: 1
+} as const;
+
+const relatedProfile = {
+  id: "66666666-6666-4666-8666-666666666666",
+  clientUserId: client.value,
+  displayName: "Ivan Ivanov",
+  relationshipLabel: "husband",
+  birthDate: "1988-07-22",
+  birthTime: "09:15",
+  birthTimePrecision: "exact",
+  birthPlaceText: "Kaliningrad, Russia",
+  birthCountryCode: "RU",
+  birthCity: "Kaliningrad",
+  birthRegion: null,
+  birthTimezone: "Europe/Kaliningrad",
+  birthTimeDstOccurrence: null,
+  birthLatitude: 54.7104,
+  birthLongitude: 20.4522,
+  source: "manual",
+  revision: 1,
+  lastEditedByUserId: client.value,
+  lastEditedByRole: "astrologer",
+  createdAt: "2026-08-03T10:00:00.000Z",
+  updatedAt: "2026-08-03T10:00:00.000Z"
 } as const;
 
 const baseInput = {

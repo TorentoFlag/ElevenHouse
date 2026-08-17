@@ -151,19 +151,35 @@ export function parseChartCalculationParticipants(
 ): readonly ChartCalculationParticipant[] {
   if (!Array.isArray(value)) throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
   const participants = value.map((participant) => {
-    if (
-      !participant ||
-      typeof participant !== "object" ||
-      Object.keys(participant).sort().join(",") !== "clientId,role"
-    ) {
+    if (!participant || typeof participant !== "object") {
       throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
     }
     const row = participant as Record<string, unknown>;
+    const keys = Object.keys(participant).sort().join(",");
     if (
       (row.role !== "subject" && row.role !== "partner") ||
       typeof row.clientId !== "string" ||
       !canonicalUuidPattern.test(row.clientId)
     ) {
+      throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
+    }
+    if (keys === "clientId,relatedProfileId,role,source") {
+      if (
+        row.role !== "partner" ||
+        row.source !== "client_related_profile" ||
+        typeof row.relatedProfileId !== "string" ||
+        !canonicalUuidPattern.test(row.relatedProfileId)
+      ) {
+        throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
+      }
+      return {
+        role: "partner",
+        source: "client_related_profile",
+        clientId: row.clientId,
+        relatedProfileId: row.relatedProfileId
+      } satisfies ChartCalculationParticipant;
+    }
+    if (keys !== "clientId,role") {
       throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
     }
     return {
@@ -176,7 +192,12 @@ export function parseChartCalculationParticipants(
     participants.length !== (relationship ? 2 : 1) ||
     participants[0]?.role !== "subject" ||
     participants[0].clientId !== clientId ||
-    (relationship && (participants[1]?.role !== "partner" || participants[1].clientId === clientId))
+    (relationship &&
+      (participants[1]?.role !== "partner" ||
+        (!("source" in participants[1]) && participants[1].clientId === clientId) ||
+        ("source" in participants[1] &&
+          participants[1].source === "client_related_profile" &&
+          participants[1].clientId !== clientId)))
   ) {
     throw new Error("CHART_JOB_PARTICIPANTS_INVALID");
   }

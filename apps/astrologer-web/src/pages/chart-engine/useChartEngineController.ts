@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ChartSettings, type ClientBirthPlaceCandidate } from "@elevenhouse/contracts";
+import {
+  ChartSettings,
+  type ClientBirthPlaceCandidate,
+  type ClientRelatedBirthProfileResponse,
+  type ClientRelatedBirthProfileUpsertRequest
+} from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
+  createClientRelatedBirthProfile,
   getAstrologerClient,
   resolveClientBirthPlaceReference,
   searchClientBirthPlaces,
@@ -60,6 +66,11 @@ import {
   attachChartEngineSubmissionTarget,
   prepareChartEngineSubmission
 } from "../../features/charts/model/chartEngineSubmissionRequest";
+import {
+  getChartPartnerBirthData,
+  toCrmChartPartnerOption,
+  toRelatedChartPartnerOption
+} from "../../features/charts/model/chartPartnerOption";
 import {
   buildChartEngineSearch as buildSafeChartEngineSearch,
   transitionChartEngineUrlState,
@@ -131,6 +142,8 @@ export function useChartEngineController() {
   const [selectedPartnerClient, setSelectedPartnerClient] = useState<ClientSelectOption | null>(
     null
   );
+  const [selectedPartnerRelatedProfile, setSelectedPartnerRelatedProfile] =
+    useState<ClientRelatedBirthProfileResponse | null>(null);
   const [restoredClientId, setRestoredClientId] = useState<string | null>(initialUrlState.clientId);
   const [restoredPartnerClientId, setRestoredPartnerClientId] = useState<string | null>(
     initialUrlState.partnerClientId
@@ -283,6 +296,24 @@ export function useChartEngineController() {
       const response = await searchClientBirthPlaces({ query, limit: 5 });
 
       return response.candidates;
+    }
+  });
+  const relatedBirthProfileMutation = useMutation({
+    mutationFn: async (input: {
+      readonly clientId: string;
+      readonly data: ClientRelatedBirthProfileUpsertRequest;
+    }) => createClientRelatedBirthProfile(input.clientId, input.data),
+    onSuccess: async (profile, input) => {
+      setSelectedClient((current) =>
+        current?.value === input.clientId
+          ? mergeClientRelatedBirthProfile(current, profile)
+          : current
+      );
+      setSelectedPartnerClient(null);
+      setRestoredPartnerClientId(null);
+      setSelectedPartnerRelatedProfile(profile);
+      setHasResultStaleIntent(Boolean(result));
+      await queryClient.invalidateQueries({ queryKey: astrologerClientsQueryKeys.all() });
     }
   });
 
@@ -544,7 +575,13 @@ export function useChartEngineController() {
         settings,
         getChartResultMethodForMode(authoritativeMode),
         transitMoment,
-        selectedPartnerClient?.birthData,
+        getChartPartnerBirthData(
+          selectedPartnerRelatedProfile
+            ? toRelatedChartPartnerOption(selectedPartnerRelatedProfile)
+            : selectedPartnerClient
+              ? toCrmChartPartnerOption(selectedPartnerClient)
+              : null
+        ),
         solarReturnYear,
         progressionTargetDate,
         horaryQuestion
@@ -576,18 +613,28 @@ export function useChartEngineController() {
     ? controllerCopy.recalculationChanged
     : recalculationTargetState.errorMessage;
   const pollErrorMessage =
-    errorMessageFrom(jobQuery.error, controllerCopy.calculationFailed) ?? recalculationRecoveryErrorMessage;
-  const resultErrorMessage = errorMessageFrom(calculationQuery.error, controllerCopy.calculationFailed);
+    errorMessageFrom(jobQuery.error, controllerCopy.calculationFailed) ??
+    recalculationRecoveryErrorMessage;
+  const resultErrorMessage = errorMessageFrom(
+    calculationQuery.error,
+    controllerCopy.calculationFailed
+  );
   const savedCalculationErrorMessage = errorMessageFrom(
     savedCalculationQuery.error,
     controllerCopy.calculationFailed
   );
-  const clientErrorMessage = errorMessageFrom(restoredClientError, controllerCopy.calculationFailed);
+  const clientErrorMessage = errorMessageFrom(
+    restoredClientError,
+    controllerCopy.calculationFailed
+  );
   const identityErrorMessage = getChartIdentityErrorMessage(
     calculationState.identity,
     controllerCopy
   );
-  const linkErrorMessage = errorMessageFrom(linkCalculationMutation.error, controllerCopy.calculationFailed);
+  const linkErrorMessage = errorMessageFrom(
+    linkCalculationMutation.error,
+    controllerCopy.calculationFailed
+  );
   const horaryPlaceErrorMessage = getHoraryPlaceReferenceErrorMessage(
     horaryPlaceReferenceQuery.error,
     chartCopy
@@ -608,6 +655,7 @@ export function useChartEngineController() {
   const isBusy =
     calculationMutation.isPending ||
     birthDataMutation.isPending ||
+    relatedBirthProfileMutation.isPending ||
     linkCalculationMutation.isPending ||
     enqueuePdfMutation.isPending ||
     downloadPdfMutation.isPending ||
@@ -633,9 +681,7 @@ export function useChartEngineController() {
     errorMessageFrom(pdfQuery.error, controllerCopy.pdfFailed) ??
     pdfAction.errorMessage;
   const jobFailureMessage =
-    jobQuery.data?.status === "failed"
-      ? controllerCopy.calculationFailed
-      : null;
+    jobQuery.data?.status === "failed" ? controllerCopy.calculationFailed : null;
   const handlePdfAction = async () => {
     if (pdfQuery.error) {
       setPdfActionErrorMessage(null);
@@ -675,6 +721,11 @@ export function useChartEngineController() {
       mode: requestedMode,
       selectedClient,
       selectedPartnerClient,
+      selectedPartnerOption: selectedPartnerRelatedProfile
+        ? toRelatedChartPartnerOption(selectedPartnerRelatedProfile)
+        : selectedPartnerClient
+          ? toCrmChartPartnerOption(selectedPartnerClient)
+          : null,
       settings,
       transitMoment,
       solarReturnYear,
@@ -697,6 +748,7 @@ export function useChartEngineController() {
   return {
     selectedClient,
     selectedPartnerClient,
+    selectedPartnerRelatedProfile,
     jobState,
     calculationId,
     result,
@@ -761,6 +813,7 @@ export function useChartEngineController() {
       invalidateActiveSubmission();
       setSelectedClient(null);
       setSelectedPartnerClient(null);
+      setSelectedPartnerRelatedProfile(null);
       setRestoredClientId(authoritativeCalculationIdentity.subjectClientId);
       setRestoredPartnerClientId(authoritativeCalculationIdentity.partnerClientId);
       setCalculationErrorMessage(null);
@@ -783,6 +836,7 @@ export function useChartEngineController() {
       const nextUrlState = transitionChartEngineUrlState(urlState, { mode: nextMode });
       setMode(nextMode);
       setSelectedPartnerClient(null);
+      setSelectedPartnerRelatedProfile(null);
       setRestoredPartnerClientId(null);
       setJobId(null);
       setCalculationId(null);
@@ -905,7 +959,12 @@ export function useChartEngineController() {
       }
     },
     isSavingBirthData: birthDataMutation.isPending,
+    isCreatingRelatedBirthProfile: relatedBirthProfileMutation.isPending,
     birthDataError: errorMessageFrom(birthDataMutation.error, controllerCopy.calculationFailed),
+    relatedBirthProfileError: errorMessageFrom(
+      relatedBirthProfileMutation.error,
+      controllerCopy.calculationFailed
+    ),
     onSearchBirthPlaces: async (query: string) => birthPlaceSearchMutation.mutateAsync(query),
     onSaveBirthData: async (data: Parameters<typeof updateClientBirthData>[1]) => {
       if (!selectedClient) {
@@ -945,6 +1004,7 @@ export function useChartEngineController() {
       setSelectedClient(client);
       setRestoredClientId(client.value);
       setSelectedPartnerClient(null);
+      setSelectedPartnerRelatedProfile(null);
       setRestoredPartnerClientId(null);
       setJobId(null);
       setCalculationId(null);
@@ -962,6 +1022,7 @@ export function useChartEngineController() {
       });
       setMode(relationshipMode);
       setSelectedPartnerClient(client);
+      setSelectedPartnerRelatedProfile(null);
       setRestoredPartnerClientId(client.value);
       setJobId(null);
       setCalculationId(null);
@@ -969,6 +1030,33 @@ export function useChartEngineController() {
       setCalculationErrorMessage(null);
       setHasResultStaleIntent(false);
       commitUrlState(nextUrlState);
+    },
+    onSelectPartnerRelatedProfile: (profile: ClientRelatedBirthProfileResponse) => {
+      invalidateActiveSubmission();
+      const relationshipMode = mode === "composite" ? "composite" : "synastry";
+      const modeUrlState = transitionChartEngineUrlState(urlState, { mode: relationshipMode });
+      const nextUrlState = transitionChartEngineUrlState(modeUrlState, {
+        partnerClientId: null
+      });
+      setMode(relationshipMode);
+      setSelectedPartnerClient(null);
+      setRestoredPartnerClientId(null);
+      setSelectedPartnerRelatedProfile(profile);
+      setJobId(null);
+      setCalculationId(null);
+      setPendingRecalculationTarget(null);
+      setCalculationErrorMessage(null);
+      setHasResultStaleIntent(false);
+      commitUrlState(nextUrlState);
+    },
+    onCreateRelatedBirthProfile: async (data: ClientRelatedBirthProfileUpsertRequest) => {
+      if (!selectedClient) {
+        throw new Error(controllerCopy.chooseClient);
+      }
+      await relatedBirthProfileMutation.mutateAsync({
+        clientId: selectedClient.value,
+        data
+      });
     },
     onCreateNatalJob: async () =>
       submitPreparedCalculation(authoritativeMode === "child_chart" ? "child_chart" : "natal"),
@@ -993,4 +1081,16 @@ function writeChartEngineUrlState(state: SafeChartEngineUrlState) {
 
 function getCurrentChartEngineSearch() {
   return typeof window === "undefined" ? "" : window.location.search;
+}
+
+function mergeClientRelatedBirthProfile(
+  client: ClientSelectOption,
+  profile: ClientRelatedBirthProfileResponse
+): ClientSelectOption {
+  const profiles = client.relatedBirthProfiles ?? [];
+  const relatedBirthProfiles = profiles.some((candidate) => candidate.id === profile.id)
+    ? profiles.map((candidate) => (candidate.id === profile.id ? profile : candidate))
+    : [...profiles, profile];
+
+  return { ...client, relatedBirthProfiles };
 }

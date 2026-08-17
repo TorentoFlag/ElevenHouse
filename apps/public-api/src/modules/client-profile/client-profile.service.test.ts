@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ClientStore } from "@elevenhouse/domain";
+import type { ClientRelatedBirthProfileStore, ClientStore } from "@elevenhouse/domain";
 import { ClientProfileService } from "./client-profile.service";
 
 const now = new Date("2026-07-06T10:00:00.000Z");
@@ -19,20 +19,26 @@ describe("ClientProfileService", () => {
           }
         ]
       })),
-      findBirthData: vi.fn(async () => null)
+      findBirthData: vi.fn(async () => null),
+      listRelatedBirthProfiles: vi.fn(async () => [])
     };
     const store = {
-      writeClientBirthProfile: vi.fn(async (input) => ({ kind: "written" as const, profile: {
-        id: "55555555-5555-4555-8555-555555555555",
-        clientUserId: input.clientUserId,
-        ...input.data,
-        revision: 1,
-        lastEditedByUserId: input.actor.userId,
-        lastEditedByRole: input.actor.role,
-        createdAt: input.now,
-        updatedAt: input.now
-      }}))
-    } satisfies Pick<ClientStore, "writeClientBirthProfile">;
+      writeClientBirthProfile: vi.fn(async (input) => ({
+        kind: "written" as const,
+        profile: {
+          id: "55555555-5555-4555-8555-555555555555",
+          clientUserId: input.clientUserId,
+          ...input.data,
+          revision: 1,
+          lastEditedByUserId: input.actor.userId,
+          lastEditedByRole: input.actor.role,
+          createdAt: input.now,
+          updatedAt: input.now
+        }
+      })),
+      writeClientRelatedBirthProfile: vi.fn()
+    } satisfies Pick<ClientStore, "writeClientBirthProfile"> &
+      Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile">;
     const service = new ClientProfileService(reader, store, { now: () => now });
 
     await expect(
@@ -40,7 +46,8 @@ describe("ClientProfileService", () => {
     ).resolves.toMatchObject({
       astrologers: [{ publicHandle: "alisa-vega", publicName: "Алиса Вега" }]
     });
-    await expect(service.upsertBirthData("11111111-1111-4111-8111-111111111111", {
+    await expect(
+      service.upsertBirthData("11111111-1111-4111-8111-111111111111", {
         label: null,
         birthDate: "1990-03-14",
         birthTime: "08:25",
@@ -64,7 +71,10 @@ describe("ClientProfileService", () => {
       lastEditedByRole: "client"
     });
     expect(store.writeClientBirthProfile).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedRevision: null, actor: { userId: "11111111-1111-4111-8111-111111111111", role: "client" } })
+      expect.objectContaining({
+        expectedRevision: null,
+        actor: { userId: "11111111-1111-4111-8111-111111111111", role: "client" }
+      })
     );
   });
 });

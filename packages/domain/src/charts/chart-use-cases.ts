@@ -152,6 +152,13 @@ function hasValidParticipants(
     return false;
   }
   if (!relationship) return partner === undefined;
+  if (partner && "source" in partner && partner.source === "client_related_profile") {
+    return (
+      partner.role === "partner" &&
+      partner.clientId === subject.clientId &&
+      canonicalUuidPattern.test(partner.relatedProfileId)
+    );
+  }
   return Boolean(
     partner &&
     partner.role === "partner" &&

@@ -5,6 +5,7 @@ import type {
   ChartSettings,
   ClientBirthDataUpsertRequest,
   ClientBirthPlaceCandidate,
+  ClientRelatedBirthProfileResponse,
   DictionaryLocale
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
@@ -61,6 +62,7 @@ export function ChartEngineWorkspace({
   readiness,
   selectedClient,
   selectedPartnerClient,
+  selectedPartnerRelatedProfile,
   settings,
   shouldShowBirthDataEditor
 }: {
@@ -94,6 +96,7 @@ export function ChartEngineWorkspace({
   readonly readiness: ChartBirthDataReadiness;
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
+  readonly selectedPartnerRelatedProfile?: ClientRelatedBirthProfileResponse | null;
   readonly settings: ChartSettings;
   readonly shouldShowBirthDataEditor: boolean;
 }) {
@@ -104,7 +107,10 @@ export function ChartEngineWorkspace({
   const needsBirthData = activeMode !== "horary";
   const isBirthDataBlocked = Boolean(needsBirthData && selectedClient && !readiness.ready);
   const isPartnerBirthDataBlocked = Boolean(
-    needsBirthData && isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
+    needsBirthData &&
+    isPartnerMode &&
+    (selectedPartnerClient || selectedPartnerRelatedProfile) &&
+    !partnerReadiness.ready
   );
   const astrocartographyResult =
     displayResult?.method === "astrocartography" ? displayResult : null;
@@ -285,6 +291,7 @@ export function ChartEngineWorkspace({
               mode={activeMode}
               result={displayResult}
               selectedPartnerClient={selectedPartnerClient}
+              selectedPartnerRelatedProfile={selectedPartnerRelatedProfile ?? null}
             />
           </section>
           <ChartSummaryRail
@@ -693,7 +700,8 @@ function StatusCard({
   missingPartnerBirthData,
   mode,
   result,
-  selectedPartnerClient
+  selectedPartnerClient,
+  selectedPartnerRelatedProfile
 }: {
   copy: ChartEngineCopy;
   errorMessage: string | null;
@@ -704,6 +712,7 @@ function StatusCard({
   mode: ChartEngineMode;
   result: ChartResult | null;
   selectedPartnerClient: ClientSelectOption | null;
+  selectedPartnerRelatedProfile: ClientRelatedBirthProfileResponse | null;
 }) {
   const modeCopy = copy.modes[mode];
   if (jobState === "calculating")
@@ -721,7 +730,11 @@ function StatusCard({
       </div>
     );
   if (missingBirthData.length > 0) return null;
-  if ((mode === "synastry" || mode === "composite") && !selectedPartnerClient)
+  if (
+    (mode === "synastry" || mode === "composite") &&
+    !selectedPartnerClient &&
+    !selectedPartnerRelatedProfile
+  )
     return (
       <div className={styles.statusCard} role="status">
         <strong>{copy.status.choosePartner}</strong>
@@ -745,7 +758,7 @@ function StatusCard({
     return (
       <div className={styles.statusCard}>
         <strong>{modeCopy.emptyTitle}</strong>
-        <span>{modeCopy.emptyDetail}</span>
+        <span>{modeCopy.readyDetail}</span>
       </div>
     );
   }

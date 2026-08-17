@@ -12,7 +12,11 @@ export const calculationStatusValues = ["calculated", "linked", "published", "ar
 
 export const calculationParticipantRoleValues = ["subject", "partner"] as const;
 
-export const calculationParticipantSourceValues = ["crm_client", "manual"] as const;
+export const calculationParticipantSourceValues = [
+  "crm_client",
+  "client_related_profile",
+  "manual"
+] as const;
 
 export const calculationClientVisibilityValues = [
   "private_to_astrologer",

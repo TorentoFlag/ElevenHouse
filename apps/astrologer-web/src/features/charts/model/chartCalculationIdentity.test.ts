@@ -4,6 +4,7 @@ import { resolveChartCalculationIdentity } from "./chartCalculationIdentity";
 
 const clientId = "22222222-2222-4222-8222-222222222222";
 const partnerClientId = "55555555-5555-4555-8555-555555555555";
+const relatedProfileId = "99999999-9999-4999-8999-999999999999";
 
 describe("chartCalculationIdentity", () => {
   it("withholds the result while authoritative calculation participants are loading", () => {
@@ -29,6 +30,23 @@ describe("chartCalculationIdentity", () => {
       kind: "ready",
       subjectClientId: clientId,
       partnerClientId
+    });
+  });
+
+  it("resolves a client related profile partner without requiring a second CRM client", () => {
+    expect(
+      resolveChartCalculationIdentity({
+        calculation: calculation("synastry", {
+          participants: [subjectParticipant(), relatedProfileParticipant()]
+        }),
+        mode: "synastry",
+        selectedClientId: clientId,
+        selectedPartnerClientId: null
+      })
+    ).toEqual({
+      kind: "ready",
+      subjectClientId: clientId,
+      partnerClientId: null
     });
   });
 
@@ -141,6 +159,12 @@ describe("chartCalculationIdentity", () => {
     calculation("natal", { module: "numerology" }),
     calculation("natal", { status: "archived" }),
     calculation("synastry", { participants: [subjectParticipant()] }),
+    calculation("synastry", {
+      participants: [
+        subjectParticipant(),
+        { ...relatedProfileParticipant(), relatedProfileId: "not-a-uuid" }
+      ]
+    }),
     calculation("natal", {
       participants: [{ ...subjectParticipant(), source: "manual", clientId: null }]
     })
@@ -191,6 +215,16 @@ function partnerParticipant(): CalculationRecordResponse["participants"][number]
     source: "crm_client",
     clientId: partnerClientId,
     displayName: "Мария"
+  };
+}
+
+function relatedProfileParticipant(): CalculationRecordResponse["participants"][number] {
+  return {
+    role: "partner",
+    source: "client_related_profile",
+    clientId,
+    relatedProfileId,
+    displayName: "Иванов Иван Иванович · муж"
   };
 }
 

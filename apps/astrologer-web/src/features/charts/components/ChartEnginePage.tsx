@@ -5,6 +5,8 @@ import type {
   ChartSettings,
   ClientBirthDataUpsertRequest,
   ClientBirthPlaceCandidate,
+  ClientRelatedBirthProfileResponse,
+  ClientRelatedBirthProfileUpsertRequest,
   DictionaryLocale
 } from "@elevenhouse/contracts";
 import type { ClientSelectOption } from "../../clients/model/clientSelectorModel";
@@ -26,6 +28,7 @@ import { ChartHorarySetup } from "./ChartHorarySetup";
 import { ChartMomentControls } from "./ChartMomentControls";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model/chartEngineInput";
 import { ChartEngineWorkspace } from "./ChartEngineWorkspace";
+import { ChartRelatedBirthProfileEditor } from "./ChartRelatedBirthProfileEditor";
 import styles from "./ChartEnginePage.module.css";
 
 export type { ChartEngineMode, ChartEnginePageJobState } from "../model/chartEngineMode";
@@ -35,6 +38,7 @@ export type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "../model
 export type ChartEnginePageProps = {
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient?: ClientSelectOption | null;
+  readonly selectedPartnerRelatedProfile?: ClientRelatedBirthProfileResponse | null;
   readonly jobState: ChartEnginePageJobState;
   readonly calculationId?: string | null;
   readonly result: ChartResult | null;
@@ -78,6 +82,10 @@ export type ChartEnginePageProps = {
   readonly onModeChange?: (mode: ChartEngineMode) => void;
   readonly onSelectClient?: (client: ClientSelectOption) => void;
   readonly onSelectPartnerClient?: (client: ClientSelectOption) => void;
+  readonly onSelectPartnerRelatedProfile?: (profile: ClientRelatedBirthProfileResponse) => void;
+  readonly onCreateRelatedBirthProfile?: (
+    data: ClientRelatedBirthProfileUpsertRequest
+  ) => void | Promise<void>;
   readonly onSaveBirthData?: (data: ClientBirthDataUpsertRequest) => void | Promise<void>;
   readonly onSearchBirthPlaces?: (query: string) => Promise<readonly ClientBirthPlaceCandidate[]>;
   readonly onRetryPoll?: () => void | Promise<void>;
@@ -86,7 +94,9 @@ export type ChartEnginePageProps = {
   readonly onRetryLink?: () => void | Promise<void>;
   readonly onRecoverCalculationIdentity?: () => void;
   readonly isSavingBirthData?: boolean;
+  readonly isCreatingRelatedBirthProfile?: boolean;
   readonly birthDataError?: string | null;
+  readonly relatedBirthProfileError?: string | null;
   readonly pdfLabel?: string;
   readonly pdfDisabled?: boolean;
   readonly pdfTitle?: string;
@@ -108,6 +118,7 @@ export function ChartEnginePage({
   interpretationMode = null,
   isBusy,
   isCalculationLinked = false,
+  isCreatingRelatedBirthProfile = false,
   isResultStale = false,
   isSavingBirthData = false,
   jobState,
@@ -139,6 +150,8 @@ export function ChartEnginePage({
   onSelectClient,
   onSelectHoraryPlace,
   onSelectPartnerClient,
+  onSelectPartnerRelatedProfile,
+  onCreateRelatedBirthProfile,
   onSettingsChange,
   onSolarReturnYearChange,
   onTransitMomentChange,
@@ -148,18 +161,23 @@ export function ChartEnginePage({
   pdfTitle,
   pollErrorMessage = null,
   progressionTargetDate,
+  relatedBirthProfileError = null,
   result,
   resultErrorMessage = null,
   savedCalculationErrorMessage = null,
   selectedClient,
   selectedPartnerClient = null,
+  selectedPartnerRelatedProfile = null,
   settings,
   solarReturnYear,
   transitMoment
 }: ChartEnginePageProps) {
   const copy = chartEngineCopyByLocale[locale];
   const readiness = getChartBirthDataReadiness(selectedClient?.birthData, locale);
-  const partnerReadiness = getChartBirthDataReadiness(selectedPartnerClient?.birthData, locale);
+  const partnerReadiness = getChartBirthDataReadiness(
+    selectedPartnerRelatedProfile ?? selectedPartnerClient?.birthData,
+    locale
+  );
   const [localMode, setLocalMode] = useState<ChartEngineMode>(mode);
   const [localTransitMoment, setLocalTransitMoment] = useState<ChartTransitMomentInput>(
     transitMoment ?? { date: "", time: "" }
@@ -174,6 +192,7 @@ export function ChartEnginePage({
   const [isBirthDataEditorDismissed, setIsBirthDataEditorDismissed] = useState(false);
   const [isHoraryContextEditorOpen, setIsHoraryContextEditorOpen] = useState(false);
   const [isPresentationOpen, setIsPresentationOpen] = useState(false);
+  const [isRelatedProfileEditorOpen, setIsRelatedProfileEditorOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const activeMode = onModeChange ? mode : localMode;
   const activeTransitMoment = transitMoment ?? localTransitMoment;
@@ -186,6 +205,7 @@ export function ChartEnginePage({
   useEffect(() => {
     setIsBirthDataEditorOpen(false);
     setIsBirthDataEditorDismissed(false);
+    setIsRelatedProfileEditorOpen(false);
   }, [selectedClient?.value]);
   useEffect(() => setIsHoraryContextEditorOpen(false), [activeMode, calculationId]);
 
@@ -196,8 +216,9 @@ export function ChartEnginePage({
   const expectedResultMethod = getChartResultMethodForMode(activeMode);
   const horaryReadiness = getChartHoraryQuestionReadiness(activeHoraryQuestion, locale);
   const isBirthDataBlocked = Boolean(needsBirthData && selectedClient && !readiness.ready);
+  const hasSelectedPartner = Boolean(selectedPartnerClient || selectedPartnerRelatedProfile);
   const isPartnerBirthDataBlocked = Boolean(
-    needsBirthData && isPartnerMode && selectedPartnerClient && !partnerReadiness.ready
+    needsBirthData && isPartnerMode && hasSelectedPartner && !partnerReadiness.ready
   );
   const displayResult =
     isBirthDataBlocked || isPartnerBirthDataBlocked || result?.method !== expectedResultMethod
@@ -217,7 +238,7 @@ export function ChartEnginePage({
   const birthDataEditorAvailable = Boolean(needsBirthData && selectedClient && onSaveBirthData);
   const shouldShowBirthDataEditor = Boolean(
     birthDataEditorAvailable &&
-      (isBirthDataEditorOpen || (!readiness.ready && !isBirthDataEditorDismissed))
+    (isBirthDataEditorOpen || (!readiness.ready && !isBirthDataEditorDismissed))
   );
   const closeBirthDataEditor = () => {
     setIsBirthDataEditorOpen(false);
@@ -236,7 +257,8 @@ export function ChartEnginePage({
     partnerReadiness,
     readiness,
     selectedClient,
-    selectedPartnerClient
+    selectedPartnerClient,
+    selectedPartnerRelatedProfile
   });
   const selectMode = (nextMode: ChartEngineMode) => {
     if (onModeChange) onModeChange(nextMode);
@@ -337,9 +359,14 @@ export function ChartEnginePage({
         }
         selectedClient={selectedClient}
         selectedPartnerClient={selectedPartnerClient}
+        selectedPartnerRelatedProfile={selectedPartnerRelatedProfile}
         onSelectClient={onSelectClient}
         onSelectMode={selectMode}
+        onOpenRelatedProfileEditor={
+          onCreateRelatedBirthProfile ? () => setIsRelatedProfileEditorOpen(true) : undefined
+        }
         onSelectPartnerClient={onSelectPartnerClient}
+        onSelectPartnerRelatedProfile={onSelectPartnerRelatedProfile}
       />
       <ChartEngineRecoveryNotices
         canRecoverCalculationIdentity={canRecoverCalculationIdentity}
@@ -356,6 +383,21 @@ export function ChartEnginePage({
         onRetryResult={onRetryResult}
         onRetrySavedCalculation={onRetrySavedCalculation}
       />
+      {isRelatedProfileEditorOpen && selectedClient && onCreateRelatedBirthProfile ? (
+        <ChartRelatedBirthProfileEditor
+          copy={copy}
+          disabled={isBusy}
+          errorMessage={relatedBirthProfileError ?? null}
+          isSaving={isCreatingRelatedBirthProfile}
+          locale={locale}
+          onCancel={() => setIsRelatedProfileEditorOpen(false)}
+          onCreate={async (data) => {
+            await onCreateRelatedBirthProfile(data);
+            setIsRelatedProfileEditorOpen(false);
+          }}
+          onSearchBirthPlaces={onSearchBirthPlaces}
+        />
+      ) : null}
       <ChartEngineWorkspace
         activeMode={activeMode}
         birthDataError={birthDataError}
@@ -382,6 +424,7 @@ export function ChartEnginePage({
         readiness={readiness}
         selectedClient={selectedClient}
         selectedPartnerClient={selectedPartnerClient}
+        selectedPartnerRelatedProfile={selectedPartnerRelatedProfile}
         settings={settings}
         shouldShowBirthDataEditor={shouldShowBirthDataEditor}
         onCloseSettings={() => setIsSettingsPanelOpen(false)}
@@ -486,7 +529,8 @@ function getChartViewState({
   partnerReadiness,
   readiness,
   selectedClient,
-  selectedPartnerClient
+  selectedPartnerClient,
+  selectedPartnerRelatedProfile
 }: {
   copy: ChartEngineCopy;
   displayResult: ChartResult | null;
@@ -501,6 +545,7 @@ function getChartViewState({
   readiness: ChartBirthDataReadiness;
   selectedClient: ClientSelectOption | null;
   selectedPartnerClient: ClientSelectOption | null;
+  selectedPartnerRelatedProfile: ClientRelatedBirthProfileResponse | null;
 }) {
   const modeCopy = copy.modes[mode];
   if (!selectedClient) return { actionLabel: copy.view.selectClientStatus, canCalculate: false };
@@ -529,9 +574,9 @@ function getChartViewState({
     return { actionLabel: copy.view.fillDataAction, canCalculate: false };
   }
   if (mode === "synastry" || mode === "composite") {
-    if (!selectedPartnerClient)
+    if (!selectedPartnerClient && !selectedPartnerRelatedProfile)
       return { actionLabel: copy.view.choosePartnerStatus, canCalculate: false };
-    if (selectedPartnerClient.value === selectedClient.value)
+    if (selectedPartnerClient?.value === selectedClient.value)
       return { actionLabel: copy.view.chooseOtherAction, canCalculate: false };
     if (!partnerReadiness.ready)
       return { actionLabel: copy.view.fillPartnerAction, canCalculate: false };

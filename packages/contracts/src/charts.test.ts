@@ -860,6 +860,25 @@ describe("chart contracts", () => {
     });
   });
 
+  it("accepts a synastry job request with a client-owned related profile partner", () => {
+    expect(
+      chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partner: {
+          source: "client_related_profile",
+          relatedProfileId: "00000000-0000-4000-8000-000000000003"
+        },
+        settings: completeSettings()
+      })
+    ).toMatchObject({
+      clientId: "00000000-0000-4000-8000-000000000001",
+      partner: {
+        source: "client_related_profile",
+        relatedProfileId: "00000000-0000-4000-8000-000000000003"
+      }
+    });
+  });
+
   it("rejects browser-supplied birth data in synastry job requests", () => {
     expect(() =>
       chartSynastryJobCreateRequestSchema.parse({
@@ -872,6 +891,17 @@ describe("chart contracts", () => {
           aspectPreset: "major",
           orbMultiplier: 1
         }
+      })
+    ).toThrow();
+    expect(() =>
+      chartSynastryJobCreateRequestSchema.parse({
+        clientId: "00000000-0000-4000-8000-000000000001",
+        partner: {
+          source: "client_related_profile",
+          relatedProfileId: "00000000-0000-4000-8000-000000000003",
+          birthDate: "1992-08-11"
+        },
+        settings: completeSettings()
       })
     ).toThrow();
   });

@@ -4,6 +4,12 @@ import type { ChartEngineCopy } from "./chartEngineCopy";
 import type { ChartHoraryQuestionInput, ChartTransitMomentInput } from "./chartEngineInput";
 import type { ChartEngineMode } from "./chartEngineMode";
 import type { ChartEngineSubmission } from "./chartEngineSubmission";
+import {
+  getChartPartnerBirthData,
+  getChartPartnerClient,
+  getChartPartnerRelatedProfileId,
+  type ChartPartnerOption
+} from "./chartPartnerOption";
 import { getChartBirthDataReadiness, toChartHoraryQuestionSnapshot } from "./chartEngineState";
 
 type WithoutSubmissionTarget<T> = T extends unknown
@@ -25,6 +31,7 @@ export function prepareChartEngineSubmission(input: {
   readonly mode: ChartEngineMode;
   readonly selectedClient: ClientSelectOption | null;
   readonly selectedPartnerClient: ClientSelectOption | null;
+  readonly selectedPartnerOption?: ChartPartnerOption | null;
   readonly settings: ChartSettings;
   readonly transitMoment: ChartTransitMomentInput;
   readonly solarReturnYear: number;
@@ -34,6 +41,9 @@ export function prepareChartEngineSubmission(input: {
   readonly copy: ChartEngineCopy["controller"];
 }): ChartEngineSubmissionPreparation {
   const { copy, mode, selectedClient, selectedPartnerClient } = input;
+  const selectedPartnerOption: ChartPartnerOption | null =
+    input.selectedPartnerOption ??
+    (selectedPartnerClient ? { source: "crm_client", client: selectedPartnerClient } : null);
   if (!selectedClient) return { kind: "blocked", message: copy.chooseClient };
 
   if (mode === "horary") {
@@ -61,17 +71,18 @@ export function prepareChartEngineSubmission(input: {
   }
 
   if (mode === "synastry" || mode === "composite") {
-    if (!selectedPartnerClient) {
+    if (!selectedPartnerOption) {
       return { kind: "blocked", message: copy.choosePartner };
     }
-    if (selectedClient.value === selectedPartnerClient.value) {
+    const partnerClient = getChartPartnerClient(selectedPartnerOption);
+    if (partnerClient && selectedClient.value === partnerClient.value) {
       return {
         kind: "blocked",
         message: mode === "composite" ? copy.compositeOtherClient : copy.synastryOtherClient
       };
     }
     const partnerReadiness = getChartBirthDataReadiness(
-      selectedPartnerClient.birthData,
+      getChartPartnerBirthData(selectedPartnerOption),
       input.locale
     );
     if (!partnerReadiness.ready) {
@@ -85,7 +96,14 @@ export function prepareChartEngineSubmission(input: {
       draft: {
         mode,
         clientId: selectedClient.value,
-        partnerClientId: selectedPartnerClient.value,
+        ...(selectedPartnerOption.source === "client_related_profile"
+          ? {
+              partner: {
+                source: "client_related_profile" as const,
+                relatedProfileId: getChartPartnerRelatedProfileId(selectedPartnerOption) ?? ""
+              }
+            }
+          : { partnerClientId: selectedPartnerOption.client.value }),
         settings: input.settings
       }
     };

@@ -115,6 +115,302 @@
   min-width: 0;
   flex: 0 1 clamp(216px, 20vw, 340px);
 }
+.partnerPicker {
+  position: relative;
+  width: clamp(216px, 20vw, 340px);
+  min-width: 0;
+  flex: 0 1 clamp(216px, 20vw, 340px);
+}
+
+.partnerPickerLabel {
+  position: absolute;
+  z-index: 3;
+  top: -7px;
+  left: 12px;
+  padding: 0 5px;
+  background: rgb(13 12 32 / 0.98);
+  color: rgb(186 178 218 / 0.62);
+  font-size: 9.5px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.partnerPickerTrigger {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 11px 5px 6px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 999px;
+  background: rgb(30 27 50 / 0.86);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.partnerPickerTrigger[aria-expanded="true"] {
+  border-color: rgb(246 210 102 / 0.38);
+  background: rgb(246 210 102 / 0.12);
+}
+
+.partnerPickerTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.partnerPickerAvatar,
+.partnerPickerOptionAvatar {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--chart-line-strong);
+  background: rgb(73 49 129 / 0.58);
+  color: #ece5ff;
+  font-weight: 900;
+}
+
+.partnerPickerAvatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 11px;
+  font-size: 12.5px;
+}
+
+.partnerPickerText,
+.partnerPickerOptionText {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.partnerPickerText strong,
+.partnerPickerText small,
+.partnerPickerOptionText strong,
+.partnerPickerOptionText small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.partnerPickerText strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.18;
+}
+
+.partnerPickerText small,
+.partnerPickerOptionText small {
+  display: block;
+  color: #918ab4;
+  font-family: var(--eh-font-mono);
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.partnerPickerChevron {
+  flex: 0 0 auto;
+  color: #b9b1db;
+  transition: transform 0.18s ease;
+}
+
+.partnerPickerChevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.partnerPickerScrim {
+  position: fixed;
+  z-index: 34;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.partnerPickerPopup {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  width: min(380px, calc(100vw - 32px));
+  box-sizing: border-box;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 14px;
+  background: #1a1838;
+  box-shadow: 0 22px 50px -18px rgb(0 0 0 / 0.85);
+}
+
+.partnerPickerSection {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.partnerPickerSectionTitle {
+  padding: 2px 4px 0;
+  color: rgb(186 178 218 / 0.62);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.partnerPickerRelatedList,
+.partnerPickerList {
+  display: grid;
+  min-width: 0;
+  max-height: 240px;
+  gap: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.partnerPickerOption,
+.partnerPickerCreate {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.partnerPickerOption:hover,
+.partnerPickerOption[data-active="true"] {
+  background: rgb(30 27 50 / 0.86);
+}
+
+.partnerPickerOption[data-selected="true"] {
+  background: rgb(246 210 102 / 0.12);
+}
+
+.partnerPickerOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.partnerPickerOptionAvatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 11px;
+  font-size: 12.5px;
+}
+
+.partnerPickerOptionText strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.partnerPickerCheck {
+  flex: 0 0 auto;
+  color: var(--chart-gold);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.partnerPickerCreate {
+  margin-top: 2px;
+  border: 1px solid rgb(246 210 102 / 0.22);
+  background: rgb(246 210 102 / 0.08);
+  color: var(--chart-gold);
+  font-weight: 780;
+}
+
+.partnerPickerCreate span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(246 210 102 / 0.12);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.partnerPickerCreate:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.partnerPickerSearchShell {
+  position: relative;
+}
+
+.partnerPickerSearchIcon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  display: flex;
+  color: #8f88b0;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.partnerPickerSearchInput {
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 12px 0 32px;
+  border: 1px solid rgb(216 212 236 / 0.16);
+  border-radius: 8px;
+  background: rgb(11 10 28 / 0.96);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+}
+
+.partnerPickerSearchInput::placeholder {
+  color: #8f88b0;
+}
+
+.partnerPickerStatus,
+.partnerPickerLoadMore {
+  padding: 8px 12px;
+  color: #918ab4;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.partnerPickerLoadMore:empty {
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.partnerPickerTrigger:focus-visible,
+.partnerPickerSearchInput:focus,
+.partnerPickerOption:focus-visible,
+.partnerPickerCreate:focus-visible,
+.relatedProfileCloseButton:focus-visible {
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 2px;
+}
 .clientButton {
   display: grid;
   width: 100%;
@@ -330,6 +626,95 @@
   min-height: 0;
   flex: 1;
   grid-template-columns: minmax(190px, 218px) minmax(360px, 1fr) minmax(300px, 340px);
+}
+
+.relatedProfileEditor {
+  display: grid;
+  max-height: min(760px, calc(100dvh - 130px));
+  overflow: auto;
+  grid-column: 1 / -1;
+  gap: 14px;
+  padding: 18px clamp(16px, 2vw, 28px) 22px;
+  border-bottom: 1px solid var(--chart-line);
+  background: rgb(16 14 40 / 0.97);
+}
+
+.relatedProfileHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.relatedProfileHeader strong {
+  display: block;
+  color: var(--eh-color-moon-120);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.relatedProfileHeader span {
+  display: block;
+  margin-top: 4px;
+  color: rgb(186 178 218 / 0.72);
+  font-size: 12px;
+}
+
+.relatedProfileCloseButton {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.relatedProfileMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.relatedProfileMetaGrid label {
+  display: grid;
+  gap: 6px;
+}
+
+.relatedProfileMetaGrid span {
+  color: rgb(186 178 218 / 0.72);
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.relatedProfileMetaGrid input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--chart-line-strong);
+  border-radius: 10px;
+  background: rgb(30 27 62);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+}
+
+.relatedProfileMetaGrid input:focus-visible {
+  outline: 2px solid var(--chart-gold);
+  outline-offset: 2px;
+}
+
+.relatedProfileError {
+  margin: 0;
+  color: rgb(255 205 205 / 0.94);
+  font-size: 12px;
 }
 
 .horaryPrecalculation {
@@ -679,8 +1064,7 @@
   border: 1px solid rgb(246 210 102 / 0.32);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, rgb(246 210 102 / 0.16), rgb(30 27 62 / 0.84) 46%),
-    rgb(22 20 48 / 0.92);
+    linear-gradient(145deg, rgb(246 210 102 / 0.16), rgb(30 27 62 / 0.84) 46%), rgb(22 20 48 / 0.92);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.06),
     0 18px 36px rgb(6 4 20 / 0.28);

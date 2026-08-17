@@ -8,6 +8,7 @@ export type ClientBirthDataSource = "client_profile" | "import" | "manual";
 export type ClientBirthDataEditorRole = "client" | "astrologer";
 
 export const CLIENT_BIRTH_PROFILE_UPDATED_EVENT = "client.birth_profile.updated.v1";
+export const CLIENT_RELATED_BIRTH_PROFILE_UPDATED_EVENT = "client.related_birth_profile.updated.v1";
 
 /**
  * Redacted lifecycle notification for a singleton birth-profile revision.
@@ -27,6 +28,22 @@ export const clientBirthProfileUpdatedEventSchema = z
   })
   .strict();
 export type ClientBirthProfileUpdatedEvent = z.infer<typeof clientBirthProfileUpdatedEventSchema>;
+
+export const clientRelatedBirthProfileUpdatedEventSchema = z
+  .object({
+    schemaVersion: z.literal("client-related-birth-profile-updated.v1"),
+    relatedProfileHistoryId: z.string().uuid(),
+    relatedProfileId: z.string().uuid(),
+    clientUserId: z.string().uuid(),
+    revision: z.number().int().positive(),
+    actorUserId: z.string().uuid(),
+    actorRole: z.enum(["client", "astrologer"]),
+    occurredAt: z.string().datetime({ offset: true })
+  })
+  .strict();
+export type ClientRelatedBirthProfileUpdatedEvent = z.infer<
+  typeof clientRelatedBirthProfileUpdatedEventSchema
+>;
 
 export type ClientRelationshipSource =
   | "direct_link"
@@ -91,6 +108,21 @@ export type ClientBirthData = NormalizedClientBirthDataInput & {
   readonly updatedAt: string;
 };
 
+export type ClientRelatedBirthProfileInput = ClientBirthDataInput & {
+  readonly displayName: string;
+  readonly relationshipLabel: string;
+};
+
+export type NormalizedClientRelatedBirthProfileInput = NormalizedClientBirthDataInput & {
+  readonly displayName: string;
+  readonly relationshipLabel: string;
+};
+
+export type ClientRelatedBirthProfile = Omit<ClientBirthData, "label"> & {
+  readonly displayName: string;
+  readonly relationshipLabel: string;
+};
+
 export type ClientProfile = {
   readonly userId: string;
   readonly displayNameSnapshot: string | null;
@@ -138,6 +170,7 @@ export type AstrologerClientListItem = {
   readonly firstLinkedAt: string;
   readonly lastLinkedAt: string;
   readonly birthData: ClientBirthData | null;
+  readonly relatedBirthProfiles?: readonly ClientRelatedBirthProfile[];
 };
 
 export type AstrologerClientList = {
