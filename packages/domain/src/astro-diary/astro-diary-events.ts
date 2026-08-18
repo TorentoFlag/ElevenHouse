@@ -4,6 +4,8 @@ import {
   type AstroDiaryEventType
 } from "@elevenhouse/contracts";
 
+export type { AstroDiaryEvent };
+
 export type AstroDiaryEventInput = AstroDiaryEvent extends infer Event
   ? Event extends { eventType: AstroDiaryEventType }
     ? Omit<Event, "schemaVersion">

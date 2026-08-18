@@ -15,9 +15,6 @@ import {
   type AstroDiarySubscriptionActivationInput
 } from "./astro-diary-subscription-activation";
 
-const digest = (character: string): `sha256:${string}` =>
-  `sha256:${character.repeat(64)}` as `sha256:${string}`;
-
 describe("AstroDiary subscription activation plan", () => {
   it("plans one active journal, immutable activation evidence, and an IDs-only event for a first applied capture", () => {
     const captured = initialCapture();
