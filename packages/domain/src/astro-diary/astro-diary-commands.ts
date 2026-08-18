@@ -805,24 +805,16 @@ function freezePublishAstrologerReplyCommand(
 
 function openClientCycleRequest(input: OpenClientCycleCommand): CanonicalJson {
   return {
-    actorUserId: input.actorUserId,
-    draftId: input.draftId,
-    expectedDraftVersion: input.expectedDraftVersion,
-    allowancePeriodId: input.allowancePeriodId,
-    allowanceExpectedVersion: input.allowanceExpectedVersion
+    draftId: input.draftId
   };
 }
 
 function publishAstrologerReplyRequest(input: PublishAstrologerReplyCommand): CanonicalJson {
   const common = {
     mode: input.mode,
-    actorUserId: input.actorUserId,
     cycleId: input.cycleId,
-    expectedCycleVersion: input.expectedCycleVersion,
     obligationId: input.obligationId,
-    expectedObligationVersion: input.expectedObligationVersion,
-    replyDraftId: input.replyDraftId,
-    expectedReplyDraftVersion: input.expectedReplyDraftVersion
+    replyDraftId: input.replyDraftId
   };
   return input.mode === "close"
     ? {
@@ -830,7 +822,6 @@ function publishAstrologerReplyRequest(input: PublishAstrologerReplyCommand): Ca
       }
     : {
         ...common,
-        promptDraftId: input.promptDraftId,
-        expectedPromptDraftVersion: input.expectedPromptDraftVersion
+        promptDraftId: input.promptDraftId
       };
 }

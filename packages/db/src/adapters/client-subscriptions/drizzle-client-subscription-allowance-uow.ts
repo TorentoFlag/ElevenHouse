@@ -103,31 +103,21 @@ export async function executePrelockedClientSubscriptionAllowanceCommandInTransa
   transaction: ClientSubscriptionTransaction,
   input: ClientSubscriptionAllowanceTransactionInput
 ): Promise<ClientSubscriptionAllowanceCommandExecution> {
-  const [prior] = await transaction
-    .select()
-    .from(clientSubscriptionAllowanceCommandReceipts)
-    .where(
-      and(
-        eq(clientSubscriptionAllowanceCommandReceipts.periodId, input.periodId),
-        eq(clientSubscriptionAllowanceCommandReceipts.idempotencyKey, input.idempotencyKey)
-      )
-    )
-    .limit(1);
+  const prior = await readAllowanceReceipt(transaction, input.periodId, input.idempotencyKey);
   if (prior) {
-    if (
-      prior.requestHash !== input.requestHash ||
-      !sameAllowanceCommand(commandSchema.parse(prior.command), input.command)
-    ) {
-      return { outcome: "idempotency_conflict" };
-    }
-    return {
-      outcome: "replayed",
-      result: await hydrateAllowanceReceiptResult(transaction, prior)
-    };
+    return replayAllowanceReceipt(transaction, input, prior);
   }
 
   const current = await loadAllowance(transaction, input.periodId, "update");
   if (!current) return { outcome: "not_found" };
+  const concurrentPrior = await readAllowanceReceipt(
+    transaction,
+    input.periodId,
+    input.idempotencyKey
+  );
+  if (concurrentPrior) {
+    return replayAllowanceReceipt(transaction, input, concurrentPrior);
+  }
   if (current.version !== input.expectedVersion) {
     return {
       outcome: "version_conflict",
@@ -230,6 +220,41 @@ export async function executePrelockedClientSubscriptionAllowanceCommandInTransa
 }
 
 type AllowanceReceiptRow = typeof clientSubscriptionAllowanceCommandReceipts.$inferSelect;
+
+async function readAllowanceReceipt(
+  transaction: ClientSubscriptionTransaction,
+  periodId: string,
+  idempotencyKey: string
+): Promise<AllowanceReceiptRow | null> {
+  const [receipt] = await transaction
+    .select()
+    .from(clientSubscriptionAllowanceCommandReceipts)
+    .where(
+      and(
+        eq(clientSubscriptionAllowanceCommandReceipts.periodId, periodId),
+        eq(clientSubscriptionAllowanceCommandReceipts.idempotencyKey, idempotencyKey)
+      )
+    )
+    .limit(1);
+  return receipt ?? null;
+}
+
+async function replayAllowanceReceipt(
+  transaction: ClientSubscriptionTransaction,
+  input: ClientSubscriptionAllowanceTransactionInput,
+  prior: AllowanceReceiptRow
+): Promise<ClientSubscriptionAllowanceCommandExecution> {
+  if (
+    prior.requestHash !== input.requestHash ||
+    !sameAllowanceCommand(commandSchema.parse(prior.command), input.command)
+  ) {
+    return { outcome: "idempotency_conflict" };
+  }
+  return {
+    outcome: "replayed",
+    result: await hydrateAllowanceReceiptResult(transaction, prior)
+  };
+}
 
 export function findClientSubscriptionPeriodAllowance(
   transaction: ClientSubscriptionTransaction,

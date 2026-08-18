@@ -301,11 +301,7 @@ export function executeAstroDiaryCommand(
     idempotencyKey: input.idempotencyKey,
     resourceAllocation: null,
     resultResource: null,
-    requestHash: sha256CanonicalJson({
-      journalId: input.journalId,
-      preconditions,
-      envelope: input.envelope
-    }),
+    requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     decide: (authority, envelope) => decide(authority, envelope)
   });
 }
@@ -333,11 +329,7 @@ export function executeAstroDiaryDraftCreateCommand(
     envelope: input.envelope,
     preconditions,
     idempotencyKey: input.idempotencyKey,
-    requestHash: sha256CanonicalJson({
-      journalId: input.journalId,
-      preconditions,
-      envelope: input.envelope
-    }),
+    requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     resourceAllocation: { type: "draft" },
     resultResource: null,
     decide
@@ -367,11 +359,7 @@ export function executeAstroDiaryDraftMutationCommand(
     envelope: input.envelope,
     preconditions,
     idempotencyKey: input.idempotencyKey,
-    requestHash: sha256CanonicalJson({
-      journalId: input.journalId,
-      preconditions,
-      envelope: input.envelope
-    }),
+    requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     resourceAllocation: null,
     resultResource: { type: "draft", draftId: input.draftId },
     decide: (authority, envelope) => decide(authority, envelope)
@@ -449,4 +437,11 @@ function normalizeAstroDiaryCommandPreconditions(
     throw new TypeError("AstroDiary commands require the target journal CAS precondition");
   }
   return preconditions;
+}
+
+function hashAstroDiaryCommandIntent(
+  journalId: string,
+  envelope: AstroDiaryCommandEnvelope
+): `sha256:${string}` {
+  return sha256CanonicalJson({ journalId, envelope });
 }

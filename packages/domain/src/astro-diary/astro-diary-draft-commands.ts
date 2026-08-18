@@ -410,7 +410,6 @@ function semanticDraftCreateRequest(
 ) {
   return {
     command: "create_draft",
-    expectedJournalVersion: request.expectedJournalVersion,
     cycleId: request.cycleId,
     kind: request.kind,
     body: request.body,

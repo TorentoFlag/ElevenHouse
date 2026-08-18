@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -11,7 +11,8 @@ import {
   executeClientSubscriptionAllowanceCommand,
   executeAstroDiaryParticipantDraftCreateCommand,
   executeOpenClientCycleCommand,
-  executePublishAstrologerReplyCommand
+  executePublishAstrologerReplyCommand,
+  hashClientSubscriptionAllowanceCommand
 } from "@elevenhouse/domain";
 
 import type { PostgresRuntime } from "../../runtime";
@@ -21,13 +22,17 @@ import {
   astroDiaryCycleOpeningAllowanceFacts,
   astroDiaryCycles,
   astroDiaryDerivativeCommands,
+  astroDiaryDraftAttachments,
   astroDiaryDrafts,
+  astroDiaryEntryAttachments,
   astroDiaryEventDeliveries,
   astroDiaryEvents,
   astroDiaryJournals,
+  astroDiaryMediaAuthorities,
   astroDiaryResponseObligations,
   astroDiaryResponseObligationWeekdays,
   astroDiaryTimelineItemRevisions,
+  astroDiaryTimelineRevisionAttachments,
   astroDiaryTimelineItems
 } from "../../schema/astro-diary";
 import {
@@ -37,6 +42,7 @@ import {
   clientSubscriptionAllowanceConsumptions,
   clientSubscriptionPeriodAllowances
 } from "../../schema/client-subscriptions";
+import { mediaAssets } from "../../schema/media";
 import { outboxEvents } from "../../schema/outbox/outbox-events.schema";
 import {
   createActiveClientSubscriptionFixture,
@@ -44,7 +50,11 @@ import {
   type ActiveClientSubscriptionFixture
 } from "../client-subscriptions/client-subscription-integration-fixture";
 import { createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-uow";
-import { createDrizzleClientSubscriptionAllowanceCommandUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
+import {
+  createDrizzleClientSubscriptionAllowanceCommandUnitOfWork,
+  executeClientSubscriptionAllowanceCommandInTransaction,
+  executePrelockedClientSubscriptionAllowanceCommandInTransaction
+} from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
 import { createDrizzleAstroDiaryCommandUnitOfWork } from "./drizzle-astro-diary-command-uow";
 
 type JournalFixture = Readonly<{
@@ -256,6 +266,104 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     ).resolves.toEqual([]);
   });
 
+  it("replays a server-allocated client draft after the journal version is refreshed", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const firstInput = clientDraftInput(journal, "Черновик остаётся тем же намерением.");
+    const applied = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, firstInput);
+    if (applied.outcome !== "applied") throw new Error("Expected an applied client draft");
+    const retry = clientDraftInput(journal, firstInput.request.body);
+    retry.idempotencyKey = firstInput.idempotencyKey;
+    retry.request.expectedJournalVersion = 2;
+
+    await expect(
+      executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, retry)
+    ).resolves.toEqual({ outcome: "replayed", result: applied.receipt.result });
+  });
+
+  it("replays client publication intent with refreshed journal and allowance authority", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Повтор использует актуальное состояние сервера.")
+    );
+    const draftId = appliedDraftId(created);
+    const idempotencyKey = `entry-refreshed-${randomUUID()}`;
+    const first = openClientCycleInput(journal, draftId, idempotencyKey, 2);
+    const applied = await executeOpenClientCycleCommand(unitOfWork, first);
+    if (applied.outcome !== "applied") throw new Error("Expected an applied client entry");
+    const retry = openClientCycleInput(journal, draftId, idempotencyKey, 3, {
+      allowanceExpectedVersion: 2
+    });
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, retry)).resolves.toEqual({
+      outcome: "replayed",
+      result: applied.receipt.result
+    });
+  });
+
+  it("atomically binds ready private client media to the entry and its first revision", async () => {
+    const journal = await createJournalFixture(runtime);
+    const mediaId = await createReadyDiaryMedia(
+      runtime,
+      journal,
+      journal.fixture.authority.clientUserId
+    );
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInputWithMedia(journal, "Запись с приватным вложением.", [mediaId])
+    );
+    const draftId = appliedDraftId(created);
+    await expect(
+      runtime.database
+        .select({ mediaId: astroDiaryDraftAttachments.mediaId })
+        .from(astroDiaryDraftAttachments)
+        .where(eq(astroDiaryDraftAttachments.draftId, draftId))
+    ).resolves.toEqual([{ mediaId }]);
+    const input = openClientCycleInput(journal, draftId, `entry-media-${randomUUID()}`, 2);
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "applied"
+    });
+    await expect(
+      runtime.database
+        .select({
+          state: astroDiaryMediaAuthorities.state,
+          boundItemId: astroDiaryMediaAuthorities.boundItemId
+        })
+        .from(astroDiaryMediaAuthorities)
+        .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId))
+    ).resolves.toEqual([{ state: "bound", boundItemId: input.command.entryItemId }]);
+    await expect(
+      runtime.database
+        .select({
+          mediaId: astroDiaryEntryAttachments.mediaId,
+          itemId: astroDiaryEntryAttachments.itemId,
+          state: astroDiaryEntryAttachments.state
+        })
+        .from(astroDiaryEntryAttachments)
+        .where(eq(astroDiaryEntryAttachments.mediaId, mediaId))
+    ).resolves.toEqual([{ mediaId, itemId: input.command.entryItemId, state: "bound" }]);
+    await expect(
+      runtime.database
+        .select({
+          mediaId: astroDiaryTimelineRevisionAttachments.mediaId,
+          itemId: astroDiaryTimelineRevisionAttachments.itemId,
+          revision: astroDiaryTimelineRevisionAttachments.revision
+        })
+        .from(astroDiaryTimelineRevisionAttachments)
+        .where(eq(astroDiaryTimelineRevisionAttachments.mediaId, mediaId))
+    ).resolves.toEqual([{ mediaId, itemId: input.command.entryItemId, revision: 1 }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryDraftAttachments)
+        .where(eq(astroDiaryDraftAttachments.draftId, draftId))
+    ).resolves.toEqual([]);
+  });
+
   it("converges concurrent same-key client publications without duplicate cycle or allowance use", async () => {
     const journal = await createJournalFixture(runtime);
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
@@ -391,19 +499,26 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
   it("rolls back every client publication effect after a late duplicate event failure", async () => {
     const journal = await createJournalFixture(runtime);
+    const mediaId = await createReadyDiaryMedia(
+      runtime,
+      journal,
+      journal.fixture.authority.clientUserId
+    );
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
     const created = await executeAstroDiaryParticipantDraftCreateCommand(
       unitOfWork,
-      clientDraftInput(journal, "Поздняя ошибка не должна оставить полузапись.")
+      clientDraftInputWithMedia(journal, "Поздняя ошибка не должна оставить полузапись.", [mediaId])
     );
     const draftId = appliedDraftId(created);
     const input = openClientCycleInput(journal, draftId, `entry-rollback-${randomUUID()}`, 2);
     input.command.eventIds.itemPublished = input.command.eventIds.cycleOpened;
     const before = await paidCoreSnapshot(runtime, journal);
+    const mediaBefore = await mediaPersistenceSnapshot(runtime, [mediaId]);
 
     await expect(executeOpenClientCycleCommand(unitOfWork, input)).rejects.toThrow();
 
     await expect(paidCoreSnapshot(runtime, journal)).resolves.toEqual(before);
+    await expect(mediaPersistenceSnapshot(runtime, [mediaId])).resolves.toEqual(mediaBefore);
   });
 
   it("keeps Diary lock order while standalone allowance commands retain advisory serialization", async () => {
@@ -472,6 +587,77 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
       blocker.release();
       await execution?.catch(() => undefined);
       await standaloneExecution?.catch(() => undefined);
+    }
+  });
+
+  it("replays a Diary allowance receipt after a standalone command waited on its allowance row", async () => {
+    const journal = await createJournalFixture(runtime);
+    const period = journal.fixture.subscription.paidPeriods.find(
+      ({ id }) => id === journal.fixture.periodId
+    );
+    if (!period) throw new Error("Paid period is missing from the fixture");
+    const idempotencyKey = `allowance-cross-entry-${randomUUID()}`;
+    const command = {
+      operation: "consume_available" as const,
+      consumptionId: randomUUID(),
+      occurredAt: period.startsAt
+    };
+    const requestHash = hashClientSubscriptionAllowanceCommand({
+      periodId: journal.fixture.periodId,
+      expectedVersion: 1,
+      command
+    });
+    const input = {
+      periodId: journal.fixture.periodId,
+      expectedVersion: 1,
+      idempotencyKey,
+      requestHash,
+      command,
+      decide: (current: Parameters<typeof consumeAvailableAllowance>[0]) =>
+        consumeAvailableAllowance(current, {
+          expectedVersion: 1,
+          idempotencyKey,
+          consumptionId: command.consumptionId,
+          now: command.occurredAt
+        })
+    };
+    let releaseDiary: () => void = () => {};
+    const diaryMayPersist = new Promise<void>((resolve) => {
+      releaseDiary = resolve;
+    });
+    let markDiaryLocked: () => void = () => {};
+    const diaryLocked = new Promise<void>((resolve) => {
+      markDiaryLocked = resolve;
+    });
+    const diaryExecution = runtime.database.transaction(async (transaction) => {
+      await transaction
+        .select({ periodId: clientSubscriptionPeriodAllowances.periodId })
+        .from(clientSubscriptionPeriodAllowances)
+        .where(eq(clientSubscriptionPeriodAllowances.periodId, journal.fixture.periodId))
+        .for("update");
+      markDiaryLocked();
+      await diaryMayPersist;
+      return executePrelockedClientSubscriptionAllowanceCommandInTransaction(transaction, input);
+    });
+    await diaryLocked;
+
+    const applicationName = `astro-diary-allowance-race-${randomUUID()}`;
+    const standaloneExecution = runtime.database.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select set_config('application_name', ${applicationName}, true)`
+      );
+      return executeClientSubscriptionAllowanceCommandInTransaction(transaction, input);
+    });
+    try {
+      await waitForDatabaseLock(runtime, applicationName);
+      releaseDiary();
+      const [diary, standalone] = await Promise.all([diaryExecution, standaloneExecution]);
+      expect(diary).toMatchObject({ outcome: "applied" });
+      expect(standalone).toMatchObject({ outcome: "replayed" });
+    } finally {
+      releaseDiary();
+      await diaryExecution.catch(() => undefined);
+      await standaloneExecution.catch(() => undefined);
     }
   });
 
@@ -592,6 +778,82 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     ).resolves.toEqual([]);
   });
 
+  it("replays closing intent with refreshed journal, cycle, and obligation authority", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "Повтор ответа использует свежие версии сервера.")
+    );
+    const draftId = appliedDraftId(created);
+    const idempotencyKey = `reply-refreshed-${randomUUID()}`;
+    const first = closingReplyInput(opened, draftId, idempotencyKey, opened.journalVersion + 1);
+    const applied = await executePublishAstrologerReplyCommand(unitOfWork, first);
+    if (applied.outcome !== "applied") throw new Error("Expected an applied closing reply");
+    const retry = closingReplyInput(opened, draftId, idempotencyKey, 5);
+    retry.command.expectedCycleVersion = 2;
+    retry.command.expectedObligationVersion = 2;
+
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, retry)).resolves.toEqual({
+      outcome: "replayed",
+      result: applied.receipt.result
+    });
+  });
+
+  it("atomically binds ready private astrologer media to the reply and its first revision", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const mediaId = await createReadyDiaryMedia(
+      runtime,
+      opened,
+      opened.fixture.authority.astrologerUserId
+    );
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInputWithMedia(opened, "Ответ с приватным вложением.", [mediaId])
+    );
+    const draftId = appliedDraftId(created);
+    const input = closingReplyInput(
+      opened,
+      draftId,
+      `reply-media-${randomUUID()}`,
+      opened.journalVersion + 1
+    );
+
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "applied"
+    });
+    await expect(
+      runtime.database
+        .select({
+          state: astroDiaryMediaAuthorities.state,
+          boundItemId: astroDiaryMediaAuthorities.boundItemId
+        })
+        .from(astroDiaryMediaAuthorities)
+        .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId))
+    ).resolves.toEqual([{ state: "bound", boundItemId: input.command.replyItemId }]);
+    await expect(
+      runtime.database
+        .select({
+          mediaId: astroDiaryEntryAttachments.mediaId,
+          itemId: astroDiaryEntryAttachments.itemId,
+          state: astroDiaryEntryAttachments.state
+        })
+        .from(astroDiaryEntryAttachments)
+        .where(eq(astroDiaryEntryAttachments.mediaId, mediaId))
+    ).resolves.toEqual([{ mediaId, itemId: input.command.replyItemId, state: "bound" }]);
+    await expect(
+      runtime.database
+        .select({
+          mediaId: astroDiaryTimelineRevisionAttachments.mediaId,
+          itemId: astroDiaryTimelineRevisionAttachments.itemId,
+          revision: astroDiaryTimelineRevisionAttachments.revision
+        })
+        .from(astroDiaryTimelineRevisionAttachments)
+        .where(eq(astroDiaryTimelineRevisionAttachments.mediaId, mediaId))
+    ).resolves.toEqual([{ mediaId, itemId: input.command.replyItemId, revision: 1 }]);
+  });
+
   it("rejects a closing reply after the paid entitlement ended", async () => {
     const opened = await createOpenCycleFixture(runtime);
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
@@ -665,10 +927,17 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
   it("rolls back every closing-reply effect after a late duplicate event failure", async () => {
     const opened = await createOpenCycleFixture(runtime);
+    const mediaId = await createReadyDiaryMedia(
+      runtime,
+      opened,
+      opened.fixture.authority.astrologerUserId
+    );
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
     const created = await executeAstroDiaryParticipantDraftCreateCommand(
       unitOfWork,
-      astrologerReplyDraftInput(opened, "Ошибка доставки не закрывает цикл частично.")
+      astrologerReplyDraftInputWithMedia(opened, "Ошибка доставки не закрывает цикл частично.", [
+        mediaId
+      ])
     );
     const draftId = appliedDraftId(created);
     const input = closingReplyInput(
@@ -679,10 +948,12 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     );
     input.command.eventIds.obligationSatisfied = input.command.eventIds.itemPublished;
     const before = await paidCoreSnapshot(runtime, opened);
+    const mediaBefore = await mediaPersistenceSnapshot(runtime, [mediaId]);
 
     await expect(executePublishAstrologerReplyCommand(unitOfWork, input)).rejects.toThrow();
 
     await expect(paidCoreSnapshot(runtime, opened)).resolves.toEqual(before);
+    await expect(mediaPersistenceSnapshot(runtime, [mediaId])).resolves.toEqual(mediaBefore);
   });
 });
 
@@ -731,6 +1002,57 @@ async function createOpenCycleFixture(runtime: PostgresRuntime): Promise<OpenCyc
   };
 }
 
+async function createReadyDiaryMedia(
+  runtime: PostgresRuntime,
+  journal: JournalFixture,
+  ownerUserId: string
+): Promise<string> {
+  const [clock] = (
+    await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
+  ).rows;
+  if (!clock) throw new Error("Integration database clock is missing");
+  const mediaId = randomUUID();
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(mediaAssets).values({
+      id: mediaId,
+      ownerUserId,
+      purpose: "astro_diary_attachment",
+      status: "ready",
+      visibility: "private",
+      storageBucket: "astro-diary-integration",
+      storageKey: `${journal.journalId}/${mediaId}`,
+      originalFileName: `${mediaId}.pdf`,
+      mimeType: "application/pdf",
+      sizeBytes: 128,
+      checksumSha256: "a".repeat(64),
+      width: null,
+      height: null,
+      altText: null,
+      failureReason: null,
+      createdAt: clock.command_at,
+      updatedAt: clock.command_at
+    });
+    await transaction.insert(astroDiaryMediaAuthorities).values({
+      mediaId,
+      journalId: journal.journalId,
+      ownerUserId,
+      purpose: "astro_diary_attachment",
+      visibility: "private",
+      state: "pending",
+      boundItemId: null,
+      readyAt: null,
+      boundAt: null,
+      createdAt: clock.command_at,
+      updatedAt: clock.command_at
+    });
+    await transaction
+      .update(astroDiaryMediaAuthorities)
+      .set({ state: "ready", readyAt: clock.command_at, updatedAt: clock.command_at })
+      .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId));
+  });
+  return mediaId;
+}
+
 function clientDraftInput(journal: JournalFixture, body: string) {
   return {
     journalId: journal.journalId,
@@ -749,6 +1071,18 @@ function clientDraftInput(journal: JournalFixture, body: string) {
   };
 }
 
+function clientDraftInputWithMedia(
+  journal: JournalFixture,
+  body: string,
+  attachmentIds: readonly string[]
+) {
+  const input = clientDraftInput(journal, body);
+  return {
+    ...input,
+    request: { ...input.request, attachmentIds: [...attachmentIds] }
+  };
+}
+
 function astrologerReplyDraftInput(opened: OpenCycleFixture, body: string) {
   return {
     journalId: opened.journalId,
@@ -764,6 +1098,18 @@ function astrologerReplyDraftInput(opened: OpenCycleFixture, body: string) {
       moodId: null,
       correctsItemId: null
     }
+  };
+}
+
+function astrologerReplyDraftInputWithMedia(
+  opened: OpenCycleFixture,
+  body: string,
+  attachmentIds: readonly string[]
+) {
+  const input = astrologerReplyDraftInput(opened, body);
+  return {
+    ...input,
+    request: { ...input.request, attachmentIds: [...attachmentIds] }
   };
 }
 
@@ -1021,6 +1367,43 @@ async function paidCoreSnapshot(runtime: PostgresRuntime, journal: JournalFixtur
   return counts.rows[0];
 }
 
+async function mediaPersistenceSnapshot(runtime: PostgresRuntime, mediaIds: readonly string[]) {
+  return {
+    assets: await runtime.database
+      .select({
+        id: mediaAssets.id,
+        ownerUserId: mediaAssets.ownerUserId,
+        purpose: mediaAssets.purpose,
+        status: mediaAssets.status,
+        visibility: mediaAssets.visibility
+      })
+      .from(mediaAssets)
+      .where(inArray(mediaAssets.id, [...mediaIds])),
+    authorities: await runtime.database
+      .select({
+        mediaId: astroDiaryMediaAuthorities.mediaId,
+        state: astroDiaryMediaAuthorities.state,
+        boundItemId: astroDiaryMediaAuthorities.boundItemId,
+        boundAt: astroDiaryMediaAuthorities.boundAt,
+        updatedAt: astroDiaryMediaAuthorities.updatedAt
+      })
+      .from(astroDiaryMediaAuthorities)
+      .where(inArray(astroDiaryMediaAuthorities.mediaId, [...mediaIds])),
+    draftAttachments: await runtime.database
+      .select()
+      .from(astroDiaryDraftAttachments)
+      .where(inArray(astroDiaryDraftAttachments.mediaId, [...mediaIds])),
+    entryAttachments: await runtime.database
+      .select()
+      .from(astroDiaryEntryAttachments)
+      .where(inArray(astroDiaryEntryAttachments.mediaId, [...mediaIds])),
+    revisionAttachments: await runtime.database
+      .select()
+      .from(astroDiaryTimelineRevisionAttachments)
+      .where(inArray(astroDiaryTimelineRevisionAttachments.mediaId, [...mediaIds]))
+  };
+}
+
 function sha256(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
@@ -1051,4 +1434,25 @@ function consumeAvailableCommand(value: unknown): Readonly<{
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForDatabaseLock(
+  runtime: PostgresRuntime,
+  applicationName: string
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const result = await runtime.pool.query<{ waiting: boolean }>(
+      `select exists (
+         select 1
+           from pg_stat_activity
+          where application_name = $1
+            and wait_event_type = 'Lock'
+       ) as waiting`,
+      [applicationName]
+    );
+    if (result.rows[0]?.waiting) return;
+    await delay(10);
+  }
+  throw new Error("Standalone allowance command did not block on the prelocked allowance row");
 }
