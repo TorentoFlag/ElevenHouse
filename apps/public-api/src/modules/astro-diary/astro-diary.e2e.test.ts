@@ -412,6 +412,7 @@ function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
       visibleMaxCursor: 0,
       hasMore: false
     }),
+    getParticipantAstrologerReplyDraft: async () => null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>
       participantUserId === clientUserId
         ? {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createAstroDiaryReplyDraft,
   getAstroDiaryJournal,
+  getAstroDiaryReplyDraft,
   publishAstroDiaryReplyDraft,
   updateAstroDiaryReplyDraft
 } from "./astroDiaryApi";
@@ -26,6 +27,15 @@ describe("astroDiaryApi paid-core commands", () => {
 
     await expect(getAstroDiaryJournal(journalId)).resolves.toEqual(summaryResponse);
     expect(get).toHaveBeenCalledWith(`/astro-diary/journals/${journalId}`);
+  });
+
+  it("hydrates the current saved reply draft through the shared response contract", async () => {
+    get.mockResolvedValueOnce({ draft: { draftId, version: 3, body: "Saved answer" } });
+
+    await expect(getAstroDiaryReplyDraft(journalId)).resolves.toEqual({
+      draft: { draftId, version: 3, body: "Saved answer" }
+    });
+    expect(get).toHaveBeenCalledWith(`/astro-diary/journals/${journalId}/astrologer-reply/draft`);
   });
 
   it("creates and updates a reply draft with CSRF and a stable idempotency key", async () => {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { HttpException, Inject, Injectable } from "@nestjs/common";
 import {
+  astroDiaryAstrologerReplyDraftResponseSchema,
   astroDiaryAstrologerReplyDraftCreateRequestSchema,
   astroDiaryAstrologerReplyDraftUpdateRequestSchema,
   astroDiaryCommandResponseSchema,
@@ -13,6 +14,7 @@ import {
   astroDiaryTimelinePageSchema,
   astroDiaryTimelineQuerySchema,
   type AstroDiaryCommandResponse,
+  type AstroDiaryAstrologerReplyDraftResponse,
   type AstroDiaryDraftMutationResponse,
   type AstroDiaryJournalListResponse,
   type AstroDiaryJournalSummaryResponse,
@@ -83,6 +85,21 @@ export class AstroDiaryService {
     });
     if (!result) throw astroDiaryHttpError(404, "astro_diary_not_found", "Journal was not found");
     return astroDiaryTimelinePageSchema.parse(result);
+  }
+
+  async getReplyDraft(
+    astrologerUserId: string,
+    journalId: string
+  ): Promise<AstroDiaryAstrologerReplyDraftResponse> {
+    requireUuid(journalId);
+    const result = await this.reader.getParticipantAstrologerReplyDraft({
+      participantUserId: astrologerUserId,
+      participantRole: "astrologer",
+      journalId,
+      now: this.clock.now().toISOString()
+    });
+    if (!result) throw astroDiaryHttpError(404, "astro_diary_not_found", "Journal was not found");
+    return astroDiaryAstrologerReplyDraftResponseSchema.parse(result);
   }
 
   async createReplyDraft(

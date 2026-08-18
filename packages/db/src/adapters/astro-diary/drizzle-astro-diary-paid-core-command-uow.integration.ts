@@ -1133,6 +1133,12 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
   it("reads the same paid journal through client and astrologer scopes without foreign leakage", async () => {
     const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const createdReply = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "Сохранённый ответ")
+    );
+    const replyDraftId = appliedDraftId(createdReply);
     const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
     const [clock] = (
       await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
@@ -1140,7 +1146,7 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     if (!clock) throw new Error("Integration database clock is missing");
     const now = clock.command_at.toISOString();
 
-    const [clientList, astrologerList, clientSummary, clientTimeline, astrologerTimeline, context] =
+    const [clientList, astrologerList, clientSummary, clientTimeline, astrologerTimeline, replyDraft, context] =
       await Promise.all([
         reader.listParticipantJournals({
           participantUserId: opened.fixture.authority.clientUserId,
@@ -1174,6 +1180,12 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
           afterCursor: 0,
           limit: 50
         }),
+        reader.getParticipantAstrologerReplyDraft({
+          participantUserId: opened.fixture.authority.astrologerUserId,
+          participantRole: "astrologer",
+          journalId: opened.journalId,
+          now
+        }),
         reader.getPaidCoreCommandContext({
           participantUserId: opened.fixture.authority.astrologerUserId,
           participantRole: "astrologer",
@@ -1187,6 +1199,9 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     expect(clientSummary?.journal.id).toBe(opened.journalId);
     expect(clientTimeline?.items.map(({ id }) => id)).toContain(opened.clientEntryItemId);
     expect(astrologerTimeline).toEqual(clientTimeline);
+    expect(replyDraft).toEqual({
+      draft: { draftId: replyDraftId, version: 1, body: "Сохранённый ответ" }
+    });
     expect(context).toMatchObject({
       activePeriod: { id: opened.fixture.periodId },
       currentCycle: { id: opened.cycleId },
@@ -1196,6 +1211,22 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     await expect(
       reader.getParticipantJournalSummary({
         participantUserId: randomUUID(),
+        participantRole: "client",
+        journalId: opened.journalId,
+        now
+      })
+    ).resolves.toBeNull();
+    await expect(
+      reader.getParticipantAstrologerReplyDraft({
+        participantUserId: randomUUID(),
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now
+      })
+    ).resolves.toBeNull();
+    await expect(
+      reader.getParticipantAstrologerReplyDraft({
+        participantUserId: opened.fixture.authority.clientUserId,
         participantRole: "client",
         journalId: opened.journalId,
         now

@@ -8,10 +8,12 @@ import styles from "./AstroDiaryReplyComposer.module.css";
 type AstroDiaryReplyComposerProps = Readonly<{
   copy: AstrologerCopy["astroDiary"];
   draft: AstroDiaryReplyDraftState | null;
+  body: string;
   error: AstroDiaryActionError | null;
   isSaving: boolean;
   isPublishing: boolean;
   onOpen?: () => void;
+  onBodyChange: (body: string) => void;
   onReloadLatest: () => void;
   onSave: (body: string) => void;
   onPublish: () => void;
@@ -20,26 +22,23 @@ type AstroDiaryReplyComposerProps = Readonly<{
 export function AstroDiaryReplyComposer({
   copy,
   draft,
+  body,
   error,
   isSaving,
   isPublishing,
   onOpen,
+  onBodyChange,
   onReloadLatest,
   onSave,
   onPublish
 }: AstroDiaryReplyComposerProps) {
-  const [isOpen, setIsOpen] = useState(Boolean(draft));
-  const [body, setBody] = useState(draft?.body ?? "");
+  const [isOpen, setIsOpen] = useState(Boolean(draft || body));
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     textareaRef.current?.focus();
   }, [isOpen]);
-
-  useEffect(() => {
-    if (draft) setBody(draft.body);
-  }, [draft]);
 
   if (!isOpen) {
     return (
@@ -84,11 +83,13 @@ export function AstroDiaryReplyComposer({
       {error ? (
         <div className={styles.error} role="alert">
           <p>{copy.reply.errors[error]}</p>
-          {error === "stale" ? (
+          {error === "stale" || error === "no_cycle" || error === "no_obligation" ? (
             <span className={styles.errorActions}>
-              <button type="button" onClick={() => textareaRef.current?.focus()}>
-                {copy.reply.reviewDraftLabel}
-              </button>
+              {error === "stale" ? (
+                <button type="button" onClick={() => textareaRef.current?.focus()}>
+                  {copy.reply.reviewDraftLabel}
+                </button>
+              ) : null}
               <button type="button" onClick={onReloadLatest}>
                 <Icon iconName="refresh" width={14} height={14} aria-hidden="true" />
                 {copy.reply.reloadLatestLabel}
@@ -109,7 +110,7 @@ export function AstroDiaryReplyComposer({
         value={body}
         placeholder={copy.reply.placeholder}
         disabled={isBusy}
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => onBodyChange(event.target.value)}
       />
       <div className={styles.actions}>
         <span className={styles.characterCount}>

@@ -115,6 +115,20 @@ describe("astrologer AstroDiary HTTP API", () => {
     expect(crossover.body).toMatchObject({ code: "astrologer_role_required" });
   });
 
+  it("hydrates only the current astrologer's reply draft", async () => {
+    const own = await request(`/astro-diary/journals/${journalId}/astrologer-reply/draft`, {
+      role: "astrologer"
+    });
+    expect(own.status).toBe(200);
+    expect(own.body).toEqual({ draft: { draftId, version: 1, body: "Ответ" } });
+
+    const foreign = await request(`/astro-diary/journals/${journalId}/astrologer-reply/draft`, {
+      role: "foreign-astrologer"
+    });
+    expect(foreign.status).toBe(404);
+    expect(foreign.body).toMatchObject({ code: "astro_diary_not_found" });
+  });
+
   it("creates and replays a closing-reply draft without accepting actor or cycle authority", async () => {
     const invalid = await request(`/astro-diary/journals/${journalId}/astrologer-reply/drafts`, {
       role: "astrologer",
@@ -376,6 +390,10 @@ function createReader(state: { ended: boolean; laterCycle: boolean }): AstroDiar
     getParticipantJournalTimeline: async ({ participantUserId }) =>
       participantUserId === astrologerUserId
         ? { items: [], nextCursor: null, visibleMaxCursor: 0, hasMore: false }
+        : null,
+    getParticipantAstrologerReplyDraft: async ({ participantUserId }) =>
+      participantUserId === astrologerUserId
+        ? { draft: { draftId, version: 1, body: "Ответ" } }
         : null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>
       participantUserId === astrologerUserId

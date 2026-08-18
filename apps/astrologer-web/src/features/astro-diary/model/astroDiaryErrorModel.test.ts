@@ -14,6 +14,9 @@ describe("toAstroDiaryActionError", () => {
     expect(toAstroDiaryActionError(new HttpError(403, { code: "paid_access_ended" }))).toBe(
       "read_only"
     );
+    expect(
+      toAstroDiaryActionError(new HttpError(409, { code: "no_open_response_obligation" }))
+    ).toBe("no_obligation");
   });
 
   it("falls back to a retryable generic state for untyped transport failures", () => {

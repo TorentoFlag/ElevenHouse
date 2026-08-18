@@ -6,6 +6,7 @@ export type AstroDiaryActionError =
   | "allowance"
   | "read_only"
   | "no_cycle"
+  | "no_obligation"
   | "generic";
 
 export function toAstroDiaryActionError(error: unknown): AstroDiaryActionError {
@@ -15,6 +16,7 @@ export function toAstroDiaryActionError(error: unknown): AstroDiaryActionError {
   if (code === "idempotency_conflict") return "idempotency";
   if (code === "allowance_exhausted") return "allowance";
   if (code === "no_open_cycle") return "no_cycle";
+  if (code === "no_open_response_obligation") return "no_obligation";
   if (
     error.status === 403 ||
     code === "paid_access_ended" ||

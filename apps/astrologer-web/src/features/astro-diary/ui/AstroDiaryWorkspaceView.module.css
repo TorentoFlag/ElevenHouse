@@ -416,6 +416,34 @@
   justify-self: center;
 }
 
+.loadMoreError {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #f2c9da;
+  font-size: 13px;
+}
+
+.loadMoreError p {
+  margin: 0;
+}
+
+.loadMoreError button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(240 132 177 / 0.42);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .timelineSkeleton {
   display: block;
   width: min(540px, 84%);

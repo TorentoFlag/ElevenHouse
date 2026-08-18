@@ -111,6 +111,8 @@ export type AstrologerCopy = {
       errorLabel: string;
       loadMoreLabel: string;
       loadingMoreLabel: string;
+      loadMoreErrorLabel: string;
+      retryLoadMoreLabel: string;
       authorLabels: Record<AstroDiaryParticipantRole, string>;
       kindLabels: Record<AstroDiaryTimelineItem["kind"], string>;
       tombstoneLabels: Record<"hidden_by_author" | "content_erased", string>;
@@ -128,11 +130,19 @@ export type AstrologerCopy = {
       unsavedLabel: string;
       publishLabel: string;
       publishingLabel: string;
+      loadingDraftLabel: string;
+      draftLoadErrorLabel: string;
       reloadLatestLabel: string;
       reviewDraftLabel: string;
       characterCountLabel: (count: number, maximum: number) => string;
       errors: Record<
-        "stale" | "idempotency" | "allowance" | "read_only" | "no_cycle" | "generic",
+        | "stale"
+        | "idempotency"
+        | "allowance"
+        | "read_only"
+        | "no_cycle"
+        | "no_obligation"
+        | "generic",
         string
       >;
     };
@@ -668,6 +678,8 @@ export const astrologerCopyByLocale = {
         errorLabel: "Не удалось загрузить ленту журнала.",
         loadMoreLabel: "Показать более новые записи",
         loadingMoreLabel: "Загружаем записи…",
+        loadMoreErrorLabel: "Не удалось загрузить следующие записи.",
+        retryLoadMoreLabel: "Повторить загрузку записей",
         authorLabels: { client: "Клиент", astrologer: "Вы" },
         kindLabels: {
           client_entry: "Запись клиента",
@@ -701,6 +713,8 @@ export const astrologerCopyByLocale = {
         unsavedLabel: "Есть несохранённые изменения",
         publishLabel: "Опубликовать ответ",
         publishingLabel: "Публикуем…",
+        loadingDraftLabel: "Загружаем сохранённый черновик…",
+        draftLoadErrorLabel: "Не удалось загрузить сохранённый черновик.",
         reloadLatestLabel: "Загрузить актуальную версию",
         reviewDraftLabel: "Проверить черновик",
         characterCountLabel: (count, maximum) => `${count} из ${maximum}`,
@@ -711,6 +725,7 @@ export const astrologerCopyByLocale = {
           allowance: "Лимит новых циклов на текущий оплаченный период исчерпан.",
           read_only: "Подписка завершена. Журнал доступен только для чтения.",
           no_cycle: "Открытого цикла для ответа больше нет. Загрузите актуальную версию.",
+          no_obligation: "Обязательство ответить больше не открыто. Загрузите актуальную версию.",
           generic: "Не удалось сохранить ответ. Повторите запрос — текст останется в редакторе."
         }
       }
@@ -1207,6 +1222,8 @@ export const astrologerCopyByLocale = {
         errorLabel: "Could not load the journal timeline.",
         loadMoreLabel: "Show newer entries",
         loadingMoreLabel: "Loading entries…",
+        loadMoreErrorLabel: "Could not load more entries.",
+        retryLoadMoreLabel: "Retry loading entries",
         authorLabels: { client: "Client", astrologer: "You" },
         kindLabels: {
           client_entry: "Client entry",
@@ -1240,6 +1257,8 @@ export const astrologerCopyByLocale = {
         unsavedLabel: "Unsaved changes",
         publishLabel: "Publish reply",
         publishingLabel: "Publishing…",
+        loadingDraftLabel: "Loading the saved draft…",
+        draftLoadErrorLabel: "Could not load the saved draft.",
         reloadLatestLabel: "Load latest",
         reviewDraftLabel: "Review draft",
         characterCountLabel: (count, maximum) => `${count} of ${maximum}`,
@@ -1250,6 +1269,7 @@ export const astrologerCopyByLocale = {
           allowance: "The new-cycle allowance for this paid period has been used.",
           read_only: "The subscription ended. This journal is read-only.",
           no_cycle: "The reply cycle is no longer open. Load the latest version.",
+          no_obligation: "The response obligation is no longer open. Load the latest version.",
           generic: "Could not save the reply. Retry—the editor will keep your text."
         }
       }

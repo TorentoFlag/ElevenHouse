@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, max, ne } from "drizzle-orm";
 import {
+  astroDiaryAstrologerReplyDraftResponseSchema,
   astroDiaryCycleSchema,
   astroDiaryJournalListResponseSchema,
   astroDiaryJournalSchema,
@@ -14,6 +15,7 @@ import type { AstroDiaryJournalReader } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   astroDiaryCycles,
+  astroDiaryDrafts,
   astroDiaryJournals,
   astroDiaryReadCursors,
   astroDiaryResponseObligations,
@@ -35,6 +37,8 @@ export function createDrizzleAstroDiaryJournalReader(
     listParticipantJournals: (input) => listParticipantJournals(database, input),
     getParticipantJournalSummary: (input) => getParticipantJournalSummary(database, input),
     getParticipantJournalTimeline: (input) => getParticipantJournalTimeline(database, input),
+    getParticipantAstrologerReplyDraft: (input) =>
+      getParticipantAstrologerReplyDraft(database, input),
     getPaidCoreCommandContext: (input) => getPaidCoreCommandContext(database, input)
   };
 }
@@ -286,6 +290,49 @@ async function getParticipantJournalTimelineInTransaction(
     nextCursor,
     visibleMaxCursor,
     hasMore: nextCursor !== null && nextCursor < visibleMaxCursor
+  });
+}
+
+async function getParticipantAstrologerReplyDraft(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getParticipantAstrologerReplyDraft"]>[0]
+) {
+  if (input.participantRole !== "astrologer") return null;
+
+  return database.transaction(async (transaction) => {
+    const journalRow = await findParticipantJournalRow(transaction, input);
+    if (!journalRow) return null;
+
+    const [cycle] = await transaction
+      .select({ id: astroDiaryCycles.id })
+      .from(astroDiaryCycles)
+      .where(
+        and(eq(astroDiaryCycles.journalId, journalRow.id), ne(astroDiaryCycles.state, "closed"))
+      )
+      .orderBy(desc(astroDiaryCycles.openedAt), desc(astroDiaryCycles.id))
+      .limit(1);
+    if (!cycle) return astroDiaryAstrologerReplyDraftResponseSchema.parse({ draft: null });
+
+    const [draft] = await transaction
+      .select({
+        draftId: astroDiaryDrafts.id,
+        version: astroDiaryDrafts.version,
+        body: astroDiaryDrafts.body
+      })
+      .from(astroDiaryDrafts)
+      .where(
+        and(
+          eq(astroDiaryDrafts.journalId, journalRow.id),
+          eq(astroDiaryDrafts.cycleId, cycle.id),
+          eq(astroDiaryDrafts.authorUserId, input.participantUserId),
+          eq(astroDiaryDrafts.authorRole, "astrologer"),
+          eq(astroDiaryDrafts.kind, "astrologer_reply")
+        )
+      )
+      .orderBy(desc(astroDiaryDrafts.updatedAt), desc(astroDiaryDrafts.id))
+      .limit(1);
+
+    return astroDiaryAstrologerReplyDraftResponseSchema.parse({ draft: draft ?? null });
   });
 }
 

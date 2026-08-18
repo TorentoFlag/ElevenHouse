@@ -12,6 +12,7 @@ type AstroDiaryTimelineProps = Readonly<{
   status: "loading" | "empty" | "error" | "ready";
   hasMore: boolean;
   isLoadingMore: boolean;
+  loadMoreError: boolean;
   onRetry: () => void;
   onLoadMore: () => void;
 }>;
@@ -24,6 +25,7 @@ export function AstroDiaryTimeline({
   status,
   hasMore,
   isLoadingMore,
+  loadMoreError,
   onRetry,
   onLoadMore
 }: AstroDiaryTimelineProps) {
@@ -60,11 +62,7 @@ export function AstroDiaryTimeline({
         </div>
       </article>
       {items.map((item) => (
-        <article
-          className={styles.timelineItem}
-          data-author={item.authorRole}
-          key={item.id}
-        >
+        <article className={styles.timelineItem} data-author={item.authorRole} key={item.id}>
           <div className={styles.timelineMeta}>
             <strong>{copy.timeline.authorLabels[item.authorRole]}</strong>
             <span>{formatTimelineDate(item.occurredAt, locale, timeZone)}</span>
@@ -78,7 +76,15 @@ export function AstroDiaryTimeline({
           ) : null}
         </article>
       ))}
-      {hasMore ? (
+      {loadMoreError ? (
+        <div className={styles.loadMoreError} role="alert">
+          <p>{copy.timeline.loadMoreErrorLabel}</p>
+          <button type="button" onClick={onLoadMore}>
+            <Icon iconName="refresh" width={14} height={14} aria-hidden="true" />
+            {copy.timeline.retryLoadMoreLabel}
+          </button>
+        </div>
+      ) : hasMore ? (
         <button
           className={styles.loadMoreButton}
           type="button"

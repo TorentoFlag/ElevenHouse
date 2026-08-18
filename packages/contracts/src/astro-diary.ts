@@ -909,6 +909,22 @@ export const astroDiaryDraftMutationResponseSchema = z
   .strict();
 export type AstroDiaryDraftMutationResponse = z.infer<typeof astroDiaryDraftMutationResponseSchema>;
 
+export const astroDiaryAstrologerReplyDraftResponseSchema = z
+  .object({
+    draft: z
+      .object({
+        draftId: uuidSchema,
+        version: positiveVersionSchema,
+        body: z.string().max(20_000)
+      })
+      .strict()
+      .nullable()
+  })
+  .strict();
+export type AstroDiaryAstrologerReplyDraftResponse = z.infer<
+  typeof astroDiaryAstrologerReplyDraftResponseSchema
+>;
+
 export const astroDiaryPublishDraftRequestSchema = z
   .object({
     expectedJournalVersion: positiveVersionSchema,

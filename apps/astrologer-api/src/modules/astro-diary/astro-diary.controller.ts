@@ -15,6 +15,7 @@ import {
   UseGuards
 } from "@nestjs/common";
 import type {
+  AstroDiaryAstrologerReplyDraftResponse,
   AstroDiaryCommandResponse,
   AstroDiaryDraftMutationResponse,
   AstroDiaryJournalListResponse,
@@ -54,6 +55,14 @@ export class AstroDiaryController {
     @Query() query: unknown
   ): Promise<AstroDiaryTimelinePage> {
     return this.service.getTimeline(requireAstrologerUserId(request), journalId, query);
+  }
+
+  @Get("journals/:journalId/astrologer-reply/draft")
+  getReplyDraft(
+    @Req() request: AstrologerSessionRequest,
+    @Param("journalId") journalId: string
+  ): Promise<AstroDiaryAstrologerReplyDraftResponse> {
+    return this.service.getReplyDraft(requireAstrologerUserId(request), journalId);
   }
 
   @Post("journals/:journalId/astrologer-reply/drafts")

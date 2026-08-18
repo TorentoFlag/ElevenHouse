@@ -11,10 +11,8 @@ import {
 } from "../../features/astro-diary/model/astroDiaryWorkspaceModel";
 import { useAstroDiaryJournalListQuery } from "../../features/astro-diary/model/useAstroDiaryJournalListQuery";
 import { useAstroDiaryJournalQuery } from "../../features/astro-diary/model/useAstroDiaryJournalQuery";
-import {
-  type AstroDiaryReplyDraftState,
-  useAstroDiaryReplyMutations
-} from "../../features/astro-diary/model/useAstroDiaryReplyMutations";
+import { useAstroDiaryReplyMutations } from "../../features/astro-diary/model/useAstroDiaryReplyMutations";
+import { useAstroDiaryReplyDraftQuery } from "../../features/astro-diary/model/useAstroDiaryReplyDraftQuery";
 import { useAstroDiaryTimelineQuery } from "../../features/astro-diary/model/useAstroDiaryTimelineQuery";
 import {
   AstroDiaryWorkspaceView,
@@ -28,7 +26,7 @@ export function AstroDiaryPage() {
   const journalsQuery = useAstroDiaryJournalListQuery();
   const [requestedJournalId, setRequestedJournalId] = useState<string>();
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, AstroDiaryReplyDraftState>>({});
+  const [replyBuffers, setReplyBuffers] = useState<Record<string, string>>({});
   const [replyErrors, setReplyErrors] = useState<
     Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>
   >({});
@@ -37,6 +35,7 @@ export function AstroDiaryPage() {
   const listSummary = journals.find(({ journal }) => journal.id === selectedJournalId);
   const journalQuery = useAstroDiaryJournalQuery(selectedJournalId);
   const timelineQuery = useAstroDiaryTimelineQuery(selectedJournalId);
+  const replyDraftQuery = useAstroDiaryReplyDraftQuery(selectedJournalId);
   const replyMutations = useAstroDiaryReplyMutations();
 
   useDocumentTitle(copy.documentTitle);
@@ -45,10 +44,13 @@ export function AstroDiaryPage() {
   const timelineItems = collectAstroDiaryTimelineItems(timelineQuery.data?.pages);
   const timelineStatus = resolveTimelineStatus({
     isLoading: timelineQuery.isLoading,
-    isError: timelineQuery.isError || journalQuery.isError,
+    isError: (timelineQuery.isError && !timelineQuery.isFetchNextPageError) || journalQuery.isError,
     itemCount: timelineItems.length
   });
-  const currentDraft = selectedJournalId ? (replyDrafts[selectedJournalId] ?? null) : null;
+  const currentDraft = replyDraftQuery.data?.draft ?? null;
+  const currentReplyBody = selectedJournalId
+    ? (replyBuffers[selectedJournalId] ?? currentDraft?.body ?? "")
+    : "";
   const currentError = selectedJournalId ? (replyErrors[selectedJournalId] ?? null) : null;
 
   const state: AstroDiaryWorkspaceState = journalsQuery.isLoading
@@ -65,16 +67,19 @@ export function AstroDiaryPage() {
             timelineStatus,
             hasMoreTimeline: Boolean(timelineQuery.hasNextPage),
             isLoadingMoreTimeline: timelineQuery.isFetchingNextPage,
+            loadMoreTimelineError: timelineQuery.isFetchNextPageError,
             replyDraft: currentDraft,
+            replyBody: currentReplyBody,
+            replyDraftStatus: replyDraftQuery.isPending
+              ? "loading"
+              : replyDraftQuery.isError
+                ? "error"
+                : "ready",
             replyError: currentError,
             isSavingReply: replyMutations.save.isPending,
             isPublishingReply: replyMutations.publish.isPending,
             mobileDetailOpen,
-            canReply: Boolean(
-              journalQuery.data &&
-                !journalQuery.isFetching &&
-                isAstroDiaryReplyActionable(journalQuery.data)
-            ),
+            canReply: Boolean(journalQuery.data && isAstroDiaryReplyActionable(journalQuery.data)),
             ...(profileQuery.data?.profile?.timezone
               ? { timeZone: profileQuery.data.profile.timezone }
               : {}),
@@ -88,6 +93,10 @@ export function AstroDiaryPage() {
             },
             onLoadMoreTimeline: () => void timelineQuery.fetchNextPage(),
             onOpenReply: () => clearReplyError(selectedJournalId, setReplyErrors),
+            onReplyBodyChange: (body) => {
+              setReplyBuffers((current) => ({ ...current, [selectedJournalId]: body }));
+            },
+            onRetryReplyDraft: () => void replyDraftQuery.refetch(),
             onSaveReply: (body) => {
               if (!journalQuery.data) return;
               void replyMutations.save
@@ -97,8 +106,8 @@ export function AstroDiaryPage() {
                   body,
                   draft: currentDraft
                 })
-                .then(({ draft }) => {
-                  setReplyDrafts((current) => ({ ...current, [selectedJournalId]: draft }));
+                .then(() => {
+                  setReplyBuffers((current) => omitJournalValue(current, selectedJournalId));
                   clearReplyError(selectedJournalId, setReplyErrors);
                 })
                 .catch((error: unknown) => {
@@ -117,11 +126,7 @@ export function AstroDiaryPage() {
                   draft: currentDraft
                 })
                 .then(() => {
-                  setReplyDrafts((current) => {
-                    const next = { ...current };
-                    delete next[selectedJournalId];
-                    return next;
-                  });
+                  setReplyBuffers((current) => omitJournalValue(current, selectedJournalId));
                   clearReplyError(selectedJournalId, setReplyErrors);
                 })
                 .catch((error: unknown) => {
@@ -133,11 +138,21 @@ export function AstroDiaryPage() {
             },
             onReloadLatest: () => {
               clearReplyError(selectedJournalId, setReplyErrors);
-              void Promise.all([journalQuery.refetch(), timelineQuery.refetch()]);
+              void Promise.all([
+                journalQuery.refetch(),
+                timelineQuery.refetch(),
+                replyDraftQuery.refetch()
+              ]);
             }
           };
 
   return <AstroDiaryWorkspaceView copy={copy} locale={locale} state={state} />;
+}
+
+function omitJournalValue<T>(current: Record<string, T>, journalId: string): Record<string, T> {
+  const next = { ...current };
+  delete next[journalId];
+  return next;
 }
 
 function resolveTimelineStatus(input: {

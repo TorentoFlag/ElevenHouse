@@ -8,7 +8,7 @@ import {
 import { createAstroDiaryCommandAttemptRegistry } from "./astroDiaryCommandAttemptRegistry";
 import {
   invalidateAstroDiaryJournal,
-  invalidateAstroDiaryJournalSummary
+  invalidateAstroDiaryReplyDraftSave
 } from "./astroDiaryQueries";
 
 export type AstroDiaryReplyDraftState = Readonly<{
@@ -72,7 +72,7 @@ export function useAstroDiaryReplyMutations() {
     },
     onSuccess: async ({ idempotencyKey }, input) => {
       attempts.acknowledge("save", idempotencyKey);
-      await invalidateAstroDiaryJournalSummary(queryClient, input.journalId);
+      await invalidateAstroDiaryReplyDraftSave(queryClient, input.journalId);
     }
   });
 

@@ -1,4 +1,5 @@
 import {
+  astroDiaryAstrologerReplyDraftResponseSchema,
   astroDiaryAstrologerReplyDraftCreateRequestSchema,
   astroDiaryAstrologerReplyDraftUpdateRequestSchema,
   astroDiaryCommandResponseSchema,
@@ -8,6 +9,7 @@ import {
   astroDiaryPaidCoreDraftPublishRequestSchema,
   astroDiaryTimelinePageSchema,
   type AstroDiaryAstrologerReplyDraftCreateRequest,
+  type AstroDiaryAstrologerReplyDraftResponse,
   type AstroDiaryAstrologerReplyDraftUpdateRequest,
   type AstroDiaryCommandResponse,
   type AstroDiaryDraftMutationResponse,
@@ -29,6 +31,16 @@ export async function getAstroDiaryJournal(
 ): Promise<AstroDiaryJournalSummaryResponse> {
   return astroDiaryJournalSummaryResponseSchema.parse(
     await application.http.get(`/astro-diary/journals/${encodeURIComponent(journalId)}`)
+  );
+}
+
+export async function getAstroDiaryReplyDraft(
+  journalId: string
+): Promise<AstroDiaryAstrologerReplyDraftResponse> {
+  return astroDiaryAstrologerReplyDraftResponseSchema.parse(
+    await application.http.get(
+      `/astro-diary/journals/${encodeURIComponent(journalId)}/astrologer-reply/draft`
+    )
   );
 }
 

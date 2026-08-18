@@ -2,6 +2,7 @@ import type { AstroDiaryTimelinePage } from "@elevenhouse/contracts";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   getAstroDiaryJournal,
+  getAstroDiaryReplyDraft,
   getAstroDiaryTimeline,
   listAstroDiaryJournals
 } from "../api/astroDiaryApi";
@@ -12,7 +13,9 @@ export const astroDiaryQueryKeys = {
   journal: (journalId: string | undefined) =>
     ["astro-diary", "journals", journalId, "summary"] as const,
   timeline: (journalId: string | undefined) =>
-    ["astro-diary", "journals", journalId, "timeline"] as const
+    ["astro-diary", "journals", journalId, "timeline"] as const,
+  replyDraft: (journalId: string | undefined) =>
+    ["astro-diary", "journals", journalId, "astrologer-reply-draft"] as const
 };
 
 export function astroDiaryJournalListQueryOptions() {
@@ -45,6 +48,14 @@ export function astroDiaryTimelineQueryOptions(journalId: string | undefined) {
   };
 }
 
+export function astroDiaryReplyDraftQueryOptions(journalId: string | undefined) {
+  return {
+    queryKey: astroDiaryQueryKeys.replyDraft(journalId),
+    queryFn: () => getAstroDiaryReplyDraft(journalId ?? ""),
+    enabled: Boolean(journalId)
+  };
+}
+
 export function getNextAstroDiaryTimelinePageParam(
   page: AstroDiaryTimelinePage
 ): number | undefined {
@@ -58,6 +69,21 @@ export async function invalidateAstroDiaryJournal(
   await invalidateAstroDiaryJournalSummary(queryClient, journalId);
   await queryClient.invalidateQueries({
     queryKey: astroDiaryQueryKeys.timeline(journalId),
+    exact: true
+  });
+  await queryClient.invalidateQueries({
+    queryKey: astroDiaryQueryKeys.replyDraft(journalId),
+    exact: true
+  });
+}
+
+export async function invalidateAstroDiaryReplyDraftSave(
+  queryClient: Pick<QueryClient, "invalidateQueries">,
+  journalId: string
+): Promise<void> {
+  await invalidateAstroDiaryJournalSummary(queryClient, journalId);
+  await queryClient.invalidateQueries({
+    queryKey: astroDiaryQueryKeys.replyDraft(journalId),
     exact: true
   });
 }

@@ -3,7 +3,7 @@ import {
   astroDiaryQueryKeys,
   getNextAstroDiaryTimelinePageParam,
   invalidateAstroDiaryJournal,
-  invalidateAstroDiaryJournalSummary
+  invalidateAstroDiaryReplyDraftSave
 } from "./astroDiaryQueries";
 
 describe("astroDiaryQueries", () => {
@@ -35,7 +35,8 @@ describe("astroDiaryQueries", () => {
     expect(invalidateQueries.mock.calls).toEqual([
       [{ queryKey: astroDiaryQueryKeys.journals(), exact: true }],
       [{ queryKey: astroDiaryQueryKeys.journal(journalId), exact: true }],
-      [{ queryKey: astroDiaryQueryKeys.timeline(journalId), exact: true }]
+      [{ queryKey: astroDiaryQueryKeys.timeline(journalId), exact: true }],
+      [{ queryKey: astroDiaryQueryKeys.replyDraft(journalId), exact: true }]
     ]);
   });
 
@@ -43,11 +44,12 @@ describe("astroDiaryQueries", () => {
     const invalidateQueries = vi.fn().mockResolvedValue(undefined);
     const journalId = "11111111-1111-4111-8111-111111111111";
 
-    await invalidateAstroDiaryJournalSummary({ invalidateQueries }, journalId);
+    await invalidateAstroDiaryReplyDraftSave({ invalidateQueries }, journalId);
 
     expect(invalidateQueries.mock.calls).toEqual([
       [{ queryKey: astroDiaryQueryKeys.journals(), exact: true }],
-      [{ queryKey: astroDiaryQueryKeys.journal(journalId), exact: true }]
+      [{ queryKey: astroDiaryQueryKeys.journal(journalId), exact: true }],
+      [{ queryKey: astroDiaryQueryKeys.replyDraft(journalId), exact: true }]
     ]);
   });
 });

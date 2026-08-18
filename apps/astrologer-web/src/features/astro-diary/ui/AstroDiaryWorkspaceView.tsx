@@ -24,7 +24,10 @@ export type AstroDiaryWorkspaceState =
       timelineStatus: "loading" | "empty" | "error" | "ready";
       hasMoreTimeline: boolean;
       isLoadingMoreTimeline: boolean;
+      loadMoreTimelineError: boolean;
       replyDraft: AstroDiaryReplyDraftState | null;
+      replyBody: string;
+      replyDraftStatus: "loading" | "error" | "ready";
       replyError: AstroDiaryActionError | null;
       isSavingReply: boolean;
       isPublishingReply: boolean;
@@ -36,6 +39,8 @@ export type AstroDiaryWorkspaceState =
       onRetryTimeline: () => void;
       onLoadMoreTimeline: () => void;
       onOpenReply: () => void;
+      onReplyBodyChange: (body: string) => void;
+      onRetryReplyDraft: () => void;
       onSaveReply: (body: string) => void;
       onPublishReply: () => void;
       onReloadLatest: () => void;
@@ -155,6 +160,7 @@ function ReadyWorkspace({
             status={state.timelineStatus}
             hasMore={state.hasMoreTimeline}
             isLoadingMore={state.isLoadingMoreTimeline}
+            loadMoreError={state.loadMoreTimelineError}
             onRetry={state.onRetryTimeline}
             onLoadMore={state.onLoadMoreTimeline}
           />
@@ -162,14 +168,27 @@ function ReadyWorkspace({
         <footer className={styles.composerRegion}>
           {summary.access.mode === "read_only" ? (
             <p className={styles.composerNotice}>{copy.readOnlyComposerLabel}</p>
+          ) : canReply && state.replyDraftStatus === "loading" ? (
+            <p className={styles.composerNotice} role="status">
+              {copy.reply.loadingDraftLabel}
+            </p>
+          ) : canReply && state.replyDraftStatus === "error" ? (
+            <div className={styles.composerNotice} role="alert">
+              {copy.reply.draftLoadErrorLabel}{" "}
+              <button type="button" onClick={state.onRetryReplyDraft}>
+                {copy.retryLabel}
+              </button>
+            </div>
           ) : canReply ? (
             <AstroDiaryReplyComposer
               copy={copy}
               draft={state.replyDraft}
+              body={state.replyBody}
               error={state.replyError}
               isSaving={state.isSavingReply}
               isPublishing={state.isPublishingReply}
               onOpen={state.onOpenReply}
+              onBodyChange={state.onReplyBodyChange}
               onReloadLatest={state.onReloadLatest}
               onSave={state.onSaveReply}
               onPublish={state.onPublishReply}
