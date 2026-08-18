@@ -6,9 +6,17 @@ import {
   createPendingClientSubscription,
   requestRenewalCharge
 } from "../client-subscriptions";
-import { clientSubscriptionEvent } from "../client-subscriptions/client-subscription-events";
-import { activeSubscription, runtimeId } from "../client-subscriptions/client-subscription-test-fixtures";
-import type { ClientSubscriptionCaptureAppliedEvent } from "../finance-core/client-order-capture-purpose-dispatch";
+import {
+  activeSubscription,
+  runtimeId
+} from "../client-subscriptions/client-subscription-test-fixtures";
+import {
+  createFinanceClientOrderCaptureDispatchReceipt,
+  createFinanceClientSubscriptionCaptureAppliedEvent,
+  sealFinanceClientOrderSubscriptionCaptureAuthority,
+  type ClientSubscriptionCaptureAppliedEvent,
+  type FinanceClientOrderCaptureDispatchTarget
+} from "../finance-core/client-order-capture-purpose-dispatch";
 import { digestFinanceCanonicalValueV1 } from "../finance-core/finance-canonical-digest";
 import {
   planAstroDiarySubscriptionActivation,
@@ -59,13 +67,14 @@ describe("AstroDiary subscription activation plan", () => {
     });
 
     const replacement = replacementEpochCapture();
-    if (replacement.outcome !== "applied") throw new Error("replacement initial capture must apply");
+    if (replacement.outcome !== "applied")
+      throw new Error("replacement initial capture must apply");
     expect(
       planAstroDiarySubscriptionActivation(
         activationInput(replacement, {
           sourceEventId: runtimeId(40),
           evidenceId: runtimeId(41),
-          target: { kind: "initial", periodId: runtimeId(42) }
+          captureKind: "initial"
         })
       )
     ).toMatchObject({
@@ -74,38 +83,114 @@ describe("AstroDiary subscription activation plan", () => {
     });
   });
 
+  it("uses the sealed dispatch authority rather than a caller-supplied initial target", () => {
+    const captured = initialCapture();
+    if (captured.outcome !== "applied") throw new Error("initial capture must apply");
+    const input = activationInput(captured);
+
+    expect(
+      planAstroDiarySubscriptionActivation(
+        withCallerTarget(input, {
+          kind: "renewal",
+          periodId: captured.receipt.period!.id,
+          renewalRequestId: runtimeId(88),
+          intendedPeriodId: captured.receipt.period!.id,
+          periodRenewedEventId: runtimeId(89),
+          entitlementChangedEventId: runtimeId(90)
+        })
+      )
+    ).toMatchObject({ outcome: "activate" });
+  });
+
+  it("uses the sealed dispatch authority rather than a caller-supplied renewal target", () => {
+    const renewal = renewalCapture();
+    const input = activationInput(renewal, {
+      sourceEventId: runtimeId(20),
+      evidenceId: runtimeId(21),
+      captureKind: "renewal",
+      renewalRequestId: runtimeId(22),
+      intendedPeriodId: runtimeId(23)
+    });
+
+    expect(
+      planAstroDiarySubscriptionActivation(
+        withCallerTarget(input, {
+          kind: "initial",
+          periodId: renewal.receipt.period!.id,
+          activatedEventId: runtimeId(88),
+          entitlementChangedEventId: runtimeId(89)
+        })
+      )
+    ).toEqual({
+      outcome: "continue_existing",
+      journalEpochId: renewal.subscription.journalEpochId,
+      subscriptionState: "active"
+    });
+  });
+
+  it("rejects a dispatch receipt whose capture kind is tampered after sealing", () => {
+    const initial = initialCapture();
+    if (initial.outcome !== "applied") throw new Error("initial capture must apply");
+    const initialInput = activationInput(initial);
+    expect(
+      planAstroDiarySubscriptionActivation({
+        ...initialInput,
+        appliedCapture: {
+          ...initialInput.appliedCapture,
+          dispatchReceipt: {
+            ...initialInput.appliedCapture.dispatchReceipt,
+            target: {
+              kind: "renewal",
+              periodId: initial.receipt.period!.id,
+              renewalRequestId: runtimeId(83),
+              intendedPeriodId: initial.receipt.period!.id,
+              periodRenewedEventId: runtimeId(84),
+              entitlementChangedEventId: runtimeId(85)
+            }
+          }
+        }
+      })
+    ).toEqual({ outcome: "rejected", code: "transition_receipt_mismatch" });
+
+    const renewal = renewalCapture();
+    const renewalInput = activationInput(renewal, {
+      sourceEventId: runtimeId(20),
+      evidenceId: runtimeId(21),
+      captureKind: "renewal",
+      renewalRequestId: runtimeId(22),
+      intendedPeriodId: runtimeId(23)
+    });
+    expect(
+      planAstroDiarySubscriptionActivation({
+        ...renewalInput,
+        appliedCapture: {
+          ...renewalInput.appliedCapture,
+          dispatchReceipt: {
+            ...renewalInput.appliedCapture.dispatchReceipt,
+            target: {
+              kind: "initial",
+              periodId: renewal.receipt.period!.id,
+              activatedEventId: runtimeId(86),
+              entitlementChangedEventId: runtimeId(87)
+            }
+          }
+        }
+      })
+    ).toEqual({ outcome: "rejected", code: "transition_receipt_mismatch" });
+  });
+
   it("continues the existing epoch on renewal and maps ended or revoked authority to read-only", () => {
     const captured = initialCapture();
     if (captured.outcome !== "applied") throw new Error("initial capture must apply");
-    const requested = requestRenewalCharge(captured.subscription, {
-      renewalRequestId: runtimeId(22),
-      sourcePeriodId: runtimeId(5),
-      intendedPeriodId: runtimeId(23),
-      requestedAt: "2026-02-27T07:30:00.000Z",
-      eventId: runtimeId(24)
-    });
-    if (requested.outcome !== "applied") throw new Error("renewal request must apply");
-    const renewal = applyRenewalCapture(requested.subscription, {
-      sourceEventId: runtimeId(20),
-      evidenceId: runtimeId(21),
-      renewalRequestId: runtimeId(22),
-      intendedPeriodId: runtimeId(23),
-      capturedAt: "2026-02-28T07:30:00.000Z",
-      periodId: runtimeId(23),
-      eventIds: [runtimeId(25), runtimeId(26)]
-    });
-    if (renewal.outcome !== "applied") throw new Error("renewal capture must apply");
+    const renewal = renewalCapture();
     expect(
       planAstroDiarySubscriptionActivation(
         activationInput(renewal, {
           sourceEventId: runtimeId(20),
           evidenceId: runtimeId(21),
-          target: {
-            kind: "renewal",
-            periodId: runtimeId(23),
-            renewalRequestId: runtimeId(22),
-            intendedPeriodId: runtimeId(23)
-          }
+          captureKind: "renewal",
+          renewalRequestId: runtimeId(22),
+          intendedPeriodId: runtimeId(23)
         })
       )
     ).toEqual({
@@ -208,7 +293,7 @@ function initialCapture() {
     sourceEventId: runtimeId(1),
     evidenceId: runtimeId(2),
     capturedAt: "2026-01-31T07:30:00.000Z",
-    periodId: runtimeId(5),
+    periodId: runtimeId(13),
     eventIds: [runtimeId(6), runtimeId(7)]
   });
 }
@@ -228,37 +313,46 @@ function replacementEpochCapture() {
   });
 }
 
-type ActivationInputWithCapture = AstroDiarySubscriptionActivationInput &
-  Readonly<{
-    appliedCapture: Readonly<{
-      sourceEvent: ClientSubscriptionCaptureAppliedEvent;
-      target:
-        | Readonly<{ kind: "initial"; periodId: string }>
-        | Readonly<{
-            kind: "renewal";
-            periodId: string;
-            renewalRequestId: string;
-            intendedPeriodId: string;
-          }>;
-    }>;
-  }>;
-
 function activationInput(
-  captured: Extract<ReturnType<typeof initialCapture>, { outcome: "applied" }> | Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }>,
+  captured:
+    | Extract<ReturnType<typeof initialCapture>, { outcome: "applied" }>
+    | Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }>,
   source: Readonly<{
     sourceEventId: string;
     evidenceId: string;
-    target?: ActivationInputWithCapture["appliedCapture"]["target"];
+    captureKind?: "initial" | "renewal";
+    renewalRequestId?: string;
+    intendedPeriodId?: string;
   }> = { sourceEventId: runtimeId(1), evidenceId: runtimeId(2) }
-): ActivationInputWithCapture {
-  const sourceEvent = clientSubscriptionEvent({
-    eventId: source.sourceEventId,
-    eventType: "client_subscription.capture_applied.v1",
-    occurredAt: captured.receipt.occurredAt,
-    subscription: captured.subscription,
-    periodId: captured.receipt.period!.id,
-    financeEvidenceId: source.evidenceId
-  }) as ClientSubscriptionCaptureAppliedEvent;
+): AstroDiarySubscriptionActivationInput {
+  const target =
+    source.captureKind === "renewal"
+      ? renewalTarget(captured, source.renewalRequestId, source.intendedPeriodId)
+      : initialTarget(captured);
+  const dispatchReceipt = createFinanceClientOrderCaptureDispatchReceipt({
+    authority: sealFinanceClientOrderSubscriptionCaptureAuthority({
+      captureKind: target.kind,
+      captureApplicationReceiptId: source.evidenceId,
+      captureApplicationDigest: `sha256:${"b".repeat(64)}`,
+      orderId: captured.subscription.contract.orderId,
+      contractId: captured.subscription.contract.id,
+      contractCanonicalDigest: captured.subscription.contract.canonicalDigest,
+      subscriptionId: captured.subscription.id,
+      subscriptionExpectedVersion: captured.subscription.version - 1,
+      capturedAt: captured.receipt.occurredAt,
+      ...(target.kind === "renewal"
+        ? {
+            renewalRequestId: target.renewalRequestId,
+            intendedPeriodId: target.intendedPeriodId
+          }
+        : {})
+    }),
+    dispatchReceiptId: runtimeId(90),
+    sourceEventId: source.sourceEventId,
+    target,
+    dispatchedAt: new Date(Date.parse(captured.receipt.occurredAt) + 1_000).toISOString()
+  });
+  const sourceEvent = createFinanceClientSubscriptionCaptureAppliedEvent(dispatchReceipt);
   return {
     lockedSubscription: captured.subscription,
     immutableContract: captured.subscription.contract,
@@ -266,7 +360,7 @@ function activationInput(
     appliedSourceEventReceipt: {
       subscriptionId: captured.subscription.id,
       sourceEventId: source.sourceEventId,
-      sourceEventDigest: digestFinanceCanonicalValueV1(sourceEvent),
+      sourceEventDigest: dispatchReceipt.sourceEventDigest,
       evidenceId: source.evidenceId,
       result: {
         outcome: "applied",
@@ -284,7 +378,91 @@ function activationInput(
     },
     appliedCapture: {
       sourceEvent,
-      target: source.target ?? { kind: "initial", periodId: captured.receipt.period!.id }
+      dispatchReceipt
     }
   };
+}
+
+function renewalCapture(): Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }> {
+  const captured = initialCapture();
+  if (captured.outcome !== "applied") throw new Error("initial capture must apply");
+  const requested = requestRenewalCharge(captured.subscription, {
+    renewalRequestId: runtimeId(22),
+    sourcePeriodId: runtimeId(13),
+    intendedPeriodId: runtimeId(23),
+    requestedAt: "2026-02-27T07:30:00.000Z",
+    eventId: runtimeId(24)
+  });
+  if (requested.outcome !== "applied") throw new Error("renewal request must apply");
+  const renewal = applyRenewalCapture(requested.subscription, {
+    sourceEventId: runtimeId(20),
+    evidenceId: runtimeId(21),
+    renewalRequestId: runtimeId(22),
+    intendedPeriodId: runtimeId(23),
+    capturedAt: "2026-02-28T07:30:00.000Z",
+    periodId: runtimeId(23),
+    eventIds: [runtimeId(25), runtimeId(26)]
+  });
+  if (renewal.outcome !== "applied") throw new Error("renewal capture must apply");
+  return renewal;
+}
+
+function initialTarget(
+  captured:
+    | Extract<ReturnType<typeof initialCapture>, { outcome: "applied" }>
+    | Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }>
+): Extract<FinanceClientOrderCaptureDispatchTarget, { kind: "initial" }> {
+  return {
+    kind: "initial",
+    periodId: captured.receipt.period!.id,
+    activatedEventId: emittedEventId(captured, "client_subscription.activated.v1"),
+    entitlementChangedEventId: emittedEventId(
+      captured,
+      "client_subscription.entitlement_changed.v1"
+    )
+  };
+}
+
+function renewalTarget(
+  captured:
+    | Extract<ReturnType<typeof initialCapture>, { outcome: "applied" }>
+    | Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }>,
+  renewalRequestId = runtimeId(22),
+  intendedPeriodId = runtimeId(23)
+): Extract<FinanceClientOrderCaptureDispatchTarget, { kind: "renewal" }> {
+  return {
+    kind: "renewal",
+    renewalRequestId,
+    intendedPeriodId,
+    periodId: captured.receipt.period!.id,
+    periodRenewedEventId: emittedEventId(captured, "client_subscription.period_renewed.v1"),
+    entitlementChangedEventId: emittedEventId(
+      captured,
+      "client_subscription.entitlement_changed.v1"
+    )
+  };
+}
+
+function emittedEventId(
+  captured:
+    | Extract<ReturnType<typeof initialCapture>, { outcome: "applied" }>
+    | Extract<ReturnType<typeof applyRenewalCapture>, { outcome: "applied" }>,
+  eventType:
+    | "client_subscription.activated.v1"
+    | "client_subscription.period_renewed.v1"
+    | "client_subscription.entitlement_changed.v1"
+): string {
+  const event = captured.events.find((candidate) => candidate.eventType === eventType);
+  if (!event) throw new Error(`missing ${eventType} lifecycle event`);
+  return event.eventId;
+}
+
+function withCallerTarget(
+  input: AstroDiarySubscriptionActivationInput,
+  target: FinanceClientOrderCaptureDispatchTarget
+): AstroDiarySubscriptionActivationInput {
+  return {
+    ...input,
+    appliedCapture: { ...input.appliedCapture, target }
+  } as AstroDiarySubscriptionActivationInput;
 }

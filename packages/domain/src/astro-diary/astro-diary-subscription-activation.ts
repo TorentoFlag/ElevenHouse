@@ -7,29 +7,28 @@ import type {
 } from "../client-subscriptions/client-subscription-types";
 import type { ClientSubscriptionSourceEventApplicationReceipt } from "../client-subscriptions/ports/client-subscription-source-event-application-unit-of-work";
 import { digestFinanceCanonicalValueV1 } from "../finance-core/finance-canonical-digest";
-import type { ClientSubscriptionCaptureAppliedEvent } from "../finance-core/client-order-capture-purpose-dispatch";
+import {
+  createFinanceClientSubscriptionCaptureAppliedEvent,
+  rehydrateFinanceClientOrderCaptureDispatchReceipt,
+  type ClientSubscriptionCaptureAppliedEvent,
+  type FinanceClientOrderCaptureDispatchReceipt
+} from "../finance-core/client-order-capture-purpose-dispatch";
 import { astroDiaryEvent } from "./astro-diary-events";
 
 type AppliedSourceEventReceipt = ClientSubscriptionSourceEventApplicationReceipt &
   Readonly<{
-    result: Extract<ClientSubscriptionSourceEventApplicationReceipt["result"], { outcome: "applied" }>;
+    result: Extract<
+      ClientSubscriptionSourceEventApplicationReceipt["result"],
+      { outcome: "applied" }
+    >;
   }>;
-type AppliedCaptureTarget =
-  | Readonly<{ kind: "initial"; periodId: string }>
-  | Readonly<{
-      kind: "renewal";
-      periodId: string;
-      renewalRequestId: string;
-      intendedPeriodId: string;
-    }>;
-
 export type AstroDiarySubscriptionActivationInput = Readonly<{
   /** The source-event UOW has already locked and transitioned this exact subscription. */
   lockedSubscription: ClientSubscription;
-  /** Canonical capture source event and dispatch target that authorized the subscription transition. */
+  /** Canonical capture source event and sealed dispatch authority that authorized the transition. */
   appliedCapture: Readonly<{
     sourceEvent: ClientSubscriptionCaptureAppliedEvent;
-    target: AppliedCaptureTarget;
+    dispatchReceipt: FinanceClientOrderCaptureDispatchReceipt;
   }>;
   /** Immutable contract independently supplied by the locked source-event boundary. */
   immutableContract: ClientSubscriptionContract;
@@ -104,6 +103,7 @@ export function planAstroDiarySubscriptionActivation(
   const subscription = input.lockedSubscription;
   const receipt = input.transitionReceipt;
   const applicationReceipt = input.appliedSourceEventReceipt;
+  const dispatchReceipt = rehydrateAppliedCapture(input.appliedCapture);
 
   if (!sameLockedContract(subscription.contract, input.immutableContract)) {
     return { outcome: "rejected", code: "contract_mismatch" };
@@ -127,11 +127,21 @@ export function planAstroDiarySubscriptionActivation(
     return { outcome: "rejected", code: "source_event_receipt_mismatch" };
   }
   if (
+    !dispatchReceipt ||
     input.appliedCapture.sourceEvent.eventType !== "client_subscription.capture_applied.v1" ||
+    dispatchReceipt.sourceEventId !== input.appliedCapture.sourceEvent.eventId ||
+    dispatchReceipt.sourceEventDigest !== applicationReceipt.sourceEventDigest ||
+    dispatchReceipt.authority.captureApplicationReceiptId !== applicationReceipt.evidenceId ||
+    dispatchReceipt.authority.subscriptionId !== subscription.id ||
+    dispatchReceipt.authority.contractId !== subscription.contract.id ||
+    dispatchReceipt.authority.orderId !== subscription.contract.orderId ||
+    dispatchReceipt.authority.contractCanonicalDigest !== subscription.contract.canonicalDigest ||
+    dispatchReceipt.authority.subscriptionExpectedVersion !== subscription.version - 1 ||
+    dispatchReceipt.authority.capturedAt !== receipt.occurredAt ||
     input.appliedCapture.sourceEvent.data.subscriptionId !== subscription.id ||
     input.appliedCapture.sourceEvent.data.contractId !== subscription.contract.id ||
     input.appliedCapture.sourceEvent.data.periodId !== receipt.period?.id ||
-    input.appliedCapture.target.periodId !== receipt.period?.id ||
+    dispatchReceipt.target.periodId !== receipt.period?.id ||
     !subscription.appliedFinanceEvidenceIds.includes(applicationReceipt.evidenceId) ||
     !periodMatchesLockedSubscription(subscription, receipt)
   ) {
@@ -158,7 +168,7 @@ export function planAstroDiarySubscriptionActivation(
   if (subscription.state !== "active" && subscription.state !== "cancel_at_period_end") {
     return { outcome: "rejected", code: "subscription_state_mismatch" };
   }
-  if (input.appliedCapture.target.kind === "renewal") {
+  if (dispatchReceipt.target.kind === "renewal") {
     return {
       outcome: "continue_existing",
       journalEpochId: subscription.journalEpochId,
@@ -200,8 +210,33 @@ export function planAstroDiarySubscriptionActivation(
   };
 }
 
-function periodMatchesLockedSubscription(subscription: ClientSubscription, receipt: ClientSubscriptionTransitionReceipt): boolean {
-  return !!receipt.period && subscription.paidPeriods.some((period) => samePeriod(period, receipt.period!));
+function rehydrateAppliedCapture(
+  input: AstroDiarySubscriptionActivationInput["appliedCapture"]
+): FinanceClientOrderCaptureDispatchReceipt | null {
+  try {
+    const receipt = rehydrateFinanceClientOrderCaptureDispatchReceipt(input.dispatchReceipt);
+    const canonicalSourceEvent = createFinanceClientSubscriptionCaptureAppliedEvent(receipt);
+    if (
+      digestFinanceCanonicalValueV1(input.sourceEvent) !== receipt.sourceEventDigest ||
+      digestFinanceCanonicalValueV1(input.sourceEvent) !==
+        digestFinanceCanonicalValueV1(canonicalSourceEvent)
+    ) {
+      return null;
+    }
+    return receipt;
+  } catch {
+    return null;
+  }
+}
+
+function periodMatchesLockedSubscription(
+  subscription: ClientSubscription,
+  receipt: ClientSubscriptionTransitionReceipt
+): boolean {
+  return (
+    !!receipt.period &&
+    subscription.paidPeriods.some((period) => samePeriod(period, receipt.period!))
+  );
 }
 
 function samePeriod(left: ClientSubscriptionPeriod, right: ClientSubscriptionPeriod): boolean {
