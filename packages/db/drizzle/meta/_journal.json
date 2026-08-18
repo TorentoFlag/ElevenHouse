@@ -379,6 +379,13 @@
       "when": 1787060762498,
       "tag": "0056_astro_diary_order_fulfillment_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1787062880349,
+      "tag": "0057_astro_diary_checkout_sealed_tuple_authority",
+      "breakpoints": true
     }
   ]
 }

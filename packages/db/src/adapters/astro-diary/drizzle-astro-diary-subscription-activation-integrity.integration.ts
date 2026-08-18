@@ -9,13 +9,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   applyClientSubscriptionCaptureDispatch,
   canonicalizeFinanceCommandPayload,
+  createOrder,
   createPendingClientSubscription,
   executeClientSubscriptionCreation,
   publishProduct,
   sealClientSubscriptionContract,
   updateProduct,
-  type ClientSubscription,
-  type CreateFinanceOrderRecordInput
+  type ClientSubscription
 } from "@elevenhouse/domain";
 import {
   createCapturedProviderPaymentSemanticSourceId,
@@ -43,19 +43,18 @@ import { clientAstrologerRelationships } from "../../schema/clients/client-astro
 import { financeArtifactRetentionPolicies } from "../../schema/finance/finance-artifacts.schema";
 import { financeClientSubscriptionCaptureDispatchReceipts } from "../../schema/finance/client-subscription-capture-dispatch.schema";
 import { financePaidProductFulfillmentDecisions } from "../../schema/finance/capture-authorities.schema";
-import { financePolicies } from "../../schema/finance/policies.schema";
 import {
   financeProviderAccountSeries,
   financeProviderAccounts
 } from "../../schema/finance/provider-accounts.schema";
 import { users } from "../../schema/identity/accounts.schema";
-import {
-  platformTariffSeries,
-  platformTariffVersions
-} from "../../schema/platform-billing/tariff-authority.schema";
+import { platformTariffSubscriptions } from "../../schema/platform-billing/tariff-authority.schema";
 import { productAccessGrants } from "../../schema/products/product-access-grants.schema";
 import { productDeliveryFormats } from "../../schema/products/product-delivery-formats.schema";
 import { products } from "../../schema/products/products.schema";
+import { availabilitySchedules } from "../../schema/scheduling/availability.schema";
+import { bookings, scheduleReservations } from "../../schema/scheduling/bookings.schema";
+import { createDrizzleClientStore } from "../clients/drizzle-client-store";
 import { createDrizzleClientSubscriptionCreationUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-creation-uow";
 import { createDrizzleClientSubscriptionCaptureDispatchUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-capture-dispatch-uow";
 import { applyDrizzleClientSubscriptionSourceEventInTransaction } from "../client-subscriptions/drizzle-client-subscription-uow";
@@ -64,9 +63,11 @@ import { createDrizzleClientOrderCheckoutPreparationUnitOfWork } from "../financ
 import { createDrizzleCapturedClientOrderWebhookClaimPort } from "../finance/drizzle-captured-client-order-webhook-claim-port";
 import { createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork } from "../finance/drizzle-online-sale-capture-canonical-webhook-uow";
 import { createDrizzleOnlineSaleCapturePersistenceResolver } from "../finance/drizzle-online-sale-capture-persistence-resolver";
+import { createDrizzleFinancePolicyStore } from "../finance/drizzle-finance-policy-store";
 import { createDrizzleOrderStore } from "../finance/drizzle-order-store";
 import { createDrizzleWebhookIngressStorageUnitOfWork } from "../finance/drizzle-webhook-ingress-storage-uow";
 import { createDrizzleProductStore } from "../products/drizzle-products-store";
+import { createDrizzlePlatformTariffAuthorityStore } from "../platform-billing/drizzle-platform-tariff-authority-store";
 import {
   createFinanceArtifactRegistry,
   type FinanceArtifactRegistry
@@ -86,7 +87,6 @@ type PurchaseAuthority = Readonly<{
 
 type PendingFixture = Readonly<{
   authority: PurchaseAuthority;
-  orderInput: CreateFinanceOrderRecordInput;
   subscription: ClientSubscription;
 }>;
 
@@ -320,7 +320,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
 
   it("seals the exact paid-fulfillment decision beside the immutable Diary purchase authority", async () => {
     const prerequisite = await seedPurchaseAuthority(runtime);
-    await createDrizzleOrderStore(runtime.database).create(prerequisite.orderInput);
+    await createProductionOrder(runtime, prerequisite);
 
     const sealed = await runtime.pool.query<{
       purchase_authority_digest: string;
@@ -382,10 +382,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
       accessGrants: [],
       astroDiaryConfig: null
     });
-    await createDrizzleOrderStore(runtime.database).create({
-      ...prerequisite.orderInput,
-      purchasePurpose: { kind: "standard", expectedProductRevision: 3 }
-    });
+    await createProductionOrder(runtime, prerequisite, 3);
     await seedCheckoutRiskAuthority(runtime, prerequisite.financeAuthority);
 
     await expect(
@@ -405,7 +402,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
 
   it("pins the order's Diary decision across product mutation and later registry revisions", async () => {
     const prerequisite = await seedPurchaseAuthority(runtime);
-    await createDrizzleOrderStore(runtime.database).create(prerequisite.orderInput);
+    await createProductionOrder(runtime, prerequisite);
     const sealed = await runtime.pool.query<{
       registry_key: string;
       registry_revision: string;
@@ -433,7 +430,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
       cancellationAllocatorPolicyVersion: "1"
     });
     const laterOrder = await seedPurchaseAuthority(runtime);
-    await createDrizzleOrderStore(runtime.database).create(laterOrder.orderInput);
+    await createProductionOrder(runtime, laterOrder);
     const laterBinding = await runtime.pool.query<{
       registry_revision: string;
       fulfillment_decision_digest: string;
@@ -520,6 +517,300 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
       retentionPolicyId: "astro-diary-task-2-provider-request",
       retentionPolicyVersion: "1"
     });
+    await expect(
+      createDrizzleClientOrderCheckoutPreparationUnitOfWork(
+        runtime.database
+      ).prepareClientOrderCheckout({
+        checkoutPreparationId: randomUUID(),
+        checkoutAuthorizationId: `checkout-authority-${randomUUID()}`,
+        paymentCommandId: randomUUID(),
+        orderId: prerequisite.authority.orderId,
+        clientUserId: prerequisite.authority.clientUserId,
+        economicPaymentIntentId: `economic-intent-${randomUUID()}`,
+        economicPaymentSessionId: `economic-session-${randomUUID()}`,
+        providerOperationIntentId: randomUUID(),
+        providerAccount,
+        dispatchEnvelope,
+        dispatchArtifact,
+        idempotencyKey: randomUUID(),
+        idempotencyRetentionDeadline: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        captureAuthority: authority,
+        operationEnvelope: operationEnvelope()
+      })
+    ).resolves.toMatchObject({ checkoutPreparation: { state: "checkout_requested" } });
+  });
+
+  it("rejects a misrouted single decision for a sealed Diary order before capture and leaves no paid artifacts", async () => {
+    const prerequisite = await seedPurchaseAuthority(runtime);
+    await createProductionOrder(runtime, prerequisite);
+    await seedCheckoutRiskAuthority(runtime, prerequisite.financeAuthority);
+
+    const mutatedProduct = await updateProduct({
+      store: createDrizzleProductStore(runtime.database),
+      ownerUserId: prerequisite.authority.astrologerUserId,
+      productId: prerequisite.authority.productId,
+      expectedRevision: 2,
+      patch: {
+        type: "single",
+        paymentModel: "once",
+        executionMode: "live",
+        subscriptionPeriod: null,
+        durationMinutes: 60,
+        accessGrants: [],
+        astroDiaryConfig: null
+      },
+      now: new Date("2026-01-01T00:03:00.000Z")
+    });
+    expect(mutatedProduct).toMatchObject({
+      revision: 3,
+      type: "single",
+      paymentModel: "once",
+      executionMode: "live"
+    });
+
+    const sealedAuthority = await createDrizzleClientOrderCheckoutCaptureAuthorityReader(
+      runtime.database
+    ).findForCheckout({ orderId: prerequisite.authority.orderId });
+    if (!sealedAuthority) throw new Error("Expected sealed Diary checkout authority");
+    expect(sealedAuthority.fulfillmentDecision.registryKey).toBe("sub.sub.async.solo");
+
+    await runtime.database.insert(financePaidProductFulfillmentDecisions).values({
+      supported: true,
+      registryKey: "single.once.live.solo",
+      registryRevision: "1",
+      holdAnchor: "booking_completed",
+      terminalEvidenceOwner: "booking",
+      terminalEvidenceStatus: "completed",
+      terminalEvidenceContractVersion: "1",
+      cancellationAllocatorOwner: "booking",
+      cancellationAllocatorPort: "BookingCancellationRefundDecisionPort",
+      cancellationAllocatorPolicyVersion: "1"
+    });
+    const wrongDecision = await runtime.pool.query<{
+      registry_revision: string;
+      canonical_digest: string;
+    }>(
+      `select registry_revision::text, canonical_digest
+         from finance_paid_product_fulfillment_decisions
+        where registry_key = 'single.once.live.solo'
+        order by registry_revision desc
+        limit 1`
+    );
+    if (!wrongDecision.rows[0]) throw new Error("Expected live single fulfillment decision");
+
+    const dispatchEnvelope = createProviderDispatchEnvelope({
+      kind: "checkout_session_create",
+      amount: { amountMinor: 4_900, currency: "RUB" },
+      captureMode: "one_stage",
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      successUrl: "https://example.test/checkout/success",
+      failureUrl: "https://example.test/checkout/failure",
+      cancelUrl: "https://example.test/checkout/cancel",
+      externalId: prerequisite.authority.orderId,
+      orderId: prerequisite.authority.orderId,
+      fiscalSnapshot: null
+    });
+    if (dispatchEnvelope.kind !== "checkout_session_create") {
+      throw new Error("Expected checkout dispatch envelope");
+    }
+    const dispatchBytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
+    const dispatchArtifact = await artifacts.registerSealedArtifact({
+      artifact: {
+        artifactId: `misrouted-single-request-${randomUUID()}`,
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength
+      },
+      artifactClass: "provider_request",
+      binding: { kind: "provider", providerAccount },
+      contentType: "application/json",
+      privateObject: {
+        privateObjectKey: `integration/misrouted-single-${prerequisite.authority.orderId}`,
+        privateObjectVersion: "v1",
+        envelopeKeyVersion: "kms-v1",
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength,
+        contentType: "application/json"
+      },
+      retentionPolicyId: "astro-diary-task-2-provider-request",
+      retentionPolicyVersion: "1"
+    });
+    const economicPaymentIntentId = `economic-intent-${randomUUID()}`;
+
+    await expect(
+      createDrizzleClientOrderCheckoutPreparationUnitOfWork(
+        runtime.database
+      ).prepareClientOrderCheckout({
+        checkoutPreparationId: randomUUID(),
+        checkoutAuthorizationId: `checkout-authority-${randomUUID()}`,
+        paymentCommandId: randomUUID(),
+        orderId: prerequisite.authority.orderId,
+        clientUserId: prerequisite.authority.clientUserId,
+        economicPaymentIntentId,
+        economicPaymentSessionId: `economic-session-${randomUUID()}`,
+        providerOperationIntentId: randomUUID(),
+        providerAccount,
+        dispatchEnvelope,
+        dispatchArtifact,
+        idempotencyKey: randomUUID(),
+        idempotencyRetentionDeadline: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        captureAuthority: {
+          riskPolicy: sealedAuthority.riskPolicy,
+          fulfillmentDecision: {
+            registryKey: "single.once.live.solo",
+            registryRevision: Number(wrongDecision.rows[0].registry_revision),
+            canonicalDigest: wrongDecision.rows[0].canonical_digest as `sha256:${string}`
+          }
+        },
+        operationEnvelope: operationEnvelope()
+      })
+    ).rejects.toMatchObject({ reason: "persistence_write_incomplete" });
+
+    const paidArtifacts = await runtime.pool.query<{
+      checkout_intent_count: number;
+      checkout_authorization_count: number;
+      wallet_count: number;
+      capture_binding_count: number;
+      capture_application_count: number;
+      subscription_count: number;
+      journal_count: number;
+    }>(
+      `select
+         (select count(*)::int from finance_economic_payment_intents
+           where id = $1) as checkout_intent_count,
+         (select count(*)::int from finance_client_checkout_authorizations
+           where order_id = $2::uuid) as checkout_authorization_count,
+         (select count(*)::int from finance_online_wallet_heads
+           where astrologer_user_id = $3::uuid) as wallet_count,
+         (select count(*)::int from finance_online_sale_capture_authority_bindings
+           where order_id = $2::text) as capture_binding_count,
+         (select count(*)::int
+            from finance_online_sale_capture_applications application
+            join finance_online_sale_capture_authority_bindings binding
+              on binding.receipt_id = application.online_sale_receipt_id
+           where binding.order_id = $2::text) as capture_application_count,
+         (select count(*)::int from client_subscriptions
+           where relationship_id = $4::uuid) as subscription_count,
+         (select count(*)::int from astro_diary_journals
+           where relationship_id = $4::uuid) as journal_count`,
+      [
+        economicPaymentIntentId,
+        prerequisite.authority.orderId,
+        prerequisite.authority.astrologerUserId,
+        prerequisite.authority.relationshipId
+      ]
+    );
+    expect(paidArtifacts.rows).toEqual([
+      {
+        checkout_intent_count: 0,
+        checkout_authorization_count: 0,
+        wallet_count: 0,
+        capture_binding_count: 0,
+        capture_application_count: 0,
+        subscription_count: 0,
+        journal_count: 0
+      }
+    ]);
+  });
+
+  it("preserves checkout for a standard live product without Diary purchase authority", async () => {
+    const prerequisite = await seedPurchaseAuthority(runtime);
+    const standardProduct = await updateProduct({
+      store: createDrizzleProductStore(runtime.database),
+      ownerUserId: prerequisite.authority.astrologerUserId,
+      productId: prerequisite.authority.productId,
+      expectedRevision: 2,
+      patch: {
+        type: "single",
+        paymentModel: "once",
+        executionMode: "live",
+        subscriptionPeriod: null,
+        durationMinutes: 60,
+        accessGrants: [],
+        astroDiaryConfig: null
+      },
+      now: new Date("2026-01-01T00:03:00.000Z")
+    });
+    expect(standardProduct).toMatchObject({
+      status: "active",
+      revision: 3,
+      type: "single",
+      paymentModel: "once",
+      executionMode: "live"
+    });
+    const bookingId = await seedPaidBookingHold(runtime, prerequisite);
+    await createProductionOrder(runtime, prerequisite, 3, bookingId);
+    await seedCheckoutRiskAuthority(runtime, prerequisite.financeAuthority);
+    await runtime.database
+      .insert(financePaidProductFulfillmentDecisions)
+      .values({
+        supported: true,
+        registryKey: "single.once.live.solo",
+        registryRevision: "1",
+        holdAnchor: "booking_completed",
+        terminalEvidenceOwner: "booking",
+        terminalEvidenceStatus: "completed",
+        terminalEvidenceContractVersion: "1",
+        cancellationAllocatorOwner: "booking",
+        cancellationAllocatorPort: "BookingCancellationRefundDecisionPort",
+        cancellationAllocatorPolicyVersion: "1"
+      })
+      .onConflictDoNothing();
+
+    const authority = await createDrizzleClientOrderCheckoutCaptureAuthorityReader(
+      runtime.database
+    ).findForCheckout({ orderId: prerequisite.authority.orderId });
+    if (!authority) throw new Error("Expected standard live checkout authority");
+    expect(authority.fulfillmentDecision.registryKey).toBe("single.once.live.solo");
+    await expect(
+      runtime.pool.query(
+        `select order_id
+           from client_subscription_purchase_authorities
+          where order_id = $1::uuid
+          union all
+         select order_id
+           from client_subscription_purchase_fulfillment_authorities
+          where order_id = $1::uuid`,
+        [prerequisite.authority.orderId]
+      )
+    ).resolves.toMatchObject({ rows: [] });
+
+    const dispatchEnvelope = createProviderDispatchEnvelope({
+      kind: "checkout_session_create",
+      amount: { amountMinor: 4_900, currency: "RUB" },
+      captureMode: "one_stage",
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      successUrl: "https://example.test/checkout/success",
+      failureUrl: "https://example.test/checkout/failure",
+      cancelUrl: "https://example.test/checkout/cancel",
+      externalId: prerequisite.authority.orderId,
+      orderId: prerequisite.authority.orderId,
+      fiscalSnapshot: null
+    });
+    if (dispatchEnvelope.kind !== "checkout_session_create") {
+      throw new Error("Expected checkout dispatch envelope");
+    }
+    const dispatchBytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
+    const dispatchArtifact = await artifacts.registerSealedArtifact({
+      artifact: {
+        artifactId: `standard-live-request-${randomUUID()}`,
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength
+      },
+      artifactClass: "provider_request",
+      binding: { kind: "provider", providerAccount },
+      contentType: "application/json",
+      privateObject: {
+        privateObjectKey: `integration/standard-live-${prerequisite.authority.orderId}`,
+        privateObjectVersion: "v1",
+        envelopeKeyVersion: "kms-v1",
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength,
+        contentType: "application/json"
+      },
+      retentionPolicyId: "astro-diary-task-2-provider-request",
+      retentionPolicyVersion: "1"
+    });
+
     await expect(
       createDrizzleClientOrderCheckoutPreparationUnitOfWork(
         runtime.database
@@ -736,7 +1027,7 @@ function createCapture(subscription: ClientSubscription, capturedAt: string) {
 
 async function createPendingFixture(runtime: PostgresRuntime): Promise<PendingFixture> {
   const prerequisite = await seedPurchaseAuthority(runtime);
-  await createDrizzleOrderStore(runtime.database).create(prerequisite.orderInput);
+  await createProductionOrder(runtime, prerequisite);
   const subscriptionId = randomUUID();
   const contractId = randomUUID();
   const journalEpochId = randomUUID();
@@ -783,7 +1074,7 @@ async function seedPurchaseAuthority(runtime: PostgresRuntime) {
   const policyId = randomUUID();
   const orderId = randomUUID();
   const tariffSeriesId = `task-2-fix-${randomUUID()}`;
-  const tariffDigest = sha256(tariffSeriesId);
+  const policyVersion = nextPolicyVersion++;
   const now = new Date("2026-01-01T00:00:00.000Z");
 
   await runtime.database.transaction(async (transaction) => {
@@ -826,42 +1117,58 @@ async function seedPurchaseAuthority(runtime: PostgresRuntime) {
       createdAt: now,
       updatedAt: now
     });
-    await transaction.insert(financePolicies).values({
-      id: policyId,
-      policyVersion: nextPolicyVersion++,
-      riskTier: "standard",
-      holdDurationHours: 48,
-      reserveBps: 0,
-      reserveReleaseDelayDays: 0,
-      providerSettlementRequired: true,
-      isActive: false,
-      createdByUserId: astrologerUserId,
-      snapshottedAt: now,
-      createdAt: now
-    });
-    await transaction
-      .insert(platformTariffSeries)
-      .values({ id: tariffSeriesId, code: tariffSeriesId });
-    await transaction.insert(platformTariffVersions).values({
-      tariffSeriesId,
-      version: 1,
-      draftRevision: 1,
-      lifecycle: "published",
-      name: "Task 2 Fix",
-      tagline: "Task 2 Fix",
-      monthlyPriceMinor: 1_000,
-      yearlyPriceMinor: 10_000,
-      monthlyRecurringFrequencyDays: 30,
-      yearlyRecurringFrequencyDays: 365,
-      currency: "RUB",
-      clientSaleCommissionBps: 400,
-      isPopular: false,
-      displayOrder: 1,
-      canonicalPreimage: "task-2-fix",
-      canonicalDigest: tariffDigest,
-      createdAt: now,
-      publishedAt: now
-    });
+  });
+
+  await createDrizzleFinancePolicyStore(runtime.database).createPolicySnapshot({
+    id: policyId,
+    policyVersion,
+    riskTier: "standard",
+    holdDurationHours: 48,
+    reserveBps: 0,
+    reserveReleaseDelayDays: 0,
+    providerSettlementRequired: true,
+    createdByUserId: astrologerUserId,
+    now: now.toISOString()
+  });
+
+  const tariffStore = createDrizzlePlatformTariffAuthorityStore({ database: runtime.database });
+  const tariffDraft = await tariffStore.createDraft({
+    tariffSeriesId,
+    version: 1,
+    name: "Task 2 Fix",
+    tagline: "Task 2 Fix",
+    monthlyPriceMinor: 0,
+    yearlyPriceMinor: 0,
+    monthlyRecurringFrequencyDays: null,
+    yearlyRecurringFrequencyDays: null,
+    clientSaleCommissionBps: 400,
+    seatsLimit: 1,
+    bookingsLimit: null,
+    aiRequestsLimit: null,
+    automationLimit: null,
+    isPopular: false,
+    displayOrder: 1,
+    features: ["products"]
+  });
+  const publishedTariff = await tariffStore.publishDraft({
+    tariffSeriesId,
+    version: 1,
+    expectedDraftRevision: tariffDraft.draftRevision
+  });
+  await runtime.database.insert(platformTariffSubscriptions).values({
+    id: randomUUID(),
+    ownerUserId: astrologerUserId,
+    tariffSeriesId,
+    tariffVersion: 1,
+    tariffVersionDigest: publishedTariff.canonicalDigest,
+    commissionBpsSnapshot: 400,
+    billingCycle: "month",
+    state: "active",
+    version: 1,
+    startsAt: new Date("2025-01-01T00:00:00.000Z"),
+    endsAt: new Date("2027-01-01T00:00:00.000Z"),
+    createdAt: now,
+    updatedAt: now
   });
 
   const publishedProduct = await publishProduct({
@@ -874,73 +1181,139 @@ async function seedPurchaseAuthority(runtime: PostgresRuntime) {
   expect(publishedProduct).toMatchObject({ status: "active", revision: 2 });
 
   const authority = { clientUserId, astrologerUserId, productId, relationshipId, orderId };
-  const orderInput: CreateFinanceOrderRecordInput = {
-    id: orderId,
-    clientUserId,
-    astrologerUserId,
-    productId,
-    productTitleSnapshot: "AstroDiary Task 2 Fix",
-    purchasePurpose: {
-      kind: "astro_diary_subscription",
-      expectedProductRevision: 2,
-      acceptedProduct: {
-        productId,
-        revision: 2,
-        ownerUserId: astrologerUserId,
-        status: "active",
-        type: "sub",
-        paymentModel: "sub",
-        executionMode: "async",
-        participantMode: "solo",
-        priceMinor: 4_900,
-        currency: "RUB",
-        cadence: "month",
-        trialDays: null,
-        groupSize: null,
-        packageSessionCount: null,
-        accessGrants: ["journal"],
-        deliveryFormats: ["chat", "audio", "file"],
-        requiredClientData: [],
-        methods: [],
-        modifiers: [],
-        astroDiaryConfig: {
-          reflectionCyclesPerPeriod: 4,
-          responseSlaWorkingDays: 2,
-          clientResponseWindowCalendarDays: 5,
-          workingWeekdays: [1, 2, 3, 4, 5],
-          serviceTimezone: "Europe/Moscow"
-        }
-      },
-      acceptedRelationship: { clientUserId, astrologerUserId, status: "active" }
+  return {
+    authority,
+    financeAuthority: {
+      policyId,
+      policyVersion,
+      tariffSeriesId,
+      tariffDigest: publishedTariff.canonicalDigest
+    }
+  };
+}
+
+async function createProductionOrder(
+  runtime: PostgresRuntime,
+  prerequisite: Awaited<ReturnType<typeof seedPurchaseAuthority>>,
+  expectedProductRevision = 2,
+  bookingId: string | null = null
+) {
+  const clientStore = createDrizzleClientStore(runtime.database);
+  const order = await createOrder({
+    orderStore: createDrizzleOrderStore(runtime.database),
+    relationshipReader: {
+      hasActiveRelationship: async (input) => Boolean(await clientStore.getAstrologerClient(input))
     },
-    directLinkIntentId: null,
-    bookingId: null,
+    productStore: createDrizzleProductStore(runtime.database),
+    financePolicyStore: createDrizzleFinancePolicyStore(runtime.database),
+    tariffAuthorityStore: createDrizzlePlatformTariffAuthorityStore({
+      database: runtime.database
+    }),
+    clientUserId: prerequisite.authority.clientUserId,
+    request: {
+      astrologerUserId: prerequisite.authority.astrologerUserId,
+      productId: prerequisite.authority.productId,
+      expectedProductRevision,
+      directLinkIntentId: null,
+      bookingId
+    },
+    idempotencyKey: `task-2-order-${prerequisite.authority.orderId}`,
+    now: new Date("2026-01-01T00:00:00.000Z"),
+    idGenerator: () => prerequisite.authority.orderId
+  });
+  expect(order).toMatchObject({
+    id: prerequisite.authority.orderId,
+    clientUserId: prerequisite.authority.clientUserId,
+    astrologerUserId: prerequisite.authority.astrologerUserId,
+    productId: prerequisite.authority.productId,
     status: "pending_payment",
     grossAmount: { amountMinor: 4_900, currency: "RUB" },
     platformFee: { amountMinor: 196, currency: "RUB" },
-    astrologerNetAmount: { amountMinor: 4_704, currency: "RUB" },
-    financePolicySnapshotId: policyId,
-    financePolicyRiskTier: "standard",
-    financePolicyHoldDurationHours: 48,
-    financePolicyReserveBps: 0,
-    financePolicyReserveReleaseDelayDays: 0,
-    tariffSeriesId,
-    tariffVersion: 1,
-    tariffVersionDigest: tariffDigest,
-    tariffCommissionBps: 400,
-    financePolicyProviderSettlementRequired: true,
-    now: now.toISOString()
-  };
-  return {
-    authority,
-    orderInput,
-    financeAuthority: {
-      policyId,
-      policyVersion: nextPolicyVersion - 1,
-      tariffSeriesId,
-      tariffDigest
-    }
-  };
+    astrologerNetAmount: { amountMinor: 4_704, currency: "RUB" }
+  });
+  return order;
+}
+
+async function seedPaidBookingHold(
+  runtime: PostgresRuntime,
+  prerequisite: Awaited<ReturnType<typeof seedPurchaseAuthority>>
+): Promise<string> {
+  const scheduleId = randomUUID();
+  const reservationId = randomUUID();
+  const bookingId = randomUUID();
+  const now = new Date("2026-01-01T00:00:00.000Z");
+  const holdExpiresAt = new Date("2026-01-02T00:00:00.000Z");
+  const serviceStartAt = new Date("2026-01-10T12:00:00.000Z");
+  const serviceEndAt = new Date("2026-01-10T13:00:00.000Z");
+
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(availabilitySchedules).values({
+      id: scheduleId,
+      ownerUserId: prerequisite.authority.astrologerUserId,
+      name: "Task 2 standard checkout",
+      timeZone: "Europe/Moscow",
+      isDefault: true,
+      version: 1,
+      startIntervalMinutes: 60,
+      bufferBeforeMinutes: 0,
+      bufferAfterMinutes: 0,
+      minimumNoticeMinutes: 0,
+      bookingHorizonDays: 365,
+      maximumBookingsPerDay: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(scheduleReservations).values({
+      id: reservationId,
+      ownerUserId: prerequisite.authority.astrologerUserId,
+      scheduleId,
+      kind: "hold",
+      lifecycle: "active",
+      serviceStartAt,
+      serviceEndAt,
+      occupiedStartAt: serviceStartAt,
+      occupiedEndAt: serviceEndAt,
+      sourceAggregateId: null,
+      holdExpiresAt,
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(bookings).values({
+      id: bookingId,
+      ownerUserId: prerequisite.authority.astrologerUserId,
+      clientUserId: prerequisite.authority.clientUserId,
+      productId: prerequisite.authority.productId,
+      reservationId,
+      source: "client_paid",
+      state: "hold",
+      lifecycleRevision: 0,
+      holdExpiresAt,
+      serviceStartAt,
+      serviceEndAt,
+      productTitleSnapshot: "AstroDiary Task 2 Fix",
+      durationMinutesSnapshot: 60,
+      deliveryFormatSnapshot: "chat",
+      priceMinorSnapshot: 4_900,
+      currencySnapshot: "RUB",
+      timeZoneSnapshot: "Europe/Moscow",
+      policySnapshot: {
+        bufferBeforeMinutes: 0,
+        bufferAfterMinutes: 0,
+        minimumNoticeMinutes: 0
+      },
+      clientDataRequirementsSnapshot: {
+        schemaVersion: "booking-client-data-requirements.v1",
+        executionMode: "live",
+        participantMode: "solo",
+        requiredClientData: [],
+        methods: []
+      },
+      createdAt: now,
+      updatedAt: now
+    });
+  });
+
+  return bookingId;
 }
 
 async function seedCheckoutRiskAuthority(
@@ -977,7 +1350,7 @@ async function seedCanonicalSubscriptionCapture(
   artifacts: FinanceArtifactRegistry
 ) {
   const prerequisite = await seedPurchaseAuthority(runtime);
-  await createDrizzleOrderStore(runtime.database).create(prerequisite.orderInput);
+  await createProductionOrder(runtime, prerequisite);
   const intentId = `economic-intent-${randomUUID()}`;
   const sessionId = `economic-session-${randomUUID()}`;
   const providerOperationIntentId = randomUUID();

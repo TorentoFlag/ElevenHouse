@@ -679,3 +679,165 @@ affected processes, and overall LOW risk.
   deployment, external payment, or production-data action was added or changed.
 - Foreign shared-checkout changes in `AGENTS.md`, `CLAUDE.md`, and the two untracked design/plan docs
   were preserved and excluded from the implementation commit.
+
+---
+
+# Fix round 4 — order-first sealed checkout tuple and real order derivation
+
+Date: 2026-08-18
+
+## Outcome
+
+The checkout trigger no longer chooses its validation branch from caller-submitted fulfillment
+authority. After locking the order it first reads immutable order-side subscription purchase
+authority. When that authority exists, checkout requires all four sealed values to match:
+
+- the purchase-authority digest in the fulfillment binding equals the order's canonical purchase
+  digest;
+- submitted registry key equals the sealed registry key;
+- submitted registry revision equals the sealed registry revision;
+- submitted decision digest equals the sealed fulfillment-decision digest.
+
+This check is independent of both the mutable current product and the caller's submitted key. A
+sealed Diary order whose product is later changed to `single.once.live.solo` therefore cannot be
+routed through the standard-product branch by submitting a valid single-product decision. A
+purchase authority without its required fulfillment binding also fails closed through the strict
+order-side lookup. Orders without subscription purchase authority retain the existing current-
+product fulfillment validation.
+
+## Production integration path
+
+The production PostgreSQL integration no longer constructs or imports
+`CreateFinanceOrderRecordInput.purchasePurpose`.
+
+- The fixture creates a draft canonical Diary product and publishes it through `publishProduct`
+  plus the production Drizzle product store.
+- Finance policy and tariff publication use their production stores; the tariff grants the real
+  `products` capability.
+- Every success and negative order is created through the domain `createOrder` use case, which
+  derives either the immutable Diary purpose or the standard purpose from the current published
+  product, and persists through `createDrizzleOrderStore`.
+- The core happy path then performs checkout preparation, canonical confirmed capture, and
+  production capture dispatch before asserting subscription, entitlement, journal, activation,
+  delivery, and IDs-only outbox evidence.
+
+The explicit standard-product regression changes a published fixture product to
+`single.once.live.solo`, supplies a valid paid-booking hold, creates its order through the same
+domain use case, proves both Diary authority tables are empty, resolves the production single
+decision, and successfully prepares checkout. No success or negative assertion fabricates either
+Diary or standard purchase purpose.
+
+## Behavioral TDD evidence
+
+The adversarial real-PostgreSQL test was first run against the vulnerable trigger. With a sealed
+Diary order, a later product mutation to `single.once.live.solo`, and a real registered single
+decision tuple, checkout incorrectly resolved with `checkout_requested`. That was the required RED
+showing the submitted key selected the bypass branch.
+
+After the source trigger and forward migration change, the same request rejects with
+`persistence_write_incomplete`. The failed transaction leaves zero matching economic payment
+intents, checkout authorizations, online wallet heads, capture bindings/applications, client
+subscriptions, and AstroDiary journals. The adjacent standard live-product case still resolves
+`checkout_requested`.
+
+Fresh post-reset result:
+
+```text
+INTEGRATION_DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse \
+  pnpm test:integration \
+  packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts
+Test Files  1 passed (1)
+Tests       11 passed (11)
+Duration    8.73s
+```
+
+The exact AstroDiary publication-shape regression also remains green:
+
+```text
+pnpm test packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts
+Test Files  1 passed (1)
+Tests       5 passed (5)
+```
+
+## Forward migration and local PostgreSQL evidence
+
+- Added only `0057_astro_diary_checkout_sealed_tuple_authority.sql` and its journal entry. The
+  committed `0056_astro_diary_order_fulfillment_authority.sql` and its metadata were not edited.
+- `0057` only replaces `finance_issue_client_checkout_authorization()`; there is no structural
+  schema delta and therefore no new snapshot.
+- Exact destructive target was revalidated as healthy local Docker
+  `elevenhouse-postgres-1`, database/user `elevenhouse`, published on localhost port 5432.
+- `DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse pnpm db:reset`
+  passed: all migrations through `0057` applied, followed by the seed with 8 categories, 396
+  dictionary entries, and 16 templates.
+- Catalog inspection of the installed function found the order-side
+  `subscription_purchase.order_id is not null` branch.
+- A fresh `pnpm db:generate` reported `No schema changes, nothing to migrate`, created no `0058`,
+  and changed no migration metadata.
+
+## Other fresh verification
+
+- Focused TypeScript Prettier check: passed. The SQL file was excluded because this repository has
+  no Prettier SQL parser.
+- Focused ESLint on the changed TypeScript paths: passed with zero findings.
+- `pnpm --filter @elevenhouse/db typecheck`: passed.
+- `pnpm --filter @elevenhouse/db build`: passed.
+- `pnpm test`: 5/5 discoverable unit tests passed.
+- `pnpm typecheck`: 43/43 Turbo tasks passed.
+- `pnpm lint`: exit 0; four pre-existing React hook warnings in unrelated frontend files.
+- `pnpm build`: 28/28 Turbo tasks passed; only existing frontend chunk-size warnings.
+- `git diff --check`: passed.
+- `pnpm docs:check`: failed on shared/unowned documentation state: `AGENTS.md` is 19,256 bytes
+  versus the 16 KiB limit, and `docs/architecture/backend-modules.md` plus
+  `docs/architecture/current-state.md` do not yet list the broader `astro-diary` astrologer-api
+  module. Those files are outside this fix-round ownership and were not changed here.
+
+## GitNexus evidence
+
+The initial index was stale/corrupt. Incremental analysis failed with exact error
+`FTS index 'file_fts' is inconsistent: document for node offset 3479 is missing during delete`.
+`analyze --repair-fts --index-only` repaired it; the required full rebuild then completed with
+28,169 nodes, 71,325 edges, 1,320 clusters, and 300 flows.
+
+Pre-edit upstream impacts were checked for every existing helper/source symbol:
+
+- `financeClientCheckoutAuthorizationIntegritySql`: LOW, zero direct callers/processes.
+- `createPendingFixture`: LOW, one direct caller.
+- `seedPurchaseAuthority`: LOW, three direct callers.
+- `seedCanonicalSubscriptionCapture`: LOW, one direct caller.
+- `PendingFixture` and the schema file target returned exact UNKNOWN/not-found results, so their
+  call sites and SQL were inspected directly before edit.
+- The first pre-edit lookup for the newly introduced integration helper `createProductionOrder`
+  produced a CRITICAL/noisy transitive result: three direct callers, 404 transitive dependents, 78
+  processes, and 20 modules. The user was warned before the optional test-only `bookingId` edit.
+  After FTS repair and an exact file-scoped rebuild, the same upstream lookup resolved LOW with the
+  three actual direct callers: `createPendingFixture`, `seedCanonicalSubscriptionCapture`, and the
+  integration test file; zero production processes are affected.
+
+Final `detect_changes(scope: all)` reports 11 changed symbols, zero affected execution processes,
+and overall LOW risk. Its five indexed changed files include the two foreign instruction files;
+those remain outside this task's staging scope.
+After exact-path staging, `detect_changes(scope: staged)` reports nine changed symbols across the
+five owned files, zero affected execution processes, and overall LOW risk.
+
+## Exact implementation paths
+
+1. `packages/db/src/schema/finance/client-checkout-authorizations.schema.ts`
+2. `packages/db/drizzle/0057_astro_diary_checkout_sealed_tuple_authority.sql`
+3. `packages/db/drizzle/meta/_journal.json`
+4. `packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts`
+5. `.superpowers/sdd/2026-08-18-astro-diary-paid-core/task-2-report.md`
+
+## Scope and residual concerns
+
+- No production application function/class/method, API surface, UI, worker, hold-release behavior,
+  external payment, deployment, or production data changed in this round. The only production
+  behavior change is the source-owned PostgreSQL checkout-trigger SQL constant plus its forward
+  migration.
+- The checkout rejection is surfaced by the current persistence UoW as
+  `persistence_write_incomplete`; the PostgreSQL constraint remains the fail-closed authority
+  boundary.
+- The repository docs gate remains blocked by the three shared/unowned findings recorded above;
+  this scoped database fix does not claim that gate as passing.
+- Foreign shared-checkout changes in `AGENTS.md`, `CLAUDE.md`, and the two untracked design/plan
+  docs were preserved and excluded from task staging.

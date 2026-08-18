@@ -176,10 +176,13 @@ declare
   risk_policy finance_risk_policy_versions%rowtype;
   fulfillment finance_paid_product_fulfillment_decisions%rowtype;
   product_row products%rowtype;
+  subscription_purchase client_subscription_purchase_authorities%rowtype;
   subscription_fulfillment client_subscription_purchase_fulfillment_authorities%rowtype;
   fulfillment_matches_order boolean;
 begin
   select * into strict order_row from orders where id = new.order_id for update;
+  select * into subscription_purchase from client_subscription_purchase_authorities
+    where order_id = new.order_id;
   select * into strict intent from finance_economic_payment_intents
     where id = new.economic_payment_intent_id;
   select * into strict session from finance_economic_payment_sessions
@@ -194,17 +197,15 @@ begin
     where registry_key = new.fulfillment_decision_id
       and registry_revision = new.fulfillment_decision_version
       and canonical_digest = new.fulfillment_decision_digest;
-  if fulfillment.registry_key = 'sub.sub.async.solo' then
+  if subscription_purchase.order_id is not null then
     select binding.* into strict subscription_fulfillment
       from client_subscription_purchase_fulfillment_authorities binding
-      join client_subscription_purchase_authorities purchase
-        on purchase.order_id = binding.order_id
-       and purchase.canonical_digest = binding.purchase_authority_digest
-     where binding.order_id = new.order_id
-       and binding.registry_key = fulfillment.registry_key
-       and binding.registry_revision = fulfillment.registry_revision
-       and binding.fulfillment_decision_digest = fulfillment.canonical_digest;
-    fulfillment_matches_order := true;
+     where binding.order_id = new.order_id;
+    fulfillment_matches_order :=
+      subscription_fulfillment.purchase_authority_digest = subscription_purchase.canonical_digest
+      and new.fulfillment_decision_id = subscription_fulfillment.registry_key
+      and new.fulfillment_decision_version = subscription_fulfillment.registry_revision
+      and new.fulfillment_decision_digest = subscription_fulfillment.fulfillment_decision_digest;
   else
     select * into strict product_row from products where id = order_row.product_id;
     fulfillment_matches_order := fulfillment.registry_key = concat_ws(
