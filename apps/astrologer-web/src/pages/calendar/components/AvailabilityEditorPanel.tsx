@@ -50,7 +50,9 @@ export function AvailabilityEditorPanel({
     event.preventDefault();
     setSaveState("idle");
     try {
-      await onSave(createAvailabilityScheduleCommand(form));
+      const selectableProductIds =
+        isProductsLoading || isProductsError ? undefined : products.map((product) => product.id);
+      await onSave(createAvailabilityScheduleCommand(form, { selectableProductIds }));
       setSaveState("saved");
     } catch (error) {
       if (isAvailabilityVersionConflict(error)) {

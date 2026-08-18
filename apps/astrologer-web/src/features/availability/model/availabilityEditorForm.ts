@@ -51,9 +51,16 @@ export function createAvailabilityEditorForm(
 }
 
 export function createAvailabilityScheduleCommand(
-  form: AvailabilityEditorForm
+  form: AvailabilityEditorForm,
+  options: { readonly selectableProductIds?: readonly string[] } = {}
 ): PutDefaultAvailabilityScheduleRequest {
-  return putDefaultAvailabilityScheduleRequestSchema.parse(form);
+  const selectableProductIds = options.selectableProductIds;
+  return putDefaultAvailabilityScheduleRequestSchema.parse({
+    ...form,
+    productIds: selectableProductIds
+      ? form.productIds.filter((productId) => selectableProductIds.includes(productId))
+      : form.productIds
+  });
 }
 
 export function addWeeklyPeriod(
