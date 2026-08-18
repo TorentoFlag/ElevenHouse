@@ -92,3 +92,64 @@ At commit preparation the index was clean. Unowned concurrent changes include
 Messaging/Instagram, `.env.example`, the DB migration journal, and a concurrent
 `packages/domain/src/astro-diary/astro-diary-events.ts` edit; they were not
 modified or staged. Implementation commit SHA: `bd3bc4de`.
+
+## Review fix round 1 — 2026-08-18
+
+### Findings resolved
+
+- Activation now binds the application receipt to the exact canonical
+  `client_subscription.capture_applied.v1` source event: source-event ID,
+  canonical digest, finance evidence, subscription, contract, and period all
+  must agree. The receipt period is compared field-for-field to the locked
+  subscription period before a plan is returned.
+- Activation versus continuation now comes from the verified dispatch target's
+  `initial|renewal` kind, not from `period.sequence`. This keeps a fresh
+  replacement epoch as an `initial` activation while a renewal cannot create a
+  second journal plan.
+- The PostgreSQL characterization is now `it.fails` and asserts the required
+  one-journal outcome. It passes only while Task 2 has not persisted that
+  outcome, and will fail conspicuously once Task 2 makes the assertion true.
+- Added coverage for a fresh replacement epoch, a non-capture source event,
+  an exact-period mismatch, `transition_receipt_mismatch`, and
+  `subscription_state_mismatch`.
+
+### GitNexus and review evidence
+
+- Upstream impact was requested for
+  `planAstroDiarySubscriptionActivation` before the edit. GitNexus had no
+  symbol entry for this newly committed module even after an incremental index
+  refresh, so it returned `UNKNOWN`/not found rather than HIGH or CRITICAL.
+  No existing source-event UOW symbol was changed.
+- The review fix was developed red first: the non-capture source-event case
+  returned `activate` before the capture binding was added.
+
+### Green verification
+
+```text
+pnpm test packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts
+1 file passed, 3 tests passed
+
+pnpm test packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts packages/domain/src/client-subscriptions/client-subscription-source-event-application-unit-of-work.test.ts packages/domain/src/client-subscriptions/client-subscription-capture-application.test.ts
+3 files passed, 11 tests passed
+
+INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/adapters/client-subscriptions/drizzle-client-subscription-source-event-uow.integration.ts packages/db/src/adapters/client-subscriptions/drizzle-astro-diary-activation-gap.integration.ts
+2 files passed, 4 tests passed, 1 expected fail
+
+pnpm --filter @elevenhouse/domain typecheck && pnpm --filter @elevenhouse/domain build
+exit 0
+```
+
+### Fix-round residual risk
+
+Task 2 still owns the actual atomic database write. The expected-failing test
+is deliberate temporary characterization debt and must be converted to an
+ordinary passing assertion when Task 2 persists the journal/receipt/event/outbox
+graph.
+
+### Fix-round commit and GitNexus follow-up
+
+- Implementation/test fix commit: `125e0a12` (`fix: bind AstroDiary capture activation`).
+- `detect_changes(scope=staged)` was attempted twice after exact-path staging,
+  but the GitNexus MCP transport was closed after its index refresh. The staged
+  list was manually verified as exactly the three Task 1 fix files and
+  `git diff --cached --check` passed before commit.
