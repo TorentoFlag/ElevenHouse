@@ -12,7 +12,7 @@ export const personalDataProcessingPolicyRu = `Политика сбора и о
 ИНН 03011202310118
 Электронная почта: support@elevenhouse.ai.
 1.2) «Пользователь» — Физическое лицо, зарегистрированное на Платформе ElevenHouse с целью получения возможности осуществлять выбор посредством Платформы ElevenHouse и покупку функционала сервиса (далее – Товары) у Исполнителя.
-1.3) «Платформа ElevenHouse» — веб-страница Исполнителя, расположенная в сети Интернет: https://astrologer.elevenhouse.ai/auth.
+1.3) «Платформа ElevenHouse» — веб-страница Исполнителя, расположенная в сети Интернет: https://app.elevenhouse.ai/auth.
 1.4) Для целей настоящей Политики термины «персональные данные», «персональные записи», «владелец персональных записей», «обработчик», «инцидент в цифровой среде», «утечка персональных данных», «трансграничная передача персональных данных», «автоматическое решение» используются в значениях, установленных Цифровым кодексом Кыргызской Республики (в т.ч. ст. 1 Цифрового кодекса КР).
 1.5) Политика разработана преимущественно на основе законодательства Кыргызской Республики ввиду регистрации Исполнителя на территории Кыргызской Республики.
 1.6) В Политике используются термины и определения в соответствии с их значениями, как они определены в Законе Кыргызской Республики «Об информации персонального характера» от 14 апреля 2008 года № 58. Исполнитель обрабатывает персональные данные с учетом требований указанного закона, его подзаконных актов и нормативно-методических документов государственных органов Кыргызской Республики, уполномоченных в сфере информационной безопасности и защиты прав субъектов персональных данных.
@@ -184,7 +184,7 @@ Registration number: 224774-3301-ЗАО
 TIN 03011202310118
 Email: support@elevenhouse.ai.
 1.2) "User" — An individual registered on the ElevenHouse Platform for the purpose of being able to make selections through the ElevenHouse Platform and purchase service features (hereinafter referred to as "Goods") from the Service Provider.
-1.3) "ElevenHouse Platform" — the Contractor's webpage located on the Internet at: https://astrologer.elevenhouse.ai/auth.
+1.3) "ElevenHouse Platform" — the Contractor's webpage located on the Internet at: https://app.elevenhouse.ai/auth.
 1.4) For the purposes of this Policy, the terms "personal data," "personal records," "personal records owner," "processor," "digital environment incident," "personal data breach," "cross-border transfer of personal data," and "automated decision" shall have the meanings established by the Digital Code of the Kyrgyz Republic (including Article 1 of the Digital Code of the Kyrgyz Republic).
 1.5) This Policy has been developed primarily on the basis of the legislation of the Kyrgyz Republic, given that the Service Provider is registered within the territory of the Kyrgyz Republic.
 1.6) The Policy uses terms and definitions in accordance with their meanings as established in the Law of the Kyrgyz Republic "On Personal Data" dated April 14, 2008, No. 58. The Contractor processes personal data in compliance with the requirements of the aforementioned law, its subordinate regulations, and the regulatory and methodological documents issued by the state authorities of the Kyrgyz Republic responsible for information security and the protection of personal data subjects' rights.

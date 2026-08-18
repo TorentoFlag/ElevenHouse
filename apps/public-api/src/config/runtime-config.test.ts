@@ -414,7 +414,7 @@ describe("createPublicApiRuntimeConfig", () => {
         PUBLIC_API_SESSION_COOKIE_SECURE: "true",
         PUBLIC_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
         PUBLIC_API_CSRF_SECRET: "configured-csrf-secret-with-enough-entropy",
-        PUBLIC_API_ALLOWED_ORIGINS: "https://app.elevenhouse.ai",
+        PUBLIC_API_ALLOWED_ORIGINS: "https://client.elevenhouse.ai",
         PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED: "true",
         PUBLIC_API_GEOAPIFY_BASE_URL: "https://geoapify-compatible.attacker",
         PUBLIC_API_GEOAPIFY_API_KEY: "public-geoapify-key"

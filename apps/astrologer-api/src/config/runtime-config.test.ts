@@ -651,7 +651,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
         ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.ai",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://app.elevenhouse.ai",
         CHART_ENGINE_BASE_URL: "http://chart-engine.attacker.internal:8012"
       })
     ).toThrow("CHART_ENGINE_BASE_URL must equal http://chart-engine:8012 in production");
@@ -668,7 +668,7 @@ describe("createAstrologerApiRuntimeConfig", () => {
         ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
         ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "ElevenHouseBot",
         ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "configured-secret",
-        ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.ai",
+        ASTROLOGER_API_ALLOWED_ORIGINS: "https://app.elevenhouse.ai",
         ASTROLOGER_API_GEOAPIFY_BASE_URL: "https://geoapify-compatible.example",
         CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
       })

@@ -140,6 +140,7 @@ describe("landing app shell", () => {
     expect(personalDataProcessingPolicyRu).toContain("ОсОО «Кюльчоро»");
     expect(personalDataProcessingPolicyRu).toContain("Цифрового кодекса Кыргызской Республики");
     expect(personalDataProcessingPolicyRu).toContain("Инциденты и уведомления");
+    expect(personalDataProcessingPolicyRu).toContain("https://app.elevenhouse.ai/auth");
     expect(personalDataProcessingPolicyRu).not.toMatch(/Платформа ElevenHouse[аео]/);
     expect(personalDataProcessingPolicyEn).toContain(
       "Personal Data Collection and Processing Policy"
@@ -147,6 +148,7 @@ describe("landing app shell", () => {
     expect(personalDataProcessingPolicyEn).toContain("Kyulchoro LLC");
     expect(personalDataProcessingPolicyEn).toContain("Digital Code of the Kyrgyz Republic");
     expect(personalDataProcessingPolicyEn).toContain("Incidents and Notifications");
+    expect(personalDataProcessingPolicyEn).toContain("https://app.elevenhouse.ai/auth");
   });
 
   it("renders a React element", () => {

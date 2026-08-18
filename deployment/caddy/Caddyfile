@@ -7,7 +7,7 @@ elevenhouse.ai {
 	reverse_proxy landing:8080
 }
 
-app.elevenhouse.ai {
+client.elevenhouse.ai {
 	encode zstd gzip
 
 	handle /elevenhouse-media/* {
@@ -35,8 +35,40 @@ app.elevenhouse.ai {
 	}
 }
 
+app.elevenhouse.ai {
+	encode zstd gzip
+
+	handle /elevenhouse-media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle /elevenhouse-private/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle_path /api/* {
+		reverse_proxy astrologer-api:3002
+	}
+
+	handle {
+		reverse_proxy astrologer-web:8080
+	}
+}
+
 astrologer.elevenhouse.ai {
 	encode zstd gzip
+
+	handle /elevenhouse-media/* {
+		reverse_proxy minio:9000
+	}
+
+	handle /elevenhouse-private/* {
+		reverse_proxy minio:9000
+	}
 
 	handle_path /media/* {
 		reverse_proxy minio:9000

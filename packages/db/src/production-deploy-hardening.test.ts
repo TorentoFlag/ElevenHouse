@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const repositoryRoot = resolve(".");
 const gitignorePath = join(repositoryRoot, ".gitignore");
 const deployWorkflowPath = join(repositoryRoot, ".github/workflows/deploy.yml");
+const productionCaddyPath = join(repositoryRoot, "deployment/caddy/Caddyfile");
 const backendDockerfilePath = join(repositoryRoot, "deployment/docker/backend.Dockerfile");
 const productionComposePath = join(repositoryRoot, "deployment/compose/compose.production.yml");
 const backupScriptPath = join(repositoryRoot, "deployment/server/backup-postgres.sh");
@@ -87,6 +88,34 @@ afterEach(() => {
 });
 
 describe("production chart deployment hardening", () => {
+  it("routes the client cabinet through client.elevenhouse.ai and the astrologer cabinet through app.elevenhouse.ai", () => {
+    const caddy = readFileSync(productionCaddyPath, "utf8");
+    const workflow = readFileSync(deployWorkflowPath, "utf8");
+    const productionEnvTemplate = readFileSync(productionEnvTemplatePath, "utf8");
+    const clientSite = caddySiteBlock(caddy, "client.elevenhouse.ai");
+    const appSite = caddySiteBlock(caddy, "app.elevenhouse.ai");
+
+    expect(clientSite).toContain("reverse_proxy public-api:3001");
+    expect(clientSite).toContain("reverse_proxy client-web:8080");
+    expect(clientSite).toContain("reverse_proxy payment-worker:3013");
+    expect(appSite).toContain("reverse_proxy astrologer-api:3002");
+    expect(appSite).toContain("reverse_proxy astrologer-web:8080");
+    expect(appSite).not.toContain("reverse_proxy public-api:3001");
+    expect(workflow).toContain("VITE_ASTROLOGER_WEB_ORIGIN=https://app.elevenhouse.ai");
+    expect(workflow).toContain("CHART_SMOKE_ORIGIN=https://app.elevenhouse.ai");
+    expect(workflow).toContain("https://client.elevenhouse.ai/api/health");
+    expect(workflow).toContain("https://app.elevenhouse.ai/api/health");
+    expect(workflow).not.toContain("https://astrologer.elevenhouse.ai/api/health");
+    expect(productionEnvTemplate).toContain("PUBLIC_API_ALLOWED_ORIGINS=https://client.elevenhouse.ai");
+    expect(productionEnvTemplate).toContain("ASTROLOGER_API_ALLOWED_ORIGINS=https://app.elevenhouse.ai");
+    expect(productionEnvTemplate).toContain(
+      "MINIO_API_CORS_ALLOW_ORIGIN=https://app.elevenhouse.ai,https://client.elevenhouse.ai"
+    );
+    expect(productionEnvTemplate).toContain(
+      "PAYMENT_WORKER_ASTROLOGER_BILLING_RETURN_ORIGIN=https://app.elevenhouse.ai"
+    );
+  });
+
   it("preflights the ledger, quiesces every database writer, and verifies zero client sessions before backup", () => {
     const workflow = readFileSync(deployWorkflowPath, "utf8");
     const stagedCompose =
@@ -159,7 +188,7 @@ describe("production chart deployment hardening", () => {
     expect(workflow).toContain("CHART_SMOKE_API_BASE_URL=http://127.0.0.1:3002");
     expect(workflow).toContain("CHART_WORKER_BASE_URL=http://chart-worker:3012");
     expect(workflow).toContain("CHART_ENGINE_BASE_URL=http://chart-engine:8012");
-    expect(workflow).toContain("CHART_SMOKE_ORIGIN=https://astrologer.elevenhouse.ai");
+    expect(workflow).toContain("CHART_SMOKE_ORIGIN=https://app.elevenhouse.ai");
     expect(workflow).toContain(`astrologer-api ${chartSmoke}`);
     expect(workflow).not.toContain("astrologer-api pnpm");
     expect(backendDockerfile).toContain("COPY apps ./apps");
@@ -609,6 +638,14 @@ describe("verified PostgreSQL backup publication", () => {
 
 function serviceBlock(source: string, service: string, nextService: string): string {
   return source.split(`\n  ${service}:\n`, 2)[1]?.split(`\n  ${nextService}:\n`, 1)[0] ?? "";
+}
+
+function caddySiteBlock(source: string, site: string): string {
+  const start = source.indexOf(`\n${site} {\n`);
+  if (start < 0) return "";
+  const rest = source.slice(start + 1);
+  const next = rest.slice(1).search(/\n[a-z0-9.-]+ \{\n/u);
+  return next < 0 ? rest : rest.slice(0, next + 1);
 }
 
 function serviceBlockByIndent(source: string, service: string): string {

@@ -52,7 +52,7 @@ jobs:
             app_filter: "@elevenhouse/landing"
             app_dir: landing
             build_args: |
-              VITE_ASTROLOGER_WEB_ORIGIN=https://astrologer.elevenhouse.ai
+              VITE_ASTROLOGER_WEB_ORIGIN=https://app.elevenhouse.ai
           - image: elevenhouse-client-web
             dockerfile: deployment/docker/frontend.Dockerfile
             app_filter: "@elevenhouse/client-web"
@@ -321,7 +321,7 @@ jobs:
             -e CHART_SMOKE_API_BASE_URL=http://127.0.0.1:3002 \
             -e CHART_WORKER_BASE_URL=http://chart-worker:3012 \
             -e CHART_ENGINE_BASE_URL=http://chart-engine:8012 \
-            -e CHART_SMOKE_ORIGIN=https://astrologer.elevenhouse.ai \
+            -e CHART_SMOKE_ORIGIN=https://app.elevenhouse.ai \
             -e CHART_SMOKE_POLL_TIMEOUT_MS=150000 \
             -e CHART_SMOKE_CLEANUP_SETTLE_TIMEOUT_MS=150000 \
             astrologer-api node apps/astrologer-api/scripts/chart-engine-smoke.mjs
@@ -332,10 +332,10 @@ jobs:
       - name: Smoke check
         run: |
           curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://client.elevenhouse.ai >/dev/null
+          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://client.elevenhouse.ai/api/health
           curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai >/dev/null
           curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai/api/health
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://astrologer.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://astrologer.elevenhouse.ai/api/health
           curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai >/dev/null
           curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai/api/health
 
