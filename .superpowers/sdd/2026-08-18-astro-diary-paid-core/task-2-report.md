@@ -362,3 +362,146 @@ affected_processes: 0
 - The current finance paid-product fulfillment registry/source-lot codec accepts only `single.once.live.solo`, not the AstroDiary `sub.sub.async.solo` product shape. To exercise real canonical finance capture without expanding Task 2 into finance product enablement, the test first seals the immutable AstroDiary purchase authority, temporarily advances the mutable product projection through the supported single-session shape for canonical capture, then restores the subscription shape before the real dispatch UOW creates and activates the subscription. Therefore the composition and atomicity are proven, but end-to-end AstroDiary checkout enablement remains outside this fix and must not be inferred from this test.
 - Repository-wide unit tests remain unavailable because the foreign deletion wave removed the unit corpus. The fresh focused PG suite, full typecheck, and full build pass, but the deleted clean-HEAD static tests remain a separate gate.
 - No API, UI, worker, browser, deploy, or production-data action was performed.
+
+---
+
+# Fix round 2 — native AstroDiary subscription capture fulfillment
+
+Date: 2026-08-18
+Implementation commit: `cccaa11a` (`fix(astro-diary): fulfill native subscription capture`)
+
+## Outcome
+
+The fix-round-1 finance concern above is superseded. The exact sealed AstroDiary product now remains a revision-1 `sub.sub.async.solo` subscription throughout order creation, checkout preparation, canonical confirmed capture, finance capture dispatch, client-subscription source-event application, and atomic AstroDiary activation. The test no longer deletes grants, rewrites the product to a single session, or restores the subscription projection afterward.
+
+The canonical path now proves:
+
+1. Order creation seals the exact immutable client-subscription purchase authority with monthly cadence, the sole `journal` grant, exact `chat`/`audio`/`file` delivery formats, empty required data/methods/modifiers, and the complete Diary configuration.
+2. Forward migration `0055` installs the immutable finance fulfillment authority for registry key `sub.sub.async.solo`, revision 1. The integration test does not insert that decision itself; removing `0055` makes production checkout authority resolution fail.
+3. Production checkout preparation persists the economic intent/session, provider operation, checkout authorization, and the native subscription fulfillment binding.
+4. Canonical confirmed capture persists the finance application, online-sale receipt/root lot/wallet, exact finance journal, and `finance.client_order.capture_applied.v1` outbox event.
+5. The existing finance dispatch UoW rehydrates the sealed client-subscription purchase authority and emits the exact subscription capture authority/source event.
+6. The existing client-subscription source-event UoW and AstroDiary collaborator atomically persist the active subscription, period, allowance, entitlement and transition evidence, journal, activation receipt/event/delivery, and IDs-only outbox event. There is no activation worker.
+
+## Production changes
+
+- `paid-product-fulfillment-registry.ts` registers only the exact AstroDiary subscription form under `sub.sub.async.solo`. It requires a week/month/year cadence, no trial/duration/package/group fields, the exact formats/grant/empty collections, and a complete valid Diary configuration. Missing `journal` access or configuration remains unsupported.
+- `source-lot-codec-rehydrate.ts` accepts and preserves the native `sub.sub.async.solo` registry key while retaining all existing strict fulfillment metadata validation.
+- `0055_astro_diary_subscription_fulfillment_authority.sql` issues the database-backed fulfillment decision used by the production checkout authority reader and fails the migration if the exact row is absent or conflicts. This is authority data only; source schema did not change.
+- No API, UI, worker, Pro/capability gate, fallback, or test-only product-shape path was added.
+
+## Exact changed paths
+
+1. `packages/domain/src/products/paid-product-fulfillment-registry.ts`
+2. `packages/domain/src/finance-core/source-lot-codec-rehydrate.ts`
+3. `packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts`
+4. `packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts`
+5. `packages/db/drizzle/0055_astro_diary_subscription_fulfillment_authority.sql`
+6. `packages/db/drizzle/meta/_journal.json`
+
+Committed `0053_astro_diary_subscription_activation.sql`, `0054_astro_diary_activation_ownership.sql`, and both snapshots remain byte-for-byte untouched. No source-schema or snapshot change was required.
+
+## Behavioral TDD evidence
+
+### RED — native domain registry
+
+```text
+pnpm test packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts
+Test Files  1 failed (1)
+Tests       1 failed | 2 passed (3)
+```
+
+The exact subscription returned `supported: false` before the registry change.
+
+### RED — real canonical capture with the exact product
+
+```text
+INTEGRATION_DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse \
+  pnpm test:integration \
+  packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts
+Test Files  1 failed (1)
+Tests       1 failed | 5 passed (6)
+reason      invalid_resolution
+```
+
+The flow reached `buildOnlineSaleCapturePersistenceCommand`; source-lot rehydration rejected the native key.
+
+### RED — production authority must come from migration lineage
+
+After removing the test-local fulfillment-decision insert and before adding `0055`, the same PG case failed at production checkout resolution:
+
+```text
+Error: AstroDiary checkout capture authority was not resolved
+Test Files  1 failed (1)
+Tests       1 failed | 5 passed (6)
+```
+
+### GREEN
+
+Fresh final focused results:
+
+```text
+pnpm test packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts
+Test Files  1 passed (1)
+Tests       3 passed (3)
+
+INTEGRATION_DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse \
+  pnpm test:integration \
+  packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts
+Test Files  1 passed (1)
+Tests       6 passed (6)
+Duration    6.51s
+```
+
+The production-composition case asserts one finance capture outbox event; one immutable finance dispatch receipt; active subscription version 2; one period, allowance, entitlement, entitlement transition application, and entitlement transition effect; the lifecycle/transition/source receipt graph; and one journal, activation receipt, activation event, delivery, and IDs-only outbox event. Dispatch replay leaves exactly one activation receipt.
+
+The forced-rollback snapshot now compares exact before/after values for the subscription head, periods, period allowances, entitlements, entitlement transition applications/effects, lifecycle events, transition receipts, source receipts, journal, activation receipt/event/delivery, and outbox. The thrown post-activation exception restores the pending version-1 head and the entire snapshot is equal.
+
+## Immediate astrologer accrual versus hold release
+
+The user’s “money received means immediately accrued to the astrologer” requirement is implemented by canonical capture, not by `releasePendingPayableLot`:
+
+- `packages/domain/src/finance-core/ledger-chart.ts` defines `astrologer_pending` as an astrologer-scoped liability with normal side `credit`.
+- `packages/db/src/adapters/finance/drizzle-online-sale-capture-persistence-resolver.ts` posts the order payable to that account during canonical confirmed capture.
+- `packages/db/src/schema/finance/capture-application.schema.ts` independently requires the exact astrologer pending credit to equal the captured payable.
+- `packages/domain/src/finance-core/online-wallet-hold-release.ts` states and implements that release never changes total astrologer liability: it debits pending and credits available and/or reserved.
+- `packages/domain/src/finance-core/source-lot-sale-hold.ts` keeps the later booking-completion/key guard on release. That guard does not gate capture-time accrual.
+
+The real-PG test proves the native AstroDiary capture posts exactly one RUB 4,704 credit to the exact astrologer’s `astrologer_pending` liability, with an active pending root lot and wallet `pending=4704`, `available=0`. The later release remains fail-closed for the subscription key and is a separate withdrawal-availability reclassification, not initial accrual.
+
+## Migration and local PostgreSQL evidence
+
+- Revalidated exact local target: healthy Docker `elevenhouse-postgres-1`, database/user `elevenhouse`, published on localhost port 5432.
+- `DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse pnpm db:reset` passed; all migrations including `0055` applied and the seed completed with 8 categories, 396 entries, and 16 templates.
+- Installed authority: `sub.sub.async.solo|1|true|sha256:9717575423cff38f1bc95763ce11294a627e938e87587aa24d88130c91b30d0b`.
+- Final `pnpm db:generate` reported `No schema changes, nothing to migrate` and created no file.
+
+## Other verification
+
+- `pnpm --filter @elevenhouse/domain typecheck` — passed.
+- `pnpm --filter @elevenhouse/db typecheck` — passed.
+- `pnpm typecheck` — 43/43 Turbo tasks passed.
+- Targeted ESLint over all four TypeScript implementation/test paths — passed with zero findings.
+- `pnpm lint` — exit 0; four pre-existing React hook warnings in unrelated frontend files.
+- `pnpm build` — 28/28 Turbo tasks passed; only existing frontend chunk-size warnings.
+- `git diff --cached --check` — passed.
+
+## GitNexus evidence
+
+The initial incremental index could not resolve the dispatch UoW and returned exact failure `Symbol 'createDrizzleClientSubscriptionCaptureDispatchUnitOfWork' not found`. A forced full index completed with 28,136 nodes, 71,202 edges, 1,319 clusters, and 300 flows.
+
+Pre-edit upstream impacts:
+
+- `PaidProductFulfillmentShape`: exact failure `Target 'PaidProductFulfillmentShape' not found`; risk UNKNOWN, followed by source/typecheck inspection.
+- `approvedLiveSoloSession`, `paidProductFulfillmentRegistry`, `resolvePaidProductFulfillment`: LOW, zero direct callers.
+- `unsupportedFulfillmentCode`: LOW, one direct caller.
+- `supportedFulfillment`: LOW, two direct and eleven total dependents, including one finance-core release flow.
+- Integration helpers `activationArtifactSnapshot`, `seedCanonicalSubscriptionCapture`, and `operationEnvelope`: LOW, one direct caller each.
+
+No HIGH or CRITICAL result occurred. Pre-commit `detect_changes(scope: staged)` reported six changed files, 20 changed symbols, zero affected processes, and overall low risk.
+
+## Caveats and external gate
+
+- The clean-HEAD static expectation files `packages/db/src/schema/astro-diary/astro-diary-integrity.test.ts` and `packages/db/src/schema/astro-diary/astro-diary.schema.test.ts` remain deleted by concurrent commit `9c426eb5`. Per ruling, their deletions were neither restored nor staged. If they reappear, their append-order/table/index expectations still require the previously identified current-value updates. The new domain and real-PG regressions are precise current coverage, but this clean-checkout static-test gate remains external.
+- The same concurrent deletion removed the wider repository unit corpus, so only the new focused domain file is currently discoverable by the unit runner. Full typecheck, lint, build, reset/migrate, and the focused real-PG suite are green; deleted tests are not represented as passing.
+- No browser, API network E2E, UI, worker, deploy, external payment, or production-data action was performed in this backend persistence fix.
