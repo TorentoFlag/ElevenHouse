@@ -3,20 +3,22 @@ import {
   createDrizzleAstroDiaryCommandUnitOfWork,
   createDrizzleAstroDiaryJournalReader
 } from "@elevenhouse/db/astro-diary";
-import { ClockModule } from "../clock/clock.module";
+
+import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
 import { SecurityModule } from "../security/security.module";
-import { AstroDiaryController } from "./astro-diary.controller";
-import { AstroDiaryService } from "./astro-diary.service";
+import { ClientAstroDiaryController } from "./astro-diary.controller";
+import { ClientAstroDiaryService } from "./astro-diary.service";
 import { ASTRO_DIARY_COMMAND_UNIT_OF_WORK, ASTRO_DIARY_JOURNAL_READER } from "./astro-diary.tokens";
 
 @Module({
-  imports: [ClockModule, DatabaseModule, IdentityModule, SecurityModule],
-  controllers: [AstroDiaryController],
+  imports: [DatabaseModule, IdentityModule, SecurityModule],
+  controllers: [ClientAstroDiaryController],
   providers: [
-    AstroDiaryService,
+    ClientAstroDiaryService,
+    SystemClock,
     {
       provide: ASTRO_DIARY_JOURNAL_READER,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
@@ -31,4 +33,4 @@ import { ASTRO_DIARY_COMMAND_UNIT_OF_WORK, ASTRO_DIARY_JOURNAL_READER } from "./
     }
   ]
 })
-export class AstroDiaryModule {}
+export class ClientAstroDiaryModule {}

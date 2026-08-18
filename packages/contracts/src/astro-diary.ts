@@ -761,6 +761,64 @@ export const astroDiaryTimelinePageSchema = z
   });
 export type AstroDiaryTimelinePage = z.infer<typeof astroDiaryTimelinePageSchema>;
 
+export const astroDiaryClientEntryDraftCreateRequestSchema = z
+  .object({
+    expectedJournalVersion: positiveVersionSchema,
+    body: z.string().max(20_000),
+    attachmentIds: attachmentIdsSchema,
+    moodId: astroDiaryMoodIdSchema.nullable()
+  })
+  .strict();
+export type AstroDiaryClientEntryDraftCreateRequest = z.infer<
+  typeof astroDiaryClientEntryDraftCreateRequestSchema
+>;
+
+export const astroDiaryAstrologerReplyDraftCreateRequestSchema = z
+  .object({
+    expectedJournalVersion: positiveVersionSchema,
+    body: z.string().max(20_000),
+    attachmentIds: attachmentIdsSchema
+  })
+  .strict();
+export type AstroDiaryAstrologerReplyDraftCreateRequest = z.infer<
+  typeof astroDiaryAstrologerReplyDraftCreateRequestSchema
+>;
+
+export const astroDiaryClientEntryDraftUpdateRequestSchema = z
+  .object({
+    expectedJournalVersion: positiveVersionSchema,
+    expectedDraftVersion: positiveVersionSchema,
+    body: z.string().max(20_000),
+    attachmentIds: attachmentIdsSchema,
+    moodId: astroDiaryMoodIdSchema.nullable()
+  })
+  .strict();
+export type AstroDiaryClientEntryDraftUpdateRequest = z.infer<
+  typeof astroDiaryClientEntryDraftUpdateRequestSchema
+>;
+
+export const astroDiaryAstrologerReplyDraftUpdateRequestSchema = z
+  .object({
+    expectedJournalVersion: positiveVersionSchema,
+    expectedDraftVersion: positiveVersionSchema,
+    body: z.string().max(20_000),
+    attachmentIds: attachmentIdsSchema
+  })
+  .strict();
+export type AstroDiaryAstrologerReplyDraftUpdateRequest = z.infer<
+  typeof astroDiaryAstrologerReplyDraftUpdateRequestSchema
+>;
+
+export const astroDiaryPaidCoreDraftPublishRequestSchema = z
+  .object({
+    expectedJournalVersion: positiveVersionSchema,
+    expectedDraftVersion: positiveVersionSchema
+  })
+  .strict();
+export type AstroDiaryPaidCoreDraftPublishRequest = z.infer<
+  typeof astroDiaryPaidCoreDraftPublishRequestSchema
+>;
+
 const draftCreateIdentityShape = {
   expectedJournalVersion: positiveVersionSchema,
   cycleId: uuidSchema.nullable(),

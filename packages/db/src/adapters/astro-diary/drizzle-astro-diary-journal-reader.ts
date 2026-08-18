@@ -31,7 +31,11 @@ export function createDrizzleAstroDiaryJournalReader(
 ): AstroDiaryJournalReader {
   return {
     listAstrologerJournals: (input) => listAstrologerJournals(database, input),
-    getJournalTimeline: (input) => getJournalTimeline(database, input)
+    getJournalTimeline: (input) => getJournalTimeline(database, input),
+    listParticipantJournals: (input) => listParticipantJournals(database, input),
+    getParticipantJournalSummary: (input) => getParticipantJournalSummary(database, input),
+    getParticipantJournalTimeline: (input) => getParticipantJournalTimeline(database, input),
+    getPaidCoreCommandContext: (input) => getPaidCoreCommandContext(database, input)
   };
 }
 
@@ -39,30 +43,48 @@ async function listAstrologerJournals(
   database: ElevenHouseDatabase,
   input: Parameters<AstroDiaryJournalReader["listAstrologerJournals"]>[0]
 ): Promise<AstroDiaryJournalListResponse> {
+  return listParticipantJournals(database, {
+    participantUserId: input.astrologerUserId,
+    participantRole: "astrologer",
+    limit: input.limit,
+    now: input.now
+  });
+}
+
+async function listParticipantJournals(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["listParticipantJournals"]>[0]
+): Promise<AstroDiaryJournalListResponse> {
   return database.transaction((transaction) =>
-    listAstrologerJournalsInTransaction(transaction, input)
+    listParticipantJournalsInTransaction(transaction, input)
   );
 }
 
-async function listAstrologerJournalsInTransaction(
+async function listParticipantJournalsInTransaction(
   database: ClientSubscriptionTransaction,
-  input: Parameters<AstroDiaryJournalReader["listAstrologerJournals"]>[0]
+  input: Parameters<AstroDiaryJournalReader["listParticipantJournals"]>[0]
 ): Promise<AstroDiaryJournalListResponse> {
+  const participantColumn =
+    input.participantRole === "client"
+      ? astroDiaryJournals.clientUserId
+      : astroDiaryJournals.astrologerUserId;
   const journalRows = await database
     .select()
     .from(astroDiaryJournals)
     .where(
-      and(
-        eq(astroDiaryJournals.astrologerUserId, input.astrologerUserId),
-        ne(astroDiaryJournals.state, "erased")
-      )
+      and(eq(participantColumn, input.participantUserId), ne(astroDiaryJournals.state, "erased"))
     )
     .orderBy(desc(astroDiaryJournals.createdAt), desc(astroDiaryJournals.id))
     .limit(input.limit);
 
   const journals = [];
   for (const journalRow of journalRows) {
-    const summary = await toJournalSummary(database, journalRow, input.now);
+    const summary = await toJournalSummary(
+      database,
+      journalRow,
+      input.participantUserId,
+      input.now
+    );
     if (summary) {
       journals.push(summary);
     }
@@ -77,6 +99,7 @@ async function listAstrologerJournalsInTransaction(
 async function toJournalSummary(
   database: ClientSubscriptionTransaction,
   journalRow: typeof astroDiaryJournals.$inferSelect,
+  participantUserId: string,
   now: string
 ): Promise<AstroDiaryJournalSummaryResponse | null> {
   const [subscriptionIdentity] = await database
@@ -152,7 +175,7 @@ async function toJournalSummary(
     .where(
       and(
         eq(astroDiaryReadCursors.journalId, journalRow.id),
-        eq(astroDiaryReadCursors.participantUserId, journalRow.astrologerUserId)
+        eq(astroDiaryReadCursors.participantUserId, participantUserId)
       )
     )
     .limit(1);
@@ -196,37 +219,56 @@ async function getJournalTimeline(
   database: ElevenHouseDatabase,
   input: Parameters<AstroDiaryJournalReader["getJournalTimeline"]>[0]
 ): Promise<AstroDiaryTimelinePage | null> {
-  return database.transaction((transaction) => getJournalTimelineInTransaction(transaction, input));
+  return getParticipantJournalTimeline(database, {
+    participantUserId: input.astrologerUserId,
+    participantRole: "astrologer",
+    journalId: input.journalId,
+    afterCursor: input.afterCursor,
+    limit: input.limit
+  });
 }
 
-async function getJournalTimelineInTransaction(
-  database: ClientSubscriptionTransaction,
-  input: Parameters<AstroDiaryJournalReader["getJournalTimeline"]>[0]
+async function getParticipantJournalSummary(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getParticipantJournalSummary"]>[0]
+): Promise<AstroDiaryJournalSummaryResponse | null> {
+  return database.transaction(async (transaction) => {
+    const journalRow = await findParticipantJournalRow(transaction, input);
+    return journalRow
+      ? toJournalSummary(transaction, journalRow, input.participantUserId, input.now)
+      : null;
+  });
+}
+
+async function getParticipantJournalTimeline(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getParticipantJournalTimeline"]>[0]
 ): Promise<AstroDiaryTimelinePage | null> {
-  const [journalRow] = await database
-    .select({ id: astroDiaryJournals.id })
-    .from(astroDiaryJournals)
-    .where(
-      and(
-        eq(astroDiaryJournals.id, input.journalId),
-        eq(astroDiaryJournals.astrologerUserId, input.astrologerUserId),
-        ne(astroDiaryJournals.state, "erased")
-      )
-    )
-    .limit(1);
+  return database.transaction((transaction) =>
+    getParticipantJournalTimelineInTransaction(transaction, input)
+  );
+}
+
+async function getParticipantJournalTimelineInTransaction(
+  database: ClientSubscriptionTransaction,
+  input: Parameters<AstroDiaryJournalReader["getParticipantJournalTimeline"]>[0]
+): Promise<AstroDiaryTimelinePage | null> {
+  const journalRow = await findParticipantJournalRow(database, input);
   if (!journalRow) return null;
+
+  const journalId = journalRow.id;
 
   const [cursorRow] = await database
     .select({ visibleMaxCursor: max(astroDiaryTimelineItems.cursor) })
     .from(astroDiaryTimelineItems)
-    .where(eq(astroDiaryTimelineItems.journalId, input.journalId));
+    .where(eq(astroDiaryTimelineItems.journalId, journalId));
   const visibleMaxCursor = cursorRow?.visibleMaxCursor ?? 0;
   const timelineRows = await database
     .select()
     .from(astroDiaryTimelineItems)
     .where(
       and(
-        eq(astroDiaryTimelineItems.journalId, input.journalId),
+        eq(astroDiaryTimelineItems.journalId, journalId),
         gt(astroDiaryTimelineItems.cursor, input.afterCursor)
       )
     )
@@ -245,6 +287,137 @@ async function getJournalTimelineInTransaction(
     visibleMaxCursor,
     hasMore: nextCursor !== null && nextCursor < visibleMaxCursor
   });
+}
+
+async function getPaidCoreCommandContext(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getPaidCoreCommandContext"]>[0]
+) {
+  return database.transaction(async (transaction) => {
+    const journalRow = await findParticipantJournalRow(transaction, input);
+    if (!journalRow) return null;
+
+    const [subscriptionIdentity] = await transaction
+      .select({ id: clientSubscriptions.id })
+      .from(clientSubscriptions)
+      .where(eq(clientSubscriptions.journalEpochId, journalRow.journalEpochId))
+      .limit(1);
+    if (!subscriptionIdentity) return null;
+    const subscription = await findClientSubscriptionById(transaction, subscriptionIdentity.id);
+    if (!subscription) return null;
+    const writableSubscription =
+      subscription.state === "active" || subscription.state === "cancel_at_period_end";
+    const currentPeriod = writableSubscription
+      ? (subscription.paidPeriods.find(
+          (period) =>
+            Date.parse(period.startsAt) <= Date.parse(input.now) &&
+            Date.parse(input.now) < Date.parse(period.endsAt) &&
+            !subscription.endedPeriodIds.includes(period.id)
+        ) ?? null)
+      : null;
+    const allowance = currentPeriod
+      ? await findClientSubscriptionPeriodAllowance(transaction, currentPeriod.id)
+      : null;
+    const latestPeriod =
+      [...subscription.paidPeriods].sort((left, right) => right.sequence - left.sequence)[0] ??
+      null;
+    const latestAllowance = latestPeriod
+      ? await findClientSubscriptionPeriodAllowance(transaction, latestPeriod.id)
+      : null;
+    const [cycle] = await transaction
+      .select({ id: astroDiaryCycles.id, version: astroDiaryCycles.version })
+      .from(astroDiaryCycles)
+      .where(
+        and(eq(astroDiaryCycles.journalId, journalRow.id), ne(astroDiaryCycles.state, "closed"))
+      )
+      .orderBy(desc(astroDiaryCycles.openedAt), desc(astroDiaryCycles.id))
+      .limit(1);
+    const [obligation] = cycle
+      ? await transaction
+          .select({
+            id: astroDiaryResponseObligations.id,
+            version: astroDiaryResponseObligations.version
+          })
+          .from(astroDiaryResponseObligations)
+          .where(
+            and(
+              eq(astroDiaryResponseObligations.journalId, journalRow.id),
+              eq(astroDiaryResponseObligations.cycleId, cycle.id),
+              ne(astroDiaryResponseObligations.state, "satisfied"),
+              ne(astroDiaryResponseObligations.state, "cancelled_by_finance_revocation"),
+              ne(astroDiaryResponseObligations.state, "closed_without_response")
+            )
+          )
+          .orderBy(asc(astroDiaryResponseObligations.dueAt), asc(astroDiaryResponseObligations.id))
+          .limit(1)
+      : [];
+    const [latestCycle] = await transaction
+      .select({ id: astroDiaryCycles.id, version: astroDiaryCycles.version })
+      .from(astroDiaryCycles)
+      .where(eq(astroDiaryCycles.journalId, journalRow.id))
+      .orderBy(desc(astroDiaryCycles.openedAt), desc(astroDiaryCycles.id))
+      .limit(1);
+    const [latestObligation] = latestCycle
+      ? await transaction
+          .select({
+            id: astroDiaryResponseObligations.id,
+            version: astroDiaryResponseObligations.version
+          })
+          .from(astroDiaryResponseObligations)
+          .where(
+            and(
+              eq(astroDiaryResponseObligations.journalId, journalRow.id),
+              eq(astroDiaryResponseObligations.cycleId, latestCycle.id)
+            )
+          )
+          .orderBy(
+            desc(astroDiaryResponseObligations.openedAt),
+            desc(astroDiaryResponseObligations.id)
+          )
+          .limit(1)
+      : [];
+    return {
+      journalVersion: journalRow.version,
+      activePeriod:
+        currentPeriod && allowance
+          ? { id: currentPeriod.id, allowanceVersion: allowance.version }
+          : null,
+      latestPeriod:
+        latestPeriod && latestAllowance
+          ? { id: latestPeriod.id, allowanceVersion: latestAllowance.version }
+          : null,
+      currentCycle: cycle ?? null,
+      currentObligation: obligation ?? null,
+      latestCycle: latestCycle ?? null,
+      latestObligation: latestObligation ?? null
+    };
+  });
+}
+
+async function findParticipantJournalRow(
+  database: ClientSubscriptionTransaction,
+  input: Readonly<{
+    journalId: string;
+    participantUserId: string;
+    participantRole: "client" | "astrologer";
+  }>
+) {
+  const participantColumn =
+    input.participantRole === "client"
+      ? astroDiaryJournals.clientUserId
+      : astroDiaryJournals.astrologerUserId;
+  const [journalRow] = await database
+    .select()
+    .from(astroDiaryJournals)
+    .where(
+      and(
+        eq(astroDiaryJournals.id, input.journalId),
+        eq(participantColumn, input.participantUserId),
+        ne(astroDiaryJournals.state, "erased")
+      )
+    )
+    .limit(1);
+  return journalRow ?? null;
 }
 
 async function toTimelineItem(

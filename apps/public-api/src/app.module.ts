@@ -11,6 +11,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { ClientCommerceModule } from "./modules/client-commerce/client-commerce.module";
 import { RefundCandidatesModule } from "./modules/refund-candidates/refund-candidates.module";
 import { SessionsModule } from "./modules/sessions/sessions.module";
+import { ClientAstroDiaryModule } from "./modules/astro-diary/astro-diary.module";
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { SessionsModule } from "./modules/sessions/sessions.module";
     BookingModule,
     OrdersModule,
     PaymentsModule,
-    SessionsModule
+    SessionsModule,
+    ClientAstroDiaryModule
   ]
 })
 export class AppModule {}

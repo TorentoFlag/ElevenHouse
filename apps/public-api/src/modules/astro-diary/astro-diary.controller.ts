@@ -22,45 +22,45 @@ import type {
   AstroDiaryTimelinePage
 } from "@elevenhouse/contracts";
 
-import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
-import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
+import type { PublicSessionRequest } from "../identity/session/identity-current-session.service";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
-import { AstroDiaryService } from "./astro-diary.service";
+import { ClientAstroDiaryService } from "./astro-diary.service";
 
 type HeaderResponse = { setHeader(name: string, value: string): void };
 
 @Controller("astro-diary")
-@UseGuards(AstrologerSessionAuthGuard)
-export class AstroDiaryController {
-  constructor(private readonly service: AstroDiaryService) {}
+@UseGuards(PublicSessionAuthGuard)
+export class ClientAstroDiaryController {
+  constructor(private readonly service: ClientAstroDiaryService) {}
 
   @Get("journals")
-  listJournals(@Req() request: AstrologerSessionRequest): Promise<AstroDiaryJournalListResponse> {
-    return this.service.listJournals(requireAstrologerUserId(request));
+  listJournals(@Req() request: PublicSessionRequest): Promise<AstroDiaryJournalListResponse> {
+    return this.service.listJournals(requireClientUserId(request));
   }
 
   @Get("journals/:journalId")
   getJournal(
-    @Req() request: AstrologerSessionRequest,
+    @Req() request: PublicSessionRequest,
     @Param("journalId") journalId: string
   ): Promise<AstroDiaryJournalSummaryResponse> {
-    return this.service.getJournal(requireAstrologerUserId(request), journalId);
+    return this.service.getJournal(requireClientUserId(request), journalId);
   }
 
   @Get("journals/:journalId/timeline")
   getTimeline(
-    @Req() request: AstrologerSessionRequest,
+    @Req() request: PublicSessionRequest,
     @Param("journalId") journalId: string,
     @Query() query: unknown
   ): Promise<AstroDiaryTimelinePage> {
-    return this.service.getTimeline(requireAstrologerUserId(request), journalId, query);
+    return this.service.getTimeline(requireClientUserId(request), journalId, query);
   }
 
-  @Post("journals/:journalId/astrologer-reply/drafts")
+  @Post("journals/:journalId/client-entry/drafts")
   @RequireCsrf()
-  @RequireIdempotency({ scope: "astro-diary.astrologer-reply-draft.create" })
-  createReplyDraft(
-    @Req() request: AstrologerSessionRequest,
+  @RequireIdempotency({ scope: "astro-diary.client-entry-draft.create" })
+  createDraft(
+    @Req() request: PublicSessionRequest,
     @Param("journalId") journalId: string,
     @Body() body: unknown,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
@@ -68,14 +68,14 @@ export class AstroDiaryController {
   ): Promise<AstroDiaryDraftMutationResponse> {
     const key = requireIdempotencyKey(idempotencyKey);
     response.setHeader("Idempotency-Key", key);
-    return this.service.createReplyDraft(requireAstrologerUserId(request), journalId, body, key);
+    return this.service.createClientEntryDraft(requireClientUserId(request), journalId, body, key);
   }
 
-  @Put("journals/:journalId/astrologer-reply/drafts/:draftId")
+  @Put("journals/:journalId/client-entry/drafts/:draftId")
   @RequireCsrf()
-  @RequireIdempotency({ scope: "astro-diary.astrologer-reply-draft.update" })
-  updateReplyDraft(
-    @Req() request: AstrologerSessionRequest,
+  @RequireIdempotency({ scope: "astro-diary.client-entry-draft.update" })
+  updateDraft(
+    @Req() request: PublicSessionRequest,
     @Param("journalId") journalId: string,
     @Param("draftId") draftId: string,
     @Body() body: unknown,
@@ -84,8 +84,8 @@ export class AstroDiaryController {
   ): Promise<AstroDiaryDraftMutationResponse> {
     const key = requireIdempotencyKey(idempotencyKey);
     response.setHeader("Idempotency-Key", key);
-    return this.service.updateReplyDraft(
-      requireAstrologerUserId(request),
+    return this.service.updateClientEntryDraft(
+      requireClientUserId(request),
       journalId,
       draftId,
       body,
@@ -93,11 +93,11 @@ export class AstroDiaryController {
     );
   }
 
-  @Post("journals/:journalId/astrologer-reply/drafts/:draftId/publish")
+  @Post("journals/:journalId/client-entry/drafts/:draftId/publish")
   @RequireCsrf()
-  @RequireIdempotency({ scope: "astro-diary.astrologer-reply.publish" })
-  publishClosingReply(
-    @Req() request: AstrologerSessionRequest,
+  @RequireIdempotency({ scope: "astro-diary.client-entry.publish" })
+  publish(
+    @Req() request: PublicSessionRequest,
     @Param("journalId") journalId: string,
     @Param("draftId") draftId: string,
     @Body() body: unknown,
@@ -106,8 +106,8 @@ export class AstroDiaryController {
   ): Promise<AstroDiaryCommandResponse> {
     const key = requireIdempotencyKey(idempotencyKey);
     response.setHeader("Idempotency-Key", key);
-    return this.service.publishClosingReply(
-      requireAstrologerUserId(request),
+    return this.service.publishClientEntry(
+      requireClientUserId(request),
       journalId,
       draftId,
       body,
@@ -116,15 +116,15 @@ export class AstroDiaryController {
   }
 }
 
-function requireAstrologerUserId(request: AstrologerSessionRequest): string {
-  const account = request.currentAstrologerAccount?.account;
-  if (!account) throw new UnauthorizedException("Valid astrologer session is required");
-  if (!account.roles.includes("astrologer")) {
+function requireClientUserId(request: PublicSessionRequest): string {
+  const account = request.currentCustomerAccount?.account;
+  if (!account) throw new UnauthorizedException("Valid public session is required");
+  if (!account.roles.includes("client")) {
     throw new ForbiddenException({
       statusCode: 403,
-      error: "astrologer_role_required",
-      code: "astrologer_role_required",
-      message: "Astrologer role is required"
+      error: "client_role_required",
+      code: "client_role_required",
+      message: "Client role is required"
     });
   }
   return account.id;

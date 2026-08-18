@@ -56,6 +56,7 @@ import {
   executePrelockedClientSubscriptionAllowanceCommandInTransaction
 } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
 import { createDrizzleAstroDiaryCommandUnitOfWork } from "./drizzle-astro-diary-command-uow";
+import { createDrizzleAstroDiaryJournalReader } from "./drizzle-astro-diary-journal-reader";
 
 type JournalFixture = Readonly<{
   fixture: ActiveClientSubscriptionFixture;
@@ -863,6 +864,26 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     );
     const draftId = appliedDraftId(created);
     await endPaidSubscription(runtime, opened.fixture);
+    const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
+    const endedAt =
+      opened.fixture.subscription.paidPeriods.find(({ id }) => id === opened.fixture.periodId)
+        ?.endsAt ?? "";
+    await expect(
+      reader.getParticipantJournalSummary({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now: endedAt
+      })
+    ).resolves.toMatchObject({ access: { mode: "read_only", subscriptionState: "ended" } });
+    await expect(
+      reader.getPaidCoreCommandContext({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now: endedAt
+      })
+    ).resolves.toMatchObject({ activePeriod: null });
     const input = closingReplyInput(
       opened,
       draftId,
@@ -954,6 +975,86 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
     await expect(paidCoreSnapshot(runtime, opened)).resolves.toEqual(before);
     await expect(mediaPersistenceSnapshot(runtime, [mediaId])).resolves.toEqual(mediaBefore);
+  });
+
+  it("reads the same paid journal through client and astrologer scopes without foreign leakage", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
+    const [clock] = (
+      await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
+    ).rows;
+    if (!clock) throw new Error("Integration database clock is missing");
+    const now = clock.command_at.toISOString();
+
+    const [clientList, astrologerList, clientSummary, clientTimeline, astrologerTimeline, context] =
+      await Promise.all([
+        reader.listParticipantJournals({
+          participantUserId: opened.fixture.authority.clientUserId,
+          participantRole: "client",
+          limit: 100,
+          now
+        }),
+        reader.listParticipantJournals({
+          participantUserId: opened.fixture.authority.astrologerUserId,
+          participantRole: "astrologer",
+          limit: 100,
+          now
+        }),
+        reader.getParticipantJournalSummary({
+          participantUserId: opened.fixture.authority.clientUserId,
+          participantRole: "client",
+          journalId: opened.journalId,
+          now
+        }),
+        reader.getParticipantJournalTimeline({
+          participantUserId: opened.fixture.authority.clientUserId,
+          participantRole: "client",
+          journalId: opened.journalId,
+          afterCursor: 0,
+          limit: 50
+        }),
+        reader.getParticipantJournalTimeline({
+          participantUserId: opened.fixture.authority.astrologerUserId,
+          participantRole: "astrologer",
+          journalId: opened.journalId,
+          afterCursor: 0,
+          limit: 50
+        }),
+        reader.getPaidCoreCommandContext({
+          participantUserId: opened.fixture.authority.astrologerUserId,
+          participantRole: "astrologer",
+          journalId: opened.journalId,
+          now
+        })
+      ]);
+
+    expect(clientList.journals.map(({ journal }) => journal.id)).toContain(opened.journalId);
+    expect(astrologerList.journals.map(({ journal }) => journal.id)).toContain(opened.journalId);
+    expect(clientSummary?.journal.id).toBe(opened.journalId);
+    expect(clientTimeline?.items.map(({ id }) => id)).toContain(opened.clientEntryItemId);
+    expect(astrologerTimeline).toEqual(clientTimeline);
+    expect(context).toMatchObject({
+      activePeriod: { id: opened.fixture.periodId },
+      currentCycle: { id: opened.cycleId },
+      currentObligation: { id: opened.obligationId }
+    });
+
+    await expect(
+      reader.getParticipantJournalSummary({
+        participantUserId: randomUUID(),
+        participantRole: "client",
+        journalId: opened.journalId,
+        now
+      })
+    ).resolves.toBeNull();
+    await expect(
+      reader.getPaidCoreCommandContext({
+        participantUserId: randomUUID(),
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now
+      })
+    ).resolves.toBeNull();
   });
 });
 

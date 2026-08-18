@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { HttpException, Inject, Injectable } from "@nestjs/common";
 import {
-  astroDiaryAstrologerReplyDraftCreateRequestSchema,
-  astroDiaryAstrologerReplyDraftUpdateRequestSchema,
+  astroDiaryClientEntryDraftCreateRequestSchema,
+  astroDiaryClientEntryDraftUpdateRequestSchema,
   astroDiaryCommandResponseSchema,
   astroDiaryDraftMutationResponseSchema,
   astroDiaryJournalListResponseSchema,
@@ -21,30 +21,29 @@ import {
 import {
   executeAstroDiaryParticipantDraftCreateCommand,
   executeAstroDiaryParticipantDraftUpdateCommand,
-  executePublishAstrologerReplyCommand,
+  executeOpenClientCycleCommand,
   type AstroDiaryCommandExecution,
   type AstroDiaryCommandStableResult,
   type AstroDiaryCommandUnitOfWork,
-  type AstroDiaryJournalReader,
-  type AstroDiaryPaidCoreCommandContext
+  type AstroDiaryJournalReader
 } from "@elevenhouse/domain";
 
-import { SystemClock } from "../clock/system-clock.service";
+import { SystemClock } from "../../common/system-clock.js";
 import { ASTRO_DIARY_COMMAND_UNIT_OF_WORK, ASTRO_DIARY_JOURNAL_READER } from "./astro-diary.tokens";
 
 @Injectable()
-export class AstroDiaryService {
+export class ClientAstroDiaryService {
   constructor(
     @Inject(ASTRO_DIARY_JOURNAL_READER) private readonly reader: AstroDiaryJournalReader,
     @Inject(ASTRO_DIARY_COMMAND_UNIT_OF_WORK)
     private readonly commandUnitOfWork: AstroDiaryCommandUnitOfWork,
-    private readonly clock: Pick<SystemClock, "now">
+    @Inject(SystemClock) private readonly clock: Pick<SystemClock, "now">
   ) {}
 
-  async listJournals(astrologerUserId: string): Promise<AstroDiaryJournalListResponse> {
+  async listJournals(clientUserId: string): Promise<AstroDiaryJournalListResponse> {
     const result = await this.reader.listParticipantJournals({
-      participantUserId: astrologerUserId,
-      participantRole: "astrologer",
+      participantUserId: clientUserId,
+      participantRole: "client",
       limit: 100,
       now: this.clock.now().toISOString()
     });
@@ -52,13 +51,13 @@ export class AstroDiaryService {
   }
 
   async getJournal(
-    astrologerUserId: string,
+    clientUserId: string,
     journalId: string
   ): Promise<AstroDiaryJournalSummaryResponse> {
     requireUuid(journalId);
     const result = await this.reader.getParticipantJournalSummary({
-      participantUserId: astrologerUserId,
-      participantRole: "astrologer",
+      participantUserId: clientUserId,
+      participantRole: "client",
       journalId,
       now: this.clock.now().toISOString()
     });
@@ -67,7 +66,7 @@ export class AstroDiaryService {
   }
 
   async getTimeline(
-    astrologerUserId: string,
+    clientUserId: string,
     journalId: string,
     query: unknown
   ): Promise<AstroDiaryTimelinePage> {
@@ -75,8 +74,8 @@ export class AstroDiaryService {
     const parsedQuery = astroDiaryTimelineQuerySchema.safeParse(query);
     if (!parsedQuery.success) throw invalidRequest();
     const result = await this.reader.getParticipantJournalTimeline({
-      participantUserId: astrologerUserId,
-      participantRole: "astrologer",
+      participantUserId: clientUserId,
+      participantRole: "client",
       journalId,
       afterCursor: parsedQuery.data.afterCursor,
       limit: parsedQuery.data.limit
@@ -85,38 +84,33 @@ export class AstroDiaryService {
     return astroDiaryTimelinePageSchema.parse(result);
   }
 
-  async createReplyDraft(
-    astrologerUserId: string,
+  async createClientEntryDraft(
+    clientUserId: string,
     journalId: string,
     body: unknown,
     idempotencyKey: string
   ): Promise<AstroDiaryDraftMutationResponse> {
     requireUuid(journalId);
-    const request = astroDiaryAstrologerReplyDraftCreateRequestSchema.safeParse(body);
+    const request = astroDiaryClientEntryDraftCreateRequestSchema.safeParse(body);
     if (!request.success) throw invalidRequest();
-    const context = await this.requireCommandContext(astrologerUserId, journalId);
-    const cycle = context.currentCycle ?? context.latestCycle;
-    if (!cycle) {
-      throw astroDiaryHttpError(409, "no_open_cycle", "Journal has no open cycle");
-    }
+    await this.requireCommandContext(clientUserId, journalId);
     const result = await executeAstroDiaryParticipantDraftCreateCommand(this.commandUnitOfWork, {
       journalId,
       idempotencyKey,
-      actorUserId: astrologerUserId,
-      actorRole: "astrologer",
+      actorUserId: clientUserId,
+      actorRole: "client",
       request: {
         ...request.data,
-        cycleId: cycle.id,
-        kind: "astrologer_reply",
-        moodId: null,
+        cycleId: null,
+        kind: "client_entry",
         correctsItemId: null
       }
     });
     return mapDraftMutationResult(result);
   }
 
-  async updateReplyDraft(
-    astrologerUserId: string,
+  async updateClientEntryDraft(
+    clientUserId: string,
     journalId: string,
     draftId: string,
     body: unknown,
@@ -124,21 +118,21 @@ export class AstroDiaryService {
   ): Promise<AstroDiaryDraftMutationResponse> {
     requireUuid(journalId);
     requireUuid(draftId);
-    const request = astroDiaryAstrologerReplyDraftUpdateRequestSchema.safeParse(body);
+    const request = astroDiaryClientEntryDraftUpdateRequestSchema.safeParse(body);
     if (!request.success) throw invalidRequest();
-    await this.requireCommandContext(astrologerUserId, journalId);
+    await this.requireCommandContext(clientUserId, journalId);
     const result = await executeAstroDiaryParticipantDraftUpdateCommand(this.commandUnitOfWork, {
       journalId,
       idempotencyKey,
-      actorUserId: astrologerUserId,
-      actorRole: "astrologer",
-      request: { ...request.data, draftId, moodId: null }
+      actorUserId: clientUserId,
+      actorRole: "client",
+      request: { ...request.data, draftId }
     });
     return mapDraftMutationResult(result);
   }
 
-  async publishClosingReply(
-    astrologerUserId: string,
+  async publishClientEntry(
+    clientUserId: string,
     journalId: string,
     draftId: string,
     body: unknown,
@@ -148,31 +142,33 @@ export class AstroDiaryService {
     requireUuid(draftId);
     const request = astroDiaryPaidCoreDraftPublishRequestSchema.safeParse(body);
     if (!request.success) throw invalidRequest();
-    const context = await this.requireCommandContext(astrologerUserId, journalId);
-    const cycle = context.currentCycle ?? context.latestCycle;
-    const obligation = context.currentObligation ?? context.latestObligation;
-    if (!cycle || !obligation) {
-      throw astroDiaryHttpError(409, "no_open_response_obligation", "No reply is currently due");
+    const context = await this.requireCommandContext(clientUserId, journalId);
+    const period = context.activePeriod ?? context.latestPeriod;
+    if (!period) {
+      throw astroDiaryHttpError(403, "paid_access_ended", "Journal access is read-only");
     }
-    const result = await executePublishAstrologerReplyCommand(this.commandUnitOfWork, {
+    const result = await executeOpenClientCycleCommand(this.commandUnitOfWork, {
       journalId,
       expectedJournalVersion: request.data.expectedJournalVersion,
       idempotencyKey,
       command: {
-        mode: "close",
-        actorUserId: astrologerUserId,
-        cycleId: cycle.id,
-        expectedCycleVersion: cycle.version,
-        obligationId: obligation.id,
-        expectedObligationVersion: obligation.version,
-        replyDraftId: draftId,
-        expectedReplyDraftVersion: request.data.expectedDraftVersion,
-        replyItemId: randomUUID(),
+        actorUserId: clientUserId,
+        draftId,
+        expectedDraftVersion: request.data.expectedDraftVersion,
+        cycleId: randomUUID(),
+        entryItemId: randomUUID(),
+        obligationId: randomUUID(),
+        contextId: randomUUID(),
         derivativeCommandId: randomUUID(),
+        allowancePeriodId: period.id,
+        allowanceExpectedVersion: period.allowanceVersion,
+        allowanceIdempotencyKey: `astro-diary:${idempotencyKey}`,
+        allowanceConsumptionId: randomUUID(),
         eventIds: {
+          cycleOpened: randomUUID(),
           itemPublished: randomUUID(),
-          obligationSatisfied: randomUUID(),
-          cycleClosed: randomUUID(),
+          obligationCreated: randomUUID(),
+          contextRequested: randomUUID(),
           derivativeRequested: randomUUID()
         }
       }
@@ -180,13 +176,10 @@ export class AstroDiaryService {
     return mapCommandResult(result);
   }
 
-  private async requireCommandContext(
-    astrologerUserId: string,
-    journalId: string
-  ): Promise<AstroDiaryPaidCoreCommandContext> {
+  private async requireCommandContext(clientUserId: string, journalId: string) {
     const context = await this.reader.getPaidCoreCommandContext({
-      participantUserId: astrologerUserId,
-      participantRole: "astrologer",
+      participantUserId: clientUserId,
+      participantRole: "client",
       journalId,
       now: this.clock.now().toISOString()
     });
@@ -195,7 +188,7 @@ export class AstroDiaryService {
   }
 }
 
-function mapDraftMutationResult(
+export function mapDraftMutationResult(
   execution: AstroDiaryCommandExecution
 ): AstroDiaryDraftMutationResponse {
   const stable = requireStableResult(execution);
@@ -211,7 +204,7 @@ function mapDraftMutationResult(
   });
 }
 
-function mapCommandResult(execution: AstroDiaryCommandExecution): AstroDiaryCommandResponse {
+export function mapCommandResult(execution: AstroDiaryCommandExecution): AstroDiaryCommandResponse {
   const stable = requireStableResult(execution);
   if (stable.outcome === "rejected") throw rejectedCommand(stable.code);
   return astroDiaryCommandResponseSchema.parse({
@@ -265,7 +258,7 @@ function requireUuid(value: string): void {
   if (!astroDiaryJournalSchema.shape.id.safeParse(value).success) throw invalidRequest();
 }
 
-function astroDiaryHttpError(
+export function astroDiaryHttpError(
   status: number,
   code: string,
   message: string,
