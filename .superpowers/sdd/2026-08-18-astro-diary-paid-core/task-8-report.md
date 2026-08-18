@@ -182,12 +182,12 @@ canonical Diary product. The actual client UI displayed the product, price, form
 and buyer contact form. The browser order request contained CSRF and a stable
 `Idempotency-Key` and created a real `pending_payment` order.
 
-The local UI/provider contour could not complete hosted checkout:
+The local UI/provider contour did not complete hosted checkout:
 
 - `127.0.0.1` initially needed to be added to the in-memory local public API origin
   allowlist; `.env` was not edited.
 - the real checkout endpoint then returned typed `503 payment_checkout_unavailable`
-  because no usable local ArcPay checkout provider/session is configured.
+  during this acceptance run.
 
 As a downstream integration diagnostic, the actual production checkout preparation,
 sealed artifact, verified webhook ingress, canonical provider read, finance capture,
@@ -342,13 +342,14 @@ That is not a narrow final-review patch.
 
 ### Hosted ArcPay acceptance
 
-Hosted ArcPay checkout is **BLOCKED**. The local `.env` has neither the public-API
-finance-checkout enablement/payment-method configuration nor payment-worker ArcPay
-credentials/webhook signing configuration. Both contours default disabled in
-runtime config, and the authenticated checkout returned typed
-`503 payment_checkout_unavailable`. No external sandbox write was authorized or
-performed. The production-UoW fallback described above remains useful downstream
-evidence, but cannot be ruled a provider PASS.
+Hosted ArcPay checkout is **BLOCKED**. Read-only inspection after the fix-round
+review found checkout/provider configuration and ArcPay secret values present in
+the local environment; no secret values were printed. The blocker is therefore
+not attributed to missing `.env` credentials. The acceptance run still did not
+execute a hosted ArcPay redirect/callback or an externally authorized sandbox
+provider flow; the observed browser checkout returned typed
+`503 payment_checkout_unavailable`. The production-UoW fallback described above
+remains useful downstream evidence, but cannot be ruled a provider PASS.
 
 ### Superdesign acceptance
 
