@@ -139,6 +139,20 @@ const resultSnapshotSchema = z.discriminatedUnion("outcome", [
 
 type AppliedTransitionData = Omit<ClientSubscriptionCommandApplied, "commandReceipt">;
 
+export type DrizzleClientSubscriptionSourceEventAppliedHook = (
+  input: Readonly<{
+    previousSubscription: ClientSubscription;
+    decision: AppliedTransitionData;
+    applicationReceipt: ClientSubscriptionSourceEventApplicationReceipt &
+      Readonly<{
+        result: Extract<
+          ClientSubscriptionSourceEventApplicationReceipt["result"],
+          { outcome: "applied" }
+        >;
+      }>;
+  }>
+) => Promise<void>;
+
 export function createDrizzleClientSubscriptionCommandUnitOfWork(
   database: ElevenHouseDatabase
 ): ClientSubscriptionCommandUnitOfWork {
@@ -274,7 +288,8 @@ export function createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork(
 /** Composes a source event with another finance transaction without weakening its receipt guards. */
 export async function applyDrizzleClientSubscriptionSourceEventInTransaction(
   transaction: ClientSubscriptionTransaction,
-  input: Parameters<ClientSubscriptionSourceEventApplicationUnitOfWork["apply"]>[0]
+  input: Parameters<ClientSubscriptionSourceEventApplicationUnitOfWork["apply"]>[0],
+  afterApplied?: DrizzleClientSubscriptionSourceEventAppliedHook
 ): Promise<ClientSubscriptionSourceEventApplicationExecution> {
           await lockPersistenceScope(
             transaction,
@@ -366,6 +381,11 @@ export async function applyDrizzleClientSubscriptionSourceEventInTransaction(
             captureEvidenceId: input.evidenceId
           });
           const applicationReceipt = sourceReceiptForApplied(input, decision);
+          await afterApplied?.({
+            previousSubscription: current,
+            decision,
+            applicationReceipt
+          });
           await insertSourceEventReceipt(
             transaction,
             applicationReceipt,
@@ -525,7 +545,13 @@ function sourceReceiptForApplied(
     readonly evidenceId: string;
   },
   decision: AppliedTransitionData
-): ClientSubscriptionSourceEventApplicationReceipt {
+): ClientSubscriptionSourceEventApplicationReceipt &
+  Readonly<{
+    result: Extract<
+      ClientSubscriptionSourceEventApplicationReceipt["result"],
+      { outcome: "applied" }
+    >;
+  }> {
   return {
     subscriptionId: input.subscriptionId,
     sourceEventId: input.sourceEventId,

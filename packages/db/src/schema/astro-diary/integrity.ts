@@ -1848,9 +1848,83 @@ after insert or update or delete on astro_diary_cycle_opening_allowance_facts
 deferrable initially deferred for each row execute function astro_diary_validate_cycle_opening_allowance_fact();
 `;
 
+/** Exact immutable source-event/transition/event graph for paid journal activation. */
+export const astroDiarySubscriptionActivationIntegritySql = `
+create trigger astro_diary_subscription_activation_receipts_immutable
+before update or delete on astro_diary_subscription_activation_receipts
+for each row execute function astro_diary_guard_immutable_evidence();
+
+create or replace function astro_diary_validate_subscription_activation()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare
+  receipt astro_diary_subscription_activation_receipts%rowtype;
+begin
+  select * into receipt
+    from astro_diary_subscription_activation_receipts
+   where id = coalesce(new.id, old.id);
+  if not found then return null; end if;
+
+  if not exists (
+    select 1
+      from astro_diary_journals journal
+      join client_subscriptions subscription
+        on subscription.id = receipt.subscription_id
+       and subscription.contract_id = receipt.contract_id
+       and subscription.relationship_id = receipt.relationship_id
+       and subscription.journal_epoch_id = receipt.journal_epoch_id
+      join client_subscription_transition_receipts transition
+        on transition.transition_id = receipt.transition_id
+       and transition.subscription_id = receipt.subscription_id
+       and transition.contract_id = receipt.contract_id
+       and transition.relationship_id = receipt.relationship_id
+       and transition.journal_epoch_id = receipt.journal_epoch_id
+       and transition.subscription_version = receipt.subscription_version
+      join client_subscription_event_application_receipts application
+        on application.source_event_id = receipt.source_event_id
+       and application.source_event_digest = receipt.source_event_digest
+       and application.evidence_id = receipt.evidence_id
+       and application.subscription_id = receipt.subscription_id
+       and application.result_kind = 'applied'
+       and application.result_version = receipt.subscription_version
+       and application.transition_id = receipt.transition_id
+      join astro_diary_events event
+        on event.event_id = receipt.activation_event_id
+       and event.event_type = 'astro_diary.journal_activated.v1'
+       and event.journal_id = receipt.journal_id
+       and event.journal_epoch_id = receipt.journal_epoch_id
+       and event.occurred_at = receipt.activated_at
+     where journal.id = receipt.journal_id
+       and journal.relationship_id = receipt.relationship_id
+       and journal.journal_epoch_id = receipt.journal_epoch_id
+       and journal.created_at = receipt.activated_at
+       and transition.primary_event_type = 'client_subscription.activated.v1'
+       and transition.state = 'active'
+       and transition.entitlement_state = 'active'
+       and transition.entitlement_scope = 'period'
+       and transition.occurred_at = (
+         select period.anchor_captured_at
+           from client_subscription_periods period
+          where period.id = transition.period_id
+            and period.subscription_id = receipt.subscription_id
+       )
+  ) then
+    raise exception 'AstroDiary activation evidence differs from its canonical capture transition graph'
+      using errcode = '23514';
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger astro_diary_subscription_activation_graph_integrity
+after insert or update or delete on astro_diary_subscription_activation_receipts
+deferrable initially deferred for each row
+execute function astro_diary_validate_subscription_activation();
+`;
+
 export const astroDiarySourceSqlAppendOrder = [
   astroDiaryImmutableEvidenceSql,
   astroDiaryDeferredGraphIntegritySql,
   astroDiaryOutboxIntegritySql,
-  astroDiaryOpeningAllowanceFactIntegritySql
+  astroDiaryOpeningAllowanceFactIntegritySql,
+  astroDiarySubscriptionActivationIntegritySql
 ] as const;

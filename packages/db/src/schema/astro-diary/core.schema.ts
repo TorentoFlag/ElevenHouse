@@ -38,6 +38,11 @@ export const astroDiaryJournals = pgTable(
       table.clientUserId,
       table.astrologerUserId
     ),
+    unique("astro_diary_journals_activation_identity_unique").on(
+      table.id,
+      table.relationshipId,
+      table.journalEpochId
+    ),
     foreignKey({
       columns: [table.relationshipId, table.clientUserId, table.astrologerUserId],
       foreignColumns: [
@@ -61,9 +66,6 @@ export const astroDiaryJournals = pgTable(
       "astro_diary_journals_distinct_users_check",
       sql`${table.clientUserId} <> ${table.astrologerUserId}`
     ),
-    uniqueIndex("astro_diary_journals_one_current_per_relationship")
-      .on(table.relationshipId)
-      .where(sql`${table.state} <> 'erased'`),
     index("astro_diary_journals_client_state_idx").on(table.clientUserId, table.state),
     index("astro_diary_journals_astrologer_state_idx").on(table.astrologerUserId, table.state)
   ]

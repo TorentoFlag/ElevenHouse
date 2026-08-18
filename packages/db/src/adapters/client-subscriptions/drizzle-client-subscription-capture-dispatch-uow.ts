@@ -29,7 +29,7 @@ import {
 import { financeProviderSemanticFacts } from "../../schema/finance/webhook-inbox.schema";
 import { executeDrizzleClientSubscriptionCreationInTransaction } from "./drizzle-client-subscription-creation-uow";
 import { findClientSubscriptionById } from "./drizzle-client-subscription-reader";
-import { applyDrizzleClientSubscriptionSourceEventInTransaction } from "./drizzle-client-subscription-uow";
+import { applyDrizzleAstroDiarySubscriptionCaptureInTransaction } from "../astro-diary/drizzle-astro-diary-subscription-activation";
 
 /**
  * Rehydrates the capture/order/contract authority under one PostgreSQL transaction. The outbox
@@ -127,11 +127,8 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
               Math.max(Date.now(), capture.observedAt.getTime())
             ).toISOString()
           });
-          const application = await applyClientSubscriptionCaptureDispatch(
-            {
-              apply: (source) =>
-                applyDrizzleClientSubscriptionSourceEventInTransaction(transaction, source)
-            },
+          const application = await applyDrizzleAstroDiarySubscriptionCaptureInTransaction(
+            transaction,
             { sourceEvent: sourceEventFor(receipt), dispatchReceipt: receipt }
           );
           if (application.outcome !== "applied") {

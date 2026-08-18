@@ -18,6 +18,7 @@ import {
 
 import { users } from "../identity/accounts.schema";
 import { mediaAssets } from "../media/media-assets.schema";
+import { clientSubscriptions, clientSubscriptionTransitionReceipts } from "../client-subscriptions";
 import { astroDiaryCycles, astroDiaryJournals } from "./core.schema";
 import { astroDiaryDraftVersionFacts, astroDiaryTimelineItemRevisions } from "./timeline.schema";
 
@@ -208,6 +209,84 @@ export const astroDiaryEvents = pgTable(
       table.journalId,
       table.occurredAt,
       table.eventId
+    )
+  ]
+);
+
+/** Immutable proof that one canonical paid capture activated one journal epoch. */
+export const astroDiarySubscriptionActivationReceipts = pgTable(
+  "astro_diary_subscription_activation_receipts",
+  {
+    id: uuid("id").primaryKey(),
+    journalId: uuid("journal_id").notNull(),
+    relationshipId: uuid("relationship_id").notNull(),
+    journalEpochId: uuid("journal_epoch_id").notNull(),
+    subscriptionId: uuid("subscription_id").notNull(),
+    contractId: uuid("contract_id").notNull(),
+    subscriptionVersion: integer("subscription_version").notNull(),
+    sourceEventId: uuid("source_event_id").notNull(),
+    sourceEventDigest: varchar("source_event_digest", { length: 71 }).notNull(),
+    evidenceId: uuid("evidence_id").notNull(),
+    transitionId: uuid("transition_id").notNull(),
+    activationEventId: uuid("activation_event_id").notNull(),
+    activatedAt: timestamp("activated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    unique("astro_diary_subscription_activation_journal_unique").on(table.journalId),
+    unique("astro_diary_subscription_activation_epoch_unique").on(table.journalEpochId),
+    unique("astro_diary_subscription_activation_subscription_unique").on(table.subscriptionId),
+    unique("astro_diary_subscription_activation_source_event_unique").on(table.sourceEventId),
+    unique("astro_diary_subscription_activation_evidence_unique").on(table.evidenceId),
+    unique("astro_diary_subscription_activation_transition_unique").on(table.transitionId),
+    unique("astro_diary_subscription_activation_event_unique").on(table.activationEventId),
+    foreignKey({
+      columns: [table.journalId, table.relationshipId, table.journalEpochId],
+      foreignColumns: [
+        astroDiaryJournals.id,
+        astroDiaryJournals.relationshipId,
+        astroDiaryJournals.journalEpochId
+      ],
+      name: "astro_diary_subscription_activation_journal_fk"
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.subscriptionId, table.contractId, table.relationshipId, table.journalEpochId],
+      foreignColumns: [
+        clientSubscriptions.id,
+        clientSubscriptions.contractId,
+        clientSubscriptions.relationshipId,
+        clientSubscriptions.journalEpochId
+      ],
+      name: "astro_diary_subscription_activation_subscription_fk"
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [
+        table.transitionId,
+        table.subscriptionId,
+        table.contractId,
+        table.subscriptionVersion
+      ],
+      foreignColumns: [
+        clientSubscriptionTransitionReceipts.transitionId,
+        clientSubscriptionTransitionReceipts.subscriptionId,
+        clientSubscriptionTransitionReceipts.contractId,
+        clientSubscriptionTransitionReceipts.subscriptionVersion
+      ],
+      name: "astro_diary_subscription_activation_transition_fk"
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.activationEventId],
+      foreignColumns: [astroDiaryEvents.eventId],
+      name: "astro_diary_subscription_activation_event_fk"
+    }).onDelete("restrict"),
+    check(
+      "astro_diary_subscription_activation_evidence_check",
+      sql`${table.subscriptionVersion} >= 2
+        and ${table.sourceEventDigest} ~ '^sha256:[a-f0-9]{64}$'
+        and ${table.id} <> ${table.journalId}
+        and ${table.id} <> ${table.sourceEventId}
+        and ${table.id} <> ${table.evidenceId}
+        and ${table.id} <> ${table.transitionId}
+        and ${table.id} <> ${table.activationEventId}`
     )
   ]
 );
