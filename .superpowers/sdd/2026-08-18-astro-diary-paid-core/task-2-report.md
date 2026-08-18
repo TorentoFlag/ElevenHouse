@@ -183,3 +183,182 @@ affected_processes: 0
 - The repository-wide unit-test gate was externally unavailable because another in-progress task removed the unit test corpus/config dependencies. Task 2 did not restore, stage, or commit those deletions.
 - The Task 1 planner unit test file was also part of that foreign deletion wave, so its already-reported Task 1 unit suite was not rerun from the final shared state. The domain package typecheck and build passed, and Task 2 exercises the planner through real PostgreSQL.
 - No API/UI/worker/browser/deploy verification was performed because those surfaces are explicitly out of Task 2 scope.
+
+---
+
+# Fix round 1 — activation receipt/event ownership hardening
+
+Date: 2026-08-18
+Implementation commit: `413d817e` (`fix(astro-diary): enforce activation ownership graph`)
+
+## Status and implemented fixes
+
+All four Important review findings were addressed in source, the next focused forward migration, and a new narrow PostgreSQL regression suite.
+
+1. `astro_diary_subscription_activation_receipts` now has a dedicated `BEFORE TRUNCATE FOR EACH STATEMENT` rejection trigger in addition to UPDATE/DELETE immutability. The source function handles every forbidden mutation with SQLSTATE `55000`.
+2. `astro_diary.journal_activated.v1` now has reverse ownership:
+   - a partial unique index permits at most one activation event for `(journal_id, journal_epoch_id)`;
+   - a deferred event-side constraint trigger requires every activation event to have one exact receipt owner matching event id, journal id, epoch, and timestamp;
+   - the existing deferred receipt-side graph still proves the source application, transition, subscription, period, journal, and event direction;
+   - existing delivery/outbox integrity remains the authority for the event → delivery → IDs-only outbox side.
+3. PostgreSQL proof now covers explicit subscription, relationship, and epoch mismatch attempts and exact rollback equality for subscription head, entitlement, lifecycle event, transition receipt, source receipt, journal, activation receipt, activation event, delivery, and outbox.
+4. The suite exercises `createDrizzleClientSubscriptionCaptureDispatchUnitOfWork` after creating a real canonical finance capture application through the canonical webhook/capture UOW. It asserts dispatch, replay, one AstroDiary activation receipt, and UPDATE/DELETE/TRUNCATE immutability of the finance dispatch receipt.
+
+The production-composition test exposed and fixed a deferred graph conflict: subscription creation and first capture happen in the same dispatch transaction, but the old contract creation trigger accepted only a final pending/version-1 head. Contract creation now has a focused deferred validator that accepts either:
+
+- the unchanged pending/version-1 creation graph; or
+- active/version-2 only when the same transaction contains the exact canonical activated transition and applied source-event receipt.
+
+This does not permit an arbitrary active head and does not change generic source-event receipt, CAS, rejection, conflict, or replay behavior.
+
+## Fix-round decisions
+
+- Kept worker activation out of scope and out of the activation gate.
+- Preserved `0053` byte-for-byte; all new database evolution is in `0054_astro_diary_activation_ownership.sql`.
+- Used a partial unique event index plus deferred reverse trigger because receipt uniqueness alone prevents two receipts but did not prevent a raw orphan/duplicate activation event.
+- Kept the original forward receipt validator. Reverse ownership is additive, so both directions must exist at commit.
+- Split contract creation validation onto its own deferred trigger. This keeps the generic client-subscription graph intact while recognizing the exact create+activate transaction produced by the canonical dispatch composition.
+- Did not restore or modify the foreign-deleted clean-HEAD tests `astro-diary-integrity.test.ts` or `astro-diary.schema.test.ts`. Added the narrowly named integration regression instead.
+
+## Exact changed paths in fix commit
+
+1. `packages/db/src/schema/astro-diary/commands.schema.ts`
+2. `packages/db/src/schema/astro-diary/integrity.ts`
+3. `packages/db/src/schema/client-subscriptions/client-subscription-integrity.ts`
+4. `packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts`
+5. `packages/db/drizzle/0054_astro_diary_activation_ownership.sql`
+6. `packages/db/drizzle/meta/0054_snapshot.json`
+7. `packages/db/drizzle/meta/_journal.json`
+
+Before the fix round, none of those seven paths had uncommitted Task 2 changes. After commit, none remains staged or modified. The report is updated separately. The large foreign test deletion wave, `AGENTS.md`, `CLAUDE.md`, and plan/spec files were not restored, staged, or committed.
+
+## Behavioral TDD evidence
+
+### RED — actual production composition
+
+The new PG suite first reached the real canonical capture and real dispatch UOW but failed at commit:
+
+```text
+FAIL activates through the production capture-dispatch composition...
+Caused by: error: Sealed subscription contract requires atomic creation graph
+where: PL/pgSQL function elevenhouse_assert_client_subscription_graph_integrity()
+constraint: client_subscription_graph_integrity
+Tests: 5 passed, 1 failed
+```
+
+This demonstrated that the previously untested create+activate composition could not commit, even though the inner activation helper passed.
+
+Earlier focused runs also established the new raw/orphan assertion reached a deferred commit failure; Drizzle wrapped the PostgreSQL message as `Failed query: commit`, so the test correctly asserts rejection rather than relying on driver message propagation.
+
+### GREEN — focused real PostgreSQL suite
+
+Fresh final command:
+
+```text
+INTEGRATION_DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse \
+  pnpm test:integration \
+  packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts
+```
+
+Result:
+
+```text
+Test Files  1 passed (1)
+Tests       6 passed (6)
+Duration    4.73s
+```
+
+Cases prove:
+
+- activation receipt TRUNCATE fails and the receipt remains;
+- a duplicate activation event for an owned journal/epoch fails and no second event remains;
+- a raw orphan activation event for a valid journal fails at deferred commit;
+- subscription, relationship, and epoch mismatch attempts each reject and leave the complete artifact snapshot byte-for-byte equivalent at the SQL result level;
+- a forced post-activation exception restores the pending subscription head and leaves entitlement/lifecycle/transition/source/journal/receipt/event/delivery/outbox counts unchanged;
+- canonical finance capture → real production dispatch UOW → atomic journal activation commits once, replays once, and persists an immutable finance dispatch receipt.
+
+## PostgreSQL installation evidence
+
+Confirmed reset target from the named local Docker container:
+
+```text
+docker exec elevenhouse-postgres-1 psql -U elevenhouse -d elevenhouse ...
+elevenhouse|elevenhouse
+```
+
+Post-reset catalog evidence:
+
+```text
+astro_diary_subscription_activation_receipts_no_truncate
+  BEFORE TRUNCATE ... FOR EACH STATEMENT
+  EXECUTE FUNCTION astro_diary_guard_subscription_activation_immutable()
+
+astro_diary_activation_event_ownership_integrity
+  AFTER INSERT OR DELETE OR UPDATE ... DEFERRABLE INITIALLY DEFERRED
+
+astro_diary_events_one_activation_per_journal_epoch
+  UNIQUE (journal_id, journal_epoch_id)
+  WHERE event_type = 'astro_diary.journal_activated.v1'
+
+client_subscription_graph_integrity
+  elevenhouse_assert_client_subscription_contract_creation_graph
+```
+
+## Migration/reset/no-delta evidence
+
+- Existing `0053_astro_diary_subscription_activation.sql` was not rewritten.
+- `pnpm db:generate` initially used Drizzle sequence index 51 as a filename and proposed `0051_youthful_fantastic_four`, colliding with the historical numbering gap. The generated current snapshot/index delta was moved to the actual forward name `0054`; the temporarily generated modification to prior `0051_snapshot.json` and journal entry was restored before any commit.
+- `0054` contains only the activation event index, receipt immutability/TRUNCATE trigger, reverse event ownership trigger, and focused contract create+activate graph trigger.
+- Confirmed local target: Docker `elevenhouse-postgres-1`, database/user `elevenhouse` on published localhost port 5432.
+- `DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse pnpm db:reset` passed: public/Drizzle schemas reset, all migrations applied, seed completed with 8 categories, 396 entries, and 16 templates.
+- Final `pnpm db:generate` printed `No schema changes, nothing to migrate`; status showed only the intended `0054` artifacts and journal update.
+
+## Other fresh verification
+
+- `pnpm --filter @elevenhouse/db typecheck` — passed after final source edit.
+- `pnpm --filter @elevenhouse/db build` — passed.
+- `pnpm typecheck` — 43/43 Turbo tasks passed.
+- `pnpm build` — 28/28 Turbo tasks passed; only existing frontend chunk-size warnings.
+- `git diff --cached --check` — passed before commit.
+- Focused PG integration — 6/6 passed after reset and after the final source edit.
+
+## GitNexus evidence
+
+Pre-edit impacts:
+
+- `astroDiaryEvents`: LOW, 0 direct callers/flows.
+- `astroDiarySourceSqlAppendOrder`: LOW, 0 direct callers/flows.
+- `clientSubscriptionIntegritySql`: LOW, 0 direct callers/flows.
+- `graphTriggerTables`: LOW, 0 direct callers/flows.
+- `astroDiarySubscriptionActivationIntegritySql`: exact GitNexus failure `Target 'astroDiarySubscriptionActivationIntegritySql' not found`; risk UNKNOWN. Focused source/caller inspection was used.
+- PostgreSQL function `elevenhouse_assert_client_subscription_graph_integrity`: exact GitNexus failure `Target 'elevenhouse_assert_client_subscription_graph_integrity' not found`; risk UNKNOWN. Focused source/trigger inspection was used.
+
+No HIGH or CRITICAL result occurred.
+
+Pre-commit `detect_changes(scope: staged)`:
+
+```text
+changed_files: 7
+changed_symbols: 7
+risk_level: low
+affected_processes: 0
+```
+
+## Self-review
+
+- Verified receipt mutation protection includes statement-level TRUNCATE and is installed by both source SQL and forward migration.
+- Verified forward and reverse event ownership agree on event, journal, epoch, and timestamp.
+- Verified partial uniqueness rejects a second activation event even before deferred ownership evaluation; a separate orphan case proves the reverse trigger itself.
+- Verified delivery/outbox remain IDs-only and are included in rollback counts.
+- Verified mismatch tests invoke the real transition persistence then fail inside activation planning/persistence, proving outer transaction rollback rather than preflight-only rejection.
+- Verified the production composition asserts the immutable finance dispatch receipt rather than an in-memory receipt.
+- Verified the contract graph exception is restricted to exact initial active/version-2 capture evidence, not renewals or arbitrary source applications.
+- Verified generic source UOW and worker surfaces were not edited.
+- Verified no foreign deletion or foreign document change entered the implementation commit.
+
+## Concerns and unresolved clean-checkout gate
+
+- Clean-HEAD expectation files `packages/db/src/schema/astro-diary/astro-diary-integrity.test.ts` and `packages/db/src/schema/astro-diary/astro-diary.schema.test.ts` require expectation updates for the new trigger/index. They remain foreign-deleted in the shared checkout by explicit ruling, so they were not restored, edited, staged, or committed. The new PG regression covers runtime behavior, but a clean checkout will still need those static expectations updated; this gate is unresolved, not claimed fixed.
+- The current finance paid-product fulfillment registry/source-lot codec accepts only `single.once.live.solo`, not the AstroDiary `sub.sub.async.solo` product shape. To exercise real canonical finance capture without expanding Task 2 into finance product enablement, the test first seals the immutable AstroDiary purchase authority, temporarily advances the mutable product projection through the supported single-session shape for canonical capture, then restores the subscription shape before the real dispatch UOW creates and activates the subscription. Therefore the composition and atomicity are proven, but end-to-end AstroDiary checkout enablement remains outside this fix and must not be inferred from this test.
+- Repository-wide unit tests remain unavailable because the foreign deletion wave removed the unit corpus. The fresh focused PG suite, full typecheck, and full build pass, but the deleted clean-HEAD static tests remain a separate gate.
+- No API, UI, worker, browser, deploy, or production-data action was performed.
