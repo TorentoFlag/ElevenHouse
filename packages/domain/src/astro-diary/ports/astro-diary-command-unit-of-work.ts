@@ -223,12 +223,20 @@ export type AstroDiaryCommandExecution =
     }>
   | Readonly<{ outcome: "idempotency_conflict" | "not_found" }>;
 
+export type AstroDiaryCommandPrivateResourceScope = Readonly<{
+  ownerUserId: string;
+  ownerRole: "client" | "astrologer";
+  draftIds: readonly string[];
+  mediaIds: readonly string[];
+}>;
+
 type AstroDiaryCommandUnitOfWorkBaseInput = Readonly<{
   journalId: string;
   envelope: AstroDiaryCommandEnvelope;
   preconditions: readonly AstroDiaryCommandPrecondition[];
   idempotencyKey: string;
   requestHash: `sha256:${string}`;
+  privateResourceScope: AstroDiaryCommandPrivateResourceScope | null;
   resultResource?: Readonly<{ type: "draft"; draftId: string }> | null;
 }>;
 
@@ -254,9 +262,10 @@ export type AstroDiaryCommandUnitOfWorkInput =
 
 export type AstroDiaryCommandUnitOfWork = Readonly<{
   /**
-   * Locks the journal and every declared precondition, rehydrates the complete authority,
-   * invokes the pure decision under that lock, then atomically persists its exact write-set,
-   * IDs-only outbox events and body-free receipt. Transient lookup/CAS failures are not sealed.
+   * Locks by journal/key and resolves an immutable receipt first. Without a receipt it rehydrates
+   * authority, conceals out-of-scope private resources before CAS, invokes the pure decision, then
+   * atomically persists its exact write-set, IDs-only outbox events and body-free receipt.
+   * Transient lookup/CAS failures are not sealed.
    */
   execute(input: AstroDiaryCommandUnitOfWorkInput): Promise<AstroDiaryCommandExecution>;
 }>;
@@ -275,6 +284,7 @@ export function executeAstroDiaryCommand(
     readonly envelope: AstroDiaryCommandEnvelope;
     readonly preconditions: readonly AstroDiaryCommandPrecondition[];
     readonly idempotencyKey: string;
+    readonly privateResourceScope?: AstroDiaryCommandPrivateResourceScope | null;
   },
   decide: (
     authority: AstroDiaryCommandAuthority,
@@ -300,6 +310,7 @@ export function executeAstroDiaryCommand(
     preconditions,
     idempotencyKey: input.idempotencyKey,
     resourceAllocation: null,
+    privateResourceScope: input.privateResourceScope ?? null,
     resultResource: null,
     requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     decide: (authority, envelope) => decide(authority, envelope)
@@ -313,6 +324,7 @@ export function executeAstroDiaryDraftCreateCommand(
     readonly envelope: AstroDiaryCommandEnvelope;
     readonly preconditions: readonly AstroDiaryCommandPrecondition[];
     readonly idempotencyKey: string;
+    readonly privateResourceScope?: AstroDiaryCommandPrivateResourceScope | null;
   },
   decide: (
     authority: AstroDiaryCommandAuthority,
@@ -331,6 +343,7 @@ export function executeAstroDiaryDraftCreateCommand(
     idempotencyKey: input.idempotencyKey,
     requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     resourceAllocation: { type: "draft" },
+    privateResourceScope: input.privateResourceScope ?? null,
     resultResource: null,
     decide
   });
@@ -344,6 +357,7 @@ export function executeAstroDiaryDraftMutationCommand(
     readonly envelope: AstroDiaryCommandEnvelope;
     readonly preconditions: readonly AstroDiaryCommandPrecondition[];
     readonly idempotencyKey: string;
+    readonly privateResourceScope?: AstroDiaryCommandPrivateResourceScope | null;
   },
   decide: (
     authority: AstroDiaryCommandAuthority,
@@ -361,6 +375,7 @@ export function executeAstroDiaryDraftMutationCommand(
     idempotencyKey: input.idempotencyKey,
     requestHash: hashAstroDiaryCommandIntent(input.journalId, input.envelope),
     resourceAllocation: null,
+    privateResourceScope: input.privateResourceScope ?? null,
     resultResource: { type: "draft", draftId: input.draftId },
     decide: (authority, envelope) => decide(authority, envelope)
   });

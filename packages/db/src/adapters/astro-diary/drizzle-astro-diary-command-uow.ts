@@ -8,6 +8,8 @@ import {
   reservePeriodAllowance,
   sha256CanonicalJson,
   stableJson,
+  type AstroDiaryCommandAuthority,
+  type AstroDiaryCommandEnvelope,
   type AstroDiaryCommandAllocatedResource,
   type AstroDiaryCommandExecution,
   type AstroDiaryCommandReceipt,
@@ -96,6 +98,11 @@ async function executeAstroDiaryCommandInTransaction(
     commandAt
   );
   if (!locked) return { outcome: "not_found" };
+  if (
+    !matchesPrivateResourceScope(locked.authority, input.envelope, input.privateResourceScope)
+  ) {
+    return { outcome: "not_found" };
+  }
   for (const precondition of input.preconditions) {
     const currentVersion = locked.preconditionVersions.get(preconditionKey(precondition));
     if (currentVersion === undefined) {
@@ -171,6 +178,47 @@ async function executeAstroDiaryCommandInTransaction(
   };
   await persistReceipt(transaction, receipt, commandAt);
   return { outcome: "applied", response, writeSet: decision.writeSet, receipt };
+}
+
+function matchesPrivateResourceScope(
+  authority: AstroDiaryCommandAuthority,
+  envelope: AstroDiaryCommandEnvelope,
+  scope: AstroDiaryCommandUnitOfWorkInput["privateResourceScope"]
+): boolean {
+  if (scope === null) return true;
+  if (
+    scope.ownerUserId !== envelope.actorUserId ||
+    scope.ownerRole !== envelope.actorRole
+  ) {
+    return false;
+  }
+  const participantUserId =
+    scope.ownerRole === "client"
+      ? authority.journal.clientUserId
+      : authority.journal.astrologerUserId;
+  if (scope.ownerUserId !== participantUserId) {
+    return true;
+  }
+  if (
+    !scope.draftIds.every((draftId) => {
+      const draft = authority.drafts.find(({ id }) => id === draftId);
+      return (
+        draft?.journalId === authority.journal.id &&
+        draft.authorUserId === scope.ownerUserId &&
+        draft.authorRole === scope.ownerRole
+      );
+    })
+  ) {
+    return false;
+  }
+  return scope.mediaIds.every((mediaId) => {
+    const media = authority.media.find(({ id }) => id === mediaId);
+    return (
+      media?.journalId === authority.journal.id &&
+      media.ownerUserId === scope.ownerUserId &&
+      media.visibility === "private"
+    );
+  });
 }
 
 function requireAllocation(

@@ -10,6 +10,7 @@ import {
   endSubscriptionAtPaidBoundary,
   executeClientSubscriptionAllowanceCommand,
   executeAstroDiaryParticipantDraftCreateCommand,
+  executeAstroDiaryParticipantDraftUpdateCommand,
   executeOpenClientCycleCommand,
   executePublishAstrologerReplyCommand,
   hashClientSubscriptionAllowanceCommand
@@ -801,6 +802,159 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     });
   });
 
+  it("replays cycle-A draft and closing receipts after cycle B becomes current", async () => {
+    const openedA = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const replyBody = "Повтор относится к уже закрытому циклу A.";
+    const firstDraftInput = astrologerReplyDraftInput(openedA, replyBody);
+    const firstDraft = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      firstDraftInput
+    );
+    const replyDraftId = appliedDraftId(firstDraft);
+    if (firstDraft.outcome !== "applied") throw new Error("Expected an applied reply draft");
+
+    const closingKey = `reply-old-cycle-${randomUUID()}`;
+    const firstClosing = closingReplyInput(
+      openedA,
+      replyDraftId,
+      closingKey,
+      openedA.journalVersion + 1
+    );
+    const closedA = await executePublishAstrologerReplyCommand(unitOfWork, firstClosing);
+    if (closedA.outcome !== "applied") throw new Error("Expected cycle A to close");
+
+    const secondClientDraftInput = clientDraftInput(openedA, "Новая запись открывает цикл B.");
+    secondClientDraftInput.request.expectedJournalVersion = 5;
+    const secondClientDraft = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      secondClientDraftInput
+    );
+    const secondClientDraftId = appliedDraftId(secondClientDraft);
+    const openingB = openClientCycleInput(openedA, secondClientDraftId, `open-b-${randomUUID()}`, 6, {
+      allowanceExpectedVersion: 2
+    });
+    const openedBResult = await executeOpenClientCycleCommand(unitOfWork, openingB);
+    if (openedBResult.outcome !== "applied") throw new Error("Expected cycle B to open");
+    const openedB: OpenCycleFixture = {
+      ...openedA,
+      cycleId: openingB.command.cycleId,
+      clientEntryItemId: openingB.command.entryItemId,
+      obligationId: openingB.command.obligationId,
+      journalVersion: 7
+    };
+
+    const draftRetry = astrologerReplyDraftInput(openedB, replyBody);
+    draftRetry.idempotencyKey = firstDraftInput.idempotencyKey;
+    await expect(
+      executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, draftRetry)
+    ).resolves.toEqual({ outcome: "replayed", result: firstDraft.receipt.result });
+
+    const closingRetry = closingReplyInput(openedB, replyDraftId, closingKey, 7);
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, closingRetry)).resolves.toEqual({
+      outcome: "replayed",
+      result: closedA.receipt.result
+    });
+    const conflictingRetry = closingReplyInput(openedB, randomUUID(), closingKey, 7);
+    await expect(
+      executePublishAstrologerReplyCommand(unitOfWork, conflictingRetry)
+    ).resolves.toEqual({ outcome: "idempotency_conflict" });
+  });
+
+  it("conceals cross-participant private draft and pending-media state before owner CAS", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "Владелец сохраняет приватный ответ.")
+    );
+    const replyDraftId = appliedDraftId(created);
+    const foreignDraftKey = `foreign-draft-${randomUUID()}`;
+    const foreignDraftUpdate = {
+      journalId: opened.journalId,
+      idempotencyKey: foreignDraftKey,
+      actorUserId: opened.fixture.authority.clientUserId,
+      actorRole: "client" as const,
+      request: {
+        expectedJournalVersion: 4,
+        draftId: replyDraftId,
+        expectedDraftVersion: 73,
+        body: "Версия чужого черновика не раскрывается.",
+        attachmentIds: [],
+        moodId: "calm" as const
+      }
+    };
+    await expect(
+      executeAstroDiaryParticipantDraftUpdateCommand(unitOfWork, foreignDraftUpdate)
+    ).resolves.toEqual({ outcome: "not_found" });
+
+    const clientPendingMediaId = await createPendingDiaryMedia(
+      runtime,
+      opened,
+      opened.fixture.authority.clientUserId
+    );
+    const foreignMediaKey = `foreign-media-${randomUUID()}`;
+    const foreignMediaUpdate = {
+      journalId: opened.journalId,
+      idempotencyKey: foreignMediaKey,
+      actorUserId: opened.fixture.authority.astrologerUserId,
+      actorRole: "astrologer" as const,
+      request: {
+        expectedJournalVersion: 4,
+        draftId: replyDraftId,
+        expectedDraftVersion: 1,
+        body: "Pending media другого участника не раскрывается.",
+        attachmentIds: [clientPendingMediaId],
+        moodId: null
+      }
+    };
+    await expect(
+      executeAstroDiaryParticipantDraftUpdateCommand(unitOfWork, foreignMediaUpdate)
+    ).resolves.toEqual({ outcome: "not_found" });
+
+    const ownerStaleKey = `owner-stale-${randomUUID()}`;
+    const ownerStaleUpdate = {
+      ...foreignMediaUpdate,
+      idempotencyKey: ownerStaleKey,
+      request: {
+        ...foreignMediaUpdate.request,
+        expectedDraftVersion: 73,
+        attachmentIds: []
+      }
+    };
+    await expect(
+      executeAstroDiaryParticipantDraftUpdateCommand(unitOfWork, ownerStaleUpdate)
+    ).resolves.toMatchObject({
+      outcome: "version_conflict",
+      aggregate: "draft",
+      id: replyDraftId,
+      expectedVersion: 73,
+      currentVersion: 1
+    });
+
+    const ownerUpdate = {
+      ...foreignMediaUpdate,
+      idempotencyKey: `owner-update-${randomUUID()}`,
+      request: {
+        ...foreignMediaUpdate.request,
+        body: "Владелец обновляет собственный черновик.",
+        attachmentIds: []
+      }
+    };
+    const applied = await executeAstroDiaryParticipantDraftUpdateCommand(unitOfWork, ownerUpdate);
+    if (applied.outcome !== "applied") throw new Error("Expected an owner draft update");
+    await expect(
+      executeAstroDiaryParticipantDraftUpdateCommand(unitOfWork, ownerUpdate)
+    ).resolves.toEqual({ outcome: "replayed", result: applied.receipt.result });
+
+    await expect(
+      runtime.database
+        .select({ idempotencyKey: astroDiaryCommandReceipts.idempotencyKey })
+        .from(astroDiaryCommandReceipts)
+        .where(inArray(astroDiaryCommandReceipts.idempotencyKey, [foreignDraftKey, foreignMediaKey]))
+    ).resolves.toEqual([]);
+  });
+
   it("atomically binds ready private astrologer media to the reply and its first revision", async () => {
     const opened = await createOpenCycleFixture(runtime);
     const mediaId = await createReadyDiaryMedia(
@@ -1150,6 +1304,53 @@ async function createReadyDiaryMedia(
       .update(astroDiaryMediaAuthorities)
       .set({ state: "ready", readyAt: clock.command_at, updatedAt: clock.command_at })
       .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId));
+  });
+  return mediaId;
+}
+
+async function createPendingDiaryMedia(
+  runtime: PostgresRuntime,
+  journal: JournalFixture,
+  ownerUserId: string
+): Promise<string> {
+  const [clock] = (
+    await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
+  ).rows;
+  if (!clock) throw new Error("Integration database clock is missing");
+  const mediaId = randomUUID();
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(mediaAssets).values({
+      id: mediaId,
+      ownerUserId,
+      purpose: "astro_diary_attachment",
+      status: "uploading",
+      visibility: "private",
+      storageBucket: "astro-diary-integration",
+      storageKey: `${journal.journalId}/${mediaId}`,
+      originalFileName: `${mediaId}.pdf`,
+      mimeType: "application/pdf",
+      sizeBytes: 128,
+      checksumSha256: null,
+      width: null,
+      height: null,
+      altText: null,
+      failureReason: null,
+      createdAt: clock.command_at,
+      updatedAt: clock.command_at
+    });
+    await transaction.insert(astroDiaryMediaAuthorities).values({
+      mediaId,
+      journalId: journal.journalId,
+      ownerUserId,
+      purpose: "astro_diary_attachment",
+      visibility: "private",
+      state: "pending",
+      boundItemId: null,
+      readyAt: null,
+      boundAt: null,
+      createdAt: clock.command_at,
+      updatedAt: clock.command_at
+    });
   });
   return mediaId;
 }

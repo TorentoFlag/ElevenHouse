@@ -29,6 +29,8 @@ const subscriptionId = "00000000-0000-4000-8000-000000000007";
 const periodId = "00000000-0000-4000-8000-000000000008";
 const draftId = "00000000-0000-4000-8000-000000000009";
 const eventId = "00000000-0000-4000-8000-000000000010";
+const astrologerDraftId = "00000000-0000-4000-8000-000000000011";
+const astrologerPendingMediaId = "00000000-0000-4000-8000-000000000012";
 
 describe("client AstroDiary HTTP API", () => {
   let app: INestApplication;
@@ -227,6 +229,43 @@ describe("client AstroDiary HTTP API", () => {
     expect(replay.body).toEqual({ outcome: "replayed", eventIds: [eventId] });
   });
 
+  it("conceals astrologer-private draft and pending-media identities from client updates", async () => {
+    const body = {
+      expectedJournalVersion: 1,
+      expectedDraftVersion: 73,
+      body: "Чужой черновик не должен раскрывать свою версию",
+      attachmentIds: [],
+      moodId: "calm"
+    };
+    const foreignDraft = await request(
+      `/astro-diary/journals/${journalId}/client-entry/drafts/${astrologerDraftId}`,
+      {
+        role: "client",
+        method: "PUT",
+        idempotencyKey: "client-foreign-draft-001",
+        body
+      }
+    );
+    expect(foreignDraft.status).toBe(404);
+    expect(foreignDraft.body).toMatchObject({ code: "astro_diary_not_found" });
+
+    const foreignPendingMedia = await request(
+      `/astro-diary/journals/${journalId}/client-entry/drafts/${draftId}`,
+      {
+        role: "client",
+        method: "PUT",
+        idempotencyKey: "client-foreign-media-001",
+        body: {
+          ...body,
+          expectedDraftVersion: 1,
+          attachmentIds: [astrologerPendingMediaId]
+        }
+      }
+    );
+    expect(foreignPendingMedia.status).toBe(404);
+    expect(foreignPendingMedia.body).toEqual(foreignDraft.body);
+  });
+
   async function request(
     path: string,
     options: {
@@ -297,6 +336,13 @@ class ReplayCommandUnitOfWork implements AstroDiaryCommandUnitOfWork {
       return receipt.requestHash === input.requestHash
         ? ({ outcome: "replayed", result: receipt.result.response } as const)
         : ({ outcome: "idempotency_conflict" } as const);
+    }
+    const privateScope = input.privateResourceScope;
+    if (
+      privateScope?.draftIds.includes(astrologerDraftId) ||
+      privateScope?.mediaIds.includes(astrologerPendingMediaId)
+    ) {
+      return { outcome: "not_found" as const };
     }
     const stable = input.resourceAllocation
       ? {

@@ -126,6 +126,12 @@ export function executeOpenClientCycleCommand(
           expectedVersion: command.allowanceExpectedVersion
         }
       ],
+      privateResourceScope: {
+        ownerUserId: command.actorUserId,
+        ownerRole: "client",
+        draftIds: [command.draftId],
+        mediaIds: []
+      },
       envelope: {
         operation: "start_cycle",
         actorUserId: command.actorUserId,
@@ -183,6 +189,15 @@ export function executePublishAstrologerReplyCommand(
             ]
           : [])
       ],
+      privateResourceScope: {
+        ownerUserId: command.actorUserId,
+        ownerRole: "astrologer",
+        draftIds:
+          command.mode === "follow_up"
+            ? [command.replyDraftId, command.promptDraftId]
+            : [command.replyDraftId],
+        mediaIds: []
+      },
       envelope: {
         operation: "close",
         actorUserId: command.actorUserId,
@@ -812,8 +827,6 @@ function openClientCycleRequest(input: OpenClientCycleCommand): CanonicalJson {
 function publishAstrologerReplyRequest(input: PublishAstrologerReplyCommand): CanonicalJson {
   const common = {
     mode: input.mode,
-    cycleId: input.cycleId,
-    obligationId: input.obligationId,
     replyDraftId: input.replyDraftId
   };
   return input.mode === "close"

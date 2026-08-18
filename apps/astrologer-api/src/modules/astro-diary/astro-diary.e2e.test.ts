@@ -30,16 +30,20 @@ const cycleId = "10000000-0000-4000-8000-000000000009";
 const obligationId = "10000000-0000-4000-8000-000000000010";
 const draftId = "10000000-0000-4000-8000-000000000011";
 const eventId = "10000000-0000-4000-8000-000000000012";
+const laterCycleId = "10000000-0000-4000-8000-000000000013";
+const laterObligationId = "10000000-0000-4000-8000-000000000014";
+const clientDraftId = "10000000-0000-4000-8000-000000000015";
+const clientPendingMediaId = "10000000-0000-4000-8000-000000000016";
 
 describe("astrologer AstroDiary HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let commandUnitOfWork: ReplayCommandUnitOfWork;
-  let readerState: { ended: boolean };
+  let readerState: { ended: boolean; laterCycle: boolean };
 
   beforeEach(async () => {
     commandUnitOfWork = new ReplayCommandUnitOfWork();
-    readerState = { ended: false };
+    readerState = { ended: false, laterCycle: false };
     const service = new AstroDiaryService(createReader(readerState), commandUnitOfWork, {
       now: () => new Date("2026-08-18T10:00:00.000Z")
     });
@@ -132,6 +136,7 @@ describe("astrologer AstroDiary HTTP API", () => {
     expect(first.body).toEqual({ outcome: "applied", draftId, version: 1 });
     expect(first.idempotencyKey).toBe("astrologer-reply-001");
 
+    readerState.laterCycle = true;
     const replay = await request(`/astro-diary/journals/${journalId}/astrologer-reply/drafts`, {
       role: "astrologer",
       method: "POST",
@@ -140,6 +145,18 @@ describe("astrologer AstroDiary HTTP API", () => {
     });
     expect(replay.status).toBe(201);
     expect(replay.body).toEqual({ outcome: "replayed", draftId, version: 1 });
+
+    const changedIntent = await request(
+      `/astro-diary/journals/${journalId}/astrologer-reply/drafts`,
+      {
+        role: "astrologer",
+        method: "POST",
+        idempotencyKey: "astrologer-reply-001",
+        body: { ...body, body: "Другой ответ" }
+      }
+    );
+    expect(changedIntent.status).toBe(409);
+    expect(changedIntent.body).toMatchObject({ code: "idempotency_conflict" });
   });
 
   it("publishes against server-read cycle and obligation authority and returns replay truthfully", async () => {
@@ -160,7 +177,7 @@ describe("astrologer AstroDiary HTTP API", () => {
       ])
     );
 
-    readerState.ended = true;
+    readerState.laterCycle = true;
     const replay = await request(path, {
       role: "astrologer",
       method: "POST",
@@ -170,6 +187,54 @@ describe("astrologer AstroDiary HTTP API", () => {
     expect(replay.status).toBe(201);
     expect(replay.body).toEqual({ outcome: "replayed", eventIds: [eventId] });
     expect(replay.idempotencyKey).toBe("astrologer-publish-001");
+
+    const changedIntent = await request(
+      `/astro-diary/journals/${journalId}/astrologer-reply/drafts/${clientDraftId}/publish`,
+      {
+        role: "astrologer",
+        method: "POST",
+        idempotencyKey: "astrologer-publish-001",
+        body
+      }
+    );
+    expect(changedIntent.status).toBe(409);
+    expect(changedIntent.body).toMatchObject({ code: "idempotency_conflict" });
+  });
+
+  it("conceals client-private draft and pending-media identities from astrologer updates", async () => {
+    const body = {
+      expectedJournalVersion: 1,
+      expectedDraftVersion: 73,
+      body: "Чужой черновик не должен раскрывать свою версию",
+      attachmentIds: []
+    };
+    const foreignDraft = await request(
+      `/astro-diary/journals/${journalId}/astrologer-reply/drafts/${clientDraftId}`,
+      {
+        role: "astrologer",
+        method: "PUT",
+        idempotencyKey: "astrologer-foreign-draft-001",
+        body
+      }
+    );
+    expect(foreignDraft.status).toBe(404);
+    expect(foreignDraft.body).toMatchObject({ code: "astro_diary_not_found" });
+
+    const foreignPendingMedia = await request(
+      `/astro-diary/journals/${journalId}/astrologer-reply/drafts/${draftId}`,
+      {
+        role: "astrologer",
+        method: "PUT",
+        idempotencyKey: "astrologer-foreign-media-001",
+        body: {
+          ...body,
+          expectedDraftVersion: 1,
+          attachmentIds: [clientPendingMediaId]
+        }
+      }
+    );
+    expect(foreignPendingMedia.status).toBe(404);
+    expect(foreignPendingMedia.body).toEqual(foreignDraft.body);
   });
 
   async function request(
@@ -216,6 +281,13 @@ class ReplayCommandUnitOfWork implements AstroDiaryCommandUnitOfWork {
         ? ({ outcome: "replayed", result: prior.result } as const)
         : ({ outcome: "idempotency_conflict" } as const);
     }
+    const privateScope = input.privateResourceScope;
+    if (
+      privateScope?.draftIds.includes(clientDraftId) ||
+      privateScope?.mediaIds.includes(clientPendingMediaId)
+    ) {
+      return { outcome: "not_found" as const };
+    }
     const stable =
       input.resourceAllocation?.type === "draft"
         ? {
@@ -240,7 +312,7 @@ class ReplayCommandUnitOfWork implements AstroDiaryCommandUnitOfWork {
   }
 }
 
-function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
+function createReader(state: { ended: boolean; laterCycle: boolean }): AstroDiaryJournalReader {
   const summary = {
     journal: {
       id: journalId,
@@ -293,8 +365,12 @@ function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
             journalVersion: 1,
             activePeriod: state.ended ? null : { id: periodId, allowanceVersion: 2 },
             latestPeriod: { id: periodId, allowanceVersion: 2 },
-            currentCycle: state.ended ? null : { id: cycleId, version: 3 },
-            currentObligation: state.ended ? null : { id: obligationId, version: 2 },
+            currentCycle: state.ended
+              ? null
+              : { id: state.laterCycle ? laterCycleId : cycleId, version: 3 },
+            currentObligation: state.ended
+              ? null
+              : { id: state.laterCycle ? laterObligationId : obligationId, version: 2 },
             latestCycle: { id: cycleId, version: 3 },
             latestObligation: { id: obligationId, version: 2 }
           }

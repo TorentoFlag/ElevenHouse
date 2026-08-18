@@ -82,6 +82,12 @@ export function executeAstroDiaryParticipantDraftCreateCommand(
           expectedVersion: input.request.expectedJournalVersion
         }
       ],
+      privateResourceScope: {
+        ownerUserId: input.actorUserId,
+        ownerRole: input.actorRole,
+        draftIds: [],
+        mediaIds: input.request.attachmentIds
+      },
       envelope: {
         operation,
         actorUserId: input.actorUserId,
@@ -123,6 +129,12 @@ export function executeAstroDiaryParticipantDraftUpdateCommand(
         input.request.draftId,
         input.request.expectedDraftVersion
       ),
+      privateResourceScope: {
+        ownerUserId: input.actorUserId,
+        ownerRole: input.actorRole,
+        draftIds: [input.request.draftId],
+        mediaIds: input.request.attachmentIds
+      },
       envelope: {
         operation: "edit",
         actorUserId: input.actorUserId,
@@ -410,7 +422,6 @@ function semanticDraftCreateRequest(
 ) {
   return {
     command: "create_draft",
-    cycleId: request.cycleId,
     kind: request.kind,
     body: request.body,
     attachmentIds: request.attachmentIds,
