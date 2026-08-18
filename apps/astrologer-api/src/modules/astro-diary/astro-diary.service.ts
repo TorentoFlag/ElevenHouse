@@ -38,7 +38,7 @@ export class AstroDiaryService {
     @Inject(ASTRO_DIARY_JOURNAL_READER) private readonly reader: AstroDiaryJournalReader,
     @Inject(ASTRO_DIARY_COMMAND_UNIT_OF_WORK)
     private readonly commandUnitOfWork: AstroDiaryCommandUnitOfWork,
-    private readonly clock: Pick<SystemClock, "now">
+    @Inject(SystemClock) private readonly clock: Pick<SystemClock, "now">
   ) {}
 
   async listJournals(astrologerUserId: string): Promise<AstroDiaryJournalListResponse> {

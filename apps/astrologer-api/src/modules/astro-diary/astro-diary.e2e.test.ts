@@ -11,12 +11,14 @@ import type {
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { SystemClock } from "../clock/system-clock.service";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import { CsrfGuard } from "../security/csrf/csrf.guard";
 import { AstrologerCsrfTokenService } from "../security/csrf/astrologer-csrf-token.service";
 import { IdempotencyGuard } from "../security/idempotency/idempotency.guard";
 import { AstroDiaryController } from "./astro-diary.controller";
 import { AstroDiaryService } from "./astro-diary.service";
+import { ASTRO_DIARY_COMMAND_UNIT_OF_WORK, ASTRO_DIARY_JOURNAL_READER } from "./astro-diary.tokens";
 
 const astrologerUserId = "10000000-0000-4000-8000-000000000001";
 const foreignAstrologerUserId = "10000000-0000-4000-8000-000000000002";
@@ -34,6 +36,22 @@ const laterCycleId = "10000000-0000-4000-8000-000000000013";
 const laterObligationId = "10000000-0000-4000-8000-000000000014";
 const clientDraftId = "10000000-0000-4000-8000-000000000015";
 const clientPendingMediaId = "10000000-0000-4000-8000-000000000016";
+
+describe("astrologer AstroDiary module wiring", () => {
+  it("resolves the service through Nest dependency injection", async () => {
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        AstroDiaryService,
+        { provide: ASTRO_DIARY_JOURNAL_READER, useValue: createReader({ ended: false, laterCycle: false }) },
+        { provide: ASTRO_DIARY_COMMAND_UNIT_OF_WORK, useValue: new ReplayCommandUnitOfWork() },
+        { provide: SystemClock, useValue: { now: () => new Date("2026-08-18T10:00:00.000Z") } }
+      ]
+    }).compile();
+
+    expect(moduleRef.get(AstroDiaryService)).toBeInstanceOf(AstroDiaryService);
+    await moduleRef.close();
+  });
+});
 
 describe("astrologer AstroDiary HTTP API", () => {
   let app: INestApplication;
