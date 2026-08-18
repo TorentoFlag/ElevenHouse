@@ -29,7 +29,6 @@ EXECUTE FUNCTION elevenhouse_guard_client_subscription_immutable_row();`
   .join("\n--> statement-breakpoint\n");
 
 const graphTriggerTables = [
-  "client_subscription_contracts",
   "client_subscription_slots",
   "client_subscriptions",
   "client_subscription_renewal_requests",
@@ -59,6 +58,72 @@ FOR EACH ROW
 EXECUTE FUNCTION elevenhouse_assert_client_subscription_graph_integrity();`
   )
   .join("\n--> statement-breakpoint\n");
+
+const contractCreationGraphIntegritySql = `CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_contract_creation_graph()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $client_subscription_contract_creation_graph$
+BEGIN
+  IF (
+    SELECT count(*)
+      FROM client_subscriptions created_head
+      JOIN client_subscription_slots created_slot
+        ON created_slot.relationship_id = created_head.relationship_id
+       AND created_slot.product_id = created_head.product_id
+       AND created_slot.current_subscription_id = created_head.id
+      JOIN client_subscription_creation_receipts creation_receipt
+        ON creation_receipt.subscription_id = created_head.id
+       AND creation_receipt.contract_id = NEW.id
+       AND creation_receipt.contract_digest = NEW.canonical_digest
+       AND creation_receipt.order_id = NEW.order_id
+       AND creation_receipt.relationship_id = NEW.relationship_id
+       AND creation_receipt.product_id = NEW.product_id
+       AND creation_receipt.result_kind = 'created'
+       AND creation_receipt.slot_effect = 'assign'
+       AND creation_receipt.result_slot_version = created_slot.version
+       AND creation_receipt.result_slot_version = creation_receipt.expected_slot_version + 1
+     WHERE created_head.contract_id = NEW.id
+       AND created_head.relationship_id = NEW.relationship_id
+       AND created_head.product_id = NEW.product_id
+       AND (
+         (created_head.version = 1 AND created_head.state = 'pending_initial_payment')
+         OR (
+           created_head.version = 2
+           AND created_head.state = 'active'
+           AND EXISTS (
+             SELECT 1
+               FROM client_subscription_transition_receipts activation_transition
+               JOIN client_subscription_event_application_receipts activation_application
+                 ON activation_application.transition_id = activation_transition.transition_id
+                AND activation_application.subscription_id = created_head.id
+                AND activation_application.result_kind = 'applied'
+                AND activation_application.result_version = created_head.version
+              WHERE activation_transition.subscription_id = created_head.id
+                AND activation_transition.contract_id = NEW.id
+                AND activation_transition.relationship_id = NEW.relationship_id
+                AND activation_transition.journal_epoch_id = created_head.journal_epoch_id
+                AND activation_transition.subscription_version = created_head.version
+                AND activation_transition.primary_event_type = 'client_subscription.activated.v1'
+                AND activation_transition.state = 'active'
+                AND activation_transition.entitlement_state = 'active'
+                AND activation_transition.entitlement_scope = 'period'
+           )
+         )
+       )
+  ) <> 1 THEN
+    RAISE EXCEPTION 'Sealed subscription contract requires atomic creation graph'
+      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_graph_integrity';
+  END IF;
+  RETURN NULL;
+END;
+$client_subscription_contract_creation_graph$;
+--> statement-breakpoint
+CREATE CONSTRAINT TRIGGER "client_subscription_graph_integrity"
+AFTER INSERT OR UPDATE OR DELETE ON client_subscription_contracts
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION elevenhouse_assert_client_subscription_contract_creation_graph();`;
 
 export const clientSubscriptionPeriodExclusionSql = `CREATE EXTENSION IF NOT EXISTS btree_gist;
 --> statement-breakpoint
@@ -669,37 +734,6 @@ BEGIN
     ELSE
       RETURN NULL;
     END IF;
-  ELSIF TG_TABLE_NAME = 'client_subscription_contracts' THEN
-    IF TG_OP <> 'DELETE' AND (
-      SELECT count(*)
-        FROM client_subscriptions created_head
-        JOIN client_subscription_slots created_slot
-          ON created_slot.relationship_id = created_head.relationship_id
-         AND created_slot.product_id = created_head.product_id
-         AND created_slot.current_subscription_id = created_head.id
-        JOIN client_subscription_creation_receipts creation_receipt
-          ON creation_receipt.subscription_id = created_head.id
-         AND creation_receipt.contract_id = NEW.id
-         AND creation_receipt.contract_digest = NEW.canonical_digest
-         AND creation_receipt.order_id = NEW.order_id
-         AND creation_receipt.relationship_id = NEW.relationship_id
-         AND creation_receipt.product_id = NEW.product_id
-         AND creation_receipt.result_kind = 'created'
-         AND creation_receipt.slot_effect = 'assign'
-         AND creation_receipt.result_slot_version = created_slot.version
-         AND creation_receipt.result_slot_version = creation_receipt.expected_slot_version + 1
-       WHERE created_head.contract_id = NEW.id
-         AND created_head.relationship_id = NEW.relationship_id
-         AND created_head.product_id = NEW.product_id
-         AND created_head.version = 1
-         AND created_head.state = 'pending_initial_payment'
-    ) <> 1 THEN
-      RAISE EXCEPTION 'Sealed subscription contract requires atomic creation graph'
-        USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_graph_integrity';
-    END IF;
-    SELECT id INTO checked_subscription_id
-      FROM client_subscriptions
-     WHERE contract_id = NEW.id;
   ELSIF TG_TABLE_NAME = 'client_subscription_slots' THEN
     checked_relationship_id := coalesce(NEW.relationship_id, OLD.relationship_id);
     checked_product_id := coalesce(NEW.product_id, OLD.product_id);
@@ -1636,4 +1670,6 @@ BEGIN
 END;
 $client_subscription_graph_integrity$;
 --> statement-breakpoint
-${graphConstraintTriggers}`;
+${graphConstraintTriggers}
+--> statement-breakpoint
+${contractCreationGraphIntegritySql}`;

@@ -1850,9 +1850,21 @@ deferrable initially deferred for each row execute function astro_diary_validate
 
 /** Exact immutable source-event/transition/event graph for paid journal activation. */
 export const astroDiarySubscriptionActivationIntegritySql = `
+create or replace function astro_diary_guard_subscription_activation_immutable()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+begin
+  raise exception 'AstroDiary subscription activation receipts are immutable'
+    using errcode = '55000';
+end;
+$$;
+
 create trigger astro_diary_subscription_activation_receipts_immutable
 before update or delete on astro_diary_subscription_activation_receipts
-for each row execute function astro_diary_guard_immutable_evidence();
+for each row execute function astro_diary_guard_subscription_activation_immutable();
+
+create trigger astro_diary_subscription_activation_receipts_no_truncate
+before truncate on astro_diary_subscription_activation_receipts
+for each statement execute function astro_diary_guard_subscription_activation_immutable();
 
 create or replace function astro_diary_validate_subscription_activation()
 returns trigger language plpgsql set search_path = pg_catalog, public as $$
@@ -1919,6 +1931,38 @@ create constraint trigger astro_diary_subscription_activation_graph_integrity
 after insert or update or delete on astro_diary_subscription_activation_receipts
 deferrable initially deferred for each row
 execute function astro_diary_validate_subscription_activation();
+
+create or replace function astro_diary_validate_activation_event_ownership()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare
+  event_row astro_diary_events%rowtype;
+begin
+  select * into event_row
+    from astro_diary_events
+   where event_id = coalesce(new.event_id, old.event_id);
+  if not found or event_row.event_type <> 'astro_diary.journal_activated.v1' then
+    return null;
+  end if;
+
+  if not exists (
+    select 1
+      from astro_diary_subscription_activation_receipts receipt
+     where receipt.activation_event_id = event_row.event_id
+       and receipt.journal_id = event_row.journal_id
+       and receipt.journal_epoch_id = event_row.journal_epoch_id
+       and receipt.activated_at = event_row.occurred_at
+  ) then
+    raise exception 'AstroDiary journal activation event has no exact activation receipt owner'
+      using errcode = '23514';
+  end if;
+  return null;
+end;
+$$;
+
+create constraint trigger astro_diary_activation_event_ownership_integrity
+after insert or update or delete on astro_diary_events
+deferrable initially deferred for each row
+execute function astro_diary_validate_activation_event_ownership();
 `;
 
 export const astroDiarySourceSqlAppendOrder = [

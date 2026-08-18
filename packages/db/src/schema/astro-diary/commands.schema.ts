@@ -209,7 +209,10 @@ export const astroDiaryEvents = pgTable(
       table.journalId,
       table.occurredAt,
       table.eventId
-    )
+    ),
+    uniqueIndex("astro_diary_events_one_activation_per_journal_epoch")
+      .on(table.journalId, table.journalEpochId)
+      .where(sql`${table.eventType} = 'astro_diary.journal_activated.v1'`)
   ]
 );
 

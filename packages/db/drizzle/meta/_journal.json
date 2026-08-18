@@ -358,6 +358,13 @@
       "when": 1787052869160,
       "tag": "0053_astro_diary_subscription_activation",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1787054813131,
+      "tag": "0054_astro_diary_activation_ownership",
+      "breakpoints": true
     }
   ]
 }
