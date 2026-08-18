@@ -484,6 +484,20 @@ describe("createAstrologerApiRuntimeConfig", () => {
     ).toThrow("Instagram Graph settings are required when Instagram Graph login is enabled");
   });
 
+  it("requires the Instagram Graph webhook verify token when the login flow is enabled", () => {
+    expect(() =>
+      createAstrologerApiRuntimeConfig({
+        ...requiredSecurityConfig,
+        ASTROLOGER_API_INSTAGRAM_GRAPH_ENABLED: "true",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_ID: "instagram-app-id",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_APP_SECRET: "instagram-app-secret",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_REDIRECT_URI:
+          "https://api.elevenhouse.test/messaging/webhooks/instagram/oauth/callback",
+        ASTROLOGER_API_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: testEncryptionKey
+      })
+    ).toThrow("Instagram Graph settings are required when Instagram Graph login is enabled");
+  });
+
   it("rejects __Host-prefixed astrologer session cookie names without Secure", () => {
     expect(() =>
       createAstrologerApiRuntimeConfig({

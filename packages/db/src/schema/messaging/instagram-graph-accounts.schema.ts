@@ -11,6 +11,7 @@ export const messagingInstagramGraphAccounts = pgTable(
       .notNull()
       .references(() => messagingChannelConnections.id, { onDelete: "cascade" }),
     instagramUserId: text("instagram_user_id").notNull(),
+    instagramAppScopedUserId: text("instagram_app_scoped_user_id"),
     instagramUsername: text("instagram_username"),
     instagramDisplayName: text("instagram_display_name"),
     accessTokenEncrypted: jsonb("access_token_encrypted")
@@ -23,9 +24,16 @@ export const messagingInstagramGraphAccounts = pgTable(
   (table) => [
     unique("messaging_instagram_graph_accounts_connection_unique").on(table.channelConnectionId),
     unique("messaging_instagram_graph_accounts_instagram_user_unique").on(table.instagramUserId),
+    unique("messaging_instagram_graph_accounts_app_scoped_user_unique").on(
+      table.instagramAppScopedUserId
+    ),
     check(
       "messaging_instagram_graph_accounts_instagram_user_id_length_check",
       sql`length(trim(${table.instagramUserId})) between 1 and 200`
+    ),
+    check(
+      "messaging_instagram_graph_accounts_app_scoped_user_id_length_check",
+      sql`${table.instagramAppScopedUserId} is null or length(trim(${table.instagramAppScopedUserId})) between 1 and 200`
     ),
     check(
       "messaging_instagram_graph_accounts_access_token_object_check",

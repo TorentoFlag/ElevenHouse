@@ -30,6 +30,7 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       text: "Message text from DB",
       threadId,
       channelConnectionId,
+      astrologerUserId,
       provider: "telegram",
       mode: "telegram_business_bot",
       businessConnectionId: "business-1",
@@ -37,7 +38,9 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
     });
 
     await expect(
-      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(outboxEventId)
+      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(
+        outboxEventId
+      )
     ).resolves.toEqual({
       outboxEventId,
       messageId,
@@ -45,6 +48,7 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       provider: "telegram",
       mode: "telegram_business_bot",
       channelConnectionId,
+      astrologerUserId,
       businessConnectionId: "business-1",
       providerChatId: "chat-1",
       text: "Message text from DB",
@@ -66,6 +70,7 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       text: "Message text from DB",
       threadId,
       channelConnectionId,
+      astrologerUserId,
       provider: "telegram",
       mode: "telegram_mtproto_account",
       businessConnectionId: null,
@@ -73,7 +78,9 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
     });
 
     await expect(
-      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(outboxEventId)
+      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(
+        outboxEventId
+      )
     ).resolves.toEqual({
       outboxEventId,
       messageId,
@@ -81,7 +88,57 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       provider: "telegram",
       mode: "telegram_mtproto_account",
       channelConnectionId,
+      astrologerUserId,
       peerId: "777000",
+      text: "Message text from DB",
+      reconciliation: false
+    });
+  });
+
+  it("reloads Instagram Graph delivery work items with the encrypted account token", async () => {
+    const encryptedAccessToken = {
+      algorithm: "aes-256-gcm" as const,
+      keyId: "instagram_graph_v1",
+      iv: "iv",
+      authTag: "tag",
+      ciphertext: "ciphertext"
+    };
+    const database = createFindDatabase({
+      outboxEventId,
+      payload: {
+        messageId,
+        threadId,
+        channelConnectionId,
+        astrologerUserId
+      },
+      messageId,
+      messageStatus: "queued",
+      text: "Message text from DB",
+      threadId,
+      channelConnectionId,
+      astrologerUserId,
+      provider: "instagram",
+      mode: "instagram_graph",
+      businessConnectionId: "ig_456",
+      instagramAccessTokenEncrypted: encryptedAccessToken,
+      providerChatId: "igsid_777"
+    });
+
+    await expect(
+      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(
+        outboxEventId
+      )
+    ).resolves.toEqual({
+      outboxEventId,
+      messageId,
+      messageStatus: "queued",
+      provider: "instagram",
+      mode: "instagram_graph",
+      channelConnectionId,
+      astrologerUserId,
+      instagramAccountId: "ig_456",
+      providerChatId: "igsid_777",
+      encryptedAccessToken,
       text: "Message text from DB",
       reconciliation: false
     });
@@ -101,6 +158,7 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
       text: "Message text from DB",
       threadId,
       channelConnectionId,
+      astrologerUserId,
       provider: "telegram",
       mode: "telegram_business_bot",
       businessConnectionId: "business-1",
@@ -108,7 +166,9 @@ describe("createDrizzleMessagingDeliveryProcessingStore", () => {
     });
 
     await expect(
-      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(outboxEventId)
+      createDrizzleMessagingDeliveryProcessingStore(database as never).findByOutboxEventId(
+        outboxEventId
+      )
     ).rejects.toThrow(`Outbox event ${outboxEventId} does not match messaging aggregate`);
   });
 
@@ -323,10 +383,12 @@ function createFindDatabase(row: Record<string, unknown>) {
   };
 }
 
-function createRecordingDatabase(input: {
-  readonly updatedMessage?: Record<string, unknown> | null;
-  readonly deliveryRequestPayload?: Record<string, unknown>;
-} = {}) {
+function createRecordingDatabase(
+  input: {
+    readonly updatedMessage?: Record<string, unknown> | null;
+    readonly deliveryRequestPayload?: Record<string, unknown>;
+  } = {}
+) {
   const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
   let transactionCount = 0;
@@ -344,14 +406,15 @@ function createRecordingDatabase(input: {
         where: () => ({
           returning: async () => {
             updates.push({ table, value });
-            const updatedMessage = input.updatedMessage === undefined
-              ? {
-                  id: messageId,
-                  threadId,
-                  channelConnectionId,
-                  externalIdentityId: null
-                }
-              : input.updatedMessage;
+            const updatedMessage =
+              input.updatedMessage === undefined
+                ? {
+                    id: messageId,
+                    threadId,
+                    channelConnectionId,
+                    externalIdentityId: null
+                  }
+                : input.updatedMessage;
             return updatedMessage ? [updatedMessage] : [];
           }
         })
@@ -384,6 +447,7 @@ function selectChain(rows: readonly Record<string, unknown>[]) {
   const query = {
     from: () => query,
     innerJoin: () => query,
+    leftJoin: () => query,
     where: () => query,
     limit: async () => rows
   };

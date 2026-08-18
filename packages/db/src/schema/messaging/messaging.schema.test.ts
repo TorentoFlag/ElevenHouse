@@ -52,6 +52,7 @@ describe("Messaging persistence schema", () => {
       expect.arrayContaining([
         "channelConnectionId",
         "instagramUserId",
+        "instagramAppScopedUserId",
         "instagramUsername",
         "instagramDisplayName",
         "accessTokenEncrypted",
@@ -61,7 +62,8 @@ describe("Messaging persistence schema", () => {
     expect(accountConfig.uniqueConstraints.map((constraint) => constraint.name)).toEqual(
       expect.arrayContaining([
         "messaging_instagram_graph_accounts_connection_unique",
-        "messaging_instagram_graph_accounts_instagram_user_unique"
+        "messaging_instagram_graph_accounts_instagram_user_unique",
+        "messaging_instagram_graph_accounts_app_scoped_user_unique"
       ])
     );
     expect(accountConfig.foreignKeys.map((key) => key.getName())).toContain(
@@ -70,6 +72,7 @@ describe("Messaging persistence schema", () => {
     expect(accountConfig.checks.map((check) => check.name)).toEqual(
       expect.arrayContaining([
         "messaging_instagram_graph_accounts_instagram_user_id_length_check",
+        "messaging_instagram_graph_accounts_app_scoped_user_id_length_check",
         "messaging_instagram_graph_accounts_access_token_object_check"
       ])
     );

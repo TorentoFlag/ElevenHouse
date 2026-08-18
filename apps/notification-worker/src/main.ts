@@ -23,6 +23,7 @@ import {
   createAuthCodeDeliveryWorker
 } from "./auth-code-delivery.queue";
 import { processAuthCodeDeliveryJob } from "./auth-code-delivery.processor";
+import { HttpInstagramGraphDeliveryProvider } from "./instagram-graph-delivery-provider";
 import { relayPendingOutboxEvents } from "./outbox-relay";
 import {
   createMessagingDeliveryQueue,
@@ -165,7 +166,9 @@ const readinessChecks = {
         }
       }
     : {}),
-  ...(messagingMediaIngestionQueue && messagingMediaIngestionWorker && messagingMediaIngestionStorage
+  ...(messagingMediaIngestionQueue &&
+  messagingMediaIngestionWorker &&
+  messagingMediaIngestionStorage
     ? {
         messagingMediaIngestionQueue: async () => {
           await messagingMediaIngestionQueue.waitUntilReady();
@@ -208,19 +211,31 @@ function createMessagingDeliveryProvider(): MessagingDeliveryProviders | null {
   }
 
   if (!config.telegramBusinessDelivery) {
-    throw new Error("Telegram Business delivery settings are required when messaging delivery is enabled");
+    throw new Error(
+      "Telegram Business delivery settings are required when messaging delivery is enabled"
+    );
   }
 
   const telegramBusiness = new TelegramBusinessMessagingDeliveryProvider(
     config.telegramBusinessDelivery
   );
+  const instagramGraph = config.instagramGraphDelivery
+    ? new HttpInstagramGraphDeliveryProvider({
+        graphApiBaseUrl: config.instagramGraphDelivery.graphApiBaseUrl,
+        tokenCipher: createAes256GcmSecretCipher(config.instagramGraphDelivery.tokenEncryptionKey)
+      })
+    : undefined;
 
   if (!telegramMtprotoSessionSupervisor) {
-    return telegramBusiness;
+    return {
+      telegramBusiness,
+      ...(instagramGraph ? { instagramGraph } : {})
+    };
   }
 
   return {
     telegramBusiness,
+    ...(instagramGraph ? { instagramGraph } : {}),
     telegramMtproto: new TelegramMtprotoSessionDeliveryProvider({
       registry: telegramMtprotoSessionSupervisor
     })
@@ -233,7 +248,9 @@ function createMessagingMediaIngestionProvider(): TelegramBusinessMediaProvider 
   }
 
   if (!config.telegramBusinessDelivery) {
-    throw new Error("Telegram Business media ingestion settings are required when media ingestion is enabled");
+    throw new Error(
+      "Telegram Business media ingestion settings are required when media ingestion is enabled"
+    );
   }
 
   return new TelegramBusinessMediaProvider(config.telegramBusinessDelivery);

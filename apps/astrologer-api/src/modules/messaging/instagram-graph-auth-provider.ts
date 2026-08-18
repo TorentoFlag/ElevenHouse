@@ -33,6 +33,7 @@ export type InstagramGraphLongLivedTokenResult = {
 
 export type InstagramGraphConnectedAccount = {
   readonly instagramAccountId: string;
+  readonly instagramAppScopedUserId: string | null;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -147,14 +148,18 @@ export class HttpInstagramGraphAuthProvider implements InstagramGraphAuthProvide
     if (!response.ok || !parsed.success) {
       throw new Error("Instagram Graph connected account lookup failed");
     }
-    const instagramAccountId = parsed.data.id?.toString() ?? input.fallbackInstagramUserId;
     const instagramUserId =
-      parsed.data.user_id?.toString() ?? parsed.data.id?.toString() ?? input.fallbackInstagramUserId;
+      parsed.data.user_id?.toString() ??
+      parsed.data.id?.toString() ??
+      input.fallbackInstagramUserId;
+    const instagramAccountId = instagramUserId;
+    const instagramAppScopedUserId = parsed.data.id?.toString() ?? null;
     if (!instagramUserId) throw new Error("Instagram Graph account id was not returned");
     if (!instagramAccountId) throw new Error("Instagram Graph scoped account id was not returned");
 
     return {
       instagramAccountId,
+      instagramAppScopedUserId,
       instagramUserId,
       instagramUsername: parsed.data.username ?? null,
       instagramDisplayName: parsed.data.name ?? null

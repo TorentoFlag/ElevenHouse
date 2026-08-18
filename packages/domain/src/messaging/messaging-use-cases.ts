@@ -18,6 +18,7 @@ import type {
   TelegramMtprotoLoginResultStoreResult,
   RecordTelegramBusinessConnectionStoreResult,
   CompleteInstagramGraphConnectionStoreResult,
+  RevokeInstagramGraphConnectionStoreResult,
   TelegramBusinessConnectionRights
 } from "./messaging-store";
 import type {
@@ -61,7 +62,7 @@ export function selectSingleSendableMessagingConversation(
   candidates: readonly SendableMessagingConversation[]
 ): SendableMessagingConversation | null {
   const sendable = candidates.filter((candidate) => candidate.canSend);
-  return sendable.length === 1 ? sendable[0] ?? null : null;
+  return sendable.length === 1 ? (sendable[0] ?? null) : null;
 }
 
 export async function createOutboundMessage(input: {
@@ -248,6 +249,7 @@ export async function completeInstagramGraphConnection(input: {
   readonly astrologerUserId: string;
   readonly connectionId: string;
   readonly instagramAccountId: string;
+  readonly instagramAppScopedUserId: string | null;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -258,12 +260,36 @@ export async function completeInstagramGraphConnection(input: {
   return input.store.completeInstagramGraphConnection({
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     connectionId: identifier(input.connectionId, "Channel connection id is required"),
-    instagramAccountId: bounded(input.instagramAccountId, 1, 200, "Instagram account id is required"),
+    instagramAccountId: bounded(
+      input.instagramAccountId,
+      1,
+      200,
+      "Instagram account id is required"
+    ),
+    instagramAppScopedUserId: optionalSnapshot(input.instagramAppScopedUserId),
     instagramUserId: bounded(input.instagramUserId, 1, 200, "Instagram user id is required"),
     instagramUsername: optionalSnapshot(input.instagramUsername),
     instagramDisplayName: optionalSnapshot(input.instagramDisplayName),
     encryptedAccessToken: encryptedSecret(input.encryptedAccessToken),
     tokenExpiresAt: input.tokenExpiresAt ? normalizeIsoInstant(input.tokenExpiresAt) : null,
+    now: input.now.toISOString()
+  });
+}
+
+export async function revokeInstagramGraphConnectionByMetaUserId(input: {
+  readonly store: MessagingStore;
+  readonly instagramAppScopedUserId: string;
+  readonly reason: "deauthorized" | "data_deletion";
+  readonly now: Date;
+}): Promise<RevokeInstagramGraphConnectionStoreResult> {
+  return input.store.revokeInstagramGraphConnectionByMetaUserId({
+    instagramAppScopedUserId: bounded(
+      input.instagramAppScopedUserId,
+      1,
+      200,
+      "Instagram app-scoped user id is required"
+    ),
+    reason: input.reason,
     now: input.now.toISOString()
   });
 }

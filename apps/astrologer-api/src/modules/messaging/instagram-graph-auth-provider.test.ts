@@ -90,7 +90,8 @@ describe("HttpInstagramGraphAuthProvider", () => {
         fallbackInstagramUserId: null
       })
     ).resolves.toEqual({
-      instagramAccountId: "ig_scoped_123",
+      instagramAccountId: "ig_456",
+      instagramAppScopedUserId: "ig_scoped_123",
       instagramUserId: "ig_456",
       instagramUsername: "alisa.astro",
       instagramDisplayName: null

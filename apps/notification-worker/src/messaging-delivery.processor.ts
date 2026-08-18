@@ -3,6 +3,10 @@ import type { MessagingDeliveryProcessingStore } from "@elevenhouse/db/messaging
 import type { Logger } from "@elevenhouse/observability";
 import type { MessagingDeliveryJobData } from "./messaging-delivery.queue";
 import type {
+  InstagramGraphDeliveryProvider,
+  InstagramGraphDeliveryProviderResult
+} from "./instagram-graph-delivery-provider";
+import type {
   MessagingDeliveryProvider,
   MessagingDeliveryProviderResult
 } from "./telegram-business-provider";
@@ -13,10 +17,14 @@ export type MessagingDeliveryProviders =
   | MessagingDeliveryProvider
   | {
       readonly telegramBusiness: MessagingDeliveryProvider;
-      readonly telegramMtproto: TelegramMtprotoDeliveryProvider;
+      readonly telegramMtproto?: TelegramMtprotoDeliveryProvider;
+      readonly instagramGraph?: InstagramGraphDeliveryProvider;
     };
 
-type MessagingDeliveryResult = MessagingDeliveryProviderResult | TelegramMtprotoMessagingProviderResult;
+type MessagingDeliveryResult =
+  | MessagingDeliveryProviderResult
+  | TelegramMtprotoMessagingProviderResult
+  | InstagramGraphDeliveryProviderResult;
 
 export async function processMessagingDeliveryJob(input: {
   readonly job: Job<MessagingDeliveryJobData>;
@@ -76,8 +84,8 @@ export async function processMessagingDeliveryJob(input: {
     attemptNumber,
     provider: result.provider,
     providerStatusCode: result.providerStatusCode,
-    errorCode: result.errorCode ?? "TELEGRAM_BUSINESS_DELIVERY_FAILED",
-    errorMessage: result.errorMessage ?? "Telegram Business delivery failed",
+    errorCode: result.errorCode ?? defaultDeliveryErrorCode(result.provider),
+    errorMessage: result.errorMessage ?? defaultDeliveryErrorMessage(result.provider),
     attemptedAt: input.now
   };
   if (result.status === "unknown") {
@@ -111,15 +119,15 @@ async function recordFinal(
     attemptNumber,
     provider: result.provider,
     providerStatusCode: result.providerStatusCode,
-    errorCode: result.errorCode ?? "TELEGRAM_BUSINESS_DELIVERY_FAILED",
-    errorMessage: result.errorMessage ?? "Telegram Business delivery failed",
+    errorCode: result.errorCode ?? defaultDeliveryErrorCode(result.provider),
+    errorMessage: result.errorMessage ?? defaultDeliveryErrorMessage(result.provider),
     attemptedAt: input.now,
     ...(result.connectionStatus
       ? {
           connectionFailure: {
             status: result.connectionStatus,
-            errorCode: result.errorCode ?? "TELEGRAM_BUSINESS_DELIVERY_FAILED",
-            errorMessage: result.errorMessage ?? "Telegram Business delivery failed"
+            errorCode: result.errorCode ?? defaultDeliveryErrorCode(result.provider),
+            errorMessage: result.errorMessage ?? defaultDeliveryErrorMessage(result.provider)
           }
         }
       : {})
@@ -189,6 +197,37 @@ function sendWithProvider(
     });
   }
 
+  if (workItem.mode === "instagram_graph") {
+    if (!providers.instagramGraph) {
+      return Promise.resolve({
+        provider: "instagram",
+        status: "failed",
+        retryable: true,
+        errorCode: "INSTAGRAM_GRAPH_PROVIDER_NOT_CONFIGURED",
+        errorMessage: "Instagram Graph delivery is not configured in this worker"
+      });
+    }
+    return providers.instagramGraph.sendMessage({
+      messageId: workItem.messageId,
+      channelConnectionId: workItem.channelConnectionId,
+      astrologerUserId: workItem.astrologerUserId,
+      instagramAccountId: workItem.instagramAccountId,
+      recipientId: workItem.providerChatId,
+      text: workItem.text,
+      encryptedAccessToken: workItem.encryptedAccessToken
+    });
+  }
+
+  if (!providers.telegramMtproto) {
+    return Promise.resolve({
+      provider: "telegram",
+      status: "failed",
+      retryable: true,
+      errorCode: "TELEGRAM_MTPROTO_PROVIDER_NOT_CONFIGURED",
+      errorMessage: "Telegram MTProto delivery is not configured in this worker"
+    });
+  }
+
   return providers.telegramMtproto.sendMessage({
     messageId: workItem.messageId,
     channelConnectionId: workItem.channelConnectionId,
@@ -205,4 +244,16 @@ function isFinalAttempt(job: Job<MessagingDeliveryJobData>): boolean {
   const attempts = typeof job.opts.attempts === "number" ? job.opts.attempts : 1;
 
   return job.attemptsMade + 1 >= attempts;
+}
+
+function defaultDeliveryErrorCode(provider: "telegram" | "instagram"): string {
+  return provider === "instagram"
+    ? "INSTAGRAM_GRAPH_DELIVERY_FAILED"
+    : "TELEGRAM_BUSINESS_DELIVERY_FAILED";
+}
+
+function defaultDeliveryErrorMessage(provider: "telegram" | "instagram"): string {
+  return provider === "instagram"
+    ? "Instagram Graph delivery failed"
+    : "Telegram Business delivery failed";
 }

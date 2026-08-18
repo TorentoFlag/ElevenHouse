@@ -28,6 +28,7 @@ import {
   recordInstagramGraphMessage,
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
+  revokeInstagramGraphConnectionByMetaUserId,
   requireTelegramMtprotoLoginSession,
   startInstagramGraphConnection,
   startTelegramBusinessConnection,
@@ -258,7 +259,7 @@ export class MessagingService {
       });
       await authProvider.subscribeAccountToWebhooks({
         accessToken: longLivedToken.accessToken,
-        instagramUserId: account.instagramAccountId,
+        instagramUserId: account.instagramUserId,
         fields: ["messages"]
       });
       const cipher = createAes256GcmSecretCipher(instagramGraphConfig.tokenEncryptionKey);
@@ -270,6 +271,7 @@ export class MessagingService {
         astrologerUserId: state.astrologerUserId,
         connectionId: state.connectionId,
         instagramAccountId: account.instagramAccountId,
+        instagramAppScopedUserId: account.instagramAppScopedUserId,
         instagramUserId: account.instagramUserId,
         instagramUsername: account.instagramUsername,
         instagramDisplayName: account.instagramDisplayName,
@@ -292,6 +294,86 @@ export class MessagingService {
         })
       };
     });
+  }
+
+  async handleInstagramGraphDeauthorizeCallback(body: unknown): Promise<{ readonly ok: true }> {
+    const signedRequest = this.parseInstagramGraphSignedRequestBody(body);
+    await revokeInstagramGraphConnectionByMetaUserId({
+      store: this.store,
+      instagramAppScopedUserId: signedRequest.userId,
+      reason: "deauthorized",
+      now: this.clock.now()
+    });
+    return { ok: true };
+  }
+
+  async handleInstagramGraphDataDeletionCallback(
+    body: unknown
+  ): Promise<{ readonly url: string; readonly confirmation_code: string }> {
+    const signedRequest = this.parseInstagramGraphSignedRequestBody(body);
+    await revokeInstagramGraphConnectionByMetaUserId({
+      store: this.store,
+      instagramAppScopedUserId: signedRequest.userId,
+      reason: "data_deletion",
+      now: this.clock.now()
+    });
+    const confirmationCode = instagramGraphDeletionConfirmationCode({
+      config: this.requireInstagramGraphConfig(),
+      userId: signedRequest.userId
+    });
+    return {
+      url: instagramGraphDeletionStatusUrl({
+        config: this.requireInstagramGraphConfig(),
+        confirmationCode
+      }),
+      confirmation_code: confirmationCode
+    };
+  }
+
+  getInstagramGraphDataDeletionStatus(confirmationCode: string): {
+    readonly status: "completed";
+    readonly confirmation_code: string;
+  } {
+    const normalized = confirmationCode.trim();
+    if (!normalized || normalized.length > 128) {
+      throw messagingHttpError(
+        400,
+        "instagram_graph_data_deletion_confirmation_invalid",
+        "Instagram Graph data deletion confirmation code is invalid"
+      );
+    }
+    return { status: "completed", confirmation_code: normalized };
+  }
+
+  private parseInstagramGraphSignedRequestBody(body: unknown): { readonly userId: string } {
+    const config = this.requireInstagramGraphConfig();
+    const parsed = parseContract(InstagramGraphSignedRequestBodySchema, body);
+    const signedRequest = verifyInstagramGraphSignedRequest({
+      appSecret: config.appSecret,
+      signedRequest: parsed.signed_request
+    });
+    if (!signedRequest) {
+      throw messagingHttpError(
+        401,
+        "instagram_graph_signed_request_invalid",
+        "Instagram Graph signed_request is invalid"
+      );
+    }
+    return signedRequest;
+  }
+
+  private requireInstagramGraphConfig(): InstagramGraphRuntimeConfig {
+    const instagramGraphConfig =
+      this.configService.get<InstagramGraphRuntimeConfig | null>("astrologerApi.instagramGraph") ??
+      null;
+    if (!instagramGraphConfig) {
+      throw messagingHttpError(
+        503,
+        "instagram_graph_connection_unavailable",
+        "Instagram Graph login is not configured"
+      );
+    }
+    return instagramGraphConfig;
   }
 
   async startTelegramMtprotoConnection(
@@ -1019,6 +1101,14 @@ const InstagramGraphCallbackQuerySchema = z.object({
   error_description: z.string().trim().min(1).optional()
 });
 
+const InstagramGraphSignedRequestBodySchema = z.object({
+  signed_request: z.string().trim().min(1)
+});
+
+const InstagramGraphSignedRequestPayloadSchema = z.object({
+  user_id: z.union([z.string().trim().min(1), z.number()])
+});
+
 type InstagramGraphCallbackState = {
   readonly astrologerUserId: string;
   readonly connectionId: string;
@@ -1109,6 +1199,26 @@ function parseInstagramGraphStatePayload(payload: string): unknown | null {
   }
 }
 
+function verifyInstagramGraphSignedRequest(input: {
+  readonly appSecret: string;
+  readonly signedRequest: string;
+}): { readonly userId: string } | null {
+  const [encodedSignature, encodedPayload] = input.signedRequest.split(".", 2);
+  if (!encodedSignature || !encodedPayload) return null;
+  const expectedSignature = createHmac("sha256", input.appSecret)
+    .update(encodedPayload)
+    .digest("base64url");
+  if (!constantTimeEqual(encodedSignature, expectedSignature)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    const parsed = InstagramGraphSignedRequestPayloadSchema.safeParse(payload);
+    if (!parsed.success) return null;
+    return { userId: parsed.data.user_id.toString() };
+  } catch {
+    return null;
+  }
+}
+
 function instagramGraphRedirectUrl(input: {
   readonly config: InstagramGraphRuntimeConfig;
   readonly status: "connected" | "error";
@@ -1118,6 +1228,29 @@ function instagramGraphRedirectUrl(input: {
   url.searchParams.set("channel", "instagram");
   url.searchParams.set("status", input.status);
   if (input.code) url.searchParams.set("code", input.code);
+  return url.toString();
+}
+
+function instagramGraphDeletionConfirmationCode(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly userId: string;
+}): string {
+  return createHmac("sha256", input.config.appSecret)
+    .update(`instagram_graph_data_deletion:${input.userId}`)
+    .digest("base64url")
+    .slice(0, 32);
+}
+
+function instagramGraphDeletionStatusUrl(input: {
+  readonly config: InstagramGraphRuntimeConfig;
+  readonly confirmationCode: string;
+}): string {
+  const url = new URL(
+    `/api/messaging/channel-connections/instagram/graph/data-deletion/status/${encodeURIComponent(
+      input.confirmationCode
+    )}`,
+    input.config.astrologerWebBaseUrl
+  );
   return url.toString();
 }
 

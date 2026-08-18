@@ -28,7 +28,18 @@ const notificationWorkerRuntimeConfigSchema = z
       .int()
       .positive()
       .default(1000),
-    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: z.enum(["true", "false"]).default("false"),
+    NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED: z
+      .enum(["true", "false"])
+      .default("false"),
+    NOTIFICATION_WORKER_INSTAGRAM_GRAPH_API_BASE_URL: z
+      .string()
+      .trim()
+      .url()
+      .default("https://graph.instagram.com/v25.0"),
+    NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: z
+      .enum(["true", "false"])
+      .default("false"),
     NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS: z.coerce
       .number()
       .int()
@@ -63,7 +74,11 @@ const notificationWorkerRuntimeConfigSchema = z
       .trim()
       .regex(/^[a-f0-9]{32}$/i)
       .optional(),
-    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY: z
+      .string()
+      .trim()
+      .min(1)
+      .optional(),
     NOTIFICATION_WORKER_TELEGRAM_MTPROTO_LEASE_DURATION_MS: z.coerce
       .number()
       .int()
@@ -74,7 +89,11 @@ const notificationWorkerRuntimeConfigSchema = z
       .int()
       .positive()
       .default(15_000),
-    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT: z.coerce.number().int().positive().default(25),
+    NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(25),
     ASTROLOGER_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
     ASTROLOGER_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
     ASTROLOGER_MEDIA_PRIVATE_STORAGE_BUCKET: z
@@ -141,6 +160,14 @@ const notificationWorkerRuntimeConfigSchema = z
       );
     }
 
+    if (config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED === "true") {
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY,
+        ["NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY"],
+        context
+      );
+    }
+
     const hasAnyMtprotoSetting =
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED === "true" ||
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID !== undefined ||
@@ -187,6 +214,7 @@ export type NotificationWorkerRuntimeConfig = {
   readonly messagingDeliveryEnabled: boolean;
   readonly messagingDeliveryAttempts: number;
   readonly messagingDeliveryBackoffMs: number;
+  readonly instagramGraphDelivery: InstagramGraphDeliveryOptions | null;
   readonly messagingMediaIngestionEnabled: boolean;
   readonly messagingMediaIngestionAttempts: number;
   readonly messagingMediaIngestionBackoffMs: number;
@@ -212,6 +240,11 @@ export type TelegramMtprotoOptions = {
   readonly leaseDurationMs: number;
   readonly sessionSyncIntervalMs: number;
   readonly claimLimit: number;
+};
+
+export type InstagramGraphDeliveryOptions = {
+  readonly graphApiBaseUrl: string;
+  readonly tokenEncryptionKey: Buffer;
 };
 
 export type MessagingMediaStorageOptions = {
@@ -244,6 +277,13 @@ export function createNotificationWorkerRuntimeConfig(
     messagingDeliveryEnabled: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true",
     messagingDeliveryAttempts: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ATTEMPTS,
     messagingDeliveryBackoffMs: config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_BACKOFF_MS,
+    instagramGraphDelivery:
+      config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED === "true"
+        ? toInstagramGraphDeliveryOptions({
+            graphApiBaseUrl: config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_API_BASE_URL,
+            tokenEncryptionKey: config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY
+          })
+        : null,
     messagingMediaIngestionEnabled:
       config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true",
     messagingMediaIngestionAttempts: config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS,
@@ -321,12 +361,30 @@ function toTelegramMtprotoOptions(input: {
   };
 }
 
+function toInstagramGraphDeliveryOptions(input: {
+  readonly graphApiBaseUrl: string;
+  readonly tokenEncryptionKey: string | undefined;
+}): InstagramGraphDeliveryOptions {
+  if (!input.tokenEncryptionKey) {
+    throw new Error(
+      "Instagram Graph delivery settings are required when Instagram delivery is enabled"
+    );
+  }
+
+  return {
+    graphApiBaseUrl: input.graphApiBaseUrl,
+    tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey)
+  };
+}
+
 function toTelegramBusinessDeliveryOptions(input: {
   readonly botToken: string | undefined;
   readonly botApiBaseUrl: string;
 }): TelegramBusinessDeliveryOptions {
   if (!input.botToken) {
-    throw new Error("Telegram Business delivery settings are required when messaging delivery is enabled");
+    throw new Error(
+      "Telegram Business delivery settings are required when messaging delivery is enabled"
+    );
   }
 
   return {

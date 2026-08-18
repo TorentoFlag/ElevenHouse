@@ -29,6 +29,7 @@ import type {
   RecordTelegramBusinessEditedMessageStoreInput,
   RecordTelegramBusinessMessageStoreInput,
   RecordTelegramMtprotoMessageStoreInput,
+  RevokeInstagramGraphConnectionStoreInput,
   StartInstagramGraphConnectionStoreInput,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramMtprotoConnectionStoreInput
@@ -69,10 +70,18 @@ describe("Messaging use cases", () => {
   it("selects the sole send-capable conversation without inspecting its provider", () => {
     expect(
       selectSingleSendableMessagingConversation([
-        { threadId: "thread-read-only", channelConnectionId: "connection-read-only", canSend: false },
+        {
+          threadId: "thread-read-only",
+          channelConnectionId: "connection-read-only",
+          canSend: false
+        },
         { threadId: "thread-sendable", channelConnectionId: "connection-sendable", canSend: true }
       ])
-    ).toEqual({ threadId: "thread-sendable", channelConnectionId: "connection-sendable", canSend: true });
+    ).toEqual({
+      threadId: "thread-sendable",
+      channelConnectionId: "connection-sendable",
+      canSend: true
+    });
 
     expect(
       selectSingleSendableMessagingConversation([
@@ -502,6 +511,7 @@ describe("Messaging use cases", () => {
         astrologerUserId,
         connectionId: "instagram-1",
         instagramAccountId: " ig-scoped-123 ",
+        instagramAppScopedUserId: " app-scoped-123 ",
         instagramUserId: " ig-456 ",
         instagramUsername: " alisa.astro ",
         instagramDisplayName: " Alisa Astro ",
@@ -516,6 +526,7 @@ describe("Messaging use cases", () => {
         astrologerUserId,
         connectionId: "instagram-1",
         instagramAccountId: "ig-scoped-123",
+        instagramAppScopedUserId: "app-scoped-123",
         instagramUserId: "ig-456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -1089,6 +1100,7 @@ class InMemoryMessagingStore implements MessagingStore {
     [];
   readonly startInstagramGraphCommands: StartInstagramGraphConnectionStoreInput[] = [];
   readonly completeInstagramGraphCommands: CompleteInstagramGraphConnectionStoreInput[] = [];
+  readonly revokeInstagramGraphCommands: RevokeInstagramGraphConnectionStoreInput[] = [];
   readonly startTelegramMtprotoCommands: StartTelegramMtprotoConnectionStoreInput[] = [];
   readonly telegramMtprotoCodeCommands: RecordTelegramMtprotoCodeResultStoreInput[] = [];
   readonly telegramMtprotoPasswordCommands: RecordTelegramMtprotoPasswordResultStoreInput[] = [];
@@ -1315,6 +1327,13 @@ class InMemoryMessagingStore implements MessagingStore {
     return {
       kind: this.#instagramGraphConnectionId === input.connectionId ? "recorded" : "unmatched"
     };
+  }
+
+  async revokeInstagramGraphConnectionByMetaUserId(
+    input: RevokeInstagramGraphConnectionStoreInput
+  ): Promise<{ readonly kind: "recorded" | "unmatched" }> {
+    this.revokeInstagramGraphCommands.push(input);
+    return { kind: "recorded" };
   }
 
   async startTelegramMtprotoConnection(input: StartTelegramMtprotoConnectionStoreInput): Promise<{

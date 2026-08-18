@@ -198,7 +198,8 @@ describe("messaging HTTP routes", () => {
           expiresInSeconds: 3600
         })),
         resolveConnectedAccount: vi.fn(async () => ({
-          instagramAccountId: "ig_scoped_123",
+          instagramAccountId: "ig_456",
+          instagramAppScopedUserId: "ig_scoped_123",
           instagramUserId: "ig_456",
           instagramUsername: "alisa.astro",
           instagramDisplayName: "Alisa Astro"
@@ -680,11 +681,7 @@ describe("messaging HTTP routes", () => {
     return { status: response.status, body: (await response.json()) as Record<string, unknown> };
   }
 
-  async function requestText(
-    method: string,
-    path: string,
-    headers: Record<string, string> = {}
-  ) {
+  async function requestText(method: string, path: string, headers: Record<string, string> = {}) {
     const response = await fetch(`${baseUrl}${path}`, { method, headers });
     return { status: response.status, body: await response.text() };
   }
@@ -774,6 +771,7 @@ function createStore(): MessagingStore {
       instagramGraphConnectionCompleteCount += 1;
       return { kind: "recorded" as const };
     }),
+    revokeInstagramGraphConnectionByMetaUserId: vi.fn(async () => ({ kind: "recorded" as const })),
     startTelegramMtprotoConnection: vi.fn(async () => {
       startedTelegramMtprotoConnectionId = connectionId;
       mtprotoLoginState = "code_required";

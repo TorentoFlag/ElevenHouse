@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import {
   MessagingClientRelationshipError,
   type MessagingMessage,
@@ -181,7 +182,8 @@ describe("MessagingService", () => {
         expiresInSeconds: 3600
       })),
       resolveConnectedAccount: vi.fn(async () => ({
-        instagramAccountId: "ig_scoped_123",
+        instagramAccountId: "ig_456",
+        instagramAppScopedUserId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro"
@@ -216,18 +218,20 @@ describe("MessagingService", () => {
     });
     expect(instagramGraphAuthProvider.subscribeAccountToWebhooks).toHaveBeenCalledWith({
       accessToken: "plain-long-token",
-      instagramUserId: "ig_scoped_123",
+      instagramUserId: "ig_456",
       fields: ["messages"]
     });
     const completeInstagramGraphConnectionMock =
       store.completeInstagramGraphConnection as ReturnType<typeof vi.fn>;
-    expect(instagramGraphAuthProvider.subscribeAccountToWebhooks.mock.invocationCallOrder[0])
-      .toBeLessThan(completeInstagramGraphConnectionMock.mock.invocationCallOrder[0] ?? 0);
+    expect(
+      instagramGraphAuthProvider.subscribeAccountToWebhooks.mock.invocationCallOrder[0]
+    ).toBeLessThan(completeInstagramGraphConnectionMock.mock.invocationCallOrder[0] ?? 0);
     expect(store.completeInstagramGraphConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         astrologerUserId,
         connectionId,
-        instagramAccountId: "ig_scoped_123",
+        instagramAccountId: "ig_456",
+        instagramAppScopedUserId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -262,6 +266,57 @@ describe("MessagingService", () => {
         "https://app.elevenhouse.test/inbox?channel=instagram&status=error&code=instagram_graph_state_invalid"
     });
     expect(instagramGraphAuthProvider.exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it("handles Meta Instagram deauthorize signed_request by revoking the connection", async () => {
+    const store = createStore();
+    const service = createService({ store, instagramGraph: instagramGraphConfig() });
+
+    await expect(
+      service.handleInstagramGraphDeauthorizeCallback({
+        signed_request: signInstagramGraphRequest({ user_id: "ig_scoped_123" })
+      })
+    ).resolves.toEqual({ ok: true });
+
+    expect(store.revokeInstagramGraphConnectionByMetaUserId).toHaveBeenCalledWith({
+      instagramAppScopedUserId: "ig_scoped_123",
+      reason: "deauthorized",
+      now: now.toISOString()
+    });
+  });
+
+  it("handles Meta Instagram data deletion signed_request with a confirmation URL", async () => {
+    const store = createStore();
+    const service = createService({ store, instagramGraph: instagramGraphConfig() });
+
+    const result = await service.handleInstagramGraphDataDeletionCallback({
+      signed_request: signInstagramGraphRequest({ user_id: "ig_scoped_123" })
+    });
+
+    expect(store.revokeInstagramGraphConnectionByMetaUserId).toHaveBeenCalledWith({
+      instagramAppScopedUserId: "ig_scoped_123",
+      reason: "data_deletion",
+      now: now.toISOString()
+    });
+    expect(result.confirmation_code).toHaveLength(32);
+    expect(result.url).toBe(
+      `https://app.elevenhouse.test/api/messaging/channel-connections/instagram/graph/data-deletion/status/${result.confirmation_code}`
+    );
+  });
+
+  it("rejects tampered Meta Instagram signed_request callbacks", async () => {
+    const store = createStore();
+    const service = createService({ store, instagramGraph: instagramGraphConfig() });
+
+    await expect(
+      service.handleInstagramGraphDeauthorizeCallback({
+        signed_request: `${signInstagramGraphRequest({ user_id: "ig_scoped_123" })}tampered`
+      })
+    ).rejects.toMatchObject({
+      status: 401,
+      response: expect.objectContaining({ code: "instagram_graph_signed_request_invalid" })
+    });
+    expect(store.revokeInstagramGraphConnectionByMetaUserId).not.toHaveBeenCalled();
   });
 
   it("returns a typed unavailable error when Instagram Graph login is not configured", async () => {
@@ -876,6 +931,14 @@ function encryptedMtprotoSecret(
   };
 }
 
+function signInstagramGraphRequest(payload: Record<string, unknown>): string {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", instagramGraphConfig().appSecret)
+    .update(encodedPayload)
+    .digest("base64url");
+  return `${signature}.${encodedPayload}`;
+}
+
 function createService(
   overrides: {
     store?: MessagingStore;
@@ -995,6 +1058,7 @@ function createStore(
     bindTelegramBusinessConnectionUser: vi.fn(async () => ({ kind: "recorded" as const })),
     startInstagramGraphConnection: vi.fn(async () => ({ connectionId })),
     completeInstagramGraphConnection: vi.fn(async () => ({ kind: "recorded" as const })),
+    revokeInstagramGraphConnectionByMetaUserId: vi.fn(async () => ({ kind: "recorded" as const })),
     recordTelegramBusinessMessage: vi.fn(async () => ({
       kind: "created" as const,
       message: domainMessage("inbound")

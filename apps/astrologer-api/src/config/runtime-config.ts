@@ -861,7 +861,13 @@ function toInstagramGraphConfig(input: {
   readonly scopes: string;
 }): AstrologerApiRuntimeConfig["instagramGraph"] {
   if (!input.enabled) return null;
-  if (!input.appId || !input.appSecret || !input.redirectUri || !input.tokenEncryptionKey) {
+  if (
+    !input.appId ||
+    !input.appSecret ||
+    !input.redirectUri ||
+    !input.tokenEncryptionKey ||
+    !input.webhookVerifyToken
+  ) {
     throw new Error("Instagram Graph settings are required when Instagram Graph login is enabled");
   }
   const scopes = input.scopes
@@ -878,7 +884,7 @@ function toInstagramGraphConfig(input: {
     appSecret: input.appSecret,
     redirectUri: input.redirectUri,
     tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey),
-    webhookVerifyToken: input.webhookVerifyToken ?? null,
+    webhookVerifyToken: input.webhookVerifyToken,
     callbackStateTtlSeconds: input.callbackStateTtlSeconds,
     authBaseUrl: stripTrailingSlashes(input.authBaseUrl),
     tokenExchangeBaseUrl: stripTrailingSlashes(input.tokenExchangeBaseUrl),

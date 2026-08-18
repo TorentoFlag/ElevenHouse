@@ -54,6 +54,7 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       messagingDeliveryEnabled: false,
       messagingDeliveryAttempts: 5,
       messagingDeliveryBackoffMs: 1000,
+      instagramGraphDelivery: null,
       messagingMediaIngestionEnabled: false,
       messagingMediaIngestionAttempts: 5,
       messagingMediaIngestionBackoffMs: 1000,
@@ -117,6 +118,33 @@ describe("createNotificationWorkerRuntimeConfig", () => {
       telegramBusinessDelivery: {
         botToken: "telegram-token",
         botApiBaseUrl: "https://telegram.test"
+      }
+    });
+  });
+
+  it("requires Instagram Graph token encryption settings when Instagram delivery is enabled", () => {
+    expect(() =>
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED: "true"
+      })
+    ).toThrow("NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY");
+  });
+
+  it("parses Instagram Graph messaging delivery settings", () => {
+    const instagramTokenKey = Buffer.alloc(32, 14).toString("base64");
+
+    expect(
+      createNotificationWorkerRuntimeConfig({
+        ...requiredDeliveryConfig,
+        NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED: "true",
+        NOTIFICATION_WORKER_INSTAGRAM_GRAPH_API_BASE_URL: "https://graph.instagram.test/v25.0",
+        NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: instagramTokenKey
+      })
+    ).toMatchObject({
+      instagramGraphDelivery: {
+        graphApiBaseUrl: "https://graph.instagram.test/v25.0",
+        tokenEncryptionKey: Buffer.alloc(32, 14)
       }
     });
   });

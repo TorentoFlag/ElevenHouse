@@ -1076,7 +1076,8 @@ describe("createDrizzleMessagingStore", () => {
       createDrizzleMessagingStore(fake.database as never).completeInstagramGraphConnection({
         astrologerUserId,
         connectionId: channelConnectionId,
-        instagramAccountId: "ig_scoped_123",
+        instagramAccountId: "ig_456",
+        instagramAppScopedUserId: "ig_scoped_123",
         instagramUserId: "ig_456",
         instagramUsername: "alisa.astro",
         instagramDisplayName: "Alisa Astro",
@@ -1093,6 +1094,7 @@ describe("createDrizzleMessagingStore", () => {
         value: expect.objectContaining({
           channelConnectionId,
           instagramUserId: "ig_456",
+          instagramAppScopedUserId: "ig_scoped_123",
           instagramUsername: "alisa.astro",
           accessTokenEncrypted: encryptedSecretSnapshot("access-token-ciphertext"),
           tokenExpiresAt: new Date("2026-09-22T10:00:00.000Z")
@@ -1115,7 +1117,7 @@ describe("createDrizzleMessagingStore", () => {
         table: messagingChannelConnections,
         value: expect.objectContaining({
           status: "active",
-          externalAccountId: "ig_scoped_123",
+          externalAccountId: "ig_456",
           externalOwnerUserId: "ig_456",
           displayNameSnapshot: "Alisa Astro",
           usernameSnapshot: "alisa.astro",
@@ -1127,6 +1129,46 @@ describe("createDrizzleMessagingStore", () => {
     expect(fake.inserts.map((insert) => JSON.stringify(insert.value)).join("\n")).not.toContain(
       "plain-user-token"
     );
+  });
+
+  it("revokes Instagram Graph connection and removes token data by Meta app-scoped user id", async () => {
+    const fake = createRevokeInstagramGraphConnectionDatabase();
+
+    await expect(
+      createDrizzleMessagingStore(
+        fake.database as never
+      ).revokeInstagramGraphConnectionByMetaUserId({
+        instagramAppScopedUserId: "ig_scoped_123",
+        reason: "data_deletion",
+        now: now.toISOString()
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(fake.transactionCount).toBe(1);
+    expect(fake.updates).toContainEqual({
+      table: messagingChannelConnections,
+      value: expect.objectContaining({
+        status: "revoked",
+        externalAccountId: null,
+        externalOwnerUserId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        lastErrorCode: "instagram_graph_data_deletion_requested",
+        updatedAt: now
+      })
+    });
+    expect(fake.deletes).toContainEqual({
+      table: messagingInstagramGraphAccounts,
+      whereCalled: true
+    });
+    expect(fake.inserts).toContainEqual({
+      table: messagingRealtimeEvents,
+      value: expect.objectContaining({
+        astrologerUserId,
+        type: "channelConnection.updated",
+        channelConnectionId
+      })
+    });
   });
 
   it("reads and advances Telegram Account login state with encrypted-only session snapshots", async () => {
@@ -2113,6 +2155,55 @@ function createCompleteInstagramGraphConnectionDatabase() {
     database,
     inserts,
     updates,
+    get transactionCount() {
+      return transactionCount;
+    }
+  };
+}
+
+function createRevokeInstagramGraphConnectionDatabase() {
+  const inserts: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const updates: Array<{ readonly table: unknown; readonly value: Record<string, unknown> }> = [];
+  const deletes: Array<{ readonly table: unknown; readonly whereCalled: boolean }> = [];
+  let transactionCount = 0;
+  const database = {
+    insert: (table: unknown) => ({
+      values: (value: Record<string, unknown>) => {
+        inserts.push({ table, value });
+        return Promise.resolve(undefined);
+      }
+    }),
+    update: (table: unknown) => ({
+      set: (value: Record<string, unknown>) => ({
+        where: () => {
+          updates.push({ table, value });
+          return { returning: async () => [{ id: channelConnectionId }] };
+        }
+      })
+    }),
+    delete: (table: unknown) => ({
+      where: () => {
+        deletes.push({ table, whereCalled: true });
+        return Promise.resolve(undefined);
+      }
+    }),
+    select: () =>
+      selectChain([
+        {
+          id: channelConnectionId,
+          astrologerUserId
+        }
+      ]),
+    transaction: async <T>(callback: (transaction: unknown) => Promise<T>) => {
+      transactionCount += 1;
+      return callback(database);
+    }
+  };
+  return {
+    database,
+    inserts,
+    updates,
+    deletes,
     get transactionCount() {
       return transactionCount;
     }

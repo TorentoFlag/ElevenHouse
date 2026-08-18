@@ -38,6 +38,8 @@ import type {
   RecordTelegramMtprotoMessageStoreInput,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
+  RevokeInstagramGraphConnectionStoreInput,
+  RevokeInstagramGraphConnectionStoreResult,
   StartInstagramGraphConnectionStoreInput,
   StartInstagramGraphConnectionStoreResult,
   StartTelegramBusinessConnectionStoreInput,
@@ -104,6 +106,8 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     startInstagramGraphConnection: (input) => startInstagramGraphConnection(database, input),
     completeInstagramGraphConnection: (input) => completeInstagramGraphConnection(database, input),
+    revokeInstagramGraphConnectionByMetaUserId: (input) =>
+      revokeInstagramGraphConnectionByMetaUserId(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
     findTelegramMtprotoLoginSession: (input) => findTelegramMtprotoLoginSession(database, input),
     recordTelegramMtprotoCodeResult: (input) => recordTelegramMtprotoCodeResult(database, input),
@@ -684,6 +688,7 @@ async function completeInstagramGraphConnection(
       .values({
         channelConnectionId: connection.id,
         instagramUserId: input.instagramUserId,
+        instagramAppScopedUserId: input.instagramAppScopedUserId,
         instagramUsername: input.instagramUsername,
         instagramDisplayName: input.instagramDisplayName,
         accessTokenEncrypted: input.encryptedAccessToken,
@@ -695,6 +700,7 @@ async function completeInstagramGraphConnection(
         target: messagingInstagramGraphAccounts.channelConnectionId,
         set: {
           instagramUserId: input.instagramUserId,
+          instagramAppScopedUserId: input.instagramAppScopedUserId,
           instagramUsername: input.instagramUsername,
           instagramDisplayName: input.instagramDisplayName,
           accessTokenEncrypted: input.encryptedAccessToken,
@@ -728,6 +734,92 @@ async function completeInstagramGraphConnection(
       )
       .returning({ id: messagingChannelConnections.id });
     if (!updated) return { kind: "unmatched" };
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: connection.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" };
+  });
+}
+
+async function revokeInstagramGraphConnectionByMetaUserId(
+  database: ElevenHouseDatabase,
+  input: RevokeInstagramGraphConnectionStoreInput
+): Promise<RevokeInstagramGraphConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    const [connection] = await transaction
+      .select({
+        id: messagingChannelConnections.id,
+        astrologerUserId: messagingChannelConnections.astrologerUserId
+      })
+      .from(messagingInstagramGraphAccounts)
+      .innerJoin(
+        messagingChannelConnections,
+        eq(messagingChannelConnections.id, messagingInstagramGraphAccounts.channelConnectionId)
+      )
+      .where(
+        and(
+          eq(
+            messagingInstagramGraphAccounts.instagramAppScopedUserId,
+            input.instagramAppScopedUserId
+          ),
+          eq(messagingChannelConnections.provider, "instagram"),
+          eq(messagingChannelConnections.mode, "instagram_graph"),
+          inArray(messagingChannelConnections.status, [
+            "connecting",
+            "active",
+            "reauth_required",
+            "error"
+          ])
+        )
+      )
+      .limit(1);
+    if (!connection) return { kind: "unmatched" };
+
+    const timestamp = new Date(input.now);
+    const errorCode =
+      input.reason === "data_deletion"
+        ? "instagram_graph_data_deletion_requested"
+        : "instagram_graph_deauthorized";
+    const errorMessage =
+      input.reason === "data_deletion"
+        ? "Instagram Graph data deletion requested by Meta signed_request"
+        : "Instagram Graph app deauthorized by Meta signed_request";
+
+    const [updated] = await transaction
+      .update(messagingChannelConnections)
+      .set({
+        status: "revoked",
+        externalAccountId: null,
+        externalOwnerUserId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        capabilities: instagramGraphPendingCapabilities(),
+        lastSyncedAt: timestamp,
+        lastErrorCode: errorCode,
+        lastErrorMessage: errorMessage,
+        updatedAt: timestamp
+      })
+      .where(
+        and(
+          eq(messagingChannelConnections.id, connection.id),
+          eq(messagingChannelConnections.provider, "instagram"),
+          eq(messagingChannelConnections.mode, "instagram_graph")
+        )
+      )
+      .returning({ id: messagingChannelConnections.id });
+    if (!updated) return { kind: "unmatched" };
+
+    await transaction
+      .delete(messagingInstagramGraphAccounts)
+      .where(eq(messagingInstagramGraphAccounts.channelConnectionId, connection.id));
 
     await transaction.insert(messagingRealtimeEvents).values({
       astrologerUserId: connection.astrologerUserId,
@@ -1333,7 +1425,9 @@ async function recordInstagramGraphMessage(
           mediaAssetId: null,
           status: isOwnerMessage ? "sent" : "received",
           failureCode: null,
-          idempotencyKey: isOwnerMessage ? instagramGraphObservedOutboundIdempotencyKey(input) : null,
+          idempotencyKey: isOwnerMessage
+            ? instagramGraphObservedOutboundIdempotencyKey(input)
+            : null,
           requestHash: isOwnerMessage ? hashInstagramGraphMessageRequest(input) : null,
           createdAt: timestamp,
           updatedAt: timestamp

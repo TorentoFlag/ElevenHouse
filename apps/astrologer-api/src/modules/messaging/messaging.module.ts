@@ -13,6 +13,7 @@ import { SecurityModule } from "../security/security.module";
 import { MessagingController } from "./messaging.controller";
 import { MessagingEventsController } from "./messaging-events.controller";
 import { MessagingWebhooksController } from "./messaging-webhooks.controller";
+import { InstagramGraphComplianceController } from "./instagram-graph-compliance.controller";
 import { InstagramGraphOAuthController } from "./instagram-graph-oauth.controller";
 import { MessagingService } from "./messaging.service";
 import {
@@ -41,6 +42,7 @@ import {
     MessagingController,
     MessagingEventsController,
     MessagingWebhooksController,
+    InstagramGraphComplianceController,
     InstagramGraphOAuthController
   ],
   providers: [

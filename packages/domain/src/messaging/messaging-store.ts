@@ -111,6 +111,7 @@ export type CompleteInstagramGraphConnectionStoreInput = {
   readonly astrologerUserId: string;
   readonly connectionId: string;
   readonly instagramAccountId: string;
+  readonly instagramAppScopedUserId: string | null;
   readonly instagramUserId: string;
   readonly instagramUsername: string | null;
   readonly instagramDisplayName: string | null;
@@ -120,6 +121,16 @@ export type CompleteInstagramGraphConnectionStoreInput = {
 };
 
 export type CompleteInstagramGraphConnectionStoreResult = {
+  readonly kind: "recorded" | "unmatched";
+};
+
+export type RevokeInstagramGraphConnectionStoreInput = {
+  readonly instagramAppScopedUserId: string;
+  readonly reason: "deauthorized" | "data_deletion";
+  readonly now: string;
+};
+
+export type RevokeInstagramGraphConnectionStoreResult = {
   readonly kind: "recorded" | "unmatched";
 };
 
@@ -335,6 +346,9 @@ export type MessagingStore = {
   readonly completeInstagramGraphConnection: (
     input: CompleteInstagramGraphConnectionStoreInput
   ) => Promise<CompleteInstagramGraphConnectionStoreResult>;
+  readonly revokeInstagramGraphConnectionByMetaUserId: (
+    input: RevokeInstagramGraphConnectionStoreInput
+  ) => Promise<RevokeInstagramGraphConnectionStoreResult>;
   readonly startTelegramMtprotoConnection: (
     input: StartTelegramMtprotoConnectionStoreInput
   ) => Promise<StartTelegramMtprotoConnectionStoreResult>;

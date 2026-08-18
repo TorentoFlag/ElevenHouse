@@ -7,7 +7,9 @@ import type { MessagingDeliveryJobData } from "./messaging-delivery.queue";
 import type { TelegramBusinessMessagingDeliveryProvider } from "./telegram-business-provider";
 import type { TelegramMtprotoMessagingProvider } from "./telegram-mtproto-provider";
 
-function createJob(overrides: Partial<Job<MessagingDeliveryJobData>> = {}): Job<MessagingDeliveryJobData> {
+function createJob(
+  overrides: Partial<Job<MessagingDeliveryJobData>> = {}
+): Job<MessagingDeliveryJobData> {
   return {
     data: { outboxEventId: "outbox_1" },
     attemptsMade: 0,
@@ -115,6 +117,68 @@ describe("processMessagingDeliveryJob", () => {
     expect(JSON.stringify(logRecords)).not.toContain("Message text from DB");
   });
 
+  it("routes Instagram Graph delivery through the Instagram provider", async () => {
+    const now = new Date("2026-07-22T10:00:00.000Z");
+    const store = createStore({
+      workItem: {
+        ...createWorkItem(),
+        provider: "instagram",
+        mode: "instagram_graph",
+        instagramAccountId: "ig_456",
+        encryptedAccessToken: {
+          algorithm: "aes-256-gcm",
+          keyId: "instagram_graph_v1",
+          iv: "iv",
+          authTag: "tag",
+          ciphertext: "ciphertext"
+        }
+      }
+    });
+    const instagramGraph = {
+      sendMessage: vi.fn(async () => ({
+        provider: "instagram" as const,
+        status: "sent" as const,
+        retryable: false,
+        providerStatusCode: 200,
+        providerMessageId: "ig-message-100"
+      }))
+    };
+
+    await processMessagingDeliveryJob({
+      job: createJob(),
+      store,
+      provider: {
+        telegramBusiness: createBusinessProvider({ status: "sent" }),
+        instagramGraph
+      },
+      now
+    });
+
+    expect(instagramGraph.sendMessage).toHaveBeenCalledWith({
+      messageId: "message_1",
+      channelConnectionId: "connection_1",
+      astrologerUserId: astrologerUserId,
+      instagramAccountId: "ig_456",
+      recipientId: "chat-1",
+      text: "Message text from DB",
+      encryptedAccessToken: {
+        algorithm: "aes-256-gcm",
+        keyId: "instagram_graph_v1",
+        iv: "iv",
+        authTag: "tag",
+        ciphertext: "ciphertext"
+      }
+    });
+    expect(store.recordSent).toHaveBeenCalledWith({
+      messageId: "message_1",
+      attemptNumber: 1,
+      provider: "instagram",
+      providerStatusCode: 200,
+      providerMessageId: "ig-message-100",
+      attemptedAt: now
+    });
+  });
+
   it("retries only an unknown Telegram Account delivery through its reconciliation work item", async () => {
     const store = createStore({
       workItem: {
@@ -133,7 +197,10 @@ describe("processMessagingDeliveryJob", () => {
     await processMessagingDeliveryJob({
       job: createJob(),
       store,
-      provider: { telegramBusiness: createBusinessProvider({ status: "sent" }), telegramMtproto: mtprotoProvider },
+      provider: {
+        telegramBusiness: createBusinessProvider({ status: "sent" }),
+        telegramMtproto: mtprotoProvider
+      },
       now: new Date("2026-07-22T10:00:00.000Z")
     });
 
@@ -268,7 +335,6 @@ describe("processMessagingDeliveryJob", () => {
     });
   });
 
-
   it("marks ambiguous final timeout unknown", async () => {
     const now = new Date("2026-07-22T10:00:00.000Z");
     const store = createStore();
@@ -327,11 +393,17 @@ describe("processMessagingDeliveryJob", () => {
   });
 });
 
-function createStore(input: {
-  readonly workItem?: Awaited<ReturnType<MessagingDeliveryProcessingStore["findByOutboxEventId"]>>;
-} = {}): MessagingDeliveryProcessingStore {
+function createStore(
+  input: {
+    readonly workItem?: Awaited<
+      ReturnType<MessagingDeliveryProcessingStore["findByOutboxEventId"]>
+    >;
+  } = {}
+): MessagingDeliveryProcessingStore {
   return {
-    findByOutboxEventId: vi.fn(async () => input.workItem === undefined ? createWorkItem() : input.workItem),
+    findByOutboxEventId: vi.fn(async () =>
+      input.workItem === undefined ? createWorkItem() : input.workItem
+    ),
     recordSent: vi.fn(async () => undefined),
     recordRetryableFailure: vi.fn(async () => undefined),
     recordRetryableUnknown: vi.fn(async () => undefined),
@@ -344,11 +416,14 @@ function createBusinessProvider(
   result: Partial<Awaited<ReturnType<TelegramBusinessMessagingDeliveryProvider["sendMessage"]>>>
 ): Pick<TelegramBusinessMessagingDeliveryProvider, "sendMessage"> {
   return {
-    sendMessage: vi.fn(async () => ({
-      provider: "telegram",
-      retryable: false,
-      ...result
-    } as Awaited<ReturnType<TelegramBusinessMessagingDeliveryProvider["sendMessage"]>>))
+    sendMessage: vi.fn(
+      async () =>
+        ({
+          provider: "telegram",
+          retryable: false,
+          ...result
+        }) as Awaited<ReturnType<TelegramBusinessMessagingDeliveryProvider["sendMessage"]>>
+    )
   };
 }
 
@@ -356,11 +431,14 @@ function createMtprotoProvider(
   result: Partial<Awaited<ReturnType<TelegramMtprotoMessagingProvider["sendMessage"]>>>
 ): Pick<TelegramMtprotoMessagingProvider, "sendMessage"> {
   return {
-    sendMessage: vi.fn(async () => ({
-      provider: "telegram",
-      retryable: false,
-      ...result
-    } as Awaited<ReturnType<TelegramMtprotoMessagingProvider["sendMessage"]>>))
+    sendMessage: vi.fn(
+      async () =>
+        ({
+          provider: "telegram",
+          retryable: false,
+          ...result
+        }) as Awaited<ReturnType<TelegramMtprotoMessagingProvider["sendMessage"]>>
+    )
   };
 }
 
@@ -372,8 +450,11 @@ function createWorkItem() {
     provider: "telegram" as const,
     mode: "telegram_business_bot" as const,
     channelConnectionId: "connection_1",
+    astrologerUserId,
     businessConnectionId: "business-1",
     providerChatId: "chat-1",
     text: "Message text from DB"
   };
 }
+
+const astrologerUserId = "22222222-2222-4222-8222-222222222222";

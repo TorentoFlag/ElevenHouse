@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import {
+  type EncryptedMessagingSecret,
   messagingMessageDeliveryReconciliationRequestedEventType,
   messagingMessageDeliveryTerminalEventType,
   messagingMessageDeliveryRequestedEventType,
@@ -13,6 +14,7 @@ import {
   messageDeliveryAttempts,
   messagingChannelConnections,
   messagingExternalIdentities,
+  messagingInstagramGraphAccounts,
   messagingMessages,
   messagingRealtimeEvents,
   messagingThreadIdentities,
@@ -30,6 +32,7 @@ export type TelegramBusinessDeliveryWorkItem = {
   readonly provider: Extract<MessagingProvider, "telegram">;
   readonly mode: Extract<MessagingChannelMode, "telegram_business_bot">;
   readonly channelConnectionId: string;
+  readonly astrologerUserId: string;
   readonly businessConnectionId: string;
   readonly providerChatId: string;
   readonly text: string;
@@ -43,6 +46,7 @@ export type TelegramMtprotoDeliveryWorkItem = {
   readonly provider: Extract<MessagingProvider, "telegram">;
   readonly mode: Extract<MessagingChannelMode, "telegram_mtproto_account">;
   readonly channelConnectionId: string;
+  readonly astrologerUserId: string;
   readonly peerId: string;
   readonly text: string;
   readonly reconciliation?: boolean;
@@ -50,12 +54,28 @@ export type TelegramMtprotoDeliveryWorkItem = {
 
 export type MessagingDeliveryWorkItem =
   | TelegramBusinessDeliveryWorkItem
-  | TelegramMtprotoDeliveryWorkItem;
+  | TelegramMtprotoDeliveryWorkItem
+  | InstagramGraphDeliveryWorkItem;
+
+export type InstagramGraphDeliveryWorkItem = {
+  readonly outboxEventId: string;
+  readonly messageId: string;
+  readonly messageStatus: MessagingMessageStatus;
+  readonly provider: Extract<MessagingProvider, "instagram">;
+  readonly mode: Extract<MessagingChannelMode, "instagram_graph">;
+  readonly channelConnectionId: string;
+  readonly astrologerUserId: string;
+  readonly instagramAccountId: string;
+  readonly providerChatId: string;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
+  readonly text: string;
+  readonly reconciliation?: boolean;
+};
 
 export type MessagingDeliveryAttemptInput = {
   readonly messageId: string;
   readonly attemptNumber: number;
-  readonly provider: Extract<MessagingProvider, "telegram">;
+  readonly provider: MessagingProvider;
   readonly attemptedAt: Date;
   readonly providerStatusCode?: number;
   readonly providerMessageId?: string;
@@ -69,7 +89,9 @@ export type MessagingDeliveryAttemptInput = {
 };
 
 export type MessagingDeliveryProcessingStore = {
-  readonly findByOutboxEventId: (outboxEventId: string) => Promise<MessagingDeliveryWorkItem | null>;
+  readonly findByOutboxEventId: (
+    outboxEventId: string
+  ) => Promise<MessagingDeliveryWorkItem | null>;
   readonly recordSent: (input: MessagingDeliveryAttemptInput) => Promise<void>;
   readonly recordRetryableFailure: (input: MessagingDeliveryAttemptInput) => Promise<void>;
   readonly recordRetryableUnknown: (input: MessagingDeliveryAttemptInput) => Promise<void>;
@@ -82,32 +104,37 @@ export function createDrizzleMessagingDeliveryProcessingStore(
 ): MessagingDeliveryProcessingStore {
   return {
     findByOutboxEventId: (outboxEventId) => findByOutboxEventId(database, outboxEventId),
-    recordSent: (input) => recordDeliveryAttempt(database, input, {
-      attemptStatus: "sent",
-      retryable: false,
-      messageStatus: "sent",
-      realtimeType: "message.updated"
-    }),
-    recordRetryableFailure: (input) => recordDeliveryAttempt(database, input, {
-      attemptStatus: "failed",
-      retryable: true
-    }),
-    recordRetryableUnknown: (input) => recordDeliveryAttempt(database, input, {
-      attemptStatus: "unknown",
-      retryable: true
-    }),
-    recordFinalFailure: (input) => recordDeliveryAttempt(database, input, {
-      attemptStatus: "failed",
-      retryable: false,
-      messageStatus: "failed",
-      realtimeType: "delivery.failed"
-    }),
-    recordFinalUnknown: (input) => recordDeliveryAttempt(database, input, {
-      attemptStatus: "unknown",
-      retryable: false,
-      messageStatus: "unknown",
-      realtimeType: "delivery.failed"
-    })
+    recordSent: (input) =>
+      recordDeliveryAttempt(database, input, {
+        attemptStatus: "sent",
+        retryable: false,
+        messageStatus: "sent",
+        realtimeType: "message.updated"
+      }),
+    recordRetryableFailure: (input) =>
+      recordDeliveryAttempt(database, input, {
+        attemptStatus: "failed",
+        retryable: true
+      }),
+    recordRetryableUnknown: (input) =>
+      recordDeliveryAttempt(database, input, {
+        attemptStatus: "unknown",
+        retryable: true
+      }),
+    recordFinalFailure: (input) =>
+      recordDeliveryAttempt(database, input, {
+        attemptStatus: "failed",
+        retryable: false,
+        messageStatus: "failed",
+        realtimeType: "delivery.failed"
+      }),
+    recordFinalUnknown: (input) =>
+      recordDeliveryAttempt(database, input, {
+        attemptStatus: "unknown",
+        retryable: false,
+        messageStatus: "unknown",
+        realtimeType: "delivery.failed"
+      })
   };
 }
 
@@ -125,9 +152,11 @@ async function findByOutboxEventId(
       text: messagingMessages.text,
       threadId: messagingThreads.id,
       channelConnectionId: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId,
       provider: messagingChannelConnections.provider,
       mode: messagingChannelConnections.mode,
       businessConnectionId: messagingChannelConnections.externalAccountId,
+      instagramAccessTokenEncrypted: messagingInstagramGraphAccounts.accessTokenEncrypted,
       providerChatId: messagingExternalIdentities.providerChatId
     })
     .from(outboxEvents)
@@ -149,6 +178,10 @@ async function findByOutboxEventId(
         eq(messagingExternalIdentities.id, messagingThreadIdentities.externalIdentityId),
         eq(messagingExternalIdentities.channelConnectionId, messagingChannelConnections.id)
       )
+    )
+    .leftJoin(
+      messagingInstagramGraphAccounts,
+      eq(messagingInstagramGraphAccounts.channelConnectionId, messagingChannelConnections.id)
     )
     .where(
       and(
@@ -337,9 +370,11 @@ function toMessagingDeliveryWorkItem(input: {
   readonly text: string;
   readonly threadId: string;
   readonly channelConnectionId: string;
+  readonly astrologerUserId: string;
   readonly provider: string;
   readonly mode: string;
   readonly businessConnectionId: string | null;
+  readonly instagramAccessTokenEncrypted: EncryptedMessagingSecret | null;
   readonly providerChatId: string;
 }): MessagingDeliveryWorkItem {
   if (!("messageId" in input.payload) || input.payload.messageId !== input.messageId) {
@@ -357,13 +392,11 @@ function toMessagingDeliveryWorkItem(input: {
     throw new Error(`Outbox event ${input.outboxEventId} does not match messaging aggregate`);
   }
 
-  if (input.provider !== "telegram") {
-    throw new Error(`Unsupported messaging delivery channel for outbox event ${input.outboxEventId}`);
-  }
-
-  if (input.mode === "telegram_business_bot") {
+  if (input.provider === "telegram" && input.mode === "telegram_business_bot") {
     if (!input.businessConnectionId) {
-      throw new Error(`Telegram Business connection is missing for outbox event ${input.outboxEventId}`);
+      throw new Error(
+        `Telegram Business connection is missing for outbox event ${input.outboxEventId}`
+      );
     }
 
     return {
@@ -373,6 +406,7 @@ function toMessagingDeliveryWorkItem(input: {
       provider: "telegram",
       mode: "telegram_business_bot",
       channelConnectionId: input.channelConnectionId,
+      astrologerUserId: input.astrologerUserId,
       businessConnectionId: input.businessConnectionId,
       providerChatId: input.providerChatId,
       text: input.text,
@@ -380,7 +414,7 @@ function toMessagingDeliveryWorkItem(input: {
     };
   }
 
-  if (input.mode === "telegram_mtproto_account") {
+  if (input.provider === "telegram" && input.mode === "telegram_mtproto_account") {
     return {
       outboxEventId: input.outboxEventId,
       messageId: input.messageId,
@@ -388,7 +422,31 @@ function toMessagingDeliveryWorkItem(input: {
       provider: "telegram",
       mode: "telegram_mtproto_account",
       channelConnectionId: input.channelConnectionId,
+      astrologerUserId: input.astrologerUserId,
       peerId: input.providerChatId,
+      text: input.text,
+      reconciliation
+    };
+  }
+
+  if (input.provider === "instagram" && input.mode === "instagram_graph") {
+    if (!input.businessConnectionId || !input.instagramAccessTokenEncrypted) {
+      throw new Error(
+        `Instagram Graph account token is missing for outbox event ${input.outboxEventId}`
+      );
+    }
+
+    return {
+      outboxEventId: input.outboxEventId,
+      messageId: input.messageId,
+      messageStatus: input.messageStatus as MessagingMessageStatus,
+      provider: "instagram",
+      mode: "instagram_graph",
+      channelConnectionId: input.channelConnectionId,
+      astrologerUserId: input.astrologerUserId,
+      instagramAccountId: input.businessConnectionId,
+      providerChatId: input.providerChatId,
+      encryptedAccessToken: input.instagramAccessTokenEncrypted,
       text: input.text,
       reconciliation
     };
