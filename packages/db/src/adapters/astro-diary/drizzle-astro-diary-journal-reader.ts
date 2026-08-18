@@ -41,8 +41,7 @@ export function createDrizzleAstroDiaryJournalReader(
     getParticipantJournalTimeline: (input) => getParticipantJournalTimeline(database, input),
     getParticipantAstrologerReplyDraft: (input) =>
       getParticipantAstrologerReplyDraft(database, input),
-    getParticipantClientEntryDraft: (input) =>
-      getParticipantClientEntryDraft(database, input),
+    getParticipantClientEntryDraft: (input) => getParticipantClientEntryDraft(database, input),
     getPaidCoreCommandContext: (input) => getPaidCoreCommandContext(database, input)
   };
 }
@@ -128,8 +127,7 @@ async function toJournalSummary(
         !subscription.endedPeriodIds.includes(period.id)
     ) ?? null;
   const access =
-    (subscription.state === "active" || subscription.state === "cancel_at_period_end") &&
-    currentPeriod
+    subscription.state === "active" && currentPeriod
       ? {
           mode: "active" as const,
           subscriptionId: subscription.id,
@@ -410,8 +408,7 @@ async function getPaidCoreCommandContext(
     if (!subscriptionIdentity) return null;
     const subscription = await findClientSubscriptionById(transaction, subscriptionIdentity.id);
     if (!subscription) return null;
-    const writableSubscription =
-      subscription.state === "active" || subscription.state === "cancel_at_period_end";
+    const writableSubscription = subscription.state === "active";
     const currentPeriod = writableSubscription
       ? (subscription.paidPeriods.find(
           (period) =>

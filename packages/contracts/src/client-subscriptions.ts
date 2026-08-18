@@ -17,7 +17,6 @@ export type ClientSubscriptionCadence = z.infer<typeof clientSubscriptionCadence
 export const clientSubscriptionStateSchema = z.enum([
   "pending_initial_payment",
   "active",
-  "cancel_at_period_end",
   "ended",
   "revoked"
 ]);
@@ -113,18 +112,6 @@ export const clientSubscriptionPeriodSummarySchema = z
   });
 export type ClientSubscriptionPeriodSummary = z.infer<typeof clientSubscriptionPeriodSummarySchema>;
 
-export const clientSubscriptionRenewalRequestSchema = z
-  .object({
-    id: uuidSchema,
-    sourcePeriodId: uuidSchema,
-    intendedPeriodId: uuidSchema,
-    requestedAt: instantSchema
-  })
-  .strict();
-export type ClientSubscriptionRenewalRequest = z.infer<
-  typeof clientSubscriptionRenewalRequestSchema
->;
-
 export const clientSubscriptionResponseSchema = z
   .object({
     id: uuidSchema,
@@ -133,21 +120,15 @@ export const clientSubscriptionResponseSchema = z
     state: clientSubscriptionStateSchema,
     version: positiveVersionSchema,
     cancellationEffectiveAt: instantSchema.nullable(),
-    renewalRequest: clientSubscriptionRenewalRequestSchema.nullable(),
     paidPeriods: z.array(clientSubscriptionPeriodSummarySchema)
   })
   .strict();
 export type ClientSubscriptionResponse = z.infer<typeof clientSubscriptionResponseSchema>;
 
 export const clientSubscriptionEventTypeSchema = z.enum([
-  "client_subscription.renewal_charge_requested.v1",
   "client_subscription.capture_applied.v1",
   "client_subscription.initial_payment_ended.v1",
   "client_subscription.activated.v1",
-  "client_subscription.period_renewed.v1",
-  "client_subscription.cancellation_scheduled.v1",
-  "client_subscription.cancellation_revoked.v1",
-  "client_subscription.renewal_failed.v1",
   "client_subscription.period_ended.v1",
   "client_subscription.revoked.v1",
   "client_subscription.entitlement_changed.v1"
@@ -159,12 +140,6 @@ const subscriptionEventDataSchema = z
   .strict();
 const subscriptionPeriodEventDataSchema = subscriptionEventDataSchema
   .extend({ periodId: uuidSchema })
-  .strict();
-const renewalTargetEventDataSchema = subscriptionEventDataSchema
-  .extend({
-    renewalRequestId: uuidSchema,
-    intendedPeriodId: uuidSchema
-  })
   .strict();
 const subscriptionEventEnvelope = <
   Type extends ClientSubscriptionEventType,
@@ -185,10 +160,6 @@ const subscriptionEventEnvelope = <
 
 export const clientSubscriptionEventSchema = z.discriminatedUnion("eventType", [
   subscriptionEventEnvelope(
-    "client_subscription.renewal_charge_requested.v1",
-    renewalTargetEventDataSchema.extend({ sourcePeriodId: uuidSchema }).strict()
-  ),
-  subscriptionEventEnvelope(
     "client_subscription.capture_applied.v1",
     subscriptionPeriodEventDataSchema.extend({ financeEvidenceId: uuidSchema }).strict()
   ),
@@ -202,22 +173,6 @@ export const clientSubscriptionEventSchema = z.discriminatedUnion("eventType", [
       .strict()
   ),
   subscriptionEventEnvelope("client_subscription.activated.v1", subscriptionPeriodEventDataSchema),
-  subscriptionEventEnvelope(
-    "client_subscription.period_renewed.v1",
-    subscriptionPeriodEventDataSchema
-  ),
-  subscriptionEventEnvelope(
-    "client_subscription.cancellation_scheduled.v1",
-    subscriptionPeriodEventDataSchema
-  ),
-  subscriptionEventEnvelope(
-    "client_subscription.cancellation_revoked.v1",
-    subscriptionPeriodEventDataSchema
-  ),
-  subscriptionEventEnvelope(
-    "client_subscription.renewal_failed.v1",
-    renewalTargetEventDataSchema.extend({ renewalAttemptId: uuidSchema }).strict()
-  ),
   subscriptionEventEnvelope(
     "client_subscription.period_ended.v1",
     subscriptionPeriodEventDataSchema

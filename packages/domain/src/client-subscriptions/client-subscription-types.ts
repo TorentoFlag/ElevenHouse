@@ -1,7 +1,6 @@
 import type {
   ClientSubscriptionCadence,
   ClientSubscriptionContract,
-  ClientSubscriptionRenewalRequest,
   ClientSubscriptionState
 } from "@elevenhouse/contracts";
 import type {
@@ -21,12 +20,7 @@ import type {
 import type { ClientRelationshipStatus } from "../clients";
 import type { OrderEconomicsSnapshot } from "../finance-core/order-economics";
 
-export type {
-  ClientSubscriptionCadence,
-  ClientSubscriptionContract,
-  ClientSubscriptionRenewalRequest,
-  ClientSubscriptionState
-};
+export type { ClientSubscriptionCadence, ClientSubscriptionContract, ClientSubscriptionState };
 
 export type ClientSubscriptionOrderSnapshot = {
   readonly orderId: string;
@@ -103,8 +97,6 @@ export type ClientSubscription = {
   readonly state: ClientSubscriptionState;
   readonly version: number;
   readonly cancellationEffectiveAt: string | null;
-  readonly renewalStoppedAt: string | null;
-  readonly renewalRequest: ClientSubscriptionRenewalRequest | null;
   readonly paidPeriods: readonly ClientSubscriptionPeriod[];
   readonly endedPeriodIds: readonly string[];
   readonly appliedFinanceEvidenceIds: readonly string[];

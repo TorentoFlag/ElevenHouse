@@ -31,12 +31,6 @@ type EventMeta = {
 type ClientSubscriptionEventInput = EventMeta &
   (
     | {
-        readonly eventType: "client_subscription.renewal_charge_requested.v1";
-        readonly sourcePeriodId: string;
-        readonly intendedPeriodId: string;
-        readonly renewalRequestId: string;
-      }
-    | {
         readonly eventType: "client_subscription.initial_payment_ended.v1";
         readonly financeEvidenceId: string;
         readonly reason: "checkout_expired" | "payment_failed";
@@ -49,17 +43,8 @@ type ClientSubscriptionEventInput = EventMeta &
     | {
         readonly eventType:
           | "client_subscription.activated.v1"
-          | "client_subscription.period_renewed.v1"
-          | "client_subscription.cancellation_scheduled.v1"
-          | "client_subscription.cancellation_revoked.v1"
           | "client_subscription.period_ended.v1";
         readonly periodId: string;
-      }
-    | {
-        readonly eventType: "client_subscription.renewal_failed.v1";
-        readonly renewalRequestId: string;
-        readonly intendedPeriodId: string;
-        readonly renewalAttemptId: string;
       }
     | {
         readonly eventType: "client_subscription.revoked.v1";
@@ -92,18 +77,6 @@ export function clientSubscriptionEvent(
   };
   let event: ClientSubscriptionEvent;
   switch (input.eventType) {
-    case "client_subscription.renewal_charge_requested.v1":
-      event = {
-        ...envelope,
-        eventType: input.eventType,
-        data: {
-          ...commonData,
-          sourcePeriodId: input.sourcePeriodId,
-          intendedPeriodId: input.intendedPeriodId,
-          renewalRequestId: input.renewalRequestId
-        }
-      };
-      break;
     case "client_subscription.capture_applied.v1":
       event = {
         ...envelope,
@@ -123,18 +96,6 @@ export function clientSubscriptionEvent(
           ...commonData,
           financeEvidenceId: input.financeEvidenceId,
           reason: input.reason
-        }
-      };
-      break;
-    case "client_subscription.renewal_failed.v1":
-      event = {
-        ...envelope,
-        eventType: input.eventType,
-        data: {
-          ...commonData,
-          renewalRequestId: input.renewalRequestId,
-          intendedPeriodId: input.intendedPeriodId,
-          renewalAttemptId: input.renewalAttemptId
         }
       };
       break;

@@ -4,7 +4,6 @@ import {
   clientSubscriptionBillingEconomicsSchema,
   clientSubscriptionCadenceSchema,
   clientSubscriptionContractSchema,
-  clientSubscriptionRenewalRequestSchema,
   clientSubscriptionStateSchema,
   type ClientSubscriptionContract,
   productAstroDiaryConfigSchema
@@ -80,8 +79,6 @@ const creationResultSnapshotSchema = z
         state: clientSubscriptionStateSchema,
         version: z.number().int().positive(),
         cancellationEffectiveAt: instantSchema.nullable(),
-        renewalStoppedAt: instantSchema.nullable(),
-        renewalRequest: clientSubscriptionRenewalRequestSchema.nullable(),
         paidPeriods: z.array(subscriptionPeriodSchema),
         endedPeriodIds: z.array(z.string().uuid()),
         appliedFinanceEvidenceIds: z.array(z.string().uuid())
@@ -216,8 +213,6 @@ export async function executeDrizzleClientSubscriptionCreationInTransaction(
     state: decision.subscription.state,
     version: decision.subscription.version,
     cancellationEffectiveAt: null,
-    renewalStoppedAt: null,
-    renewalRequestId: null,
     currentPeriodId: null,
     futurePeriodId: null,
     createdAt: new Date(decision.contract.createdAt),

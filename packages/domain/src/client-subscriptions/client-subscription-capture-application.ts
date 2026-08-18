@@ -7,7 +7,7 @@ import {
   type FinanceClientOrderCaptureDispatchReceipt
 } from "../finance-core/client-order-capture-purpose-dispatch";
 import { digestFinanceCanonicalValueV1 } from "../finance-core/finance-canonical-digest";
-import { applyInitialCapture, applyRenewalCapture } from "./client-subscription-lifecycle";
+import { applyInitialCapture } from "./client-subscription-lifecycle";
 import {
   applyClientSubscriptionSourceEvent,
   type ClientSubscriptionSourceEventApplicationExecution,
@@ -21,7 +21,7 @@ export type ClientSubscriptionCaptureDispatchExecution =
 /**
  * Applies only the purpose-specific capture event after rehydrating its immutable finance receipt.
  * The generic economic-payment event never enters this boundary, and the input event is not a
- * lifecycle output: successful transitions emit only activated/renewed and entitlement facts.
+ * lifecycle output: successful transitions emit only activated and entitlement facts.
  */
 export async function applyClientSubscriptionCaptureDispatch(
   unitOfWork: ClientSubscriptionSourceEventApplicationUnitOfWork,
@@ -64,15 +64,7 @@ export async function applyClientSubscriptionCaptureDispatch(
             eventIds: [target.activatedEventId, target.entitlementChangedEventId]
           });
         }
-        return applyRenewalCapture(current, {
-          sourceEventId: verified.sourceEvent.eventId,
-          evidenceId: verified.sourceEvent.data.financeEvidenceId,
-          renewalRequestId: target.renewalRequestId,
-          intendedPeriodId: target.intendedPeriodId,
-          capturedAt: authority.capturedAt,
-          periodId: target.periodId,
-          eventIds: [target.periodRenewedEventId, target.entitlementChangedEventId]
-        });
+        throw new CaptureAuthorityConflict();
       }
     );
   } catch (error) {

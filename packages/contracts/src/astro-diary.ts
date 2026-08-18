@@ -635,7 +635,7 @@ const activeDiaryAccessSchema = z
   .object({
     mode: z.literal("active"),
     subscriptionId: uuidSchema,
-    subscriptionState: z.enum(["active", "cancel_at_period_end"]),
+    subscriptionState: z.literal("active"),
     currentPeriod: z
       .object({
         id: uuidSchema,

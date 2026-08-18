@@ -683,8 +683,7 @@ export function validateAstroDiaryCommandAuthority(
     contract.relationshipId !== authority.journal.relationshipId ||
     contract.astrologerUserId !== authority.journal.astrologerUserId ||
     contract.clientUserId !== authority.journal.clientUserId ||
-    (authority.subscription.state === "active" ||
-      authority.subscription.state === "cancel_at_period_end") !==
+    (authority.subscription.state === "active") !==
       (authority.access.entitlementState === "active") ||
     (authority.subscription.state === "ended") !==
       (authority.access.entitlementState === "ended") ||

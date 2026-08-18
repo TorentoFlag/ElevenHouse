@@ -29,30 +29,15 @@ type CaptureAuthorityCommon = Readonly<{
   canonicalDigest: Sha256Digest;
 }>;
 
-export type FinanceClientOrderSubscriptionCaptureAuthority =
-  | (CaptureAuthorityCommon & Readonly<{ captureKind: "initial" }>)
-  | (CaptureAuthorityCommon &
-      Readonly<{
-        captureKind: "renewal";
-        renewalRequestId: string;
-        intendedPeriodId: string;
-      }>);
+export type FinanceClientOrderSubscriptionCaptureAuthority = CaptureAuthorityCommon &
+  Readonly<{ captureKind: "initial" }>;
 
-export type FinanceClientOrderCaptureDispatchTarget =
-  | Readonly<{
-      kind: "initial";
-      periodId: string;
-      activatedEventId: string;
-      entitlementChangedEventId: string;
-    }>
-  | Readonly<{
-      kind: "renewal";
-      renewalRequestId: string;
-      intendedPeriodId: string;
-      periodId: string;
-      periodRenewedEventId: string;
-      entitlementChangedEventId: string;
-    }>;
+export type FinanceClientOrderCaptureDispatchTarget = Readonly<{
+  kind: "initial";
+  periodId: string;
+  activatedEventId: string;
+  entitlementChangedEventId: string;
+}>;
 
 export type FinanceClientOrderCaptureDispatchReceipt = Readonly<{
   kind: "finance_client_order_capture_dispatch_receipt";
@@ -103,17 +88,7 @@ const authorityInputCommonSchema = z.object({
 const initialAuthorityInputSchema = authorityInputCommonSchema
   .extend({ captureKind: z.literal("initial") })
   .strict();
-const renewalAuthorityInputSchema = authorityInputCommonSchema
-  .extend({
-    captureKind: z.literal("renewal"),
-    renewalRequestId: canonicalUuidSchema,
-    intendedPeriodId: canonicalUuidSchema
-  })
-  .strict();
-const authorityInputSchema = z.discriminatedUnion("captureKind", [
-  initialAuthorityInputSchema,
-  renewalAuthorityInputSchema
-]);
+const authorityInputSchema = initialAuthorityInputSchema;
 const initialAuthoritySchema = initialAuthorityInputSchema
   .extend({
     kind: z.literal("client_subscription_capture_authority"),
@@ -121,17 +96,7 @@ const initialAuthoritySchema = initialAuthorityInputSchema
     canonicalDigest: digestSchema
   })
   .strict();
-const renewalAuthoritySchema = renewalAuthorityInputSchema
-  .extend({
-    kind: z.literal("client_subscription_capture_authority"),
-    schemaVersion: z.literal(1),
-    canonicalDigest: digestSchema
-  })
-  .strict();
-const authoritySchema = z.discriminatedUnion("captureKind", [
-  initialAuthoritySchema,
-  renewalAuthoritySchema
-]);
+const authoritySchema = initialAuthoritySchema;
 
 const initialTargetSchema = z
   .object({
@@ -141,17 +106,7 @@ const initialTargetSchema = z
     entitlementChangedEventId: canonicalUuidSchema
   })
   .strict();
-const renewalTargetSchema = z
-  .object({
-    kind: z.literal("renewal"),
-    renewalRequestId: canonicalUuidSchema,
-    intendedPeriodId: canonicalUuidSchema,
-    periodId: canonicalUuidSchema,
-    periodRenewedEventId: canonicalUuidSchema,
-    entitlementChangedEventId: canonicalUuidSchema
-  })
-  .strict();
-const targetSchema = z.discriminatedUnion("kind", [initialTargetSchema, renewalTargetSchema]);
+const targetSchema = initialTargetSchema;
 
 const receiptSchema = z
   .object({
@@ -327,15 +282,6 @@ function assertTargetMatchesAuthority(
   target: FinanceClientOrderCaptureDispatchTarget
 ): void {
   if (authority.captureKind !== target.kind) invalidReceipt();
-  if (
-    authority.captureKind === "renewal" &&
-    (target.kind !== "renewal" ||
-      target.renewalRequestId !== authority.renewalRequestId ||
-      target.intendedPeriodId !== authority.intendedPeriodId ||
-      target.periodId !== authority.intendedPeriodId)
-  ) {
-    invalidReceipt();
-  }
 }
 
 function assertDispatchTime(capturedAt: string, dispatchedAt: string): void {
@@ -350,10 +296,7 @@ function assertDistinctOutputIds(
     target: FinanceClientOrderCaptureDispatchTarget;
   }>
 ): void {
-  const lifecycleIds =
-    input.target.kind === "initial"
-      ? [input.target.activatedEventId, input.target.entitlementChangedEventId]
-      : [input.target.periodRenewedEventId, input.target.entitlementChangedEventId];
+  const lifecycleIds = [input.target.activatedEventId, input.target.entitlementChangedEventId];
   const ids = [
     input.authority.captureApplicationReceiptId,
     input.authority.orderId,

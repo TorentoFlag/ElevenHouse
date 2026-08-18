@@ -75,7 +75,7 @@ export type AstroDiarySubscriptionActivationPlan =
   | Readonly<{
       outcome: "continue_existing";
       journalEpochId: string;
-      subscriptionState: "active" | "cancel_at_period_end";
+      subscriptionState: "active";
     }>
   | Readonly<{
       outcome: "read_only";
@@ -165,15 +165,8 @@ export function planAstroDiarySubscriptionActivation(
       subscriptionState: subscription.state
     };
   }
-  if (subscription.state !== "active" && subscription.state !== "cancel_at_period_end") {
+  if (subscription.state !== "active") {
     return { outcome: "rejected", code: "subscription_state_mismatch" };
-  }
-  if (dispatchReceipt.target.kind === "renewal") {
-    return {
-      outcome: "continue_existing",
-      journalEpochId: subscription.journalEpochId,
-      subscriptionState: subscription.state
-    };
   }
 
   const journal = {

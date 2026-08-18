@@ -21,8 +21,6 @@ export function activeSubscription(): ClientSubscription {
     state: "active",
     version: 2,
     cancellationEffectiveAt: null,
-    renewalStoppedAt: null,
-    renewalRequest: null,
     endedPeriodIds: [],
     appliedFinanceEvidenceIds: [runtimeId(3)],
     contract: {

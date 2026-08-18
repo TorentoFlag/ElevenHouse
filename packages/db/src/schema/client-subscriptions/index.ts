@@ -4,7 +4,6 @@ export * from "./client-subscription-purchase-fulfillment-authorities.schema";
 export * from "./client-subscription-slots.schema";
 export * from "./client-subscriptions.schema";
 export * from "./client-subscription-periods.schema";
-export * from "./client-subscription-renewal-requests.schema";
 export * from "./client-subscription-lifecycle.schema";
 export * from "./client-subscription-command-receipts.schema";
 export * from "./client-subscription-allowances.schema";

@@ -28,8 +28,6 @@ export const clientSubscriptions = pgTable(
     state: text("state").notNull(),
     version: integer("version").notNull(),
     cancellationEffectiveAt: timestamp("cancellation_effective_at", { withTimezone: true }),
-    renewalStoppedAt: timestamp("renewal_stopped_at", { withTimezone: true }),
-    renewalRequestId: uuid("renewal_request_id"),
     currentPeriodId: uuid("current_period_id"),
     futurePeriodId: uuid("future_period_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -68,7 +66,7 @@ export const clientSubscriptions = pgTable(
     }).onDelete("restrict"),
     check(
       "client_subscriptions_state_check",
-      sql`${table.state} in ('pending_initial_payment', 'active', 'cancel_at_period_end', 'ended', 'revoked')`
+      sql`${table.state} in ('pending_initial_payment', 'active', 'ended', 'revoked')`
     ),
     check("client_subscriptions_version_check", sql`${table.version} >= 1`),
     check(
@@ -78,18 +76,10 @@ export const clientSubscriptions = pgTable(
         and ${table.currentPeriodId} is null
         and ${table.futurePeriodId} is null
         and ${table.cancellationEffectiveAt} is null
-        and ${table.renewalStoppedAt} is null
-        and ${table.renewalRequestId} is null
       ) or (
         ${table.state} = 'active'
         and ${table.currentPeriodId} is not null
         and ${table.cancellationEffectiveAt} is null
-        and ${table.renewalStoppedAt} is null
-      ) or (
-        ${table.state} = 'cancel_at_period_end'
-        and ${table.currentPeriodId} is not null
-        and ${table.cancellationEffectiveAt} is not null
-        and ${table.renewalStoppedAt} is not null
       ) or (
         ${table.state} = 'ended'
         and ${table.currentPeriodId} is null
@@ -100,8 +90,6 @@ export const clientSubscriptions = pgTable(
         and ${table.currentPeriodId} is null
         and ${table.futurePeriodId} is null
         and ${table.cancellationEffectiveAt} is null
-        and ${table.renewalStoppedAt} is null
-        and ${table.renewalRequestId} is null
       )`
     ),
     check(
@@ -110,9 +98,7 @@ export const clientSubscriptions = pgTable(
     ),
     uniqueIndex("client_subscriptions_current_relationship_product_unique")
       .on(table.relationshipId, table.productId)
-      .where(
-        sql`${table.state} in ('pending_initial_payment', 'active', 'cancel_at_period_end') or ${table.renewalRequestId} is not null`
-      ),
+      .where(sql`${table.state} in ('pending_initial_payment', 'active')`),
     index("client_subscriptions_contract_state_idx").on(table.contractId, table.state),
     index("client_subscriptions_relationship_state_idx").on(table.relationshipId, table.state)
   ]

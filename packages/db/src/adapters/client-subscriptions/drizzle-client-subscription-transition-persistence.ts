@@ -17,7 +17,6 @@ import {
   clientSubscriptionLifecycleEvents,
   clientSubscriptionPeriodAllowances,
   clientSubscriptionPeriods,
-  clientSubscriptionRenewalRequests,
   clientSubscriptionSlots,
   clientSubscriptions,
   clientSubscriptionTransitionReceipts
@@ -99,19 +98,6 @@ export async function persistClientSubscriptionTransition(
     });
   }
 
-  if (
-    input.next.renewalRequest &&
-    input.next.renewalRequest.id !== input.current.renewalRequest?.id
-  ) {
-    await transaction.insert(clientSubscriptionRenewalRequests).values({
-      id: input.next.renewalRequest.id,
-      subscriptionId: input.next.id,
-      sourcePeriodId: input.next.renewalRequest.sourcePeriodId,
-      intendedPeriodId: input.next.renewalRequest.intendedPeriodId,
-      requestedAt: new Date(input.next.renewalRequest.requestedAt)
-    });
-  }
-
   await transaction.insert(clientSubscriptionTransitionReceipts).values({
     transitionId: input.receipt.transitionId,
     subscriptionId: input.receipt.subscriptionId,
@@ -146,8 +132,6 @@ export async function persistClientSubscriptionTransition(
       cancellationEffectiveAt: input.next.cancellationEffectiveAt
         ? new Date(input.next.cancellationEffectiveAt)
         : null,
-      renewalStoppedAt: input.next.renewalStoppedAt ? new Date(input.next.renewalStoppedAt) : null,
-      renewalRequestId: input.next.renewalRequest?.id ?? null,
       currentPeriodId: currentPeriod?.id ?? null,
       futurePeriodId: futurePeriod?.id ?? null,
       updatedAt: new Date(input.receipt.occurredAt)

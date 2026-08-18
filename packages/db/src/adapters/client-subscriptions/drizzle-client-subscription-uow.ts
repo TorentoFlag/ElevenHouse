@@ -2,7 +2,6 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   clientSubscriptionContractSchema,
   clientSubscriptionEventSchema,
-  clientSubscriptionRenewalRequestSchema,
   clientSubscriptionStateSchema
 } from "@elevenhouse/contracts";
 import type {
@@ -41,13 +40,7 @@ const rejectedCodeSchema = z.enum([
   "future_period_exists",
   "subscription_revoked",
   "no_paid_period",
-  "cancellation_already_effective",
-  "cancellation_not_scheduled",
   "paid_access_not_ended",
-  "renewal_disabled",
-  "renewal_request_exists",
-  "renewal_request_mismatch",
-  "renewal_period_mismatch",
   "paid_access_ended"
 ]);
 const persistenceResultSchema = z.discriminatedUnion("outcome", [
@@ -95,8 +88,6 @@ const subscriptionSnapshotSchema = z
     state: clientSubscriptionStateSchema,
     version: z.number().int().positive(),
     cancellationEffectiveAt: z.string().datetime({ offset: true }).nullable(),
-    renewalStoppedAt: z.string().datetime({ offset: true }).nullable(),
-    renewalRequest: clientSubscriptionRenewalRequestSchema.nullable(),
     paidPeriods: z.array(periodSnapshotSchema),
     endedPeriodIds: z.array(z.string().uuid()),
     appliedFinanceEvidenceIds: z.array(z.string().uuid())
@@ -281,7 +272,10 @@ export function createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork(
   database: ElevenHouseDatabase
 ): ClientSubscriptionSourceEventApplicationUnitOfWork {
   return {
-    apply: (input) => database.transaction((transaction) => applyDrizzleClientSubscriptionSourceEventInTransaction(transaction, input))
+    apply: (input) =>
+      database.transaction((transaction) =>
+        applyDrizzleClientSubscriptionSourceEventInTransaction(transaction, input)
+      )
   };
 }
 
@@ -291,114 +285,105 @@ export async function applyDrizzleClientSubscriptionSourceEventInTransaction(
   input: Parameters<ClientSubscriptionSourceEventApplicationUnitOfWork["apply"]>[0],
   afterApplied?: DrizzleClientSubscriptionSourceEventAppliedHook
 ): Promise<ClientSubscriptionSourceEventApplicationExecution> {
-          await lockPersistenceScope(
-            transaction,
-            `client-subscription-source-event:${input.sourceEventId}`
-          );
-          await lockPersistenceScope(
-            transaction,
-            `client-subscription-evidence:${input.evidenceId}`
-          );
-          const [bySource] = await transaction
-            .select()
-            .from(clientSubscriptionEventApplicationReceipts)
-            .where(
-              eq(clientSubscriptionEventApplicationReceipts.sourceEventId, input.sourceEventId)
-            )
-            .limit(1);
-          if (bySource) {
-            if (
-              bySource.sourceEventDigest !== input.sourceEventDigest ||
-              bySource.evidenceId !== input.evidenceId ||
-              bySource.subscriptionId !== input.subscriptionId
-            ) {
-              return { outcome: "source_event_conflict" };
-            }
-            return {
-              outcome: "replayed",
-              result: hydrateSourceEventResult(bySource)
-            };
-          }
-          const [byEvidence] = await transaction
-            .select({ sourceEventId: clientSubscriptionEventApplicationReceipts.sourceEventId })
-            .from(clientSubscriptionEventApplicationReceipts)
-            .where(eq(clientSubscriptionEventApplicationReceipts.evidenceId, input.evidenceId))
-            .limit(1);
-          if (byEvidence) return { outcome: "evidence_conflict" };
+  await lockPersistenceScope(
+    transaction,
+    `client-subscription-source-event:${input.sourceEventId}`
+  );
+  await lockPersistenceScope(transaction, `client-subscription-evidence:${input.evidenceId}`);
+  const [bySource] = await transaction
+    .select()
+    .from(clientSubscriptionEventApplicationReceipts)
+    .where(eq(clientSubscriptionEventApplicationReceipts.sourceEventId, input.sourceEventId))
+    .limit(1);
+  if (bySource) {
+    if (
+      bySource.sourceEventDigest !== input.sourceEventDigest ||
+      bySource.evidenceId !== input.evidenceId ||
+      bySource.subscriptionId !== input.subscriptionId
+    ) {
+      return { outcome: "source_event_conflict" };
+    }
+    return {
+      outcome: "replayed",
+      result: hydrateSourceEventResult(bySource)
+    };
+  }
+  const [byEvidence] = await transaction
+    .select({ sourceEventId: clientSubscriptionEventApplicationReceipts.sourceEventId })
+    .from(clientSubscriptionEventApplicationReceipts)
+    .where(eq(clientSubscriptionEventApplicationReceipts.evidenceId, input.evidenceId))
+    .limit(1);
+  if (byEvidence) return { outcome: "evidence_conflict" };
 
-          const current = await findClientSubscriptionById(
-            transaction,
-            input.subscriptionId,
-            "update"
-          );
-          if (!current) return { outcome: "not_found" };
-          if (current.version !== input.expectedVersion) {
-            return {
-              outcome: "version_conflict",
-              expectedVersion: input.expectedVersion,
-              currentVersion: current.version
-            };
-          }
-          const decision = input.decide(current);
-          if (decision.outcome === "rejected") {
-            const applicationReceipt = sourceReceiptForRejected(input, decision.code);
-            await insertSourceEventReceipt(transaction, applicationReceipt, null, null, null);
-            return { outcome: "rejected", decision, applicationReceipt };
-          }
-          if (decision.outcome === "idempotent") {
-            assertIdempotentHead(current, decision.subscription);
-            const applicationReceipt: ClientSubscriptionSourceEventApplicationReceipt = {
-              subscriptionId: input.subscriptionId,
-              sourceEventId: input.sourceEventId,
-              sourceEventDigest: input.sourceEventDigest,
-              evidenceId: input.evidenceId,
-              result: { outcome: "idempotent", subscriptionVersion: current.version }
-            };
-            await insertSourceEventReceipt(
-              transaction,
-              applicationReceipt,
-              null,
-              null,
-              resultSnapshotSchema.parse({
-                outcome: "idempotent",
-                subscription: current,
-                events: []
-              })
-            );
-            return {
-              outcome: "idempotent",
-              subscription: current,
-              events: [],
-              applicationReceipt
-            };
-          }
+  const current = await findClientSubscriptionById(transaction, input.subscriptionId, "update");
+  if (!current) return { outcome: "not_found" };
+  if (current.version !== input.expectedVersion) {
+    return {
+      outcome: "version_conflict",
+      expectedVersion: input.expectedVersion,
+      currentVersion: current.version
+    };
+  }
+  const decision = input.decide(current);
+  if (decision.outcome === "rejected") {
+    const applicationReceipt = sourceReceiptForRejected(input, decision.code);
+    await insertSourceEventReceipt(transaction, applicationReceipt, null, null, null);
+    return { outcome: "rejected", decision, applicationReceipt };
+  }
+  if (decision.outcome === "idempotent") {
+    assertIdempotentHead(current, decision.subscription);
+    const applicationReceipt: ClientSubscriptionSourceEventApplicationReceipt = {
+      subscriptionId: input.subscriptionId,
+      sourceEventId: input.sourceEventId,
+      sourceEventDigest: input.sourceEventDigest,
+      evidenceId: input.evidenceId,
+      result: { outcome: "idempotent", subscriptionVersion: current.version }
+    };
+    await insertSourceEventReceipt(
+      transaction,
+      applicationReceipt,
+      null,
+      null,
+      resultSnapshotSchema.parse({
+        outcome: "idempotent",
+        subscription: current,
+        events: []
+      })
+    );
+    return {
+      outcome: "idempotent",
+      subscription: current,
+      events: [],
+      applicationReceipt
+    };
+  }
 
-          await persistClientSubscriptionTransition(transaction, {
-            current,
-            next: decision.subscription,
-            receipt: decision.receipt,
-            events: decision.events,
-            captureEvidenceId: input.evidenceId
-          });
-          const applicationReceipt = sourceReceiptForApplied(input, decision);
-          await afterApplied?.({
-            previousSubscription: current,
-            decision,
-            applicationReceipt
-          });
-          await insertSourceEventReceipt(
-            transaction,
-            applicationReceipt,
-            decision.receipt.transitionId,
-            decision.receipt.slotEffect,
-            resultSnapshotSchema.parse({
-              outcome: "applied",
-              subscription: decision.subscription,
-              events: decision.events,
-              receipt: decision.receipt
-            })
-          );
-          return { ...decision, applicationReceipt };
+  await persistClientSubscriptionTransition(transaction, {
+    current,
+    next: decision.subscription,
+    receipt: decision.receipt,
+    events: decision.events,
+    captureEvidenceId: input.evidenceId
+  });
+  const applicationReceipt = sourceReceiptForApplied(input, decision);
+  await afterApplied?.({
+    previousSubscription: current,
+    decision,
+    applicationReceipt
+  });
+  await insertSourceEventReceipt(
+    transaction,
+    applicationReceipt,
+    decision.receipt.transitionId,
+    decision.receipt.slotEffect,
+    resultSnapshotSchema.parse({
+      outcome: "applied",
+      subscription: decision.subscription,
+      events: decision.events,
+      receipt: decision.receipt
+    })
+  );
+  return { ...decision, applicationReceipt };
 }
 
 type CommandReceiptRow = typeof clientSubscriptionCommandReceipts.$inferSelect;

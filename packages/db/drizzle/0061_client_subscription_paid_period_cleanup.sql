@@ -1,693 +1,269 @@
-export const clientSubscriptionImmutableTables = [
-  "client_subscription_purchase_authorities",
-  "client_subscription_purchase_fulfillment_authorities",
-  "client_subscription_contracts",
-  "client_subscription_periods",
-  "client_subscription_transition_receipts",
-  "client_subscription_lifecycle_events",
-  "client_subscription_creation_receipts",
-  "client_subscription_command_receipts",
-  "client_subscription_event_application_receipts",
-  "client_subscription_allowance_command_receipts",
-  "client_subscription_allowance_command_effects",
-  "client_entitlement_transition_applications",
-  "client_entitlement_transition_effects"
-] as const;
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" DROP CONSTRAINT "finance_client_subscription_capture_dispatch_renewal_request_fk";--> statement-breakpoint
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" DROP CONSTRAINT "finance_client_subscription_capture_dispatch_intended_period_fk";--> statement-breakpoint
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" DROP CONSTRAINT "client_subscription_capture_dispatch_receipt_capture_kind_check";--> statement-breakpoint
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" DROP COLUMN "renewal_request_id";--> statement-breakpoint
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" DROP COLUMN "intended_period_id";--> statement-breakpoint
+ALTER TABLE "finance_client_subscription_capture_dispatch_receipts" ADD CONSTRAINT "client_subscription_capture_dispatch_receipt_capture_kind_check" CHECK ("finance_client_subscription_capture_dispatch_receipts"."capture_kind" = 'initial');--> statement-breakpoint
+ALTER TABLE "client_subscriptions" DROP CONSTRAINT "client_subscriptions_state_check";--> statement-breakpoint
+ALTER TABLE "client_subscriptions" DROP CONSTRAINT "client_subscriptions_state_pointer_shape_check";--> statement-breakpoint
+DROP INDEX "client_subscriptions_current_relationship_product_unique";--> statement-breakpoint
+ALTER TABLE "client_subscriptions" DROP COLUMN "renewal_stopped_at";--> statement-breakpoint
+ALTER TABLE "client_subscriptions" DROP COLUMN "renewal_request_id";--> statement-breakpoint
+ALTER TABLE "client_subscriptions" ADD CONSTRAINT "client_subscriptions_state_check" CHECK ("client_subscriptions"."state" in ('pending_initial_payment', 'active', 'ended', 'revoked'));--> statement-breakpoint
+ALTER TABLE "client_subscriptions" ADD CONSTRAINT "client_subscriptions_state_pointer_shape_check" CHECK ((
+        "client_subscriptions"."state" = 'pending_initial_payment'
+        and "client_subscriptions"."current_period_id" is null
+        and "client_subscriptions"."future_period_id" is null
+        and "client_subscriptions"."cancellation_effective_at" is null
+      ) or (
+        "client_subscriptions"."state" = 'active'
+        and "client_subscriptions"."current_period_id" is not null
+        and "client_subscriptions"."cancellation_effective_at" is null
+      ) or (
+        "client_subscriptions"."state" = 'ended'
+        and "client_subscriptions"."current_period_id" is null
+        and "client_subscriptions"."future_period_id" is null
+        and "client_subscriptions"."cancellation_effective_at" is null
+      ) or (
+        "client_subscriptions"."state" = 'revoked'
+        and "client_subscriptions"."current_period_id" is null
+        and "client_subscriptions"."future_period_id" is null
+        and "client_subscriptions"."cancellation_effective_at" is null
+      ));--> statement-breakpoint
+CREATE UNIQUE INDEX "client_subscriptions_current_relationship_product_unique" ON "client_subscriptions" USING btree ("relationship_id","product_id") WHERE "client_subscriptions"."state" in ('pending_initial_payment', 'active');--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" DROP CONSTRAINT "client_subscription_transition_receipts_state_check";--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" DROP CONSTRAINT "client_subscription_transition_receipts_entitlement_check";--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" DROP CONSTRAINT "client_subscription_transition_receipts_primary_event_check";--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" ADD CONSTRAINT "client_subscription_transition_receipts_state_check" CHECK ("client_subscription_transition_receipts"."state" in ('active', 'ended', 'revoked'));--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" ADD CONSTRAINT "client_subscription_transition_receipts_entitlement_check" CHECK ("client_subscription_transition_receipts"."entitlement_state" in ('active', 'ended', 'revoked')
+        and "client_subscription_transition_receipts"."entitlement_scope" in ('none', 'period', 'subscription_all')
+        and (
+          ("client_subscription_transition_receipts"."primary_event_type" = 'client_subscription.initial_payment_ended.v1'
+            and "client_subscription_transition_receipts"."entitlement_scope" = 'none'
+            and "client_subscription_transition_receipts"."period_id" is null
+            and "client_subscription_transition_receipts"."entitlement_state" = 'ended'
+            and "client_subscription_transition_receipts"."state" = 'ended'
+            and "client_subscription_transition_receipts"."slot_effect" = 'release')
+          or ("client_subscription_transition_receipts"."primary_event_type" = 'client_subscription.activated.v1'
+            and "client_subscription_transition_receipts"."entitlement_scope" = 'period'
+            and "client_subscription_transition_receipts"."period_id" is not null
+            and "client_subscription_transition_receipts"."entitlement_state" = 'active'
+            and "client_subscription_transition_receipts"."state" = 'active')
+          or ("client_subscription_transition_receipts"."primary_event_type" = 'client_subscription.period_ended.v1'
+            and "client_subscription_transition_receipts"."entitlement_scope" = 'period'
+            and "client_subscription_transition_receipts"."period_id" is not null
+            and "client_subscription_transition_receipts"."entitlement_state" = 'ended'
+            and "client_subscription_transition_receipts"."state" in ('active', 'ended'))
+          or ("client_subscription_transition_receipts"."primary_event_type" = 'client_subscription.revoked.v1'
+            and "client_subscription_transition_receipts"."entitlement_scope" = 'subscription_all'
+            and "client_subscription_transition_receipts"."period_id" is null
+            and "client_subscription_transition_receipts"."entitlement_state" = 'revoked')
+        ));--> statement-breakpoint
+ALTER TABLE "client_subscription_transition_receipts" ADD CONSTRAINT "client_subscription_transition_receipts_primary_event_check" CHECK ("client_subscription_transition_receipts"."primary_event_type" in (
+        'client_subscription.initial_payment_ended.v1',
+        'client_subscription.activated.v1',
+        'client_subscription.period_ended.v1',
+        'client_subscription.revoked.v1'
+      ));--> statement-breakpoint
+ALTER TABLE "client_subscription_lifecycle_events" DROP CONSTRAINT "client_subscription_lifecycle_events_type_check";--> statement-breakpoint
+ALTER TABLE "client_subscription_lifecycle_events" DROP CONSTRAINT "client_subscription_lifecycle_events_data_shape_check";--> statement-breakpoint
+ALTER TABLE "client_subscription_lifecycle_events" ADD CONSTRAINT "client_subscription_lifecycle_events_type_check" CHECK ("client_subscription_lifecycle_events"."event_type" in (
+        'client_subscription.initial_payment_ended.v1',
+        'client_subscription.activated.v1',
+        'client_subscription.period_ended.v1',
+        'client_subscription.revoked.v1',
+        'client_subscription.entitlement_changed.v1'
+      ));--> statement-breakpoint
+ALTER TABLE "client_subscription_lifecycle_events" ADD CONSTRAINT "client_subscription_lifecycle_events_data_shape_check" CHECK ((
+        "client_subscription_lifecycle_events"."event_type" = 'client_subscription.initial_payment_ended.v1'
+        and "client_subscription_lifecycle_events"."data"->>'reason' in ('checkout_expired', 'payment_failed')
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'financeEvidenceId') = 'string'
+        and "client_subscription_lifecycle_events"."data" - ARRAY['subscriptionId','contractId','financeEvidenceId','reason']::text[] = '{}'::jsonb
+      ) or (
+        "client_subscription_lifecycle_events"."event_type" in (
+          'client_subscription.activated.v1',
+          'client_subscription.period_ended.v1'
+        )
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'periodId') = 'string'
+        and "client_subscription_lifecycle_events"."data" - ARRAY['subscriptionId','contractId','periodId']::text[] = '{}'::jsonb
+      ) or (
+        "client_subscription_lifecycle_events"."event_type" = 'client_subscription.revoked.v1'
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'periodId') = 'string'
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'financeEvidenceId') = 'string'
+        and "client_subscription_lifecycle_events"."data" - ARRAY['subscriptionId','contractId','periodId','financeEvidenceId']::text[] = '{}'::jsonb
+      ) or (
+        "client_subscription_lifecycle_events"."event_type" = 'client_subscription.entitlement_changed.v1'
+        and "client_subscription_lifecycle_events"."data"->>'scope' in ('period', 'subscription_all')
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'relationshipId') = 'string'
+        and jsonb_typeof("client_subscription_lifecycle_events"."data"->'journalEpochId') = 'string'
+        and (
+          ("client_subscription_lifecycle_events"."data"->>'scope' = 'period'
+            and jsonb_typeof("client_subscription_lifecycle_events"."data"->'periodId') = 'string'
+            and "client_subscription_lifecycle_events"."data" - ARRAY['subscriptionId','contractId','scope','relationshipId','journalEpochId','periodId']::text[] = '{}'::jsonb)
+          or ("client_subscription_lifecycle_events"."data"->>'scope' = 'subscription_all'
+            and "client_subscription_lifecycle_events"."data" - ARRAY['subscriptionId','contractId','scope','relationshipId','journalEpochId']::text[] = '{}'::jsonb)
+        )
+      ));--> statement-breakpoint
+DROP TABLE "client_subscription_renewal_requests";--> statement-breakpoint
+create or replace function finance_assert_client_subscription_capture_dispatch_receipt()
+returns trigger language plpgsql set search_path = pg_catalog, public as $$
+declare
+  capture_row record;
+  application_row record;
+  contract_row record;
+  primary_event_row record;
+  entitlement_event_row record;
+begin
+  select application.id, application.canonical_digest, intent.source_id, semantic.observed_at
+    into capture_row
+    from finance_online_sale_capture_applications application
+    join finance_economic_payment_intents intent
+      on intent.id = application.economic_payment_intent_id
+    join finance_provider_semantic_facts semantic
+      on semantic.id = application.semantic_fact_id
+   where application.id = new.capture_application_receipt_id;
+  if not found
+     or capture_row.canonical_digest <> new.capture_application_digest
+     or capture_row.source_id <> new.order_id::text then
+    raise exception 'client subscription capture dispatch receipt capture authority is inconsistent'
+      using errcode = '23514';
+  end if;
 
-const immutableTableTriggers = clientSubscriptionImmutableTables
-  .map(
-    (table) => `CREATE TRIGGER "${table}_immutable"
-BEFORE UPDATE OR DELETE ON ${table}
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_immutable_row();
---> statement-breakpoint
-CREATE TRIGGER "${table}_no_truncate"
-BEFORE TRUNCATE ON ${table}
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_immutable_row();`
-  )
-  .join("\n--> statement-breakpoint\n");
+  select source_event_id, source_event_digest, evidence_id, subscription_id,
+         result_kind, result_version, transition_id
+    into application_row
+    from client_subscription_event_application_receipts
+   where source_event_id = new.source_event_id;
+  if not found
+     or application_row.source_event_digest <> new.source_event_digest
+     or application_row.evidence_id <> new.capture_application_receipt_id
+     or application_row.subscription_id <> new.subscription_id
+     or application_row.result_kind <> 'applied'
+     or application_row.result_version <> new.subscription_expected_version + 1
+     or application_row.transition_id is null then
+    raise exception 'client subscription capture dispatch receipt source application authority is inconsistent'
+      using errcode = '23514';
+  end if;
 
-const graphTriggerTables = [
-  "client_subscription_slots",
-  "client_subscriptions",
-  "client_subscription_periods",
-  "client_subscription_period_allowances",
-  "client_subscription_allowance_reservations",
-  "client_subscription_allowance_consumptions",
-  "client_subscription_transition_receipts",
-  "client_subscription_lifecycle_events",
-  "client_subscription_creation_receipts",
-  "client_subscription_command_receipts",
-  "client_subscription_event_application_receipts",
-  "client_subscription_allowance_command_receipts",
-  "client_subscription_allowance_command_effects",
-  "client_entitlement_transition_applications",
-  "client_entitlement_transition_effects",
-  "client_entitlement_grants",
-  "outbox_events"
-] as const;
+  select id, order_id, canonical_digest
+    into contract_row
+    from client_subscription_contracts
+   where id = new.contract_id;
+  if not found
+     or contract_row.order_id <> new.order_id
+     or contract_row.canonical_digest <> new.contract_canonical_digest then
+    raise exception 'client subscription capture dispatch receipt contract authority is inconsistent'
+      using errcode = '23514';
+  end if;
 
-const graphConstraintTriggers = graphTriggerTables
-  .map(
-    (table) => `CREATE CONSTRAINT TRIGGER "client_subscription_graph_integrity"
-AFTER INSERT OR UPDATE OR DELETE ON ${table}
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_assert_client_subscription_graph_integrity();`
-  )
-  .join("\n--> statement-breakpoint\n");
+  if not exists (
+    select 1
+      from client_subscription_periods
+     where id = new.period_id
+       and subscription_id = new.subscription_id
+       and capture_evidence_id = new.capture_application_receipt_id
+  ) then
+    raise exception 'client subscription capture dispatch receipt period authority is inconsistent'
+      using errcode = '23514';
+  end if;
 
-const contractCreationGraphIntegritySql = `CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_contract_creation_graph()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_contract_creation_graph$
-BEGIN
-  IF (
-    SELECT count(*)
-      FROM client_subscriptions created_head
-      JOIN client_subscription_slots created_slot
-        ON created_slot.relationship_id = created_head.relationship_id
-       AND created_slot.product_id = created_head.product_id
-       AND created_slot.current_subscription_id = created_head.id
-      JOIN client_subscription_creation_receipts creation_receipt
-        ON creation_receipt.subscription_id = created_head.id
-       AND creation_receipt.contract_id = NEW.id
-       AND creation_receipt.contract_digest = NEW.canonical_digest
-       AND creation_receipt.order_id = NEW.order_id
-       AND creation_receipt.relationship_id = NEW.relationship_id
-       AND creation_receipt.product_id = NEW.product_id
-       AND creation_receipt.result_kind = 'created'
-       AND creation_receipt.slot_effect = 'assign'
-       AND creation_receipt.result_slot_version = created_slot.version
-       AND creation_receipt.result_slot_version = creation_receipt.expected_slot_version + 1
-     WHERE created_head.contract_id = NEW.id
-       AND created_head.relationship_id = NEW.relationship_id
-       AND created_head.product_id = NEW.product_id
-       AND (
-         (created_head.version = 1 AND created_head.state = 'pending_initial_payment')
-         OR (
-           created_head.version = 2
-           AND created_head.state = 'active'
-           AND EXISTS (
-             SELECT 1
-               FROM client_subscription_transition_receipts activation_transition
-               JOIN client_subscription_event_application_receipts activation_application
-                 ON activation_application.transition_id = activation_transition.transition_id
-                AND activation_application.subscription_id = created_head.id
-                AND activation_application.result_kind = 'applied'
-                AND activation_application.result_version = created_head.version
-              WHERE activation_transition.subscription_id = created_head.id
-                AND activation_transition.contract_id = NEW.id
-                AND activation_transition.relationship_id = NEW.relationship_id
-                AND activation_transition.journal_epoch_id = created_head.journal_epoch_id
-                AND activation_transition.subscription_version = created_head.version
-                AND activation_transition.primary_event_type = 'client_subscription.activated.v1'
-                AND activation_transition.state = 'active'
-                AND activation_transition.entitlement_state = 'active'
-                AND activation_transition.entitlement_scope = 'period'
-           )
-         )
-       )
-  ) <> 1 THEN
-    RAISE EXCEPTION 'Sealed subscription contract requires atomic creation graph'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_graph_integrity';
-  END IF;
-  RETURN NULL;
-END;
-$client_subscription_contract_creation_graph$;
---> statement-breakpoint
-CREATE CONSTRAINT TRIGGER "client_subscription_graph_integrity"
-AFTER INSERT OR UPDATE OR DELETE ON client_subscription_contracts
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_assert_client_subscription_contract_creation_graph();`;
+  select id, transition_id, subscription_id, contract_id, subscription_version, event_type, data
+    into primary_event_row
+    from client_subscription_lifecycle_events
+   where id = new.primary_lifecycle_event_id;
+  if not found
+     or primary_event_row.subscription_id <> new.subscription_id
+     or primary_event_row.contract_id <> new.contract_id
+     or primary_event_row.transition_id <> application_row.transition_id
+     or primary_event_row.subscription_version <> new.subscription_expected_version + 1
+     or primary_event_row.data->>'periodId' <> new.period_id::text
+     or new.capture_kind <> 'initial'
+     or primary_event_row.event_type <> 'client_subscription.activated.v1' then
+    raise exception 'client subscription capture dispatch receipt primary lifecycle event is inconsistent'
+      using errcode = '23514';
+  end if;
 
-export const clientSubscriptionPeriodExclusionSql = `CREATE EXTENSION IF NOT EXISTS btree_gist;
---> statement-breakpoint
-ALTER TABLE client_subscription_periods
-ADD CONSTRAINT client_subscription_periods_no_overlap
-EXCLUDE USING gist (
-  subscription_id WITH =,
-  tstzrange(starts_at, ends_at, '[)') WITH &&
-);`;
+  select id, transition_id, subscription_id, contract_id, subscription_version, event_type, data
+    into entitlement_event_row
+    from client_subscription_lifecycle_events
+   where id = new.entitlement_changed_event_id;
+  if not found
+     or entitlement_event_row.transition_id <> primary_event_row.transition_id
+     or entitlement_event_row.subscription_id <> new.subscription_id
+     or entitlement_event_row.contract_id <> new.contract_id
+     or entitlement_event_row.subscription_version <> new.subscription_expected_version + 1
+     or entitlement_event_row.event_type <> 'client_subscription.entitlement_changed.v1'
+     or entitlement_event_row.data->>'scope' <> 'period'
+     or entitlement_event_row.data->>'periodId' <> new.period_id::text then
+    raise exception 'client subscription capture dispatch receipt entitlement event is inconsistent'
+      using errcode = '23514';
+  end if;
 
-export const clientSubscriptionIntegritySql = `CREATE EXTENSION IF NOT EXISTS pgcrypto;
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_subscription_immutable_row()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_immutable$
-BEGIN
-  IF TG_OP = 'TRUNCATE' THEN
-    RAISE EXCEPTION 'Client subscription historical facts cannot be truncated'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_history_immutable';
-  END IF;
-  IF TG_OP = 'UPDATE' THEN
-    RAISE EXCEPTION 'Client subscription historical facts are immutable'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_history_immutable';
-  END IF;
-  RAISE EXCEPTION 'Client subscription historical facts cannot be deleted'
-    USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_history_immutable';
-END;
-$client_subscription_immutable$;
---> statement-breakpoint
-${immutableTableTriggers}
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_subscription_head_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_head_guard$
-BEGIN
-  IF TG_OP = 'TRUNCATE' OR TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Client subscription heads are retained permanently'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_head_monotonic';
-  END IF;
-  IF TG_OP = 'INSERT' THEN
-    IF NEW.version <> 1 OR NEW.state <> 'pending_initial_payment' THEN
-      RAISE EXCEPTION 'Client subscription heads begin pending at version one'
-        USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_head_monotonic';
-    END IF;
-    RETURN NEW;
-  END IF;
-  IF NEW.id IS DISTINCT FROM OLD.id
-     OR NEW.contract_id IS DISTINCT FROM OLD.contract_id
-     OR NEW.relationship_id IS DISTINCT FROM OLD.relationship_id
-     OR NEW.product_id IS DISTINCT FROM OLD.product_id
-     OR NEW.journal_epoch_id IS DISTINCT FROM OLD.journal_epoch_id
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at
-     OR NEW.version <> OLD.version + 1
-     OR NEW.updated_at < OLD.updated_at THEN
-    RAISE EXCEPTION 'Client subscription head transition must be one contiguous CAS revision'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_head_monotonic';
-  END IF;
-  RETURN NEW;
-END;
-$client_subscription_head_guard$;
---> statement-breakpoint
-CREATE TRIGGER "client_subscriptions_monotonic"
-BEFORE INSERT OR UPDATE OR DELETE ON client_subscriptions
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_head_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_subscriptions_no_truncate"
-BEFORE TRUNCATE ON client_subscriptions
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_head_mutation();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_subscription_slot_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_slot_guard$
-BEGIN
-  IF TG_OP = 'TRUNCATE' OR TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Client subscription CAS slots are retained permanently'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_slot_monotonic';
-  END IF;
-  IF TG_OP = 'INSERT' THEN
-    IF NEW.version <> 0 OR NEW.current_subscription_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Client subscription CAS slot begins empty at version zero'
-        USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_slot_monotonic';
-    END IF;
-    RETURN NEW;
-  END IF;
-  IF NEW.relationship_id IS DISTINCT FROM OLD.relationship_id
-     OR NEW.product_id IS DISTINCT FROM OLD.product_id
-     OR NEW.client_user_id IS DISTINCT FROM OLD.client_user_id
-     OR NEW.astrologer_user_id IS DISTINCT FROM OLD.astrologer_user_id
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at
-     OR NEW.updated_at < OLD.updated_at
-     OR (
-       NEW.current_subscription_id IS DISTINCT FROM OLD.current_subscription_id
-       AND NEW.version IS DISTINCT FROM OLD.version + 1
-     )
-     OR (
-       NEW.current_subscription_id IS NOT DISTINCT FROM OLD.current_subscription_id
-       AND NEW.version IS DISTINCT FROM OLD.version
-     ) THEN
-    RAISE EXCEPTION 'Client subscription slot pointer changes require one CAS revision'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_slot_monotonic';
-  END IF;
-  IF OLD.current_subscription_id IS NOT NULL
-     AND NEW.current_subscription_id IS NOT NULL
-     AND NEW.current_subscription_id IS DISTINCT FROM OLD.current_subscription_id THEN
-    RAISE EXCEPTION 'Subscription slot cannot replace one epoch with another directly'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_slot_monotonic';
-  END IF;
-  RETURN NEW;
-END;
-$client_subscription_slot_guard$;
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_slots_monotonic"
-BEFORE INSERT OR UPDATE OR DELETE ON client_subscription_slots
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_slot_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_slots_no_truncate"
-BEFORE TRUNCATE ON client_subscription_slots
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_slot_mutation();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_subscription_allowance_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_allowance_guard$
-BEGIN
-  IF TG_OP = 'TRUNCATE' OR TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Client subscription allowance heads are retained permanently'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_allowance_monotonic';
-  END IF;
-  IF TG_OP = 'INSERT' THEN
-    IF NEW.version <> 1 THEN
-      RAISE EXCEPTION 'Client subscription allowance begins at version one'
-        USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_allowance_monotonic';
-    END IF;
-    RETURN NEW;
-  END IF;
-  IF NEW.period_id IS DISTINCT FROM OLD.period_id
-     OR NEW.subscription_id IS DISTINCT FROM OLD.subscription_id
-     OR NEW.ends_at IS DISTINCT FROM OLD.ends_at
-     OR NEW.total IS DISTINCT FROM OLD.total
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at
-     OR NEW.version <> OLD.version + 1
-     OR NEW.updated_at < OLD.updated_at THEN
-    RAISE EXCEPTION 'Client subscription allowance mutation requires one CAS revision'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_allowance_monotonic';
-  END IF;
-  RETURN NEW;
-END;
-$client_subscription_allowance_guard$;
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_period_allowances_monotonic"
-BEFORE INSERT OR UPDATE OR DELETE ON client_subscription_period_allowances
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_allowance_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_period_allowances_no_truncate"
-BEFORE TRUNCATE ON client_subscription_period_allowances
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_allowance_mutation();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_subscription_reservation_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_reservation_guard$
-BEGIN
-  IF TG_OP = 'TRUNCATE' OR TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Client subscription allowance reservations are retained permanently'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_reservation_monotonic';
-  END IF;
-  IF TG_OP = 'INSERT' AND NEW.state <> 'reserved' THEN
-    RAISE EXCEPTION 'Client subscription reservation must begin reserved'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_reservation_monotonic';
-  END IF;
-  IF TG_OP = 'UPDATE' AND (
-    NEW.id IS DISTINCT FROM OLD.id
-    OR NEW.period_id IS DISTINCT FROM OLD.period_id
-    OR NEW.subscription_id IS DISTINCT FROM OLD.subscription_id
-    OR NEW.reserved_at IS DISTINCT FROM OLD.reserved_at
-    OR OLD.state <> 'reserved'
-    OR NEW.state NOT IN ('consumed', 'released')
-  ) THEN
-    RAISE EXCEPTION 'Client subscription reservation permits one terminal transition'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_subscription_reservation_monotonic';
-  END IF;
-  RETURN NEW;
-END;
-$client_subscription_reservation_guard$;
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_allowance_reservations_monotonic"
-BEFORE INSERT OR UPDATE OR DELETE ON client_subscription_allowance_reservations
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_reservation_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_allowance_reservations_no_truncate"
-BEFORE TRUNCATE ON client_subscription_allowance_reservations
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_reservation_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_allowance_consumptions_immutable"
-BEFORE UPDATE OR DELETE ON client_subscription_allowance_consumptions
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_immutable_row();
---> statement-breakpoint
-CREATE TRIGGER "client_subscription_allowance_consumptions_no_truncate"
-BEFORE TRUNCATE ON client_subscription_allowance_consumptions
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_subscription_immutable_row();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_guard_client_entitlement_grant_mutation()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_entitlement_grant_guard$
-BEGIN
-  IF TG_OP = 'TRUNCATE' OR TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'Client entitlement grants are retained permanently'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_entitlement_grant_monotonic';
-  END IF;
-  IF TG_OP = 'INSERT' THEN
-    IF NEW.version <> 1 OR NEW.state <> 'active' THEN
-      RAISE EXCEPTION 'Client entitlement grant begins active at version one'
-        USING ERRCODE = '55000', CONSTRAINT = 'client_entitlement_grant_monotonic';
-    END IF;
-    RETURN NEW;
-  END IF;
-  IF NEW.id IS DISTINCT FROM OLD.id
-     OR NEW.subscription_id IS DISTINCT FROM OLD.subscription_id
-     OR NEW.contract_id IS DISTINCT FROM OLD.contract_id
-     OR NEW.relationship_id IS DISTINCT FROM OLD.relationship_id
-     OR NEW.journal_epoch_id IS DISTINCT FROM OLD.journal_epoch_id
-     OR NEW.period_id IS DISTINCT FROM OLD.period_id
-     OR NEW.capability IS DISTINCT FROM OLD.capability
-     OR NEW.starts_at IS DISTINCT FROM OLD.starts_at
-     OR NEW.ends_at IS DISTINCT FROM OLD.ends_at
-     OR NEW.created_at IS DISTINCT FROM OLD.created_at
-     OR OLD.state <> 'active'
-     OR NEW.state NOT IN ('active', 'ended', 'revoked')
-     OR NEW.source_subscription_version <= OLD.source_subscription_version
-     OR NEW.version <> OLD.version + 1
-     OR NEW.updated_at < OLD.updated_at THEN
-    RAISE EXCEPTION 'Client entitlement grant permits one terminal CAS transition'
-      USING ERRCODE = '55000', CONSTRAINT = 'client_entitlement_grant_monotonic';
-  END IF;
-  RETURN NEW;
-END;
-$client_entitlement_grant_guard$;
---> statement-breakpoint
-CREATE TRIGGER "client_entitlement_grants_monotonic"
-BEFORE INSERT OR UPDATE OR DELETE ON client_entitlement_grants
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_guard_client_entitlement_grant_mutation();
---> statement-breakpoint
-CREATE TRIGGER "client_entitlement_grants_no_truncate"
-BEFORE TRUNCATE ON client_entitlement_grants
-FOR EACH STATEMENT
-EXECUTE FUNCTION elevenhouse_guard_client_entitlement_grant_mutation();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_purchase_authority()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_purchase_authority$
-DECLARE
-  authority_row client_subscription_purchase_authorities%ROWTYPE;
-  product_row products%ROWTYPE;
-  order_row orders%ROWTYPE;
-  relationship_row client_astrologer_relationships%ROWTYPE;
-  economics_row finance_order_economics_snapshots%ROWTYPE;
-  order_row_transaction_id text;
-  expected_config jsonb;
-  expected_preimage text;
-  expected_weekdays jsonb;
-BEGIN
-  SELECT * INTO STRICT authority_row
-    FROM client_subscription_purchase_authorities
-   WHERE order_id = NEW.order_id;
-  SELECT * INTO STRICT order_row
-    FROM orders
-   WHERE id = authority_row.order_id
-     FOR NO KEY UPDATE;
-  SELECT xmin::text INTO STRICT order_row_transaction_id
-    FROM orders
-   WHERE id = authority_row.order_id;
-  SELECT * INTO STRICT product_row
-    FROM products
-   WHERE id = authority_row.product_id
-     FOR NO KEY UPDATE;
-  SELECT * INTO STRICT relationship_row
-    FROM client_astrologer_relationships
-   WHERE id = authority_row.relationship_id
-     FOR NO KEY UPDATE;
-  SELECT * INTO STRICT economics_row
-    FROM finance_order_economics_snapshots
-   WHERE order_id = authority_row.billing_economics_order_id
-     AND canonical_digest = authority_row.billing_economics_digest
-     FOR KEY SHARE;
-
-  IF order_row_transaction_id IS DISTINCT FROM pg_current_xact_id()::text THEN
-    RAISE EXCEPTION 'Subscription purchase authority must be sealed atomically with its order'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_purchase_authority';
-  END IF;
-
-  SELECT coalesce(jsonb_agg(weekday ORDER BY weekday), '[]'::jsonb)
-    INTO expected_weekdays
-    FROM generate_series(1, 7) AS weekday
-   WHERE product_row.astro_diary_working_weekdays_mask & (1 << (weekday - 1)) <> 0;
-  expected_config := jsonb_build_object(
-    'clientResponseWindowCalendarDays', product_row.astro_diary_client_response_window_calendar_days,
-    'reflectionCyclesPerPeriod', product_row.astro_diary_reflection_cycles_per_period,
-    'responseSlaWorkingDays', product_row.astro_diary_response_sla_working_days,
-    'serviceTimezone', product_row.astro_diary_service_timezone,
-    'workingWeekdays', expected_weekdays
+  new.captured_at := capture_row.observed_at;
+  new.canonical_preimage := finance_canonical_jsonb_v1(jsonb_build_object(
+    'schemaVersion', 'finance-client-subscription-capture-dispatch-receipt.v1',
+    'dispatchReceiptId', new.dispatch_receipt_id,
+    'captureApplicationReceiptId', new.capture_application_receipt_id,
+    'captureApplicationDigest', capture_row.canonical_digest,
+    'orderId', new.order_id,
+    'contractId', new.contract_id,
+    'contractCanonicalDigest', contract_row.canonical_digest,
+    'subscriptionId', new.subscription_id,
+    'subscriptionExpectedVersion', new.subscription_expected_version,
+    'applicationResultVersion', application_row.result_version,
+    'transitionId', application_row.transition_id,
+    'captureKind', new.capture_kind,
+    'sourceEventId', application_row.source_event_id,
+    'sourceEventDigest', application_row.source_event_digest,
+    'evidenceId', application_row.evidence_id,
+    'periodId', new.period_id,
+    'primaryLifecycleEventId', new.primary_lifecycle_event_id,
+    'entitlementChangedEventId', new.entitlement_changed_event_id,
+    'capturedAt', new.captured_at
+  ));
+  new.canonical_digest := 'sha256:' || encode(
+    digest(convert_to(new.canonical_preimage, 'UTF8'), 'sha256'), 'hex'
   );
 
-  IF product_row.revision IS DISTINCT FROM authority_row.product_revision
-     OR product_row.owner_user_id IS DISTINCT FROM authority_row.astrologer_user_id
-     OR product_row.status IS DISTINCT FROM 'active'
-     OR product_row.type IS DISTINCT FROM 'async'
-     OR product_row.payment_model IS DISTINCT FROM 'once'
-     OR product_row.execution_mode IS DISTINCT FROM 'async'
-     OR product_row.participant_mode IS DISTINCT FROM 'solo'
-     OR product_row.subscription_period IS DISTINCT FROM authority_row.cadence
-     OR product_row.price_minor IS DISTINCT FROM authority_row.price_minor
-     OR product_row.currency IS DISTINCT FROM authority_row.currency
-     OR product_row.trial_days IS NOT NULL
-     OR product_row.group_size IS NOT NULL
-     OR product_row.package_session_count IS NOT NULL
-     OR expected_config IS DISTINCT FROM authority_row.astro_diary_config
-     OR order_row.client_user_id IS DISTINCT FROM authority_row.client_user_id
-     OR order_row.astrologer_user_id IS DISTINCT FROM authority_row.astrologer_user_id
-     OR order_row.product_id IS DISTINCT FROM authority_row.product_id
-     OR order_row.gross_amount_minor IS DISTINCT FROM authority_row.price_minor
-     OR order_row.gross_currency IS DISTINCT FROM authority_row.currency
-     OR relationship_row.client_user_id IS DISTINCT FROM authority_row.client_user_id
-     OR relationship_row.astrologer_user_id IS DISTINCT FROM authority_row.astrologer_user_id
-     OR relationship_row.status IS DISTINCT FROM 'active'
-     OR (SELECT coalesce(jsonb_agg(value ORDER BY "order"), '[]'::jsonb)
-           FROM product_access_grants WHERE product_id = product_row.id)
-        IS DISTINCT FROM authority_row.access_grants
-     OR (SELECT coalesce(jsonb_agg(value ORDER BY "order"), '[]'::jsonb)
-           FROM product_delivery_formats WHERE product_id = product_row.id)
-        IS DISTINCT FROM authority_row.delivery_formats
-     OR (SELECT coalesce(jsonb_agg(value ORDER BY "order"), '[]'::jsonb)
-           FROM product_required_client_data WHERE product_id = product_row.id)
-        IS DISTINCT FROM authority_row.required_client_data
-     OR (SELECT coalesce(jsonb_agg(value ORDER BY "order"), '[]'::jsonb)
-           FROM product_methods WHERE product_id = product_row.id)
-        IS DISTINCT FROM authority_row.methods
-     OR EXISTS (SELECT 1 FROM product_modifiers WHERE product_id = product_row.id) THEN
-    RAISE EXCEPTION 'Subscription purchase authority does not match locked order and product terms'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_purchase_authority';
-  END IF;
+  if cardinality(array[
+    new.capture_application_receipt_id,
+    new.order_id,
+    new.contract_id,
+    new.subscription_id,
+    new.dispatch_receipt_id,
+    new.source_event_id,
+    new.period_id,
+    new.primary_lifecycle_event_id,
+    new.entitlement_changed_event_id
+  ]) <> cardinality(array(
+    select distinct value
+      from unnest(array[
+        new.capture_application_receipt_id,
+        new.order_id,
+        new.contract_id,
+        new.subscription_id,
+        new.dispatch_receipt_id,
+        new.source_event_id,
+        new.period_id,
+        new.primary_lifecycle_event_id,
+        new.entitlement_changed_event_id
+      ]) as identities(value)
+  )) then
+    raise exception 'client subscription capture dispatch receipt output identities alias authority identities'
+      using errcode = '23514';
+  end if;
 
-  IF economics_row.astrologer_user_id IS DISTINCT FROM authority_row.astrologer_user_id
-     OR economics_row.gross_amount_minor IS DISTINCT FROM authority_row.price_minor
-     OR economics_row.gross_currency IS DISTINCT FROM authority_row.currency THEN
-    RAISE EXCEPTION 'Subscription purchase authority billing economics do not match the order'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_purchase_authority';
-  END IF;
+  if new.canonical_digest <> 'sha256:' || encode(
+    digest(convert_to(new.canonical_preimage, 'UTF8'), 'sha256'),
+    'hex'
+  ) then
+    raise exception 'client subscription capture dispatch receipt canonical digest is inconsistent'
+      using errcode = '23514';
+  end if;
 
-  expected_preimage := finance_canonical_jsonb_v1(jsonb_build_object(
-    'accessGrants', authority_row.access_grants,
-    'astrologerUserId', authority_row.astrologer_user_id::text,
-    'astroDiaryConfig', authority_row.astro_diary_config,
-    'billingEconomics', jsonb_build_object(
-      'allocationRevision', economics_row.allocation_revision,
-      'astrologerUserId', economics_row.astrologer_user_id::text,
-      'commission', jsonb_build_object('amountMinor', economics_row.commission_amount_minor, 'currency', economics_row.commission_currency),
-      'commissionBps', economics_row.commission_bps,
-      'gross', jsonb_build_object('amountMinor', economics_row.gross_amount_minor, 'currency', economics_row.gross_currency),
-      'orderId', economics_row.order_id,
-      'payable', jsonb_build_object('amountMinor', economics_row.payable_amount_minor, 'currency', economics_row.payable_currency),
-      'planId', economics_row.plan_id,
-      'planVersionId', economics_row.plan_version_id
-    ),
-    'cadence', authority_row.cadence,
-    'clientUserId', authority_row.client_user_id::text,
-    'currency', authority_row.currency,
-    'deliveryFormats', authority_row.delivery_formats,
-    'methods', authority_row.methods,
-    'modifiers', authority_row.modifiers,
-    'orderId', authority_row.order_id::text,
-    'priceMinor', authority_row.price_minor,
-    'productId', authority_row.product_id::text,
-    'productRevision', authority_row.product_revision,
-    'relationshipId', authority_row.relationship_id::text,
-    'requiredClientData', authority_row.required_client_data
-  ));
-  IF authority_row.canonical_preimage IS DISTINCT FROM expected_preimage
-     OR authority_row.canonical_digest IS DISTINCT FROM
-        'sha256:' || encode(digest(expected_preimage, 'sha256'), 'hex') THEN
-    RAISE EXCEPTION 'Subscription purchase authority canonical seal is invalid'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_purchase_authority';
-  END IF;
-  RETURN NULL;
-END;
-$client_subscription_purchase_authority$;
---> statement-breakpoint
-CREATE CONSTRAINT TRIGGER "client_subscription_purchase_authority"
-AFTER INSERT ON client_subscription_purchase_authorities
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_assert_client_subscription_purchase_authority();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_contract_seal()
-RETURNS trigger
-LANGUAGE plpgsql
-SET search_path = pg_catalog, public
-AS $client_subscription_contract_seal$
-DECLARE
-  contract_row client_subscription_contracts%ROWTYPE;
-  authority_row client_subscription_purchase_authorities%ROWTYPE;
-  order_row orders%ROWTYPE;
-  relationship_row client_astrologer_relationships%ROWTYPE;
-  economics_row finance_order_economics_snapshots%ROWTYPE;
-  expected_preimage text;
-BEGIN
-  SELECT * INTO STRICT contract_row
-    FROM client_subscription_contracts
-   WHERE id = NEW.id;
-  SELECT * INTO STRICT authority_row
-    FROM client_subscription_purchase_authorities
-   WHERE order_id = contract_row.order_id
-     FOR NO KEY UPDATE;
-  SELECT * INTO STRICT order_row
-    FROM orders
-   WHERE id = contract_row.order_id
-     FOR NO KEY UPDATE;
-  SELECT * INTO STRICT relationship_row
-    FROM client_astrologer_relationships
-   WHERE id = contract_row.relationship_id
-     FOR NO KEY UPDATE;
-  SELECT * INTO STRICT economics_row
-    FROM finance_order_economics_snapshots
-   WHERE order_id = contract_row.billing_order_id
-     AND canonical_digest = contract_row.billing_economics_digest
-     FOR KEY SHARE;
-
-  IF authority_row.canonical_digest IS DISTINCT FROM contract_row.purchase_authority_digest
-     OR authority_row.product_id IS DISTINCT FROM contract_row.product_id
-     OR authority_row.product_revision IS DISTINCT FROM contract_row.product_revision
-     OR authority_row.relationship_id IS DISTINCT FROM contract_row.relationship_id
-     OR authority_row.astrologer_user_id IS DISTINCT FROM contract_row.astrologer_user_id
-     OR authority_row.client_user_id IS DISTINCT FROM contract_row.client_user_id
-     OR authority_row.price_minor IS DISTINCT FROM contract_row.price_minor
-     OR authority_row.currency IS DISTINCT FROM contract_row.currency
-     OR authority_row.cadence IS DISTINCT FROM contract_row.cadence
-     OR authority_row.billing_economics_digest IS DISTINCT FROM contract_row.billing_economics_digest
-     OR authority_row.access_grants IS DISTINCT FROM contract_row.access_grants
-     OR authority_row.delivery_formats IS DISTINCT FROM contract_row.delivery_formats
-     OR authority_row.required_client_data IS DISTINCT FROM contract_row.required_client_data
-     OR authority_row.methods IS DISTINCT FROM contract_row.methods
-     OR authority_row.modifiers IS DISTINCT FROM contract_row.modifiers
-     OR authority_row.astro_diary_config IS DISTINCT FROM contract_row.astro_diary_config
-     OR order_row.client_user_id IS DISTINCT FROM contract_row.client_user_id
-     OR order_row.astrologer_user_id IS DISTINCT FROM contract_row.astrologer_user_id
-     OR order_row.product_id IS DISTINCT FROM contract_row.product_id
-     OR order_row.gross_amount_minor IS DISTINCT FROM contract_row.price_minor
-     OR order_row.gross_currency IS DISTINCT FROM contract_row.currency
-     OR relationship_row.client_user_id IS DISTINCT FROM contract_row.client_user_id
-     OR relationship_row.astrologer_user_id IS DISTINCT FROM contract_row.astrologer_user_id
-     OR relationship_row.status IS DISTINCT FROM 'active' THEN
-    RAISE EXCEPTION 'Client subscription contract does not match locked authority'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_contract_seal';
-  END IF;
-
-  IF contract_row.billing_order_id IS DISTINCT FROM contract_row.order_id::text
-     OR contract_row.billing_astrologer_user_id IS DISTINCT FROM contract_row.astrologer_user_id
-     OR contract_row.billing_plan_id IS DISTINCT FROM economics_row.plan_id
-     OR contract_row.billing_plan_version_id IS DISTINCT FROM economics_row.plan_version_id
-     OR contract_row.billing_gross_amount_minor IS DISTINCT FROM economics_row.gross_amount_minor
-     OR contract_row.billing_gross_currency IS DISTINCT FROM economics_row.gross_currency
-     OR contract_row.billing_commission_amount_minor IS DISTINCT FROM economics_row.commission_amount_minor
-     OR contract_row.billing_commission_currency IS DISTINCT FROM economics_row.commission_currency
-     OR contract_row.billing_payable_amount_minor IS DISTINCT FROM economics_row.payable_amount_minor
-     OR contract_row.billing_payable_currency IS DISTINCT FROM economics_row.payable_currency
-     OR contract_row.billing_commission_bps IS DISTINCT FROM economics_row.commission_bps
-     OR contract_row.billing_allocation_revision IS DISTINCT FROM economics_row.allocation_revision
-     OR contract_row.billing_astrologer_user_id IS DISTINCT FROM economics_row.astrologer_user_id
-     OR order_row.tariff_series_id IS DISTINCT FROM economics_row.plan_id
-     OR order_row.tariff_series_id || '@' || order_row.tariff_version::text
-        IS DISTINCT FROM economics_row.plan_version_id
-     OR order_row.gross_amount_minor IS DISTINCT FROM economics_row.gross_amount_minor
-     OR order_row.gross_currency IS DISTINCT FROM economics_row.gross_currency
-     OR order_row.platform_fee_amount_minor IS DISTINCT FROM economics_row.commission_amount_minor
-     OR order_row.platform_fee_currency IS DISTINCT FROM economics_row.commission_currency
-     OR order_row.astrologer_net_amount_minor IS DISTINCT FROM economics_row.payable_amount_minor
-     OR order_row.astrologer_net_currency IS DISTINCT FROM economics_row.payable_currency
-     OR order_row.tariff_commission_bps IS DISTINCT FROM economics_row.commission_bps THEN
-    RAISE EXCEPTION 'Billing economics authority does not match sealed contract'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_contract_seal';
-  END IF;
-
-  IF contract_row.created_at !~
-       '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{0,8}[1-9])?Z$' THEN
-    RAISE EXCEPTION 'Client subscription contract creation instant is not canonical UTC'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_contract_seal';
-  END IF;
-  PERFORM contract_row.created_at::timestamptz;
-
-  expected_preimage := finance_canonical_jsonb_v1(jsonb_build_object(
-    'accessGrants', contract_row.access_grants,
-    'astrologerUserId', contract_row.astrologer_user_id::text,
-    'astroDiaryConfig', contract_row.astro_diary_config,
-    'billingEconomics', jsonb_build_object(
-      'allocationRevision', contract_row.billing_allocation_revision,
-      'astrologerUserId', contract_row.billing_astrologer_user_id::text,
-      'commission', jsonb_build_object(
-        'amountMinor', contract_row.billing_commission_amount_minor,
-        'currency', contract_row.billing_commission_currency
-      ),
-      'commissionBps', contract_row.billing_commission_bps,
-      'gross', jsonb_build_object(
-        'amountMinor', contract_row.billing_gross_amount_minor,
-        'currency', contract_row.billing_gross_currency
-      ),
-      'orderId', contract_row.billing_order_id,
-      'payable', jsonb_build_object(
-        'amountMinor', contract_row.billing_payable_amount_minor,
-        'currency', contract_row.billing_payable_currency
-      ),
-      'planId', contract_row.billing_plan_id,
-      'planVersionId', contract_row.billing_plan_version_id
-    ),
-    'cadence', contract_row.cadence,
-    'clientUserId', contract_row.client_user_id::text,
-    'createdAt', contract_row.created_at,
-    'currency', contract_row.currency,
-    'deliveryFormats', contract_row.delivery_formats,
-    'id', contract_row.id::text,
-    'methods', contract_row.methods,
-    'modifiers', contract_row.modifiers,
-    'orderId', contract_row.order_id::text,
-    'priceMinor', contract_row.price_minor,
-    'productId', contract_row.product_id::text,
-    'productRevision', contract_row.product_revision,
-    'relationshipId', contract_row.relationship_id::text,
-    'requiredClientData', contract_row.required_client_data
-  ));
-  IF contract_row.canonical_preimage IS DISTINCT FROM expected_preimage
-     OR contract_row.canonical_digest IS DISTINCT FROM
-        'sha256:' || encode(digest(expected_preimage, 'sha256'), 'hex') THEN
-    RAISE EXCEPTION 'Client subscription canonical contract seal is invalid'
-      USING ERRCODE = '23514', CONSTRAINT = 'client_subscription_contract_seal';
-  END IF;
-  RETURN NULL;
-END;
-$client_subscription_contract_seal$;
---> statement-breakpoint
-CREATE CONSTRAINT TRIGGER "client_subscription_contract_seal"
-AFTER INSERT ON client_subscription_contracts
-DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW
-EXECUTE FUNCTION elevenhouse_assert_client_subscription_contract_seal();
+  return new;
+end;
+$$;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION elevenhouse_assert_client_subscription_graph_integrity()
 RETURNS trigger
@@ -1627,7 +1203,3 @@ BEGIN
   RETURN NULL;
 END;
 $client_subscription_graph_integrity$;
---> statement-breakpoint
-${graphConstraintTriggers}
---> statement-breakpoint
-${contractCreationGraphIntegritySql}`;

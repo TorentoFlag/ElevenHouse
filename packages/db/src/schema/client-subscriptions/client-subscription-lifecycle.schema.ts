@@ -72,7 +72,7 @@ export const clientSubscriptionTransitionReceipts = pgTable(
     ),
     check(
       "client_subscription_transition_receipts_state_check",
-      sql`${table.state} in ('active', 'cancel_at_period_end', 'ended', 'revoked')`
+      sql`${table.state} in ('active', 'ended', 'revoked')`
     ),
     check(
       "client_subscription_transition_receipts_entitlement_check",
@@ -85,45 +85,16 @@ export const clientSubscriptionTransitionReceipts = pgTable(
             and ${table.entitlementState} = 'ended'
             and ${table.state} = 'ended'
             and ${table.slotEffect} = 'release')
-          or (${table.primaryEventType} = 'client_subscription.renewal_charge_requested.v1'
-            and ${table.entitlementScope} = 'none'
-            and ${table.periodId} is not null
-            and ${table.entitlementState} = 'active'
-            and ${table.state} = 'active'
-            and ${table.slotEffect} = 'retain')
-          or (${table.primaryEventType} = 'client_subscription.cancellation_scheduled.v1'
-            and ${table.entitlementScope} = 'none'
-            and ${table.periodId} is not null
-            and ${table.entitlementState} = 'active'
-            and ${table.state} = 'cancel_at_period_end'
-            and ${table.slotEffect} = 'retain')
-          or (${table.primaryEventType} = 'client_subscription.cancellation_revoked.v1'
-            and ${table.entitlementScope} = 'none'
-            and ${table.periodId} is not null
-            and ${table.entitlementState} = 'active'
-            and ${table.state} = 'active'
-            and ${table.slotEffect} = 'retain')
-          or (${table.primaryEventType} = 'client_subscription.renewal_failed.v1'
-            and ${table.entitlementScope} = 'none'
-            and ${table.periodId} is not null
-            and ${table.entitlementState} = 'active'
-            and ${table.state} in ('active', 'cancel_at_period_end')
-            and ${table.slotEffect} = 'retain')
           or (${table.primaryEventType} = 'client_subscription.activated.v1'
             and ${table.entitlementScope} = 'period'
             and ${table.periodId} is not null
             and ${table.entitlementState} = 'active'
             and ${table.state} = 'active')
-          or (${table.primaryEventType} = 'client_subscription.period_renewed.v1'
-            and ${table.entitlementScope} = 'period'
-            and ${table.periodId} is not null
-            and ${table.entitlementState} = 'active'
-            and ${table.state} in ('active', 'cancel_at_period_end'))
           or (${table.primaryEventType} = 'client_subscription.period_ended.v1'
             and ${table.entitlementScope} = 'period'
             and ${table.periodId} is not null
             and ${table.entitlementState} = 'ended'
-            and ${table.state} in ('active', 'cancel_at_period_end', 'ended'))
+            and ${table.state} in ('active', 'ended'))
           or (${table.primaryEventType} = 'client_subscription.revoked.v1'
             and ${table.entitlementScope} = 'subscription_all'
             and ${table.periodId} is null
@@ -134,12 +105,7 @@ export const clientSubscriptionTransitionReceipts = pgTable(
       "client_subscription_transition_receipts_primary_event_check",
       sql`${table.primaryEventType} in (
         'client_subscription.initial_payment_ended.v1',
-        'client_subscription.renewal_charge_requested.v1',
         'client_subscription.activated.v1',
-        'client_subscription.period_renewed.v1',
-        'client_subscription.cancellation_scheduled.v1',
-        'client_subscription.cancellation_revoked.v1',
-        'client_subscription.renewal_failed.v1',
         'client_subscription.period_ended.v1',
         'client_subscription.revoked.v1'
       )`
@@ -189,12 +155,7 @@ export const clientSubscriptionLifecycleEvents = pgTable(
       "client_subscription_lifecycle_events_type_check",
       sql`${table.eventType} in (
         'client_subscription.initial_payment_ended.v1',
-        'client_subscription.renewal_charge_requested.v1',
         'client_subscription.activated.v1',
-        'client_subscription.period_renewed.v1',
-        'client_subscription.cancellation_scheduled.v1',
-        'client_subscription.cancellation_revoked.v1',
-        'client_subscription.renewal_failed.v1',
         'client_subscription.period_ended.v1',
         'client_subscription.revoked.v1',
         'client_subscription.entitlement_changed.v1'
@@ -218,27 +179,12 @@ export const clientSubscriptionLifecycleEvents = pgTable(
         and jsonb_typeof(${table.data}->'financeEvidenceId') = 'string'
         and ${table.data} - ARRAY['subscriptionId','contractId','financeEvidenceId','reason']::text[] = '{}'::jsonb
       ) or (
-        ${table.eventType} = 'client_subscription.renewal_charge_requested.v1'
-        and jsonb_typeof(${table.data}->'sourcePeriodId') = 'string'
-        and jsonb_typeof(${table.data}->'intendedPeriodId') = 'string'
-        and jsonb_typeof(${table.data}->'renewalRequestId') = 'string'
-        and ${table.data} - ARRAY['subscriptionId','contractId','sourcePeriodId','intendedPeriodId','renewalRequestId']::text[] = '{}'::jsonb
-      ) or (
         ${table.eventType} in (
           'client_subscription.activated.v1',
-          'client_subscription.period_renewed.v1',
-          'client_subscription.cancellation_scheduled.v1',
-          'client_subscription.cancellation_revoked.v1',
           'client_subscription.period_ended.v1'
         )
         and jsonb_typeof(${table.data}->'periodId') = 'string'
         and ${table.data} - ARRAY['subscriptionId','contractId','periodId']::text[] = '{}'::jsonb
-      ) or (
-        ${table.eventType} = 'client_subscription.renewal_failed.v1'
-        and jsonb_typeof(${table.data}->'renewalRequestId') = 'string'
-        and jsonb_typeof(${table.data}->'intendedPeriodId') = 'string'
-        and jsonb_typeof(${table.data}->'renewalAttemptId') = 'string'
-        and ${table.data} - ARRAY['subscriptionId','contractId','renewalRequestId','intendedPeriodId','renewalAttemptId']::text[] = '{}'::jsonb
       ) or (
         ${table.eventType} = 'client_subscription.revoked.v1'
         and jsonb_typeof(${table.data}->'periodId') = 'string'

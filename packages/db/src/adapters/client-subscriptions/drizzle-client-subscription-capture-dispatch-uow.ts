@@ -208,8 +208,6 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
             subscriptionId: subscription.id,
             subscriptionExpectedVersion: subscription.version,
             captureKind: "initial",
-            renewalRequestId: null,
-            intendedPeriodId: null,
             sourceEventId: receipt.sourceEventId,
             sourceEventDigest: receipt.sourceEventDigest,
             periodId: receipt.target.periodId,
@@ -315,7 +313,7 @@ function initialTarget(receipt: ReturnType<typeof createFinanceClientOrderCaptur
 function replayDispatchReceipt(
   row: typeof financeClientSubscriptionCaptureDispatchReceipts.$inferSelect
 ): FinanceClientOrderCapturePurposeDispatchExecution {
-  if (row.captureKind !== "initial" || row.renewalRequestId || row.intendedPeriodId) {
+  if (row.captureKind !== "initial") {
     return { outcome: "authority_conflict" };
   }
   const receipt = createFinanceClientOrderCaptureDispatchReceipt({

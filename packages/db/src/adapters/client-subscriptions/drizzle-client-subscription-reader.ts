@@ -17,7 +17,6 @@ import {
   clientSubscriptionEventApplicationReceipts,
   clientSubscriptionLifecycleEvents,
   clientSubscriptionPeriods,
-  clientSubscriptionRenewalRequests,
   clientSubscriptionSlots,
   clientSubscriptions
 } from "../../schema/client-subscriptions";
@@ -78,18 +77,6 @@ export async function findClientSubscriptionById(
     .from(clientSubscriptionPeriods)
     .where(eq(clientSubscriptionPeriods.subscriptionId, subscriptionId))
     .orderBy(asc(clientSubscriptionPeriods.sequence));
-  const renewalRows = await database
-    .select()
-    .from(clientSubscriptionRenewalRequests)
-    .where(
-      row.head.renewalRequestId
-        ? and(
-            eq(clientSubscriptionRenewalRequests.subscriptionId, subscriptionId),
-            eq(clientSubscriptionRenewalRequests.id, row.head.renewalRequestId)
-          )
-        : sql`false`
-    )
-    .limit(1);
   const evidenceRows = await database
     .select({ evidenceId: clientSubscriptionEventApplicationReceipts.evidenceId })
     .from(clientSubscriptionEventApplicationReceipts)
@@ -111,7 +98,6 @@ export async function findClientSubscriptionById(
 
   const contract = mapContract(row.contract);
   const paidPeriods = periodRows.map(mapPeriod);
-  const renewal = renewalRows[0];
   return {
     id: row.head.id,
     contract,
@@ -119,15 +105,6 @@ export async function findClientSubscriptionById(
     state: clientSubscriptionStateSchema.parse(row.head.state),
     version: row.head.version,
     cancellationEffectiveAt: row.head.cancellationEffectiveAt?.toISOString() ?? null,
-    renewalStoppedAt: row.head.renewalStoppedAt?.toISOString() ?? null,
-    renewalRequest: renewal
-      ? {
-          id: renewal.id,
-          sourcePeriodId: renewal.sourcePeriodId,
-          intendedPeriodId: renewal.intendedPeriodId,
-          requestedAt: renewal.requestedAt.toISOString()
-        }
-      : null,
     paidPeriods,
     endedPeriodIds: endedPeriodRows.map((ended) => z.string().uuid().parse(ended.periodId)),
     appliedFinanceEvidenceIds: evidenceRows.map((evidence) => evidence.evidenceId)

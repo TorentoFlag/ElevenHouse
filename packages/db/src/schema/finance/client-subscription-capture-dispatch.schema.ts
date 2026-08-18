@@ -1,9 +1,18 @@
 import { sql } from "drizzle-orm";
-import { check, foreignKey, integer, pgTable, text, timestamp, unique, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  check,
+  foreignKey,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+  varchar
+} from "drizzle-orm/pg-core";
 
 import { clientSubscriptionContracts } from "../client-subscriptions/client-subscription-contracts.schema";
 import { clientSubscriptionPeriods } from "../client-subscriptions/client-subscription-periods.schema";
-import { clientSubscriptionRenewalRequests } from "../client-subscriptions/client-subscription-renewal-requests.schema";
 import { clientSubscriptions } from "../client-subscriptions/client-subscriptions.schema";
 import { financeOnlineSaleCaptureApplications } from "./online-sale-capture.schema";
 import { orders } from "./orders.schema";
@@ -21,8 +30,6 @@ export const financeClientSubscriptionCaptureDispatchReceipts = pgTable(
     subscriptionId: uuid("subscription_id").notNull(),
     subscriptionExpectedVersion: integer("subscription_expected_version").notNull(),
     captureKind: text("capture_kind").notNull(),
-    renewalRequestId: uuid("renewal_request_id"),
-    intendedPeriodId: uuid("intended_period_id"),
     sourceEventId: uuid("source_event_id").notNull(),
     sourceEventDigest: varchar("source_event_digest", { length: 71 }).notNull(),
     periodId: uuid("period_id").notNull(),
@@ -62,33 +69,13 @@ export const financeClientSubscriptionCaptureDispatchReceipts = pgTable(
       name: "finance_client_subscription_capture_dispatch_subscription_fk"
     }).onDelete("restrict"),
     foreignKey({
-      columns: [table.renewalRequestId, table.subscriptionId, table.intendedPeriodId],
-      foreignColumns: [
-        clientSubscriptionRenewalRequests.id,
-        clientSubscriptionRenewalRequests.subscriptionId,
-        clientSubscriptionRenewalRequests.intendedPeriodId
-      ],
-      name: "finance_client_subscription_capture_dispatch_renewal_request_fk"
-    }).onDelete("restrict"),
-    foreignKey({
-      columns: [table.intendedPeriodId, table.subscriptionId],
-      foreignColumns: [clientSubscriptionPeriods.id, clientSubscriptionPeriods.subscriptionId],
-      name: "finance_client_subscription_capture_dispatch_intended_period_fk"
-    }).onDelete("restrict"),
-    foreignKey({
       columns: [table.periodId, table.subscriptionId],
       foreignColumns: [clientSubscriptionPeriods.id, clientSubscriptionPeriods.subscriptionId],
       name: "finance_client_subscription_capture_dispatch_period_fk"
     }).onDelete("restrict"),
     check(
       "client_subscription_capture_dispatch_receipt_capture_kind_check",
-      sql`(${table.captureKind} = 'initial'
-          and ${table.renewalRequestId} is null
-          and ${table.intendedPeriodId} is null)
-        or (${table.captureKind} = 'renewal'
-          and ${table.renewalRequestId} is not null
-          and ${table.intendedPeriodId} is not null
-          and ${table.periodId} = ${table.intendedPeriodId})`
+      sql`${table.captureKind} = 'initial'`
     ),
     check(
       "client_subscription_capture_dispatch_receipt_output_ids_check",
@@ -162,17 +149,6 @@ begin
       using errcode = '23514';
   end if;
 
-  if new.capture_kind = 'renewal' and not exists (
-    select 1
-      from client_subscription_renewal_requests
-     where id = new.renewal_request_id
-       and subscription_id = new.subscription_id
-       and intended_period_id = new.intended_period_id
-  ) then
-    raise exception 'client subscription capture dispatch receipt renewal authority is inconsistent'
-      using errcode = '23514';
-  end if;
-
   if not exists (
     select 1
       from client_subscription_periods
@@ -194,8 +170,8 @@ begin
      or primary_event_row.transition_id <> application_row.transition_id
      or primary_event_row.subscription_version <> new.subscription_expected_version + 1
      or primary_event_row.data->>'periodId' <> new.period_id::text
-     or (new.capture_kind = 'initial' and primary_event_row.event_type <> 'client_subscription.activated.v1')
-     or (new.capture_kind = 'renewal' and primary_event_row.event_type <> 'client_subscription.period_renewed.v1') then
+     or new.capture_kind <> 'initial'
+     or primary_event_row.event_type <> 'client_subscription.activated.v1' then
     raise exception 'client subscription capture dispatch receipt primary lifecycle event is inconsistent'
       using errcode = '23514';
   end if;
@@ -230,8 +206,6 @@ begin
     'applicationResultVersion', application_row.result_version,
     'transitionId', application_row.transition_id,
     'captureKind', new.capture_kind,
-    'renewalRequestId', new.renewal_request_id,
-    'intendedPeriodId', new.intended_period_id,
     'sourceEventId', application_row.source_event_id,
     'sourceEventDigest', application_row.source_event_digest,
     'evidenceId', application_row.evidence_id,

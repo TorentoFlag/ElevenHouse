@@ -84,7 +84,6 @@ export const astroDiaryWriteSetPersistence = {
       "client_subscriptions",
       "client_subscription_periods",
       "client_subscription_period_allowances",
-      "client_subscription_renewal_requests",
       "client_entitlement_transition_applications",
       "client_entitlement_grants",
       "client_entitlement_transition_effects",
