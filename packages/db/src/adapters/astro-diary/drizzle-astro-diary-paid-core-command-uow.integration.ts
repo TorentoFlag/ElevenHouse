@@ -1133,10 +1133,15 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
   it("reads the same paid journal through client and astrologer scopes without foreign leakage", async () => {
     const opened = await createOpenCycleFixture(runtime);
+    const replyAttachmentId = await createReadyDiaryMedia(
+      runtime,
+      opened,
+      opened.fixture.authority.astrologerUserId
+    );
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
     const createdReply = await executeAstroDiaryParticipantDraftCreateCommand(
       unitOfWork,
-      astrologerReplyDraftInput(opened, "Сохранённый ответ")
+      astrologerReplyDraftInputWithMedia(opened, "Сохранённый ответ", [replyAttachmentId])
     );
     const replyDraftId = appliedDraftId(createdReply);
     const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
@@ -1200,7 +1205,12 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     expect(clientTimeline?.items.map(({ id }) => id)).toContain(opened.clientEntryItemId);
     expect(astrologerTimeline).toEqual(clientTimeline);
     expect(replyDraft).toEqual({
-      draft: { draftId: replyDraftId, version: 1, body: "Сохранённый ответ" }
+      draft: {
+        draftId: replyDraftId,
+        version: 1,
+        body: "Сохранённый ответ",
+        attachmentIds: [replyAttachmentId]
+      }
     });
     expect(context).toMatchObject({
       activePeriod: { id: opened.fixture.periodId },
@@ -1244,10 +1254,17 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
 
   it("hydrates only the owning client's unpublished entry draft", async () => {
     const journal = await createJournalFixture(runtime);
+    const clientAttachmentId = await createReadyDiaryMedia(
+      runtime,
+      journal,
+      journal.fixture.authority.clientUserId
+    );
     const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
     const created = await executeAstroDiaryParticipantDraftCreateCommand(
       unitOfWork,
-      clientDraftInput(journal, "Черновик клиента после перезагрузки")
+      clientDraftInputWithMedia(journal, "Черновик клиента после перезагрузки", [
+        clientAttachmentId
+      ])
     );
     const clientDraftId = appliedDraftId(created);
     const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
@@ -1269,7 +1286,8 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
         draftId: clientDraftId,
         version: 1,
         body: "Черновик клиента после перезагрузки",
-        moodId: "calm"
+        moodId: "calm",
+        attachmentIds: [clientAttachmentId]
       }
     });
     await expect(

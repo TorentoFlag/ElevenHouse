@@ -23,7 +23,12 @@ afterEach(cleanup);
 describe("AstroDiaryPage reply recovery", () => {
   let journalReads: number;
   let latestJournalRead: Deferred<AstroDiaryJournalSummaryResponse> | null;
-  let serverDraft: { draftId: string; version: number; body: string } | null;
+  let serverDraft: {
+    draftId: string;
+    version: number;
+    body: string;
+    attachmentIds: readonly string[];
+  } | null;
   let timelineFirstPage: {
     items: readonly [typeof timelineItem] | readonly [];
     nextCursor: number | null;
@@ -87,9 +92,14 @@ describe("AstroDiaryPage reply recovery", () => {
   });
 
   it("hydrates the acknowledged server draft after a fresh route mount and updates it", async () => {
-    serverDraft = { draftId, version: 3, body: "Saved on the server" };
+    serverDraft = {
+      draftId,
+      version: 3,
+      body: "Saved on the server",
+      attachmentIds: [attachmentId]
+    };
     http.put.mockImplementation(async (_path: string, body: { body: string }) => {
-      serverDraft = { draftId, version: 4, body: body.body };
+      serverDraft = { draftId, version: 4, body: body.body, attachmentIds: [attachmentId] };
       return { outcome: "applied", draftId, version: 4 };
     });
 
@@ -109,7 +119,11 @@ describe("AstroDiaryPage reply recovery", () => {
     expect(http.post).not.toHaveBeenCalled();
     expect(http.put).toHaveBeenCalledWith(
       `/astro-diary/journals/${journalId}/astrologer-reply/drafts/${draftId}`,
-      expect.objectContaining({ expectedDraftVersion: 3, body: "Updated after navigation" }),
+      expect.objectContaining({
+        expectedDraftVersion: 3,
+        body: "Updated after navigation",
+        attachmentIds: [attachmentId]
+      }),
       expect.anything()
     );
   });
@@ -169,6 +183,7 @@ type Deferred<T> = Readonly<{
 
 const journalId = "11111111-1111-4111-8111-111111111111";
 const draftId = "21111111-1111-4111-8111-111111111111";
+const attachmentId = "22111111-1111-4111-8111-111111111111";
 
 const timelineItem = {
   id: "c1111111-1111-4111-8111-111111111111",

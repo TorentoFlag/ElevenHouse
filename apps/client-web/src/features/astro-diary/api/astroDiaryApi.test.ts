@@ -28,11 +28,23 @@ describe("client AstroDiary API", () => {
 
   it("hydrates the server-owned client entry draft", async () => {
     get.mockResolvedValueOnce({
-      draft: { draftId, version: 2, body: "Saved entry", moodId: "calm" }
+      draft: {
+        draftId,
+        version: 2,
+        body: "Saved entry",
+        moodId: "calm",
+        attachmentIds: [attachmentId]
+      }
     });
 
     await expect(getClientAstroDiaryEntryDraft(journalId)).resolves.toEqual({
-      draft: { draftId, version: 2, body: "Saved entry", moodId: "calm" }
+      draft: {
+        draftId,
+        version: 2,
+        body: "Saved entry",
+        moodId: "calm",
+        attachmentIds: [attachmentId]
+      }
     });
     expect(get).toHaveBeenCalledWith(
       `/astro-diary/journals/${journalId}/client-entry/draft`
@@ -99,6 +111,7 @@ describe("client AstroDiary API", () => {
 
 const journalId = "11111111-1111-4111-8111-111111111111";
 const draftId = "21111111-1111-4111-8111-111111111111";
+const attachmentId = "22111111-1111-4111-8111-111111111111";
 const summary = {
   journal: {
     id: journalId,

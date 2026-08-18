@@ -2,11 +2,13 @@
 
 Date: 2026-08-18
 
-Verdict: **BLOCKED** for final visual signoff only. The paid-core implementation,
-real local PostgreSQL lifecycle, authenticated non-empty browser journey, security
-checks, RU/EN presentation, responsive states, and repository verification passed.
-The remaining blocker is the unavailable Superdesign tool/canvas, so this report
-does not claim final approved visual parity.
+Verdict: **BLOCKED**. Initial paid activation, the real local PostgreSQL journal
+lifecycle, authenticated non-empty browser interactions, security checks, RU/EN
+presentation, responsive states, and repository verification passed. The complete
+paid-core acceptance did not pass because three independent gates remain open:
+there is no runnable recurring-renewal production path for client subscriptions,
+hosted ArcPay redirect/callback was not accepted against a configured sandbox
+provider, and the Superdesign tool/canvas is unavailable.
 
 ## Implemented and fixed
 
@@ -30,6 +32,19 @@ TDD evidence:
 2. After the narrow service/contract change it returned the canonical Diary
    product with `paymentModel: "sub"` and kept the generic subscription hidden.
 
+The final review also found and fixed a recovered-draft attachment defect:
+
+- client and astrologer draft response contracts now include the draft's existing
+  ordered `attachmentIds`;
+- the PostgreSQL reader hydrates those IDs from
+  `astro_diary_draft_attachments` in ordinal order;
+- both web mutation models preserve the acknowledged IDs when a recovered draft is
+  saved again, instead of sending `attachmentIds: []` and silently detaching media;
+- API, real-PostgreSQL, and browser-model tests cover both participant roles.
+
+This does not add attachment upload UI. It preserves the paid-core capability for
+already prepared attachment IDs that the write contracts already accepted.
+
 GitNexus pre-edit impact:
 
 - `ClientCommerceService.findOrderableProducts`: LOW; direct callers
@@ -37,10 +52,9 @@ GitNexus pre-edit impact:
 - `clientPurchaseOptionSchema`: LOW; no indexed upstream process.
 - Final unstaged `detect_changes`: LOW, no affected indexed execution process.
 
-No other production code was changed. A suspected astrologer-api dependency
-failure was traced to a stale `dist` artifact. A fresh build restored the existing
-`@Inject(SystemClock)` source composition and the API booted; no speculative source
-fix was made.
+A suspected astrologer-api dependency failure was traced to a stale `dist`
+artifact. A fresh build restored the existing `@Inject(SystemClock)` source
+composition and the API booted; no speculative source fix was made.
 
 ## Intake and authority
 
@@ -52,6 +66,9 @@ fix was made.
   - `apps/public-api/src/modules/client-commerce/client-commerce.service.ts`
   - `apps/public-api/src/modules/client-commerce/client-commerce.e2e.test.ts`
   - `packages/contracts/src/client-commerce.ts`
+  - client/astrologer AstroDiary draft contracts, reader, web mutation models, and
+    their focused API/DB/web tests
+  - the SDD progress ledger
   - this report
 - No push, PR, deploy, remote mutation, external account write, or purchase was
   performed.
@@ -109,6 +126,31 @@ Two command-construction attempts were corrected and are not hidden:
 
 The corrected root `pnpm test <repo paths>` command is the passing evidence above.
 
+### Final-review attachment regression
+
+The final review ran the recovered-attachment tests red before production changes:
+
+- both API draft reads were rejected by the strict response schemas as unrecognized
+  `attachmentIds`;
+- both web recovered-draft tests failed before an update request could preserve the
+  IDs;
+- both real-PostgreSQL draft reads returned drafts without their attached media IDs.
+
+After the narrow fix, five focused API/page/composer files passed 24/24 and the
+real-PostgreSQL paid-core command integration suite passed 21/21. The first full
+repository gate then found two old API-test fixtures that still omitted the newly
+required field; those fixtures were corrected and the fresh gate passed:
+
+- exact owned-file ESLint: zero warnings/errors;
+- affected package typecheck: 21/21 Turbo tasks;
+- affected package build: 19/19 Turbo tasks;
+- `pnpm verify`: lint with zero errors and four unrelated existing hook warnings,
+  typecheck 43/43, unit tests 66/66, build 28/28;
+- `git diff --check`: passed.
+
+These checks do not close the external ArcPay, recurring-renewal, or Superdesign
+gates.
+
 ## Real local paid journey
 
 ### Identities and product
@@ -147,10 +189,13 @@ The local UI/provider contour could not complete hosted checkout:
 - the real checkout endpoint then returned typed `503 payment_checkout_unavailable`
   because no usable local ArcPay checkout provider/session is configured.
 
-Per the Task 8 brief, the actual production checkout preparation, sealed artifact,
-verified webhook ingress, canonical provider read, finance capture, and subscription
-capture-dispatch UoWs were run against the UI-created order rather than inserting an
-order, subscription, journal, or paid state directly. The successful contour was:
+As a downstream integration diagnostic, the actual production checkout preparation,
+sealed artifact, verified webhook ingress, canonical provider read, finance capture,
+and subscription capture-dispatch UoWs were run against the UI-created order rather
+than inserting an order, subscription, journal, or paid state directly. This proves
+the production UoWs after provider acceptance, but it is not a substitute for a
+hosted ArcPay redirect/callback and is not payment-provider acceptance. The proven
+downstream contour was:
 
 - order `97978024-a8e6-483a-8c89-7d47675aac6b` → `paid`;
 - subscription `f490ce7f-079b-41ca-8047-d57bee10176f` → `active`, version 2;
@@ -269,9 +314,45 @@ available evidence.
 
 ## Blocked, skipped, and residual risk
 
-### Blocked
+### Recurring renewal production path
 
-Final Superdesign signoff is blocked:
+Recurring renewal is **BLOCKED** and was not approximated with a partial scheduler
+or fake provider path:
+
+- `requestRenewalCharge` exists only as an uncalled domain transition in
+  `packages/domain/src/client-subscriptions/client-subscription-lifecycle.ts`;
+- `createDrizzleClientSubscriptionCommandUnitOfWork` can persist a caller-supplied
+  transition, but no production app composes it for renewal selection/requesting;
+- `apps/payment-worker/src/main.ts` schedules platform-tariff renewal only, not
+  client-subscription renewal;
+- `drizzle-client-subscription-capture-dispatch-uow.ts` issues and replays only
+  `captureKind: "initial"`, despite the sealed domain receipt supporting a renewal
+  target;
+- the reusable saved-card setup/charge contour is bound to
+  `platform_tariff_subscriptions`, so there is no client-subscription credential,
+  recurring consent, economic-intent, or provider-charge authority to dispatch;
+- `applyRenewalCapture` and the same-journal period projection are implemented and
+  tested as downstream domain/DB mechanics, but no real provider capture can reach
+  them through a production client-subscription renewal route.
+
+Closing this gate requires a separately designed scheduler/claim boundary, a
+client-subscription recurring-payment credential and consent authority, finance
+intent/provider dispatch and reconciliation, and renewal capture/failure routing.
+That is not a narrow final-review patch.
+
+### Hosted ArcPay acceptance
+
+Hosted ArcPay checkout is **BLOCKED**. The local `.env` has neither the public-API
+finance-checkout enablement/payment-method configuration nor payment-worker ArcPay
+credentials/webhook signing configuration. Both contours default disabled in
+runtime config, and the authenticated checkout returned typed
+`503 payment_checkout_unavailable`. No external sandbox write was authorized or
+performed. The production-UoW fallback described above remains useful downstream
+evidence, but cannot be ruled a provider PASS.
+
+### Superdesign acceptance
+
+Final Superdesign signoff is **BLOCKED**:
 
 ```text
 command -v superdesign
@@ -286,9 +367,9 @@ canvas. Production/HTML screenshots were not presented as a fake Superdesign can
 
 ### Partial / exact limitations
 
-- Hosted ArcPay redirect/callback was not executed because the local provider is
-  unavailable. The downstream acceptance used the actual production finance and
-  subscription UoWs on an authenticated UI-created order, as allowed by the brief.
+- The authenticated browser journey is partial at payment: it created the real
+  order, then continued only through the explicitly separated production-UoW
+  diagnostic because hosted ArcPay was unavailable.
 - Screenshot files could not be persisted by the DevTools connector.
 - Selected-row desktop height is 63px versus the Task 5 reference 60px.
 
@@ -311,11 +392,17 @@ included in the scoped delivery:
 
 ## Final ruling
 
-- Paid-core code/integration gates: **PASS**.
-- Real local non-empty runtime journey: **PASS with the explicitly documented local
-  provider fallback**.
+- Initial-capture and AstroDiary command/journal code gates: **PASS**.
+- Recovered draft attachment preservation: **PASS** for contracts, DB reader, API,
+  and both web mutation models; no upload UI was added.
+- Recurring client-subscription renewal: **BLOCKED**; no production execution path.
+- Hosted ArcPay redirect/callback: **BLOCKED**; the UoW diagnostic is not provider
+  acceptance.
+- Real local non-empty runtime journey: **PARTIAL** at the payment-provider boundary;
+  the post-capture journal interaction and terminal read-only contour passed.
 - Security/foreign-access/read-only checks: **PASS**.
 - Browser RU/EN desktop/mobile behavior: **PASS**, with the recorded 3px row variance
   and unavailable durable screenshot paths.
 - Approved Superdesign canvas/signoff: **BLOCKED**.
-- Overall Task 8 verdict: **BLOCKED only on external Superdesign acceptance**.
+- Overall Task 8 verdict: **BLOCKED** on recurring renewal, hosted ArcPay acceptance,
+  and approved Superdesign acceptance.

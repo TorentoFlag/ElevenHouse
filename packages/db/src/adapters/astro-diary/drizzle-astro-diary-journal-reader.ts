@@ -16,6 +16,7 @@ import type { AstroDiaryJournalReader } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   astroDiaryCycles,
+  astroDiaryDraftAttachments,
   astroDiaryDrafts,
   astroDiaryJournals,
   astroDiaryReadCursors,
@@ -335,7 +336,11 @@ async function getParticipantAstrologerReplyDraft(
       .orderBy(desc(astroDiaryDrafts.updatedAt), desc(astroDiaryDrafts.id))
       .limit(1);
 
-    return astroDiaryAstrologerReplyDraftResponseSchema.parse({ draft: draft ?? null });
+    return astroDiaryAstrologerReplyDraftResponseSchema.parse({
+      draft: draft
+        ? { ...draft, attachmentIds: await readDraftAttachmentIds(transaction, draft.draftId) }
+        : null
+    });
   });
 }
 
@@ -369,8 +374,24 @@ async function getParticipantClientEntryDraft(
       .orderBy(desc(astroDiaryDrafts.updatedAt), desc(astroDiaryDrafts.id))
       .limit(1);
 
-    return astroDiaryClientEntryDraftResponseSchema.parse({ draft: draft ?? null });
+    return astroDiaryClientEntryDraftResponseSchema.parse({
+      draft: draft
+        ? { ...draft, attachmentIds: await readDraftAttachmentIds(transaction, draft.draftId) }
+        : null
+    });
   });
+}
+
+async function readDraftAttachmentIds(
+  database: ClientSubscriptionTransaction,
+  draftId: string
+): Promise<string[]> {
+  const rows = await database
+    .select({ mediaId: astroDiaryDraftAttachments.mediaId })
+    .from(astroDiaryDraftAttachments)
+    .where(eq(astroDiaryDraftAttachments.draftId, draftId))
+    .orderBy(asc(astroDiaryDraftAttachments.ordinal));
+  return rows.map(({ mediaId }) => mediaId);
 }
 
 async function getPaidCoreCommandContext(

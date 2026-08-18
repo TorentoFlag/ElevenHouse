@@ -30,10 +30,22 @@ describe("astroDiaryApi paid-core commands", () => {
   });
 
   it("hydrates the current saved reply draft through the shared response contract", async () => {
-    get.mockResolvedValueOnce({ draft: { draftId, version: 3, body: "Saved answer" } });
+    get.mockResolvedValueOnce({
+      draft: {
+        draftId,
+        version: 3,
+        body: "Saved answer",
+        attachmentIds: [attachmentId]
+      }
+    });
 
     await expect(getAstroDiaryReplyDraft(journalId)).resolves.toEqual({
-      draft: { draftId, version: 3, body: "Saved answer" }
+      draft: {
+        draftId,
+        version: 3,
+        body: "Saved answer",
+        attachmentIds: [attachmentId]
+      }
     });
     expect(get).toHaveBeenCalledWith(`/astro-diary/journals/${journalId}/astrologer-reply/draft`);
   });
@@ -97,6 +109,7 @@ describe("astroDiaryApi paid-core commands", () => {
 
 const journalId = "11111111-1111-4111-8111-111111111111";
 const draftId = "21111111-1111-4111-8111-111111111111";
+const attachmentId = "22111111-1111-4111-8111-111111111111";
 const summaryResponse = {
   journal: {
     id: journalId,

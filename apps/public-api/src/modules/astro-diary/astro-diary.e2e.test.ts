@@ -31,6 +31,7 @@ const draftId = "00000000-0000-4000-8000-000000000009";
 const eventId = "00000000-0000-4000-8000-000000000010";
 const astrologerDraftId = "00000000-0000-4000-8000-000000000011";
 const astrologerPendingMediaId = "00000000-0000-4000-8000-000000000012";
+const clientAttachmentId = "00000000-0000-4000-8000-000000000013";
 
 describe("client AstroDiary HTTP API", () => {
   let app: INestApplication;
@@ -123,7 +124,13 @@ describe("client AstroDiary HTTP API", () => {
     });
     expect(own.status).toBe(200);
     expect(own.body).toEqual({
-      draft: { draftId, version: 1, body: "Сегодня спокойно", moodId: "calm" }
+      draft: {
+        draftId,
+        version: 1,
+        body: "Сегодня спокойно",
+        moodId: "calm",
+        attachmentIds: [clientAttachmentId]
+      }
     });
 
     const foreign = await request(`/astro-diary/journals/${journalId}/client-entry/draft`, {
@@ -431,7 +438,15 @@ function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
     getParticipantAstrologerReplyDraft: async () => null,
     getParticipantClientEntryDraft: async ({ participantUserId }) =>
       participantUserId === clientUserId
-        ? { draft: { draftId, version: 1, body: "Сегодня спокойно", moodId: "calm" } }
+        ? {
+            draft: {
+              draftId,
+              version: 1,
+              body: "Сегодня спокойно",
+              moodId: "calm",
+              attachmentIds: [clientAttachmentId]
+            }
+          }
         : null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>
       participantUserId === clientUserId

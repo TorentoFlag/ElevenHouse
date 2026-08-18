@@ -93,7 +93,15 @@ describe("ClientAstroDiaryPage", () => {
       if (path === "/astro-diary/journals") return { journals: [activeSummary], total: 1 };
       if (path === `/astro-diary/journals/${journalId}`) return activeSummary;
       if (path === `/astro-diary/journals/${journalId}/client-entry/draft`) {
-        return { draft: { draftId, version: 3, body: "Saved on the server", moodId: "calm" } };
+        return {
+          draft: {
+            draftId,
+            version: 3,
+            body: "Saved on the server",
+            moodId: "calm",
+            attachmentIds: [attachmentId]
+          }
+        };
       }
       if (path.startsWith(`/astro-diary/journals/${journalId}/timeline?`)) {
         return { items: [], nextCursor: null, visibleMaxCursor: 0, hasMore: false };
@@ -110,7 +118,11 @@ describe("ClientAstroDiaryPage", () => {
 
     await waitFor(() => expect(http.put).toHaveBeenCalledWith(
       expect.stringContaining(`/client-entry/drafts/${draftId}`),
-      expect.objectContaining({ body: "Continue after reload", expectedDraftVersion: 3 }),
+      expect.objectContaining({
+        body: "Continue after reload",
+        expectedDraftVersion: 3,
+        attachmentIds: [attachmentId]
+      }),
       expect.anything()
     ));
     expect(http.post).not.toHaveBeenCalledWith(
@@ -122,7 +134,13 @@ describe("ClientAstroDiaryPage", () => {
 
   it("creates, updates, and publishes only a server-acknowledged draft", async () => {
     let journalVersion = 4;
-    let serverDraft: { draftId: string; version: number; body: string; moodId: "calm" | null } | null = null;
+    let serverDraft: {
+      draftId: string;
+      version: number;
+      body: string;
+      moodId: "calm" | null;
+      attachmentIds: readonly string[];
+    } | null = null;
     http.get.mockImplementation(async (path: string) => {
       if (path === "/me/overview") return overview;
       if (path === "/astro-diary/journals") return { journals: [{ ...activeSummary, journal: { ...activeSummary.journal, version: journalVersion } }], total: 1 };
@@ -134,7 +152,13 @@ describe("ClientAstroDiaryPage", () => {
     http.post.mockImplementation(async (path: string) => {
       if (path.endsWith("/client-entry/drafts")) {
         journalVersion = 5;
-        serverDraft = { draftId, version: 1, body: "First version", moodId: null };
+        serverDraft = {
+          draftId,
+          version: 1,
+          body: "First version",
+          moodId: null,
+          attachmentIds: []
+        };
         return { outcome: "applied", draftId, version: 1 };
       }
       if (path.endsWith(`/client-entry/drafts/${draftId}/publish`)) return { outcome: "applied", eventIds: [] };
@@ -142,7 +166,13 @@ describe("ClientAstroDiaryPage", () => {
     });
     http.put.mockImplementation(async () => {
       journalVersion = 6;
-      serverDraft = { draftId, version: 2, body: "Second version", moodId: null };
+      serverDraft = {
+        draftId,
+        version: 2,
+        body: "Second version",
+        moodId: null,
+        attachmentIds: []
+      };
       return { outcome: "applied", draftId, version: 2 };
     });
     renderPage();
@@ -187,6 +217,7 @@ function deferred<T>() {
 const astrologerId = "41111111-1111-4111-8111-111111111111";
 const journalId = "11111111-1111-4111-8111-111111111111";
 const draftId = "21111111-1111-4111-8111-111111111111";
+const attachmentId = "22111111-1111-4111-8111-111111111111";
 const overview = {
   astrologers: [{ astrologerUserId: astrologerId, publicName: "Mira", publicHandle: "mira", relationshipStatus: "active", firstLinkedAt: "2026-08-01T00:00:00.000Z", lastLinkedAt: "2026-08-18T00:00:00.000Z" }],
   birthData: null,

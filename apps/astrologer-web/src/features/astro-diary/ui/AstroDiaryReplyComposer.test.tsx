@@ -42,7 +42,8 @@ describe("AstroDiaryReplyComposer", () => {
         draft={{
           draftId: "11111111-1111-4111-8111-111111111111",
           version: 2,
-          body: "Saved answer"
+          body: "Saved answer",
+          attachmentIds: []
         }}
         body="Saved answer"
         error={null}
@@ -64,7 +65,8 @@ describe("AstroDiaryReplyComposer", () => {
         draft={{
           draftId: "11111111-1111-4111-8111-111111111111",
           version: 2,
-          body: "Saved answer"
+          body: "Saved answer",
+          attachmentIds: []
         }}
         body="Saved answer"
         error="stale"
@@ -90,7 +92,8 @@ describe("AstroDiaryReplyComposer", () => {
         draft={{
           draftId: "11111111-1111-4111-8111-111111111111",
           version: 2,
-          body: "Saved answer"
+          body: "Saved answer",
+          attachmentIds: []
         }}
         body="Saved answer"
         error="no_obligation"

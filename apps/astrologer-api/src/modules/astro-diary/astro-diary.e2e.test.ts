@@ -36,6 +36,7 @@ const laterCycleId = "10000000-0000-4000-8000-000000000013";
 const laterObligationId = "10000000-0000-4000-8000-000000000014";
 const clientDraftId = "10000000-0000-4000-8000-000000000015";
 const clientPendingMediaId = "10000000-0000-4000-8000-000000000016";
+const astrologerAttachmentId = "10000000-0000-4000-8000-000000000017";
 
 describe("astrologer AstroDiary module wiring", () => {
   it("resolves the service through Nest dependency injection", async () => {
@@ -120,7 +121,14 @@ describe("astrologer AstroDiary HTTP API", () => {
       role: "astrologer"
     });
     expect(own.status).toBe(200);
-    expect(own.body).toEqual({ draft: { draftId, version: 1, body: "Ответ" } });
+    expect(own.body).toEqual({
+      draft: {
+        draftId,
+        version: 1,
+        body: "Ответ",
+        attachmentIds: [astrologerAttachmentId]
+      }
+    });
 
     const foreign = await request(`/astro-diary/journals/${journalId}/astrologer-reply/draft`, {
       role: "foreign-astrologer"
@@ -393,7 +401,14 @@ function createReader(state: { ended: boolean; laterCycle: boolean }): AstroDiar
         : null,
     getParticipantAstrologerReplyDraft: async ({ participantUserId }) =>
       participantUserId === astrologerUserId
-        ? { draft: { draftId, version: 1, body: "Ответ" } }
+        ? {
+            draft: {
+              draftId,
+              version: 1,
+              body: "Ответ",
+              attachmentIds: [astrologerAttachmentId]
+            }
+          }
         : null,
     getParticipantClientEntryDraft: async () => null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>

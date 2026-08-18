@@ -916,7 +916,8 @@ export const astroDiaryClientEntryDraftResponseSchema = z
         draftId: uuidSchema,
         version: positiveVersionSchema,
         body: z.string().max(20_000),
-        moodId: astroDiaryMoodIdSchema.nullable()
+        moodId: astroDiaryMoodIdSchema.nullable(),
+        attachmentIds: attachmentIdsSchema
       })
       .strict()
       .nullable()
@@ -932,7 +933,8 @@ export const astroDiaryAstrologerReplyDraftResponseSchema = z
       .object({
         draftId: uuidSchema,
         version: positiveVersionSchema,
-        body: z.string().max(20_000)
+        body: z.string().max(20_000),
+        attachmentIds: attachmentIdsSchema
       })
       .strict()
       .nullable()

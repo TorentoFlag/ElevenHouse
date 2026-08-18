@@ -15,6 +15,7 @@ export type AstroDiaryReplyDraftState = Readonly<{
   draftId: string;
   version: number;
   body: string;
+  attachmentIds: readonly string[];
 }>;
 
 export type SaveAstroDiaryReplyInput = Readonly<{
@@ -41,7 +42,8 @@ export function useAstroDiaryReplyMutations() {
         expectedJournalVersion: input.expectedJournalVersion,
         body: input.body,
         draftId: input.draft?.draftId ?? null,
-        expectedDraftVersion: input.draft?.version ?? null
+        expectedDraftVersion: input.draft?.version ?? null,
+        attachmentIds: input.draft?.attachmentIds ?? []
       };
       const idempotencyKey = attempts.acquire("save", intent);
       const result = input.draft
@@ -53,7 +55,7 @@ export function useAstroDiaryReplyMutations() {
               expectedJournalVersion: input.expectedJournalVersion,
               expectedDraftVersion: input.draft.version,
               body: input.body,
-              attachmentIds: []
+              attachmentIds: [...input.draft.attachmentIds]
             }
           })
         : await createAstroDiaryReplyDraft({
@@ -66,7 +68,12 @@ export function useAstroDiaryReplyMutations() {
             }
           });
       return {
-        draft: { draftId: result.draftId, version: result.version, body: input.body },
+        draft: {
+          draftId: result.draftId,
+          version: result.version,
+          body: input.body,
+          attachmentIds: input.draft?.attachmentIds ?? []
+        },
         idempotencyKey
       };
     },
