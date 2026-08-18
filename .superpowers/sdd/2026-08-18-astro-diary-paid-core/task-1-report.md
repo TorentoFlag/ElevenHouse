@@ -76,6 +76,16 @@ entitlement, and produces zero journals in the current implementation.
   and source-event composition remain Task 2 work; no claim of paid-core
   activation completion is made here.
 
+## Skipped gates and residual risk
+
+- `pnpm verify` was not run because its shared repository surface includes
+  unrelated concurrent Messaging/Instagram, migration, and documentation work.
+  The affected domain and real-PostgreSQL source-event surfaces were run
+  directly instead.
+- API/runtime/browser/design acceptance is intentionally not applicable to
+  this domain/DB-boundary Task 1; Task 2 must still demonstrate the atomic
+  journal/receipt/event/outbox commit before paid activation can be claimed.
+
 ## Shared checkout and commit
 
 At commit preparation the index was clean. Unowned concurrent changes include
