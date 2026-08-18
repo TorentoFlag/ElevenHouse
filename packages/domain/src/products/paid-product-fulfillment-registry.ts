@@ -1,7 +1,13 @@
 import type {
+  ProductAccessGrant,
+  ProductAstroDiaryConfig,
+  ProductDeliveryFormat,
   ProductExecutionMode,
+  ProductMethod,
   ProductParticipantMode,
   ProductPaymentModel,
+  ProductRequiredClientData,
+  ProductSubscriptionPeriod,
   ProductType
 } from "./product-types";
 
@@ -28,6 +34,17 @@ export type PaidProductFulfillmentShape = {
   readonly paymentModel: ProductPaymentModel;
   readonly executionMode: ProductExecutionMode;
   readonly participantMode: ProductParticipantMode;
+  readonly subscriptionPeriod?: ProductSubscriptionPeriod | null;
+  readonly trialDays?: number | null;
+  readonly durationMinutes?: number | null;
+  readonly packageSessionCount?: number | null;
+  readonly groupSize?: number | null;
+  readonly deliveryFormats?: readonly ProductDeliveryFormat[];
+  readonly requiredClientData?: readonly ProductRequiredClientData[];
+  readonly methods?: readonly ProductMethod[];
+  readonly accessGrants?: readonly ProductAccessGrant[];
+  readonly modifiers?: readonly unknown[];
+  readonly astroDiaryConfig?: ProductAstroDiaryConfig | null;
 };
 
 export type PaidProductTerminalEvidence = {
@@ -89,10 +106,20 @@ const approvedLiveSoloSession = Object.freeze({
   cancellationAllocator
 } satisfies PaidProductFulfillmentDecision);
 
+const approvedAstroDiarySubscription = Object.freeze({
+  supported: true,
+  registryKey: "sub.sub.async.solo",
+  registryRevision: 1,
+  holdAnchor: "booking_completed",
+  terminalEvidence,
+  cancellationAllocator
+} satisfies PaidProductFulfillmentDecision);
+
 const paidProductFulfillmentRegistry: Readonly<
   Record<string, Extract<PaidProductFulfillmentDecision, { supported: true }>>
 > = Object.freeze({
-  "single.once.live.solo": approvedLiveSoloSession
+  "single.once.live.solo": approvedLiveSoloSession,
+  "sub.sub.async.solo": approvedAstroDiarySubscription
 });
 
 export async function resolvePaidProductFulfillment(input: {
@@ -141,6 +168,7 @@ function unsupportedFulfillmentCode(
   if (product.paymentModel === "free") {
     return "free_product_fulfillment_not_required";
   }
+  if (isExactAstroDiarySubscription(product)) return null;
 
   switch (product.type) {
     case "single":
@@ -193,6 +221,55 @@ function unsupportedFulfillmentCode(
     default:
       return "paid_product_shape_unsupported";
   }
+}
+
+function isExactAstroDiarySubscription(product: PaidProductFulfillmentShape): boolean {
+  const config = product.astroDiaryConfig;
+  return (
+    product.type === "sub" &&
+    product.paymentModel === "sub" &&
+    product.executionMode === "async" &&
+    product.participantMode === "solo" &&
+    (product.subscriptionPeriod === "week" ||
+      product.subscriptionPeriod === "month" ||
+      product.subscriptionPeriod === "year") &&
+    product.trialDays === null &&
+    product.durationMinutes === null &&
+    product.packageSessionCount === null &&
+    product.groupSize === null &&
+    exactValues(product.deliveryFormats, ["chat", "audio", "file"]) &&
+    exactValues(product.requiredClientData, []) &&
+    exactValues(product.methods, []) &&
+    exactValues(product.accessGrants, ["journal"]) &&
+    exactValues(product.modifiers, []) &&
+    config !== null &&
+    config !== undefined &&
+    positiveInteger(config.reflectionCyclesPerPeriod) &&
+    positiveInteger(config.responseSlaWorkingDays) &&
+    positiveInteger(config.clientResponseWindowCalendarDays) &&
+    config.workingWeekdays.length > 0 &&
+    new Set(config.workingWeekdays).size === config.workingWeekdays.length &&
+    config.workingWeekdays.every(
+      (weekday) => Number.isInteger(weekday) && weekday >= 1 && weekday <= 7
+    ) &&
+    config.serviceTimezone.length > 0 &&
+    config.serviceTimezone.trim() === config.serviceTimezone
+  );
+}
+
+function exactValues(
+  actual: readonly unknown[] | undefined,
+  expected: readonly unknown[]
+): boolean {
+  return (
+    actual !== undefined &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
+}
+
+function positiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
 }
 
 function unsupportedDecision(

@@ -230,9 +230,10 @@ export function supportedFulfillment(value: unknown): SupportedFulfillmentSnapsh
     "port",
     "policyVersion"
   ]);
+  const registryKey = fields.registryKey;
   if (
     fields.supported !== true ||
-    fields.registryKey !== "single.once.live.solo" ||
+    (registryKey !== "single.once.live.solo" && registryKey !== "sub.sub.async.solo") ||
     fields.registryRevision !== 1 ||
     fields.holdAnchor !== "booking_completed" ||
     terminal.owner !== "booking" ||
@@ -246,7 +247,7 @@ export function supportedFulfillment(value: unknown): SupportedFulfillmentSnapsh
   }
   return Object.freeze({
     supported: true,
-    registryKey: "single.once.live.solo",
+    registryKey,
     registryRevision: 1,
     holdAnchor: "booking_completed",
     terminalEvidence: Object.freeze({
