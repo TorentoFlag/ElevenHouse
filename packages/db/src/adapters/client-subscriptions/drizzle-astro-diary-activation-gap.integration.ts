@@ -31,7 +31,7 @@ describe.sequential("AstroDiary source-event activation gap", () => {
     await closeDatabase?.();
   }, 30_000);
 
-  it("characterizes that an applied initial capture persists entitlement but no AstroDiary journal, including replay and concurrent redelivery", async () => {
+  it.fails("Task 2 must atomically create exactly one journal for an applied initial capture, including replay and concurrent redelivery", async () => {
     const pending = await createPendingClientSubscriptionFixture(runtime);
     const sourceEventId = randomUUID();
     const evidenceId = randomUUID();
@@ -69,6 +69,6 @@ describe.sequential("AstroDiary source-event activation gap", () => {
     const replay = await apply();
     expect(replay).toEqual({ outcome: "replayed", result: applied });
     await expect(runtime.database.select().from(clientEntitlementGrants)).resolves.toHaveLength(1);
-    await expect(runtime.database.select().from(astroDiaryJournals)).resolves.toHaveLength(0);
+    await expect(runtime.database.select().from(astroDiaryJournals)).resolves.toHaveLength(1);
   });
 });
