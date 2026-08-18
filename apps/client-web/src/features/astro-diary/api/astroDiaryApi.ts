@@ -106,5 +106,5 @@ export async function publishClientAstroDiaryEntryDraft(
 }
 
 function commandRequestOptions(idempotencyKey: string) {
-  return { csrf: true, headers: { "idempotency-key": idempotencyKey } } as const;
+  return { csrf: true, idempotencyKey } as const;
 }

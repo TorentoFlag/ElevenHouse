@@ -4,6 +4,37 @@ Date: 2026-08-18
 
 Status: **IMPLEMENTED; AUTHENTICATED VISUAL ACCEPTANCE PARTIAL**
 
+## Review fix round 1
+
+The two requested review findings are fixed:
+
+- AstroDiary draft create, update, and publish now pass the named
+  `idempotencyKey` transport option used by `HttpClient`. The real request
+  builder therefore emits `idempotency-key` together with the CSRF and content
+  type headers; the previous arbitrary `headers` object was structurally
+  accepted at the call site but ignored by `HttpClient`.
+- The entry-authority retry control now uses the module's declared
+  `--diary-line` border and `--diary-accent` focus tokens instead of undefined
+  `--diary-border` and `--diary-gold` variables.
+
+RED evidence was captured with a real `HttpClient` transport test: create
+request construction contained `content-type` and `x-csrf-token`, but omitted
+`idempotency-key`. After the fix, the same test proves all three mutation
+requests carry their distinct idempotency keys. A focused UI test also proves
+the authority-retry action is a native focusable button and invokes its retry
+callback.
+
+Fresh fix-round verification:
+
+- `pnpm exec vitest run --config vitest.config.ts apps/client-web/src/features/astro-diary apps/client-web/src/pages/astro-diary apps/client-web/src/router.contract.test.ts --reporter=dot`
+  — `9` files, `24` tests passed.
+- `pnpm --filter @elevenhouse/client-web typecheck` — passed.
+- `pnpm --filter @elevenhouse/client-web build` — passed with the existing
+  large-chunk warning.
+- Focused ESLint over the API and updated workspace test — passed.
+- Source search found no remaining `--diary-border` or `--diary-gold` use in
+  the client AstroDiary feature.
+
 ## Implemented
 
 - Added the authenticated relationship-scoped client route

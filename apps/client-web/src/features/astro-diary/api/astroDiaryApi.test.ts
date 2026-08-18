@@ -64,7 +64,7 @@ describe("client AstroDiary API", () => {
     expect(post).toHaveBeenCalledWith(
       `/astro-diary/journals/${journalId}/client-entry/drafts`,
       { expectedJournalVersion: 4, body: "First entry", attachmentIds: [], moodId: "calm" },
-      { csrf: true, headers: { "idempotency-key": "astro-diary:save:one" } }
+      { csrf: true, idempotencyKey: "astro-diary:save:one" }
     );
     expect(put).toHaveBeenCalledWith(
       `/astro-diary/journals/${journalId}/client-entry/drafts/${draftId}`,
@@ -75,7 +75,7 @@ describe("client AstroDiary API", () => {
         attachmentIds: [],
         moodId: "joy"
       },
-      { csrf: true, headers: { "idempotency-key": "astro-diary:save:two" } }
+      { csrf: true, idempotencyKey: "astro-diary:save:two" }
     );
   });
 
@@ -92,7 +92,7 @@ describe("client AstroDiary API", () => {
     expect(post).toHaveBeenCalledWith(
       `/astro-diary/journals/${journalId}/client-entry/drafts/${draftId}/publish`,
       { expectedJournalVersion: 6, expectedDraftVersion: 2 },
-      { csrf: true, headers: { "idempotency-key": "astro-diary:publish:one" } }
+      { csrf: true, idempotencyKey: "astro-diary:publish:one" }
     );
   });
 });

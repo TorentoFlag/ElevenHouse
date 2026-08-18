@@ -86,8 +86,8 @@
 .composerRegion { display: flex; min-height: 112px; box-sizing: border-box; justify-content: center; padding: 12px 22px 16px; border-top: 1px solid var(--diary-line); background: var(--diary-panel); }
 .composerNotice { align-self: center; color: var(--diary-muted); font-size: 13px; text-align: center; }
 .composerNotice p { margin: 0; }
-.composerNotice button { display: inline-flex; min-height: 44px; align-items: center; gap: 6px; margin-top: 8px; border: 1px solid var(--diary-border); border-radius: 10px; padding: 0 14px; background: var(--diary-panel); color: var(--diary-text); font: inherit; cursor: pointer; }
-.composerNotice button:focus-visible { outline: 2px solid var(--diary-gold); outline-offset: 2px; }
+.composerNotice button { display: inline-flex; min-height: 44px; align-items: center; gap: 6px; margin-top: 8px; border: 1px solid var(--diary-line); border-radius: 10px; padding: 0 14px; background: var(--diary-panel); color: var(--diary-text); font: inherit; cursor: pointer; }
+.composerNotice button:focus-visible { outline: 2px solid var(--diary-accent); outline-offset: 2px; }
 .journalRow:focus-visible, .mobileBackButton:focus-visible, .appHeader a:focus-visible, .appNav a:focus-visible, .brand:focus-visible, .emptyState button:focus-visible, .timelineState button:focus-visible, .loadMoreButton:focus-visible, .loadMoreError button:focus-visible { outline: 2px solid var(--diary-accent); outline-offset: 2px; }
 
 @keyframes diaryPulse { from { opacity: .42; } to { opacity: .82; } }

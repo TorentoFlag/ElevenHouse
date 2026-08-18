@@ -76,6 +76,23 @@ describe("ClientAstroDiaryWorkspaceView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back to journals" }));
     expect(onBackToList).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the entry-authority retry action keyboard focusable", () => {
+    const onRetryEntryAuthority = vi.fn();
+    render(
+      <MemoryRouter><ClientAstroDiaryWorkspaceView
+        copy={clientCopyByLocale.en.astroDiary}
+        locale="en"
+        state={readyState({ entryAuthorityStatus: "error", onRetryEntryAuthority })}
+      /></MemoryRouter>
+    );
+
+    const retry = screen.getByRole("button", { name: "Retry" });
+    retry.focus();
+    expect(retry).toHaveFocus();
+    fireEvent.click(retry);
+    expect(onRetryEntryAuthority).toHaveBeenCalledTimes(1);
+  });
 });
 
 function readyState(overrides: Record<string, unknown> = {}) {
