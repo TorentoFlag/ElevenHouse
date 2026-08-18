@@ -1,134 +1,162 @@
 import { useI18n } from "@elevenhouse/i18n";
+import { useState } from "react";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
+import { useCurrentAstrologerProfileQuery } from "../../features/astrologer-profile/model/useCurrentAstrologerProfileQuery";
+import { toAstroDiaryActionError } from "../../features/astro-diary/model/astroDiaryErrorModel";
+import {
+  collectAstroDiaryTimelineItems,
+  isAstroDiaryReplyActionable,
+  resolveAstroDiarySelection
+} from "../../features/astro-diary/model/astroDiaryWorkspaceModel";
 import { useAstroDiaryJournalListQuery } from "../../features/astro-diary/model/useAstroDiaryJournalListQuery";
+import { useAstroDiaryJournalQuery } from "../../features/astro-diary/model/useAstroDiaryJournalQuery";
+import {
+  type AstroDiaryReplyDraftState,
+  useAstroDiaryReplyMutations
+} from "../../features/astro-diary/model/useAstroDiaryReplyMutations";
 import { useAstroDiaryTimelineQuery } from "../../features/astro-diary/model/useAstroDiaryTimelineQuery";
-import styles from "./AstroDiaryPage.module.css";
+import {
+  AstroDiaryWorkspaceView,
+  type AstroDiaryWorkspaceState
+} from "../../features/astro-diary/ui/AstroDiaryWorkspaceView";
 
 export function AstroDiaryPage() {
-  const { dictionary } = useI18n<AstrologerCopy>();
+  const { dictionary, locale } = useI18n<AstrologerCopy>();
   const copy = dictionary.astroDiary;
+  const profileQuery = useCurrentAstrologerProfileQuery();
   const journalsQuery = useAstroDiaryJournalListQuery();
-  const primaryJournal = journalsQuery.data?.journals[0];
-  const timelineQuery = useAstroDiaryTimelineQuery(primaryJournal?.journal.id);
+  const [requestedJournalId, setRequestedJournalId] = useState<string>();
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, AstroDiaryReplyDraftState>>({});
+  const [replyErrors, setReplyErrors] = useState<
+    Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>
+  >({});
+  const journals = journalsQuery.data?.journals ?? [];
+  const selectedJournalId = resolveAstroDiarySelection(requestedJournalId, journals);
+  const listSummary = journals.find(({ journal }) => journal.id === selectedJournalId);
+  const journalQuery = useAstroDiaryJournalQuery(selectedJournalId);
+  const timelineQuery = useAstroDiaryTimelineQuery(selectedJournalId);
+  const replyMutations = useAstroDiaryReplyMutations();
 
   useDocumentTitle(copy.documentTitle);
 
-  return (
-    <section className={styles.page} aria-labelledby="astro-diary-title">
-      <header className={styles.toolbar}>
-        <div className={styles.titleGroup}>
-          <span className={styles.titleIcon} aria-hidden="true">
-            ◌
-          </span>
-          <div>
-            <p className={styles.eyebrow}>{copy.eyebrow}</p>
-            <h1 id="astro-diary-title" className={styles.title}>
-              {copy.title}
-            </h1>
-          </div>
-        </div>
-      </header>
+  const selectedJournal = journalQuery.data ?? listSummary;
+  const timelineItems = collectAstroDiaryTimelineItems(timelineQuery.data?.pages);
+  const timelineStatus = resolveTimelineStatus({
+    isLoading: timelineQuery.isLoading,
+    isError: timelineQuery.isError || journalQuery.isError,
+    itemCount: timelineItems.length
+  });
+  const currentDraft = selectedJournalId ? (replyDrafts[selectedJournalId] ?? null) : null;
+  const currentError = selectedJournalId ? (replyErrors[selectedJournalId] ?? null) : null;
 
-      <div className={styles.content}>
-        <article className={styles.connectionCard} aria-labelledby="astro-diary-connection-title">
-          <p className={styles.badge}>AstroDiary</p>
-          <h2 id="astro-diary-connection-title" className={styles.connectionTitle}>
-            {copy.connectionTitle}
-          </h2>
-          <p className={styles.connectionDescription}>{copy.connectionDescription}</p>
-          <div className={styles.journalStatus} aria-live="polite">
-            {journalsQuery.isLoading ? (
-              <p className={styles.statusText}>{copy.loadingLabel}</p>
-            ) : journalsQuery.isError ? (
-              <>
-                <p className={styles.statusTitle}>{copy.errorTitle}</p>
-                <p className={styles.statusText}>{copy.errorDescription}</p>
-              </>
-            ) : journalsQuery.data && journalsQuery.data.total > 0 && primaryJournal ? (
-              <>
-                <p className={styles.statusTitle}>
-                  {copy.journalCountLabel(journalsQuery.data.total)}
-                </p>
-                <p className={styles.statusText}>
-                  {copy.accessModeLabel(primaryJournal.access.mode)}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className={styles.statusTitle}>{copy.emptyTitle}</p>
-                <p className={styles.statusText}>{copy.emptyDescription}</p>
-              </>
-            )}
-          </div>
-        </article>
+  const state: AstroDiaryWorkspaceState = journalsQuery.isLoading
+    ? { kind: "loading" }
+    : journalsQuery.isError
+      ? { kind: "error", onRetry: () => void journalsQuery.refetch() }
+      : journals.length === 0 || !selectedJournalId || !selectedJournal
+        ? { kind: "empty" }
+        : {
+            kind: "ready",
+            journals,
+            selectedJournal,
+            timelineItems,
+            timelineStatus,
+            hasMoreTimeline: Boolean(timelineQuery.hasNextPage),
+            isLoadingMoreTimeline: timelineQuery.isFetchingNextPage,
+            replyDraft: currentDraft,
+            replyError: currentError,
+            isSavingReply: replyMutations.save.isPending,
+            isPublishingReply: replyMutations.publish.isPending,
+            mobileDetailOpen,
+            canReply: Boolean(
+              journalQuery.data &&
+                !journalQuery.isFetching &&
+                isAstroDiaryReplyActionable(journalQuery.data)
+            ),
+            ...(profileQuery.data?.profile?.timezone
+              ? { timeZone: profileQuery.data.profile.timezone }
+              : {}),
+            onSelectJournal: (journalId) => {
+              setRequestedJournalId(journalId);
+              setMobileDetailOpen(true);
+            },
+            onBackToList: () => setMobileDetailOpen(false),
+            onRetryTimeline: () => {
+              void Promise.all([journalQuery.refetch(), timelineQuery.refetch()]);
+            },
+            onLoadMoreTimeline: () => void timelineQuery.fetchNextPage(),
+            onOpenReply: () => clearReplyError(selectedJournalId, setReplyErrors),
+            onSaveReply: (body) => {
+              if (!journalQuery.data) return;
+              void replyMutations.save
+                .mutateAsync({
+                  journalId: selectedJournalId,
+                  expectedJournalVersion: journalQuery.data.journal.version,
+                  body,
+                  draft: currentDraft
+                })
+                .then(({ draft }) => {
+                  setReplyDrafts((current) => ({ ...current, [selectedJournalId]: draft }));
+                  clearReplyError(selectedJournalId, setReplyErrors);
+                })
+                .catch((error: unknown) => {
+                  setReplyErrors((current) => ({
+                    ...current,
+                    [selectedJournalId]: toAstroDiaryActionError(error)
+                  }));
+                });
+            },
+            onPublishReply: () => {
+              if (!journalQuery.data || !currentDraft) return;
+              void replyMutations.publish
+                .mutateAsync({
+                  journalId: selectedJournalId,
+                  expectedJournalVersion: journalQuery.data.journal.version,
+                  draft: currentDraft
+                })
+                .then(() => {
+                  setReplyDrafts((current) => {
+                    const next = { ...current };
+                    delete next[selectedJournalId];
+                    return next;
+                  });
+                  clearReplyError(selectedJournalId, setReplyErrors);
+                })
+                .catch((error: unknown) => {
+                  setReplyErrors((current) => ({
+                    ...current,
+                    [selectedJournalId]: toAstroDiaryActionError(error)
+                  }));
+                });
+            },
+            onReloadLatest: () => {
+              clearReplyError(selectedJournalId, setReplyErrors);
+              void Promise.all([journalQuery.refetch(), timelineQuery.refetch()]);
+            }
+          };
 
-        {journalsQuery.data && journalsQuery.data.journals.length > 0 ? (
-          <section className={styles.journalList} aria-labelledby="astro-diary-journal-list-title">
-            <h2 id="astro-diary-journal-list-title" className={styles.sectionTitle}>
-              {copy.journalListTitle}
-            </h2>
-            <div className={styles.journalCards}>
-              {journalsQuery.data.journals.map((summary) => (
-                <article className={styles.journalCard} key={summary.journal.id}>
-                  <h3 className={styles.journalCardTitle}>
-                    {copy.clientLabel(summary.journal.clientUserId.slice(0, 8))}
-                  </h3>
-                  <dl className={styles.journalMeta}>
-                    <div>
-                      <dt>{copy.unreadLabel(summary.unreadCount)}</dt>
-                      <dd>{copy.cursorLabel(summary.visibleMaxCursor)}</dd>
-                    </div>
-                    <div>
-                      <dt>{copy.accessLabel(summary.access.mode)}</dt>
-                      <dd>{copy.accessModeLabel(summary.access.subscriptionState)}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
+  return <AstroDiaryWorkspaceView copy={copy} locale={locale} state={state} />;
+}
 
-        {primaryJournal ? (
-          <section className={styles.timelinePanel} aria-labelledby="astro-diary-timeline-title">
-            <h2 id="astro-diary-timeline-title" className={styles.sectionTitle}>
-              {copy.timelineTitle}
-            </h2>
-            {timelineQuery.isLoading ? (
-              <p className={styles.sectionDescription}>{copy.timelineLoadingLabel}</p>
-            ) : timelineQuery.isError ? (
-              <p className={styles.sectionDescription}>{copy.timelineErrorLabel}</p>
-            ) : timelineQuery.data && timelineQuery.data.items.length > 0 ? (
-              <div className={styles.timelineItems}>
-                {timelineQuery.data.items.map((item) => (
-                  <article className={styles.timelineItem} key={item.id}>
-                    <p className={styles.timelineMeta}>
-                      {copy.timelineItemMetaLabel(item.kind, item.cursor)}
-                    </p>
-                    {"body" in item ? (
-                      <p className={styles.timelineBody}>{item.body}</p>
-                    ) : (
-                      <p className={styles.timelineBody}>{item.reason}</p>
-                    )}
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className={styles.sectionDescription}>{copy.timelineEmptyLabel}</p>
-            )}
-          </section>
-        ) : null}
+function resolveTimelineStatus(input: {
+  readonly isLoading: boolean;
+  readonly isError: boolean;
+  readonly itemCount: number;
+}): "loading" | "empty" | "error" | "ready" {
+  if (input.isLoading) return "loading";
+  if (input.isError) return "error";
+  return input.itemCount === 0 ? "empty" : "ready";
+}
 
-        <div className={styles.sectionGrid}>
-          {copy.sections.map((section) => (
-            <article className={styles.sectionCard} key={section.title}>
-              <h2 className={styles.sectionTitle}>{section.title}</h2>
-              <p className={styles.sectionDescription}>{section.description}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+function clearReplyError(
+  journalId: string,
+  setReplyErrors: React.Dispatch<
+    React.SetStateAction<
+      Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>
+    >
+  >
+): void {
+  setReplyErrors((current) => ({ ...current, [journalId]: undefined }));
 }
