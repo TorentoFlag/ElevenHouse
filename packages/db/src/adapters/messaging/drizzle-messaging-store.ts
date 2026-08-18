@@ -1408,6 +1408,20 @@ async function recordInstagramGraphMessage(
         externalIdentityId: identity.id,
         now: timestamp
       });
+      if (isOwnerMessage) {
+        const existingOutbound = await reconcileInstagramGraphObservedOutbound(transaction, {
+          channelConnectionId: connection.id,
+          externalIdentityId: identity.id,
+          threadId: thread.id,
+          providerMessageId: input.providerMessageId,
+          providerSentAt,
+          text: input.text,
+          now: timestamp
+        });
+        if (existingOutbound) {
+          return { kind: "duplicate" as const, message: existingOutbound };
+        }
+      }
 
       const [row] = await transaction
         .insert(messagingMessages)
@@ -2277,6 +2291,72 @@ async function findInstagramGraphMessage(
     .limit(1);
 
   return row ? toMessagingMessage(row.message) : null;
+}
+
+async function reconcileInstagramGraphObservedOutbound(
+  database: MessagingDatabase,
+  input: {
+    readonly channelConnectionId: string;
+    readonly externalIdentityId: string;
+    readonly threadId: string;
+    readonly providerMessageId: string;
+    readonly providerSentAt: Date;
+    readonly text: string;
+    readonly now: Date;
+  }
+): Promise<MessagingMessage | null> {
+  const [existingExactRow] = await database
+    .select()
+    .from(messagingMessages)
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        eq(messagingMessages.externalIdentityId, input.externalIdentityId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound")
+      )
+    )
+    .limit(1);
+  if (existingExactRow) return toMessagingMessage(existingExactRow);
+
+  const [candidate] = await database
+    .select({ id: messagingMessages.id })
+    .from(messagingMessages)
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        isNull(messagingMessages.externalIdentityId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound"),
+        ne(messagingMessages.status, "deleted")
+      )
+    )
+    .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
+    .limit(1);
+  if (!candidate) return null;
+
+  const [row] = await database
+    .update(messagingMessages)
+    .set({
+      threadId: input.threadId,
+      externalIdentityId: input.externalIdentityId,
+      providerSentAt: input.providerSentAt,
+      text: input.text,
+      status: "sent",
+      failureCode: null,
+      updatedAt: input.now
+    })
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        eq(messagingMessages.id, candidate.id),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound")
+      )
+    )
+    .returning();
+
+  return row ? toMessagingMessage(row) : null;
 }
 
 async function findLatestVisibleMessageForThread(
