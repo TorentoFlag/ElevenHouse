@@ -153,3 +153,83 @@ graph.
   but the GitNexus MCP transport was closed after its index refresh. The staged
   list was manually verified as exactly the three Task 1 fix files and
   `git diff --cached --check` passed before commit.
+
+## Review fix round 2 — 2026-08-18
+
+### Finding resolved
+
+- `AstroDiarySubscriptionActivationInput.appliedCapture` now accepts the
+  sealed `FinanceClientOrderCaptureDispatchReceipt`, not an independent
+  caller-supplied `initial|renewal` target. The planner rehydrates that receipt
+  and rebuilds its canonical capture event before accepting it.
+- The planner binds receipt source-event ID/digest, finance evidence,
+  subscription, contract/order/digest, expected pre-transition version,
+  captured time, and target period to the locked transition. Only the
+  rehydrated receipt's target kind selects `activate` versus
+  `continue_existing`.
+- Regression coverage proves a valid initial capture cannot be suppressed by
+  an injected renewal target, a valid renewal cannot be turned into an
+  activation by an injected initial target, and post-seal initial/renewal kind
+  tampering is rejected as `transition_receipt_mismatch`.
+- The generic source-event UOW contract, schema/migrations, APIs, UI, workers,
+  and product gates were not changed.
+
+### GitNexus impact
+
+- Before editing `planAstroDiarySubscriptionActivation`, upstream impact was
+  requested twice. Both calls failed with `Transport closed`, so no risk level
+  could be returned and therefore no HIGH/CRITICAL result was suppressed.
+- Local recovery command `node .gitnexus/run.cjs analyze` also failed because
+  GitNexus reported a corrupted `file_fts` index (`document for node offset
+  4905 is missing during delete`). The required pre-commit
+  `detect_changes(scope=compare, base_ref=main)` likewise returned
+  `Transport closed`.
+
+### TDD and verification evidence
+
+RED:
+
+```text
+pnpm exec vitest run --config vitest.config.ts packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts
+6 tests, 3 failed as intended:
+- caller renewal target changed a valid initial plan to continue_existing
+- caller initial target changed a valid renewal plan to activate
+- post-seal receipt target mutation was accepted
+```
+
+GREEN:
+
+```text
+pnpm exec prettier --check packages/domain/src/astro-diary/astro-diary-subscription-activation.ts packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts
+All matched files use Prettier code style
+
+pnpm --filter @elevenhouse/domain typecheck
+exit 0
+
+pnpm exec vitest run --config vitest.config.ts packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts packages/domain/src/client-subscriptions/client-subscription-capture-application.test.ts packages/domain/src/finance-core/client-order-capture-purpose-dispatch.test.ts
+3 files passed, 14 tests passed
+
+pnpm exec eslint packages/domain/src/astro-diary/astro-diary-subscription-activation.ts packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts
+exit 0
+
+git diff --check
+exit 0
+```
+
+### Files changed and self-review
+
+- `packages/domain/src/astro-diary/astro-diary-subscription-activation.ts`
+- `packages/domain/src/astro-diary/astro-diary-subscription-activation.test.ts`
+- `.superpowers/sdd/2026-08-18-astro-diary-paid-core/task-1-report.md`
+
+The planner remains pure and transaction-scoped. It now consumes precisely the
+same sealed receipt authority that the capture dispatcher rehydrates; it does
+not infer activation from period sequence or an unsealed DTO. The only
+remaining paid-core risk is intentional Task 2 work: persist the accepted plan
+atomically with the canonical source-event transaction.
+
+### Fix-round commit
+
+Implementation/test commit: `1fd09e07` (`fix: seal AstroDiary activation discriminator`).
+It contains only the two activation-boundary paths listed above. The report is
+committed separately because its final evidence must name that SHA.
