@@ -74,8 +74,8 @@ foundation client cabinet, не discovery API.
 `booking`, `orders` and `payments` now provide the first direct-link command
 contour for booking intent, order creation and checkout initiation. Full public
 product/profile reads, slot-selection UI integration, materials, feed,
-subscriptions, journal and client-visible calculation delivery remain separate
-incomplete contours.
+one-time paid-access periods, journal and client-visible calculation delivery
+remain separate incomplete contours.
 
 `client-commerce` provides authenticated relationship-scoped purchase-option
 and available-slot reads. It filters orderable products through the active
@@ -201,7 +201,9 @@ state and never executes a provider refund.
   are V2-only. A confirmed booking is eligible only when its service requires
   chart data; missing profile readiness creates a durable human work item and
   rechecks readiness before a chart command is requested.
-- `Subscriptions`: recurring client subscriptions и platform plans для астрологов.
+- `Paid access`: one-time client paid periods and recurring platform plans for
+  astrologers. Client-side astrologer products must not create stored-card
+  renewal schedules unless a new product decision explicitly adds that contour.
 - `BirthData`: единственный client-owned профиль даты, времени и места
   рождения. Клиент и астролог с активной явной client--astrologer связью могут
   вносить правки через CAS; source, actor и immutable history обязательны.

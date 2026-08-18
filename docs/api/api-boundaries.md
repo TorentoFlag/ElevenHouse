@@ -8,8 +8,8 @@ related-astrologer read, cabinet overview, client birth-profile routes and the
 relationship-scoped purchase-option and slot reads, booking/order/payment
 commands, client checkout-state reads and owner-scoped dispute-candidate
 submission/read for paid orders. Full public profile read model, materials,
-feed, client recurring subscriptions, journal and client-visible calculation
-delivery remain incomplete contours on this surface.
+feed, one-time client paid-access periods, journal and client-visible
+calculation delivery remain incomplete contours on this surface.
 
 Ответственности:
 

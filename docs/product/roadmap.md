@@ -48,7 +48,7 @@
 
 ## Этап 4: Клиентский кабинет, сессии, материалы, отзывы
 
-Цель: закрыть post-payment и recurring клиентские сценарии.
+Цель: закрыть post-payment клиентские сценарии и delivery после оплаты.
 
 Включает:
 
@@ -177,7 +177,7 @@
 Включает:
 
 - Content products и recorded materials.
-- Client subscriptions на контент или услуги астролога.
+- One-time paid access на контент или услуги астролога.
 - Platform plans для астрологов.
 - Funnel/automation builder.
 - Broadcasts и segmented notifications.
