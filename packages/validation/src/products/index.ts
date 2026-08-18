@@ -22,7 +22,11 @@ export const productDeliveryFormatValues = [
   "channel"
 ] as const;
 export type ProductDeliveryFormatValue = (typeof productDeliveryFormatValues)[number];
-export const astroDiaryDeliveryFormatValues = ["chat", "audio", "file"] as const satisfies readonly ProductDeliveryFormatValue[];
+export const astroDiaryDeliveryFormatValues = [
+  "chat",
+  "audio",
+  "file"
+] as const satisfies readonly ProductDeliveryFormatValue[];
 
 export const productExecutionModeValues = ["live", "async", "instant"] as const;
 export type ProductExecutionModeValue = (typeof productExecutionModeValues)[number];
@@ -294,13 +298,23 @@ function collectAstroDiaryInvariantIssues(
       message: "AstroDiary products require journal as their only access grant"
     });
   }
-  if (value.type !== "sub") {
-    issues.push({ path: ["type"], message: "AstroDiary products require subscription type" });
+  if (value.type !== "async") {
+    issues.push({ path: ["type"], message: "AstroDiary products require async result type" });
   }
-  if (value.paymentModel !== "sub") {
+  if (value.paymentModel !== "once") {
     issues.push({
       path: ["paymentModel"],
-      message: "AstroDiary products require subscription payment model"
+      message: "AstroDiary products require one-time payment model"
+    });
+  }
+  if (
+    value.subscriptionPeriod !== "week" &&
+    value.subscriptionPeriod !== "month" &&
+    value.subscriptionPeriod !== "year"
+  ) {
+    issues.push({
+      path: ["subscriptionPeriod"],
+      message: "AstroDiary products require a paid access period"
     });
   }
   if (value.executionMode !== "async") {
@@ -336,7 +350,7 @@ function collectAstroDiaryInvariantIssues(
   if (value.modifiers?.length !== 0) {
     issues.push({
       path: ["modifiers"],
-      message: "AstroDiary subscriptions do not support price modifiers"
+      message: "AstroDiary products do not support price modifiers"
     });
   }
   if (

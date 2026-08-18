@@ -233,7 +233,7 @@ export function supportedFulfillment(value: unknown): SupportedFulfillmentSnapsh
   const registryKey = fields.registryKey;
   if (
     fields.supported !== true ||
-    (registryKey !== "single.once.live.solo" && registryKey !== "sub.sub.async.solo") ||
+    (registryKey !== "single.once.live.solo" && registryKey !== "async.once.async.solo") ||
     fields.registryRevision !== 1 ||
     fields.holdAnchor !== "booking_completed" ||
     terminal.owner !== "booking" ||

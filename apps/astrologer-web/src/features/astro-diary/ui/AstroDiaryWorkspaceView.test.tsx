@@ -31,7 +31,7 @@ describe("AstroDiaryWorkspaceView", () => {
         state={{ kind: "empty" }}
       />
     );
-    expect(screen.getByText("There are no active AstroDiary subscriptions yet.")).toBeVisible();
+    expect(screen.getByText("There are no active AstroDiary paid periods yet.")).toBeVisible();
     expect(document.body).not.toHaveTextContent("Pro");
   });
 
@@ -73,7 +73,7 @@ describe("AstroDiaryWorkspaceView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Client 61111111/ }));
     expect(onSelectJournal).toHaveBeenCalledWith(readOnlySummary.journal.id);
-    expect(screen.getByText("Subscription ended · history is read-only")).toBeVisible();
+    expect(screen.getByText("Paid period ended · history is read-only")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Write reply" })).not.toBeInTheDocument();
   });
 });

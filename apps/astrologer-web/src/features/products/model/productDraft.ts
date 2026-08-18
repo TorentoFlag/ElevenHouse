@@ -559,7 +559,9 @@ function toPayload(draft: ProductFormDraft, mode: "create" | "update") {
         ? normalizeOptionalNumber(draft.packageDiscountPercent, nullable)
         : nullOrUndefined(nullable),
     subscriptionPeriod:
-      paymentModel === "sub" ? draft.subscriptionPeriod : nullOrUndefined(nullable),
+      paymentModel === "sub" || draft.astroDiaryConfig
+        ? draft.subscriptionPeriod
+        : nullOrUndefined(nullable),
     trialDays:
       paymentModel === "sub"
         ? normalizeOptionalNumber(draft.trialDays, nullable)

@@ -139,7 +139,7 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
           if (!authority) {
             return {
               outcome:
-                capture.fulfillmentDecisionId === "sub.sub.async.solo"
+                capture.fulfillmentDecisionId === "async.once.async.solo"
                   ? "authority_conflict"
                   : "not_client_subscription"
             };

@@ -225,7 +225,7 @@ function orderPurchasePurpose(product: Product, clientUserId: string) {
     throw new OrderProductNotAvailableError();
   }
   return {
-    kind: "astro_diary_subscription" as const,
+    kind: "astro_diary_paid_period" as const,
     expectedProductRevision: product.revision,
     acceptedProduct: {
       productId: product.id,

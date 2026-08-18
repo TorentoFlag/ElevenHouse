@@ -157,14 +157,14 @@ const expertSubscriptionPayload = {
   modifiers: []
 } satisfies CreateProductRequest;
 
-const astroDiarySubscriptionPayload = {
-  type: "sub",
+const astroDiaryPaidPeriodPayload = {
+  type: "async",
   title: "Астродневник",
   subtitle: "Личное сопровождение и вопросы для рефлексии",
   priceMinor: 0,
   currency: "RUB",
   executionMode: "async",
-  paymentModel: "sub",
+  paymentModel: "once",
   subscriptionPeriod: "month",
   participantMode: "solo",
   deliveryFormats: ["chat", "audio", "file"],
@@ -247,8 +247,8 @@ const expertSubscriptionPayloadEn = localizePayload(expertSubscriptionPayload, {
   includedItems: ["Regular materials", "Private channel", "Monthly session or live stream"]
 });
 
-const astroDiarySubscriptionPayloadEn = {
-  ...astroDiarySubscriptionPayload,
+const astroDiaryPaidPeriodPayloadEn = {
+  ...astroDiaryPaidPeriodPayload,
   includedItems: [
     { text: "4 reflection cycles per month", icon: "reference", order: 10 },
     { text: "Astrologer response within 2 working days", icon: "clock", order: 20 },
@@ -323,15 +323,15 @@ export const productTemplateSeedData = [
     subtitle: "Recurring access to materials and support",
     description: "A starter for a private channel, content, sessions or community."
   }),
-  seed("astro_diary_subscription", "ru", 65, astroDiarySubscriptionPayload, {
+  seed("astro_diary_paid_period", "ru", 65, astroDiaryPaidPeriodPayload, {
     title: "Астродневник",
     subtitle: "Личное сопровождение и вопросы для рефлексии",
-    description: "Подписка на переписку с астрологом, рефлексию и ответы по циклам."
+    description: "Разовая оплата доступа к переписке, рефлексии и ответам по циклам."
   }),
-  seed("astro_diary_subscription", "en", 65, astroDiarySubscriptionPayloadEn, {
+  seed("astro_diary_paid_period", "en", 65, astroDiaryPaidPeriodPayloadEn, {
     title: "Astro journal",
     subtitle: "Personal guidance and reflection questions",
-    description: "A subscription for reflective correspondence with an astrologer."
+    description: "One-time paid access to reflective correspondence with an astrologer."
   }),
   seed("custom_format", "ru", 70, customFormatPayload, {
     title: "Свой формат",

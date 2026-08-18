@@ -31,6 +31,6 @@ export function describeProductMutationError(
   }
 
   return locale === "ru"
-    ? "Подписку на Астродневник пока нельзя активировать: платежи и выдача доступа еще не подключены. Сохраните продукт как черновик."
-    : "The AstroDiary subscription cannot be activated yet because billing and access fulfillment are not connected. Save the product as a draft.";
+    ? "Астродневник пока нельзя активировать: платежи и выдача доступа еще не подключены. Сохраните продукт как черновик."
+    : "The AstroDiary paid-period product cannot be activated yet because billing and access fulfillment are not connected. Save the product as a draft.";
 }

@@ -83,13 +83,13 @@ describe("client commerce HTTP API", () => {
     await app?.close();
   });
 
-  it("lists the canonical AstroDiary subscription without exposing a generic subscription", async () => {
+  it("lists the canonical AstroDiary one-time paid-period product without exposing a generic subscription", async () => {
     const response = await fetch(`${baseUrl}/me/astrologers/${astrologerUserId}/purchase-options`);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       astrologerUserId,
-      products: [{ id: diaryProductId, paymentModel: "sub", type: "sub" }]
+      products: [{ id: diaryProductId, paymentModel: "once", type: "async" }]
     });
   });
 });
@@ -145,8 +145,8 @@ function astroDiaryProduct(): Product {
   return {
     ...productBase(),
     id: diaryProductId,
-    type: "sub",
-    paymentModel: "sub",
+    type: "async",
+    paymentModel: "once",
     executionMode: "async",
     participantMode: "solo",
     subscriptionPeriod: "month",

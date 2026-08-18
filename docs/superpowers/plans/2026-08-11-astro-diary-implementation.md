@@ -270,16 +270,16 @@ astrology fact from the browser.
    calendar days, non-empty unique ISO weekdays, and required IANA timezone. Export the
    bounds as shared named constants so UI and DB tests do not duplicate literals.
 2. Add failing product invariant tests: `journal` grant requires type/payment/execution/
-   participant shape `sub/sub/async/solo`, exact `chat/audio/file` delivery formats, and
-   empty client-data/method/modifier arrays; that shape requires complete AstroDiary
-   config; non-Diary products reject AstroDiary config.
-3. Add `astro_diary_subscription` RU/EN system template and prove exact configurable
+   participant shape `async/once/async/solo`, exact `chat/audio/file` delivery formats,
+   a configured paid access period, and empty client-data/method/modifier arrays; that
+   shape requires complete AstroDiary config; non-Diary products reject AstroDiary config.
+3. Add `astro_diary_paid_period` RU/EN system template and prove exact configurable
    defaults; do not overload `expert_subscription`.
 4. Persist config as typed columns/JSON only where it remains queryable and constraint-
    enforced. Use server validation and DB checks; no display-string SLA authority.
 5. Add a monotonic Product `revision`, expose it in responses, require
    `expectedRevision` for update/status mutations, enforce CAS in the store, and prove
-   stale updates fail explicitly. Subscription checkout will bind this exact revision.
+   stale updates fail explicitly. AstroDiary checkout will bind this exact revision.
 6. Add product editor fields and state tests; activation remains rejected until Task 5
    registers proven fulfillment readiness.
 7. Freeze current AI runtime/model/prompt request snapshots and run them unchanged.
@@ -443,7 +443,7 @@ INTEGRATION_DATABASE_URL="$DATABASE_URL" pnpm test:integration packages/db/src/a
 pnpm --filter @elevenhouse/payment-worker typecheck
 ```
 
-### Task 5: Subscription APIs and Orderability Gate
+### Task 5: Paid-Period APIs and Orderability Gate
 
 **Create/modify:**
 
@@ -457,14 +457,15 @@ pnpm --filter @elevenhouse/payment-worker typecheck
 **Behavioral steps:**
 
 1. Add relationship-scoped offer/current subscription/period/allowance reads and
-   checkout/cancel/revoke-cancellation commands with strict contracts, auth, CSRF,
-   idempotency, and CAS.
+   checkout and paid-period reads with strict contracts, auth, CSRF, idempotency, and CAS.
 2. Add astrologer owner read projection for configured products and subscriber status.
-3. Register only `sub.sub.async.solo` with `journal` and a complete AstroDiary config;
-   dependency reader must prove finance capture, recurring, finance revocation, and entitlement
-   authorities registered. It must also reject zero price and any non-canonical Diary
-   delivery/client-data/method/modifier shape. All generic subscriptions remain unsupported.
-4. Remove the client-commerce subscription filter only for the proven AstroDiary shape.
+3. Register only `async.once.async.solo` with `journal`, a configured paid access period,
+   and a complete AstroDiary config; dependency reader must prove finance capture, finance
+   revocation, and entitlement authorities registered. It must also reject zero price and any
+   non-canonical Diary delivery/client-data/method/modifier shape. Automatic renewal and
+   generic recurring subscriptions remain unsupported.
+4. Remove the client-commerce subscription filter only for the proven AstroDiary paid-period
+   shape.
 5. Add API e2e tests for related/unrelated/blocked pair, active/draft product,
    pending/failed/unknown payment, duplicate commands, and no cross-owner leakage.
 

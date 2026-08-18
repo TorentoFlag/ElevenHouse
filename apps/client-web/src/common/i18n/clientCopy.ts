@@ -161,7 +161,10 @@ export type ClientAstroDiaryCopy = {
     reloadLatestLabel: string;
     reviewDraftLabel: string;
     characterCountLabel: (count: number, maximum: number) => string;
-    errors: Record<"stale" | "idempotency" | "allowance" | "read_only" | "state" | "generic", string>;
+    errors: Record<
+      "stale" | "idempotency" | "allowance" | "read_only" | "state" | "generic",
+      string
+    >;
   };
 };
 
@@ -186,16 +189,19 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
     notRelatedTitle: "Связь с астрологом не найдена",
     notRelatedDescription: "Откройте Астродневник из кабинета рядом с уже связанным астрологом.",
     noSubscriptionTitle: (astrologerName) => `Астродневник у ${astrologerName}`,
-    noSubscriptionDescription: "Астродневник пока недоступен. Подписка у этого астролога откроет личный дневник.",
+    noSubscriptionDescription:
+      "Астродневник пока недоступен. Разовая покупка у этого астролога откроет личный дневник на оплаченный период.",
     errorTitle: "Не удалось загрузить Астродневник",
     errorDescription: "Повторите запрос. Мы не подменяем данные дневника локальной копией.",
     retryLabel: "Повторить",
     journalListTitle: "Мои журналы",
-    journalRowLabel: (summary) => summary.access.mode === "active" ? "Текущий журнал" : "Архивный журнал",
-    journalStateLabel: (summary) => summary.access.mode === "active" ? "Текущий журнал" : "История",
+    journalRowLabel: (summary) =>
+      summary.access.mode === "active" ? "Текущий журнал" : "Архивный журнал",
+    journalStateLabel: (summary) =>
+      summary.access.mode === "active" ? "Текущий журнал" : "История",
     unreadLabel: (count) => `Непрочитано: ${count}`,
     backToListLabel: "Назад к журналам",
-    archivedLabel: "Подписка завершена · история доступна только для чтения",
+    archivedLabel: "Оплаченный период завершён · история доступна только для чтения",
     allowanceLabel: (available) => `Новых циклов: ${available}`,
     allowanceExhaustedLabel: "Лимит новых циклов на текущий оплаченный период исчерпан.",
     readOnlyComposerLabel: "Новые записи недоступны в архивном журнале.",
@@ -205,7 +211,8 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
     timeline: {
       ariaLabel: "Лента Астродневника",
       contextTitle: "Личное пространство",
-      contextDescription: "Записи и ответы видны только вам и этому астрологу. Состояние дневника подтверждает сервер.",
+      contextDescription:
+        "Записи и ответы видны только вам и этому астрологу. Состояние дневника подтверждает сервер.",
       emptyLabel: "Здесь пока нет опубликованных записей.",
       errorLabel: "Не удалось загрузить ленту журнала.",
       loadMoreLabel: "Показать более новые записи",
@@ -213,9 +220,25 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       loadMoreErrorLabel: "Не удалось загрузить следующие записи.",
       retryLoadMoreLabel: "Повторить загрузку записей",
       authorLabels: { client: "Вы", astrologer: "Астролог" },
-      kindLabels: { client_entry: "Ваша запись", astrologer_reply: "Ответ астролога", reflection_prompt: "Вопрос для рефлексии", correction: "Исправление", tombstone: "Удалённая запись" },
-      tombstoneLabels: { hidden_by_author: "Автор скрыл содержимое записи.", content_erased: "Содержимое записи удалено." },
-      moodLabels: { inspired: "Вдохновение", joy: "Радость", calm: "Спокойствие", tired: "Усталость", anxious: "Тревога", sad: "Грусть" }
+      kindLabels: {
+        client_entry: "Ваша запись",
+        astrologer_reply: "Ответ астролога",
+        reflection_prompt: "Вопрос для рефлексии",
+        correction: "Исправление",
+        tombstone: "Удалённая запись"
+      },
+      tombstoneLabels: {
+        hidden_by_author: "Автор скрыл содержимое записи.",
+        content_erased: "Содержимое записи удалено."
+      },
+      moodLabels: {
+        inspired: "Вдохновение",
+        joy: "Радость",
+        calm: "Спокойствие",
+        tired: "Усталость",
+        anxious: "Тревога",
+        sad: "Грусть"
+      }
     },
     entry: {
       writeLabel: "Написать запись",
@@ -234,7 +257,8 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       reviewDraftLabel: "Проверить черновик",
       characterCountLabel: (count, maximum) => `${count} из ${maximum}`,
       errors: {
-        stale: "Дневник изменился в другой сессии. Загрузите актуальную версию — ваш текст сохранён здесь.",
+        stale:
+          "Дневник изменился в другой сессии. Загрузите актуальную версию — ваш текст сохранён здесь.",
         idempotency: "Этот повтор связан с другим содержимым. Повторите сохранение без изменений.",
         allowance: "Лимит новых циклов на текущий оплаченный период исчерпан.",
         read_only: "Подписка завершена. Журнал доступен только для чтения.",
@@ -253,18 +277,22 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
     privateLabel: "Only you and your astrologer",
     loadingAriaLabel: "Loading your AstroDiary",
     notRelatedTitle: "Astrologer relationship not found",
-    notRelatedDescription: "Open AstroDiary from your account beside an astrologer you are already connected with.",
+    notRelatedDescription:
+      "Open AstroDiary from your account beside an astrologer you are already connected with.",
     noSubscriptionTitle: (astrologerName) => `AstroDiary with ${astrologerName}`,
-    noSubscriptionDescription: "AstroDiary is not available yet. A subscription with this astrologer unlocks your personal journal.",
+    noSubscriptionDescription:
+      "AstroDiary is not available yet. A one-time purchase with this astrologer unlocks your personal journal for the paid period.",
     errorTitle: "Could not load AstroDiary",
     errorDescription: "Retry the request. Journal data is never replaced with a local copy.",
     retryLabel: "Retry",
     journalListTitle: "My journals",
-    journalRowLabel: (summary) => summary.access.mode === "active" ? "Current journal" : "Archived journal",
-    journalStateLabel: (summary) => summary.access.mode === "active" ? "Current journal" : "History",
+    journalRowLabel: (summary) =>
+      summary.access.mode === "active" ? "Current journal" : "Archived journal",
+    journalStateLabel: (summary) =>
+      summary.access.mode === "active" ? "Current journal" : "History",
     unreadLabel: (count) => `Unread: ${count}`,
     backToListLabel: "Back to journals",
-    archivedLabel: "Subscription ended · history is read-only",
+    archivedLabel: "Paid period ended · history is read-only",
     allowanceLabel: (available) => `New cycles: ${available}`,
     allowanceExhaustedLabel: "The new-cycle allowance for this paid period has been used.",
     readOnlyComposerLabel: "New entries are unavailable in an archived journal.",
@@ -274,7 +302,8 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
     timeline: {
       ariaLabel: "AstroDiary timeline",
       contextTitle: "Private space",
-      contextDescription: "Entries and replies are visible only to you and this astrologer. The server confirms journal state.",
+      contextDescription:
+        "Entries and replies are visible only to you and this astrologer. The server confirms journal state.",
       emptyLabel: "There are no published entries here yet.",
       errorLabel: "Could not load the journal timeline.",
       loadMoreLabel: "Show newer entries",
@@ -282,9 +311,25 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       loadMoreErrorLabel: "Could not load more entries.",
       retryLoadMoreLabel: "Retry loading entries",
       authorLabels: { client: "You", astrologer: "Astrologer" },
-      kindLabels: { client_entry: "Your entry", astrologer_reply: "Astrologer reply", reflection_prompt: "Reflection prompt", correction: "Correction", tombstone: "Deleted entry" },
-      tombstoneLabels: { hidden_by_author: "The author hid this entry's content.", content_erased: "This entry's content was erased." },
-      moodLabels: { inspired: "Inspired", joy: "Joy", calm: "Calm", tired: "Tired", anxious: "Anxious", sad: "Sad" }
+      kindLabels: {
+        client_entry: "Your entry",
+        astrologer_reply: "Astrologer reply",
+        reflection_prompt: "Reflection prompt",
+        correction: "Correction",
+        tombstone: "Deleted entry"
+      },
+      tombstoneLabels: {
+        hidden_by_author: "The author hid this entry's content.",
+        content_erased: "This entry's content was erased."
+      },
+      moodLabels: {
+        inspired: "Inspired",
+        joy: "Joy",
+        calm: "Calm",
+        tired: "Tired",
+        anxious: "Anxious",
+        sad: "Sad"
+      }
     },
     entry: {
       writeLabel: "Write an entry",
@@ -303,10 +348,11 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       reviewDraftLabel: "Review draft",
       characterCountLabel: (count, maximum) => `${count} of ${maximum}`,
       errors: {
-        stale: "The journal changed in another session. Load the latest version—your text is still here.",
+        stale:
+          "The journal changed in another session. Load the latest version—your text is still here.",
         idempotency: "This retry is bound to different content. Retry without changing it.",
         allowance: "The new-cycle allowance for this paid period has been used.",
-        read_only: "The subscription ended. This journal is read-only.",
+        read_only: "The paid period ended. This journal is read-only.",
         state: "A new cycle is not available now. Load the latest journal state.",
         generic: "Could not save the entry. Retry—the editor will keep your text."
       }
@@ -421,7 +467,8 @@ export const clientCopyByLocale = {
     purchaseFlow: {
       eyebrow: "Запись и оплата",
       title: "Выберите услугу связанного астролога",
-      relationshipOnly: "В этом кабинете нет каталога: показываем только услуги астрологов, с которыми у вас уже есть связь.",
+      relationshipOnly:
+        "В этом кабинете нет каталога: показываем только услуги астрологов, с которыми у вас уже есть связь.",
       astrologerLabel: "Астролог",
       loadingProducts: "Загружаем доступные услуги…",
       noProducts: "У этого астролога пока нет доступных для онлайн-оплаты услуг.",
@@ -436,19 +483,32 @@ export const clientCopyByLocale = {
       emailLabel: "Email",
       phoneLabel: "Телефон",
       phonePlaceholderLabel: "Телефон в формате +7999…",
-      receiptContactHint: "Используйте email или телефон, подтверждённый при входе: он нужен для кассового чека.",
+      receiptContactHint:
+        "Используйте email или телефон, подтверждённый при входе: он нужен для кассового чека.",
       preparingPayment: "Подготавливаем защищённую оплату…",
       creatingOrder: "Создаём заказ…",
       pay: "Оплатить {amount}",
-      checkoutUnknown: "Состояние платёжной сессии требует проверки. Повторно не списывайте средства.",
+      checkoutUnknown:
+        "Состояние платёжной сессии требует проверки. Повторно не списывайте средства.",
       checkoutFailed: "Не удалось подготовить оплату. Средства не списаны.",
-      checkoutFailedGeneric: "Не удалось создать оплату. Проверьте подтверждённый email или телефон и попробуйте ещё раз.",
-      checkoutRequiresHttps: "Не удалось открыть защищённую оплату: для return URL требуется HTTPS. Средства не списаны.",
+      checkoutFailedGeneric:
+        "Не удалось создать оплату. Проверьте подтверждённый email или телефон и попробуйте ещё раз.",
+      checkoutRequiresHttps:
+        "Не удалось открыть защищённую оплату: для return URL требуется HTTPS. Средства не списаны.",
       returnStatusLabel: "Статус заказа",
       paid: "Оплата подтверждена. Астролог получит заказ в кабинете.",
-      pendingPayment: "Проверяем результат оплаты. Не создавайте повторный заказ, обновите страницу через минуту.",
-      paymentNotCompleted: "Оплата не завершена. Средства по этому заказу не списаны либо будут отражены после проверки банка.",
-      deliveryFormats: { video: "Видео", chat: "Чат", audio: "Аудио", text: "Текст", file: "Файл", channel: "Канал" }
+      pendingPayment:
+        "Проверяем результат оплаты. Не создавайте повторный заказ, обновите страницу через минуту.",
+      paymentNotCompleted:
+        "Оплата не завершена. Средства по этому заказу не списаны либо будут отражены после проверки банка.",
+      deliveryFormats: {
+        video: "Видео",
+        chat: "Чат",
+        audio: "Аудио",
+        text: "Текст",
+        file: "Файл",
+        channel: "Канал"
+      }
     }
   },
   en: {
@@ -557,7 +617,8 @@ export const clientCopyByLocale = {
     purchaseFlow: {
       eyebrow: "Booking and payment",
       title: "Choose a service from your connected astrologer",
-      relationshipOnly: "There is no catalogue in this account. We show services only from astrologers you are already connected with.",
+      relationshipOnly:
+        "There is no catalogue in this account. We show services only from astrologers you are already connected with.",
       astrologerLabel: "Astrologer",
       loadingProducts: "Loading available services…",
       noProducts: "This astrologer has no services available for online payment yet.",
@@ -572,19 +633,31 @@ export const clientCopyByLocale = {
       emailLabel: "Email",
       phoneLabel: "Phone",
       phonePlaceholderLabel: "Phone in +7999… format",
-      receiptContactHint: "Use the email or phone verified during sign-in. It is required for the fiscal receipt.",
+      receiptContactHint:
+        "Use the email or phone verified during sign-in. It is required for the fiscal receipt.",
       preparingPayment: "Preparing secure payment…",
       creatingOrder: "Creating order…",
       pay: "Pay {amount}",
       checkoutUnknown: "The payment session needs review. Do not attempt to pay again.",
       checkoutFailed: "Payment could not be prepared. No funds were charged.",
-      checkoutFailedGeneric: "Could not create the payment. Check your verified email or phone and try again.",
-      checkoutRequiresHttps: "Secure payment could not be opened: the return URL requires HTTPS. No funds were charged.",
+      checkoutFailedGeneric:
+        "Could not create the payment. Check your verified email or phone and try again.",
+      checkoutRequiresHttps:
+        "Secure payment could not be opened: the return URL requires HTTPS. No funds were charged.",
       returnStatusLabel: "Order status",
       paid: "Payment is confirmed. The astrologer will receive the order in their account.",
-      pendingPayment: "We are checking the payment result. Do not create another order; refresh the page in a minute.",
-      paymentNotCompleted: "Payment is not complete. Funds for this order were not charged, or will appear after bank review.",
-      deliveryFormats: { video: "Video", chat: "Chat", audio: "Audio", text: "Text", file: "File", channel: "Channel" }
+      pendingPayment:
+        "We are checking the payment result. Do not create another order; refresh the page in a minute.",
+      paymentNotCompleted:
+        "Payment is not complete. Funds for this order were not charged, or will appear after bank review.",
+      deliveryFormats: {
+        video: "Video",
+        chat: "Chat",
+        audio: "Audio",
+        text: "Text",
+        file: "File",
+        channel: "Channel"
+      }
     }
   }
 } satisfies Record<SupportedLocale, ClientCopy>;

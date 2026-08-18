@@ -153,7 +153,9 @@ export const products = pgTable(
     ),
     check(
       "products_astro_diary_shape_check",
-      sql`${table.astroDiaryReflectionCyclesPerPeriod} is null or (${table.type} = 'sub' and ${table.paymentModel} = 'sub' and ${table.executionMode} = 'async' and ${table.participantMode} = 'solo' and ${table.durationMinutes} is null and ${table.durationLabel} is null and ${table.slaLabel} is null and ${table.packageSessionCount} is null and ${table.packageDiscountPercent} is null and ${table.trialDays} is null and ${table.groupSize} is null)`
+      sql`${table.astroDiaryReflectionCyclesPerPeriod} is null or (${table.type} = 'async' and ${table.paymentModel} = 'once' and ${table.subscriptionPeriod} in ${sql.raw(
+        formatSqlValues(productSubscriptionPeriodValues)
+      )} and ${table.executionMode} = 'async' and ${table.participantMode} = 'solo' and ${table.durationMinutes} is null and ${table.durationLabel} is null and ${table.slaLabel} is null and ${table.packageSessionCount} is null and ${table.packageDiscountPercent} is null and ${table.trialDays} is null and ${table.groupSize} is null)`
     ),
     check(
       "products_astro_diary_reflection_cycles_check",

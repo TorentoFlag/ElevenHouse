@@ -12,7 +12,7 @@ export type OrderPurchasePurpose =
       expectedProductRevision: number;
     }>
   | Readonly<{
-      kind: "astro_diary_subscription";
+      kind: "astro_diary_paid_period";
       expectedProductRevision: number;
       acceptedProduct: ClientSubscriptionProductSnapshot;
       acceptedRelationship: Readonly<{

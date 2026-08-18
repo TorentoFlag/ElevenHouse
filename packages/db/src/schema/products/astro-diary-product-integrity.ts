@@ -152,8 +152,9 @@ BEGIN
         USING ERRCODE = '23514', CONSTRAINT = '${astroDiaryProductIntegrityConstraintName}';
     END IF;
 
-    IF product_row.type IS DISTINCT FROM 'sub'
-       OR product_row.payment_model IS DISTINCT FROM 'sub'
+    IF product_row.type IS DISTINCT FROM 'async'
+       OR product_row.payment_model IS DISTINCT FROM 'once'
+       OR product_row.subscription_period NOT IN ('week', 'month', 'year')
        OR product_row.execution_mode IS DISTINCT FROM 'async'
        OR product_row.participant_mode IS DISTINCT FROM 'solo'
        OR product_row.price_minor <= 0

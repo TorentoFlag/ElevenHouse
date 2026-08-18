@@ -26,7 +26,7 @@ export class ProductFulfillmentNotReadyError extends Error {
   readonly code = "PRODUCT_FULFILLMENT_NOT_READY" as const;
 
   constructor() {
-    super("AstroDiary subscription fulfillment is not ready");
+    super("AstroDiary paid-period fulfillment is not ready");
   }
 }
 

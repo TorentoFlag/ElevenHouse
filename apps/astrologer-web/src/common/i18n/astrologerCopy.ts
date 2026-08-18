@@ -1193,7 +1193,7 @@ export const astrologerCopyByLocale = {
       eyebrow: "Client journal",
       loadingAriaLabel: "Loading AstroDiary journals",
       emptyTitle: "No active journals",
-      emptyDescription: "There are no active AstroDiary subscriptions yet.",
+      emptyDescription: "There are no active AstroDiary paid periods yet.",
       errorTitle: "Could not load journals",
       errorDescription: "Retry the request. Journal data is never replaced with a local copy.",
       retryLabel: "Retry",
@@ -1210,7 +1210,7 @@ export const astrologerCopyByLocale = {
             : "Active journal",
       backToListLabel: "Back to journal list",
       responseDueLabel: (formattedDate) => `Reply by ${formattedDate}`,
-      archivedLabel: "Subscription ended · history is read-only",
+      archivedLabel: "Paid period ended · history is read-only",
       readOnlyComposerLabel: "New replies are unavailable in an archived journal.",
       waitingForClientLabel: "It is the client's turn. Reply opens after a new entry.",
       timeline: {
@@ -1267,7 +1267,7 @@ export const astrologerCopyByLocale = {
             "The journal changed in another session. Load the latest version—your text is still here.",
           idempotency: "This key is already bound to different text. Retry without changing it.",
           allowance: "The new-cycle allowance for this paid period has been used.",
-          read_only: "The subscription ended. This journal is read-only.",
+          read_only: "The paid period ended. This journal is read-only.",
           no_cycle: "The reply cycle is no longer open. Load the latest version.",
           no_obligation: "The response obligation is no longer open. Load the latest version.",
           generic: "Could not save the reply. Retry—the editor will keep your text."

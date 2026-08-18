@@ -453,8 +453,8 @@ BEGIN
   IF product_row.revision IS DISTINCT FROM authority_row.product_revision
      OR product_row.owner_user_id IS DISTINCT FROM authority_row.astrologer_user_id
      OR product_row.status IS DISTINCT FROM 'active'
-     OR product_row.type IS DISTINCT FROM 'sub'
-     OR product_row.payment_model IS DISTINCT FROM 'sub'
+     OR product_row.type IS DISTINCT FROM 'async'
+     OR product_row.payment_model IS DISTINCT FROM 'once'
      OR product_row.execution_mode IS DISTINCT FROM 'async'
      OR product_row.participant_mode IS DISTINCT FROM 'solo'
      OR product_row.subscription_period IS DISTINCT FROM authority_row.cadence

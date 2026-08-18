@@ -106,9 +106,9 @@ const approvedLiveSoloSession = Object.freeze({
   cancellationAllocator
 } satisfies PaidProductFulfillmentDecision);
 
-const approvedAstroDiarySubscription = Object.freeze({
+const approvedAstroDiaryPaidPeriod = Object.freeze({
   supported: true,
-  registryKey: "sub.sub.async.solo",
+  registryKey: "async.once.async.solo",
   registryRevision: 1,
   holdAnchor: "booking_completed",
   terminalEvidence,
@@ -119,11 +119,11 @@ const paidProductFulfillmentRegistry: Readonly<
   Record<string, Extract<PaidProductFulfillmentDecision, { supported: true }>>
 > = Object.freeze({
   "single.once.live.solo": approvedLiveSoloSession,
-  "sub.sub.async.solo": approvedAstroDiarySubscription
+  "async.once.async.solo": approvedAstroDiaryPaidPeriod
 });
 
 export function isCanonicalAstroDiaryPaidProduct(product: PaidProductFulfillmentShape): boolean {
-  return isExactAstroDiarySubscription(product);
+  return isExactAstroDiaryPaidPeriod(product);
 }
 
 export async function resolvePaidProductFulfillment(input: {
@@ -172,7 +172,7 @@ function unsupportedFulfillmentCode(
   if (product.paymentModel === "free") {
     return "free_product_fulfillment_not_required";
   }
-  if (isExactAstroDiarySubscription(product)) return null;
+  if (isExactAstroDiaryPaidPeriod(product)) return null;
 
   switch (product.type) {
     case "single":
@@ -227,11 +227,11 @@ function unsupportedFulfillmentCode(
   }
 }
 
-function isExactAstroDiarySubscription(product: PaidProductFulfillmentShape): boolean {
+function isExactAstroDiaryPaidPeriod(product: PaidProductFulfillmentShape): boolean {
   const config = product.astroDiaryConfig;
   return (
-    product.type === "sub" &&
-    product.paymentModel === "sub" &&
+    product.type === "async" &&
+    product.paymentModel === "once" &&
     product.executionMode === "async" &&
     product.participantMode === "solo" &&
     (product.subscriptionPeriod === "week" ||

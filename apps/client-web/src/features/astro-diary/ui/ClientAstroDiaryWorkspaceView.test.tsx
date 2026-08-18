@@ -14,25 +14,27 @@ describe("ClientAstroDiaryWorkspaceView", () => {
   it("renders loading and subscription-neutral no-subscription states", () => {
     const { rerender } = render(
       <MemoryRouter>
-      <ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={{ kind: "loading" }}
-      />
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={{ kind: "loading" }}
+        />
       </MemoryRouter>
     );
     expect(screen.getByLabelText("Loading your AstroDiary")).toHaveAttribute("aria-busy", "true");
 
     rerender(
-      <MemoryRouter><ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={{ kind: "no_subscription", astrologerName: "Mira" }}
-      /></MemoryRouter>
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={{ kind: "no_subscription", astrologerName: "Mira" }}
+        />
+      </MemoryRouter>
     );
     expect(
       screen.getByText(
-        "AstroDiary is not available yet. A subscription with this astrologer unlocks your personal journal."
+        "AstroDiary is not available yet. A one-time purchase with this astrologer unlocks your personal journal for the paid period."
       )
     ).toBeVisible();
     expect(document.body).not.toHaveTextContent("Pro");
@@ -40,13 +42,15 @@ describe("ClientAstroDiaryWorkspaceView", () => {
 
   it("keeps archived history readable without mounting a write action", () => {
     render(
-      <MemoryRouter><ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={readyState({ selectedJournal: readOnlySummary, journals: [readOnlySummary] })}
-      /></MemoryRouter>
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={readyState({ selectedJournal: readOnlySummary, journals: [readOnlySummary] })}
+        />
+      </MemoryRouter>
     );
-    expect(screen.getByText("Subscription ended · history is read-only")).toBeVisible();
+    expect(screen.getByText("Paid period ended · history is read-only")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Write an entry" })).not.toBeInTheDocument();
   });
 
@@ -54,11 +58,13 @@ describe("ClientAstroDiaryWorkspaceView", () => {
     const onSelectJournal = vi.fn();
     const onBackToList = vi.fn();
     const { rerender } = render(
-      <MemoryRouter><ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={readyState({ onSelectJournal, onBackToList, mobileDetailOpen: false })}
-      /></MemoryRouter>
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={readyState({ onSelectJournal, onBackToList, mobileDetailOpen: false })}
+        />
+      </MemoryRouter>
     );
     const workspace = screen.getByTestId("client-astro-diary-workspace");
     expect(workspace).toHaveAttribute("data-mobile-detail", "false");
@@ -66,11 +72,13 @@ describe("ClientAstroDiaryWorkspaceView", () => {
     expect(onSelectJournal).toHaveBeenCalledWith(activeSummary.journal.id);
 
     rerender(
-      <MemoryRouter><ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={readyState({ onSelectJournal, onBackToList, mobileDetailOpen: true })}
-      /></MemoryRouter>
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={readyState({ onSelectJournal, onBackToList, mobileDetailOpen: true })}
+        />
+      </MemoryRouter>
     );
     expect(workspace).toHaveAttribute("data-mobile-detail", "true");
     fireEvent.click(screen.getByRole("button", { name: "Back to journals" }));
@@ -80,11 +88,13 @@ describe("ClientAstroDiaryWorkspaceView", () => {
   it("keeps the entry-authority retry action keyboard focusable", () => {
     const onRetryEntryAuthority = vi.fn();
     render(
-      <MemoryRouter><ClientAstroDiaryWorkspaceView
-        copy={clientCopyByLocale.en.astroDiary}
-        locale="en"
-        state={readyState({ entryAuthorityStatus: "error", onRetryEntryAuthority })}
-      /></MemoryRouter>
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.en.astroDiary}
+          locale="en"
+          state={readyState({ entryAuthorityStatus: "error", onRetryEntryAuthority })}
+        />
+      </MemoryRouter>
     );
 
     const retry = screen.getByRole("button", { name: "Retry" });

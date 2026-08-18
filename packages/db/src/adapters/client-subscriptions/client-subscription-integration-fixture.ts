@@ -106,7 +106,7 @@ export async function seedClientSubscriptionOrderPrerequisites(
     await transaction.insert(products).values({
       id: productId,
       ownerUserId: astrologerUserId,
-      type: purpose === "astro_diary" ? "sub" : "async",
+      type: "async",
       status: "active",
       revision: 1,
       title: "AstroDiary integration",
@@ -116,7 +116,7 @@ export async function seedClientSubscriptionOrderPrerequisites(
       coverMediaId: null,
       introVideoUrl: null,
       executionMode: "async",
-      paymentModel: purpose === "astro_diary" ? "sub" : "once",
+      paymentModel: "once",
       durationMinutes: null,
       durationLabel: null,
       slaLabel: null,
@@ -220,15 +220,15 @@ export async function seedClientSubscriptionOrderPrerequisites(
     purchasePurpose:
       purpose === "astro_diary"
         ? {
-            kind: "astro_diary_subscription",
+            kind: "astro_diary_paid_period",
             expectedProductRevision: 1,
             acceptedProduct: {
               productId,
               revision: 1,
               ownerUserId: astrologerUserId,
               status: "active",
-              type: "sub",
-              paymentModel: "sub",
+              type: "async",
+              paymentModel: "once",
               executionMode: "async",
               participantMode: "solo",
               priceMinor: 4_900,

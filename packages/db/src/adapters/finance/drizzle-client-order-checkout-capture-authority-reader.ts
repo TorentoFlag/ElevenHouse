@@ -133,7 +133,9 @@ export function createDrizzleClientOrderCheckoutCaptureAuthorityReader(
           .limit(1);
         if (!product) fail("authority_integrity_conflict");
         const registryKey = `${product.type}.${product.paymentModel}.${product.executionMode}.${product.participantMode}`;
-        if (registryKey === "sub.sub.async.solo") return null;
+        if (registryKey === "async.once.async.solo" || registryKey === "sub.sub.async.solo") {
+          return null;
+        }
         const [fulfillment] = await database
           .select()
           .from(financePaidProductFulfillmentDecisions)

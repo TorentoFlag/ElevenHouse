@@ -342,7 +342,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
     );
     expect(sealed.rows).toHaveLength(1);
     expect(sealed.rows[0]).toMatchObject({
-      registry_key: "sub.sub.async.solo",
+      registry_key: "async.once.async.solo",
       registry_revision: "1"
     });
     expect(sealed.rows[0]?.purchase_authority_digest).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -375,8 +375,8 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
     expect(genericProduct).toMatchObject({
       status: "active",
       revision: 3,
-      type: "sub",
-      paymentModel: "sub",
+      type: "async",
+      paymentModel: "once",
       executionMode: "async",
       participantMode: "solo",
       accessGrants: [],
@@ -419,7 +419,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
          cross join finance_paid_product_fulfillment_decisions fulfillment
         where risk.policy_id = $1
           and risk.policy_version = $2
-          and fulfillment.registry_key = 'sub.sub.async.solo'
+          and fulfillment.registry_key = 'async.once.async.solo'
           and fulfillment.registry_revision = 1`,
       [prerequisite.financeAuthority.policyId, prerequisite.financeAuthority.policyVersion]
     );
@@ -493,7 +493,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
             canonicalDigest: globalDiaryAuthority.risk_policy_digest as `sha256:${string}`
           },
           fulfillmentDecision: {
-            registryKey: "sub.sub.async.solo",
+            registryKey: "async.once.async.solo",
             registryRevision: Number(globalDiaryAuthority.registry_revision),
             canonicalDigest: globalDiaryAuthority.fulfillment_decision_digest as `sha256:${string}`
           }
@@ -597,6 +597,65 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
         finance_journal_entry_count: 0
       }
     ]);
+
+    const legacyAuthority = await runtime.pool.query<{
+      registry_revision: string;
+      fulfillment_decision_digest: string;
+    }>(
+      `select fulfillment.registry_revision::text as registry_revision,
+              fulfillment.canonical_digest as fulfillment_decision_digest
+         from finance_paid_product_fulfillment_decisions fulfillment
+        where fulfillment.registry_key = 'sub.sub.async.solo'
+          and fulfillment.registry_revision = 1`
+    );
+    expect(legacyAuthority.rows).toHaveLength(1);
+    const legacyGlobalAuthority = legacyAuthority.rows[0];
+    if (!legacyGlobalAuthority) {
+      throw new Error("Expected legacy global Diary authority to exist in migration history");
+    }
+    const legacyCheckoutAuthorizationId = `checkout-authority-${randomUUID()}`;
+
+    await expect(
+      createDrizzleClientOrderCheckoutPreparationUnitOfWork(
+        runtime.database
+      ).prepareClientOrderCheckout({
+        checkoutPreparationId: randomUUID(),
+        checkoutAuthorizationId: legacyCheckoutAuthorizationId,
+        paymentCommandId: randomUUID(),
+        orderId: prerequisite.authority.orderId,
+        clientUserId: prerequisite.authority.clientUserId,
+        economicPaymentIntentId: `economic-intent-${randomUUID()}`,
+        economicPaymentSessionId: `economic-session-${randomUUID()}`,
+        providerOperationIntentId: randomUUID(),
+        providerAccount,
+        dispatchEnvelope,
+        dispatchArtifact,
+        idempotencyKey: randomUUID(),
+        idempotencyRetentionDeadline: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        captureAuthority: {
+          riskPolicy: {
+            policyId: globalDiaryAuthority.risk_policy_id,
+            policyVersion: Number(globalDiaryAuthority.risk_policy_version),
+            canonicalDigest: globalDiaryAuthority.risk_policy_digest as `sha256:${string}`
+          },
+          fulfillmentDecision: {
+            registryKey: "sub.sub.async.solo",
+            registryRevision: Number(legacyGlobalAuthority.registry_revision),
+            canonicalDigest: legacyGlobalAuthority.fulfillment_decision_digest as `sha256:${string}`
+          }
+        },
+        operationEnvelope: operationEnvelope()
+      })
+    ).rejects.toMatchObject({ reason: "persistence_write_incomplete" });
+
+    await expect(
+      runtime.pool.query(
+        `select count(*)::int as count
+           from finance_client_checkout_authorizations
+          where authority_id = $1`,
+        [legacyCheckoutAuthorizationId]
+      )
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
   it("pins the order's Diary decision across product mutation and later registry revisions", async () => {
@@ -618,7 +677,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
 
     await runtime.database.insert(financePaidProductFulfillmentDecisions).values({
       supported: true,
-      registryKey: "sub.sub.async.solo",
+      registryKey: "async.once.async.solo",
       registryRevision: "2",
       holdAnchor: "booking_completed",
       terminalEvidenceOwner: "booking",
@@ -771,7 +830,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
       runtime.database
     ).findForCheckout({ orderId: prerequisite.authority.orderId });
     if (!sealedAuthority) throw new Error("Expected sealed Diary checkout authority");
-    expect(sealedAuthority.fulfillmentDecision.registryKey).toBe("sub.sub.async.solo");
+    expect(sealedAuthority.fulfillmentDecision.registryKey).toBe("async.once.async.solo");
 
     await runtime.database.insert(financePaidProductFulfillmentDecisions).values({
       supported: true,
@@ -1104,7 +1163,7 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
       outbox_count: 1
     });
     expect(fixture.financeCaptureOutboxCount).toBe(1);
-    expect(fixture.fulfillmentDecisionId).toBe("sub.sub.async.solo");
+    expect(fixture.fulfillmentDecisionId).toBe("async.once.async.solo");
     expect(fixture.astrologerAccrual).toEqual({
       account_code: "astrologer_pending",
       account_class: "liability",
@@ -1281,14 +1340,14 @@ async function seedPurchaseAuthority(runtime: PostgresRuntime) {
     await transaction.insert(products).values({
       id: productId,
       ownerUserId: astrologerUserId,
-      type: "sub",
+      type: "async",
       status: "draft",
       revision: 1,
       title: "AstroDiary Task 2 Fix",
       priceMinor: 4_900,
       currency: "RUB",
       executionMode: "async",
-      paymentModel: "sub",
+      paymentModel: "once",
       subscriptionPeriod: "month",
       participantMode: "solo",
       astroDiaryReflectionCyclesPerPeriod: 4,
@@ -1586,7 +1645,7 @@ async function seedCanonicalSubscriptionCapture(
     runtime.database
   ).findForCheckout({ orderId: prerequisite.authority.orderId });
   if (!captureAuthority) throw new Error("AstroDiary checkout capture authority was not resolved");
-  expect(captureAuthority.fulfillmentDecision.registryKey).toBe("sub.sub.async.solo");
+  expect(captureAuthority.fulfillmentDecision.registryKey).toBe("async.once.async.solo");
 
   const dispatchEnvelope = createProviderDispatchEnvelope({
     kind: "checkout_session_create",
@@ -1827,8 +1886,8 @@ async function seedCanonicalSubscriptionCapture(
     .where(eq(products.id, prerequisite.authority.productId));
   expect(product).toMatchObject({
     revision: 2,
-    type: "sub",
-    paymentModel: "sub",
+    type: "async",
+    paymentModel: "once",
     executionMode: "async",
     subscriptionPeriod: "month",
     participantMode: "solo",

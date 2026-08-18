@@ -16,9 +16,9 @@ export function createDefaultAstroDiaryProductConfig(): ProductAstroDiaryConfig 
 export function normalizeAstroDiaryProductDraft(draft: ProductFormDraft): ProductFormDraft {
   return {
     ...draft,
-    type: "sub",
+    type: "async",
     executionMode: "async",
-    paymentModel: "sub",
+    paymentModel: "once",
     durationMinutes: null,
     durationLabel: "",
     slaLabel: "",

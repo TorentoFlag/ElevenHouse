@@ -193,7 +193,7 @@ begin
       and new.fulfillment_decision_version = subscription_fulfillment.registry_revision
       and new.fulfillment_decision_digest = subscription_fulfillment.fulfillment_decision_digest;
   else
-    if new.fulfillment_decision_id = 'sub.sub.async.solo' then
+    if new.fulfillment_decision_id in ('async.once.async.solo', 'sub.sub.async.solo') then
       raise exception 'client checkout authorization does not match locked order and payment session' using errcode = '23514';
     end if;
     select * into strict product_row from products where id = order_row.product_id;

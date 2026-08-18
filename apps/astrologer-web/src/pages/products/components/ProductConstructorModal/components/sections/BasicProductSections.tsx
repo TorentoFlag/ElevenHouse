@@ -296,8 +296,13 @@ function PaymentSection({
 }: ProductConstructorSectionProps & { readonly mode?: PaymentSectionMode }) {
   const { uiCopy, actions } = controller;
   const showPackageControls = mode === "package" || draft.paymentModel === "pack";
-  const showSubscriptionControls = mode === "subscription" || draft.paymentModel === "sub";
   const isAstroDiary = draft.accessGrants.length === 1 && draft.accessGrants[0] === "journal";
+  const showSubscriptionControls =
+    mode === "subscription" || draft.paymentModel === "sub" || isAstroDiary;
+
+  if (mode === "subscription" && !showSubscriptionControls && !showPackageControls) {
+    return null;
+  }
 
   return (
     <section

@@ -23,7 +23,10 @@ export function normalizeProductDraftForType(draft: ProductFormDraft): ProductFo
     priceMinor: paymentModel === "free" ? 0 : draft.priceMinor,
     packageSessionCount: paymentModel === "pack" ? (draft.packageSessionCount ?? 1) : null,
     packageDiscountPercent: paymentModel === "pack" ? (draft.packageDiscountPercent ?? 0) : null,
-    subscriptionPeriod: paymentModel === "sub" ? (draft.subscriptionPeriod ?? "month") : null,
+    subscriptionPeriod:
+      paymentModel === "sub" || draft.astroDiaryConfig
+        ? (draft.subscriptionPeriod ?? "month")
+        : null,
     trialDays: paymentModel === "sub" ? (draft.trialDays ?? 0) : null,
     groupSize: draft.participantMode === "group" ? (draft.groupSize ?? 2) : null,
     astroDiaryConfig: null,

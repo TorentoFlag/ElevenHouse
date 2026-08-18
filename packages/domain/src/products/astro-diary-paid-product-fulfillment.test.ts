@@ -6,8 +6,8 @@ import type { Product } from "./product-types";
 import { publishProduct } from "./product-use-cases";
 
 const exactAstroDiaryProduct = Object.freeze({
-  type: "sub",
-  paymentModel: "sub",
+  type: "async",
+  paymentModel: "once",
   executionMode: "async",
   participantMode: "solo",
   subscriptionPeriod: "month",
@@ -61,7 +61,7 @@ describe("AstroDiary paid-product fulfillment", () => {
     ).rejects.toMatchObject({ code: "PRODUCT_FULFILLMENT_NOT_READY" });
   });
 
-  it("registers the exact sealed AstroDiary subscription shape under its native key", async () => {
+  it("registers the exact sealed AstroDiary one-time paid-period shape under its native key", async () => {
     const getDependencyStatus = vi.fn().mockResolvedValue("registered");
 
     await expect(
@@ -71,16 +71,31 @@ describe("AstroDiary paid-product fulfillment", () => {
       })
     ).resolves.toMatchObject({
       supported: true,
-      registryKey: "sub.sub.async.solo",
+      registryKey: "async.once.async.solo",
       registryRevision: 1
     });
     expect(getDependencyStatus).toHaveBeenCalledTimes(2);
   });
 
+  it("does not accept the old recurring subscription shape as canonical AstroDiary", async () => {
+    const getDependencyStatus = vi.fn().mockResolvedValue("registered");
+
+    await expect(
+      resolvePaidProductFulfillment({
+        product: { ...exactAstroDiaryProduct, type: "sub", paymentModel: "sub" },
+        reader: { getDependencyStatus }
+      })
+    ).resolves.toEqual({
+      supported: false,
+      code: "client_subscription_fulfillment_unsupported"
+    });
+    expect(getDependencyStatus).not.toHaveBeenCalled();
+  });
+
   it.each([
     { name: "journal grant", patch: { accessGrants: [] } },
     { name: "Diary configuration", patch: { astroDiaryConfig: null } }
-  ])("rejects a subscription without its exact $name", async ({ patch }) => {
+  ])("rejects a paid-period product without its exact $name", async ({ patch }) => {
     const getDependencyStatus = vi.fn().mockResolvedValue("registered");
 
     await expect(
@@ -90,7 +105,7 @@ describe("AstroDiary paid-product fulfillment", () => {
       })
     ).resolves.toEqual({
       supported: false,
-      code: "client_subscription_fulfillment_unsupported"
+      code: "asynchronous_fulfillment_unsupported"
     });
     expect(getDependencyStatus).not.toHaveBeenCalled();
   });

@@ -58,7 +58,7 @@ export const clientSubscriptionPurchaseFulfillmentAuthorities = pgTable(
     ),
     check(
       "client_sub_purchase_fulfillment_shape_check",
-      sql`${table.registryKey} = 'sub.sub.async.solo'
+      sql`${table.registryKey} = 'async.once.async.solo'
         and ${table.registryRevision} >= 1`
     ),
     check(

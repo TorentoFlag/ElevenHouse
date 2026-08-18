@@ -108,8 +108,8 @@ function snapshotsMatch(
     exactArray(order.methods, product.methods) &&
     order.modifiers.length === product.modifiers.length &&
     sameAstroDiaryConfig(order.astroDiaryConfig, product.astroDiaryConfig) &&
-    product.type === "sub" &&
-    product.paymentModel === "sub" &&
+    product.type === "async" &&
+    product.paymentModel === "once" &&
     product.executionMode === "async" &&
     product.participantMode === "solo" &&
     product.trialDays === null &&

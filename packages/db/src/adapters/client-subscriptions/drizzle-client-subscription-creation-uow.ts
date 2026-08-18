@@ -94,7 +94,10 @@ export function createDrizzleClientSubscriptionCreationUnitOfWork(
   database: ElevenHouseDatabase
 ): ClientSubscriptionCreationUnitOfWork {
   return {
-    execute: (input) => database.transaction((transaction) => executeDrizzleClientSubscriptionCreationInTransaction(transaction, input))
+    execute: (input) =>
+      database.transaction((transaction) =>
+        executeDrizzleClientSubscriptionCreationInTransaction(transaction, input)
+      )
   };
 }
 
@@ -106,171 +109,171 @@ export async function executeDrizzleClientSubscriptionCreationInTransaction(
   transaction: CreationTransaction,
   input: Parameters<ClientSubscriptionCreationUnitOfWork["execute"]>[0]
 ): Promise<ClientSubscriptionCreationExecution> {
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${`client-subscription-creation:${input.orderId}:${input.idempotencyKey}`}, 0))`
-        );
-        const prior = await readCreationReceipt(transaction, input.orderId, input.idempotencyKey);
-        if (prior) {
-          if (prior.requestHash !== input.requestHash) return { outcome: "idempotency_conflict" };
-          return {
-            outcome: "replayed",
-            result: hydrateCreationResult(prior)
-          };
-        }
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`client-subscription-creation:${input.orderId}:${input.idempotencyKey}`}, 0))`
+  );
+  const prior = await readCreationReceipt(transaction, input.orderId, input.idempotencyKey);
+  if (prior) {
+    if (prior.requestHash !== input.requestHash) return { outcome: "idempotency_conflict" };
+    return {
+      outcome: "replayed",
+      result: hydrateCreationResult(prior)
+    };
+  }
 
-        const slotIdentity = await readCreationSlotIdentity(transaction, input);
-        if (!slotIdentity) return { outcome: "not_found" };
+  const slotIdentity = await readCreationSlotIdentity(transaction, input);
+  if (!slotIdentity) return { outcome: "not_found" };
 
-        await transaction
-          .insert(clientSubscriptionSlots)
-          .values({
-            relationshipId: input.relationshipId,
-            productId: input.productId,
-            clientUserId: slotIdentity.clientUserId,
-            astrologerUserId: slotIdentity.astrologerUserId,
-            version: 0,
-            currentSubscriptionId: null,
-            createdAt: sql`clock_timestamp()`,
-            updatedAt: sql`clock_timestamp()`
-          })
-          .onConflictDoNothing();
-        const [slot] = await transaction
-          .select()
-          .from(clientSubscriptionSlots)
-          .where(
-            and(
-              eq(clientSubscriptionSlots.relationshipId, input.relationshipId),
-              eq(clientSubscriptionSlots.productId, input.productId)
-            )
-          )
-          .for("update")
-          .limit(1);
-        if (!slot) throw new Error("Expected client subscription slot after insert");
-        if (slot.version !== input.expectedSlotVersion) {
-          return {
-            outcome: "version_conflict",
-            expectedVersion: input.expectedSlotVersion,
-            currentVersion: slot.version
-          };
-        }
+  await transaction
+    .insert(clientSubscriptionSlots)
+    .values({
+      relationshipId: input.relationshipId,
+      productId: input.productId,
+      clientUserId: slotIdentity.clientUserId,
+      astrologerUserId: slotIdentity.astrologerUserId,
+      version: 0,
+      currentSubscriptionId: null,
+      createdAt: sql`clock_timestamp()`,
+      updatedAt: sql`clock_timestamp()`
+    })
+    .onConflictDoNothing();
+  const [slot] = await transaction
+    .select()
+    .from(clientSubscriptionSlots)
+    .where(
+      and(
+        eq(clientSubscriptionSlots.relationshipId, input.relationshipId),
+        eq(clientSubscriptionSlots.productId, input.productId)
+      )
+    )
+    .for("update")
+    .limit(1);
+  if (!slot) throw new Error("Expected client subscription slot after insert");
+  if (slot.version !== input.expectedSlotVersion) {
+    return {
+      outcome: "version_conflict",
+      expectedVersion: input.expectedSlotVersion,
+      currentVersion: slot.version
+    };
+  }
 
-        const authority = await loadCreationAuthority(transaction, input);
-        if (!authority) return { outcome: "not_found" };
+  const authority = await loadCreationAuthority(transaction, input);
+  if (!authority) return { outcome: "not_found" };
 
-        const decision = input.decide(authority.value);
-        if (decision.outcome === "rejected") {
-          const receipt = {
-            orderId: input.orderId,
-            idempotencyKey: input.idempotencyKey,
-            requestHash: input.requestHash,
-            slot: {
-              relationshipId: input.relationshipId,
-              productId: input.productId,
-              expectedVersion: input.expectedSlotVersion,
-              resultVersion: input.expectedSlotVersion,
-              effect: "retain" as const
-            },
-            result: { outcome: "rejected" as const, code: decision.code }
-          };
-          await transaction.insert(clientSubscriptionCreationReceipts).values({
-            orderId: input.orderId,
-            relationshipId: input.relationshipId,
-            productId: input.productId,
-            idempotencyKey: input.idempotencyKey,
-            requestHash: input.requestHash,
-            expectedSlotVersion: input.expectedSlotVersion,
-            slotEffect: "retain",
-            resultKind: "rejected",
-            result: receipt.result,
-            resultSnapshot: null,
-            resultSlotVersion: input.expectedSlotVersion,
-            subscriptionId: null,
-            contractId: null,
-            contractDigest: null,
-            createdAt: sql`clock_timestamp()`
-          });
-          return { ...decision, persistenceReceipt: receipt };
-        }
+  const decision = input.decide(authority.value);
+  if (decision.outcome === "rejected") {
+    const receipt = {
+      orderId: input.orderId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      slot: {
+        relationshipId: input.relationshipId,
+        productId: input.productId,
+        expectedVersion: input.expectedSlotVersion,
+        resultVersion: input.expectedSlotVersion,
+        effect: "retain" as const
+      },
+      result: { outcome: "rejected" as const, code: decision.code }
+    };
+    await transaction.insert(clientSubscriptionCreationReceipts).values({
+      orderId: input.orderId,
+      relationshipId: input.relationshipId,
+      productId: input.productId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      expectedSlotVersion: input.expectedSlotVersion,
+      slotEffect: "retain",
+      resultKind: "rejected",
+      result: receipt.result,
+      resultSnapshot: null,
+      resultSlotVersion: input.expectedSlotVersion,
+      subscriptionId: null,
+      contractId: null,
+      contractDigest: null,
+      createdAt: sql`clock_timestamp()`
+    });
+    return { ...decision, persistenceReceipt: receipt };
+  }
 
-        if (
-          decision.subscription.id !== input.subscriptionId ||
-          decision.subscription.contract.id !== decision.contract.id ||
-          decision.contract.orderId !== input.orderId ||
-          decision.contract.productId !== input.productId ||
-          decision.contract.relationshipId !== input.relationshipId ||
-          decision.subscription.version !== 1 ||
-          decision.subscription.state !== "pending_initial_payment"
-        ) {
-          throw new Error("Client subscription creation decision does not match locked authority");
-        }
-        await insertContract(transaction, authority.purchaseAuthorityDigest, decision.contract);
-        await transaction.insert(clientSubscriptions).values({
-          id: decision.subscription.id,
-          contractId: decision.contract.id,
-          relationshipId: decision.contract.relationshipId,
-          productId: decision.contract.productId,
-          journalEpochId: decision.subscription.journalEpochId,
-          state: decision.subscription.state,
-          version: decision.subscription.version,
-          cancellationEffectiveAt: null,
-          renewalStoppedAt: null,
-          renewalRequestId: null,
-          currentPeriodId: null,
-          futurePeriodId: null,
-          createdAt: new Date(decision.contract.createdAt),
-          updatedAt: new Date(decision.contract.createdAt)
-        });
-        const resultSlotVersion = input.expectedSlotVersion + 1;
-        await transaction
-          .update(clientSubscriptionSlots)
-          .set({
-            version: resultSlotVersion,
-            currentSubscriptionId: decision.subscription.id,
-            updatedAt: sql`clock_timestamp()`
-          })
-          .where(
-            and(
-              eq(clientSubscriptionSlots.relationshipId, input.relationshipId),
-              eq(clientSubscriptionSlots.productId, input.productId),
-              eq(clientSubscriptionSlots.version, input.expectedSlotVersion)
-            )
-          );
-        const receipt = {
-          orderId: input.orderId,
-          idempotencyKey: input.idempotencyKey,
-          requestHash: input.requestHash,
-          slot: {
-            relationshipId: input.relationshipId,
-            productId: input.productId,
-            expectedVersion: input.expectedSlotVersion,
-            resultVersion: resultSlotVersion,
-            effect: "assign" as const
-          },
-          result: {
-            outcome: "created" as const,
-            subscriptionId: decision.subscription.id,
-            contractId: decision.contract.id,
-            contractDigest: sha256DigestSchema.parse(decision.contract.canonicalDigest)
-          }
-        };
-        await transaction.insert(clientSubscriptionCreationReceipts).values({
-          orderId: input.orderId,
-          relationshipId: input.relationshipId,
-          productId: input.productId,
-          idempotencyKey: input.idempotencyKey,
-          requestHash: input.requestHash,
-          expectedSlotVersion: input.expectedSlotVersion,
-          slotEffect: "assign",
-          resultKind: "created",
-          result: receipt.result,
-          resultSnapshot: decision,
-          resultSlotVersion,
-          subscriptionId: decision.subscription.id,
-          contractId: decision.contract.id,
-          contractDigest: decision.contract.canonicalDigest,
-          createdAt: sql`clock_timestamp()`
-        });
-        return { ...decision, persistenceReceipt: receipt };
+  if (
+    decision.subscription.id !== input.subscriptionId ||
+    decision.subscription.contract.id !== decision.contract.id ||
+    decision.contract.orderId !== input.orderId ||
+    decision.contract.productId !== input.productId ||
+    decision.contract.relationshipId !== input.relationshipId ||
+    decision.subscription.version !== 1 ||
+    decision.subscription.state !== "pending_initial_payment"
+  ) {
+    throw new Error("Client subscription creation decision does not match locked authority");
+  }
+  await insertContract(transaction, authority.purchaseAuthorityDigest, decision.contract);
+  await transaction.insert(clientSubscriptions).values({
+    id: decision.subscription.id,
+    contractId: decision.contract.id,
+    relationshipId: decision.contract.relationshipId,
+    productId: decision.contract.productId,
+    journalEpochId: decision.subscription.journalEpochId,
+    state: decision.subscription.state,
+    version: decision.subscription.version,
+    cancellationEffectiveAt: null,
+    renewalStoppedAt: null,
+    renewalRequestId: null,
+    currentPeriodId: null,
+    futurePeriodId: null,
+    createdAt: new Date(decision.contract.createdAt),
+    updatedAt: new Date(decision.contract.createdAt)
+  });
+  const resultSlotVersion = input.expectedSlotVersion + 1;
+  await transaction
+    .update(clientSubscriptionSlots)
+    .set({
+      version: resultSlotVersion,
+      currentSubscriptionId: decision.subscription.id,
+      updatedAt: sql`clock_timestamp()`
+    })
+    .where(
+      and(
+        eq(clientSubscriptionSlots.relationshipId, input.relationshipId),
+        eq(clientSubscriptionSlots.productId, input.productId),
+        eq(clientSubscriptionSlots.version, input.expectedSlotVersion)
+      )
+    );
+  const receipt = {
+    orderId: input.orderId,
+    idempotencyKey: input.idempotencyKey,
+    requestHash: input.requestHash,
+    slot: {
+      relationshipId: input.relationshipId,
+      productId: input.productId,
+      expectedVersion: input.expectedSlotVersion,
+      resultVersion: resultSlotVersion,
+      effect: "assign" as const
+    },
+    result: {
+      outcome: "created" as const,
+      subscriptionId: decision.subscription.id,
+      contractId: decision.contract.id,
+      contractDigest: sha256DigestSchema.parse(decision.contract.canonicalDigest)
+    }
+  };
+  await transaction.insert(clientSubscriptionCreationReceipts).values({
+    orderId: input.orderId,
+    relationshipId: input.relationshipId,
+    productId: input.productId,
+    idempotencyKey: input.idempotencyKey,
+    requestHash: input.requestHash,
+    expectedSlotVersion: input.expectedSlotVersion,
+    slotEffect: "assign",
+    resultKind: "created",
+    result: receipt.result,
+    resultSnapshot: decision,
+    resultSlotVersion,
+    subscriptionId: decision.subscription.id,
+    contractId: decision.contract.id,
+    contractDigest: decision.contract.canonicalDigest,
+    createdAt: sql`clock_timestamp()`
+  });
+  return { ...decision, persistenceReceipt: receipt };
 }
 
 type CreationTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
@@ -459,8 +462,8 @@ async function loadCreationAuthority(
         revision: order.productRevision,
         ownerUserId: order.astrologerUserId,
         status: "active",
-        type: "sub",
-        paymentModel: "sub",
+        type: "async",
+        paymentModel: "once",
         executionMode: "async",
         participantMode: "solo",
         priceMinor: order.priceMinor,

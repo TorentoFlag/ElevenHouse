@@ -150,7 +150,7 @@ export async function sealClientSubscriptionPurchaseAuthorityForOrder(
   const fulfillmentRows = await transaction
     .select()
     .from(financePaidProductFulfillmentDecisions)
-    .where(eq(financePaidProductFulfillmentDecisions.registryKey, "sub.sub.async.solo"));
+    .where(eq(financePaidProductFulfillmentDecisions.registryKey, "async.once.async.solo"));
   const fulfillmentDecision = await resolvePaidProductFulfillment({
     product: {
       type: accepted.type,
@@ -184,7 +184,7 @@ export async function sealClientSubscriptionPurchaseAuthorityForOrder(
   );
   if (
     !fulfillmentDecision.supported ||
-    fulfillmentDecision.registryKey !== "sub.sub.async.solo" ||
+    fulfillmentDecision.registryKey !== "async.once.async.solo" ||
     !fulfillment ||
     !matchesFulfillmentDecision(fulfillment, fulfillmentDecision)
   ) {
@@ -245,8 +245,8 @@ export async function sealClientSubscriptionPurchaseAuthorityForOrder(
         on economics.order_id = order_row.id::text
       where order_row.id = ${input.orderId}
         and product_row.status = 'active'
-        and product_row.type = 'sub'
-        and product_row.payment_model = 'sub'
+        and product_row.type = 'async'
+        and product_row.payment_model = 'once'
         and product_row.execution_mode = 'async'
         and product_row.participant_mode = 'solo'
         and product_row.subscription_period in ('week', 'month', 'year')

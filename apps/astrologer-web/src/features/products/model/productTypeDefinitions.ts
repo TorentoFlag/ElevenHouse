@@ -87,7 +87,17 @@ const productTypeDefinitions = {
   async: {
     type: "async",
     mode: "guided",
-    primarySections: ["media", "basics", "asyncResult", "clientData", "methods", "includedItems"],
+    primarySections: [
+      "media",
+      "basics",
+      "asyncResult",
+      "subscription",
+      "accessGrants",
+      "astroDiary",
+      "clientData",
+      "methods",
+      "includedItems"
+    ],
     advancedSections: ["accessGrants", "modifiers"],
     fixedPaymentModel: "once",
     fixedExecutionMode: "async",
