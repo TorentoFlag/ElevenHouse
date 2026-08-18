@@ -154,6 +154,8 @@ export function InboxPageView({
 }: InboxPageViewProps) {
   const selectedThread = selectedThreadResponse?.thread ?? null;
   const selectedIdentity = selectedThread?.primaryIdentity ?? null;
+  const selectedProvider = selectedIdentity?.provider ?? "telegram";
+  const selectedProviderLabel = providerLabel(selectedProvider);
   const telegramBusiness = channelConnections.find(
     (connection) => connection.mode === "telegram_business_bot"
   );
@@ -319,7 +321,7 @@ export function InboxPageView({
                 <div className={styles.threadHeaderIdentity}>
                   <h2>{threadTitle(selectedThread)}</h2>
                   <p>
-                    <ProviderPill provider={selectedIdentity?.provider ?? "telegram"} /> Telegram
+                    <ProviderPill provider={selectedProvider} /> {selectedProviderLabel}
                   </p>
                 </div>
                 <div className={styles.threadHeaderActions}>
@@ -379,7 +381,7 @@ export function InboxPageView({
                 name="inboxComposer"
                 value={draft}
                 onChange={(event) => onDraftChange(event.currentTarget.value)}
-                placeholder={canSend ? "Ответить через Telegram..." : "Подключите отправку"}
+                placeholder={canSend ? `Ответить через ${selectedProviderLabel}...` : "Подключите отправку"}
                 disabled={composerDisabled}
               />
               <button type="submit" disabled={composerDisabled || !draft.trim()}>
