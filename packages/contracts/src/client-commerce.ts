@@ -33,11 +33,15 @@ export const clientPurchaseOptionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.paymentModel !== "once" && value.paymentModel !== "pack") {
+    if (
+      value.paymentModel !== "once" &&
+      value.paymentModel !== "pack" &&
+      value.paymentModel !== "sub"
+    ) {
       context.addIssue({
         code: "custom",
         path: ["paymentModel"],
-        message: "Client purchase options must be one-time or package products"
+        message: "Client purchase options must be one-time, package, or subscription products"
       });
     }
     if (value.executionMode === "live" && value.durationMinutes === null) {

@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
   getAvailableBookingSlots,
+  isCanonicalAstroDiaryPaidProduct,
   resolveActiveTariffCommission,
   resolvePlatformTariffCapability,
   type AvailabilityStore,
@@ -121,7 +122,9 @@ export class ClientCommerceService {
       (product) =>
         product.priceMinor > 0 &&
         product.deliveryFormats.length > 0 &&
-        (product.paymentModel === "once" || product.paymentModel === "pack") &&
+        (product.paymentModel === "once" ||
+          product.paymentModel === "pack" ||
+          isCanonicalAstroDiaryPaidProduct(product)) &&
         (product.executionMode !== "live" || product.durationMinutes !== null)
     );
   }
