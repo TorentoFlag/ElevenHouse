@@ -26,7 +26,7 @@ export const privacyPolicySections: readonly PrivacyPolicySection[] = [
     blocks: [
       {
         kind: "paragraph",
-        text: "Настоящая Политика конфиденциальности определяет порядок сбора, обработки, хранения и защиты персональных данных пользователей интернет-приложение Asteria (далее — Приложение)."
+        text: "Настоящая Политика конфиденциальности определяет порядок сбора, обработки, хранения и защиты персональных данных пользователей интернет-приложения ElevenHouse (далее — Приложение)."
       },
       {
         kind: "paragraph",
@@ -42,7 +42,7 @@ export const privacyPolicySections: readonly PrivacyPolicySection[] = [
       },
       {
         kind: "paragraph",
-        text: "ОсОО «Кюльчоро» является оператором персональных данных пользователей интернет-приложение Asteria."
+        text: "ОсОО «Кюльчоро» является оператором персональных данных пользователей интернет-приложения ElevenHouse."
       }
     ]
   },
@@ -303,6 +303,298 @@ export const privacyPolicySections: readonly PrivacyPolicySection[] = [
       {
         kind: "paragraph",
         text: "По всем вопросам, связанным с обработкой персональных данных, вы можете связаться с нами:"
+      },
+      {
+        kind: "paragraph",
+        text: `Email: ${privacyContactEmail}`
+      }
+    ]
+  }
+];
+
+export const privacyPolicySectionsEn: readonly PrivacyPolicySection[] = [
+  {
+    title: "1. General Provisions",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "This Privacy Policy defines the procedure for collecting, processing, storing, and protecting personal data of users of the internet application ElevenHouse (the Application)."
+      },
+      {
+        kind: "paragraph",
+        text: "By using the Application, the user confirms their free, conscious, and informed consent to the terms of this Privacy Policy."
+      },
+      {
+        kind: "paragraph",
+        text: "Personal data operator: Limited Liability Company Kyulchoro."
+      },
+      {
+        kind: "paragraph",
+        text: "Legal address: Kyrgyz Republic, Bishkek, Leninsky District, Kyzyl-Adyr Street (Archa-Beshik residential area), 172 A."
+      },
+      {
+        kind: "paragraph",
+        text: "Kyulchoro LLC is the personal data operator for users of the internet application ElevenHouse."
+      }
+    ]
+  },
+  {
+    title: "2. Applicable Law",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "Personal data is processed in accordance with:"
+      },
+      {
+        kind: "list",
+        items: [
+          "the Constitution of the Kyrgyz Republic;",
+          'Law of the Kyrgyz Republic "On Personal Data" No. 58 dated April 14, 2008;',
+          "other regulatory legal acts of the Kyrgyz Republic;",
+          "the requirements of the Google Play Developer Policy."
+        ]
+      }
+    ]
+  },
+  {
+    title: "3. Data We Collect",
+    blocks: [
+      {
+        kind: "subheading",
+        text: "3.1. Data provided by the user"
+      },
+      {
+        kind: "paragraph",
+        text: "The Application may process the following data voluntarily provided by the user:"
+      },
+      {
+        kind: "list",
+        items: [
+          "name or pseudonym, if provided;",
+          "date, time, and place of birth for astrological calculations;",
+          "email address when contacting support or registering, if applicable;",
+          "location, optionally and only with the user's explicit consent, to improve the accuracy of astrological calculations."
+        ]
+      },
+      {
+        kind: "subheading",
+        text: "3.2. Technical data"
+      },
+      {
+        kind: "paragraph",
+        text: "We may automatically collect:"
+      },
+      {
+        kind: "list",
+        items: [
+          "device type and model;",
+          "operating system and version;",
+          "system language;",
+          "unique device identifiers, including Advertising ID;",
+          "application usage data, including viewed screens, used features, and session duration;",
+          "crash reports and diagnostic data."
+        ]
+      },
+      {
+        kind: "subheading",
+        text: "3.3. Geolocation"
+      },
+      {
+        kind: "paragraph",
+        text: "Geolocation is used only with the user's permission and solely for correct operation of the Application's functionality. The user may withdraw permission in the device settings."
+      }
+    ]
+  },
+  {
+    title: "4. Purposes and Legal Grounds for Processing",
+    blocks: [
+      {
+        kind: "subheading",
+        text: "4.1. Processing purposes"
+      },
+      {
+        kind: "paragraph",
+        text: "Personal data is processed exclusively for:"
+      },
+      {
+        kind: "list",
+        items: [
+          "providing and improving the Application's functionality;",
+          "performing astrological calculations and generating personalized content;",
+          "analytics and user experience improvement;",
+          "displaying advertising, where applicable;",
+          "processing requests and providing user support;",
+          "complying with the requirements of the laws of the Kyrgyz Republic."
+        ]
+      },
+      {
+        kind: "paragraph",
+        text: "Personal data is not used for automated decision-making that produces legal effects."
+      },
+      {
+        kind: "subheading",
+        text: "4.2. Legal grounds"
+      },
+      {
+        kind: "paragraph",
+        text: "Personal data is processed on the basis of:"
+      },
+      {
+        kind: "list",
+        items: [
+          "the user's consent;",
+          "the need to perform the user agreement;",
+          "the requirements of the laws of the Kyrgyz Republic."
+        ]
+      }
+    ]
+  },
+  {
+    title: "5. Advertising and Analytics",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "If advertising is used in the Application:"
+      },
+      {
+        kind: "list",
+        items: [
+          "advertising identifiers, including Advertising ID, may be used;",
+          "advertising may be personalized;",
+          "the user may limit ad personalization in their device settings."
+        ]
+      },
+      {
+        kind: "paragraph",
+        text: "Google services, including Google Play Services, Firebase, and similar tools, may be used for analytics, stability, and security of the Application."
+      }
+    ]
+  },
+  {
+    title: "6. Transfer of Data to Third Parties",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "We do not sell users' personal data."
+      },
+      {
+        kind: "paragraph",
+        text: "Personal data may be transferred only in the following cases:"
+      },
+      {
+        kind: "list",
+        items: [
+          "upon a lawful request from public authorities;",
+          "to service providers, including hosting, analytics, and advertising partners, only within the purposes of processing;",
+          "when Google services are used;",
+          "in connection with business reorganization, including merger, acquisition, or transfer of assets;",
+          "with the user's explicit consent."
+        ]
+      },
+      {
+        kind: "paragraph",
+        text: "All third parties must comply with confidentiality and personal data protection requirements."
+      }
+    ]
+  },
+  {
+    title: "7. Cross-Border Transfer and Data Storage",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "Personal data may be stored and processed both in the Kyrgyz Republic and outside it, provided that the requirements of the laws of the Kyrgyz Republic are met and an appropriate level of personal data protection is ensured."
+      },
+      {
+        kind: "paragraph",
+        text: "The data retention period does not exceed the period necessary to achieve the processing purposes, unless otherwise required by law."
+      }
+    ]
+  },
+  {
+    title: "8. User Rights",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "The user has the right to:"
+      },
+      {
+        kind: "list",
+        items: [
+          "receive information about their personal data;",
+          "request correction, blocking, or deletion of data;",
+          "withdraw consent to personal data processing;",
+          "restrict personal data processing;",
+          "seek protection of their rights from authorized authorities or a court."
+        ]
+      },
+      {
+        kind: "paragraph",
+        text: "To exercise their rights, the user may send a request by email to the address specified in the Contacts section."
+      }
+    ]
+  },
+  {
+    title: "9. Children",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "The Application is not intended for children under 14 and is not intended for children under 13 in accordance with Google Play requirements."
+      },
+      {
+        kind: "paragraph",
+        text: "We do not knowingly collect children's personal data."
+      },
+      {
+        kind: "paragraph",
+        text: "If you become aware that a child's data has been transferred to us, please contact us so that it can be deleted."
+      }
+    ]
+  },
+  {
+    title: "10. Personal Data Protection Measures",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "We apply necessary organizational and technical measures to protect personal data, including:"
+      },
+      {
+        kind: "list",
+        items: [
+          "storing data on protected servers;",
+          "restricting data access to authorized persons only;",
+          "using confidentiality agreements;",
+          "regular measures to prevent unauthorized access."
+        ]
+      },
+      {
+        kind: "paragraph",
+        text: "The user independently takes measures to protect their device and account credentials."
+      }
+    ]
+  },
+  {
+    title: "11. Changes to the Policy",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "We may make changes to this Privacy Policy."
+      },
+      {
+        kind: "paragraph",
+        text: "The current version is always available through the link specified in Google Play."
+      },
+      {
+        kind: "paragraph",
+        text: "Continued use of the Application means consent to the updated version."
+      }
+    ]
+  },
+  {
+    title: "12. Contacts",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "For all questions related to personal data processing, you may contact us:"
       },
       {
         kind: "paragraph",

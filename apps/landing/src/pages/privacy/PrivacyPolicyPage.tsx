@@ -3,8 +3,10 @@ import { Logo } from "../../components/Logo";
 import {
   privacyContactEmail,
   privacyPolicySections,
+  privacyPolicySectionsEn,
   privacyPolicyUpdatedAt
 } from "./privacyPolicyContent";
+import type { PrivacyPolicySection } from "./privacyPolicyContent";
 
 export function PrivacyPolicyPage() {
   return (
@@ -24,7 +26,7 @@ export function PrivacyPolicyPage() {
           <h1>Политика конфиденциальности</h1>
           <p>
             Настоящая Политика конфиденциальности определяет порядок сбора, обработки, хранения и
-            защиты персональных данных пользователей интернет-приложение Asteria.
+            защиты персональных данных пользователей интернет-приложения ElevenHouse.
           </p>
           <dl>
             <div>
@@ -41,30 +43,41 @@ export function PrivacyPolicyPage() {
         </header>
 
         <div className="privacy-section-list">
-          {privacyPolicySections.map((section) => (
-            <section className="privacy-section" key={section.title}>
-              <h2>{section.title}</h2>
-              {section.blocks.map((block) => {
-                if (block.kind === "subheading") {
-                  return <h3 key={block.text}>{block.text}</h3>;
-                }
-
-                if (block.kind === "list") {
-                  return (
-                    <ul key={block.items.join("|")}>
-                      {block.items.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  );
-                }
-
-                return <p key={block.text}>{block.text}</p>;
-              })}
-            </section>
-          ))}
+          <section className="privacy-section">
+            <h2>Русская версия</h2>
+          </section>
+          {privacyPolicySections.map((section) => renderPrivacySection(section))}
+          <section className="privacy-section">
+            <h2>English version</h2>
+          </section>
+          {privacyPolicySectionsEn.map((section) => renderPrivacySection(section, "en"))}
         </div>
       </article>
     </main>
+  );
+}
+
+function renderPrivacySection(section: PrivacyPolicySection, language?: "en") {
+  return (
+    <section className="privacy-section" key={`${language ?? "ru"}:${section.title}`}>
+      <h2>{section.title}</h2>
+      {section.blocks.map((block) => {
+        if (block.kind === "subheading") {
+          return <h3 key={block.text}>{block.text}</h3>;
+        }
+
+        if (block.kind === "list") {
+          return (
+            <ul key={block.items.join("|")}>
+              {block.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        return <p key={block.text}>{block.text}</p>;
+      })}
+    </section>
   );
 }

@@ -2,7 +2,13 @@ import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App, resolveLandingRoute } from "./App";
 import { LANDING_APP_TITLE } from "./app-title";
-import { landingCopy, landingLanguages, landingSections, loginHref, primaryCtaHref } from "./content/landingContent";
+import {
+  landingCopy,
+  landingLanguages,
+  landingSections,
+  loginHref,
+  primaryCtaHref
+} from "./content/landingContent";
 import { LandingPage } from "./pages/home/LandingPage";
 import { PersonalDataProcessingPolicyPage } from "./pages/personal-data-processing/PersonalDataProcessingPolicyPage";
 import {
@@ -11,7 +17,26 @@ import {
   personalDataProcessingPolicyRu
 } from "./pages/personal-data-processing/personalDataProcessingPolicyContent";
 import { PrivacyPolicyPage } from "./pages/privacy/PrivacyPolicyPage";
-import { privacyContactEmail, privacyPolicySections } from "./pages/privacy/privacyPolicyContent";
+import {
+  privacyContactEmail,
+  privacyPolicySections,
+  privacyPolicySectionsEn
+} from "./pages/privacy/privacyPolicyContent";
+
+function flattenPrivacyPolicySections(sections: typeof privacyPolicySections): string {
+  return sections
+    .flatMap((section) => [
+      section.title,
+      ...section.blocks.flatMap((block) => {
+        if (block.kind === "list") {
+          return block.items;
+        }
+
+        return block.text;
+      })
+    ])
+    .join("\n");
+}
 
 describe("landing app shell", () => {
   afterEach(() => {
@@ -55,7 +80,11 @@ describe("landing app shell", () => {
   it("provides English landing copy for the language switcher", () => {
     expect(landingLanguages).toEqual(["ru", "en"]);
     expect(landingCopy.en.hero.title).toEqual(["Your stellar practice", "in one workspace"]);
-    expect(landingCopy.en.navLinks.map((link) => link.label)).toEqual(["Features", "How it works", "Pricing"]);
+    expect(landingCopy.en.navLinks.map((link) => link.label)).toEqual([
+      "Features",
+      "How it works",
+      "Pricing"
+    ]);
   });
 
   it("routes /privacy to the public privacy policy page", () => {
@@ -85,24 +114,22 @@ describe("landing app shell", () => {
   });
 
   it("publishes the Kyrgyz Republic privacy policy content and contact", () => {
-    const policyText = privacyPolicySections
-      .flatMap((section) => [
-        section.title,
-        ...section.blocks.flatMap((block) => {
-          if (block.kind === "list") {
-            return block.items;
-          }
-
-          return block.text;
-        })
-      ])
-      .join("\n");
+    const policyText = flattenPrivacyPolicySections(privacyPolicySections);
+    const policyTextEn = flattenPrivacyPolicySections(privacyPolicySectionsEn);
 
     expect(privacyContactEmail).toBe("info@kyulchoro.kg");
     expect(policyText).toContain("Общество с ограниченной ответственностью «Кюльчоро»");
     expect(policyText).toContain("Законом Кыргызской Республики «О персональных данных»");
     expect(policyText).toContain("требованиями Google Play Developer Policy");
     expect(policyText).toContain("Email: info@kyulchoro.kg");
+    expect(policyText).toContain("интернет-приложения ElevenHouse");
+    expect(policyText).not.toMatch(/Asteria|Астерия/i);
+    expect(policyTextEn).toContain("Privacy Policy");
+    expect(policyTextEn).toContain("internet application ElevenHouse");
+    expect(policyTextEn).toContain('Law of the Kyrgyz Republic "On Personal Data"');
+    expect(policyTextEn).toContain("Google Play Developer Policy");
+    expect(policyTextEn).toContain("Email: info@kyulchoro.kg");
+    expect(policyTextEn).not.toMatch(/Asteria|Астерия/i);
   });
 
   it("publishes the standalone personal data processing policy in Russian and English", () => {
@@ -113,6 +140,7 @@ describe("landing app shell", () => {
     expect(personalDataProcessingPolicyRu).toContain("ОсОО «Кюльчоро»");
     expect(personalDataProcessingPolicyRu).toContain("Цифрового кодекса Кыргызской Республики");
     expect(personalDataProcessingPolicyRu).toContain("Инциденты и уведомления");
+    expect(personalDataProcessingPolicyRu).not.toMatch(/Платформа ElevenHouse[аео]/);
     expect(personalDataProcessingPolicyEn).toContain(
       "Personal Data Collection and Processing Policy"
     );
