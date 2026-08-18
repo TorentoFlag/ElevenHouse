@@ -505,3 +505,177 @@ No HIGH or CRITICAL result occurred. Pre-commit `detect_changes(scope: staged)` 
 - The clean-HEAD static expectation files `packages/db/src/schema/astro-diary/astro-diary-integrity.test.ts` and `packages/db/src/schema/astro-diary/astro-diary.schema.test.ts` remain deleted by concurrent commit `9c426eb5`. Per ruling, their deletions were neither restored nor staged. If they reappear, their append-order/table/index expectations still require the previously identified current-value updates. The new domain and real-PG regressions are precise current coverage, but this clean-checkout static-test gate remains external.
 - The same concurrent deletion removed the wider repository unit corpus, so only the new focused domain file is currently discoverable by the unit runner. Full typecheck, lint, build, reset/migrate, and the focused real-PG suite are green; deleted tests are not represented as passing.
 - No browser, API network E2E, UI, worker, deploy, external payment, or production-data action was performed in this backend persistence fix.
+
+---
+
+# Fix round 3 — real publish and immutable order-side checkout authority
+
+Date: 2026-08-18
+Implementation commit: `37e2cea5` (`fix(astro-diary): seal checkout fulfillment authority`)
+
+## Outcome
+
+Both critical real-checkout findings are closed in production code and the real PostgreSQL path.
+
+1. Product publication no longer rejects every product carrying `journal`. It permits only the
+   already-defined canonical AstroDiary paid-product shape: `sub/sub/async/solo`, week/month/year
+   cadence, no trial/duration/package/group fields, exact `chat/audio/file` delivery, empty generic
+   data/method/modifier collections, the sole `journal` grant, and complete valid Diary config.
+   Every other journal product remains blocked by `PRODUCT_FULFILLMENT_NOT_READY`.
+2. Order creation now runs the exact domain fulfillment resolver and seals a second immutable,
+   canonical order-side authority beside the existing Diary purchase authority. The new record
+   binds the purchase-authority digest to the exact registry key, registry revision, and finance
+   fulfillment-decision digest.
+3. Checkout authority resolution reads that sealed order-side tuple for Diary orders. It does not
+   derive Diary selection from the mutable current product. A generic product with the same
+   four-part key and no sealed Diary purpose returns no capture authority.
+4. The database checkout-authorization trigger independently requires the exact sealed Diary
+   tuple. A caller cannot inject the globally registered Diary key for a generic same-key order.
+   A product mutation after order creation no longer changes the selected checkout decision.
+5. Capture dispatch joins the immutable capture-side fulfillment tuple and compares it with the
+   purchase-side tuple. An AstroDiary capture with absent or conflicting subscription authority is
+   `authority_conflict`; it can no longer be reported as successful `not_client_subscription`.
+
+## Production path proved
+
+The PostgreSQL suite now creates a draft canonical product, publishes it through the real domain
+use case and Drizzle product store (revision 1 draft to revision 2 active), creates the order through
+the real order store, prepares checkout, applies canonical confirmed capture, dispatches the
+capture purpose, and verifies active subscription, period, allowance, entitlement evidence,
+AstroDiary journal, activation event/delivery, and IDs-only outbox evidence.
+
+The direct `status: 'active'` product insert was removed. The path keeps the exact AstroDiary
+product shape from publication through capture; there is no test-only shape rewrite. The finance
+capture still posts exactly RUB 4,704 to the astrologer's `astrologer_pending` liability, with the
+root lot and wallet still pending. No hold-release code changed, so the existing booking-only later
+release guard remains intact.
+
+## Negative and pinning evidence
+
+- A valid canonical Diary product publishes; a non-canonical journal product remains rejected.
+- A generic active `sub.sub.async.solo` product without Diary config/purpose returns `null` before
+  checkout capture and has no purchase-fulfillment authority row.
+- After a Diary order is sealed, changing its current product to `single.once.live.solo` does not
+  change checkout selection; real checkout preparation still persists the sealed Diary revision.
+- After inserting fulfillment decision revision 2, a newly created Diary order still deterministically
+  seals registry revision 1 from the current domain registry, and an earlier order remains pinned to
+  revision 1 plus its exact canonical digest.
+- The real canonical capture dispatch explicitly proves the result is not
+  `not_client_subscription`, then proves `dispatched`, replay, and one activation receipt.
+- The new authority row rejects update/delete/TRUNCATE and owns exact composite FKs to both the
+  Diary purchase digest and the finance fulfillment decision tuple.
+
+## Forward migration and source schema
+
+- Added only `0056_astro_diary_order_fulfillment_authority.sql` plus its generated `0056` snapshot
+  and journal entry. Committed `0053`, `0054`, `0055`, and their existing snapshots were not edited.
+- `0056` creates `client_subscription_purchase_fulfillment_authorities`, DB-issues its canonical
+  preimage/digest, installs immutable row and statement-level TRUNCATE guards, and replaces the
+  checkout-authorization issue function with exact order-side Diary validation.
+- The table key is one row per order. Its purchase FK is
+  `(order_id, purchase_authority_digest)` and its decision FK is
+  `(registry_key, registry_revision, fulfillment_decision_digest)`.
+- The table check admits only `sub.sub.async.solo`; generic journal or generic same-key products
+  cannot create it because the order sealer first validates the exact accepted Diary graph and runs
+  the domain resolver.
+- No retroactive decision is guessed for pre-`0056` manually bypassed rows. A purchase authority
+  without the new exact tuple fails closed at checkout/dispatch. The previously blanket-blocked
+  publish path could not create such a valid production-path order.
+
+## Behavioral TDD evidence
+
+RED phases were observed before each implementation layer:
+
+```text
+Domain publish: canonical Diary publish rejected by PRODUCT_FULFILLMENT_NOT_READY
+PG real publish: 6/6 production-path cases failed at the blanket journal guard
+Order authority: relation client_subscription_purchase_fulfillment_authorities did not exist
+Checkout reader: generic same-key incorrectly received Diary authority; mutated product lost Diary authority
+Checkout trigger: mutated-product real checkout rejected with persistence_write_incomplete
+```
+
+Fresh final focused results:
+
+```text
+pnpm test packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts
+Test Files  1 passed (1)
+Tests       5 passed (5)
+
+INTEGRATION_DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse \
+  pnpm test:integration \
+  packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts
+Test Files  1 passed (1)
+Tests       9 passed (9)
+```
+
+## Migration/reset/catalog evidence
+
+- Read-only target check: local Docker `elevenhouse-postgres-1`, database/user `elevenhouse`,
+  localhost port 5432.
+- `DATABASE_URL=postgresql://elevenhouse:elevenhouse@localhost:5432/elevenhouse pnpm db:reset`
+  passed: reset, all migrations through `0056`, and seed (8 categories, 396 entries, 16 templates).
+- A fresh Drizzle generate after `0056` printed `No schema changes, nothing to migrate`; it changed
+  no journal or snapshot artifact.
+- Catalog inspection found the purchase and decision composite FKs, shape/digest checks, PK/exact
+  owner unique constraint, issue trigger, immutable trigger, and no-TRUNCATE trigger.
+- Installed pinned authority remains
+  `sub.sub.async.solo|1|sha256:9717575423cff38f1bc95763ce11294a627e938e87587aa24d88130c91b30d0b`.
+- The installed `finance_issue_client_checkout_authorization()` definition contains the new
+  order-side purchase-fulfillment table validation.
+
+## Other fresh verification
+
+- Focused ESLint across all changed TypeScript paths: zero findings.
+- `pnpm --filter @elevenhouse/domain typecheck`: passed.
+- `pnpm --filter @elevenhouse/db typecheck`: passed.
+- `pnpm typecheck`: 43/43 Turbo tasks passed.
+- `pnpm lint`: exit 0; four pre-existing React hook warnings in unrelated frontend files.
+- `pnpm build`: 28/28 Turbo tasks passed; only existing frontend chunk-size warnings.
+- `git diff --cached --check`: passed.
+
+## GitNexus evidence
+
+The index was refreshed to current HEAD before edits: 28,147 nodes, 71,224 edges, 1,321 clusters,
+and 300 flows.
+
+Pre-edit upstream impacts:
+
+- `updateProductStatus`: LOW; three direct status callers.
+- `sealClientSubscriptionPurchaseAuthorityForOrder`: LOW; one direct order-store caller.
+- `createDrizzleClientOrderCheckoutCaptureAuthorityReader`: CRITICAL because it is the payment
+  checkout authority boundary; one direct composition caller. The user was warned before edit.
+- `createDrizzleClientSubscriptionCaptureDispatchUnitOfWork`: CRITICAL because it is the capture
+  purpose-dispatch boundary; one direct composition caller. The user was warned before edit.
+- Private exact Diary predicate: CRITICAL/noisy transitive import fanout. It was deliberately not
+  edited; a small exported wrapper calls the unchanged predicate.
+- SQL/source constants not resolved by GitNexus returned exact UNKNOWN/not-found results; focused
+  schema, migration, trigger, and caller inspection was used before editing.
+
+Pre-commit `detect_changes(scope: staged)` reported 14 changed files, 17 changed symbols, zero
+affected processes, and overall LOW risk.
+
+## Exact implementation paths
+
+1. `packages/domain/src/products/product-use-cases.ts`
+2. `packages/domain/src/products/paid-product-fulfillment-registry.ts`
+3. `packages/domain/src/products/astro-diary-paid-product-fulfillment.test.ts`
+4. `packages/db/src/adapters/client-subscriptions/drizzle-client-subscription-purchase-authority.ts`
+5. `packages/db/src/adapters/finance/drizzle-client-order-checkout-capture-authority-reader.ts`
+6. `packages/db/src/adapters/client-subscriptions/drizzle-client-subscription-capture-dispatch-uow.ts`
+7. `packages/db/src/adapters/astro-diary/drizzle-astro-diary-subscription-activation-integrity.integration.ts`
+8. `packages/db/src/schema/client-subscriptions/client-subscription-purchase-fulfillment-authorities.schema.ts`
+9. `packages/db/src/schema/client-subscriptions/client-subscription-integrity.ts`
+10. `packages/db/src/schema/client-subscriptions/index.ts`
+11. `packages/db/src/schema/finance/client-checkout-authorizations.schema.ts`
+12. `packages/db/drizzle/0056_astro_diary_order_fulfillment_authority.sql`
+13. `packages/db/drizzle/meta/0056_snapshot.json`
+14. `packages/db/drizzle/meta/_journal.json`
+
+## Scope and residual concerns
+
+- The foreign committed removal `9c426eb5` of the broader/static test corpus was not restored.
+  Focused domain and real-PG coverage is current; removed clean-HEAD expectations are not claimed.
+- No UI, API surface, activation worker, generic relay behavior, hold-release behavior, browser flow,
+  deployment, external payment, or production-data action was added or changed.
+- Foreign shared-checkout changes in `AGENTS.md`, `CLAUDE.md`, and the two untracked design/plan docs
+  were preserved and excluded from the implementation commit.
