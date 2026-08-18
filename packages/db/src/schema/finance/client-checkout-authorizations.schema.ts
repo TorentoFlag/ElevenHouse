@@ -183,20 +183,6 @@ begin
   select * into strict order_row from orders where id = new.order_id for update;
   select * into subscription_purchase from client_subscription_purchase_authorities
     where order_id = new.order_id;
-  select * into strict intent from finance_economic_payment_intents
-    where id = new.economic_payment_intent_id;
-  select * into strict session from finance_economic_payment_sessions
-    where id = new.economic_payment_session_id;
-  select * into strict finance_policy from finance_policies
-    where id = order_row.finance_policy_snapshot_id;
-  select * into strict risk_policy from finance_risk_policy_versions
-    where policy_id = new.risk_policy_id
-      and policy_version = new.risk_policy_version
-      and canonical_digest = new.risk_policy_digest;
-  select * into strict fulfillment from finance_paid_product_fulfillment_decisions
-    where registry_key = new.fulfillment_decision_id
-      and registry_revision = new.fulfillment_decision_version
-      and canonical_digest = new.fulfillment_decision_digest;
   if subscription_purchase.order_id is not null then
     select binding.* into strict subscription_fulfillment
       from client_subscription_purchase_fulfillment_authorities binding
@@ -207,7 +193,14 @@ begin
       and new.fulfillment_decision_version = subscription_fulfillment.registry_revision
       and new.fulfillment_decision_digest = subscription_fulfillment.fulfillment_decision_digest;
   else
+    if new.fulfillment_decision_id = 'sub.sub.async.solo' then
+      raise exception 'client checkout authorization does not match locked order and payment session' using errcode = '23514';
+    end if;
     select * into strict product_row from products where id = order_row.product_id;
+    select * into strict fulfillment from finance_paid_product_fulfillment_decisions
+      where registry_key = new.fulfillment_decision_id
+        and registry_revision = new.fulfillment_decision_version
+        and canonical_digest = new.fulfillment_decision_digest;
     fulfillment_matches_order := fulfillment.registry_key = concat_ws(
       '.',
       product_row.type,
@@ -216,6 +209,16 @@ begin
       product_row.participant_mode
     );
   end if;
+  select * into strict intent from finance_economic_payment_intents
+    where id = new.economic_payment_intent_id;
+  select * into strict session from finance_economic_payment_sessions
+    where id = new.economic_payment_session_id;
+  select * into strict finance_policy from finance_policies
+    where id = order_row.finance_policy_snapshot_id;
+  select * into strict risk_policy from finance_risk_policy_versions
+    where policy_id = new.risk_policy_id
+      and policy_version = new.risk_policy_version
+      and canonical_digest = new.risk_policy_digest;
   if order_row.client_user_id <> new.client_user_id
      or order_row.status <> 'pending_payment'
      or intent.purpose <> 'client_order'

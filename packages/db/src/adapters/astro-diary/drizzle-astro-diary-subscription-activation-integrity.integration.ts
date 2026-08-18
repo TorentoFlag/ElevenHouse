@@ -393,11 +393,210 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
     await expect(
       runtime.pool.query(
         `select order_id
+           from client_subscription_purchase_authorities
+          where order_id = $1::uuid
+          union all
+         select order_id
            from client_subscription_purchase_fulfillment_authorities
-          where order_id = $1`,
+          where order_id = $1::uuid`,
         [prerequisite.authority.orderId]
       )
     ).resolves.toMatchObject({ rows: [] });
+
+    const injectedAuthority = await runtime.pool.query<{
+      risk_policy_id: string;
+      risk_policy_version: string;
+      risk_policy_digest: string;
+      registry_revision: string;
+      fulfillment_decision_digest: string;
+    }>(
+      `select risk.policy_id as risk_policy_id,
+              risk.policy_version::text as risk_policy_version,
+              risk.canonical_digest as risk_policy_digest,
+              fulfillment.registry_revision::text as registry_revision,
+              fulfillment.canonical_digest as fulfillment_decision_digest
+         from finance_risk_policy_versions risk
+         cross join finance_paid_product_fulfillment_decisions fulfillment
+        where risk.policy_id = $1
+          and risk.policy_version = $2
+          and fulfillment.registry_key = 'sub.sub.async.solo'
+          and fulfillment.registry_revision = 1`,
+      [prerequisite.financeAuthority.policyId, prerequisite.financeAuthority.policyVersion]
+    );
+    expect(injectedAuthority.rows).toHaveLength(1);
+    const globalDiaryAuthority = injectedAuthority.rows[0];
+    if (!globalDiaryAuthority) throw new Error("Expected globally registered Diary authority");
+
+    const dispatchEnvelope = createProviderDispatchEnvelope({
+      kind: "checkout_session_create",
+      amount: { amountMinor: 4_900, currency: "RUB" },
+      captureMode: "one_stage",
+      paymentMethods: [{ method: "bank_card", paymentMode: "redirect" }],
+      successUrl: "https://example.test/checkout/success",
+      failureUrl: "https://example.test/checkout/failure",
+      cancelUrl: "https://example.test/checkout/cancel",
+      externalId: prerequisite.authority.orderId,
+      orderId: prerequisite.authority.orderId,
+      fiscalSnapshot: null
+    });
+    if (dispatchEnvelope.kind !== "checkout_session_create") {
+      throw new Error("Expected checkout dispatch envelope");
+    }
+    const dispatchBytes = canonicalizeFinanceCommandPayload(dispatchEnvelope);
+    const dispatchArtifact = await artifacts.registerSealedArtifact({
+      artifact: {
+        artifactId: `generic-reserved-key-request-${randomUUID()}`,
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength
+      },
+      artifactClass: "provider_request",
+      binding: { kind: "provider", providerAccount },
+      contentType: "application/json",
+      privateObject: {
+        privateObjectKey: `integration/generic-reserved-key-${prerequisite.authority.orderId}`,
+        privateObjectVersion: "v1",
+        envelopeKeyVersion: "kms-v1",
+        sha256Digest: digest(dispatchBytes),
+        byteLength: dispatchBytes.byteLength,
+        contentType: "application/json"
+      },
+      retentionPolicyId: "astro-diary-task-2-provider-request",
+      retentionPolicyVersion: "1"
+    });
+    const checkoutPreparationId = randomUUID();
+    const checkoutAuthorizationId = `checkout-authority-${randomUUID()}`;
+    const economicPaymentIntentId = `economic-intent-${randomUUID()}`;
+    const economicPaymentSessionId = `economic-session-${randomUUID()}`;
+    const providerOperationIntentId = randomUUID();
+
+    await expect(
+      createDrizzleClientOrderCheckoutPreparationUnitOfWork(
+        runtime.database
+      ).prepareClientOrderCheckout({
+        checkoutPreparationId,
+        checkoutAuthorizationId,
+        paymentCommandId: randomUUID(),
+        orderId: prerequisite.authority.orderId,
+        clientUserId: prerequisite.authority.clientUserId,
+        economicPaymentIntentId,
+        economicPaymentSessionId,
+        providerOperationIntentId,
+        providerAccount,
+        dispatchEnvelope,
+        dispatchArtifact,
+        idempotencyKey: randomUUID(),
+        idempotencyRetentionDeadline: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+        captureAuthority: {
+          riskPolicy: {
+            policyId: globalDiaryAuthority.risk_policy_id,
+            policyVersion: Number(globalDiaryAuthority.risk_policy_version),
+            canonicalDigest: globalDiaryAuthority.risk_policy_digest as `sha256:${string}`
+          },
+          fulfillmentDecision: {
+            registryKey: "sub.sub.async.solo",
+            registryRevision: Number(globalDiaryAuthority.registry_revision),
+            canonicalDigest: globalDiaryAuthority.fulfillment_decision_digest as `sha256:${string}`
+          }
+        },
+        operationEnvelope: operationEnvelope()
+      })
+    ).rejects.toMatchObject({ reason: "persistence_write_incomplete" });
+
+    const artifactsAfterRejection = await runtime.pool.query<{
+      checkout_preparation_count: number;
+      checkout_authorization_count: number;
+      economic_intent_count: number;
+      economic_source_head_count: number;
+      economic_intent_receipt_count: number;
+      economic_session_count: number;
+      economic_session_receipt_count: number;
+      provider_operation_count: number;
+      checkout_outbox_count: number;
+      capture_binding_count: number;
+      capture_application_count: number;
+      wallet_count: number;
+      subscription_count: number;
+      astro_diary_journal_count: number;
+      finance_journal_transaction_count: number;
+      finance_journal_entry_count: number;
+    }>(
+      `select
+         (select count(*)::int from finance_client_checkout_preparations
+           where id = $1::uuid) as checkout_preparation_count,
+         (select count(*)::int from finance_client_checkout_authorizations
+           where authority_id = $2) as checkout_authorization_count,
+         (select count(*)::int from finance_economic_payment_intents
+           where id = $3) as economic_intent_count,
+         (select count(*)::int from finance_economic_payment_source_heads
+           where purpose = 'client_order' and source_id = $4::uuid::text) as economic_source_head_count,
+         (select count(*)::int from finance_economic_payment_intent_creation_receipts
+           where economic_payment_intent_id = $3) as economic_intent_receipt_count,
+         (select count(*)::int from finance_economic_payment_sessions
+           where id = $5) as economic_session_count,
+         (select count(*)::int from finance_economic_payment_session_open_receipts
+           where economic_payment_session_id = $5) as economic_session_receipt_count,
+         (select count(*)::int from finance_provider_operation_intents
+           where id = $6) as provider_operation_count,
+         (select count(*)::int from outbox_events
+           where aggregate_id = $6::uuid) as checkout_outbox_count,
+         (select count(*)::int from finance_online_sale_capture_authority_bindings
+           where order_id = $4::uuid::text) as capture_binding_count,
+         (select count(*)::int
+            from finance_online_sale_capture_applications application
+            join finance_online_sale_capture_authority_bindings binding
+              on binding.receipt_id = application.online_sale_receipt_id
+           where binding.order_id = $4::uuid::text) as capture_application_count,
+         (select count(*)::int from finance_online_wallet_heads
+           where astrologer_user_id = $7::uuid) as wallet_count,
+         (select count(*)::int from client_subscriptions
+           where relationship_id = $8::uuid) as subscription_count,
+         (select count(*)::int from astro_diary_journals
+           where relationship_id = $8::uuid) as astro_diary_journal_count,
+         (select count(*)::int
+            from finance_journal_transactions journal_transaction
+            join finance_source_identities source_identity
+              on source_identity.id = journal_transaction.source_identity_id
+           where source_identity.source_kind = 'order'
+             and source_identity.source_id = $4::uuid::text) as finance_journal_transaction_count,
+         (select count(*)::int
+            from finance_journal_entries journal_entry
+            join finance_journal_transactions journal_transaction
+              on journal_transaction.id = journal_entry.journal_transaction_id
+            join finance_source_identities source_identity
+              on source_identity.id = journal_transaction.source_identity_id
+           where source_identity.source_kind = 'order'
+             and source_identity.source_id = $4::uuid::text) as finance_journal_entry_count`,
+      [
+        checkoutPreparationId,
+        checkoutAuthorizationId,
+        economicPaymentIntentId,
+        prerequisite.authority.orderId,
+        economicPaymentSessionId,
+        providerOperationIntentId,
+        prerequisite.authority.astrologerUserId,
+        prerequisite.authority.relationshipId
+      ]
+    );
+    expect(artifactsAfterRejection.rows).toEqual([
+      {
+        checkout_preparation_count: 0,
+        checkout_authorization_count: 0,
+        economic_intent_count: 0,
+        economic_source_head_count: 0,
+        economic_intent_receipt_count: 0,
+        economic_session_count: 0,
+        economic_session_receipt_count: 0,
+        provider_operation_count: 0,
+        checkout_outbox_count: 0,
+        capture_binding_count: 0,
+        capture_application_count: 0,
+        wallet_count: 0,
+        subscription_count: 0,
+        astro_diary_journal_count: 0,
+        finance_journal_transaction_count: 0,
+        finance_journal_entry_count: 0
+      }
+    ]);
   });
 
   it("pins the order's Diary decision across product mutation and later registry revisions", async () => {
