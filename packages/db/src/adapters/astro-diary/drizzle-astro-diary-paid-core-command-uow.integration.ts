@@ -1,0 +1,1054 @@
+import { createHash, randomUUID } from "node:crypto";
+
+import { eq, inArray } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import {
+  applyClientSubscriptionSourceEvent,
+  consumeAvailableAllowance,
+  createAstroDiaryResponseObligation,
+  endSubscriptionAtPaidBoundary,
+  executeClientSubscriptionAllowanceCommand,
+  executeAstroDiaryParticipantDraftCreateCommand,
+  executeOpenClientCycleCommand,
+  executePublishAstrologerReplyCommand
+} from "@elevenhouse/domain";
+
+import type { PostgresRuntime } from "../../runtime";
+import {
+  astroDiaryCommandReceipts,
+  astroDiaryContextSnapshots,
+  astroDiaryCycleOpeningAllowanceFacts,
+  astroDiaryCycles,
+  astroDiaryDerivativeCommands,
+  astroDiaryDrafts,
+  astroDiaryEventDeliveries,
+  astroDiaryEvents,
+  astroDiaryJournals,
+  astroDiaryResponseObligations,
+  astroDiaryResponseObligationWeekdays,
+  astroDiaryTimelineItemRevisions,
+  astroDiaryTimelineItems
+} from "../../schema/astro-diary";
+import {
+  clientEntitlementGrants,
+  clientSubscriptionAllowanceCommandEffects,
+  clientSubscriptionAllowanceCommandReceipts,
+  clientSubscriptionAllowanceConsumptions,
+  clientSubscriptionPeriodAllowances
+} from "../../schema/client-subscriptions";
+import { outboxEvents } from "../../schema/outbox/outbox-events.schema";
+import {
+  createActiveClientSubscriptionFixture,
+  createClientSubscriptionIntegrationDatabase,
+  type ActiveClientSubscriptionFixture
+} from "../client-subscriptions/client-subscription-integration-fixture";
+import { createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-uow";
+import { createDrizzleClientSubscriptionAllowanceCommandUnitOfWork } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
+import { createDrizzleAstroDiaryCommandUnitOfWork } from "./drizzle-astro-diary-command-uow";
+
+type JournalFixture = Readonly<{
+  fixture: ActiveClientSubscriptionFixture;
+  journalId: string;
+}>;
+
+type OpenCycleFixture = JournalFixture &
+  Readonly<{
+    cycleId: string;
+    clientEntryItemId: string;
+    obligationId: string;
+    journalVersion: number;
+  }>;
+
+describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
+  let runtime: PostgresRuntime;
+  let closeDatabase: () => Promise<void>;
+
+  beforeAll(async () => {
+    const integration = await createClientSubscriptionIntegrationDatabase();
+    runtime = integration.runtime;
+    closeDatabase = integration.close;
+  }, 60_000);
+
+  afterAll(async () => {
+    await closeDatabase?.();
+  }, 30_000);
+
+  it("publishes one client entry with the complete paid write-set and replays stored identities", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const draftInput = clientDraftInput(journal, "Сегодня я выбираю не торопиться.");
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, draftInput);
+    const replayedDraft = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      draftInput
+    );
+    const draftId = appliedDraftId(created);
+    if (created.outcome !== "applied") throw new Error("Expected an applied client draft");
+    expect(replayedDraft).toEqual({ outcome: "replayed", result: created.receipt.result });
+
+    const idempotencyKey = `entry-${randomUUID()}`;
+    const first = openClientCycleInput(journal, draftId, idempotencyKey, 2);
+    const applied = await executeOpenClientCycleCommand(unitOfWork, first);
+    expect(applied).toMatchObject({ outcome: "applied", response: { outcome: "applied" } });
+    if (applied.outcome !== "applied") throw new Error("Expected an applied client entry");
+
+    const retryWithFreshServerIdentities = openClientCycleInput(
+      journal,
+      draftId,
+      idempotencyKey,
+      2
+    );
+    const replay = await executeOpenClientCycleCommand(unitOfWork, retryWithFreshServerIdentities);
+    expect(replay).toEqual({ outcome: "replayed", result: applied.receipt.result });
+    expect(retryWithFreshServerIdentities.command.cycleId).not.toBe(first.command.cycleId);
+
+    await expect(
+      runtime.database
+        .select({ version: astroDiaryJournals.version })
+        .from(astroDiaryJournals)
+        .where(eq(astroDiaryJournals.id, journal.journalId))
+    ).resolves.toEqual([{ version: 3 }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.journalId, journal.journalId))
+    ).resolves.toMatchObject([
+      {
+        id: first.command.cycleId,
+        openingPeriodId: journal.fixture.periodId,
+        state: "awaiting_astrologer_response",
+        version: 1
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItems)
+        .where(eq(astroDiaryTimelineItems.journalId, journal.journalId))
+    ).resolves.toMatchObject([
+      {
+        id: first.command.entryItemId,
+        cycleId: first.command.cycleId,
+        cursor: 1,
+        currentRevision: 1,
+        kind: "client_entry"
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItemRevisions)
+        .where(eq(astroDiaryTimelineItemRevisions.itemId, first.command.entryItemId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryResponseObligations)
+        .where(eq(astroDiaryResponseObligations.id, first.command.obligationId))
+    ).resolves.toMatchObject([
+      {
+        cycleId: first.command.cycleId,
+        triggerItemId: first.command.entryItemId,
+        state: "open",
+        version: 1,
+        responseSlaWorkingDays: 2,
+        serviceTimezone: "Europe/Moscow"
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryResponseObligationWeekdays)
+        .where(eq(astroDiaryResponseObligationWeekdays.obligationId, first.command.obligationId))
+    ).resolves.toHaveLength(5);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionPeriodAllowances)
+        .where(eq(clientSubscriptionPeriodAllowances.periodId, journal.fixture.periodId))
+    ).resolves.toMatchObject([{ available: 3, reserved: 0, consumed: 1, version: 2 }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandReceipts)
+        .where(eq(clientSubscriptionAllowanceCommandReceipts.periodId, journal.fixture.periodId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandEffects)
+        .where(eq(clientSubscriptionAllowanceCommandEffects.periodId, journal.fixture.periodId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceConsumptions)
+        .where(eq(clientSubscriptionAllowanceConsumptions.periodId, journal.fixture.periodId))
+    ).resolves.toMatchObject([
+      {
+        id: first.command.allowanceConsumptionId,
+        source: "available",
+        reservationId: null
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycleOpeningAllowanceFacts)
+        .where(eq(astroDiaryCycleOpeningAllowanceFacts.cycleId, first.command.cycleId))
+    ).resolves.toMatchObject([
+      {
+        openingPeriodId: journal.fixture.periodId,
+        openingAllowanceConsumptionId: first.command.allowanceConsumptionId,
+        openingAllowanceReservationId: null
+      }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryContextSnapshots)
+        .where(eq(astroDiaryContextSnapshots.id, first.command.contextId))
+    ).resolves.toMatchObject([
+      { itemId: first.command.entryItemId, sourceItemRevision: 1, status: "pending", version: 1 }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryDerivativeCommands)
+        .where(eq(astroDiaryDerivativeCommands.id, first.command.derivativeCommandId))
+    ).resolves.toMatchObject([
+      { itemId: first.command.entryItemId, sourceRevision: 1, operation: "generate" }
+    ]);
+
+    const eventIds = Object.values(first.command.eventIds);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryEvents)
+        .where(inArray(astroDiaryEvents.eventId, eventIds))
+    ).resolves.toHaveLength(5);
+    const deliveries = await runtime.database
+      .select()
+      .from(astroDiaryEventDeliveries)
+      .where(inArray(astroDiaryEventDeliveries.eventId, eventIds));
+    expect(deliveries).toHaveLength(8);
+    await expect(
+      runtime.database
+        .select()
+        .from(outboxEvents)
+        .where(
+          inArray(
+            outboxEvents.aggregateId,
+            deliveries.map(({ id }) => id)
+          )
+        )
+    ).resolves.toHaveLength(8);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCommandReceipts)
+        .where(eq(astroDiaryCommandReceipts.idempotencyKey, idempotencyKey))
+    ).resolves.toMatchObject([{ outcome: "applied", requestHash: applied.receipt.requestHash }]);
+    await expect(
+      runtime.database.select().from(astroDiaryDrafts).where(eq(astroDiaryDrafts.id, draftId))
+    ).resolves.toEqual([]);
+  });
+
+  it("converges concurrent same-key client publications without duplicate cycle or allowance use", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Один и тот же смысл, одна публикация.")
+    );
+    const draftId = appliedDraftId(created);
+    const idempotencyKey = `entry-race-${randomUUID()}`;
+    const leftInput = openClientCycleInput(journal, draftId, idempotencyKey, 2);
+    const rightInput = openClientCycleInput(journal, draftId, idempotencyKey, 2);
+
+    const [left, right] = await Promise.all([
+      executeOpenClientCycleCommand(unitOfWork, leftInput),
+      executeOpenClientCycleCommand(unitOfWork, rightInput)
+    ]);
+
+    expect([left.outcome, right.outcome].sort()).toEqual(["applied", "replayed"]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.journalId, journal.journalId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceConsumptions)
+        .where(eq(clientSubscriptionAllowanceConsumptions.periodId, journal.fixture.periodId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandReceipts)
+        .where(eq(clientSubscriptionAllowanceCommandReceipts.periodId, journal.fixture.periodId))
+    ).resolves.toHaveLength(1);
+  });
+
+  it("does not seal stale client publication preconditions", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Версия журнала уже изменилась.")
+    );
+    const draftId = appliedDraftId(created);
+    const input = openClientCycleInput(journal, draftId, `entry-stale-${randomUUID()}`, 1);
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, input)).resolves.toEqual({
+      outcome: "version_conflict",
+      aggregate: "journal",
+      id: journal.journalId,
+      expectedVersion: 1,
+      currentVersion: 2
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCommandReceipts)
+        .where(eq(astroDiaryCommandReceipts.idempotencyKey, input.idempotencyKey))
+    ).resolves.toEqual([]);
+  });
+
+  it("seals a foreign client rejection without publishing or consuming allowance", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Только владелец может опубликовать это.")
+    );
+    const draftId = appliedDraftId(created);
+    const input = openClientCycleInput(journal, draftId, `entry-foreign-${randomUUID()}`, 2, {
+      actorUserId: randomUUID()
+    });
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "rejected",
+      code: "actor_mismatch",
+      receipt: { result: { outcome: "rejected", code: "actor_mismatch" } }
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.journalId, journal.journalId))
+    ).resolves.toEqual([]);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceConsumptions)
+        .where(eq(clientSubscriptionAllowanceConsumptions.periodId, journal.fixture.periodId))
+    ).resolves.toEqual([]);
+  });
+
+  it("seals exhausted allowance without any visible client publication", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Лимит цикла уже исчерпан.")
+    );
+    const draftId = appliedDraftId(created);
+    await exhaustPeriodAllowance(runtime, journal.fixture);
+    const input = openClientCycleInput(journal, draftId, `entry-exhausted-${randomUUID()}`, 2, {
+      allowanceExpectedVersion: 5
+    });
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "rejected",
+      code: "allowance_exhausted"
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.journalId, journal.journalId))
+    ).resolves.toEqual([]);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandReceipts)
+        .where(
+          eq(
+            clientSubscriptionAllowanceCommandReceipts.idempotencyKey,
+            input.command.allowanceIdempotencyKey
+          )
+        )
+    ).resolves.toEqual([]);
+    await expect(
+      runtime.database.select().from(astroDiaryDrafts).where(eq(astroDiaryDrafts.id, draftId))
+    ).resolves.toHaveLength(1);
+  });
+
+  it("rolls back every client publication effect after a late duplicate event failure", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Поздняя ошибка не должна оставить полузапись.")
+    );
+    const draftId = appliedDraftId(created);
+    const input = openClientCycleInput(journal, draftId, `entry-rollback-${randomUUID()}`, 2);
+    input.command.eventIds.itemPublished = input.command.eventIds.cycleOpened;
+    const before = await paidCoreSnapshot(runtime, journal);
+
+    await expect(executeOpenClientCycleCommand(unitOfWork, input)).rejects.toThrow();
+
+    await expect(paidCoreSnapshot(runtime, journal)).resolves.toEqual(before);
+  });
+
+  it("keeps Diary lock order while standalone allowance commands retain advisory serialization", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Глобальный порядок блокировок остаётся единым.")
+    );
+    const draftId = appliedDraftId(created);
+    const input = openClientCycleInput(journal, draftId, `entry-lock-order-${randomUUID()}`, 2);
+    const blocker = await runtime.pool.connect();
+    let execution: ReturnType<typeof executeOpenClientCycleCommand> | null = null;
+    let standaloneExecution: ReturnType<typeof executeClientSubscriptionAllowanceCommand> | null =
+      null;
+    let blockerReleased = false;
+    try {
+      await blocker.query("begin");
+      await blocker.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `client-subscription-allowance:${journal.fixture.periodId}:${input.command.allowanceIdempotencyKey}`
+      ]);
+      execution = executeOpenClientCycleCommand(unitOfWork, input);
+      const outcome = await Promise.race([
+        execution.then((result) => ({ kind: "result" as const, result })),
+        delay(1_000).then(() => ({ kind: "timeout" as const }))
+      ]);
+      expect(outcome).toMatchObject({ kind: "result", result: { outcome: "applied" } });
+
+      const [receipt] = await runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandReceipts)
+        .where(
+          eq(
+            clientSubscriptionAllowanceCommandReceipts.idempotencyKey,
+            input.command.allowanceIdempotencyKey
+          )
+        );
+      if (!receipt) throw new Error("Expected the embedded allowance receipt");
+      const command = consumeAvailableCommand(receipt.command);
+      standaloneExecution = executeClientSubscriptionAllowanceCommand(
+        createDrizzleClientSubscriptionAllowanceCommandUnitOfWork(runtime.database),
+        {
+          periodId: journal.fixture.periodId,
+          expectedVersion: 1,
+          idempotencyKey: input.command.allowanceIdempotencyKey,
+          command
+        },
+        (current) =>
+          consumeAvailableAllowance(current, {
+            expectedVersion: 1,
+            idempotencyKey: input.command.allowanceIdempotencyKey,
+            consumptionId: command.consumptionId,
+            now: command.occurredAt
+          })
+      );
+      const standaloneWhileLocked = await Promise.race([
+        standaloneExecution.then((result) => ({ kind: "result" as const, result })),
+        delay(250).then(() => ({ kind: "timeout" as const }))
+      ]);
+      expect(standaloneWhileLocked).toEqual({ kind: "timeout" });
+      await blocker.query("rollback");
+      blockerReleased = true;
+      await expect(standaloneExecution).resolves.toMatchObject({ outcome: "replayed" });
+    } finally {
+      if (!blockerReleased) await blocker.query("rollback");
+      blocker.release();
+      await execution?.catch(() => undefined);
+      await standaloneExecution?.catch(() => undefined);
+    }
+  });
+
+  it("closes one exact paid cycle atomically and replays the stored closing reply", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const draftInput = astrologerReplyDraftInput(opened, "Ответ сохраняет границы цикла.");
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(unitOfWork, draftInput);
+    const replayedDraft = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      draftInput
+    );
+    const draftId = appliedDraftId(created);
+    if (created.outcome !== "applied") throw new Error("Expected an applied astrologer draft");
+    expect(replayedDraft).toEqual({ outcome: "replayed", result: created.receipt.result });
+    const idempotencyKey = `reply-${randomUUID()}`;
+    const first = closingReplyInput(opened, draftId, idempotencyKey, opened.journalVersion + 1);
+
+    const applied = await executePublishAstrologerReplyCommand(unitOfWork, first);
+    expect(applied).toMatchObject({ outcome: "applied", response: { outcome: "applied" } });
+    if (applied.outcome !== "applied") throw new Error("Expected an applied closing reply");
+    const freshServerIdentities = closingReplyInput(
+      opened,
+      draftId,
+      idempotencyKey,
+      opened.journalVersion + 1
+    );
+    await expect(
+      executePublishAstrologerReplyCommand(unitOfWork, freshServerIdentities)
+    ).resolves.toEqual({ outcome: "replayed", result: applied.receipt.result });
+    expect(freshServerIdentities.command.replyItemId).not.toBe(first.command.replyItemId);
+
+    await expect(
+      runtime.database
+        .select({ version: astroDiaryJournals.version })
+        .from(astroDiaryJournals)
+        .where(eq(astroDiaryJournals.id, opened.journalId))
+    ).resolves.toEqual([{ version: 5 }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.id, opened.cycleId))
+    ).resolves.toMatchObject([{ state: "closed", version: 2, closeReason: "completed" }]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryResponseObligations)
+        .where(eq(astroDiaryResponseObligations.id, opened.obligationId))
+    ).resolves.toMatchObject([
+      { state: "satisfied", version: 2, satisfiedByItemId: first.command.replyItemId }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItems)
+        .where(eq(astroDiaryTimelineItems.id, first.command.replyItemId))
+    ).resolves.toMatchObject([
+      { kind: "astrologer_reply", cycleId: opened.cycleId, cursor: 2, currentRevision: 1 }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryTimelineItemRevisions)
+        .where(eq(astroDiaryTimelineItemRevisions.itemId, first.command.replyItemId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryDerivativeCommands)
+        .where(eq(astroDiaryDerivativeCommands.id, first.command.derivativeCommandId))
+    ).resolves.toMatchObject([
+      { itemId: first.command.replyItemId, sourceRevision: 1, operation: "generate" }
+    ]);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceCommandReceipts)
+        .where(eq(clientSubscriptionAllowanceCommandReceipts.periodId, opened.fixture.periodId))
+    ).resolves.toHaveLength(1);
+    await expect(
+      runtime.database
+        .select()
+        .from(clientSubscriptionAllowanceConsumptions)
+        .where(eq(clientSubscriptionAllowanceConsumptions.periodId, opened.fixture.periodId))
+    ).resolves.toHaveLength(1);
+    const eventIds = Object.values(first.command.eventIds);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryEvents)
+        .where(inArray(astroDiaryEvents.eventId, eventIds))
+    ).resolves.toHaveLength(4);
+    const deliveries = await runtime.database
+      .select()
+      .from(astroDiaryEventDeliveries)
+      .where(inArray(astroDiaryEventDeliveries.eventId, eventIds));
+    expect(deliveries).toHaveLength(6);
+    await expect(
+      runtime.database
+        .select()
+        .from(outboxEvents)
+        .where(
+          inArray(
+            outboxEvents.aggregateId,
+            deliveries.map(({ id }) => id)
+          )
+        )
+    ).resolves.toHaveLength(6);
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCommandReceipts)
+        .where(eq(astroDiaryCommandReceipts.idempotencyKey, idempotencyKey))
+    ).resolves.toMatchObject([{ outcome: "applied", requestHash: applied.receipt.requestHash }]);
+    await expect(
+      runtime.database.select().from(astroDiaryDrafts).where(eq(astroDiaryDrafts.id, draftId))
+    ).resolves.toEqual([]);
+  });
+
+  it("rejects a closing reply after the paid entitlement ended", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "После окончания доступа запись запрещена.")
+    );
+    const draftId = appliedDraftId(created);
+    await endPaidSubscription(runtime, opened.fixture);
+    const input = closingReplyInput(
+      opened,
+      draftId,
+      `reply-ended-${randomUUID()}`,
+      opened.journalVersion + 1
+    );
+
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "rejected",
+      code: "paid_access_ended"
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.id, opened.cycleId))
+    ).resolves.toMatchObject([{ state: "awaiting_astrologer_response", version: 1 }]);
+  });
+
+  it("rejects closing when the persisted response deadline no longer matches paid terms", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "Срок ответа должен быть доказан контрактом.")
+    );
+    const draftId = appliedDraftId(created);
+    const [current] = await runtime.database
+      .select()
+      .from(astroDiaryResponseObligations)
+      .where(eq(astroDiaryResponseObligations.id, opened.obligationId));
+    if (!current) throw new Error("Expected the response obligation");
+    const mismatched = createAstroDiaryResponseObligation({
+      obligationId: current.id,
+      journalId: current.journalId,
+      cycleId: current.cycleId,
+      triggerItemId: current.triggerItemId,
+      openedAt: current.openedAt.toISOString(),
+      responseSlaWorkingDays: 3,
+      workingWeekdays: [1, 2, 3, 4, 5],
+      serviceTimezone: "Europe/Moscow"
+    });
+    await injectPersistedDeadlineMismatch(runtime, opened.obligationId, mismatched);
+    const input = closingReplyInput(
+      opened,
+      draftId,
+      `reply-deadline-${randomUUID()}`,
+      opened.journalVersion + 1
+    );
+
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, input)).resolves.toMatchObject({
+      outcome: "rejected",
+      code: "obligation_deadline_conflict"
+    });
+    await expect(
+      runtime.database
+        .select()
+        .from(astroDiaryCycles)
+        .where(eq(astroDiaryCycles.id, opened.cycleId))
+    ).resolves.toMatchObject([{ state: "awaiting_astrologer_response", version: 1 }]);
+  });
+
+  it("rolls back every closing-reply effect after a late duplicate event failure", async () => {
+    const opened = await createOpenCycleFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      astrologerReplyDraftInput(opened, "Ошибка доставки не закрывает цикл частично.")
+    );
+    const draftId = appliedDraftId(created);
+    const input = closingReplyInput(
+      opened,
+      draftId,
+      `reply-rollback-${randomUUID()}`,
+      opened.journalVersion + 1
+    );
+    input.command.eventIds.obligationSatisfied = input.command.eventIds.itemPublished;
+    const before = await paidCoreSnapshot(runtime, opened);
+
+    await expect(executePublishAstrologerReplyCommand(unitOfWork, input)).rejects.toThrow();
+
+    await expect(paidCoreSnapshot(runtime, opened)).resolves.toEqual(before);
+  });
+});
+
+async function createJournalFixture(runtime: PostgresRuntime): Promise<JournalFixture> {
+  const [clock] = (
+    await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
+  ).rows;
+  if (!clock) throw new Error("Integration database clock is missing");
+  const fixture = await createActiveClientSubscriptionFixture(
+    runtime,
+    clock.command_at.toISOString()
+  );
+  const journalId = randomUUID();
+  await runtime.database.insert(astroDiaryJournals).values({
+    id: journalId,
+    relationshipId: fixture.authority.relationshipId,
+    journalEpochId: fixture.subscription.journalEpochId,
+    astrologerUserId: fixture.authority.astrologerUserId,
+    clientUserId: fixture.authority.clientUserId,
+    state: "active",
+    version: 1,
+    createdAt: clock.command_at
+  });
+  return { fixture, journalId };
+}
+
+async function createOpenCycleFixture(runtime: PostgresRuntime): Promise<OpenCycleFixture> {
+  const journal = await createJournalFixture(runtime);
+  const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+  const created = await executeAstroDiaryParticipantDraftCreateCommand(
+    unitOfWork,
+    clientDraftInput(journal, "Мне важно заметить собственный ритм.")
+  );
+  const draftId = appliedDraftId(created);
+  const opened = openClientCycleInput(journal, draftId, `open-${randomUUID()}`, 2);
+  const result = await executeOpenClientCycleCommand(unitOfWork, opened);
+  if (result.outcome !== "applied") {
+    throw new Error(`Expected an open client cycle, received ${result.outcome}`);
+  }
+  return {
+    ...journal,
+    cycleId: opened.command.cycleId,
+    clientEntryItemId: opened.command.entryItemId,
+    obligationId: opened.command.obligationId,
+    journalVersion: 3
+  };
+}
+
+function clientDraftInput(journal: JournalFixture, body: string) {
+  return {
+    journalId: journal.journalId,
+    idempotencyKey: `client-draft-${randomUUID()}`,
+    actorUserId: journal.fixture.authority.clientUserId,
+    actorRole: "client" as const,
+    request: {
+      expectedJournalVersion: 1,
+      cycleId: null,
+      kind: "client_entry" as const,
+      body,
+      attachmentIds: [],
+      moodId: "calm" as const,
+      correctsItemId: null
+    }
+  };
+}
+
+function astrologerReplyDraftInput(opened: OpenCycleFixture, body: string) {
+  return {
+    journalId: opened.journalId,
+    idempotencyKey: `reply-draft-${randomUUID()}`,
+    actorUserId: opened.fixture.authority.astrologerUserId,
+    actorRole: "astrologer" as const,
+    request: {
+      expectedJournalVersion: opened.journalVersion,
+      cycleId: opened.cycleId,
+      kind: "astrologer_reply" as const,
+      body,
+      attachmentIds: [],
+      moodId: null,
+      correctsItemId: null
+    }
+  };
+}
+
+function openClientCycleInput(
+  journal: JournalFixture,
+  draftId: string,
+  idempotencyKey: string,
+  expectedJournalVersion: number,
+  override: Readonly<{ actorUserId?: string; allowanceExpectedVersion?: number }> = {}
+) {
+  return {
+    journalId: journal.journalId,
+    expectedJournalVersion,
+    idempotencyKey,
+    command: {
+      actorUserId: override.actorUserId ?? journal.fixture.authority.clientUserId,
+      draftId,
+      expectedDraftVersion: 1,
+      cycleId: randomUUID(),
+      entryItemId: randomUUID(),
+      obligationId: randomUUID(),
+      contextId: randomUUID(),
+      derivativeCommandId: randomUUID(),
+      allowancePeriodId: journal.fixture.periodId,
+      allowanceExpectedVersion: override.allowanceExpectedVersion ?? 1,
+      allowanceIdempotencyKey: `allowance-${randomUUID()}`,
+      allowanceConsumptionId: randomUUID(),
+      eventIds: {
+        cycleOpened: randomUUID(),
+        itemPublished: randomUUID(),
+        obligationCreated: randomUUID(),
+        contextRequested: randomUUID(),
+        derivativeRequested: randomUUID()
+      }
+    }
+  };
+}
+
+async function injectPersistedDeadlineMismatch(
+  runtime: PostgresRuntime,
+  obligationId: string,
+  mismatch: Readonly<{
+    dueAt: string;
+    responseSlaWorkingDays: number;
+    resolvedDueLocal: string;
+    resolvedDueOffset: string;
+  }>
+): Promise<void> {
+  const connection = await runtime.pool.connect();
+  try {
+    // Production writers cannot mutate SLA evidence. This isolated-database injection proves that
+    // the closing command still fails closed if pre-existing persisted evidence is inconsistent.
+    await connection.query(
+      "alter table astro_diary_response_obligations disable trigger astro_diary_response_obligations_version_guard"
+    );
+    await connection.query(
+      `update astro_diary_response_obligations
+          set due_at = $1,
+              response_sla_working_days = $2,
+              resolved_due_local = $3,
+              resolved_due_offset = $4
+        where id = $5`,
+      [
+        mismatch.dueAt,
+        mismatch.responseSlaWorkingDays,
+        mismatch.resolvedDueLocal,
+        mismatch.resolvedDueOffset,
+        obligationId
+      ]
+    );
+  } finally {
+    await connection.query(
+      "alter table astro_diary_response_obligations enable trigger astro_diary_response_obligations_version_guard"
+    );
+    connection.release();
+  }
+}
+
+async function exhaustPeriodAllowance(
+  runtime: PostgresRuntime,
+  fixture: ActiveClientSubscriptionFixture
+): Promise<void> {
+  const period = fixture.subscription.paidPeriods.find(({ id }) => id === fixture.periodId);
+  if (!period) throw new Error("Paid period is missing from the fixture");
+  const unitOfWork = createDrizzleClientSubscriptionAllowanceCommandUnitOfWork(runtime.database);
+  for (let expectedVersion = 1; expectedVersion <= 4; expectedVersion += 1) {
+    const idempotencyKey = `exhaust-${randomUUID()}`;
+    const consumptionId = randomUUID();
+    const result = await executeClientSubscriptionAllowanceCommand(
+      unitOfWork,
+      {
+        periodId: fixture.periodId,
+        expectedVersion,
+        idempotencyKey,
+        command: {
+          operation: "consume_available",
+          consumptionId,
+          occurredAt: period.startsAt
+        }
+      },
+      (current) =>
+        consumeAvailableAllowance(current, {
+          expectedVersion,
+          idempotencyKey,
+          consumptionId,
+          now: period.startsAt
+        })
+    );
+    if (result.outcome !== "applied") {
+      throw new Error(`Expected allowance exhaustion setup, received ${result.outcome}`);
+    }
+  }
+}
+
+function closingReplyInput(
+  opened: OpenCycleFixture,
+  draftId: string,
+  idempotencyKey: string,
+  expectedJournalVersion: number
+) {
+  return {
+    journalId: opened.journalId,
+    expectedJournalVersion,
+    idempotencyKey,
+    command: {
+      mode: "close" as const,
+      actorUserId: opened.fixture.authority.astrologerUserId,
+      cycleId: opened.cycleId,
+      expectedCycleVersion: 1,
+      obligationId: opened.obligationId,
+      expectedObligationVersion: 1,
+      replyDraftId: draftId,
+      expectedReplyDraftVersion: 1,
+      replyItemId: randomUUID(),
+      derivativeCommandId: randomUUID(),
+      eventIds: {
+        itemPublished: randomUUID(),
+        obligationSatisfied: randomUUID(),
+        cycleClosed: randomUUID(),
+        derivativeRequested: randomUUID()
+      }
+    }
+  };
+}
+
+function appliedDraftId(
+  result: Awaited<ReturnType<typeof executeAstroDiaryParticipantDraftCreateCommand>>
+): string {
+  if (result.outcome !== "applied" || result.response.resource === null) {
+    throw new Error(`Expected an applied server-allocated draft, received ${result.outcome}`);
+  }
+  return result.response.resource.draftId;
+}
+
+async function endPaidSubscription(
+  runtime: PostgresRuntime,
+  fixture: ActiveClientSubscriptionFixture
+): Promise<void> {
+  const period = fixture.subscription.paidPeriods.find(({ id }) => id === fixture.periodId);
+  if (!period) throw new Error("Paid period is missing from the fixture");
+  const sourceEventId = randomUUID();
+  const evidenceId = randomUUID();
+  const result = await applyClientSubscriptionSourceEvent(
+    createDrizzleClientSubscriptionSourceEventApplicationUnitOfWork(runtime.database),
+    {
+      subscriptionId: fixture.subscription.id,
+      expectedVersion: fixture.subscription.version,
+      sourceEventId,
+      sourceEventDigest: sha256(sourceEventId),
+      evidenceId
+    },
+    (current) =>
+      endSubscriptionAtPaidBoundary(current, {
+        now: period.endsAt,
+        eventIds: [randomUUID(), randomUUID()]
+      })
+  );
+  if (result.outcome !== "applied") {
+    throw new Error(`Expected paid-boundary end, received ${result.outcome}`);
+  }
+  await expect(
+    runtime.database
+      .select()
+      .from(clientEntitlementGrants)
+      .where(eq(clientEntitlementGrants.subscriptionId, fixture.subscription.id))
+  ).resolves.toMatchObject([{ state: "ended" }]);
+}
+
+async function paidCoreSnapshot(runtime: PostgresRuntime, journal: JournalFixture) {
+  const counts = await runtime.pool.query<{
+    journal_version: number;
+    drafts: number;
+    cycles: number;
+    items: number;
+    revisions: number;
+    obligations: number;
+    contexts: number;
+    derivatives: number;
+    diary_receipts: number;
+    allowance_receipts: number;
+    allowance_effects: number;
+    allowance_consumptions: number;
+    allowance_facts: number;
+    events: number;
+    deliveries: number;
+    outbox: number;
+    allowance_head: unknown;
+    cycle_heads: unknown;
+    obligation_heads: unknown;
+  }>(
+    `select
+      (select version from astro_diary_journals where id = $1) as journal_version,
+      (select count(*)::int from astro_diary_drafts where journal_id = $1) as drafts,
+      (select count(*)::int from astro_diary_cycles where journal_id = $1) as cycles,
+      (select count(*)::int from astro_diary_timeline_items where journal_id = $1) as items,
+      (select count(*)::int from astro_diary_timeline_item_revisions where journal_id = $1) as revisions,
+      (select count(*)::int from astro_diary_response_obligations where journal_id = $1) as obligations,
+      (select count(*)::int from astro_diary_context_snapshots where journal_id = $1) as contexts,
+      (select count(*)::int from astro_diary_derivative_commands where journal_id = $1) as derivatives,
+      (select count(*)::int from astro_diary_command_receipts where journal_id = $1) as diary_receipts,
+      (select count(*)::int from client_subscription_allowance_command_receipts where period_id = $2) as allowance_receipts,
+      (select count(*)::int from client_subscription_allowance_command_effects where period_id = $2) as allowance_effects,
+      (select count(*)::int from client_subscription_allowance_consumptions where period_id = $2) as allowance_consumptions,
+      (select count(*)::int from astro_diary_cycle_opening_allowance_facts where journal_id = $1) as allowance_facts,
+      (select count(*)::int from astro_diary_events where journal_id = $1) as events,
+      (select count(*)::int from astro_diary_event_deliveries d join astro_diary_events e on e.event_id = d.event_id where e.journal_id = $1) as deliveries,
+      (select count(*)::int from outbox_events o where exists (
+        select 1 from astro_diary_event_deliveries d
+        join astro_diary_events e on e.event_id = d.event_id
+        where e.journal_id = $1 and d.id = o.aggregate_id
+      )) as outbox,
+      (select jsonb_build_object(
+        'available', available,
+        'reserved', reserved,
+        'consumed', consumed,
+        'released', released,
+        'version', version
+      ) from client_subscription_period_allowances where period_id = $2) as allowance_head,
+      (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', id,
+        'state', state,
+        'version', version,
+        'closedAt', closed_at,
+        'closeReason', close_reason
+      ) order by id), '[]'::jsonb) from astro_diary_cycles where journal_id = $1) as cycle_heads,
+      (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', id,
+        'state', state,
+        'version', version,
+        'satisfiedByItemId', satisfied_by_item_id,
+        'closedAt', closed_at
+      ) order by id), '[]'::jsonb) from astro_diary_response_obligations where journal_id = $1) as obligation_heads`,
+    [journal.journalId, journal.fixture.periodId]
+  );
+  return counts.rows[0];
+}
+
+function sha256(value: string): `sha256:${string}` {
+  return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
+}
+
+function consumeAvailableCommand(value: unknown): Readonly<{
+  operation: "consume_available";
+  consumptionId: string;
+  occurredAt: string;
+}> {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("operation" in value) ||
+    value.operation !== "consume_available" ||
+    !("consumptionId" in value) ||
+    typeof value.consumptionId !== "string" ||
+    !("occurredAt" in value) ||
+    typeof value.occurredAt !== "string"
+  ) {
+    throw new Error("Expected a consumed-available allowance command");
+  }
+  return {
+    operation: value.operation,
+    consumptionId: value.consumptionId,
+    occurredAt: value.occurredAt
+  };
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}

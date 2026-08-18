@@ -343,6 +343,7 @@ export function decidePublishAstrologerReplyCommand(
   if (coherence) return rejected(coherence);
   const access = authorizeAstroDiaryOperation(authority.access, "close");
   if (access.outcome === "denied") return rejected(access.code);
+  if (authority.access.entitlementState !== "active") return rejected("paid_access_ended");
   if (input.actorUserId !== authority.journal.astrologerUserId) return rejected("actor_mismatch");
   const cycle = owned(authority.cycles, input.cycleId);
   const obligation = owned(authority.obligations, input.obligationId);
@@ -356,6 +357,22 @@ export function decidePublishAstrologerReplyCommand(
     draft.authorUserId !== input.actorUserId
   ) {
     return rejected("authority_scope_conflict");
+  }
+  const triggerItem = authority.timelineItems.find(({ id }) => id === obligation.triggerItemId);
+  if (
+    !authority.subscription.paidPeriods.some(({ id }) => id === cycle.openingPeriodId) ||
+    !triggerItem ||
+    triggerItem.journalId !== authority.journal.id ||
+    triggerItem.cycleId !== cycle.id ||
+    triggerItem.kind !== "client_entry" ||
+    triggerItem.authorRole !== "client" ||
+    triggerItem.authorUserId !== authority.journal.clientUserId ||
+    Temporal.Instant.compare(obligation.openedAt, triggerItem.occurredAt) !== 0
+  ) {
+    return rejected("obligation_scope_conflict");
+  }
+  if (!matchesPaidObligationDeadline(authority, obligation)) {
+    return rejected("obligation_deadline_conflict");
   }
   const published = publishAstroDiaryDraft(draft, {
     actorUserId: input.actorUserId,
@@ -611,6 +628,34 @@ function owned<Value extends { readonly id: string }>(
   id: string
 ): Value | undefined {
   return values.find((value) => value.id === id);
+}
+
+function matchesPaidObligationDeadline(
+  authority: AstroDiaryCommandAuthority,
+  obligation: AstroDiaryResponseObligation
+): boolean {
+  const terms = authority.contract.astroDiaryConfig;
+  const expected = createAstroDiaryResponseObligation({
+    obligationId: obligation.id,
+    journalId: obligation.journalId,
+    cycleId: obligation.cycleId,
+    triggerItemId: obligation.triggerItemId,
+    openedAt: obligation.openedAt,
+    responseSlaWorkingDays: terms.responseSlaWorkingDays,
+    workingWeekdays: terms.workingWeekdays,
+    serviceTimezone: terms.serviceTimezone
+  });
+  return (
+    Temporal.Instant.compare(obligation.dueAt, expected.dueAt) === 0 &&
+    obligation.responseSlaWorkingDays === expected.responseSlaWorkingDays &&
+    obligation.serviceTimezone === expected.serviceTimezone &&
+    obligation.resolvedDueLocal === expected.resolvedDueLocal &&
+    obligation.resolvedDueOffset === expected.resolvedDueOffset &&
+    obligation.workingWeekdays.length === expected.workingWeekdays.length &&
+    obligation.workingWeekdays.every(
+      (weekday, index) => weekday === expected.workingWeekdays[index]
+    )
+  );
 }
 
 export function validateAstroDiaryCommandAuthority(

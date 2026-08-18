@@ -111,6 +111,15 @@ export async function readLockedAstroDiaryCommandAuthority(
     .orderBy(asc(clientEntitlementGrants.startsAt))
     .for("share");
 
+  const allowances = [];
+  for (const period of subscription.paidPeriods) {
+    const allowance = await findClientSubscriptionPeriodAllowance(transaction, period.id, "update");
+    if (!allowance) {
+      throw new Error("AstroDiary subscription period allowance authority is missing");
+    }
+    allowances.push(allowance);
+  }
+
   const cycleRows = await transaction
     .select()
     .from(astroDiaryCycles)
@@ -215,15 +224,6 @@ export async function readLockedAstroDiaryCommandAuthority(
     (activePeriod
       ? entitlementRows.find((row) => row.periodId === activePeriod.id)
       : entitlementRows.at(-1)) ?? null;
-
-  const allowances = [];
-  for (const period of subscription.paidPeriods) {
-    const allowance = await findClientSubscriptionPeriodAllowance(transaction, period.id, "update");
-    if (!allowance) {
-      throw new Error("AstroDiary subscription period allowance authority is missing");
-    }
-    allowances.push(allowance);
-  }
 
   const journal = astroDiaryJournalSchema.parse({
     id: journalRow.id,

@@ -78,8 +78,9 @@ type ClientSubscriptionAllowanceTransactionInput = Parameters<
 >[0];
 
 /**
- * Persists one allowance command inside an already-owned transaction. Callers must keep this
- * result in the same transaction as every business effect that depends on the allowance change.
+ * Persists one allowance command inside an already-owned transaction and acquires the standalone
+ * same-key advisory lock. Callers that already hold the period allowance in a broader global lock
+ * order must use the prelocked entry below so they do not invert advisory-lock and row-lock order.
  */
 export async function executeClientSubscriptionAllowanceCommandInTransaction(
   transaction: ClientSubscriptionTransaction,
@@ -90,6 +91,18 @@ export async function executeClientSubscriptionAllowanceCommandInTransaction(
       ${`client-subscription-allowance:${input.periodId}:${input.idempotencyKey}`}, 0
     ))`
   );
+  return executePrelockedClientSubscriptionAllowanceCommandInTransaction(transaction, input);
+}
+
+/**
+ * Persists an allowance command after the caller has already locked its period allowance in the
+ * enclosing transaction's global lock order. This entry deliberately does not acquire the
+ * standalone allowance-command advisory lock.
+ */
+export async function executePrelockedClientSubscriptionAllowanceCommandInTransaction(
+  transaction: ClientSubscriptionTransaction,
+  input: ClientSubscriptionAllowanceTransactionInput
+): Promise<ClientSubscriptionAllowanceCommandExecution> {
   const [prior] = await transaction
     .select()
     .from(clientSubscriptionAllowanceCommandReceipts)

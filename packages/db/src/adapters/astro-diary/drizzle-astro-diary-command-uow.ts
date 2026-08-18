@@ -44,7 +44,7 @@ import {
 import { astroDiaryEvents } from "../../schema/astro-diary/commands.schema";
 import { outboxEvents } from "../../schema/outbox/outbox-events.schema";
 import type { ClientSubscriptionTransaction } from "../client-subscriptions/drizzle-client-subscription-transition-persistence";
-import { executeClientSubscriptionAllowanceCommandInTransaction } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
+import { executePrelockedClientSubscriptionAllowanceCommandInTransaction } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
 import {
   preconditionKey,
   readLockedAstroDiaryCommandAuthority
@@ -2025,20 +2025,23 @@ async function persistConsumedOpeningAllowance(
     throw new Error("AstroDiary opening cycle requires one consumed available allowance receipt");
   }
   const command = receipt.command;
-  const execution = await executeClientSubscriptionAllowanceCommandInTransaction(transaction, {
-    periodId: effect.after.periodId,
-    expectedVersion: effect.beforeVersion,
-    idempotencyKey: receipt.idempotencyKey,
-    requestHash: receipt.requestHash,
-    command,
-    decide: (current) =>
-      consumeAvailableAllowance(current, {
-        expectedVersion: effect.beforeVersion!,
-        idempotencyKey: receipt.idempotencyKey,
-        consumptionId: command.consumptionId,
-        now: command.occurredAt
-      })
-  });
+  const execution = await executePrelockedClientSubscriptionAllowanceCommandInTransaction(
+    transaction,
+    {
+      periodId: effect.after.periodId,
+      expectedVersion: effect.beforeVersion,
+      idempotencyKey: receipt.idempotencyKey,
+      requestHash: receipt.requestHash,
+      command,
+      decide: (current) =>
+        consumeAvailableAllowance(current, {
+          expectedVersion: effect.beforeVersion!,
+          idempotencyKey: receipt.idempotencyKey,
+          consumptionId: command.consumptionId,
+          now: command.occurredAt
+        })
+    }
+  );
   if (
     execution.outcome !== "applied" ||
     stableJson(execution.allowance) !== stableJson(effect.after)
@@ -2063,20 +2066,23 @@ async function persistReservedOpeningAllowance(
     throw new Error("AstroDiary prompt opening requires one reserved allowance receipt");
   }
   const command = receipt.command;
-  const execution = await executeClientSubscriptionAllowanceCommandInTransaction(transaction, {
-    periodId: effect.after.periodId,
-    expectedVersion: effect.beforeVersion,
-    idempotencyKey: receipt.idempotencyKey,
-    requestHash: receipt.requestHash,
-    command,
-    decide: (current) =>
-      reservePeriodAllowance(current, {
-        expectedVersion: effect.beforeVersion!,
-        idempotencyKey: receipt.idempotencyKey,
-        reservationId: command.reservationId,
-        now: command.occurredAt
-      })
-  });
+  const execution = await executePrelockedClientSubscriptionAllowanceCommandInTransaction(
+    transaction,
+    {
+      periodId: effect.after.periodId,
+      expectedVersion: effect.beforeVersion,
+      idempotencyKey: receipt.idempotencyKey,
+      requestHash: receipt.requestHash,
+      command,
+      decide: (current) =>
+        reservePeriodAllowance(current, {
+          expectedVersion: effect.beforeVersion!,
+          idempotencyKey: receipt.idempotencyKey,
+          reservationId: command.reservationId,
+          now: command.occurredAt
+        })
+    }
+  );
   if (
     execution.outcome !== "applied" ||
     stableJson(execution.allowance) !== stableJson(effect.after)
@@ -2102,20 +2108,23 @@ async function persistConsumedReservedOpeningAllowance(
     throw new Error("AstroDiary prompt acceptance requires one consumed reservation receipt");
   }
   const command = receipt.command;
-  const execution = await executeClientSubscriptionAllowanceCommandInTransaction(transaction, {
-    periodId: effect.after.periodId,
-    expectedVersion: effect.beforeVersion,
-    idempotencyKey: receipt.idempotencyKey,
-    requestHash: receipt.requestHash,
-    command,
-    decide: (current) =>
-      consumeReservedAllowance(current, {
-        expectedVersion: effect.beforeVersion!,
-        idempotencyKey: receipt.idempotencyKey,
-        reservationId: command.reservationId,
-        now: command.occurredAt
-      })
-  });
+  const execution = await executePrelockedClientSubscriptionAllowanceCommandInTransaction(
+    transaction,
+    {
+      periodId: effect.after.periodId,
+      expectedVersion: effect.beforeVersion,
+      idempotencyKey: receipt.idempotencyKey,
+      requestHash: receipt.requestHash,
+      command,
+      decide: (current) =>
+        consumeReservedAllowance(current, {
+          expectedVersion: effect.beforeVersion!,
+          idempotencyKey: receipt.idempotencyKey,
+          reservationId: command.reservationId,
+          now: command.occurredAt
+        })
+    }
+  );
   if (
     execution.outcome !== "applied" ||
     stableJson(execution.allowance) !== stableJson(effect.after)
@@ -2140,20 +2149,23 @@ async function persistReleasedOpeningAllowance(
     throw new Error("AstroDiary prompt decline requires one released reservation receipt");
   }
   const command = receipt.command;
-  const execution = await executeClientSubscriptionAllowanceCommandInTransaction(transaction, {
-    periodId: effect.after.periodId,
-    expectedVersion: effect.beforeVersion,
-    idempotencyKey: receipt.idempotencyKey,
-    requestHash: receipt.requestHash,
-    command,
-    decide: (current) =>
-      releaseReservedAllowance(current, {
-        expectedVersion: effect.beforeVersion!,
-        idempotencyKey: receipt.idempotencyKey,
-        reservationId: command.reservationId,
-        now: command.occurredAt
-      })
-  });
+  const execution = await executePrelockedClientSubscriptionAllowanceCommandInTransaction(
+    transaction,
+    {
+      periodId: effect.after.periodId,
+      expectedVersion: effect.beforeVersion,
+      idempotencyKey: receipt.idempotencyKey,
+      requestHash: receipt.requestHash,
+      command,
+      decide: (current) =>
+        releaseReservedAllowance(current, {
+          expectedVersion: effect.beforeVersion!,
+          idempotencyKey: receipt.idempotencyKey,
+          reservationId: command.reservationId,
+          now: command.occurredAt
+        })
+    }
+  );
   if (
     execution.outcome !== "applied" ||
     stableJson(execution.allowance) !== stableJson(effect.after)
