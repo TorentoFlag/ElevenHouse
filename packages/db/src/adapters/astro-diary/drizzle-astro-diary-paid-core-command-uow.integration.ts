@@ -1241,6 +1241,54 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
       })
     ).resolves.toBeNull();
   });
+
+  it("hydrates only the owning client's unpublished entry draft", async () => {
+    const journal = await createJournalFixture(runtime);
+    const unitOfWork = createDrizzleAstroDiaryCommandUnitOfWork(runtime.database);
+    const created = await executeAstroDiaryParticipantDraftCreateCommand(
+      unitOfWork,
+      clientDraftInput(journal, "Черновик клиента после перезагрузки")
+    );
+    const clientDraftId = appliedDraftId(created);
+    const reader = createDrizzleAstroDiaryJournalReader(runtime.database);
+    const [clock] = (
+      await runtime.pool.query<{ command_at: Date }>("select clock_timestamp() as command_at")
+    ).rows;
+    if (!clock) throw new Error("Integration database clock is missing");
+    const now = clock.command_at.toISOString();
+
+    await expect(
+      reader.getParticipantClientEntryDraft({
+        participantUserId: journal.fixture.authority.clientUserId,
+        participantRole: "client",
+        journalId: journal.journalId,
+        now
+      })
+    ).resolves.toEqual({
+      draft: {
+        draftId: clientDraftId,
+        version: 1,
+        body: "Черновик клиента после перезагрузки",
+        moodId: "calm"
+      }
+    });
+    await expect(
+      reader.getParticipantClientEntryDraft({
+        participantUserId: randomUUID(),
+        participantRole: "client",
+        journalId: journal.journalId,
+        now
+      })
+    ).resolves.toBeNull();
+    await expect(
+      reader.getParticipantClientEntryDraft({
+        participantUserId: journal.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: journal.journalId,
+        now
+      })
+    ).resolves.toBeNull();
+  });
 });
 
 async function createJournalFixture(runtime: PostgresRuntime): Promise<JournalFixture> {

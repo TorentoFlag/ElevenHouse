@@ -117,6 +117,22 @@ describe("client AstroDiary HTTP API", () => {
     expect(invalid.body).toMatchObject({ code: "invalid_request" });
   });
 
+  it("hydrates only the current client's unpublished entry draft", async () => {
+    const own = await request(`/astro-diary/journals/${journalId}/client-entry/draft`, {
+      role: "client"
+    });
+    expect(own.status).toBe(200);
+    expect(own.body).toEqual({
+      draft: { draftId, version: 1, body: "Сегодня спокойно", moodId: "calm" }
+    });
+
+    const foreign = await request(`/astro-diary/journals/${journalId}/client-entry/draft`, {
+      role: "foreign-client"
+    });
+    expect(foreign.status).toBe(404);
+    expect(foreign.body).toMatchObject({ code: "astro_diary_not_found" });
+  });
+
   it("returns the same allocated draft on network replay and conflicts on changed intent", async () => {
     const payload = {
       expectedJournalVersion: 1,
@@ -413,6 +429,10 @@ function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
       hasMore: false
     }),
     getParticipantAstrologerReplyDraft: async () => null,
+    getParticipantClientEntryDraft: async ({ participantUserId }) =>
+      participantUserId === clientUserId
+        ? { draft: { draftId, version: 1, body: "Сегодня спокойно", moodId: "calm" } }
+        : null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>
       participantUserId === clientUserId
         ? {

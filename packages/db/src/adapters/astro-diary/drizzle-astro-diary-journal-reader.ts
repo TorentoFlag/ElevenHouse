@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, gt, max, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, max, ne } from "drizzle-orm";
 import {
   astroDiaryAstrologerReplyDraftResponseSchema,
+  astroDiaryClientEntryDraftResponseSchema,
   astroDiaryCycleSchema,
   astroDiaryJournalListResponseSchema,
   astroDiaryJournalSchema,
@@ -39,6 +40,8 @@ export function createDrizzleAstroDiaryJournalReader(
     getParticipantJournalTimeline: (input) => getParticipantJournalTimeline(database, input),
     getParticipantAstrologerReplyDraft: (input) =>
       getParticipantAstrologerReplyDraft(database, input),
+    getParticipantClientEntryDraft: (input) =>
+      getParticipantClientEntryDraft(database, input),
     getPaidCoreCommandContext: (input) => getPaidCoreCommandContext(database, input)
   };
 }
@@ -333,6 +336,40 @@ async function getParticipantAstrologerReplyDraft(
       .limit(1);
 
     return astroDiaryAstrologerReplyDraftResponseSchema.parse({ draft: draft ?? null });
+  });
+}
+
+async function getParticipantClientEntryDraft(
+  database: ElevenHouseDatabase,
+  input: Parameters<AstroDiaryJournalReader["getParticipantClientEntryDraft"]>[0]
+) {
+  if (input.participantRole !== "client") return null;
+
+  return database.transaction(async (transaction) => {
+    const journalRow = await findParticipantJournalRow(transaction, input);
+    if (!journalRow) return null;
+
+    const [draft] = await transaction
+      .select({
+        draftId: astroDiaryDrafts.id,
+        version: astroDiaryDrafts.version,
+        body: astroDiaryDrafts.body,
+        moodId: astroDiaryDrafts.moodId
+      })
+      .from(astroDiaryDrafts)
+      .where(
+        and(
+          eq(astroDiaryDrafts.journalId, journalRow.id),
+          isNull(astroDiaryDrafts.cycleId),
+          eq(astroDiaryDrafts.authorUserId, input.participantUserId),
+          eq(astroDiaryDrafts.authorRole, "client"),
+          eq(astroDiaryDrafts.kind, "client_entry")
+        )
+      )
+      .orderBy(desc(astroDiaryDrafts.updatedAt), desc(astroDiaryDrafts.id))
+      .limit(1);
+
+    return astroDiaryClientEntryDraftResponseSchema.parse({ draft: draft ?? null });
   });
 }
 

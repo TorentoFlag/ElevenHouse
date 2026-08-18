@@ -32,6 +32,13 @@ export const router = createBrowserRouter([
             element: <MePage />
           },
           {
+            path: clientRouteContract.authenticatedAstroDiary,
+            lazy: async () => ({
+              Component: (await import("./pages/astro-diary/ClientAstroDiaryPage"))
+                .ClientAstroDiaryPage
+            })
+          },
+          {
             path: clientRouteContract.authenticatedSession,
             lazy: async () => ({ Component: (await import("./pages/session/SessionPage")).SessionPage })
           }

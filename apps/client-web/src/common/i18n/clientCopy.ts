@@ -1,5 +1,11 @@
 import type { OtpAuthFormCopy } from "@elevenhouse/design-system/components/OtpAuthForm";
 import type { OtpCodeFormCopy } from "@elevenhouse/design-system/components/OtpCodeForm";
+import type {
+  AstroDiaryJournalSummaryResponse,
+  AstroDiaryMoodId,
+  AstroDiaryParticipantRole,
+  AstroDiaryTimelineItem
+} from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 
 export type AuthCopy = {
@@ -96,15 +102,221 @@ export type ClientPurchaseFlowCopy = {
   deliveryFormats: Record<string, string>;
 };
 
+export type ClientAstroDiaryCopy = {
+  documentTitle: string;
+  title: string;
+  eyebrow: string;
+  clientCabinetLabel: string;
+  navigationLabel: string;
+  backToCabinetLabel: string;
+  privateLabel: string;
+  loadingAriaLabel: string;
+  notRelatedTitle: string;
+  notRelatedDescription: string;
+  noSubscriptionTitle: (astrologerName: string) => string;
+  noSubscriptionDescription: string;
+  errorTitle: string;
+  errorDescription: string;
+  retryLabel: string;
+  journalListTitle: string;
+  journalRowLabel: (summary: AstroDiaryJournalSummaryResponse) => string;
+  journalStateLabel: (summary: AstroDiaryJournalSummaryResponse) => string;
+  unreadLabel: (count: number) => string;
+  backToListLabel: string;
+  archivedLabel: string;
+  allowanceLabel: (available: number) => string;
+  allowanceExhaustedLabel: string;
+  readOnlyComposerLabel: string;
+  waitingForAstrologerLabel: string;
+  loadingAccessLabel: string;
+  accessErrorLabel: string;
+  timeline: {
+    ariaLabel: string;
+    contextTitle: string;
+    contextDescription: string;
+    emptyLabel: string;
+    errorLabel: string;
+    loadMoreLabel: string;
+    loadingMoreLabel: string;
+    loadMoreErrorLabel: string;
+    retryLoadMoreLabel: string;
+    authorLabels: Record<AstroDiaryParticipantRole, string>;
+    kindLabels: Record<AstroDiaryTimelineItem["kind"], string>;
+    tombstoneLabels: Record<"hidden_by_author" | "content_erased", string>;
+    moodLabels: Record<AstroDiaryMoodId, string>;
+  };
+  entry: {
+    writeLabel: string;
+    modeLabel: string;
+    title: string;
+    moodLabel: string;
+    bodyLabel: string;
+    placeholder: string;
+    saveLabel: string;
+    savingLabel: string;
+    savedLabel: string;
+    unsavedLabel: string;
+    publishLabel: string;
+    publishingLabel: string;
+    reloadLatestLabel: string;
+    reviewDraftLabel: string;
+    characterCountLabel: (count: number, maximum: number) => string;
+    errors: Record<"stale" | "idempotency" | "allowance" | "read_only" | "state" | "generic", string>;
+  };
+};
+
 export type ClientCopy = {
   auth: AuthCopy;
+  astroDiary: ClientAstroDiaryCopy;
   birthPlaceSearch: BirthPlaceSearchCopy;
   birthTimeOccurrence: BirthTimeOccurrenceCopy;
   purchaseFlow: ClientPurchaseFlowCopy;
 };
 
+const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy> = {
+  ru: {
+    documentTitle: "ElevenHouse | Мой астродневник",
+    title: "Мой астродневник",
+    eyebrow: "Личный дневник",
+    clientCabinetLabel: "Кабинет клиента",
+    navigationLabel: "Разделы кабинета",
+    backToCabinetLabel: "В кабинет",
+    privateLabel: "Только вы и ваш астролог",
+    loadingAriaLabel: "Загрузка вашего Астродневника",
+    notRelatedTitle: "Связь с астрологом не найдена",
+    notRelatedDescription: "Откройте Астродневник из кабинета рядом с уже связанным астрологом.",
+    noSubscriptionTitle: (astrologerName) => `Астродневник у ${astrologerName}`,
+    noSubscriptionDescription: "Астродневник пока недоступен. Подписка у этого астролога откроет личный дневник.",
+    errorTitle: "Не удалось загрузить Астродневник",
+    errorDescription: "Повторите запрос. Мы не подменяем данные дневника локальной копией.",
+    retryLabel: "Повторить",
+    journalListTitle: "Мои журналы",
+    journalRowLabel: (summary) => summary.access.mode === "active" ? "Текущий журнал" : "Архивный журнал",
+    journalStateLabel: (summary) => summary.access.mode === "active" ? "Текущий журнал" : "История",
+    unreadLabel: (count) => `Непрочитано: ${count}`,
+    backToListLabel: "Назад к журналам",
+    archivedLabel: "Подписка завершена · история доступна только для чтения",
+    allowanceLabel: (available) => `Новых циклов: ${available}`,
+    allowanceExhaustedLabel: "Лимит новых циклов на текущий оплаченный период исчерпан.",
+    readOnlyComposerLabel: "Новые записи недоступны в архивном журнале.",
+    waitingForAstrologerLabel: "Запись отправлена. Теперь очередь ответа астролога.",
+    loadingAccessLabel: "Проверяем доступ к журналу…",
+    accessErrorLabel: "Не удалось подтвердить доступ к записи.",
+    timeline: {
+      ariaLabel: "Лента Астродневника",
+      contextTitle: "Личное пространство",
+      contextDescription: "Записи и ответы видны только вам и этому астрологу. Состояние дневника подтверждает сервер.",
+      emptyLabel: "Здесь пока нет опубликованных записей.",
+      errorLabel: "Не удалось загрузить ленту журнала.",
+      loadMoreLabel: "Показать более новые записи",
+      loadingMoreLabel: "Загружаем записи…",
+      loadMoreErrorLabel: "Не удалось загрузить следующие записи.",
+      retryLoadMoreLabel: "Повторить загрузку записей",
+      authorLabels: { client: "Вы", astrologer: "Астролог" },
+      kindLabels: { client_entry: "Ваша запись", astrologer_reply: "Ответ астролога", reflection_prompt: "Вопрос для рефлексии", correction: "Исправление", tombstone: "Удалённая запись" },
+      tombstoneLabels: { hidden_by_author: "Автор скрыл содержимое записи.", content_erased: "Содержимое записи удалено." },
+      moodLabels: { inspired: "Вдохновение", joy: "Радость", calm: "Спокойствие", tired: "Усталость", anxious: "Тревога", sad: "Грусть" }
+    },
+    entry: {
+      writeLabel: "Написать запись",
+      modeLabel: "Запись",
+      title: "Черновик записи",
+      moodLabel: "Как вы себя чувствуете",
+      bodyLabel: "Текст записи",
+      placeholder: "Опишите событие, мысль или состояние…",
+      saveLabel: "Сохранить черновик",
+      savingLabel: "Сохраняем…",
+      savedLabel: "Черновик сохранён",
+      unsavedLabel: "Есть несохранённые изменения",
+      publishLabel: "Опубликовать запись",
+      publishingLabel: "Публикуем…",
+      reloadLatestLabel: "Загрузить актуальную версию",
+      reviewDraftLabel: "Проверить черновик",
+      characterCountLabel: (count, maximum) => `${count} из ${maximum}`,
+      errors: {
+        stale: "Дневник изменился в другой сессии. Загрузите актуальную версию — ваш текст сохранён здесь.",
+        idempotency: "Этот повтор связан с другим содержимым. Повторите сохранение без изменений.",
+        allowance: "Лимит новых циклов на текущий оплаченный период исчерпан.",
+        read_only: "Подписка завершена. Журнал доступен только для чтения.",
+        state: "Новый цикл сейчас недоступен. Загрузите актуальное состояние журнала.",
+        generic: "Не удалось сохранить запись. Повторите запрос — текст останется в редакторе."
+      }
+    }
+  },
+  en: {
+    documentTitle: "ElevenHouse | My AstroDiary",
+    title: "My AstroDiary",
+    eyebrow: "Personal journal",
+    clientCabinetLabel: "Client account",
+    navigationLabel: "Account sections",
+    backToCabinetLabel: "Back to account",
+    privateLabel: "Only you and your astrologer",
+    loadingAriaLabel: "Loading your AstroDiary",
+    notRelatedTitle: "Astrologer relationship not found",
+    notRelatedDescription: "Open AstroDiary from your account beside an astrologer you are already connected with.",
+    noSubscriptionTitle: (astrologerName) => `AstroDiary with ${astrologerName}`,
+    noSubscriptionDescription: "AstroDiary is not available yet. A subscription with this astrologer unlocks your personal journal.",
+    errorTitle: "Could not load AstroDiary",
+    errorDescription: "Retry the request. Journal data is never replaced with a local copy.",
+    retryLabel: "Retry",
+    journalListTitle: "My journals",
+    journalRowLabel: (summary) => summary.access.mode === "active" ? "Current journal" : "Archived journal",
+    journalStateLabel: (summary) => summary.access.mode === "active" ? "Current journal" : "History",
+    unreadLabel: (count) => `Unread: ${count}`,
+    backToListLabel: "Back to journals",
+    archivedLabel: "Subscription ended · history is read-only",
+    allowanceLabel: (available) => `New cycles: ${available}`,
+    allowanceExhaustedLabel: "The new-cycle allowance for this paid period has been used.",
+    readOnlyComposerLabel: "New entries are unavailable in an archived journal.",
+    waitingForAstrologerLabel: "Your entry is published. It is now your astrologer's turn.",
+    loadingAccessLabel: "Checking journal access…",
+    accessErrorLabel: "Could not confirm entry access.",
+    timeline: {
+      ariaLabel: "AstroDiary timeline",
+      contextTitle: "Private space",
+      contextDescription: "Entries and replies are visible only to you and this astrologer. The server confirms journal state.",
+      emptyLabel: "There are no published entries here yet.",
+      errorLabel: "Could not load the journal timeline.",
+      loadMoreLabel: "Show newer entries",
+      loadingMoreLabel: "Loading entries…",
+      loadMoreErrorLabel: "Could not load more entries.",
+      retryLoadMoreLabel: "Retry loading entries",
+      authorLabels: { client: "You", astrologer: "Astrologer" },
+      kindLabels: { client_entry: "Your entry", astrologer_reply: "Astrologer reply", reflection_prompt: "Reflection prompt", correction: "Correction", tombstone: "Deleted entry" },
+      tombstoneLabels: { hidden_by_author: "The author hid this entry's content.", content_erased: "This entry's content was erased." },
+      moodLabels: { inspired: "Inspired", joy: "Joy", calm: "Calm", tired: "Tired", anxious: "Anxious", sad: "Sad" }
+    },
+    entry: {
+      writeLabel: "Write an entry",
+      modeLabel: "Entry",
+      title: "Entry draft",
+      moodLabel: "How you feel",
+      bodyLabel: "Entry text",
+      placeholder: "Describe an event, thought, or feeling…",
+      saveLabel: "Save draft",
+      savingLabel: "Saving…",
+      savedLabel: "Draft saved",
+      unsavedLabel: "Unsaved changes",
+      publishLabel: "Publish entry",
+      publishingLabel: "Publishing…",
+      reloadLatestLabel: "Load latest",
+      reviewDraftLabel: "Review draft",
+      characterCountLabel: (count, maximum) => `${count} of ${maximum}`,
+      errors: {
+        stale: "The journal changed in another session. Load the latest version—your text is still here.",
+        idempotency: "This retry is bound to different content. Retry without changing it.",
+        allowance: "The new-cycle allowance for this paid period has been used.",
+        read_only: "The subscription ended. This journal is read-only.",
+        state: "A new cycle is not available now. Load the latest journal state.",
+        generic: "Could not save the entry. Retry—the editor will keep your text."
+      }
+    }
+  }
+};
+
 export const clientCopyByLocale = {
   ru: {
+    astroDiary: clientAstroDiaryCopyByLocale.ru,
     auth: {
       documentTitle: "ElevenHouse | Авторизация",
       sectionAriaLabel: "Авторизация",
@@ -240,6 +452,7 @@ export const clientCopyByLocale = {
     }
   },
   en: {
+    astroDiary: clientAstroDiaryCopyByLocale.en,
     auth: {
       documentTitle: "ElevenHouse | Sign in",
       sectionAriaLabel: "Authentication",

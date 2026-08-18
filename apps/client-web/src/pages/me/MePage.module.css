@@ -158,6 +158,26 @@
   font-size: var(--eh-font-size-12);
 }
 
+.astroDiaryLink {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: var(--eh-space-6);
+  margin-left: auto;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  padding: 0 var(--eh-space-9);
+  color: var(--eh-color-gold);
+  font-size: var(--eh-font-size-12);
+  font-weight: var(--eh-font-weight-semibold);
+  text-decoration: none;
+}
+
+.astroDiaryLink:focus-visible {
+  outline: 2px solid var(--eh-color-gold);
+  outline-offset: 2px;
+}
+
 .nav {
   display: grid;
   gap: var(--eh-space-3);

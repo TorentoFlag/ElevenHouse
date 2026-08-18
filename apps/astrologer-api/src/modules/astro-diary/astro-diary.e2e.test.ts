@@ -395,6 +395,7 @@ function createReader(state: { ended: boolean; laterCycle: boolean }): AstroDiar
       participantUserId === astrologerUserId
         ? { draft: { draftId, version: 1, body: "Ответ" } }
         : null,
+    getParticipantClientEntryDraft: async () => null,
     getPaidCoreCommandContext: async ({ participantUserId }) =>
       participantUserId === astrologerUserId
         ? {

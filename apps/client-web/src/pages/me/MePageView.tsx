@@ -16,6 +16,7 @@ import type {
 } from "../../common/i18n/clientCopy";
 import { BirthPlaceAutocomplete } from "../../features/client-profile/components/BirthPlaceAutocomplete";
 import { ClientPurchaseFlow } from "../../features/client-commerce/components/ClientPurchaseFlow";
+import { AstroDiaryRelationshipLink } from "../../features/astro-diary/ui/AstroDiaryRelationshipLink";
 import {
   applyBirthPlaceCandidate,
   createBirthProfileForm,
@@ -179,6 +180,13 @@ export function MePageView({
                     <strong>{astrologer.publicName}</strong>
                     <small>@{astrologer.publicHandle}</small>
                   </span>
+                  {astrologer.relationshipStatus !== "blocked" ? (
+                    <AstroDiaryRelationshipLink
+                      astrologerId={astrologer.astrologerUserId}
+                      className={styles.astroDiaryLink}
+                      label="AstroDiary"
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>

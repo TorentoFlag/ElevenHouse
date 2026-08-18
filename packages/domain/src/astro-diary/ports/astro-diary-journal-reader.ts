@@ -1,5 +1,6 @@
 import type {
   AstroDiaryAstrologerReplyDraftResponse,
+  AstroDiaryClientEntryDraftResponse,
   AstroDiaryJournalListResponse,
   AstroDiaryJournalSummaryResponse,
   AstroDiaryTimelinePage
@@ -69,6 +70,9 @@ export type AstroDiaryJournalReader = Readonly<{
   getParticipantAstrologerReplyDraft(
     input: AstroDiaryParticipantJournalInput
   ): Promise<AstroDiaryAstrologerReplyDraftResponse | null>;
+  getParticipantClientEntryDraft(
+    input: AstroDiaryParticipantJournalInput
+  ): Promise<AstroDiaryClientEntryDraftResponse | null>;
   getPaidCoreCommandContext(
     input: AstroDiaryParticipantJournalInput
   ): Promise<AstroDiaryPaidCoreCommandContext | null>;
