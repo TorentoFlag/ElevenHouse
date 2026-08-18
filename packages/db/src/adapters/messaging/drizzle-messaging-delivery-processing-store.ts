@@ -160,6 +160,7 @@ async function findByOutboxEventId(
       providerChatId: messagingExternalIdentities.providerChatId
     })
     .from(outboxEvents)
+    .innerJoin(messagingMessages, eq(messagingMessages.id, outboxEvents.aggregateId))
     .innerJoin(messagingThreads, eq(messagingThreads.id, messagingMessages.threadId))
     .innerJoin(
       messagingChannelConnections,
