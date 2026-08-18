@@ -1,5 +1,6 @@
 export const clientSubscriptionImmutableTables = [
   "client_subscription_purchase_authorities",
+  "client_subscription_purchase_fulfillment_authorities",
   "client_subscription_contracts",
   "client_subscription_renewal_requests",
   "client_subscription_periods",

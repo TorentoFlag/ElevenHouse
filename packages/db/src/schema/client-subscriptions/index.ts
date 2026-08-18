@@ -1,5 +1,6 @@
 export * from "./client-subscription-contracts.schema";
 export * from "./client-subscription-purchase-authorities.schema";
+export * from "./client-subscription-purchase-fulfillment-authorities.schema";
 export * from "./client-subscription-slots.schema";
 export * from "./client-subscriptions.schema";
 export * from "./client-subscription-periods.schema";

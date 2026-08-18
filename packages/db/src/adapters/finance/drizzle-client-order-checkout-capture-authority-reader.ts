@@ -7,6 +7,8 @@ import { hasAsciiControlCharacter } from "@elevenhouse/domain/finance-core";
 import { and, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
+import { clientSubscriptionPurchaseAuthorities } from "../../schema/client-subscriptions/client-subscription-purchase-authorities.schema";
+import { clientSubscriptionPurchaseFulfillmentAuthorities } from "../../schema/client-subscriptions/client-subscription-purchase-fulfillment-authorities.schema";
 import {
   financePaidProductFulfillmentDecisions,
   financeRiskPolicyVersions
@@ -54,13 +56,84 @@ export function createDrizzleClientOrderCheckoutCaptureAuthorityReader(
             )
           )
           .limit(1);
+        if (!risk) fail("authority_integrity_conflict");
+        const [subscriptionPurpose] = await database
+          .select({
+            purchaseAuthorityDigest: clientSubscriptionPurchaseAuthorities.canonicalDigest,
+            bindingOrderId: clientSubscriptionPurchaseFulfillmentAuthorities.orderId,
+            bindingPurchaseAuthorityDigest:
+              clientSubscriptionPurchaseFulfillmentAuthorities.purchaseAuthorityDigest,
+            registryKey: clientSubscriptionPurchaseFulfillmentAuthorities.registryKey,
+            registryRevision: clientSubscriptionPurchaseFulfillmentAuthorities.registryRevision,
+            fulfillmentDecisionDigest:
+              clientSubscriptionPurchaseFulfillmentAuthorities.fulfillmentDecisionDigest
+          })
+          .from(clientSubscriptionPurchaseAuthorities)
+          .leftJoin(
+            clientSubscriptionPurchaseFulfillmentAuthorities,
+            and(
+              eq(
+                clientSubscriptionPurchaseFulfillmentAuthorities.orderId,
+                clientSubscriptionPurchaseAuthorities.orderId
+              ),
+              eq(
+                clientSubscriptionPurchaseFulfillmentAuthorities.purchaseAuthorityDigest,
+                clientSubscriptionPurchaseAuthorities.canonicalDigest
+              )
+            )
+          )
+          .where(eq(clientSubscriptionPurchaseAuthorities.orderId, order.id))
+          .limit(1);
+        if (subscriptionPurpose) {
+          if (
+            !subscriptionPurpose.bindingOrderId ||
+            !subscriptionPurpose.bindingPurchaseAuthorityDigest ||
+            !subscriptionPurpose.registryKey ||
+            !subscriptionPurpose.registryRevision ||
+            !subscriptionPurpose.fulfillmentDecisionDigest ||
+            subscriptionPurpose.bindingOrderId !== order.id ||
+            subscriptionPurpose.bindingPurchaseAuthorityDigest !==
+              subscriptionPurpose.purchaseAuthorityDigest
+          ) {
+            fail("authority_integrity_conflict");
+          }
+          const [fulfillment] = await database
+            .select()
+            .from(financePaidProductFulfillmentDecisions)
+            .where(
+              and(
+                eq(
+                  financePaidProductFulfillmentDecisions.registryKey,
+                  subscriptionPurpose.registryKey
+                ),
+                eq(
+                  financePaidProductFulfillmentDecisions.registryRevision,
+                  subscriptionPurpose.registryRevision
+                ),
+                eq(
+                  financePaidProductFulfillmentDecisions.canonicalDigest,
+                  subscriptionPurpose.fulfillmentDecisionDigest
+                )
+              )
+            )
+            .limit(1);
+          if (!fulfillment) fail("authority_integrity_conflict");
+          return mapClientOrderCheckoutCaptureAuthority({
+            order,
+            policy,
+            risk,
+            fulfillment,
+            registryKey: subscriptionPurpose.registryKey
+          });
+        }
         const [product] = await database
           .select()
           .from(products)
           .where(eq(products.id, order.productId))
           .limit(1);
-        if (!risk || !product) fail("authority_integrity_conflict");
+        if (!product) fail("authority_integrity_conflict");
         const registryKey = `${product.type}.${product.paymentModel}.${product.executionMode}.${product.participantMode}`;
+        if (registryKey === "sub.sub.async.solo") return null;
         const [fulfillment] = await database
           .select()
           .from(financePaidProductFulfillmentDecisions)

@@ -9,6 +9,7 @@ import {
   ProductRevisionConflictError,
   ProductValidationError
 } from "./product-errors";
+import { isCanonicalAstroDiaryPaidProduct } from "./paid-product-fulfillment-registry";
 import type { ProductListResult, ProductStore } from "./product-store";
 import type {
   Product,
@@ -224,7 +225,11 @@ async function updateProductStatus(input: {
   if (current.revision !== expectedRevision) {
     throw new ProductRevisionConflictError(expectedRevision, current.revision);
   }
-  if (input.status === "active" && current.accessGrants.includes("journal")) {
+  if (
+    input.status === "active" &&
+    current.accessGrants.includes("journal") &&
+    !isCanonicalAstroDiaryPaidProduct(current)
+  ) {
     throw new ProductFulfillmentNotReadyError();
   }
 

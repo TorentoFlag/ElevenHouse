@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   applyClientSubscriptionCaptureDispatch,
   createPendingClientSubscription,
@@ -18,13 +18,15 @@ import {
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   clientSubscriptionContracts,
+  clientSubscriptionPurchaseFulfillmentAuthorities,
   clientSubscriptionPurchaseAuthorities,
   clientSubscriptions
 } from "../../schema/client-subscriptions";
 import {
   financeClientSubscriptionCaptureDispatchReceipts,
   financeEconomicPaymentIntents,
-  financeOnlineSaleCaptureApplications
+  financeOnlineSaleCaptureApplications,
+  financeOnlineSaleCaptureAuthorityBindings
 } from "../../schema/finance";
 import { financeProviderSemanticFacts } from "../../schema/finance/webhook-inbox.schema";
 import { executeDrizzleClientSubscriptionCreationInTransaction } from "./drizzle-client-subscription-creation-uow";
@@ -50,7 +52,13 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
               id: financeOnlineSaleCaptureApplications.id,
               canonicalDigest: financeOnlineSaleCaptureApplications.canonicalDigest,
               orderId: financeEconomicPaymentIntents.sourceId,
-              observedAt: financeProviderSemanticFacts.observedAt
+              observedAt: financeProviderSemanticFacts.observedAt,
+              fulfillmentDecisionId:
+                financeOnlineSaleCaptureAuthorityBindings.fulfillmentDecisionId,
+              fulfillmentDecisionVersion:
+                financeOnlineSaleCaptureAuthorityBindings.fulfillmentDecisionVersion,
+              fulfillmentDecisionDigest:
+                financeOnlineSaleCaptureAuthorityBindings.fulfillmentDecisionDigest
             })
             .from(financeOnlineSaleCaptureApplications)
             .innerJoin(
@@ -62,14 +70,25 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
             )
             .innerJoin(
               financeProviderSemanticFacts,
-              eq(financeProviderSemanticFacts.id, financeOnlineSaleCaptureApplications.semanticFactId)
-            )
-            .where(
               eq(
-                financeOnlineSaleCaptureApplications.id,
-                input.captureApplicationReceiptId
+                financeProviderSemanticFacts.id,
+                financeOnlineSaleCaptureApplications.semanticFactId
               )
             )
+            .innerJoin(
+              financeOnlineSaleCaptureAuthorityBindings,
+              and(
+                eq(
+                  financeOnlineSaleCaptureAuthorityBindings.receiptId,
+                  financeOnlineSaleCaptureApplications.onlineSaleReceiptId
+                ),
+                eq(
+                  financeOnlineSaleCaptureAuthorityBindings.captureFactId,
+                  financeOnlineSaleCaptureApplications.captureFactId
+                )
+              )
+            )
+            .where(eq(financeOnlineSaleCaptureApplications.id, input.captureApplicationReceiptId))
             .for("update")
             .limit(1);
           if (!capture) return { outcome: "capture_not_found" };
@@ -87,12 +106,58 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
           if (prior) return replayDispatchReceipt(prior);
 
           const [authority] = await transaction
-            .select()
+            .select({
+              orderId: clientSubscriptionPurchaseAuthorities.orderId,
+              productId: clientSubscriptionPurchaseAuthorities.productId,
+              relationshipId: clientSubscriptionPurchaseAuthorities.relationshipId,
+              purchaseAuthorityDigest: clientSubscriptionPurchaseAuthorities.canonicalDigest,
+              bindingOrderId: clientSubscriptionPurchaseFulfillmentAuthorities.orderId,
+              bindingPurchaseAuthorityDigest:
+                clientSubscriptionPurchaseFulfillmentAuthorities.purchaseAuthorityDigest,
+              registryKey: clientSubscriptionPurchaseFulfillmentAuthorities.registryKey,
+              registryRevision: clientSubscriptionPurchaseFulfillmentAuthorities.registryRevision,
+              fulfillmentDecisionDigest:
+                clientSubscriptionPurchaseFulfillmentAuthorities.fulfillmentDecisionDigest
+            })
             .from(clientSubscriptionPurchaseAuthorities)
+            .leftJoin(
+              clientSubscriptionPurchaseFulfillmentAuthorities,
+              and(
+                eq(
+                  clientSubscriptionPurchaseFulfillmentAuthorities.orderId,
+                  clientSubscriptionPurchaseAuthorities.orderId
+                ),
+                eq(
+                  clientSubscriptionPurchaseFulfillmentAuthorities.purchaseAuthorityDigest,
+                  clientSubscriptionPurchaseAuthorities.canonicalDigest
+                )
+              )
+            )
             .where(eq(clientSubscriptionPurchaseAuthorities.orderId, capture.orderId))
-            .for("no key update")
+            .for("no key update", { of: clientSubscriptionPurchaseAuthorities })
             .limit(1);
-          if (!authority) return { outcome: "not_client_subscription" };
+          if (!authority) {
+            return {
+              outcome:
+                capture.fulfillmentDecisionId === "sub.sub.async.solo"
+                  ? "authority_conflict"
+                  : "not_client_subscription"
+            };
+          }
+          if (
+            !authority.bindingOrderId ||
+            !authority.bindingPurchaseAuthorityDigest ||
+            !authority.registryKey ||
+            !authority.registryRevision ||
+            !authority.fulfillmentDecisionDigest ||
+            authority.bindingOrderId !== authority.orderId ||
+            authority.bindingPurchaseAuthorityDigest !== authority.purchaseAuthorityDigest ||
+            authority.registryKey !== capture.fulfillmentDecisionId ||
+            authority.registryRevision !== capture.fulfillmentDecisionVersion ||
+            authority.fulfillmentDecisionDigest !== capture.fulfillmentDecisionDigest
+          ) {
+            return { outcome: "authority_conflict" };
+          }
 
           const subscription = await loadOrCreatePendingSubscription(transaction, {
             orderId: authority.orderId,
@@ -123,9 +188,7 @@ export function createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
               activatedEventId: randomUUID(),
               entitlementChangedEventId: randomUUID()
             },
-            dispatchedAt: new Date(
-              Math.max(Date.now(), capture.observedAt.getTime())
-            ).toISOString()
+            dispatchedAt: new Date(Math.max(Date.now(), capture.observedAt.getTime())).toISOString()
           });
           const application = await applyDrizzleAstroDiarySubscriptionCaptureInTransaction(
             transaction,

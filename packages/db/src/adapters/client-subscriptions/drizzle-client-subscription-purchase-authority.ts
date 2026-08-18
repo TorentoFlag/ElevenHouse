@@ -2,11 +2,16 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import {
   OrderProductRevisionConflictError,
   OrderPurchaseAuthorityChangedError,
+  resolvePaidProductFulfillment,
+  type PaidProductFulfillmentDecision,
+  type PaidProductFulfillmentDependencyRef,
   type OrderPurchasePurpose
 } from "@elevenhouse/domain";
 
 import type { FinanceTransaction } from "../finance/drizzle-finance-command-store";
+import { clientSubscriptionPurchaseFulfillmentAuthorities } from "../../schema/client-subscriptions/client-subscription-purchase-fulfillment-authorities.schema";
 import { clientAstrologerRelationships } from "../../schema/clients/client-astrologer-relationships.schema";
+import { financePaidProductFulfillmentDecisions } from "../../schema/finance/capture-authorities.schema";
 import { orders } from "../../schema/finance/orders.schema";
 import { productAccessGrants } from "../../schema/products/product-access-grants.schema";
 import { productDeliveryFormats } from "../../schema/products/product-delivery-formats.schema";
@@ -142,7 +147,52 @@ export async function sealClientSubscriptionPurchaseAuthorityForOrder(
     throw new OrderPurchaseAuthorityChangedError();
   }
 
-  const result = await transaction.execute(sql<{ order_id: string }>`
+  const fulfillmentRows = await transaction
+    .select()
+    .from(financePaidProductFulfillmentDecisions)
+    .where(eq(financePaidProductFulfillmentDecisions.registryKey, "sub.sub.async.solo"));
+  const fulfillmentDecision = await resolvePaidProductFulfillment({
+    product: {
+      type: accepted.type,
+      paymentModel: accepted.paymentModel,
+      executionMode: accepted.executionMode,
+      participantMode: accepted.participantMode,
+      subscriptionPeriod: accepted.cadence,
+      trialDays: accepted.trialDays,
+      durationMinutes: null,
+      packageSessionCount: accepted.packageSessionCount,
+      groupSize: accepted.groupSize,
+      deliveryFormats: accepted.deliveryFormats,
+      requiredClientData: accepted.requiredClientData,
+      methods: accepted.methods,
+      accessGrants: accepted.accessGrants,
+      modifiers: accepted.modifiers,
+      astroDiaryConfig: accepted.astroDiaryConfig
+    },
+    reader: {
+      getDependencyStatus: async (reference) =>
+        fulfillmentRows.some((row) => matchesFulfillmentDependency(row, reference))
+          ? "registered"
+          : "missing"
+    }
+  });
+  const fulfillment = fulfillmentRows.find(
+    (row) =>
+      fulfillmentDecision.supported &&
+      row.registryKey === fulfillmentDecision.registryKey &&
+      row.registryRevision === String(fulfillmentDecision.registryRevision)
+  );
+  if (
+    !fulfillmentDecision.supported ||
+    fulfillmentDecision.registryKey !== "sub.sub.async.solo" ||
+    !fulfillment ||
+    !matchesFulfillmentDecision(fulfillment, fulfillmentDecision)
+  ) {
+    throw new OrderPurchaseAuthorityChangedError();
+  }
+
+  const result = await transaction.execute(
+    sql<{ order_id: string; canonical_digest: string }>`
     with candidate as (
       select
         order_row.id as order_id,
@@ -260,11 +310,61 @@ export async function sealClientSubscriptionPurchaseAuthorityForOrder(
       sealed.modifiers, sealed.astro_diary_config, sealed.canonical_preimage,
       'sha256:' || encode(digest(sealed.canonical_preimage, 'sha256'), 'hex'), sealed.created_at
     from sealed
-    returning order_id
-  `);
-  if (result.rows.length !== 1 || result.rows[0]?.order_id !== input.orderId) {
+    returning order_id, canonical_digest
+  `
+  );
+  const sealedPurchaseAuthority = result.rows[0] as
+    | { order_id: string; canonical_digest: string }
+    | undefined;
+  if (
+    result.rows.length !== 1 ||
+    sealedPurchaseAuthority?.order_id !== input.orderId ||
+    !/^sha256:[a-f0-9]{64}$/.test(sealedPurchaseAuthority.canonical_digest)
+  ) {
     throw new OrderPurchaseAuthorityChangedError();
   }
+  await transaction.insert(clientSubscriptionPurchaseFulfillmentAuthorities).values({
+    orderId: input.orderId,
+    purchaseAuthorityDigest: sealedPurchaseAuthority.canonical_digest,
+    registryKey: fulfillment.registryKey,
+    registryRevision: fulfillment.registryRevision,
+    fulfillmentDecisionDigest: fulfillment.canonicalDigest
+  });
+}
+
+function matchesFulfillmentDependency(
+  row: typeof financePaidProductFulfillmentDecisions.$inferSelect,
+  reference: PaidProductFulfillmentDependencyRef
+): boolean {
+  if (!row.supported) return false;
+  if (reference.kind === "terminal_evidence") {
+    return (
+      row.terminalEvidenceOwner === reference.owner &&
+      row.terminalEvidenceStatus === reference.status &&
+      row.terminalEvidenceContractVersion === String(reference.contractVersion)
+    );
+  }
+  return (
+    row.cancellationAllocatorOwner === reference.owner &&
+    row.cancellationAllocatorPort === reference.port &&
+    row.cancellationAllocatorPolicyVersion === String(reference.policyVersion)
+  );
+}
+
+function matchesFulfillmentDecision(
+  row: typeof financePaidProductFulfillmentDecisions.$inferSelect,
+  decision: Extract<PaidProductFulfillmentDecision, { supported: true }>
+): boolean {
+  return (
+    row.supported &&
+    row.holdAnchor === decision.holdAnchor &&
+    row.terminalEvidenceOwner === decision.terminalEvidence.owner &&
+    row.terminalEvidenceStatus === decision.terminalEvidence.status &&
+    row.terminalEvidenceContractVersion === String(decision.terminalEvidence.contractVersion) &&
+    row.cancellationAllocatorOwner === decision.cancellationAllocator.owner &&
+    row.cancellationAllocatorPort === decision.cancellationAllocator.port &&
+    row.cancellationAllocatorPolicyVersion === String(decision.cancellationAllocator.policyVersion)
+  );
 }
 
 function weekdaysMask(weekdays: readonly number[]): number {

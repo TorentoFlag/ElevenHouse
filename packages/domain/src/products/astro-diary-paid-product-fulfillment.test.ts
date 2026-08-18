@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolvePaidProductFulfillment } from "./paid-product-fulfillment-registry";
+import type { ProductStore } from "./product-store";
+import type { Product } from "./product-types";
+import { publishProduct } from "./product-use-cases";
 
 const exactAstroDiaryProduct = Object.freeze({
   type: "sub",
@@ -27,6 +30,37 @@ const exactAstroDiaryProduct = Object.freeze({
 } as const);
 
 describe("AstroDiary paid-product fulfillment", () => {
+  it("publishes only the canonical AstroDiary journal product", async () => {
+    const product = astroDiaryProductForPublish();
+
+    await expect(
+      publishProduct({
+        store: productStoreFor(product),
+        ownerUserId: product.ownerUserId,
+        productId: product.id,
+        expectedRevision: product.revision,
+        now: new Date("2026-01-02T00:00:00.000Z")
+      })
+    ).resolves.toMatchObject({ status: "active", revision: 2 });
+  });
+
+  it("keeps a non-canonical journal product blocked from publication", async () => {
+    const product = {
+      ...astroDiaryProductForPublish(),
+      deliveryFormats: ["chat"] as const
+    };
+
+    await expect(
+      publishProduct({
+        store: productStoreFor(product),
+        ownerUserId: product.ownerUserId,
+        productId: product.id,
+        expectedRevision: product.revision,
+        now: new Date("2026-01-02T00:00:00.000Z")
+      })
+    ).rejects.toMatchObject({ code: "PRODUCT_FULFILLMENT_NOT_READY" });
+  });
+
   it("registers the exact sealed AstroDiary subscription shape under its native key", async () => {
     const getDependencyStatus = vi.fn().mockResolvedValue("registered");
 
@@ -61,3 +95,47 @@ describe("AstroDiary paid-product fulfillment", () => {
     expect(getDependencyStatus).not.toHaveBeenCalled();
   });
 });
+
+function astroDiaryProductForPublish(): Product {
+  return {
+    id: "10000000-0000-4000-8000-000000000001",
+    ownerUserId: "10000000-0000-4000-8000-000000000002",
+    status: "draft",
+    revision: 1,
+    title: "AstroDiary",
+    subtitle: null,
+    priceMinor: 4_900,
+    currency: "RUB",
+    coverMediaId: null,
+    introVideoUrl: null,
+    durationLabel: null,
+    slaLabel: null,
+    packageDiscountPercent: null,
+    includedItems: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...exactAstroDiaryProduct
+  };
+}
+
+function productStoreFor(product: Product): ProductStore {
+  return {
+    listByOwner: async () => ({
+      products: [product],
+      total: 1,
+      counts: { all: 1, active: 0, draft: 1, archived: 0 }
+    }),
+    findByOwnerAndId: async () => product,
+    create: async () => product,
+    update: async ({ patch, now }) => ({
+      outcome: "updated",
+      product: {
+        ...product,
+        status: patch.status ?? product.status,
+        revision: product.revision + 1,
+        updatedAt: now
+      }
+    }),
+    duplicate: async () => ({ outcome: "duplicated", product })
+  };
+}

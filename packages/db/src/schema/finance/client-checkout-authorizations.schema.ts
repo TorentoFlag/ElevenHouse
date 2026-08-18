@@ -176,6 +176,8 @@ declare
   risk_policy finance_risk_policy_versions%rowtype;
   fulfillment finance_paid_product_fulfillment_decisions%rowtype;
   product_row products%rowtype;
+  subscription_fulfillment client_subscription_purchase_fulfillment_authorities%rowtype;
+  fulfillment_matches_order boolean;
 begin
   select * into strict order_row from orders where id = new.order_id for update;
   select * into strict intent from finance_economic_payment_intents
@@ -192,7 +194,27 @@ begin
     where registry_key = new.fulfillment_decision_id
       and registry_revision = new.fulfillment_decision_version
       and canonical_digest = new.fulfillment_decision_digest;
-  select * into strict product_row from products where id = order_row.product_id;
+  if fulfillment.registry_key = 'sub.sub.async.solo' then
+    select binding.* into strict subscription_fulfillment
+      from client_subscription_purchase_fulfillment_authorities binding
+      join client_subscription_purchase_authorities purchase
+        on purchase.order_id = binding.order_id
+       and purchase.canonical_digest = binding.purchase_authority_digest
+     where binding.order_id = new.order_id
+       and binding.registry_key = fulfillment.registry_key
+       and binding.registry_revision = fulfillment.registry_revision
+       and binding.fulfillment_decision_digest = fulfillment.canonical_digest;
+    fulfillment_matches_order := true;
+  else
+    select * into strict product_row from products where id = order_row.product_id;
+    fulfillment_matches_order := fulfillment.registry_key = concat_ws(
+      '.',
+      product_row.type,
+      product_row.payment_model,
+      product_row.execution_mode,
+      product_row.participant_mode
+    );
+  end if;
   if order_row.client_user_id <> new.client_user_id
      or order_row.status <> 'pending_payment'
      or intent.purpose <> 'client_order'
@@ -209,7 +231,7 @@ begin
      or risk_policy.reserve_release_delay_days <> order_row.finance_policy_reserve_release_delay_days
      or risk_policy.provider_settlement_required <> order_row.finance_policy_provider_settlement_required
      or risk_policy.effective_at::timestamptz > clock_timestamp()
-     or fulfillment.registry_key <> concat_ws('.', product_row.type, product_row.payment_model, product_row.execution_mode, product_row.participant_mode) then
+     or not fulfillment_matches_order then
     raise exception 'client checkout authorization does not match locked order and payment session' using errcode = '23514';
   end if;
   new.order_snapshot_version := 1;

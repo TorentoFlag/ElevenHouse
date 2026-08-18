@@ -122,6 +122,10 @@ const paidProductFulfillmentRegistry: Readonly<
   "sub.sub.async.solo": approvedAstroDiarySubscription
 });
 
+export function isCanonicalAstroDiaryPaidProduct(product: PaidProductFulfillmentShape): boolean {
+  return isExactAstroDiarySubscription(product);
+}
+
 export async function resolvePaidProductFulfillment(input: {
   readonly product: PaidProductFulfillmentShape;
   readonly reader: PaidProductFulfillmentDependencyReader;
