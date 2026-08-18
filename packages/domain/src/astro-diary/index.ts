@@ -14,6 +14,7 @@ export * from "./astro-diary-prompt-commands";
 export * from "./astro-diary-read-state";
 export * from "./astro-diary-read-commands";
 export * from "./astro-diary-sla";
+export * from "./astro-diary-subscription-activation";
 export * from "./astro-diary-timeline";
 export * from "./ports/astro-diary-command-unit-of-work";
 export * from "./ports/astro-diary-journal-reader";
