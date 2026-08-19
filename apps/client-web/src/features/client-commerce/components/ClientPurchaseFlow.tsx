@@ -6,6 +6,7 @@ import type {
 } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { HttpError } from "../../../common/http/HttpError";
 import type { ClientPurchaseFlowCopy } from "../../../common/i18n/clientCopy";
 import {
   createClientOrder,
@@ -229,13 +230,9 @@ export function ClientPurchaseFlow({
       );
       checkoutPreparationId.current = preparation.checkoutPreparationId;
       setStatus("preparing");
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setMessage(
-        window.location.protocol === "https:"
-          ? copy.checkoutFailedGeneric
-          : copy.checkoutRequiresHttps
-      );
+      setMessage(checkoutErrorMessage(error, copy));
     }
   }
 
@@ -498,6 +495,29 @@ function checkoutReturnUrl(orderId: string): string {
   const url = new URL("/me", window.location.origin);
   url.searchParams.set("order", orderId);
   return url.toString();
+}
+
+function checkoutErrorMessage(error: unknown, copy: ClientPurchaseFlowCopy): string {
+  const code = httpErrorCode(error);
+  if (
+    code === "payment_checkout_unavailable" ||
+    code === "payment_checkout_worker_preparation_required"
+  ) {
+    return copy.checkoutUnavailable;
+  }
+  if (code === "payment_checkout_buyer_contact_unverified") return copy.checkoutFailedGeneric;
+  if (window.location.protocol !== "https:") return copy.checkoutRequiresHttps;
+  return copy.checkoutFailedGeneric;
+}
+
+function httpErrorCode(error: unknown): string | null {
+  if (!(error instanceof HttpError)) return null;
+  const body = error.body;
+  if (!body || typeof body !== "object" || Array.isArray(body) || !("code" in body)) {
+    return null;
+  }
+  const code = (body as { readonly code?: unknown }).code;
+  return typeof code === "string" ? code : null;
 }
 
 function upcomingRange(): { readonly start: string; readonly end: string } {

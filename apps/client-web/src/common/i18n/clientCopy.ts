@@ -94,6 +94,7 @@ export type ClientPurchaseFlowCopy = {
   checkoutUnknown: string;
   checkoutFailed: string;
   checkoutFailedGeneric: string;
+  checkoutUnavailable: string;
   checkoutRequiresHttps: string;
   returnStatusLabel: string;
   paid: string;
@@ -493,6 +494,8 @@ export const clientCopyByLocale = {
       checkoutFailed: "Не удалось подготовить оплату. Средства не списаны.",
       checkoutFailedGeneric:
         "Не удалось создать оплату. Проверьте подтверждённый email или телефон и попробуйте ещё раз.",
+      checkoutUnavailable:
+        "Оплата временно недоступна на стороне платёжного сервиса. Средства не списаны, попробуйте позже.",
       checkoutRequiresHttps:
         "Не удалось открыть защищённую оплату: для return URL требуется HTTPS. Средства не списаны.",
       returnStatusLabel: "Статус заказа",
@@ -642,6 +645,8 @@ export const clientCopyByLocale = {
       checkoutFailed: "Payment could not be prepared. No funds were charged.",
       checkoutFailedGeneric:
         "Could not create the payment. Check your verified email or phone and try again.",
+      checkoutUnavailable:
+        "Payment is temporarily unavailable in the secure payment service. No funds were charged; try again later.",
       checkoutRequiresHttps:
         "Secure payment could not be opened: the return URL requires HTTPS. No funds were charged.",
       returnStatusLabel: "Order status",
