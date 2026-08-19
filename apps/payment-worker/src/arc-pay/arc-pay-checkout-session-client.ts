@@ -19,7 +19,12 @@ export class ArcPayCheckoutSessionClientError extends Error {
   readonly code = "ARC_PAY_CHECKOUT_SESSION_CLIENT_ERROR" as const;
 
   constructor(
-    readonly reason: "not_configured" | "invalid_input" | "transport" | "provider_rejected" | "invalid_response"
+    readonly reason:
+      | "not_configured"
+      | "invalid_input"
+      | "transport"
+      | "provider_rejected"
+      | "invalid_response"
   ) {
     super("ArcPay hosted checkout session could not be created safely");
     this.name = "ArcPayCheckoutSessionClientError";
@@ -34,10 +39,12 @@ export function createArcPayCheckoutSessionClient(
   config: Readonly<{ apiBaseUrl: string; apiSecret: string | null }>,
   fetchImpl: typeof fetch = fetch
 ): Readonly<{
-  createHostedCheckout(input: Readonly<{
-    envelope: HostedCheckoutEnvelope;
-    idempotencyKey: string;
-  }>): Promise<ArcPayHostedCheckoutSession>;
+  createHostedCheckout(
+    input: Readonly<{
+      envelope: HostedCheckoutEnvelope;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPayHostedCheckoutSession>;
 }> {
   const apiBaseUrl = httpsBaseUrl(config.apiBaseUrl);
   return Object.freeze({
@@ -48,7 +55,7 @@ export function createArcPayCheckoutSessionClient(
       const body = checkoutRequestBody(envelope);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/v1/checkout/sessions", apiBaseUrl), {
+        response = await fetchImpl(new URL("/checkout/sessions", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,
@@ -130,10 +137,17 @@ function checkoutRequestBody(envelope: HostedCheckoutEnvelope) {
   };
 }
 
-function checkoutSession(value: unknown, rawResponseBytes: Uint8Array): ArcPayHostedCheckoutSession {
+function checkoutSession(
+  value: unknown,
+  rawResponseBytes: Uint8Array
+): ArcPayHostedCheckoutSession {
   if (typeof value !== "object" || value === null || Array.isArray(value)) fail("invalid_response");
   const candidate = value as Record<string, unknown>;
-  if (!hasExactOwnKeys(candidate, ["id", "url"]) || !isUuid(candidate.id) || !httpsUrl(candidate.url)) {
+  if (
+    !hasExactOwnKeys(candidate, ["id", "url"]) ||
+    !isUuid(candidate.id) ||
+    !httpsUrl(candidate.url)
+  ) {
     fail("invalid_response");
   }
   return Object.freeze({
@@ -173,7 +187,10 @@ function isUuid(value: unknown): value is string {
 function hasExactOwnKeys(value: object, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
   const normalizedExpected = [...expected].sort();
-  return actual.length === normalizedExpected.length && actual.every((key, index) => key === normalizedExpected[index]);
+  return (
+    actual.length === normalizedExpected.length &&
+    actual.every((key, index) => key === normalizedExpected[index])
+  );
 }
 
 function fail(reason: ArcPayCheckoutSessionClientError["reason"]): never {
