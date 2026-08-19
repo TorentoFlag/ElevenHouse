@@ -172,6 +172,8 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
         .mockResolvedValueOnce({ kind: "recorded" })
         .mockResolvedValueOnce({ kind: "recorded" }),
       recordWhatsAppCloudMessage: vi.fn().mockResolvedValue({ kind: "unmatched" }),
+      markWhatsAppCloudWebhookEventIgnored: vi.fn().mockResolvedValue({ kind: "recorded" }),
+      markWhatsAppCloudWebhookEventProcessed: vi.fn().mockResolvedValue({ kind: "recorded" }),
       recordWhatsAppCloudStatus: vi
         .fn()
         .mockResolvedValue({ kind: "recorded", updatedCount: 1 })
@@ -223,6 +225,21 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
 
     expect(store.recordWhatsAppCloudMessage).toHaveBeenCalledTimes(1);
     expect(store.recordWhatsAppCloudStatus).toHaveBeenCalledTimes(2);
+    expect(store.markWhatsAppCloudWebhookEventIgnored).toHaveBeenCalledWith({
+      eventKey: "whatsapp:message:phone-1:wamid.inbound.1",
+      errorCode: "whatsapp_cloud_connection_unmatched",
+      errorMessage: "No active WhatsApp Cloud channel connection matched phone_number_id",
+      now: now.toISOString()
+    });
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenCalledTimes(2);
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenNthCalledWith(1, {
+      eventKey: "whatsapp:status:phone-1:wamid.outbound.1:delivered:1787085120000",
+      now: now.toISOString()
+    });
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenNthCalledWith(2, {
+      eventKey: "whatsapp:status:phone-1:wamid.outbound.1:read:1787085121000",
+      now: now.toISOString()
+    });
     expect(store.recordWhatsAppCloudWebhookEvent).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
@@ -237,10 +254,48 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
     );
   });
 
+  it("marks a matched WhatsApp message webhook processed after recording the inbox message", async () => {
+    const store = {
+      recordWhatsAppCloudWebhookEvent: vi.fn().mockResolvedValue({ kind: "recorded" }),
+      recordWhatsAppCloudMessage: vi.fn().mockResolvedValue({ kind: "created" }),
+      markWhatsAppCloudWebhookEventProcessed: vi.fn().mockResolvedValue({ kind: "recorded" })
+    } as unknown as MessagingStore;
+    const service = createService({ store });
+
+    await service.handleWhatsAppCloudWebhookChanges([
+      {
+        field: "messages",
+        wabaId: "waba-1",
+        phoneNumberId: "phone-1",
+        displayPhoneNumber: "15550783881",
+        contacts: [],
+        messages: [
+          {
+            id: "wamid.inbound.processed",
+            from: "15551234567",
+            type: "text",
+            text: "hello",
+            providerSentAt: "2026-08-18T20:31:00.000Z"
+          }
+        ],
+        echoes: [],
+        statuses: [],
+        accountUpdate: null,
+        syncEvents: []
+      }
+    ]);
+
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenCalledWith({
+      eventKey: "whatsapp:message:phone-1:wamid.inbound.processed",
+      now: now.toISOString()
+    });
+  });
+
   it("durably records WhatsApp SMB echoes before mirroring outbound messages", async () => {
     const store = {
       recordWhatsAppCloudWebhookEvent: vi.fn().mockResolvedValue({ kind: "recorded" }),
-      recordWhatsAppCloudEcho: vi.fn().mockResolvedValue({ kind: "created" })
+      recordWhatsAppCloudEcho: vi.fn().mockResolvedValue({ kind: "created" }),
+      markWhatsAppCloudWebhookEventProcessed: vi.fn().mockResolvedValue({ kind: "recorded" })
     } as unknown as MessagingStore;
     const service = createService({ store });
 
@@ -290,6 +345,10 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
         providerSentAt: "2026-08-18T20:33:00.000Z"
       })
     );
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenCalledWith({
+      eventKey: "whatsapp:echo:phone-1:wamid.echo.1:smb_message_echoes",
+      now: now.toISOString()
+    });
   });
 
   it("durably records WhatsApp history and contact sync events for async processing", async () => {

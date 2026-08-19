@@ -20,6 +20,9 @@ import type {
   CreateClientFromThreadStoreInput,
   CreateOutboundMessageStoreInput,
   LinkThreadToClientStoreInput,
+  MarkWhatsAppCloudWebhookEventIgnoredStoreInput,
+  MarkWhatsAppCloudWebhookEventProcessedStoreInput,
+  MarkWhatsAppCloudWebhookEventTerminalStoreResult,
   MarkThreadReadStoreInput,
   MarkThreadReadStoreResult,
   MessagingMessage,
@@ -140,6 +143,10 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     recordWhatsAppCloudStatus: (input) => recordWhatsAppCloudStatus(database, input),
     recordWhatsAppCloudWebhookEvent: (input) =>
       recordWhatsAppCloudWebhookEvent(database, input),
+    markWhatsAppCloudWebhookEventProcessed: (input) =>
+      markWhatsAppCloudWebhookEventProcessed(database, input),
+    markWhatsAppCloudWebhookEventIgnored: (input) =>
+      markWhatsAppCloudWebhookEventIgnored(database, input),
     recordWhatsAppCloudAccountUpdate: (input) =>
       recordWhatsAppCloudAccountUpdate(database, input),
     recordTelegramMtprotoMessage: (input) => recordTelegramMtprotoMessage(database, input),
@@ -1982,6 +1989,63 @@ async function recordWhatsAppCloudWebhookEvent(
     if (!isProviderWebhookEventKeyViolation(error)) throw error;
     return { kind: "duplicate" };
   }
+}
+
+async function markWhatsAppCloudWebhookEventProcessed(
+  database: ElevenHouseDatabase,
+  input: MarkWhatsAppCloudWebhookEventProcessedStoreInput
+): Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult> {
+  return markWhatsAppCloudWebhookEventTerminal(database, {
+    eventKey: input.eventKey,
+    processingStatus: "processed",
+    errorCode: null,
+    errorMessage: null,
+    now: input.now
+  });
+}
+
+async function markWhatsAppCloudWebhookEventIgnored(
+  database: ElevenHouseDatabase,
+  input: MarkWhatsAppCloudWebhookEventIgnoredStoreInput
+): Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult> {
+  return markWhatsAppCloudWebhookEventTerminal(database, {
+    eventKey: input.eventKey,
+    processingStatus: "ignored",
+    errorCode: input.errorCode,
+    errorMessage: input.errorMessage,
+    now: input.now
+  });
+}
+
+async function markWhatsAppCloudWebhookEventTerminal(
+  database: ElevenHouseDatabase,
+  input: {
+    readonly eventKey: string;
+    readonly processingStatus: "processed" | "ignored";
+    readonly errorCode: string | null;
+    readonly errorMessage: string | null;
+    readonly now: string;
+  }
+): Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult> {
+  const [row] = await database
+    .update(messagingProviderWebhookEvents)
+    .set({
+      processingStatus: input.processingStatus,
+      lastErrorCode: input.errorCode,
+      lastErrorMessage: input.errorMessage,
+      processedAt: new Date(input.now)
+    })
+    .where(
+      and(
+        eq(messagingProviderWebhookEvents.provider, "whatsapp"),
+        eq(messagingProviderWebhookEvents.mode, "whatsapp_cloud"),
+        eq(messagingProviderWebhookEvents.eventKey, input.eventKey),
+        eq(messagingProviderWebhookEvents.processingStatus, "pending")
+      )
+    )
+    .returning({ id: messagingProviderWebhookEvents.id });
+
+  return row ? { kind: "recorded" } : { kind: "unmatched" };
 }
 
 async function recordWhatsAppCloudAccountUpdate(

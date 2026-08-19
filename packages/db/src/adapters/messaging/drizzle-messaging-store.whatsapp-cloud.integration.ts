@@ -152,6 +152,80 @@ describe.sequential("Drizzle messaging store WhatsApp Cloud", () => {
     ).rejects.toThrow();
   });
 
+  it("marks unmatched provider webhook events ignored with a terminal timestamp", async () => {
+    const store = createDrizzleMessagingStore(runtime.database);
+    const eventKey = `whatsapp:message:phone-1:${randomUUID()}`;
+
+    await expect(
+      store.recordWhatsAppCloudWebhookEvent({
+        eventKey,
+        field: "messages",
+        externalAccountId: "phone-1",
+        externalOwnerUserId: "waba-1",
+        normalizedSummary: { messageCount: 1 },
+        receivedAt: "2026-08-18T20:30:02.000Z"
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    await expect(
+      store.markWhatsAppCloudWebhookEventIgnored({
+        eventKey,
+        errorCode: "whatsapp_cloud_connection_unmatched",
+        errorMessage: "No active WhatsApp Cloud channel connection matched phone_number_id",
+        now: "2026-08-18T20:30:03.000Z"
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    const [event] = await runtime.database
+      .select()
+      .from(messagingProviderWebhookEvents)
+      .where(eq(messagingProviderWebhookEvents.eventKey, eventKey));
+
+    expect(event).toMatchObject({
+      processingStatus: "ignored",
+      attemptCount: 0,
+      lastErrorCode: "whatsapp_cloud_connection_unmatched",
+      lastErrorMessage: "No active WhatsApp Cloud channel connection matched phone_number_id",
+      processedAt: new Date("2026-08-18T20:30:03.000Z")
+    });
+  });
+
+  it("marks inline-processed provider webhook events processed with a terminal timestamp", async () => {
+    const store = createDrizzleMessagingStore(runtime.database);
+    const eventKey = `whatsapp:message:phone-1:${randomUUID()}`;
+
+    await expect(
+      store.recordWhatsAppCloudWebhookEvent({
+        eventKey,
+        field: "messages",
+        externalAccountId: "phone-1",
+        externalOwnerUserId: "waba-1",
+        normalizedSummary: { messageCount: 1 },
+        receivedAt: "2026-08-18T20:30:02.000Z"
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    await expect(
+      store.markWhatsAppCloudWebhookEventProcessed({
+        eventKey,
+        now: "2026-08-18T20:30:03.000Z"
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    const [event] = await runtime.database
+      .select()
+      .from(messagingProviderWebhookEvents)
+      .where(eq(messagingProviderWebhookEvents.eventKey, eventKey));
+
+    expect(event).toMatchObject({
+      processingStatus: "processed",
+      attemptCount: 0,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      processedAt: new Date("2026-08-18T20:30:03.000Z")
+    });
+  });
+
   it("records inbound WhatsApp messages and deduplicates by provider message id", async () => {
     const store = createDrizzleMessagingStore(runtime.database);
     const { connectionId, phoneNumberId, displayPhoneNumber } =

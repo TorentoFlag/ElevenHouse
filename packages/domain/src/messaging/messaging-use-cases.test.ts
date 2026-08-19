@@ -4,6 +4,8 @@ import type { MessagingStore } from "./messaging-store";
 import {
   completeWhatsAppCloudConnection,
   recordWhatsAppCloudAccountUpdate,
+  markWhatsAppCloudWebhookEventIgnored,
+  markWhatsAppCloudWebhookEventProcessed,
   recordWhatsAppCloudMessage,
   recordWhatsAppCloudWebhookEvent,
   startWhatsAppCloudConnection,
@@ -273,6 +275,48 @@ describe("WhatsApp Cloud messaging use cases", () => {
       event: "PARTNER_REMOVED",
       reason: "removed by owner",
       eventAt: "2026-08-18T20:30:00.000Z",
+      now: now.toISOString()
+    });
+  });
+
+  it("normalizes WhatsApp webhook ignored terminal status before storing", async () => {
+    const store = {
+      markWhatsAppCloudWebhookEventIgnored: vi.fn().mockResolvedValue({ kind: "recorded" })
+    } as unknown as MessagingStore;
+
+    await expect(
+      markWhatsAppCloudWebhookEventIgnored({
+        store,
+        eventKey: " whatsapp:message:phone-1:wamid.1 ",
+        errorCode: " whatsapp_cloud_connection_unmatched ",
+        errorMessage: " no connection ",
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(store.markWhatsAppCloudWebhookEventIgnored).toHaveBeenCalledWith({
+      eventKey: "whatsapp:message:phone-1:wamid.1",
+      errorCode: "whatsapp_cloud_connection_unmatched",
+      errorMessage: "no connection",
+      now: now.toISOString()
+    });
+  });
+
+  it("normalizes WhatsApp webhook processed terminal status before storing", async () => {
+    const store = {
+      markWhatsAppCloudWebhookEventProcessed: vi.fn().mockResolvedValue({ kind: "recorded" })
+    } as unknown as MessagingStore;
+
+    await expect(
+      markWhatsAppCloudWebhookEventProcessed({
+        store,
+        eventKey: " whatsapp:message:phone-1:wamid.1 ",
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(store.markWhatsAppCloudWebhookEventProcessed).toHaveBeenCalledWith({
+      eventKey: "whatsapp:message:phone-1:wamid.1",
       now: now.toISOString()
     });
   });

@@ -13,6 +13,7 @@ import {
 } from "./messaging-events";
 import type {
   InboundMessageRecordResult,
+  MarkWhatsAppCloudWebhookEventTerminalStoreResult,
   MessagingStore,
   TelegramMtprotoLoginSession,
   TelegramMtprotoLoginResultStoreResult,
@@ -617,6 +618,37 @@ export async function recordWhatsAppCloudWebhookEvent(input: {
     externalOwnerUserId: optionalSnapshot(input.externalOwnerUserId),
     normalizedSummary: input.normalizedSummary,
     receivedAt: normalizeIsoInstant(input.receivedAt)
+  });
+}
+
+export async function markWhatsAppCloudWebhookEventProcessed(input: {
+  readonly store: MessagingStore;
+  readonly eventKey: string;
+  readonly now: Date;
+}): Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult> {
+  return input.store.markWhatsAppCloudWebhookEventProcessed({
+    eventKey: bounded(input.eventKey, 1, 500, "WhatsApp webhook event key is required"),
+    now: input.now.toISOString()
+  });
+}
+
+export async function markWhatsAppCloudWebhookEventIgnored(input: {
+  readonly store: MessagingStore;
+  readonly eventKey: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+  readonly now: Date;
+}): Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult> {
+  return input.store.markWhatsAppCloudWebhookEventIgnored({
+    eventKey: bounded(input.eventKey, 1, 500, "WhatsApp webhook event key is required"),
+    errorCode: bounded(input.errorCode, 1, 120, "WhatsApp webhook ignored code is required"),
+    errorMessage: bounded(
+      input.errorMessage,
+      1,
+      500,
+      "WhatsApp webhook ignored reason is required"
+    ),
+    now: input.now.toISOString()
   });
 }
 

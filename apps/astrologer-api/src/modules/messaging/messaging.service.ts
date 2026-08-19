@@ -21,6 +21,8 @@ import {
   createClientFromThread,
   createOutboundMessage,
   linkThreadToClient,
+  markWhatsAppCloudWebhookEventIgnored,
+  markWhatsAppCloudWebhookEventProcessed,
   markThreadRead,
   recordTelegramBusinessConnection,
   recordTelegramBusinessDeletedMessages,
@@ -110,6 +112,21 @@ import type { TelegramMtprotoAuthProvider } from "./telegram-mtproto-auth-provid
 import type { WhatsAppCloudAuthProvider } from "./whatsapp-cloud-auth-provider";
 import type { ParsedWhatsAppCloudWebhookChange } from "./whatsapp-cloud-webhook";
 import { z } from "@elevenhouse/validation";
+
+const whatsappCloudConnectionUnmatchedError = {
+  code: "whatsapp_cloud_connection_unmatched",
+  message: "No active WhatsApp Cloud channel connection matched phone_number_id"
+};
+
+const whatsappCloudUnsupportedMessageError = {
+  code: "whatsapp_cloud_message_unsupported",
+  message: "WhatsApp Cloud webhook message does not contain supported text content"
+};
+
+const whatsappCloudStatusUnrecognizedError = {
+  code: "whatsapp_cloud_status_unrecognized",
+  message: "WhatsApp Cloud webhook status is not supported"
+};
 
 @Injectable()
 export class MessagingService {
@@ -600,7 +617,7 @@ export class MessagingService {
           receivedAt
         });
         if (event.kind === "recorded") {
-          await recordWhatsAppCloudAccountUpdate({
+          const result = await recordWhatsAppCloudAccountUpdate({
             store: this.store,
             wabaId: change.wabaId,
             phoneNumberId: change.phoneNumberId,
@@ -609,6 +626,21 @@ export class MessagingService {
             eventAt: change.accountUpdate.eventAt,
             now: this.clock.now()
           });
+          if (result.kind === "unmatched") {
+            await markWhatsAppCloudWebhookEventIgnored({
+              store: this.store,
+              eventKey,
+              errorCode: whatsappCloudConnectionUnmatchedError.code,
+              errorMessage: whatsappCloudConnectionUnmatchedError.message,
+              now: this.clock.now()
+            });
+          } else {
+            await markWhatsAppCloudWebhookEventProcessed({
+              store: this.store,
+              eventKey,
+              now: this.clock.now()
+            });
+          }
         }
       }
 
@@ -691,8 +723,18 @@ export class MessagingService {
           },
           receivedAt
         });
-        if (event.kind === "duplicate" || !message.text) continue;
-        await recordWhatsAppCloudMessage({
+        if (event.kind === "duplicate") continue;
+        if (!message.text) {
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudUnsupportedMessageError.code,
+            errorMessage: whatsappCloudUnsupportedMessageError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        const result = await recordWhatsAppCloudMessage({
           store: this.store,
           phoneNumberId: change.phoneNumberId,
           providerMessageId: message.id,
@@ -700,6 +742,24 @@ export class MessagingService {
           recipientWaId: change.displayPhoneNumber ?? change.phoneNumberId,
           text: message.text,
           providerSentAt: message.providerSentAt,
+          now: this.clock.now()
+        });
+        if (result.kind === "unmatched") {
+          this.logger.warn(
+            `WhatsApp Cloud webhook message unmatched phoneNumberId=${change.phoneNumberId} senderWaId=${message.from} providerMessageId=${message.id}`
+          );
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudConnectionUnmatchedError.code,
+            errorMessage: whatsappCloudConnectionUnmatchedError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        await markWhatsAppCloudWebhookEventProcessed({
+          store: this.store,
+          eventKey,
           now: this.clock.now()
         });
       }
@@ -723,8 +783,18 @@ export class MessagingService {
           },
           receivedAt
         });
-        if (event.kind === "duplicate" || !echo.text) continue;
-        await recordWhatsAppCloudEcho({
+        if (event.kind === "duplicate") continue;
+        if (!echo.text) {
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudUnsupportedMessageError.code,
+            errorMessage: whatsappCloudUnsupportedMessageError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        const result = await recordWhatsAppCloudEcho({
           store: this.store,
           phoneNumberId: change.phoneNumberId,
           providerMessageId: echo.id,
@@ -732,6 +802,21 @@ export class MessagingService {
           recipientWaId: echo.to,
           text: echo.text,
           providerSentAt: echo.providerSentAt,
+          now: this.clock.now()
+        });
+        if (result.kind === "unmatched") {
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudConnectionUnmatchedError.code,
+            errorMessage: whatsappCloudConnectionUnmatchedError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        await markWhatsAppCloudWebhookEventProcessed({
+          store: this.store,
+          eventKey,
           now: this.clock.now()
         });
       }
@@ -757,14 +842,39 @@ export class MessagingService {
           },
           receivedAt
         });
-        if (event.kind === "duplicate" || !normalizedStatus) continue;
-        await recordWhatsAppCloudStatus({
+        if (event.kind === "duplicate") continue;
+        if (!normalizedStatus) {
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudStatusUnrecognizedError.code,
+            errorMessage: whatsappCloudStatusUnrecognizedError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        const result = await recordWhatsAppCloudStatus({
           store: this.store,
           phoneNumberId: change.phoneNumberId,
           providerMessageId: status.id,
           status: normalizedStatus,
           providerStatusAt: status.providerSentAt,
           failureCode: normalizedStatus === "failed" ? "whatsapp_cloud_delivery_failed" : null,
+          now: this.clock.now()
+        });
+        if (result.kind === "unmatched") {
+          await markWhatsAppCloudWebhookEventIgnored({
+            store: this.store,
+            eventKey,
+            errorCode: whatsappCloudConnectionUnmatchedError.code,
+            errorMessage: whatsappCloudConnectionUnmatchedError.message,
+            now: this.clock.now()
+          });
+          continue;
+        }
+        await markWhatsAppCloudWebhookEventProcessed({
+          store: this.store,
+          eventKey,
           now: this.clock.now()
         });
       }

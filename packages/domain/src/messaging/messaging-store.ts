@@ -308,6 +308,22 @@ export type RecordWhatsAppCloudWebhookEventStoreResult = {
   readonly kind: "recorded" | "duplicate";
 };
 
+export type MarkWhatsAppCloudWebhookEventProcessedStoreInput = {
+  readonly eventKey: string;
+  readonly now: string;
+};
+
+export type MarkWhatsAppCloudWebhookEventIgnoredStoreInput = {
+  readonly eventKey: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+  readonly now: string;
+};
+
+export type MarkWhatsAppCloudWebhookEventTerminalStoreResult = {
+  readonly kind: "recorded" | "unmatched";
+};
+
 export type RecordWhatsAppCloudAccountUpdateStoreInput = {
   readonly wabaId: string;
   readonly phoneNumberId: string | null;
@@ -491,6 +507,12 @@ export type MessagingStore = {
   readonly recordWhatsAppCloudWebhookEvent: (
     input: RecordWhatsAppCloudWebhookEventStoreInput
   ) => Promise<RecordWhatsAppCloudWebhookEventStoreResult>;
+  readonly markWhatsAppCloudWebhookEventProcessed: (
+    input: MarkWhatsAppCloudWebhookEventProcessedStoreInput
+  ) => Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult>;
+  readonly markWhatsAppCloudWebhookEventIgnored: (
+    input: MarkWhatsAppCloudWebhookEventIgnoredStoreInput
+  ) => Promise<MarkWhatsAppCloudWebhookEventTerminalStoreResult>;
   readonly recordWhatsAppCloudAccountUpdate: (
     input: RecordWhatsAppCloudAccountUpdateStoreInput
   ) => Promise<RecordWhatsAppCloudAccountUpdateStoreResult>;
