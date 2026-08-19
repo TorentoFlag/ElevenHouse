@@ -11,7 +11,12 @@ describe("AstroDiary product template seed", () => {
     expect(astroDiaryTemplates).toHaveLength(2);
 
     for (const template of astroDiaryTemplates) {
+      expect(template.payload.type).toBe("async");
+      expect(template.payload.executionMode).toBe("async");
       expect(template.payload.paymentModel).toBe("once");
+      expect(template.payload.participantMode).toBe("solo");
+      expect(template.payload.subscriptionPeriod).toBe("month");
+      expect(template.payload.priceMinor).toBeGreaterThan(0);
       expect(template.payload.includedItems.map((item) => item.text).join("\n")).not.toMatch(
         /в месяц|per month|subscription|подпис/i
       );

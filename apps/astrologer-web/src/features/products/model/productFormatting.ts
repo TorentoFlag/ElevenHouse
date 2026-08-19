@@ -56,7 +56,7 @@ export function createProductCardSummary(
   const analyticsUnavailable = product.analytics.status === "unavailable";
 
   return {
-    typeLabel: copy.types[product.type].label,
+    typeLabel: getProductCardTypeLabel(product, copy),
     statusLabel: copy.statuses[product.status].label,
     statusTone: copy.statuses[product.status].tone,
     price: formatProductPrice(product, copy, locale),
@@ -87,4 +87,16 @@ function createProductMetaLine(product: ProductResponse, copy: ProductCopy): str
     product.slaLabel;
 
   return [formatLine, durationLine].filter(Boolean).join(" · ");
+}
+
+function getProductCardTypeLabel(product: ProductResponse, copy: ProductCopy): string {
+  if (
+    product.astroDiaryConfig !== null &&
+    product.accessGrants.length === 1 &&
+    product.accessGrants[0] === "journal"
+  ) {
+    return copy.accessGrants.journal.label;
+  }
+
+  return copy.types[product.type].label;
 }

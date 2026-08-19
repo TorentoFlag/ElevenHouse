@@ -161,7 +161,7 @@ const astroDiaryPaidPeriodPayload = {
   type: "async",
   title: "Астродневник",
   subtitle: "Личное сопровождение и вопросы для рефлексии",
-  priceMinor: 0,
+  priceMinor: 150000,
   currency: "RUB",
   executionMode: "async",
   paymentModel: "once",
