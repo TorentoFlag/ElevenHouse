@@ -373,6 +373,17 @@ export function getPreviewCoverPlaceholder(coverPlaceholder: string): string {
   return previewPlaceholder.charAt(0).toLocaleUpperCase("ru-RU") + previewPlaceholder.slice(1);
 }
 
+export function getProductConstructorTypeLabel(
+  draft: ProductFormDraft,
+  productCopy: ProductCopy
+): string {
+  if (draft.accessGrants.length === 1 && draft.accessGrants[0] === "journal") {
+    return productCopy.accessGrants.journal.label;
+  }
+
+  return productCopy.types[draft.type].label;
+}
+
 export function formatModifierSuffix(
   modifier: ProductModifierRequest,
   locale: ProductLocale,
@@ -430,10 +441,13 @@ function getPreviewCategoryLabel(
   productCopy: ProductCopy,
   uiCopy: ProductPreviewCopy
 ) {
+  if (draft.accessGrants.length === 1 && draft.accessGrants[0] === "journal") {
+    return productCopy.accessGrants.journal.label;
+  }
   if (draft.paymentModel === "sub") return productCopy.paymentModels.sub.label;
   if (draft.paymentModel === "free") return productCopy.paymentModels.free.label;
   if (draft.participantMode === "group") return productCopy.participantModes.group.label;
   if (draft.participantMode === "gift") return productCopy.participantModes.gift.label;
   if (draft.executionMode === "live") return uiCopy.personalConsultationLabel;
-  return productCopy.types[draft.type].label;
+  return getProductConstructorTypeLabel(draft, productCopy);
 }

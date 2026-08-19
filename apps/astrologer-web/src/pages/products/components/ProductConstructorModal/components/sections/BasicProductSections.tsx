@@ -41,6 +41,26 @@ export type BasicProductSectionId =
 
 type PaymentSectionMode = "all" | "package" | "subscription";
 
+export type ProductPaymentSectionVisibility = {
+  readonly renderSection: boolean;
+  readonly showPackageControls: boolean;
+  readonly showSubscriptionControls: boolean;
+};
+
+export function resolveProductPaymentSectionVisibility(
+  draft: Pick<ProductConstructorSectionProps["draft"], "paymentModel">,
+  mode: PaymentSectionMode = "all"
+): ProductPaymentSectionVisibility {
+  const showPackageControls = mode === "package" || draft.paymentModel === "pack";
+  const showSubscriptionControls = draft.paymentModel === "sub";
+
+  return {
+    renderSection: mode === "all" || showPackageControls || showSubscriptionControls,
+    showPackageControls,
+    showSubscriptionControls
+  };
+}
+
 type BasicProductSectionsProps = ProductConstructorSectionProps & {
   readonly visibleSections?: readonly BasicProductSectionId[];
   readonly paymentSectionMode?: PaymentSectionMode;
@@ -295,12 +315,10 @@ function PaymentSection({
   mode = "all"
 }: ProductConstructorSectionProps & { readonly mode?: PaymentSectionMode }) {
   const { uiCopy, actions } = controller;
-  const showPackageControls = mode === "package" || draft.paymentModel === "pack";
-  const isAstroDiary = draft.accessGrants.length === 1 && draft.accessGrants[0] === "journal";
-  const showSubscriptionControls =
-    mode === "subscription" || draft.paymentModel === "sub" || isAstroDiary;
+  const { renderSection, showPackageControls, showSubscriptionControls } =
+    resolveProductPaymentSectionVisibility(draft, mode);
 
-  if (mode === "subscription" && !showSubscriptionControls && !showPackageControls) {
+  if (!renderSection) {
     return null;
   }
 
@@ -353,17 +371,15 @@ function PaymentSection({
               onSelect={(value) => actions.updateDraft({ subscriptionPeriod: value })}
             />
           </div>
-          {!isAstroDiary ? (
-            <LabeledStepper label={copy.trialDaysLabel}>
-              <NumberStepper
-                value={draft.trialDays ?? 0}
-                min={0}
-                decrementLabel={copy.trialDaysLabel}
-                incrementLabel={copy.trialDaysLabel}
-                onValueChange={(value) => actions.updateDraft({ trialDays: value || null })}
-              />
-            </LabeledStepper>
-          ) : null}
+          <LabeledStepper label={copy.trialDaysLabel}>
+            <NumberStepper
+              value={draft.trialDays ?? 0}
+              min={0}
+              decrementLabel={copy.trialDaysLabel}
+              incrementLabel={copy.trialDaysLabel}
+              onValueChange={(value) => actions.updateDraft({ trialDays: value || null })}
+            />
+          </LabeledStepper>
         </div>
       ) : null}
       {mode === "all" && draft.paymentModel === "free" ? (

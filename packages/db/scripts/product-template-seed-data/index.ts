@@ -179,7 +179,7 @@ const astroDiaryPaidPeriodPayload = {
     serviceTimezone: "UTC"
   },
   includedItems: [
-    { text: "4 цикла рефлексии в месяц", icon: "reference", order: 10 },
+    { text: "4 цикла рефлексии за оплаченный период", icon: "reference", order: 10 },
     { text: "Ответ астролога в течение 2 рабочих дней", icon: "clock", order: 20 },
     { text: "Текст, вложения и голосовые сообщения", icon: "chat", order: 30 }
   ],
@@ -250,7 +250,7 @@ const expertSubscriptionPayloadEn = localizePayload(expertSubscriptionPayload, {
 const astroDiaryPaidPeriodPayloadEn = {
   ...astroDiaryPaidPeriodPayload,
   includedItems: [
-    { text: "4 reflection cycles per month", icon: "reference", order: 10 },
+    { text: "4 reflection cycles per paid period", icon: "reference", order: 10 },
     { text: "Astrologer response within 2 working days", icon: "clock", order: 20 },
     { text: "Text, attachments and voice messages", icon: "chat", order: 30 }
   ]

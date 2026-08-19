@@ -3,6 +3,7 @@ import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import { Button } from "@elevenhouse/design-system/components/Button";
 import "@elevenhouse/design-system/components/Button.css";
 import type { ProductCopy } from "../../../../../features/products/model/productCopy";
+import { getProductConstructorTypeLabel } from "../../../../../features/products/model/productConstructorViewModel";
 import type { ProductFormDraft } from "../../../../../features/products/model/productDraft";
 import type { ConstructorUiCopy } from "../helpers/constructorUiCopy";
 import type { ProductConstructorModalCopy } from "../types";
@@ -42,7 +43,7 @@ export function ProductConstructorHeader({
           <Icon iconName="chevronRight" width={13} height={13} aria-hidden="true" />
           <span>{uiCopy.createBreadcrumb}</span>
           <Icon iconName="chevronRight" width={13} height={13} aria-hidden="true" />
-          <strong>{productCopy.types[draft.type].label}</strong>
+          <strong>{getProductConstructorTypeLabel(draft, productCopy)}</strong>
         </div>
         <h2 className={styles.productConstructorTitle}>{copy.title}</h2>
       </div>
