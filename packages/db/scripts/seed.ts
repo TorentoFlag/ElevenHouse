@@ -8,6 +8,7 @@ import {
   dictionarySeedCategories,
   dictionarySeedPlatformEntries
 } from "./dictionary-seed-data/index";
+import { defaultFinancePolicySeedData } from "./finance-policy-seed-data";
 import { reconcileFlowRuntimeControlAuthority } from "./flow-runtime-control-reconciliation";
 import { productTemplateSeedData } from "./product-template-seed-data/index";
 
@@ -25,9 +26,10 @@ async function main() {
     await seedFlowRuntimeControlAuthority();
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
+    await seedDefaultFinancePolicy();
     await seedProductTemplates();
     console.log(
-      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries and ${productTemplateSeedData.length} product templates upserted`
+      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries, default finance policy reconciled and ${productTemplateSeedData.length} product templates upserted`
     );
   } finally {
     await pool.end();
@@ -113,6 +115,50 @@ async function seedDictionaryPlatformEntries() {
          status = excluded.status,
          updated_at = now()`,
     values
+  );
+}
+
+async function seedDefaultFinancePolicy() {
+  await pool.query(
+    `insert into finance_policies (
+       policy_version,
+       risk_tier,
+       hold_duration_hours,
+       reserve_bps,
+       reserve_release_delay_days,
+       provider_settlement_required,
+       is_active,
+       created_by_user_id,
+       snapshotted_at,
+       created_at
+     )
+     select seed_versions.next_policy_version,
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            true,
+            null,
+            now(),
+            now()
+     from (
+       select coalesce(max(policy_version), 0) + 1 as next_policy_version
+       from finance_policies
+     ) seed_versions
+     where not exists (
+       select 1
+       from finance_policies
+       where risk_tier = $1
+         and is_active = true
+     )`,
+    [
+      defaultFinancePolicySeedData.riskTier,
+      defaultFinancePolicySeedData.holdDurationHours,
+      defaultFinancePolicySeedData.reserveBps,
+      defaultFinancePolicySeedData.reserveReleaseDelayDays,
+      defaultFinancePolicySeedData.providerSettlementRequired
+    ]
   );
 }
 
