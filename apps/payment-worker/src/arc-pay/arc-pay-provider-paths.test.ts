@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 const repoRoot = process.cwd();
 
 const arcPayBoundaryFiles = [
+  "apps/payment-worker/src/arc-pay/arc-pay-checkout-session-client.ts",
   "apps/payment-worker/src/arc-pay/arc-pay-card-setup-client.ts",
   "apps/payment-worker/src/arc-pay/arc-pay-saved-card-charge-client.ts",
   "apps/payment-worker/src/arc-pay/arc-pay-canonical-payment-reader.ts",
@@ -32,22 +33,28 @@ const documentedArcPayPaths = [
 ] as const;
 
 describe("ArcPay provider REST paths", () => {
-  test("uses documented unversioned endpoint paths across worker-owned ArcPay clients", () => {
+  test("uses the documented v1 API base path across worker-owned ArcPay clients", () => {
     const fixture = JSON.parse(
       readFileSync(
         join(repoRoot, "apps/payment-worker/src/arc-pay/fixtures/openapi-2026-08-12.json"),
         "utf8"
       )
-    ) as { readonly paths?: Record<string, unknown> };
+    ) as {
+      readonly paths?: Record<string, unknown>;
+      readonly servers?: readonly { readonly url?: string }[];
+    };
     const fixturePaths = new Set(Object.keys(fixture.paths ?? {}));
     expect(documentedArcPayPaths.filter((path) => !fixturePaths.has(path))).toEqual([]);
+    expect(new URL(fixture.servers?.[0]?.url ?? "").pathname).toBe("/v1");
 
     const offenders = arcPayBoundaryFiles.flatMap((filePath) => {
       const source = readFileSync(join(repoRoot, filePath), "utf8");
       return source
         .split("\n")
         .map((line, index) => ({ filePath, line: index + 1, text: line.trim() }))
-        .filter(({ text }) => text.includes("/v1/") || text.includes('"/v1'));
+        .filter(({ text }) =>
+          /[`'"]\/(?:cards|checkout|payments|settlement)(?:\/|`|"|')/.test(text)
+        );
     });
 
     expect(offenders).toEqual([]);

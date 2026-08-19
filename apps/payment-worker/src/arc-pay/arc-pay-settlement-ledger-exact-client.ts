@@ -75,7 +75,7 @@ export function createArcPayExactSettlementClient(
       }
 
       const url = new URL(
-        input.stream === "settlement_ledger" ? "/settlement/ledger" : "/settlement/payouts",
+        input.stream === "settlement_ledger" ? "/v1/settlement/ledger" : "/v1/settlement/payouts",
         input.apiBaseUrl
       );
       if (input.stream === "settlement_ledger") {

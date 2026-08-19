@@ -40,7 +40,7 @@ describe("ArcPay hosted checkout session client", () => {
     });
 
     expect(requests).toHaveLength(1);
-    expect(new URL(requests[0]!.url).pathname).toBe("/checkout/sessions");
+    expect(new URL(requests[0]!.url).pathname).toBe("/v1/checkout/sessions");
     expect(requests[0]!.headers.get("authorization")).toBe("Bearer sk_test_valid");
     expect(requests[0]!.headers.get("idempotency-key")).toBe(
       "a6142be4-8c89-4c7d-a509-1036bdfb8df5"

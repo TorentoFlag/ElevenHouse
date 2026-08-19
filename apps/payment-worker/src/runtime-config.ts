@@ -6,7 +6,7 @@ const runtimeConfigSchema = z.object({
   PAYMENT_WORKER_HEALTH_PORT: z.coerce.number().int().min(1).max(65535).default(3011),
   PAYMENT_WORKER_WEBHOOK_HOST: z.string().trim().min(1).default("0.0.0.0"),
   PAYMENT_WORKER_WEBHOOK_PORT: z.coerce.number().int().min(1).max(65535).default(3013),
-  PAYMENT_WORKER_ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space"),
+  PAYMENT_WORKER_ARC_PAY_API_BASE_URL: z.string().url().default("https://api.arcpay.space/v1"),
   PAYMENT_WORKER_ARC_PAY_API_SECRET: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_ARC_PAY_WEBHOOK_SECRET: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_ARC_PAY_WEBHOOK_SIGNING_KEY_VERSION_ID: z.string().trim().min(1).optional(),

@@ -125,7 +125,7 @@ export function createArcPayCanonicalPaymentReader(
     let response: Response;
     try {
       response = await fetchImpl(
-        new URL(`/payments/${encodeURIComponent(providerPaymentId)}`, apiBaseUrl),
+        new URL(`/v1/payments/${encodeURIComponent(providerPaymentId)}`, apiBaseUrl),
         { headers: { authorization: `Bearer ${config.apiSecret}` } }
       );
     } catch {
@@ -225,7 +225,7 @@ export function createArcPayCanonicalPaymentReader(
       const paymentResponse = await fetchJson({
         apiBaseUrl,
         apiSecret: config.apiSecret,
-        path: `/payments/${encodeURIComponent(providerSetupId)}`,
+        path: `/v1/payments/${encodeURIComponent(providerSetupId)}`,
         fetchImpl
       });
       const paymentPayload = parseJson(paymentResponse);
@@ -237,7 +237,7 @@ export function createArcPayCanonicalPaymentReader(
       const savedCardsResponse = await fetchJson({
         apiBaseUrl,
         apiSecret: config.apiSecret,
-        path: `/cards?customer_id=${encodeURIComponent(providerCustomerId)}`,
+        path: `/v1/cards?customer_id=${encodeURIComponent(providerCustomerId)}`,
         fetchImpl
       });
       const credential = parseActiveSavedCard(parseJson(savedCardsResponse), setup.cardTokenId);

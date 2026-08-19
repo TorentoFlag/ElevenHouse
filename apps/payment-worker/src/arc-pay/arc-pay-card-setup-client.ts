@@ -94,7 +94,7 @@ export function createArcPayCardSetupClient(
       const envelope = cardSetupEnvelope(input.envelope);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/cards/setup", apiBaseUrl), {
+        response = await fetchImpl(new URL("/v1/cards/setup", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,
@@ -139,7 +139,10 @@ export function createArcPayCardSetupClient(
       let response: Response;
       try {
         response = await fetchImpl(
-          new URL(`/payments/${encodeURIComponent(envelope.providerSetupId)}/execute`, apiBaseUrl),
+          new URL(
+            `/v1/payments/${encodeURIComponent(envelope.providerSetupId)}/execute`,
+            apiBaseUrl
+          ),
           {
             method: "POST",
             headers: {
@@ -190,7 +193,7 @@ export function createArcPayCardSetupClient(
       try {
         response = await fetchImpl(
           new URL(
-            `/payments/${encodeURIComponent(providerSetupId)}/complete-3ds-method`,
+            `/v1/payments/${encodeURIComponent(providerSetupId)}/complete-3ds-method`,
             apiBaseUrl
           ),
           {

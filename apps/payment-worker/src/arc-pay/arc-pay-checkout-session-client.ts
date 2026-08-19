@@ -55,7 +55,7 @@ export function createArcPayCheckoutSessionClient(
       const body = checkoutRequestBody(envelope);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/checkout/sessions", apiBaseUrl), {
+        response = await fetchImpl(new URL("/v1/checkout/sessions", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,

@@ -106,7 +106,10 @@ function field(value: unknown): Readonly<{ name: string; value: string }> {
 }
 
 function completionEndpoint(value: unknown, providerSetupId: string): string {
-  if (typeof value !== "string" || value !== `/payments/${providerSetupId}/complete-3ds-method`) {
+  if (
+    typeof value !== "string" ||
+    value !== `/v1/payments/${providerSetupId}/complete-3ds-method`
+  ) {
     fail("invalid_action");
   }
   return value;

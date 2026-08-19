@@ -44,7 +44,7 @@ export function createArcPaySettlementBalanceClient(
       if (!input.apiSecret) throw new ArcPaySettlementBalanceError();
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/settlement/balance", input.apiBaseUrl), {
+        response = await fetchImpl(new URL("/v1/settlement/balance", input.apiBaseUrl), {
           headers: { authorization: `Bearer ${input.apiSecret}` }
         });
       } catch {

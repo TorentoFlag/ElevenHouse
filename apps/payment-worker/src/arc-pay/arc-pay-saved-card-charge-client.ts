@@ -56,7 +56,7 @@ export function createArcPaySavedCardChargeClient(
       const idempotencyKey = idempotency(input.idempotencyKey);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/payments/saved-card", apiBaseUrl), {
+        response = await fetchImpl(new URL("/v1/payments/saved-card", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,

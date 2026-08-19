@@ -13,6 +13,14 @@ const baseProductionConfig = {
 } as const;
 
 describe("payment worker finance provider dispatch runtime config", () => {
+  test("defaults ArcPay API base URL to the documented OpenAPI v1 server", () => {
+    const config = createPaymentWorkerRuntimeConfig({
+      NODE_ENV: "development"
+    });
+
+    expect(config.arcPay.apiBaseUrl).toBe("https://api.arcpay.space/v1");
+  });
+
   test("requires S3 private artifact storage when production provider dispatch is enabled", () => {
     expect(() =>
       createPaymentWorkerRuntimeConfig({

@@ -30,7 +30,7 @@ export function createArcPaySettlementLedgerClient(input: {
   return {
     async listSettlementLedger(request) {
       if (!input.apiSecret) throw new ArcPaySettlementLedgerError();
-      const url = new URL("/settlement/ledger", input.apiBaseUrl);
+      const url = new URL("/v1/settlement/ledger", input.apiBaseUrl);
       url.searchParams.set("from", request.from);
       url.searchParams.set("to", request.to);
       url.searchParams.set("limit", String(request.limit));

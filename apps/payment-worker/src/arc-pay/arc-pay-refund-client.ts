@@ -56,7 +56,7 @@ export function createArcPayRefundClient(
       try {
         response = await fetchImpl(
           new URL(
-            `/payments/${encodeURIComponent(envelope.providerPaymentId)}/refunds`,
+            `/v1/payments/${encodeURIComponent(envelope.providerPaymentId)}/refunds`,
             apiBaseUrl
           ),
           {
