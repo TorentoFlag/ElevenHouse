@@ -8,6 +8,7 @@ import {
   dictionarySeedCategories,
   dictionarySeedPlatformEntries
 } from "./dictionary-seed-data/index";
+import { resolveArcPayProviderAccountSeedData } from "./finance-provider-account-seed-data";
 import {
   defaultClientCheckoutPreparePolicySeedData,
   defaultFinancePolicySeedData
@@ -31,6 +32,7 @@ async function main() {
     await seedDictionaryPlatformEntries();
     await seedDefaultFinancePolicy();
     await seedDefaultClientCheckoutPreparePolicy();
+    await seedArcPayProviderAccount();
     await seedProductTemplates();
     console.log(
       `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries, default finance prerequisites reconciled and ${productTemplateSeedData.length} product templates upserted`
@@ -230,6 +232,127 @@ async function seedDefaultClientCheckoutPreparePolicy() {
     throw new Error(
       `Published ${seed.operationKind} resource policy does not match the canonical seed`
     );
+  }
+}
+
+async function seedArcPayProviderAccount() {
+  const seed = resolveArcPayProviderAccountSeedData(process.env);
+  if (!seed) {
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `insert into finance_provider_account_series (
+         series_id,
+         provider,
+         active_identity_version,
+         head_version,
+         created_at
+       )
+       select $1,
+              $2,
+              $3,
+              $3::text,
+              now()
+       where not exists (
+         select 1
+         from finance_provider_account_series
+         where provider = $2
+       )`,
+      [seed.seriesId, seed.provider, seed.identityVersion]
+    );
+    await client.query(
+      `insert into finance_provider_accounts (
+         series_id,
+         provider_account_id,
+         identity_version,
+         provider,
+         merchant_tenant_id,
+         terminal_scope,
+         settlement_scope,
+         predecessor_provider_account_id,
+         predecessor_identity_version,
+         created_at
+       )
+       select $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              $7,
+              null,
+              null,
+              now()
+       where exists (
+         select 1
+         from finance_provider_account_series
+         where series_id = $1
+           and provider = $4
+           and active_identity_version = $3
+       )
+         and not exists (
+           select 1
+           from finance_provider_accounts
+           where provider = $4
+         )`,
+      [
+        seed.seriesId,
+        seed.providerAccountId,
+        seed.identityVersion,
+        seed.provider,
+        seed.merchantTenantId,
+        seed.terminalScope,
+        seed.settlementScope
+      ]
+    );
+    const result = await client.query<{
+      series_id: string;
+      provider_account_id: string;
+      identity_version: number;
+      provider: "arc_pay";
+      merchant_tenant_id: string;
+      terminal_scope: string;
+      settlement_scope: string;
+    }>(
+      `select series.series_id,
+              account.provider_account_id,
+              account.identity_version,
+              account.provider,
+              account.merchant_tenant_id,
+              account.terminal_scope,
+              account.settlement_scope
+       from finance_provider_account_series series
+       inner join finance_provider_accounts account
+         on account.series_id = series.series_id
+        and account.provider = series.provider
+        and account.identity_version = series.active_identity_version
+       where series.provider = $1`,
+      [seed.provider]
+    );
+
+    const row = result.rows[0];
+    if (
+      result.rowCount !== 1 ||
+      row?.series_id !== seed.seriesId ||
+      row.provider_account_id !== seed.providerAccountId ||
+      row.identity_version !== seed.identityVersion ||
+      row.provider !== seed.provider ||
+      row.merchant_tenant_id !== seed.merchantTenantId ||
+      row.terminal_scope !== seed.terminalScope ||
+      row.settlement_scope !== seed.settlementScope
+    ) {
+      throw new Error("Active ArcPay provider account does not match the canonical seed");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
