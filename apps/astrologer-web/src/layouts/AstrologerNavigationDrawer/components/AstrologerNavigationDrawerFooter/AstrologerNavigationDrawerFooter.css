@@ -30,6 +30,16 @@
   background: rgb(244 196 48 / 0.1);
 }
 
+.astrologerNavigationDrawer__personalPage:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.astrologerNavigationDrawer__personalPage:disabled:hover {
+  border-color: rgb(216 212 236 / 0.08);
+  background: rgb(22 20 47 / 0.86);
+}
+
 .astrologerNavigationDrawer__personalPage:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgb(244 196 48 / 0.2);

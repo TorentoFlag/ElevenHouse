@@ -454,9 +454,10 @@ export type AppShellNavigationCopy = {
   expandLabel: string;
   personalPage: {
     title: string;
-    description: string;
-    href: string;
+    loadingDescription: string;
+    unavailableDescription: string;
     ariaLabel: string;
+    unavailableAriaLabel: string;
   };
   items: AppShellNavigationItemCopy[];
   footerItems: AppShellNavigationItemCopy[];
@@ -606,9 +607,10 @@ export const astrologerCopyByLocale = {
         expandLabel: "Развернуть боковое меню",
         personalPage: {
           title: "Личная страница",
-          description: "elevenhouse.app/alisa-vega",
-          href: "https://elevenhouse.app/alisa-vega",
-          ariaLabel: "Открыть личную страницу астролога"
+          loadingDescription: "Ссылка загружается",
+          unavailableDescription: "Опубликуйте профиль в настройках",
+          ariaLabel: "Открыть личную страницу астролога",
+          unavailableAriaLabel: "Личная страница астролога пока недоступна"
         },
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
@@ -1150,9 +1152,10 @@ export const astrologerCopyByLocale = {
         expandLabel: "Expand sidebar navigation",
         personalPage: {
           title: "Personal page",
-          description: "elevenhouse.app/alisa-vega",
-          href: "https://elevenhouse.app/alisa-vega",
-          ariaLabel: "Open astrologer personal page"
+          loadingDescription: "Link is loading",
+          unavailableDescription: "Publish the profile in settings",
+          ariaLabel: "Open astrologer personal page",
+          unavailableAriaLabel: "Astrologer personal page is not available yet"
         },
         items: [
           { id: "dashboard", title: "Dashboard", href: "/dashboard" },
