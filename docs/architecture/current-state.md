@@ -43,6 +43,7 @@ Use this for current structural facts. Ownership, policy, contracts and readines
 
 | App | Module |
 | --- | --- |
+| public-api | `astro-diary` |
 | public-api | `booking` |
 | public-api | `client-commerce` |
 | public-api | `client-consents` |
@@ -59,6 +60,7 @@ Use this for current structural facts. Ownership, policy, contracts and readines
 | public-api | `sessions` |
 | astrologer-api | `ai` |
 | astrologer-api | `astro-calendar` |
+| astrologer-api | `astro-diary` |
 | astrologer-api | `astrologer-profile` |
 | astrologer-api | `availability` |
 | astrologer-api | `bookings` |

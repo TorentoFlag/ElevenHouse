@@ -47,6 +47,7 @@ export class AppModule {}
 
 `apps/public-api` сейчас содержит:
 
+- `astro-diary`
 - `booking`
 - `client-commerce`
 - `client-consents` (reserved; no runtime module is implemented yet)
@@ -84,6 +85,11 @@ a public catalogue or astrologer-handle lookup. `refund-candidates` lets a
 client list and submit an idempotent CSRF-protected dispute candidate for an
 owned paid order. It is not a provider-refund success path. `client-consents`
 is a reserved directory only and has no runtime module or API contract yet.
+`astro-diary` exposes the client-owned relationship journal surface for an
+already-related astrologer. It composes server-side relationship authorization,
+paid-period access, draft persistence, journal timeline reads and command
+idempotency. It is not a discovery route, public catalogue or recurring billing
+surface.
 
 `platform-tariffs` owns the astrologer-facing tariff catalogue, selection and
 saved-card subscription/read state. It persists finance commands and worker
@@ -95,6 +101,7 @@ capability guard; browser locks are presentation only, never authorization.
 
 - `ai`
 - `astro-calendar`
+- `astro-diary`
 - `astrologer-profile`
 - `availability`
 - `bookings`
@@ -121,6 +128,12 @@ capability guard; browser locks are presentation only, never authorization.
 - `redis`
 - `security`
 - `verification`
+
+`astro-diary` exposes the astrologer-owned workspace for paid relationship
+journals: journal list/detail, timeline reads, private reply drafts and explicit
+publish commands. Controllers remain thin and compose domain ports/adapters; the
+module does not call payment providers directly and does not own product
+checkout.
 
 `apps/admin-api` сейчас содержит:
 
