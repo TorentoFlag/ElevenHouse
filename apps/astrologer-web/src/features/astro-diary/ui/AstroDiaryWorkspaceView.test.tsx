@@ -5,6 +5,7 @@ import type { AstroDiaryJournalSummaryResponse } from "@elevenhouse/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { astrologerCopyByLocale } from "../../../common/i18n/astrologerCopy";
+import { AstroDiaryReplyComposer } from "./AstroDiaryReplyComposer";
 import { AstroDiaryWorkspaceView } from "./AstroDiaryWorkspaceView";
 
 afterEach(cleanup);
@@ -75,6 +76,69 @@ describe("AstroDiaryWorkspaceView", () => {
     expect(onSelectJournal).toHaveBeenCalledWith(readOnlySummary.journal.id);
     expect(screen.getByText("Paid period ended · history is read-only")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Write reply" })).not.toBeInTheDocument();
+  });
+
+  it("keeps Russian read-only labels subscription-neutral", () => {
+    render(
+      <AstroDiaryWorkspaceView
+        copy={astrologerCopyByLocale.ru.astroDiary}
+        locale="ru"
+        state={{
+          kind: "ready",
+          journals: [readOnlySummary],
+          selectedJournal: readOnlySummary,
+          timelineItems: [],
+          timelineStatus: "empty",
+          hasMoreTimeline: false,
+          isLoadingMoreTimeline: false,
+          loadMoreTimelineError: false,
+          replyDraft: null,
+          replyBody: "",
+          replyDraftStatus: "ready",
+          replyError: null,
+          isSavingReply: false,
+          isPublishingReply: false,
+          mobileDetailOpen: false,
+          onSelectJournal: vi.fn(),
+          onBackToList: vi.fn(),
+          onRetryTimeline: vi.fn(),
+          onLoadMoreTimeline: vi.fn(),
+          onOpenReply: vi.fn(),
+          onReplyBodyChange: vi.fn(),
+          onRetryReplyDraft: vi.fn(),
+          onSaveReply: vi.fn(),
+          onPublishReply: vi.fn(),
+          onReloadLatest: vi.fn()
+        }}
+      />
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Оплаченный период завершён · история доступна только для чтения"
+    );
+    expect(screen.getByRole("status")).not.toHaveTextContent("Подписка");
+  });
+
+  it("keeps the Russian read-only reply error subscription-neutral", () => {
+    render(
+      <AstroDiaryReplyComposer
+        copy={astrologerCopyByLocale.ru.astroDiary}
+        draft={null}
+        body="Ответ"
+        error="read_only"
+        isSaving={false}
+        isPublishing={false}
+        onBodyChange={vi.fn()}
+        onReloadLatest={vi.fn()}
+        onSave={vi.fn()}
+        onPublish={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Оплаченный период завершён. Журнал доступен только для чтения."
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Подписка");
   });
 });
 
