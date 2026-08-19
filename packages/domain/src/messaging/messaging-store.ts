@@ -159,6 +159,18 @@ export type CompleteWhatsAppCloudConnectionStoreResult = {
   readonly kind: "recorded" | "unmatched";
 };
 
+export type UpdateWhatsAppCloudConnectionSyncStatusStoreInput = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly historySyncStatus: WhatsAppCloudSyncStatus;
+  readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  readonly now: string;
+};
+
+export type UpdateWhatsAppCloudConnectionSyncStatusStoreResult = {
+  readonly kind: "recorded" | "unmatched";
+};
+
 export type RevokeInstagramGraphConnectionStoreInput = {
   readonly instagramAppScopedUserId: string;
   readonly reason: "deauthorized" | "data_deletion";
@@ -442,6 +454,9 @@ export type MessagingStore = {
   readonly completeWhatsAppCloudConnection: (
     input: CompleteWhatsAppCloudConnectionStoreInput
   ) => Promise<CompleteWhatsAppCloudConnectionStoreResult>;
+  readonly updateWhatsAppCloudConnectionSyncStatus: (
+    input: UpdateWhatsAppCloudConnectionSyncStatusStoreInput
+  ) => Promise<UpdateWhatsAppCloudConnectionSyncStatusStoreResult>;
   readonly revokeInstagramGraphConnectionByMetaUserId: (
     input: RevokeInstagramGraphConnectionStoreInput
   ) => Promise<RevokeInstagramGraphConnectionStoreResult>;

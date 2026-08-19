@@ -7,6 +7,7 @@ import {
   recordWhatsAppCloudMessage,
   recordWhatsAppCloudWebhookEvent,
   startWhatsAppCloudConnection,
+  updateWhatsAppCloudConnectionSyncStatus,
   whatsappCloudContactSyncEventKey,
   whatsappCloudEchoEventKey,
   whatsappCloudAccountUpdateEventKey,
@@ -117,6 +118,31 @@ describe("WhatsApp Cloud messaging use cases", () => {
         now
       })
     ).rejects.toThrow("WhatsApp sync status is invalid");
+  });
+
+  it("normalizes WhatsApp sync status updates before storing", async () => {
+    const store = {
+      updateWhatsAppCloudConnectionSyncStatus: vi.fn().mockResolvedValue({ kind: "recorded" })
+    } as unknown as MessagingStore;
+
+    await expect(
+      updateWhatsAppCloudConnectionSyncStatus({
+        store,
+        astrologerUserId,
+        connectionId,
+        historySyncStatus: "failed",
+        contactSyncStatus: "requested",
+        now
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    expect(store.updateWhatsAppCloudConnectionSyncStatus).toHaveBeenCalledWith({
+      astrologerUserId,
+      connectionId,
+      historySyncStatus: "failed",
+      contactSyncStatus: "requested",
+      now: now.toISOString()
+    });
   });
 
   it("builds deterministic WhatsApp webhook event keys", () => {

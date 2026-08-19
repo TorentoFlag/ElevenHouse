@@ -58,7 +58,9 @@ import type {
   StartTelegramMtprotoConnectionStoreInput,
   StartTelegramMtprotoConnectionStoreResult,
   TelegramMtprotoLoginResultStoreResult,
-  TelegramMtprotoLoginSession
+  TelegramMtprotoLoginSession,
+  UpdateWhatsAppCloudConnectionSyncStatusStoreInput,
+  UpdateWhatsAppCloudConnectionSyncStatusStoreResult
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -122,6 +124,8 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     completeInstagramGraphConnection: (input) => completeInstagramGraphConnection(database, input),
     startWhatsAppCloudConnection: (input) => startWhatsAppCloudConnection(database, input),
     completeWhatsAppCloudConnection: (input) => completeWhatsAppCloudConnection(database, input),
+    updateWhatsAppCloudConnectionSyncStatus: (input) =>
+      updateWhatsAppCloudConnectionSyncStatus(database, input),
     revokeInstagramGraphConnectionByMetaUserId: (input) =>
       revokeInstagramGraphConnectionByMetaUserId(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
@@ -933,6 +937,32 @@ async function completeWhatsAppCloudConnection(
 
     return { kind: "recorded" };
   });
+}
+
+async function updateWhatsAppCloudConnectionSyncStatus(
+  database: ElevenHouseDatabase,
+  input: UpdateWhatsAppCloudConnectionSyncStatusStoreInput
+): Promise<UpdateWhatsAppCloudConnectionSyncStatusStoreResult> {
+  const timestamp = new Date(input.now);
+  const [updated] = await database
+    .update(messagingWhatsappCloudAccounts)
+    .set({
+      historySyncStatus: input.historySyncStatus,
+      contactSyncStatus: input.contactSyncStatus,
+      updatedAt: timestamp
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingWhatsappCloudAccounts.channelConnectionId, messagingChannelConnections.id),
+        eq(messagingChannelConnections.id, input.connectionId),
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "whatsapp"),
+        eq(messagingChannelConnections.mode, "whatsapp_cloud")
+      )
+    )
+    .returning({ id: messagingWhatsappCloudAccounts.id });
+  return updated ? { kind: "recorded" } : { kind: "unmatched" };
 }
 
 async function revokeInstagramGraphConnectionByMetaUserId(

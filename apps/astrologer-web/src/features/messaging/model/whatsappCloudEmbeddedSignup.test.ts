@@ -17,8 +17,9 @@ describe("whatsappCloudEmbeddedSignup model", () => {
       override_default_response_type: true,
       state: "state-1",
       extras: {
-        version: "v3",
-        featureType: "whatsapp_business_app_onboarding"
+        setup: {},
+        featureType: "whatsapp_business_app_onboarding",
+        sessionInfoVersion: "3"
       }
     });
   });

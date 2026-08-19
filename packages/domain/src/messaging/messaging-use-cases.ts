@@ -22,7 +22,8 @@ import type {
   RevokeInstagramGraphConnectionStoreResult,
   RecordWhatsAppCloudAccountUpdateStoreResult,
   RecordWhatsAppCloudWebhookEventStoreResult,
-  TelegramBusinessConnectionRights
+  TelegramBusinessConnectionRights,
+  UpdateWhatsAppCloudConnectionSyncStatusStoreResult
 } from "./messaging-store";
 import type {
   EncryptedMessagingSecret,
@@ -314,7 +315,7 @@ export async function completeWhatsAppCloudConnection(input: {
   readonly historySyncStatus: WhatsAppCloudSyncStatus;
   readonly contactSyncStatus: WhatsAppCloudSyncStatus;
   readonly now: Date;
-}): Promise<CompleteWhatsAppCloudConnectionStoreResult> {
+}): Promise<UpdateWhatsAppCloudConnectionSyncStatusStoreResult> {
   return input.store.completeWhatsAppCloudConnection({
     astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
     connectionId: identifier(input.connectionId, "Channel connection id is required"),
@@ -332,6 +333,23 @@ export async function completeWhatsAppCloudConnection(input: {
     connectedVia: "embedded_signup_coexistence",
     tokenIssuedAt: input.tokenIssuedAt ? normalizeIsoInstant(input.tokenIssuedAt) : null,
     tokenExpiresAt: input.tokenExpiresAt ? normalizeIsoInstant(input.tokenExpiresAt) : null,
+    historySyncStatus: whatsappCloudSyncStatus(input.historySyncStatus),
+    contactSyncStatus: whatsappCloudSyncStatus(input.contactSyncStatus),
+    now: input.now.toISOString()
+  });
+}
+
+export async function updateWhatsAppCloudConnectionSyncStatus(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly historySyncStatus: WhatsAppCloudSyncStatus;
+  readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  readonly now: Date;
+}): Promise<CompleteWhatsAppCloudConnectionStoreResult> {
+  return input.store.updateWhatsAppCloudConnectionSyncStatus({
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    connectionId: identifier(input.connectionId, "Channel connection id is required"),
     historySyncStatus: whatsappCloudSyncStatus(input.historySyncStatus),
     contactSyncStatus: whatsappCloudSyncStatus(input.contactSyncStatus),
     now: input.now.toISOString()

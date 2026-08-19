@@ -21,8 +21,9 @@ type FacebookLoginOptions = {
   readonly override_default_response_type: true;
   readonly state: string;
   readonly extras: {
-    readonly version: "v3";
+    readonly setup: Record<string, never>;
     readonly featureType: "whatsapp_business_app_onboarding";
+    readonly sessionInfoVersion: "3";
   };
 };
 
@@ -76,8 +77,9 @@ export function buildWhatsAppCloudEmbeddedSignupLoginOptions(input: {
     override_default_response_type: true,
     state: input.state,
     extras: {
-      version: "v3",
-      featureType: "whatsapp_business_app_onboarding"
+      setup: {},
+      featureType: "whatsapp_business_app_onboarding",
+      sessionInfoVersion: "3"
     }
   };
 }

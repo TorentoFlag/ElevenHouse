@@ -96,6 +96,43 @@ describe.sequential("Drizzle messaging store WhatsApp Cloud", () => {
     });
   });
 
+  it("updates WhatsApp Cloud sync statuses without changing connection ownership", async () => {
+    const store = createDrizzleMessagingStore(runtime.database);
+    const { connectionId } = await seedActiveWhatsAppConnection(runtime, store);
+
+    await expect(
+      store.updateWhatsAppCloudConnectionSyncStatus({
+        astrologerUserId: randomUUID(),
+        connectionId,
+        historySyncStatus: "failed",
+        contactSyncStatus: "failed",
+        now: "2026-08-18T20:30:05.000Z"
+      })
+    ).resolves.toEqual({ kind: "unmatched" });
+
+    await expect(
+      store.updateWhatsAppCloudConnectionSyncStatus({
+        astrologerUserId: (await runtime.database
+          .select({ astrologerUserId: messagingChannelConnections.astrologerUserId })
+          .from(messagingChannelConnections)
+          .where(eq(messagingChannelConnections.id, connectionId)))[0]?.astrologerUserId ?? "",
+        connectionId,
+        historySyncStatus: "failed",
+        contactSyncStatus: "requested",
+        now: "2026-08-18T20:30:06.000Z"
+      })
+    ).resolves.toEqual({ kind: "recorded" });
+
+    const [account] = await runtime.database
+      .select()
+      .from(messagingWhatsappCloudAccounts)
+      .where(eq(messagingWhatsappCloudAccounts.channelConnectionId, connectionId));
+    expect(account).toMatchObject({
+      historySyncStatus: "failed",
+      contactSyncStatus: "requested"
+    });
+  });
+
   it("deduplicates provider webhook events by event key", async () => {
     const event = {
       provider: "whatsapp",

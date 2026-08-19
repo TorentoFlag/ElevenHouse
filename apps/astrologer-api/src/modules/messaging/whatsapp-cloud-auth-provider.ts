@@ -150,9 +150,11 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
     readonly wabaId: string;
   }): Promise<void> {
     const url = new URL(`${this.options.graphApiBaseUrl}/${input.wabaId}/subscribed_apps`);
-    url.searchParams.set("access_token", input.accessToken);
 
-    const response = await this.fetchFn(url, { method: "POST" });
+    const response = await this.fetchFn(url, {
+      method: "POST",
+      headers: graphBearerHeaders(input.accessToken)
+    });
     const payload = await readGraphJson(response);
     const parsed = successResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
@@ -166,14 +168,16 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
     readonly syncType: "smb_app_state_sync" | "history";
   }): Promise<{ readonly requestId: string | null }> {
     const url = new URL(`${this.options.graphApiBaseUrl}/${input.phoneNumberId}/smb_app_data`);
-    url.searchParams.set("access_token", input.accessToken);
     const body = new URLSearchParams();
     body.set("sync_type", input.syncType);
 
     const response = await this.fetchFn(url, {
       method: "POST",
       body,
-      headers: { "content-type": "application/x-www-form-urlencoded" }
+      headers: {
+        ...graphBearerHeaders(input.accessToken),
+        "content-type": "application/x-www-form-urlencoded"
+      }
     });
     const payload = await readGraphJson(response);
     const parsed = successResponseSchema.safeParse(payload);
@@ -189,8 +193,10 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
       "fields",
       "id,display_phone_number,verified_name,platform_type,is_on_biz_app"
     );
-    url.searchParams.set("access_token", accessToken);
-    const response = await this.fetchFn(url, { method: "GET" });
+    const response = await this.fetchFn(url, {
+      method: "GET",
+      headers: graphBearerHeaders(accessToken)
+    });
     const payload = await readGraphJson(response);
     const parsed = phoneNumberSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
@@ -205,8 +211,10 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
       "fields",
       "id,display_phone_number,verified_name,platform_type,is_on_biz_app"
     );
-    url.searchParams.set("access_token", accessToken);
-    const response = await this.fetchFn(url, { method: "GET" });
+    const response = await this.fetchFn(url, {
+      method: "GET",
+      headers: graphBearerHeaders(accessToken)
+    });
     const payload = await readGraphJson(response);
     const parsed = phoneNumbersResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
@@ -222,8 +230,10 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
   private async fetchBusinessId(accessToken: string, wabaId: string): Promise<string | null> {
     const url = new URL(`${this.options.graphApiBaseUrl}/${wabaId}`);
     url.searchParams.set("fields", "id,business{id}");
-    url.searchParams.set("access_token", accessToken);
-    const response = await this.fetchFn(url, { method: "GET" });
+    const response = await this.fetchFn(url, {
+      method: "GET",
+      headers: graphBearerHeaders(accessToken)
+    });
     const payload = await readGraphJson(response);
     const parsed = wabaBusinessResponseSchema.safeParse(payload);
     if (!response.ok || !parsed.success) {
@@ -231,6 +241,10 @@ export class HttpWhatsAppCloudAuthProvider implements WhatsAppCloudAuthProvider 
     }
     return parsed.data.business?.id?.toString() ?? parsed.data.id?.toString() ?? null;
   }
+}
+
+function graphBearerHeaders(accessToken: string): Record<string, string> {
+  return { authorization: `Bearer ${accessToken}` };
 }
 
 function parseGrantedScopes(value: string | string[] | undefined): readonly string[] {

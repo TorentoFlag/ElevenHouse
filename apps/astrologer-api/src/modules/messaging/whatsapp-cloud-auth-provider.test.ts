@@ -67,6 +67,16 @@ describe("HttpWhatsAppCloudAuthProvider", () => {
       verifiedName: "ElevenHouse",
       wabaId: "waba-1"
     });
+    const [phoneNumbersUrl, phoneNumbersInit] = fetchFn.mock.calls[0] ?? [];
+    expect(phoneNumbersUrl?.searchParams.get("access_token")).toBeNull();
+    expect(phoneNumbersInit).toMatchObject({
+      headers: { authorization: "Bearer token" }
+    });
+    const [businessUrl, businessInit] = fetchFn.mock.calls[1] ?? [];
+    expect(businessUrl?.searchParams.get("access_token")).toBeNull();
+    expect(businessInit).toMatchObject({
+      headers: { authorization: "Bearer token" }
+    });
   });
 
   it("subscribes WABA and requests SMB app data sync", async () => {
@@ -84,6 +94,21 @@ describe("HttpWhatsAppCloudAuthProvider", () => {
         syncType: "history"
       })
     ).resolves.toEqual({ requestId: "sync-request-1" });
+    const [subscribeUrl, subscribeInit] = fetchFn.mock.calls[0] ?? [];
+    expect(subscribeUrl?.searchParams.get("access_token")).toBeNull();
+    expect(subscribeInit).toMatchObject({
+      method: "POST",
+      headers: { authorization: "Bearer token" }
+    });
+    const [syncUrl, syncInit] = fetchFn.mock.calls[1] ?? [];
+    expect(syncUrl?.searchParams.get("access_token")).toBeNull();
+    expect(syncInit).toMatchObject({
+      method: "POST",
+      headers: {
+        authorization: "Bearer token",
+        "content-type": "application/x-www-form-urlencoded"
+      }
+    });
   });
 
   it("classifies Graph error body without leaking secrets", async () => {

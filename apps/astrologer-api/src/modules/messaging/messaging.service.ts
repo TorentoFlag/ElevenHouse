@@ -40,6 +40,7 @@ import {
   startWhatsAppCloudConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection,
+  updateWhatsAppCloudConnectionSyncStatus,
   whatsappCloudAccountUpdateEventKey,
   whatsappCloudContactSyncEventKey,
   whatsappCloudEchoEventKey,
@@ -48,7 +49,8 @@ import {
   whatsappCloudStatusEventKey,
   type MessagingReadStore,
   type MessagingStore,
-  type PrivateObjectStoragePort
+  type PrivateObjectStoragePort,
+  type WhatsAppCloudSyncStatus
 } from "@elevenhouse/domain";
 import {
   CreateMessagingThreadClientRequestSchema,
@@ -305,20 +307,11 @@ export class MessagingService {
         accessToken: token.accessToken,
         wabaId: phone.wabaId
       });
-      await authProvider.requestSmbAppDataSync({
-        accessToken: token.accessToken,
-        phoneNumberId: phone.phoneNumberId,
-        syncType: "smb_app_state_sync"
-      });
-      if (whatsappCloudConfig.historySyncEnabled) {
-        await authProvider.requestSmbAppDataSync({
-          accessToken: token.accessToken,
-          phoneNumberId: phone.phoneNumberId,
-          syncType: "history"
-        });
-      }
-
       const cipher = createAes256GcmSecretCipher(whatsappCloudConfig.tokenEncryptionKey);
+      const initialHistorySyncStatus: WhatsAppCloudSyncStatus = whatsappCloudConfig.historySyncEnabled
+        ? "requested"
+        : "not_requested";
+      const initialContactSyncStatus: WhatsAppCloudSyncStatus = "requested";
       const result = await completeWhatsAppCloudConnection({
         store: this.store,
         astrologerUserId: state.astrologerUserId,
@@ -340,10 +333,29 @@ export class MessagingService {
         tokenScopes: token.grantedScopes,
         tokenIssuedAt: this.clock.now().toISOString(),
         tokenExpiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
-        historySyncStatus: whatsappCloudConfig.historySyncEnabled ? "requested" : "not_requested",
-        contactSyncStatus: "requested",
+        historySyncStatus: initialHistorySyncStatus,
+        contactSyncStatus: initialContactSyncStatus,
         now: this.clock.now()
       });
+      if (result.kind === "recorded") {
+        const syncStatus = await this.requestInitialWhatsAppCloudSync({
+          authProvider,
+          accessToken: token.accessToken,
+          phoneNumberId: phone.phoneNumberId,
+          historySyncEnabled: whatsappCloudConfig.historySyncEnabled
+        });
+        if (
+          syncStatus.historySyncStatus !== initialHistorySyncStatus ||
+          syncStatus.contactSyncStatus !== initialContactSyncStatus
+        ) {
+          await this.recordWhatsAppCloudSyncStatusUpdate({
+            astrologerUserId: state.astrologerUserId,
+            connectionId: state.connectionId,
+            historySyncStatus: syncStatus.historySyncStatus,
+            contactSyncStatus: syncStatus.contactSyncStatus
+          });
+        }
+      }
       const connections = await this.readStore.listChannelConnections({
         astrologerUserId: state.astrologerUserId
       });
@@ -357,6 +369,75 @@ export class MessagingService {
         code: result.kind === "recorded" ? null : "whatsapp_cloud_connection_not_found"
       });
     });
+  }
+
+  private async requestInitialWhatsAppCloudSync(input: {
+    readonly authProvider: WhatsAppCloudAuthProvider;
+    readonly accessToken: string;
+    readonly phoneNumberId: string;
+    readonly historySyncEnabled: boolean;
+  }): Promise<{
+    readonly historySyncStatus: WhatsAppCloudSyncStatus;
+    readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  }> {
+    const contactSyncStatus = await this.requestWhatsAppCloudSync({
+      authProvider: input.authProvider,
+      accessToken: input.accessToken,
+      phoneNumberId: input.phoneNumberId,
+      syncType: "smb_app_state_sync"
+    });
+    const historySyncStatus = input.historySyncEnabled
+      ? await this.requestWhatsAppCloudSync({
+          authProvider: input.authProvider,
+          accessToken: input.accessToken,
+          phoneNumberId: input.phoneNumberId,
+          syncType: "history"
+        })
+      : "not_requested";
+    return { historySyncStatus, contactSyncStatus };
+  }
+
+  private async requestWhatsAppCloudSync(input: {
+    readonly authProvider: WhatsAppCloudAuthProvider;
+    readonly accessToken: string;
+    readonly phoneNumberId: string;
+    readonly syncType: "smb_app_state_sync" | "history";
+  }): Promise<WhatsAppCloudSyncStatus> {
+    try {
+      await input.authProvider.requestSmbAppDataSync({
+        accessToken: input.accessToken,
+        phoneNumberId: input.phoneNumberId,
+        syncType: input.syncType
+      });
+      return "requested";
+    } catch (error) {
+      this.logger.warn(
+        `WhatsApp Cloud ${input.syncType} request failed for phoneNumberId=${input.phoneNumberId}: ${errorMessage(error)}`
+      );
+      return "failed";
+    }
+  }
+
+  private async recordWhatsAppCloudSyncStatusUpdate(input: {
+    readonly astrologerUserId: string;
+    readonly connectionId: string;
+    readonly historySyncStatus: WhatsAppCloudSyncStatus;
+    readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  }): Promise<void> {
+    try {
+      await updateWhatsAppCloudConnectionSyncStatus({
+        store: this.store,
+        astrologerUserId: input.astrologerUserId,
+        connectionId: input.connectionId,
+        historySyncStatus: input.historySyncStatus,
+        contactSyncStatus: input.contactSyncStatus,
+        now: this.clock.now()
+      });
+    } catch (error) {
+      this.logger.warn(
+        `WhatsApp Cloud sync status update failed for connectionId=${input.connectionId}: ${errorMessage(error)}`
+      );
+    }
   }
 
   async completeInstagramGraphConnectionCallback(
@@ -1773,6 +1854,11 @@ function encryptedMessagingSecret(
     authTag: encrypted.authTag,
     ciphertext: encrypted.ciphertext
   };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return "unknown_error";
 }
 
 async function mapMessagingErrors<T>(operation: () => Promise<T>): Promise<T> {

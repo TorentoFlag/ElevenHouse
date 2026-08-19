@@ -52,7 +52,8 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
   it("completes Coexistence onboarding with only waba_id from the browser session", async () => {
     const store = {
       startWhatsAppCloudConnection: vi.fn().mockResolvedValue({ connectionId }),
-      completeWhatsAppCloudConnection: vi.fn().mockResolvedValue({ kind: "recorded" })
+      completeWhatsAppCloudConnection: vi.fn().mockResolvedValue({ kind: "recorded" }),
+      updateWhatsAppCloudConnectionSyncStatus: vi.fn().mockResolvedValue({ kind: "recorded" })
     } as unknown as MessagingStore;
     const authProvider = {
       exchangeCode: vi.fn().mockResolvedValue({
@@ -104,6 +105,62 @@ describe("MessagingService WhatsApp Cloud Embedded Signup", () => {
         contactSyncStatus: "requested"
       })
     );
+  });
+
+  it("persists the WhatsApp connection when best-effort sync requests fail", async () => {
+    const store = {
+      startWhatsAppCloudConnection: vi.fn().mockResolvedValue({ connectionId }),
+      completeWhatsAppCloudConnection: vi.fn().mockResolvedValue({ kind: "recorded" }),
+      updateWhatsAppCloudConnectionSyncStatus: vi.fn().mockResolvedValue({ kind: "recorded" })
+    } as unknown as MessagingStore;
+    const authProvider = {
+      exchangeCode: vi.fn().mockResolvedValue({
+        accessToken: "token",
+        grantedScopes: ["whatsapp_business_management", "whatsapp_business_messaging"],
+        expiresAt: null
+      }),
+      resolvePhoneNumber: vi.fn().mockResolvedValue({
+        wabaId: "waba-1",
+        businessId: "business-1",
+        phoneNumberId: "phone-1",
+        displayPhoneNumber: "+15550783881",
+        verifiedName: "ElevenHouse",
+        platformType: "CLOUD_API",
+        isOnBizApp: true
+      }),
+      subscribeWabaToWebhooks: vi.fn().mockResolvedValue(undefined),
+      requestSmbAppDataSync: vi.fn().mockRejectedValue(new Error("Meta sync temporarily unavailable"))
+    } satisfies WhatsAppCloudAuthProvider;
+    const service = createService({ store, authProvider });
+    const start = await service.startWhatsAppCloudConnection(session());
+
+    await expect(
+      service.completeWhatsAppCloudConnection(
+        {
+          state: start.state,
+          code: "code-1",
+          session: {
+            event: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING",
+            wabaId: "waba-1"
+          }
+        },
+        session()
+      )
+    ).resolves.toMatchObject({ status: "connected", channelConnection: { id: connectionId } });
+
+    expect(store.completeWhatsAppCloudConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        historySyncStatus: "requested",
+        contactSyncStatus: "requested"
+      })
+    );
+    expect(store.updateWhatsAppCloudConnectionSyncStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        historySyncStatus: "failed",
+        contactSyncStatus: "failed"
+      })
+    );
+    expect(authProvider.requestSmbAppDataSync).toHaveBeenCalledTimes(2);
   });
 
   it("deduplicates WhatsApp webhook messages and preserves separate status event keys", async () => {
