@@ -211,8 +211,6 @@ export async function executeDrizzleClientSubscriptionCreationInTransaction(
     journalEpochId: decision.subscription.journalEpochId,
     state: decision.subscription.state,
     version: decision.subscription.version,
-    // Historical column remains physically present until the next isolated DB migration.
-    cancellationEffectiveAt: null,
     currentPeriodId: null,
     futurePeriodId: null,
     createdAt: new Date(decision.contract.createdAt),

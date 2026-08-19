@@ -27,7 +27,6 @@ export const clientSubscriptions = pgTable(
     journalEpochId: uuid("journal_epoch_id").notNull(),
     state: text("state").notNull(),
     version: integer("version").notNull(),
-    cancellationEffectiveAt: timestamp("cancellation_effective_at", { withTimezone: true }),
     currentPeriodId: uuid("current_period_id"),
     futurePeriodId: uuid("future_period_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -75,21 +74,17 @@ export const clientSubscriptions = pgTable(
         ${table.state} = 'pending_initial_payment'
         and ${table.currentPeriodId} is null
         and ${table.futurePeriodId} is null
-        and ${table.cancellationEffectiveAt} is null
       ) or (
         ${table.state} = 'active'
         and ${table.currentPeriodId} is not null
-        and ${table.cancellationEffectiveAt} is null
       ) or (
         ${table.state} = 'ended'
         and ${table.currentPeriodId} is null
         and ${table.futurePeriodId} is null
-        and ${table.cancellationEffectiveAt} is null
       ) or (
         ${table.state} = 'revoked'
         and ${table.currentPeriodId} is null
         and ${table.futurePeriodId} is null
-        and ${table.cancellationEffectiveAt} is null
       )`
     ),
     check(

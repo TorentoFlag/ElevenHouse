@@ -1703,6 +1703,15 @@ async function seedCanonicalSubscriptionCapture(
     operationEnvelope: operationEnvelope()
   });
   expect(checkout.checkoutPreparation.state).toBe("checkout_requested");
+  const sessionTimestamp = await runtime.pool.query<{ opened_at: Date }>(
+    `select opened_at from finance_economic_payment_sessions where id = $1`,
+    [sessionId]
+  );
+  const openedAt = sessionTimestamp.rows[0]?.opened_at;
+  const observedAt = openedAt ? new Date(openedAt.getTime() + 1).toISOString() : undefined;
+  if (!observedAt) {
+    throw new Error("Canonical capture fixture payment session timestamp was not found");
+  }
 
   const webhookBytes = new TextEncoder().encode(JSON.stringify({ id: webhookId }));
   const canonicalBytes = new TextEncoder().encode(JSON.stringify({ id: providerPaymentId }));
@@ -1777,7 +1786,6 @@ async function seedCanonicalSubscriptionCapture(
   if (!claim || claim.inboxItemId !== stored.inboxItemId) {
     throw new Error("Canonical capture fixture was not claimable");
   }
-  const observedAt = new Date().toISOString();
   const canonicalUnitOfWork = createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork({
     database: runtime.database,
     workerId,
