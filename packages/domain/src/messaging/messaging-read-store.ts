@@ -69,9 +69,16 @@ export type TelegramBusinessConnectionReconciliationCandidate = {
   readonly businessConnectionId: string;
 };
 
+export type MessagingReadLinkedClient = {
+  readonly userId: string;
+  readonly displayName: string | null;
+  readonly birthDate: string | null;
+};
+
 export type MessagingReadThread = {
   readonly id: string;
   readonly clientUserId: string | null;
+  readonly linkedClient: MessagingReadLinkedClient | null;
   readonly status: MessagingThreadStatus;
   readonly primaryIdentity: MessagingReadExternalIdentity | null;
   readonly lastMessage: MessagingReadMessage | null;

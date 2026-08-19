@@ -10,6 +10,9 @@ import type {
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
+  clientAstrologerRelationships,
+  clientBirthData,
+  clientProfiles,
   messageMediaIngestions,
   mediaAssets,
   messagingChannelConnections,
@@ -180,6 +183,7 @@ async function toReadThread(
   return {
     id: thread.id,
     clientUserId: thread.clientUserId,
+    linkedClient: await findLinkedClient(database, thread),
     status: thread.status as MessagingReadThread["status"],
     primaryIdentity: identityRow ? toExternalIdentity(identityRow.identity) : null,
     lastMessage: lastMessageRow
@@ -189,6 +193,49 @@ async function toReadThread(
     unreadCount: thread.unreadAstrologerCount,
     createdAt: toIsoString(thread.createdAt),
     updatedAt: toIsoString(thread.updatedAt)
+  };
+}
+
+async function findLinkedClient(
+  database: ElevenHouseDatabase,
+  thread: MessagingThreadRow
+): Promise<MessagingReadThread["linkedClient"]> {
+  if (!thread.clientUserId) {
+    return null;
+  }
+
+  const [row] = await database
+    .select({
+      userId: clientProfiles.userId,
+      displayName: clientProfiles.displayNameSnapshot,
+      birthDate: clientBirthData.birthDate
+    })
+    .from(clientAstrologerRelationships)
+    .innerJoin(
+      clientProfiles,
+      eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId)
+    )
+    .leftJoin(
+      clientBirthData,
+      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+    )
+    .where(
+      and(
+        eq(clientAstrologerRelationships.astrologerUserId, thread.astrologerUserId),
+        eq(clientAstrologerRelationships.clientUserId, thread.clientUserId),
+        eq(clientAstrologerRelationships.status, "active")
+      )
+    )
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    userId: row.userId,
+    displayName: row.displayName,
+    birthDate: row.birthDate
   };
 }
 

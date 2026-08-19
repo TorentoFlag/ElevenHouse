@@ -5,6 +5,7 @@ import {
   CompleteWhatsAppCloudConnectionResponseSchema,
   MessagingChannelConnectionSchema,
   MessagingChannelModeSchema,
+  MessagingThreadSchema,
   MessagingProviderSchema,
   StartWhatsAppCloudConnectionResponseSchema
 } from "./messaging";
@@ -69,6 +70,35 @@ describe("messaging contracts WhatsApp Cloud", () => {
         code: null
       })
     ).toMatchObject({ status: "connected" });
+  });
+});
+
+describe("messaging thread client snapshot contract", () => {
+  it("parses the linked CRM client summary with the thread", () => {
+    expect(
+      MessagingThreadSchema.parse({
+        id: "10000000-0000-4000-8000-000000000010",
+        clientUserId: "10000000-0000-4000-8000-000000000020",
+        linkedClient: {
+          userId: "10000000-0000-4000-8000-000000000020",
+          displayName: "QA Inbox Client",
+          birthDate: "1991-04-03"
+        },
+        status: "open",
+        primaryIdentity: null,
+        lastMessage: null,
+        lastMessageAt: null,
+        unreadCount: 0,
+        createdAt: "2026-08-19T12:00:00.000Z",
+        updatedAt: "2026-08-19T12:00:00.000Z"
+      })
+    ).toMatchObject({
+      clientUserId: "10000000-0000-4000-8000-000000000020",
+      linkedClient: {
+        displayName: "QA Inbox Client",
+        birthDate: "1991-04-03"
+      }
+    });
   });
 });
 

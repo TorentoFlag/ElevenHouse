@@ -38,6 +38,7 @@ import { InboxPageView } from "./InboxPageView";
 export function InboxPage() {
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [isMobileThreadOpen, setIsMobileThreadOpen] = useState(true);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [activeThreadFilter, setActiveThreadFilter] = useState<InboxThreadFilter>("all");
@@ -148,6 +149,7 @@ export function InboxPage() {
   useEffect(() => {
     setLinkClient(null);
     setCreateClientDisplayName("");
+    setDraft("");
   }, [selectedThreadId]);
 
   useEffect(() => {
@@ -246,6 +248,7 @@ export function InboxPage() {
       draft={draft}
       search={search}
       activeThreadFilter={activeThreadFilter}
+      isMobileThreadOpen={isMobileThreadOpen}
       linkClientUserId={linkClient?.value ?? ""}
       linkClient={linkClient}
       createClientDisplayName={createClientDisplayName}
@@ -254,7 +257,11 @@ export function InboxPage() {
       clientActionError={clientActionError}
       onSearchChange={setSearch}
       onThreadFilterChange={setActiveThreadFilter}
-      onSelectThread={setSelectedThreadId}
+      onSelectThread={(threadId) => {
+        setSelectedThreadId(threadId);
+        setIsMobileThreadOpen(true);
+      }}
+      onMobileBack={() => setIsMobileThreadOpen(false)}
       onDraftChange={setDraft}
       onOpenTelegramBusinessGuide={() => setIsTelegramBusinessGuideOpen(true)}
       onCloseTelegramBusinessGuide={() => setIsTelegramBusinessGuideOpen(false)}

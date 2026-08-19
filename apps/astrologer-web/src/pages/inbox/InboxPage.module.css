@@ -430,6 +430,38 @@
   display: none;
 }
 
+@media (max-width: 860px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .body[data-mobile-thread-open="true"] .threadListPanel,
+  .body[data-mobile-thread-open="false"] .threadPanel {
+    display: none;
+  }
+
+  .body[data-mobile-thread-open="true"] .threadPanel,
+  .body[data-mobile-thread-open="false"] .threadListPanel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobileThreadBack {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--inbox-line-strong);
+    border-radius: 12px;
+    padding: 0 12px;
+    background: var(--inbox-surface);
+    color: var(--inbox-text);
+    cursor: pointer;
+    font: 700 12px / 1 var(--eh-font-sans);
+  }
+}
+
 .messages {
   display: flex;
   min-height: 0;

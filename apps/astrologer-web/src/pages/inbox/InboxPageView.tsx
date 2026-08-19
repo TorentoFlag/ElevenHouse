@@ -54,6 +54,7 @@ export type InboxPageViewProps = {
   readonly draft: string;
   readonly search: string;
   readonly activeThreadFilter: InboxThreadFilter;
+  readonly isMobileThreadOpen: boolean;
   readonly linkClientUserId: string;
   readonly linkClient: ClientSelectOption | null;
   readonly createClientDisplayName: string;
@@ -63,6 +64,7 @@ export type InboxPageViewProps = {
   readonly onSearchChange: (value: string) => void;
   readonly onThreadFilterChange: (value: InboxThreadFilter) => void;
   readonly onSelectThread: (threadId: string) => void;
+  readonly onMobileBack: () => void;
   readonly onDraftChange: (value: string) => void;
   readonly onOpenTelegramBusinessGuide: () => void;
   readonly onCloseTelegramBusinessGuide: () => void;
@@ -127,6 +129,7 @@ export function InboxPageView({
   draft,
   search,
   activeThreadFilter,
+  isMobileThreadOpen,
   linkClientUserId,
   linkClient,
   createClientDisplayName,
@@ -136,6 +139,7 @@ export function InboxPageView({
   onSearchChange,
   onThreadFilterChange,
   onSelectThread,
+  onMobileBack,
   onDraftChange,
   onOpenTelegramBusinessGuide,
   onCloseTelegramBusinessGuide,
@@ -226,7 +230,10 @@ export function InboxPageView({
         </div>
       </header>
 
-      <div className={styles.body}>
+      <div
+        className={styles.body}
+        data-mobile-thread-open={isMobileThreadOpen ? "true" : "false"}
+      >
         <aside className={styles.threadListPanel} aria-label="Диалоги">
           {showTelegramSetup && telegramBusinessStartError ? (
             <p className={styles.connectionError} role="alert">
@@ -287,7 +294,7 @@ export function InboxPageView({
               </p>
             )}
             {!isThreadsLoading && !isThreadsError && threads.length === 0 && (
-              <p className={styles.stateText}>Пока нет диалогов. Подключите Telegram.</p>
+              <p className={styles.stateText}>{emptyThreadListMessage(activeThreadFilter)}</p>
             )}
             {threads.map((thread) => (
               <button
@@ -321,7 +328,7 @@ export function InboxPageView({
 
         <main className={styles.threadPanel} aria-label="Переписка">
           <div className={styles.threadHeader}>
-            <button className={styles.mobileThreadBack} type="button">
+            <button className={styles.mobileThreadBack} type="button" onClick={onMobileBack}>
               Назад
             </button>
             {selectedThread ? (
@@ -390,7 +397,10 @@ export function InboxPageView({
                 name="inboxComposer"
                 value={draft}
                 onChange={(event) => onDraftChange(event.currentTarget.value)}
-                placeholder={canSend ? `Ответить через ${selectedProviderLabel}...` : "Подключите отправку"}
+                aria-label="Сообщение"
+                placeholder={
+                  canSend ? `Ответить через ${selectedProviderLabel}...` : "Подключите отправку"
+                }
                 disabled={composerDisabled}
               />
               <button type="submit" disabled={composerDisabled || !draft.trim()}>
@@ -520,8 +530,8 @@ export function InboxPageView({
                     </section>
                   </>
                 )}
-                {selectedThread.clientUserId && (
-                  <button type="button">Открыть карточку клиента</button>
+                {selectedThread.clientUserId && !selectedThread.linkedClient && (
+                  <p className={styles.contextMuted}>CRM-клиент связан без доступного профиля.</p>
                 )}
               </div>
             </>
@@ -701,7 +711,21 @@ function messageStatusLabel(status: MessagingMessage["status"]) {
 }
 
 function threadTitle(thread: MessagingThread) {
-  return thread.primaryIdentity?.displayName ?? thread.primaryIdentity?.username ?? "Новый клиент";
+  return (
+    thread.linkedClient?.displayName ??
+    thread.primaryIdentity?.displayName ??
+    thread.primaryIdentity?.username ??
+    (thread.clientUserId ? "CRM клиент" : "Новый клиент")
+  );
+}
+
+function emptyThreadListMessage(activeFilter: InboxThreadFilter) {
+  if (activeFilter === "telegram") return "Пока нет диалогов Telegram.";
+  if (activeFilter === "instagram") return "Пока нет диалогов Instagram.";
+  if (activeFilter === "whatsapp") return "Пока нет диалогов WhatsApp.";
+  if (activeFilter === "unread") return "Нет непрочитанных диалогов.";
+
+  return "Пока нет диалогов. Подключите канал.";
 }
 
 function threadPreview(message: MessagingMessage | null) {

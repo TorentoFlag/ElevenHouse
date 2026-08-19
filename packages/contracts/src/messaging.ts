@@ -194,6 +194,16 @@ export type MessagingExternalIdentityResponse = z.infer<
 export const MessagingThreadStatusSchema = z.enum(["open", "archived", "blocked"]);
 export type MessagingThreadStatus = z.infer<typeof MessagingThreadStatusSchema>;
 
+export const MessagingThreadLinkedClientSchema = z.strictObject({
+  userId: UuidSchema,
+  displayName: NullableSnapshotSchema,
+  birthDate: z
+    .string()
+    .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)
+    .nullable()
+});
+export type MessagingThreadLinkedClient = z.infer<typeof MessagingThreadLinkedClientSchema>;
+
 export const MessagingMessageDirectionSchema = z.enum(["inbound", "outbound"]);
 export type MessagingMessageDirection = z.infer<typeof MessagingMessageDirectionSchema>;
 
@@ -258,6 +268,7 @@ export type MessagingMessage = z.infer<typeof MessagingMessageSchema>;
 export const MessagingThreadSchema = z.strictObject({
   id: UuidSchema,
   clientUserId: UuidSchema.nullable(),
+  linkedClient: MessagingThreadLinkedClientSchema.nullable(),
   status: MessagingThreadStatusSchema,
   primaryIdentity: MessagingExternalIdentitySchema.nullable(),
   lastMessage: MessagingMessageSchema.nullable(),
