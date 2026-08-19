@@ -1,8 +1,8 @@
 # Client-subscription capture dispatch
 
-**Goal:** a verified `client_order` capture activates or renews the exact
-ClientSubscription asynchronously, without changing booking or ordinary-order
-semantics.
+**Goal:** a verified `client_order` capture activates the exact one-time
+ClientSubscription paid period asynchronously, without changing booking,
+ordinary-order or platform-tariff subscription semantics.
 
 ## Research
 
@@ -39,7 +39,7 @@ then quarantine.
 4. Wire the payment-worker relay to the shared fenced outbox store and the
    dispatch UoW, using the established interval/config values and exactly three
    total attempts.
-5. Prove real PostgreSQL initial activation, renewal/replay, ordinary-order
+5. Prove real PostgreSQL initial activation, activation replay, ordinary-order
    no-op, malformed/quarantined event, stale claim, and retry exhaustion;
    then run affected package checks, generate/no-delta, and local reset.
 
