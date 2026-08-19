@@ -407,6 +407,13 @@
       "when": 1787086284673,
       "tag": "0060_astro_diary_one_time_paid_period",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1787089000000,
+      "tag": "0061_client_subscription_paid_period_cleanup",
+      "breakpoints": true
     }
   ]
 }
