@@ -19079,15 +19079,15 @@
       "checkConstraints": {
         "messaging_channel_connections_provider_check": {
           "name": "messaging_channel_connections_provider_check",
-          "value": "\"messaging_channel_connections\".\"provider\" in ('telegram', 'instagram')"
+          "value": "\"messaging_channel_connections\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
         },
         "messaging_channel_connections_mode_check": {
           "name": "messaging_channel_connections_mode_check",
-          "value": "\"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account', 'instagram_graph')"
+          "value": "\"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account', 'instagram_graph', 'whatsapp_cloud')"
         },
         "messaging_channel_connections_provider_mode_check": {
           "name": "messaging_channel_connections_provider_mode_check",
-          "value": "(\"messaging_channel_connections\".\"provider\" = 'telegram' and \"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account')) or (\"messaging_channel_connections\".\"provider\" = 'instagram' and \"messaging_channel_connections\".\"mode\" = 'instagram_graph')"
+          "value": "(\"messaging_channel_connections\".\"provider\" = 'telegram' and \"messaging_channel_connections\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account')) or (\"messaging_channel_connections\".\"provider\" = 'instagram' and \"messaging_channel_connections\".\"mode\" = 'instagram_graph') or (\"messaging_channel_connections\".\"provider\" = 'whatsapp' and \"messaging_channel_connections\".\"mode\" = 'whatsapp_cloud')"
         },
         "messaging_channel_connections_status_check": {
           "name": "messaging_channel_connections_status_check",
@@ -19257,7 +19257,7 @@
       "checkConstraints": {
         "messaging_external_identities_provider_check": {
           "name": "messaging_external_identities_provider_check",
-          "value": "\"messaging_external_identities\".\"provider\" in ('telegram', 'instagram')"
+          "value": "\"messaging_external_identities\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
         },
         "messaging_external_identities_link_status_check": {
           "name": "messaging_external_identities_link_status_check",
@@ -19546,7 +19546,7 @@
       "checkConstraints": {
         "messaging_thread_identities_provider_check": {
           "name": "messaging_thread_identities_provider_check",
-          "value": "\"messaging_thread_identities\".\"provider\" in ('telegram', 'instagram')"
+          "value": "\"messaging_thread_identities\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
         }
       },
       "isRLSEnabled": false
@@ -20046,7 +20046,7 @@
       "checkConstraints": {
         "message_media_ingestions_provider_check": {
           "name": "message_media_ingestions_provider_check",
-          "value": "\"message_media_ingestions\".\"provider\" in ('telegram', 'instagram')"
+          "value": "\"message_media_ingestions\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
         },
         "message_media_ingestions_content_type_check": {
           "name": "message_media_ingestions_content_type_check",
@@ -20205,7 +20205,7 @@
       "checkConstraints": {
         "message_delivery_attempts_provider_check": {
           "name": "message_delivery_attempts_provider_check",
-          "value": "\"message_delivery_attempts\".\"provider\" in ('telegram', 'instagram')"
+          "value": "\"message_delivery_attempts\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
         },
         "message_delivery_attempts_status_check": {
           "name": "message_delivery_attempts_status_check",
@@ -63590,6 +63590,362 @@
         "astro_diary_timeline_revision_attachments_ordinal_check": {
           "name": "astro_diary_timeline_revision_attachments_ordinal_check",
           "value": "\"astro_diary_timeline_revision_attachments\".\"ordinal\" between 0 and 19"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_whatsapp_cloud_accounts": {
+      "name": "messaging_whatsapp_cloud_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "channel_connection_id": {
+          "name": "channel_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "waba_id": {
+          "name": "waba_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_number_id": {
+          "name": "phone_number_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_phone_number": {
+          "name": "display_phone_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verified_name": {
+          "name": "verified_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "platform_type": {
+          "name": "platform_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_on_biz_app": {
+          "name": "is_on_biz_app",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "access_token_encrypted": {
+          "name": "access_token_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_scopes": {
+          "name": "token_scopes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "connected_via": {
+          "name": "connected_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "history_sync_status": {
+          "name": "history_sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_requested'"
+        },
+        "contact_sync_status": {
+          "name": "contact_sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_requested'"
+        },
+        "token_issued_at": {
+          "name": "token_issued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "token_expires_at": {
+          "name": "token_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "messaging_whatsapp_cloud_accounts_channel_connection_id_messaging_channel_connections_id_fk": {
+          "name": "messaging_whatsapp_cloud_accounts_channel_connection_id_messaging_channel_connections_id_fk",
+          "tableFrom": "messaging_whatsapp_cloud_accounts",
+          "tableTo": "messaging_channel_connections",
+          "columnsFrom": ["channel_connection_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_whatsapp_cloud_accounts_connection_unique": {
+          "name": "messaging_whatsapp_cloud_accounts_connection_unique",
+          "nullsNotDistinct": false,
+          "columns": ["channel_connection_id"]
+        },
+        "messaging_whatsapp_cloud_accounts_phone_unique": {
+          "name": "messaging_whatsapp_cloud_accounts_phone_unique",
+          "nullsNotDistinct": false,
+          "columns": ["phone_number_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_whatsapp_cloud_accounts_waba_id_length_check": {
+          "name": "messaging_whatsapp_cloud_accounts_waba_id_length_check",
+          "value": "length(trim(\"messaging_whatsapp_cloud_accounts\".\"waba_id\")) between 1 and 200"
+        },
+        "messaging_whatsapp_cloud_accounts_business_id_length_check": {
+          "name": "messaging_whatsapp_cloud_accounts_business_id_length_check",
+          "value": "\"messaging_whatsapp_cloud_accounts\".\"business_id\" is null or length(trim(\"messaging_whatsapp_cloud_accounts\".\"business_id\")) between 1 and 200"
+        },
+        "messaging_whatsapp_cloud_accounts_phone_id_length_check": {
+          "name": "messaging_whatsapp_cloud_accounts_phone_id_length_check",
+          "value": "length(trim(\"messaging_whatsapp_cloud_accounts\".\"phone_number_id\")) between 1 and 200"
+        },
+        "messaging_whatsapp_cloud_accounts_access_token_object_check": {
+          "name": "messaging_whatsapp_cloud_accounts_access_token_object_check",
+          "value": "jsonb_typeof(\"messaging_whatsapp_cloud_accounts\".\"access_token_encrypted\") = 'object'"
+        },
+        "messaging_whatsapp_cloud_accounts_token_scopes_array_check": {
+          "name": "messaging_whatsapp_cloud_accounts_token_scopes_array_check",
+          "value": "jsonb_typeof(\"messaging_whatsapp_cloud_accounts\".\"token_scopes\") = 'array'"
+        },
+        "messaging_whatsapp_cloud_accounts_connected_via_check": {
+          "name": "messaging_whatsapp_cloud_accounts_connected_via_check",
+          "value": "\"messaging_whatsapp_cloud_accounts\".\"connected_via\" = 'embedded_signup_coexistence'"
+        },
+        "messaging_whatsapp_cloud_accounts_history_status_check": {
+          "name": "messaging_whatsapp_cloud_accounts_history_status_check",
+          "value": "\"messaging_whatsapp_cloud_accounts\".\"history_sync_status\" in ('not_requested', 'requested', 'syncing', 'completed', 'declined', 'failed', 'partial')"
+        },
+        "messaging_whatsapp_cloud_accounts_contact_status_check": {
+          "name": "messaging_whatsapp_cloud_accounts_contact_status_check",
+          "value": "\"messaging_whatsapp_cloud_accounts\".\"contact_sync_status\" in ('not_requested', 'requested', 'syncing', 'completed', 'declined', 'failed', 'partial')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.messaging_provider_webhook_events": {
+      "name": "messaging_provider_webhook_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_key": {
+          "name": "event_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "field": {
+          "name": "field",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_account_id": {
+          "name": "external_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "external_owner_user_id": {
+          "name": "external_owner_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload_ref": {
+          "name": "payload_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload_encrypted": {
+          "name": "payload_encrypted",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "normalized_summary": {
+          "name": "normalized_summary",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "processing_status": {
+          "name": "processing_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_error_message": {
+          "name": "last_error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "messaging_provider_webhook_events_status_received_idx": {
+          "name": "messaging_provider_webhook_events_status_received_idx",
+          "columns": [
+            {
+              "expression": "processing_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "received_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "messaging_provider_webhook_events_event_key_unique": {
+          "name": "messaging_provider_webhook_events_event_key_unique",
+          "nullsNotDistinct": false,
+          "columns": ["event_key"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "messaging_provider_webhook_events_provider_check": {
+          "name": "messaging_provider_webhook_events_provider_check",
+          "value": "\"messaging_provider_webhook_events\".\"provider\" in ('telegram', 'instagram', 'whatsapp')"
+        },
+        "messaging_provider_webhook_events_mode_check": {
+          "name": "messaging_provider_webhook_events_mode_check",
+          "value": "\"messaging_provider_webhook_events\".\"mode\" in ('telegram_business_bot', 'telegram_mtproto_account', 'instagram_graph', 'whatsapp_cloud')"
+        },
+        "messaging_provider_webhook_events_status_check": {
+          "name": "messaging_provider_webhook_events_status_check",
+          "value": "\"messaging_provider_webhook_events\".\"processing_status\" in ('pending', 'processing', 'processed', 'failed', 'ignored')"
+        },
+        "messaging_provider_webhook_events_event_key_length_check": {
+          "name": "messaging_provider_webhook_events_event_key_length_check",
+          "value": "length(trim(\"messaging_provider_webhook_events\".\"event_key\")) between 1 and 500"
+        },
+        "messaging_provider_webhook_events_field_length_check": {
+          "name": "messaging_provider_webhook_events_field_length_check",
+          "value": "length(trim(\"messaging_provider_webhook_events\".\"field\")) between 1 and 200"
+        },
+        "messaging_provider_webhook_events_attempt_count_check": {
+          "name": "messaging_provider_webhook_events_attempt_count_check",
+          "value": "\"messaging_provider_webhook_events\".\"attempt_count\" >= 0"
+        },
+        "messaging_provider_webhook_events_summary_object_check": {
+          "name": "messaging_provider_webhook_events_summary_object_check",
+          "value": "jsonb_typeof(\"messaging_provider_webhook_events\".\"normalized_summary\") = 'object'"
+        },
+        "messaging_provider_webhook_events_payload_encrypted_object_check": {
+          "name": "messaging_provider_webhook_events_payload_encrypted_object_check",
+          "value": "\"messaging_provider_webhook_events\".\"payload_encrypted\" is null or jsonb_typeof(\"messaging_provider_webhook_events\".\"payload_encrypted\") = 'object'"
         }
       },
       "isRLSEnabled": false
