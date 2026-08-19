@@ -75,7 +75,7 @@ export function createArcPayExactSettlementClient(
       }
 
       const url = new URL(
-        input.stream === "settlement_ledger" ? "/v1/settlement/ledger" : "/v1/settlement/payouts",
+        input.stream === "settlement_ledger" ? "/settlement/ledger" : "/settlement/payouts",
         input.apiBaseUrl
       );
       if (input.stream === "settlement_ledger") {
@@ -92,7 +92,9 @@ export function createArcPayExactSettlementClient(
 
       let response: Response;
       try {
-        response = await fetchImpl(url, { headers: { authorization: `Bearer ${input.apiSecret}` } });
+        response = await fetchImpl(url, {
+          headers: { authorization: `Bearer ${input.apiSecret}` }
+        });
       } catch {
         fail("transport");
       }
@@ -200,34 +202,44 @@ export function createArcPayExactSettlementLedgerClient(
   return createArcPayExactSettlementClient({ ...input, stream: "settlement_ledger" });
 }
 
-function parseLedgerPage(value: unknown, providerAccount: FinanceProviderAccountIdentity): Readonly<{
+function parseLedgerPage(
+  value: unknown,
+  providerAccount: FinanceProviderAccountIdentity
+): Readonly<{
   rows: readonly LosslessSettlementEntry[];
   nextCursor: string | null;
 }> {
   const page = recordWithOptional(value, ["entries", "total_count"], ["next_cursor"]);
   if (!Array.isArray(page.entries)) fail("invalid_response");
   const rows = page.entries.map((entry) => parseLedgerEntry(entry, providerAccount));
-  return Object.freeze({ rows: Object.freeze(rows), nextCursor: optionalIdentifier(page.next_cursor, 1_000) });
+  return Object.freeze({
+    rows: Object.freeze(rows),
+    nextCursor: optionalIdentifier(page.next_cursor, 1_000)
+  });
 }
 
 function parseLedgerEntry(
   value: unknown,
   providerAccount: FinanceProviderAccountIdentity
 ): LosslessSettlementEntry {
-  const entry = recordWithOptional(value, [
-    "amount",
-    "bank_terminal_id",
-    "currency",
-    "direction",
-    "entry_id",
-    "entry_type",
-    "occurred_at",
-    "organization_id",
-    "reference_id",
-    "reference_type",
-    "settlement_status",
-    "terminal_id"
-  ], ["balance_after", "bank_auth_code", "bank_code", "bank_internal_reference", "bank_rrn"]);
+  const entry = recordWithOptional(
+    value,
+    [
+      "amount",
+      "bank_terminal_id",
+      "currency",
+      "direction",
+      "entry_id",
+      "entry_type",
+      "occurred_at",
+      "organization_id",
+      "reference_id",
+      "reference_type",
+      "settlement_status",
+      "terminal_id"
+    ],
+    ["balance_after", "bank_auth_code", "bank_code", "bank_internal_reference", "bank_rrn"]
+  );
   const organizationId = identifier(entry.organization_id, 160);
   if (organizationId !== providerAccount.providerAccountId || entry.currency !== "RUB") {
     fail("invalid_response");
@@ -318,10 +330,7 @@ function recordWithOptional(
   const result = value as Record<string, unknown>;
   const allowed = new Set([...requiredKeys, ...optionalKeys]);
   const actual = Object.keys(result);
-  if (
-    requiredKeys.some((key) => !(key in result)) ||
-    actual.some((key) => !allowed.has(key))
-  ) {
+  if (requiredKeys.some((key) => !(key in result)) || actual.some((key) => !allowed.has(key))) {
     fail("invalid_response");
   }
   return result;
@@ -349,7 +358,8 @@ function optionalIdentifier(value: unknown, maximumLength: number): string | nul
 }
 
 function int64(value: unknown): string {
-  if (typeof value !== "string" || !/^-?(0|[1-9][0-9]{0,18})$/.test(value)) fail("invalid_response");
+  if (typeof value !== "string" || !/^-?(0|[1-9][0-9]{0,18})$/.test(value))
+    fail("invalid_response");
   try {
     const parsed = BigInt(value);
     if (parsed < -(1n << 63n) || parsed > (1n << 63n) - 1n || parsed.toString() !== value) {
@@ -381,7 +391,10 @@ function optionalTimestamp(value: unknown): string | null {
 }
 
 function readRetention(value: Readonly<{ policyId: string; policyVersion: string }>) {
-  return Object.freeze({ policyId: identifier(value.policyId, 160), policyVersion: identifier(value.policyVersion, 160) });
+  return Object.freeze({
+    policyId: identifier(value.policyId, 160),
+    policyVersion: identifier(value.policyVersion, 160)
+  });
 }
 
 function positiveSafeInteger(value: unknown): value is number {

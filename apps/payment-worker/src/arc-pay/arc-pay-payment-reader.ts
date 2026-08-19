@@ -23,7 +23,7 @@ export function createArcPayPaymentAttemptResolver(input: {
       let response: Response;
       try {
         response = await fetchImpl(
-          new URL(`/v1/payments/${encodeURIComponent(providerPaymentId)}`, input.apiBaseUrl),
+          new URL(`/payments/${encodeURIComponent(providerPaymentId)}`, input.apiBaseUrl),
           { headers: { authorization: `Bearer ${input.apiSecret}` } }
         );
       } catch {

@@ -6,12 +6,14 @@ const maximumResponseBytes = 2 * 1024 * 1024;
 const signedInt64Pattern = /^(?:0|-?[1-9][0-9]*)$/;
 
 export type ArcPaySettlementBalanceClient = Readonly<{
-  readSettlementBalance(): Promise<Readonly<{
-    balances: readonly ArcPaySettlementBalance[];
-    rawBody: Uint8Array;
-    rawDigest: `sha256:${string}`;
-    rawByteLength: number;
-  }>>;
+  readSettlementBalance(): Promise<
+    Readonly<{
+      balances: readonly ArcPaySettlementBalance[];
+      rawBody: Uint8Array;
+      rawDigest: `sha256:${string}`;
+      rawByteLength: number;
+    }>
+  >;
 }>;
 
 export type ArcPaySettlementBalance = Readonly<{
@@ -29,18 +31,20 @@ export class ArcPaySettlementBalanceError extends Error {
   }
 }
 
-export function createArcPaySettlementBalanceClient(input: Readonly<{
-  apiBaseUrl: string;
-  apiSecret: string | null;
-  fetchImpl?: typeof fetch;
-}>): ArcPaySettlementBalanceClient {
+export function createArcPaySettlementBalanceClient(
+  input: Readonly<{
+    apiBaseUrl: string;
+    apiSecret: string | null;
+    fetchImpl?: typeof fetch;
+  }>
+): ArcPaySettlementBalanceClient {
   const fetchImpl = input.fetchImpl ?? fetch;
   return Object.freeze({
     async readSettlementBalance() {
       if (!input.apiSecret) throw new ArcPaySettlementBalanceError();
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/v1/settlement/balance", input.apiBaseUrl), {
+        response = await fetchImpl(new URL("/settlement/balance", input.apiBaseUrl), {
           headers: { authorization: `Bearer ${input.apiSecret}` }
         });
       } catch {
@@ -84,7 +88,9 @@ function parseBalance(value: unknown): ArcPaySettlementBalance {
   const keys = Object.keys(value).sort();
   if (
     keys.length !== 5 ||
-    keys.some((key, index) => key !== ["available", "currency", "pending", "reserved", "updated_at"][index])
+    keys.some(
+      (key, index) => key !== ["available", "currency", "pending", "reserved", "updated_at"][index]
+    )
   ) {
     fail();
   }
@@ -105,7 +111,8 @@ function int64(value: unknown): string {
 
 function timestamp(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  if (typeof value !== "string" || value.trim() !== value || Number.isNaN(Date.parse(value))) fail();
+  if (typeof value !== "string" || value.trim() !== value || Number.isNaN(Date.parse(value)))
+    fail();
   return value;
 }
 

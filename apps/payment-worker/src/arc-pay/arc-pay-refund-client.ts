@@ -39,10 +39,12 @@ export function createArcPayRefundClient(
   config: Readonly<{ apiBaseUrl: string; apiSecret: string | null }>,
   fetchImpl: typeof fetch = fetch
 ): Readonly<{
-  createRefund(input: Readonly<{
-    envelope: RefundEnvelope;
-    idempotencyKey: string;
-  }>): Promise<ArcPayRefund>;
+  createRefund(
+    input: Readonly<{
+      envelope: RefundEnvelope;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPayRefund>;
 }> {
   const apiBaseUrl = httpsBaseUrl(config.apiBaseUrl);
   return Object.freeze({
@@ -54,7 +56,7 @@ export function createArcPayRefundClient(
       try {
         response = await fetchImpl(
           new URL(
-            `/v1/payments/${encodeURIComponent(envelope.providerPaymentId)}/refunds`,
+            `/payments/${encodeURIComponent(envelope.providerPaymentId)}/refunds`,
             apiBaseUrl
           ),
           {
@@ -64,7 +66,10 @@ export function createArcPayRefundClient(
               "content-type": "application/json",
               "idempotency-key": idempotencyKey
             },
-            body: JSON.stringify({ amount: envelope.amount.amountMinor, reason: envelope.externalId })
+            body: JSON.stringify({
+              amount: envelope.amount.amountMinor,
+              reason: envelope.externalId
+            })
           }
         );
       } catch {
@@ -86,7 +91,10 @@ function refundEnvelope(value: RefundEnvelope): RefundEnvelope {
 
 async function responseBytes(response: Response): Promise<Uint8Array> {
   const declaredLength = response.headers.get("content-length");
-  if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > 2 * 1024 * 1024)) {
+  if (
+    declaredLength !== null &&
+    (!/^\d+$/.test(declaredLength) || Number(declaredLength) > 2 * 1024 * 1024)
+  ) {
     fail("invalid_response");
   }
   let bytes: Uint8Array;
@@ -139,7 +147,8 @@ function parseResponse(rawResponseBytes: Uint8Array, envelope: RefundEnvelope): 
 function httpsBaseUrl(value: string): URL {
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error();
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      throw new Error();
     return url;
   } catch {
     fail("invalid_input");
@@ -172,7 +181,10 @@ function status(value: unknown): value is ArcPayRefund["status"] {
 function instant(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(value);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(value)
+  );
 }
 
 function record(value: unknown): value is Record<string, unknown> {

@@ -28,11 +28,17 @@ export class ArcPayThreeDsActionDecoderError extends Error {
  * It deliberately accepts no callback URL supplied by the browser and binds method completion to
  * the exact provider payment ID that created the action.
  */
-export function decodeArcPayThreeDsAction(input: Readonly<{
-  providerSetupId: string;
-  responseBytes: Uint8Array;
-}>): ArcPayThreeDsAction {
-  if (!uuid(input.providerSetupId) || input.responseBytes.byteLength < 1 || input.responseBytes.byteLength > 2 * 1024 * 1024) {
+export function decodeArcPayThreeDsAction(
+  input: Readonly<{
+    providerSetupId: string;
+    responseBytes: Uint8Array;
+  }>
+): ArcPayThreeDsAction {
+  if (
+    !uuid(input.providerSetupId) ||
+    input.responseBytes.byteLength < 1 ||
+    input.responseBytes.byteLength > 2 * 1024 * 1024
+  ) {
     fail("invalid_input");
   }
   let document: unknown;
@@ -80,7 +86,9 @@ function parseAction(value: unknown, providerSetupId: string): ArcPayThreeDsActi
     threeDs: Object.freeze({
       version: threeDs.version,
       phase: threeDs.phase,
-      completionEndpoint: method ? completionEndpoint(threeDs.completion_endpoint, providerSetupId) : null,
+      completionEndpoint: method
+        ? completionEndpoint(threeDs.completion_endpoint, providerSetupId)
+        : null,
       threeDsServerTransactionId: method ? opaque(threeDs.three_ds_server_trans_id) : null,
       submit: Object.freeze({
         method: "POST" as const,
@@ -98,14 +106,15 @@ function field(value: unknown): Readonly<{ name: string; value: string }> {
 }
 
 function completionEndpoint(value: unknown, providerSetupId: string): string {
-  if (typeof value !== "string" || value !== `/v1/payments/${providerSetupId}/complete-3ds-method`) {
+  if (typeof value !== "string" || value !== `/payments/${providerSetupId}/complete-3ds-method`) {
     fail("invalid_action");
   }
   return value;
 }
 
 function httpsUrl(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 8_192 || /[\u0000-\u001f\u007f]/.test(value)) return false;
+  if (typeof value !== "string" || value.length > 8_192 || /[\u0000-\u001f\u007f]/.test(value))
+    return false;
   try {
     const parsed = new URL(value);
     return parsed.protocol === "https:" && !parsed.username && !parsed.password;
@@ -115,13 +124,21 @@ function httpsUrl(value: unknown): value is string {
 }
 
 function opaque(value: unknown): string {
-  if (typeof value !== "string" || value.length < 1 || value.length > 8_192 || /[\u0000-\u001f\u007f]/.test(value)) {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 8_192 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
     fail("invalid_action");
   }
   return value;
 }
 function uuid(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

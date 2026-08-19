@@ -17,7 +17,12 @@ export class ArcPaySavedCardChargeClientError extends Error {
   readonly code = "ARC_PAY_SAVED_CARD_CHARGE_CLIENT_ERROR" as const;
 
   constructor(
-    readonly reason: "not_configured" | "invalid_input" | "transport" | "provider_rejected" | "invalid_response"
+    readonly reason:
+      | "not_configured"
+      | "invalid_input"
+      | "transport"
+      | "provider_rejected"
+      | "invalid_response"
   ) {
     super("ArcPay saved-card charge could not be executed safely");
   }
@@ -32,12 +37,14 @@ export function createArcPaySavedCardChargeClient(
   config: Readonly<{ apiBaseUrl: string; apiSecret: string | null }>,
   fetchImpl: typeof fetch = fetch
 ): Readonly<{
-  chargeSavedCard(input: Readonly<{
-    envelope: SavedCardChargeEnvelope;
-    providerCustomerId: string;
-    cardTokenId: string;
-    idempotencyKey: string;
-  }>): Promise<ArcPaySavedCardCharge>;
+  chargeSavedCard(
+    input: Readonly<{
+      envelope: SavedCardChargeEnvelope;
+      providerCustomerId: string;
+      cardTokenId: string;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPaySavedCardCharge>;
 }> {
   const apiBaseUrl = httpsBaseUrl(config.apiBaseUrl);
   return Object.freeze({
@@ -49,7 +56,7 @@ export function createArcPaySavedCardChargeClient(
       const idempotencyKey = idempotency(input.idempotencyKey);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/v1/payments/saved-card", apiBaseUrl), {
+        response = await fetchImpl(new URL("/payments/saved-card", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,
@@ -114,7 +121,8 @@ function parseResponse(rawResponseBytes: Uint8Array): ArcPaySavedCardCharge {
   } catch {
     fail("invalid_response");
   }
-  if (!record(value) || !identifier(value.payment_id) || !status(value.status)) fail("invalid_response");
+  if (!record(value) || !identifier(value.payment_id) || !status(value.status))
+    fail("invalid_response");
   return Object.freeze({
     providerPaymentId: value.payment_id,
     status: value.status,
@@ -125,7 +133,8 @@ function parseResponse(rawResponseBytes: Uint8Array): ArcPaySavedCardCharge {
 function httpsBaseUrl(value: string): URL {
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) throw new Error();
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      throw new Error();
     return url;
   } catch {
     fail("invalid_input");
@@ -133,14 +142,24 @@ function httpsBaseUrl(value: string): URL {
 }
 
 function customerId(value: unknown): string {
-  if (typeof value !== "string" || value.length < 1 || value.length > 255 || value.trim() !== value || /[\u0000-\u001f\u007f]/.test(value)) {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    value.length > 255 ||
+    value.trim() !== value ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
     fail("invalid_input");
   }
   return value;
 }
 
 function uuid(value: unknown): string {
-  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) fail("invalid_input");
+  if (
+    typeof value !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
+  )
+    fail("invalid_input");
   return value;
 }
 
@@ -151,11 +170,24 @@ function idempotency(value: unknown): string {
 }
 
 function identifier(value: unknown): value is string {
-  return typeof value === "string" && value.length >= 1 && value.length <= 255 && value.trim() === value && !/[\u0000-\u001f\u007f]/.test(value);
+  return (
+    typeof value === "string" &&
+    value.length >= 1 &&
+    value.length <= 255 &&
+    value.trim() === value &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 function status(value: unknown): value is ArcPaySavedCardCharge["status"] {
-  return value === "authorized" || value === "captured" || value === "pending" || value === "pending_3ds" || value === "failed" || value === "declined";
+  return (
+    value === "authorized" ||
+    value === "captured" ||
+    value === "pending" ||
+    value === "pending_3ds" ||
+    value === "failed" ||
+    value === "declined"
+  );
 }
 
 function record(value: unknown): value is Record<string, unknown> {

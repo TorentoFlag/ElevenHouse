@@ -40,7 +40,12 @@ export class ArcPayCardSetupClientError extends Error {
   readonly code = "ARC_PAY_CARD_SETUP_CLIENT_ERROR" as const;
 
   constructor(
-    readonly reason: "not_configured" | "invalid_input" | "transport" | "provider_rejected" | "invalid_response"
+    readonly reason:
+      | "not_configured"
+      | "invalid_input"
+      | "transport"
+      | "provider_rejected"
+      | "invalid_response"
   ) {
     super("ArcPay card setup could not be created safely");
   }
@@ -56,24 +61,30 @@ export function createArcPayCardSetupClient(
   config: Readonly<{ apiBaseUrl: string; apiSecret: string | null }>,
   fetchImpl: typeof fetch = fetch
 ): Readonly<{
-  createCardSetup(input: Readonly<{
-    envelope: CardSetupCreateEnvelope;
-    idempotencyKey: string;
-  }>): Promise<ArcPayCardSetup>;
-  executeCardSetup(input: Readonly<{
-    envelope: CardSetupExecuteEnvelope;
-    tokenizationSecret: ArcPayCardTokenizationSecret;
-    idempotencyKey: string;
-  }>): Promise<ArcPayCardSetupExecution>;
-  completeThreeDsMethod(input: Readonly<{
-    providerSetupId: string;
-    completionIndicator: "Y" | "N" | "U";
-    /** Extracted from the sealed provider response by the worker, never provided by the browser. */
-    threeDsServerTransactionId: string;
-    /** Reloaded from the one-time vault, never accepted from the completion endpoint. */
-    browserInfo: ArcPayBrowserInfo;
-    idempotencyKey: string;
-  }>): Promise<ArcPayCardSetupExecution>;
+  createCardSetup(
+    input: Readonly<{
+      envelope: CardSetupCreateEnvelope;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPayCardSetup>;
+  executeCardSetup(
+    input: Readonly<{
+      envelope: CardSetupExecuteEnvelope;
+      tokenizationSecret: ArcPayCardTokenizationSecret;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPayCardSetupExecution>;
+  completeThreeDsMethod(
+    input: Readonly<{
+      providerSetupId: string;
+      completionIndicator: "Y" | "N" | "U";
+      /** Extracted from the sealed provider response by the worker, never provided by the browser. */
+      threeDsServerTransactionId: string;
+      /** Reloaded from the one-time vault, never accepted from the completion endpoint. */
+      browserInfo: ArcPayBrowserInfo;
+      idempotencyKey: string;
+    }>
+  ): Promise<ArcPayCardSetupExecution>;
 }> {
   const apiBaseUrl = httpsBaseUrl(config.apiBaseUrl);
   return Object.freeze({
@@ -83,7 +94,7 @@ export function createArcPayCardSetupClient(
       const envelope = cardSetupEnvelope(input.envelope);
       let response: Response;
       try {
-        response = await fetchImpl(new URL("/v1/cards/setup", apiBaseUrl), {
+        response = await fetchImpl(new URL("/cards/setup", apiBaseUrl), {
           method: "POST",
           headers: {
             authorization: `Bearer ${config.apiSecret}`,
@@ -123,32 +134,45 @@ export function createArcPayCardSetupClient(
       if (!config.apiSecret?.trim()) fail("not_configured");
       if (!isIdempotencyKey(input.idempotencyKey)) fail("invalid_input");
       const envelope = cardSetupExecuteEnvelope(input.envelope);
-      if (input.tokenizationSecret.providerSetupId !== envelope.providerSetupId) fail("invalid_input");
+      if (input.tokenizationSecret.providerSetupId !== envelope.providerSetupId)
+        fail("invalid_input");
       let response: Response;
       try {
-        response = await fetchImpl(new URL(`/v1/payments/${encodeURIComponent(envelope.providerSetupId)}/execute`, apiBaseUrl), {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${config.apiSecret}`,
-            "content-type": "application/json",
-            "idempotency-key": input.idempotencyKey
-          },
-          body: JSON.stringify({
-            payment_method: "bank_card",
-            payment_mode: "h2h",
-            card_token_id: input.tokenizationSecret.cardTokenId,
-            browser_info: browserInfo(input.tokenizationSecret.browserInfo)
-          })
-        });
+        response = await fetchImpl(
+          new URL(`/payments/${encodeURIComponent(envelope.providerSetupId)}/execute`, apiBaseUrl),
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${config.apiSecret}`,
+              "content-type": "application/json",
+              "idempotency-key": input.idempotencyKey
+            },
+            body: JSON.stringify({
+              payment_method: "bank_card",
+              payment_mode: "h2h",
+              card_token_id: input.tokenizationSecret.cardTokenId,
+              browser_info: browserInfo(input.tokenizationSecret.browserInfo)
+            })
+          }
+        );
       } catch {
         fail("transport");
       }
       if (!response.ok) fail("provider_rejected");
       let rawResponseBytes: Uint8Array;
-      try { rawResponseBytes = new Uint8Array(await response.arrayBuffer()); } catch { fail("invalid_response"); }
-      if (rawResponseBytes.byteLength < 1 || rawResponseBytes.byteLength > 16 * 1024 * 1024) fail("invalid_response");
+      try {
+        rawResponseBytes = new Uint8Array(await response.arrayBuffer());
+      } catch {
+        fail("invalid_response");
+      }
+      if (rawResponseBytes.byteLength < 1 || rawResponseBytes.byteLength > 16 * 1024 * 1024)
+        fail("invalid_response");
       let payload: unknown;
-      try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(rawResponseBytes)); } catch { fail("invalid_response"); }
+      try {
+        payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(rawResponseBytes));
+      } catch {
+        fail("invalid_response");
+      }
       return cardSetupExecution(payload, rawResponseBytes, envelope.providerSetupId);
     },
     async completeThreeDsMethod(input) {
@@ -165,7 +189,10 @@ export function createArcPayCardSetupClient(
       let response: Response;
       try {
         response = await fetchImpl(
-          new URL(`/v1/payments/${encodeURIComponent(providerSetupId)}/complete-3ds-method`, apiBaseUrl),
+          new URL(
+            `/payments/${encodeURIComponent(providerSetupId)}/complete-3ds-method`,
+            apiBaseUrl
+          ),
           {
             method: "POST",
             headers: {
@@ -185,10 +212,19 @@ export function createArcPayCardSetupClient(
       }
       if (!response.ok) fail("provider_rejected");
       let rawResponseBytes: Uint8Array;
-      try { rawResponseBytes = new Uint8Array(await response.arrayBuffer()); } catch { fail("invalid_response"); }
-      if (rawResponseBytes.byteLength < 1 || rawResponseBytes.byteLength > 16 * 1024 * 1024) fail("invalid_response");
+      try {
+        rawResponseBytes = new Uint8Array(await response.arrayBuffer());
+      } catch {
+        fail("invalid_response");
+      }
+      if (rawResponseBytes.byteLength < 1 || rawResponseBytes.byteLength > 16 * 1024 * 1024)
+        fail("invalid_response");
       let payload: unknown;
-      try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(rawResponseBytes)); } catch { fail("invalid_response"); }
+      try {
+        payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(rawResponseBytes));
+      } catch {
+        fail("invalid_response");
+      }
       return cardSetupExecution(payload, rawResponseBytes, providerSetupId);
     }
   });
@@ -228,7 +264,11 @@ function cardSetupExecution(
   rawResponseBytes: Uint8Array,
   expectedProviderSetupId: string
 ): ArcPayCardSetupExecution {
-  if (!isRecord(value) || value.payment_id !== expectedProviderSetupId || !executionStatus(value.status)) {
+  if (
+    !isRecord(value) ||
+    value.payment_id !== expectedProviderSetupId ||
+    !executionStatus(value.status)
+  ) {
     fail("invalid_response");
   }
   if (value.card_token_id !== undefined && !isUuid(value.card_token_id)) fail("invalid_response");
@@ -297,7 +337,13 @@ function completionIndicator(value: unknown): value is "Y" | "N" | "U" {
 }
 
 function threeDsServerTransactionId(value: unknown): value is string {
-  return typeof value === "string" && value.trim() === value && value.length >= 1 && value.length <= 512 && !/[\u0000-\u001f\u007f]/.test(value);
+  return (
+    typeof value === "string" &&
+    value.trim() === value &&
+    value.length >= 1 &&
+    value.length <= 512 &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
 }
 
 function isIsoInstant(value: unknown): value is string {
@@ -311,7 +357,14 @@ function isIsoInstant(value: unknown): value is string {
 }
 
 function executionStatus(value: unknown): value is ArcPayCardSetupExecution["status"] {
-  return value === "authorized" || value === "captured" || value === "pending" || value === "pending_3ds" || value === "failed" || value === "declined";
+  return (
+    value === "authorized" ||
+    value === "captured" ||
+    value === "pending" ||
+    value === "pending_3ds" ||
+    value === "failed" ||
+    value === "declined"
+  );
 }
 
 function fail(reason: ArcPayCardSetupClientError["reason"]): never {
