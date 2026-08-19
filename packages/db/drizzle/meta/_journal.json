@@ -421,6 +421,13 @@
       "when": 1787132700000,
       "tag": "0062_client_subscription_drop_cancellation_timestamp",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1787140800000,
+      "tag": "0063_archive_legacy_astro_diary_subscription_template",
+      "breakpoints": true
     }
   ]
 }

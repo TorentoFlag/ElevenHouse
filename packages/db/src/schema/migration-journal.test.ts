@@ -33,4 +33,15 @@ describe("Drizzle migration journal", () => {
       expect(snapshot.tables).toHaveProperty("public.messaging_provider_webhook_events");
     }
   });
+
+  it("archives the legacy recurring AstroDiary product template without touching the paid-period template", () => {
+    const migration = readFileSync(
+      "packages/db/drizzle/0063_archive_legacy_astro_diary_subscription_template.sql",
+      "utf8"
+    );
+
+    expect(migration).toContain(`where "code" = 'astro_diary_subscription'`);
+    expect(migration).toContain(`and "status" = 'active'`);
+    expect(migration).not.toContain("astro_diary_paid_period");
+  });
 });
