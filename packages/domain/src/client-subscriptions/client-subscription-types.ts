@@ -96,7 +96,6 @@ export type ClientSubscription = {
   readonly journalEpochId: string;
   readonly state: ClientSubscriptionState;
   readonly version: number;
-  readonly cancellationEffectiveAt: string | null;
   readonly paidPeriods: readonly ClientSubscriptionPeriod[];
   readonly endedPeriodIds: readonly string[];
   readonly appliedFinanceEvidenceIds: readonly string[];

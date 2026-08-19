@@ -20,7 +20,6 @@ export function activeSubscription(): ClientSubscription {
     journalEpochId: runtimeId(2),
     state: "active",
     version: 2,
-    cancellationEffectiveAt: null,
     endedPeriodIds: [],
     appliedFinanceEvidenceIds: [runtimeId(3)],
     contract: {

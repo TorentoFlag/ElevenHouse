@@ -119,7 +119,6 @@ export const clientSubscriptionResponseSchema = z
     journalEpochId: uuidSchema,
     state: clientSubscriptionStateSchema,
     version: positiveVersionSchema,
-    cancellationEffectiveAt: instantSchema.nullable(),
     paidPeriods: z.array(clientSubscriptionPeriodSummarySchema)
   })
   .strict();

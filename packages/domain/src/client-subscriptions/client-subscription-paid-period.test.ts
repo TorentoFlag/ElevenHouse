@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import * as lifecycle from "./client-subscription-lifecycle";
 import type { ClientSubscriptionTransitionOutcome } from "./client-subscription-lifecycle";
+import { activeSubscription } from "./client-subscription-test-fixtures";
 
 describe("client subscription paid-period lifecycle", () => {
   it("does not export recurring renewal or cancellation commands", () => {
@@ -19,5 +20,9 @@ describe("client subscription paid-period lifecycle", () => {
       "rejected"
     ];
     expect(codes).toContain("applied");
+  });
+
+  it("does not keep a cancellation timestamp on the subscription aggregate", () => {
+    expect("cancellationEffectiveAt" in activeSubscription()).toBe(false);
   });
 });

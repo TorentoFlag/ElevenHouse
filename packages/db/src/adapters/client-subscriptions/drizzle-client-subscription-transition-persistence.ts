@@ -129,9 +129,6 @@ export async function persistClientSubscriptionTransition(
     .set({
       state: input.next.state,
       version: input.next.version,
-      cancellationEffectiveAt: input.next.cancellationEffectiveAt
-        ? new Date(input.next.cancellationEffectiveAt)
-        : null,
       currentPeriodId: currentPeriod?.id ?? null,
       futurePeriodId: futurePeriod?.id ?? null,
       updatedAt: new Date(input.receipt.occurredAt)

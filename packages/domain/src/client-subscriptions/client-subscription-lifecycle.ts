@@ -51,7 +51,6 @@ export function createPendingClientSubscription(input: {
     journalEpochId: input.journalEpochId,
     state: "pending_initial_payment",
     version: 1,
-    cancellationEffectiveAt: null,
     paidPeriods: [],
     endedPeriodIds: [],
     appliedFinanceEvidenceIds: []
@@ -185,7 +184,6 @@ export function endSubscriptionAtPaidBoundary(
     ...subscription,
     state: lastPeriodEnded ? "ended" : subscription.state,
     version: subscription.version + 1,
-    cancellationEffectiveAt: lastPeriodEnded ? null : subscription.cancellationEffectiveAt,
     endedPeriodIds: [...subscription.endedPeriodIds, endedPeriod.id]
   };
   return applied(
@@ -233,7 +231,6 @@ export function applyPermanentRevocation(
     ...subscription,
     state: "revoked",
     version: subscription.version + 1,
-    cancellationEffectiveAt: null,
     appliedFinanceEvidenceIds: [...subscription.appliedFinanceEvidenceIds, input.evidenceId]
   };
   return applied(

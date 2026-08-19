@@ -104,7 +104,6 @@ export async function findClientSubscriptionById(
     journalEpochId: row.head.journalEpochId,
     state: clientSubscriptionStateSchema.parse(row.head.state),
     version: row.head.version,
-    cancellationEffectiveAt: row.head.cancellationEffectiveAt?.toISOString() ?? null,
     paidPeriods,
     endedPeriodIds: endedPeriodRows.map((ended) => z.string().uuid().parse(ended.periodId)),
     appliedFinanceEvidenceIds: evidenceRows.map((evidence) => evidence.evidenceId)

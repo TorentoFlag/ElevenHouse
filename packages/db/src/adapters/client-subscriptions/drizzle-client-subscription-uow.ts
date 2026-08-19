@@ -87,7 +87,6 @@ const subscriptionSnapshotSchema = z
     journalEpochId: z.string().uuid(),
     state: clientSubscriptionStateSchema,
     version: z.number().int().positive(),
-    cancellationEffectiveAt: z.string().datetime({ offset: true }).nullable(),
     paidPeriods: z.array(periodSnapshotSchema),
     endedPeriodIds: z.array(z.string().uuid()),
     appliedFinanceEvidenceIds: z.array(z.string().uuid())

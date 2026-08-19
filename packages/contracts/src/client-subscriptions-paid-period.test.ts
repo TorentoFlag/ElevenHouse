@@ -23,5 +23,6 @@ describe("client subscription paid-period contract", () => {
 
   it("does not expose an open renewal request in subscription responses", () => {
     expect("renewalRequest" in clientSubscriptionResponseSchema.shape).toBe(false);
+    expect("cancellationEffectiveAt" in clientSubscriptionResponseSchema.shape).toBe(false);
   });
 });

@@ -78,7 +78,6 @@ const creationResultSnapshotSchema = z
         journalEpochId: z.string().uuid(),
         state: clientSubscriptionStateSchema,
         version: z.number().int().positive(),
-        cancellationEffectiveAt: instantSchema.nullable(),
         paidPeriods: z.array(subscriptionPeriodSchema),
         endedPeriodIds: z.array(z.string().uuid()),
         appliedFinanceEvidenceIds: z.array(z.string().uuid())
@@ -212,6 +211,7 @@ export async function executeDrizzleClientSubscriptionCreationInTransaction(
     journalEpochId: decision.subscription.journalEpochId,
     state: decision.subscription.state,
     version: decision.subscription.version,
+    // Historical column remains physically present until the next isolated DB migration.
     cancellationEffectiveAt: null,
     currentPeriodId: null,
     futurePeriodId: null,
