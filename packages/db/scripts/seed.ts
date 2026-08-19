@@ -8,7 +8,10 @@ import {
   dictionarySeedCategories,
   dictionarySeedPlatformEntries
 } from "./dictionary-seed-data/index";
-import { defaultFinancePolicySeedData } from "./finance-policy-seed-data";
+import {
+  defaultClientCheckoutPreparePolicySeedData,
+  defaultFinancePolicySeedData
+} from "./finance-policy-seed-data";
 import { reconcileFlowRuntimeControlAuthority } from "./flow-runtime-control-reconciliation";
 import { productTemplateSeedData } from "./product-template-seed-data/index";
 
@@ -27,9 +30,10 @@ async function main() {
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
     await seedDefaultFinancePolicy();
+    await seedDefaultClientCheckoutPreparePolicy();
     await seedProductTemplates();
     console.log(
-      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries, default finance policy reconciled and ${productTemplateSeedData.length} product templates upserted`
+      `Database seed completed: ${dictionarySeedCategories.length} dictionary categories, ${dictionarySeedPlatformEntries.length} dictionary platform entries, default finance prerequisites reconciled and ${productTemplateSeedData.length} product templates upserted`
     );
   } finally {
     await pool.end();
@@ -160,6 +164,73 @@ async function seedDefaultFinancePolicy() {
       defaultFinancePolicySeedData.providerSettlementRequired
     ]
   );
+}
+
+async function seedDefaultClientCheckoutPreparePolicy() {
+  const seed = defaultClientCheckoutPreparePolicySeedData;
+
+  await pool.query(
+    `insert into finance_operation_resource_policy_versions (
+       policy_id,
+       version,
+       operation_kind,
+       draft_revision,
+       lifecycle,
+       maximum_rows,
+       maximum_decimal_digits,
+       maximum_artifact_bytes,
+       canonical_preimage,
+       canonical_digest,
+       created_at,
+       published_at,
+       retired_at
+     )
+     select $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            now(),
+            now(),
+            null
+     where not exists (
+       select 1
+       from finance_operation_resource_policy_versions
+       where operation_kind = $3
+         and lifecycle = 'published'
+     )`,
+    [
+      seed.policyId,
+      seed.version,
+      seed.operationKind,
+      seed.draftRevision,
+      seed.lifecycle,
+      seed.maximumRows,
+      seed.maximumDecimalDigits,
+      seed.maximumArtifactBytes,
+      seed.canonicalPreimage,
+      seed.canonicalDigest
+    ]
+  );
+
+  const result = await pool.query<{ canonical_digest: string }>(
+    `select canonical_digest
+     from finance_operation_resource_policy_versions
+     where operation_kind = $1
+       and lifecycle = 'published'`,
+    [seed.operationKind]
+  );
+
+  if (result.rowCount !== 1 || result.rows[0]?.canonical_digest !== seed.canonicalDigest) {
+    throw new Error(
+      `Published ${seed.operationKind} resource policy does not match the canonical seed`
+    );
+  }
 }
 
 async function seedProductTemplates() {
