@@ -37,6 +37,15 @@ const notificationWorkerRuntimeConfigSchema = z
       .url()
       .default("https://graph.instagram.com/v25.0"),
     NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_WHATSAPP_CLOUD_DELIVERY_ENABLED: z
+      .enum(["true", "false"])
+      .default("false"),
+    NOTIFICATION_WORKER_WHATSAPP_CLOUD_GRAPH_API_BASE_URL: z
+      .string()
+      .trim()
+      .url()
+      .default("https://graph.facebook.com/v26.0"),
+    NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED: z
       .enum(["true", "false"])
       .default("false"),
@@ -61,6 +70,24 @@ const notificationWorkerRuntimeConfigSchema = z
       .positive()
       .max(20_000_000)
       .default(20_000_000),
+    NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ENABLED: z
+      .enum(["true", "false"])
+      .default("false"),
+    NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ATTEMPTS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BACKOFF_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1000),
+    NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BATCH_SIZE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(50),
     NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_TELEGRAM_BOT_API_BASE_URL: z
       .string()
@@ -168,6 +195,14 @@ const notificationWorkerRuntimeConfigSchema = z
       );
     }
 
+    if (config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_DELIVERY_ENABLED === "true") {
+      requireHttpDeliverySetting(
+        config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY,
+        ["NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY"],
+        context
+      );
+    }
+
     const hasAnyMtprotoSetting =
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_ENABLED === "true" ||
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID !== undefined ||
@@ -215,11 +250,16 @@ export type NotificationWorkerRuntimeConfig = {
   readonly messagingDeliveryAttempts: number;
   readonly messagingDeliveryBackoffMs: number;
   readonly instagramGraphDelivery: InstagramGraphDeliveryOptions | null;
+  readonly whatsappCloudDelivery: WhatsAppCloudDeliveryOptions | null;
   readonly messagingMediaIngestionEnabled: boolean;
   readonly messagingMediaIngestionAttempts: number;
   readonly messagingMediaIngestionBackoffMs: number;
   readonly messagingMediaIngestionBatchSize: number;
   readonly messagingMediaIngestionMaxBytes: number;
+  readonly messagingProviderWebhookProcessingEnabled: boolean;
+  readonly messagingProviderWebhookProcessingAttempts: number;
+  readonly messagingProviderWebhookProcessingBackoffMs: number;
+  readonly messagingProviderWebhookProcessingBatchSize: number;
   readonly mediaStorage: MessagingMediaStorageOptions;
   readonly telegramBusinessDelivery: TelegramBusinessDeliveryOptions | null;
   readonly telegramMtproto: TelegramMtprotoOptions | null;
@@ -243,6 +283,11 @@ export type TelegramMtprotoOptions = {
 };
 
 export type InstagramGraphDeliveryOptions = {
+  readonly graphApiBaseUrl: string;
+  readonly tokenEncryptionKey: Buffer;
+};
+
+export type WhatsAppCloudDeliveryOptions = {
   readonly graphApiBaseUrl: string;
   readonly tokenEncryptionKey: Buffer;
 };
@@ -284,6 +329,13 @@ export function createNotificationWorkerRuntimeConfig(
             tokenEncryptionKey: config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY
           })
         : null,
+    whatsappCloudDelivery:
+      config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_DELIVERY_ENABLED === "true"
+        ? toWhatsAppCloudDeliveryOptions({
+            graphApiBaseUrl: config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_GRAPH_API_BASE_URL,
+            tokenEncryptionKey: config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY
+          })
+        : null,
     messagingMediaIngestionEnabled:
       config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true",
     messagingMediaIngestionAttempts: config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ATTEMPTS,
@@ -292,6 +344,14 @@ export function createNotificationWorkerRuntimeConfig(
     messagingMediaIngestionBatchSize:
       config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_BATCH_SIZE,
     messagingMediaIngestionMaxBytes: config.NOTIFICATION_WORKER_MESSAGING_MEDIA_MAX_BYTES,
+    messagingProviderWebhookProcessingEnabled:
+      config.NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ENABLED === "true",
+    messagingProviderWebhookProcessingAttempts:
+      config.NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ATTEMPTS,
+    messagingProviderWebhookProcessingBackoffMs:
+      config.NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BACKOFF_MS,
+    messagingProviderWebhookProcessingBatchSize:
+      config.NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BATCH_SIZE,
     mediaStorage: {
       endpoint: config.ASTROLOGER_MEDIA_STORAGE_ENDPOINT,
       region: config.ASTROLOGER_MEDIA_STORAGE_REGION,
@@ -373,6 +433,22 @@ function toInstagramGraphDeliveryOptions(input: {
 
   return {
     graphApiBaseUrl: input.graphApiBaseUrl,
+    tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey)
+  };
+}
+
+function toWhatsAppCloudDeliveryOptions(input: {
+  readonly graphApiBaseUrl: string;
+  readonly tokenEncryptionKey: string | undefined;
+}): WhatsAppCloudDeliveryOptions {
+  if (!input.tokenEncryptionKey) {
+    throw new Error(
+      "WhatsApp Cloud delivery settings are required when WhatsApp delivery is enabled"
+    );
+  }
+
+  return {
+    graphApiBaseUrl: input.graphApiBaseUrl.replace(/\/+$/, ""),
     tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey)
   };
 }

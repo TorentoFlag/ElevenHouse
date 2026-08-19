@@ -11,6 +11,7 @@ import type {
   SendMessagingMessageRequest
 } from "@elevenhouse/contracts";
 import {
+  completeWhatsAppCloudConnection,
   createMessagingThreadClient,
   getMessagingThread,
   linkMessagingThreadClient,
@@ -21,9 +22,14 @@ import {
   startInstagramGraphConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection,
+  startWhatsAppCloudConnection,
   submitTelegramMtprotoCode,
   submitTelegramMtprotoPassword
 } from "../api/messagingApi";
+import {
+  launchWhatsAppCloudEmbeddedSignup,
+  type WhatsAppCloudEmbeddedSignupLauncher
+} from "./whatsappCloudEmbeddedSignup";
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;
 type IdempotencyKeyFactory = () => string;
@@ -62,6 +68,25 @@ export function startTelegramBusinessConnectionMutationOptions(queryClient: Quer
 export function startInstagramGraphConnectionMutationOptions(queryClient: QueryInvalidator) {
   return {
     mutationFn: () => startInstagramGraphConnection(),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
+  };
+}
+
+export function connectWhatsAppCloudConnectionMutationOptions(
+  queryClient: QueryInvalidator,
+  launchEmbeddedSignup: WhatsAppCloudEmbeddedSignupLauncher = launchWhatsAppCloudEmbeddedSignup
+) {
+  return {
+    mutationFn: async () => {
+      const start = await startWhatsAppCloudConnection();
+      const signup = await launchEmbeddedSignup(start);
+      return completeWhatsAppCloudConnection({
+        state: start.state,
+        code: signup.code,
+        session: signup.session
+      });
+    },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: messagingQueryKeys.channelConnections() })
   };

@@ -1,4 +1,6 @@
 import {
+  CompleteWhatsAppCloudConnectionBodySchema,
+  CompleteWhatsAppCloudConnectionResponseSchema,
   CreateMessagingThreadClientRequestSchema,
   LinkMessagingThreadClientRequestSchema,
   MessagingChannelConnectionResponseSchema,
@@ -15,9 +17,12 @@ import {
   StartInstagramGraphConnectionResponseSchema,
   StartTelegramBusinessConnectionResponseSchema,
   StartTelegramMtprotoConnectionRequestSchema,
+  StartWhatsAppCloudConnectionResponseSchema,
   SubmitTelegramMtprotoCodeRequestSchema,
   SubmitTelegramMtprotoPasswordRequestSchema,
   TelegramMtprotoLoginResponseSchema,
+  type CompleteWhatsAppCloudConnectionBody,
+  type CompleteWhatsAppCloudConnectionResponse,
   type CreateMessagingThreadClientRequest,
   type LinkMessagingThreadClientRequest,
   type MessagingChannelConnectionResponse,
@@ -25,6 +30,7 @@ import {
   type MessagingMessageResponse,
   type StartInstagramGraphConnectionResponse,
   type StartTelegramMtprotoConnectionRequest,
+  type StartWhatsAppCloudConnectionResponse,
   type SubmitTelegramMtprotoCodeRequest,
   type SubmitTelegramMtprotoPasswordRequest,
   type StartTelegramBusinessConnectionResponse,
@@ -58,6 +64,25 @@ export async function startTelegramBusinessConnection(): Promise<StartTelegramBu
 export async function startInstagramGraphConnection(): Promise<StartInstagramGraphConnectionResponse> {
   return StartInstagramGraphConnectionResponseSchema.parse(
     await application.http.post("/messaging/channel-connections/instagram/graph/start", undefined, {
+      csrf: true
+    })
+  );
+}
+
+export async function startWhatsAppCloudConnection(): Promise<StartWhatsAppCloudConnectionResponse> {
+  return StartWhatsAppCloudConnectionResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/whatsapp/cloud/start", undefined, {
+      csrf: true
+    })
+  );
+}
+
+export async function completeWhatsAppCloudConnection(
+  request: CompleteWhatsAppCloudConnectionBody
+): Promise<CompleteWhatsAppCloudConnectionResponse> {
+  const body = CompleteWhatsAppCloudConnectionBodySchema.parse(request);
+  return CompleteWhatsAppCloudConnectionResponseSchema.parse(
+    await application.http.post("/messaging/channel-connections/whatsapp/cloud/complete", body, {
       csrf: true
     })
   );

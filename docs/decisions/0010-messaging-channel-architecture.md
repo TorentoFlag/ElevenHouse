@@ -10,8 +10,9 @@ Accepted for implementation planning.
 
 ElevenHouse needs a production Clients and Inbox contour where astrologers can
 communicate with clients through external channels while preserving personal
-brand. Telegram is the first provider. Telegram Business / Secretary bot and
-Telegram MTProto Account are both first-class connection modes.
+brand. Telegram is the first provider family. Telegram Business / Secretary
+bot, Telegram MTProto Account, Instagram Graph and WhatsApp Cloud are
+first-class connection modes.
 
 ## Decision
 
@@ -37,21 +38,25 @@ Realtime uses an app-local RealtimeGateway abstraction. The first transport is
 SSE for server-to-browser freshness. WebSocket remains a later transport option
 for approved bidirectional realtime features.
 
-Telegram provider support is modeled through channel connection capabilities.
+Provider support is modeled through channel connection capabilities.
 `telegram_business_bot` stores Telegram Business connection ids and rights.
-`telegram_mtproto_account` stores encrypted user-session material in a later
-implementation slice. Instagram is represented as a future provider adapter,
-not implemented by this decision.
+`telegram_mtproto_account` stores encrypted user-session material.
+`instagram_graph` stores Instagram Graph account identity and encrypted tokens.
+`whatsapp_cloud` stores Meta WABA/phone-number identity and encrypted WhatsApp
+Cloud business integration tokens for astrologer-owned WhatsApp Business app
+numbers connected through Embedded Signup Coexistence.
 
 ## Consequences
 
-- Controllers do not send Telegram messages directly.
+- Controllers do not send provider messages directly.
 - Browser state is never the source of truth for messages.
 - Logging must never include phone numbers, Telegram verification or 2FA codes,
-  business-connection secrets, raw provider payloads, session strings,
-  credentials or message bodies. Queue payloads contain identifiers only.
+  Meta codes/tokens, business-connection secrets, raw provider payloads, session
+  strings, credentials or message bodies. Queue payloads contain identifiers
+  only.
 - Inbound webhooks must validate provider authenticity and dedupe provider
-  update/message ids before acknowledging.
+  update/message ids before acknowledging. Meta webhooks validate raw-body
+  signatures before parsing business payloads.
 - Browser playback of provider media must use owner-scoped backend source
   endpoints and short-lived private storage URLs; provider file ids, file paths,
   bot-token URLs and storage bucket/key details must not leave the backend.

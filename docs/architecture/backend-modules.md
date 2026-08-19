@@ -261,9 +261,10 @@ state and never executes a provider refund.
   threads, messages, delivery attempts, inbound dedupe, outbound idempotency
   and realtime event publication. `Clients` owns CRM relationships, manual
   client creation, birth data and private notes; Messaging owns conversation
-  state and provider boundaries. Telegram Business / Secretary bot and Telegram
-  MTProto Account are first-class connection modes. Instagram remains a future
-  provider adapter shape. See
+  state and provider boundaries. Telegram Business / Secretary bot, Telegram
+  MTProto Account, Instagram Graph and WhatsApp Cloud are first-class
+  connection modes. WhatsApp Cloud connects astrologer-owned WhatsApp Business
+  app numbers through Meta Embedded Signup Coexistence. See
   `docs/decisions/0010-messaging-channel-architecture.md`.
 - `Content`: posts, lead magnets, materials, broadcasts, content products.
 - `Reviews`: review submission, moderation, display aggregates.
@@ -299,18 +300,22 @@ Controllers должны только оркестрировать use cases. В
 ingestion and the SSE freshness endpoint. Its transactions persist Messaging
 state and an outbox event together; controllers never call provider adapters
 directly. Provider webhooks are CSRF-exempt only because their authenticity is
-validated by the provider-specific webhook boundary.
+validated by the provider-specific webhook boundary. Meta webhooks use signed
+raw-body verification before business payload parsing; WhatsApp Cloud GET
+verification uses the configured verify token.
 
-`notification-worker` may relay and execute Messaging delivery jobs, but it
-does not own conversations, CRM relationships or the source of truth. Queue
-payloads contain only identifiers; the worker reloads authoritative connection
-and message state before calling a provider adapter. Realtime is exposed through
-an app-local `RealtimeGateway` abstraction, with SSE as the first transport and
-WebSocket reserved for later approved bidirectional features.
+`notification-worker` may relay and execute Messaging delivery jobs and
+WhatsApp provider-webhook sync jobs, but it does not own conversations, CRM
+relationships or the source of truth. Queue payloads contain only identifiers;
+the worker reloads authoritative connection, message or webhook-event state
+before calling provider adapters or marking provider-sync processing results.
+Realtime is exposed through an app-local `RealtimeGateway` abstraction, with SSE
+as the first transport and WebSocket reserved for later approved bidirectional
+features.
 
 Messaging logging must never include phone numbers, Telegram verification or
-2FA codes, business-connection secrets, raw provider payloads, session strings,
-credentials or message bodies.
+2FA codes, Meta codes/tokens, business-connection secrets, raw provider
+payloads, session strings, credentials or message bodies.
 
 ### Chart Engine
 

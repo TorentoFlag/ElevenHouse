@@ -11,10 +11,13 @@ export type ChannelConnectionDialogProps = {
   readonly connection: MessagingChannelConnection | undefined;
   readonly mtprotoConnection: MessagingChannelConnection | undefined;
   readonly instagramConnection: MessagingChannelConnection | undefined;
+  readonly whatsappConnection: MessagingChannelConnection | undefined;
   readonly isStarting: boolean;
   readonly errorMessage: string | null;
   readonly isStartingInstagramGraph: boolean;
   readonly instagramGraphErrorMessage: string | null;
+  readonly isStartingWhatsAppCloud: boolean;
+  readonly whatsappCloudErrorMessage: string | null;
   readonly telegramBotUsername: string | null;
   readonly telegramBotUrl: string | null;
   readonly mtprotoStep: TelegramMtprotoWizardStep;
@@ -30,6 +33,7 @@ export type ChannelConnectionDialogProps = {
   readonly mtprotoErrorMessage: string | null;
   readonly onStartConnection: () => void;
   readonly onStartInstagramGraphConnection: () => void;
+  readonly onStartWhatsAppCloudConnection: () => void;
   readonly onMtprotoPhoneNumberChange: (value: string) => void;
   readonly onMtprotoConsentAcceptedChange: (value: boolean) => void;
   readonly onMtprotoCodeChange: (value: string) => void;
@@ -46,17 +50,21 @@ type ChannelConnectionStep =
   | "telegram-methods"
   | "telegram-business"
   | "telegram-mtproto"
-  | "instagram-graph";
+  | "instagram-graph"
+  | "whatsapp-cloud";
 type TelegramGuideStepId = 1 | 2 | 3 | 4 | 5;
 
 export function ChannelConnectionDialog({
   connection,
   mtprotoConnection,
   instagramConnection,
+  whatsappConnection,
   isStarting,
   errorMessage,
   isStartingInstagramGraph,
   instagramGraphErrorMessage,
+  isStartingWhatsAppCloud,
+  whatsappCloudErrorMessage,
   telegramBotUsername,
   telegramBotUrl,
   mtprotoStep,
@@ -72,6 +80,7 @@ export function ChannelConnectionDialog({
   mtprotoErrorMessage,
   onStartConnection,
   onStartInstagramGraphConnection,
+  onStartWhatsAppCloudConnection,
   onMtprotoPhoneNumberChange,
   onMtprotoConsentAcceptedChange,
   onMtprotoCodeChange,
@@ -94,7 +103,10 @@ export function ChannelConnectionDialog({
     <div className={styles.channelSetupOverlay} role="presentation" onMouseDown={onClose}>
       <section
         className={
-          step === "telegram-business" || step === "telegram-mtproto" || step === "instagram-graph"
+          step === "telegram-business" ||
+          step === "telegram-mtproto" ||
+          step === "instagram-graph" ||
+          step === "whatsapp-cloud"
             ? styles.telegramGuideDialog
             : styles.channelSetupDialog
         }
@@ -107,9 +119,11 @@ export function ChannelConnectionDialog({
           <ChannelSelection
             connection={connection}
             instagramConnection={instagramConnection}
+            whatsappConnection={whatsappConnection}
             onClose={onClose}
             onSelectInstagram={() => setStep("instagram-graph")}
             onSelectTelegram={() => setStep("telegram-methods")}
+            onSelectWhatsApp={() => setStep("whatsapp-cloud")}
           />
         ) : null}
         {step === "telegram-methods" ? (
@@ -170,6 +184,16 @@ export function ChannelConnectionDialog({
             onStartConnection={onStartInstagramGraphConnection}
           />
         ) : null}
+        {step === "whatsapp-cloud" ? (
+          <WhatsAppCloudGuide
+            connection={whatsappConnection}
+            errorMessage={whatsappCloudErrorMessage}
+            isStarting={isStartingWhatsAppCloud}
+            onBack={() => setStep("channels")}
+            onClose={onClose}
+            onStartConnection={onStartWhatsAppCloudConnection}
+          />
+        ) : null}
       </section>
     </div>
   );
@@ -184,15 +208,19 @@ export function ChannelConnectionDialog({
 function ChannelSelection({
   connection,
   instagramConnection,
+  whatsappConnection,
   onClose,
   onSelectInstagram,
-  onSelectTelegram
+  onSelectTelegram,
+  onSelectWhatsApp
 }: {
   readonly connection: MessagingChannelConnection | undefined;
   readonly instagramConnection: MessagingChannelConnection | undefined;
+  readonly whatsappConnection: MessagingChannelConnection | undefined;
   readonly onClose: () => void;
   readonly onSelectInstagram: () => void;
   readonly onSelectTelegram: () => void;
+  readonly onSelectWhatsApp: () => void;
 }) {
   return (
     <>
@@ -234,6 +262,19 @@ function ChannelSelection({
           <span className={styles.channelSetupRowText}>
             <strong>Instagram</strong>
             <span>{instagramChannelStatusText(instagramConnection)}</span>
+          </span>
+          <span className={styles.channelSetupRowAction}>Выбрать</span>
+        </button>
+        <button
+          className={styles.channelSetupRow}
+          type="button"
+          aria-label="Выбрать WhatsApp"
+          onClick={onSelectWhatsApp}
+        >
+          <span className={styles.channelSetupBadgeWhatsApp}>W</span>
+          <span className={styles.channelSetupRowText}>
+            <strong>WhatsApp</strong>
+            <span>{whatsappCloudStatusText(whatsappConnection)}</span>
           </span>
           <span className={styles.channelSetupRowAction}>Выбрать</span>
         </button>
@@ -604,6 +645,88 @@ function InstagramGraphGuide({
           <div className={styles.telegramGuideActionStatus} role="status">
             <span>Канал подключён</span>
             <strong>Instagram готов к работе</strong>
+          </div>
+        ) : (
+          <button
+            className={styles.telegramGuidePrimary}
+            type="button"
+            disabled={isStarting}
+            onClick={() => onStartConnection()}
+          >
+            {isStarting ? "Открываем Meta" : "Продолжить в Meta"}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function WhatsAppCloudGuide({
+  connection,
+  errorMessage,
+  isStarting,
+  onBack,
+  onClose,
+  onStartConnection
+}: {
+  readonly connection: MessagingChannelConnection | undefined;
+  readonly errorMessage: string | null;
+  readonly isStarting: boolean;
+  readonly onBack: () => void;
+  readonly onClose: () => void;
+  readonly onStartConnection: () => void;
+}) {
+  const isActive = connection?.status === "active";
+  const needsAttention =
+    connection?.status === "reauth_required" ||
+    connection?.status === "revoked" ||
+    connection?.status === "error";
+
+  return (
+    <>
+      <header className={styles.telegramGuideHeader}>
+        <div>
+          <button className={styles.channelSetupBack} type="button" onClick={onBack}>
+            Каналы
+          </button>
+          <span className={styles.telegramGuideKicker}>WhatsApp</span>
+          <h2 id="whatsapp-cloud-guide-title">Подключить WhatsApp</h2>
+          <p>Подключите существующий WhatsApp Business App номер через Meta Embedded Signup.</p>
+        </div>
+        <button
+          className={styles.telegramGuideClose}
+          type="button"
+          aria-label="Закрыть подключение WhatsApp"
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </header>
+
+      <div className={styles.telegramMtprotoBody}>
+        <div className={styles.telegramGuideStatus} data-attention={needsAttention || undefined}>
+          <span>{whatsappCloudStatusLabel(connection, isStarting)}</span>
+          <strong>{whatsappCloudStatusText(connection)}</strong>
+        </div>
+
+        {errorMessage ? (
+          <p className={styles.telegramGuideError} role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+
+        <section className={styles.telegramMtprotoNotice}>
+          <strong>WhatsApp подключается как аккаунт астролога, а не как номер ElevenHouse.</strong>
+          <p>
+            После перехода в Meta выберите существующий WhatsApp Business App аккаунт и номер.
+            История и сообщения будут синхронизироваться через официальный Cloud API.
+          </p>
+        </section>
+
+        {isActive ? (
+          <div className={styles.telegramGuideActionStatus} role="status">
+            <span>Канал подключён</span>
+            <strong>WhatsApp готов к работе</strong>
           </div>
         ) : (
           <button
@@ -1013,6 +1136,7 @@ function dialogTitleId(step: ChannelConnectionStep) {
   if (step === "telegram-methods") return "telegram-method-title";
   if (step === "telegram-mtproto") return "telegram-mtproto-guide-title";
   if (step === "instagram-graph") return "instagram-graph-guide-title";
+  if (step === "whatsapp-cloud") return "whatsapp-cloud-guide-title";
 
   return "telegram-business-guide-title";
 }
@@ -1066,6 +1190,29 @@ function instagramGraphStatusText(connection: MessagingChannelConnection | undef
   if (connection?.status === "error") return "Последняя попытка подключения завершилась ошибкой.";
 
   return "Начните подключение и завершите авторизацию на стороне Meta.";
+}
+
+function whatsappCloudStatusLabel(
+  connection: MessagingChannelConnection | undefined,
+  isStarting: boolean
+) {
+  if (isStarting) return "Открываем";
+  if (connection?.status === "active") return "Подключено";
+  if (connection?.status === "connecting") return "Ожидает Meta";
+  if (connection?.status === "reauth_required") return "Нужна авторизация";
+  if (connection?.status === "revoked") return "Отключено";
+
+  return "Не начато";
+}
+
+function whatsappCloudStatusText(connection: MessagingChannelConnection | undefined) {
+  if (connection?.status === "active") return "WhatsApp уже подключён.";
+  if (connection?.status === "connecting") return "Завершите подключение в Meta.";
+  if (connection?.status === "reauth_required") return "Meta требует повторную авторизацию.";
+  if (connection?.status === "revoked") return "Канал отключён, подключите WhatsApp заново.";
+  if (connection?.status === "error") return "Последняя попытка подключения завершилась ошибкой.";
+
+  return "Не подключён";
 }
 
 function telegramMtprotoStatusLabel(step: TelegramMtprotoWizardStep, isActive: boolean) {

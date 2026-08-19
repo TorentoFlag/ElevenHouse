@@ -8,6 +8,7 @@ import {
   createDrizzleMessagingStore,
   createDrizzleMessagingDeliveryProcessingStore,
   createDrizzleMessagingMediaIngestionProcessingStore,
+  createDrizzleMessagingProviderWebhookProcessingStore,
   createDrizzleTelegramMtprotoSessionProcessingStore
 } from "@elevenhouse/db/messaging";
 import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/notifications";
@@ -24,6 +25,7 @@ import {
 } from "./auth-code-delivery.queue";
 import { processAuthCodeDeliveryJob } from "./auth-code-delivery.processor";
 import { HttpInstagramGraphDeliveryProvider } from "./instagram-graph-delivery-provider";
+import { HttpWhatsAppCloudDeliveryProvider } from "./whatsapp-cloud-delivery-provider";
 import { relayPendingOutboxEvents } from "./outbox-relay";
 import {
   createMessagingDeliveryQueue,
@@ -40,6 +42,12 @@ import { processMessagingMediaIngestionJob } from "./messaging-media-ingestion.p
 import { relayPendingMessagingMediaIngestions } from "./messaging-media-ingestion.relay";
 import { TelegramBusinessMediaProvider } from "./messaging-media-ingestion.provider";
 import { createS3MessagingMediaObjectStorage } from "./messaging-media-ingestion.storage";
+import {
+  createMessagingProviderWebhookQueue,
+  createMessagingProviderWebhookWorker
+} from "./messaging-provider-webhook.queue";
+import { processMessagingProviderWebhookJob } from "./messaging-provider-webhook.processor";
+import { relayPendingMessagingProviderWebhooks } from "./messaging-provider-webhook.relay";
 import { createWorkerReadiness, createWorkerReadinessServer } from "./readiness";
 import { createNotificationWorkerRuntimeConfig } from "./runtime-config";
 import { TelegramBusinessMessagingDeliveryProvider } from "./telegram-business-provider";
@@ -106,6 +114,12 @@ const messagingMediaIngestionProvider = createMessagingMediaIngestionProvider();
 const messagingMediaIngestionStorage = config.messagingMediaIngestionEnabled
   ? createS3MessagingMediaObjectStorage(config.mediaStorage)
   : null;
+const messagingProviderWebhookQueue = config.messagingProviderWebhookProcessingEnabled
+  ? createMessagingProviderWebhookQueue(config.redisUrl)
+  : null;
+const messagingProviderWebhookStore = config.messagingProviderWebhookProcessingEnabled
+  ? createDrizzleMessagingProviderWebhookProcessingStore(postgresRuntime.database)
+  : null;
 const authCodeDeliveryWorker = createAuthCodeDeliveryWorker(config.redisUrl, (job) =>
   processAuthCodeDeliveryJob({
     job,
@@ -146,6 +160,18 @@ const messagingMediaIngestionWorker =
         })
       )
     : null;
+const messagingProviderWebhookWorker =
+  config.messagingProviderWebhookProcessingEnabled && messagingProviderWebhookStore
+    ? createMessagingProviderWebhookWorker(config.redisUrl, (job) =>
+        processMessagingProviderWebhookJob({
+          job,
+          store: messagingProviderWebhookStore,
+          now: new Date(),
+          leaseOwner: workerInstanceId,
+          logger
+        })
+      )
+    : null;
 const readinessChecks = {
   postgres: async () => {
     await postgresRuntime.pool.query("select 1");
@@ -163,6 +189,16 @@ const readinessChecks = {
         },
         messagingDeliveryWorker: async () => {
           await messagingDeliveryWorker.waitUntilReady();
+        }
+      }
+    : {}),
+  ...(messagingProviderWebhookQueue && messagingProviderWebhookWorker
+    ? {
+        messagingProviderWebhookQueue: async () => {
+          await messagingProviderWebhookQueue.waitUntilReady();
+        },
+        messagingProviderWebhookWorker: async () => {
+          await messagingProviderWebhookWorker.waitUntilReady();
         }
       }
     : {}),
@@ -225,17 +261,25 @@ function createMessagingDeliveryProvider(): MessagingDeliveryProviders | null {
         tokenCipher: createAes256GcmSecretCipher(config.instagramGraphDelivery.tokenEncryptionKey)
       })
     : undefined;
+  const whatsappCloud = config.whatsappCloudDelivery
+    ? new HttpWhatsAppCloudDeliveryProvider({
+        graphApiBaseUrl: config.whatsappCloudDelivery.graphApiBaseUrl,
+        tokenCipher: createAes256GcmSecretCipher(config.whatsappCloudDelivery.tokenEncryptionKey)
+      })
+    : undefined;
 
   if (!telegramMtprotoSessionSupervisor) {
     return {
       telegramBusiness,
-      ...(instagramGraph ? { instagramGraph } : {})
+      ...(instagramGraph ? { instagramGraph } : {}),
+      ...(whatsappCloud ? { whatsappCloud } : {})
     };
   }
 
   return {
     telegramBusiness,
     ...(instagramGraph ? { instagramGraph } : {}),
+    ...(whatsappCloud ? { whatsappCloud } : {}),
     telegramMtproto: new TelegramMtprotoSessionDeliveryProvider({
       registry: telegramMtprotoSessionSupervisor
     })
@@ -305,6 +349,19 @@ function startRelay(): ReturnType<typeof setInterval> {
         logger.error("messaging media ingestion relay failed", { error });
       });
     }
+    if (messagingProviderWebhookQueue && messagingProviderWebhookStore) {
+      relayPendingMessagingProviderWebhooks({
+        store: messagingProviderWebhookStore,
+        queue: messagingProviderWebhookQueue,
+        batchSize: config.messagingProviderWebhookProcessingBatchSize,
+        queueOptions: {
+          attempts: config.messagingProviderWebhookProcessingAttempts,
+          backoffMs: config.messagingProviderWebhookProcessingBackoffMs
+        }
+      }).catch((error: unknown) => {
+        logger.error("messaging provider webhook relay failed", { error });
+      });
+    }
   }, config.outboxRelayIntervalMs);
 
   timer.unref();
@@ -353,6 +410,8 @@ async function shutdown(): Promise<void> {
   }
   await telegramMtprotoSessionSupervisor?.shutdown(new Date());
   await closeHealthServer();
+  await messagingProviderWebhookWorker?.close();
+  await messagingProviderWebhookQueue?.close();
   await messagingMediaIngestionWorker?.close();
   await messagingMediaIngestionQueue?.close();
   await messagingDeliveryWorker?.close();

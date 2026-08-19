@@ -15,6 +15,7 @@ import {
   messagingChannelConnections,
   messagingExternalIdentities,
   messagingInstagramGraphAccounts,
+  messagingWhatsappCloudAccounts,
   messagingMessages,
   messagingRealtimeEvents,
   messagingThreadIdentities,
@@ -55,7 +56,8 @@ export type TelegramMtprotoDeliveryWorkItem = {
 export type MessagingDeliveryWorkItem =
   | TelegramBusinessDeliveryWorkItem
   | TelegramMtprotoDeliveryWorkItem
-  | InstagramGraphDeliveryWorkItem;
+  | InstagramGraphDeliveryWorkItem
+  | WhatsAppCloudDeliveryWorkItem;
 
 export type InstagramGraphDeliveryWorkItem = {
   readonly outboxEventId: string;
@@ -66,6 +68,21 @@ export type InstagramGraphDeliveryWorkItem = {
   readonly channelConnectionId: string;
   readonly astrologerUserId: string;
   readonly instagramAccountId: string;
+  readonly providerChatId: string;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
+  readonly text: string;
+  readonly reconciliation?: boolean;
+};
+
+export type WhatsAppCloudDeliveryWorkItem = {
+  readonly outboxEventId: string;
+  readonly messageId: string;
+  readonly messageStatus: MessagingMessageStatus;
+  readonly provider: Extract<MessagingProvider, "whatsapp">;
+  readonly mode: Extract<MessagingChannelMode, "whatsapp_cloud">;
+  readonly channelConnectionId: string;
+  readonly astrologerUserId: string;
+  readonly phoneNumberId: string;
   readonly providerChatId: string;
   readonly encryptedAccessToken: EncryptedMessagingSecret;
   readonly text: string;
@@ -157,6 +174,8 @@ async function findByOutboxEventId(
       mode: messagingChannelConnections.mode,
       businessConnectionId: messagingChannelConnections.externalAccountId,
       instagramAccessTokenEncrypted: messagingInstagramGraphAccounts.accessTokenEncrypted,
+      whatsappAccessTokenEncrypted: messagingWhatsappCloudAccounts.accessTokenEncrypted,
+      whatsappPhoneNumberId: messagingWhatsappCloudAccounts.phoneNumberId,
       providerChatId: messagingExternalIdentities.providerChatId
     })
     .from(outboxEvents)
@@ -183,6 +202,10 @@ async function findByOutboxEventId(
     .leftJoin(
       messagingInstagramGraphAccounts,
       eq(messagingInstagramGraphAccounts.channelConnectionId, messagingChannelConnections.id)
+    )
+    .leftJoin(
+      messagingWhatsappCloudAccounts,
+      eq(messagingWhatsappCloudAccounts.channelConnectionId, messagingChannelConnections.id)
     )
     .where(
       and(
@@ -376,6 +399,8 @@ function toMessagingDeliveryWorkItem(input: {
   readonly mode: string;
   readonly businessConnectionId: string | null;
   readonly instagramAccessTokenEncrypted: EncryptedMessagingSecret | null;
+  readonly whatsappAccessTokenEncrypted: EncryptedMessagingSecret | null;
+  readonly whatsappPhoneNumberId: string | null;
   readonly providerChatId: string;
 }): MessagingDeliveryWorkItem {
   if (!("messageId" in input.payload) || input.payload.messageId !== input.messageId) {
@@ -448,6 +473,29 @@ function toMessagingDeliveryWorkItem(input: {
       instagramAccountId: input.businessConnectionId,
       providerChatId: input.providerChatId,
       encryptedAccessToken: input.instagramAccessTokenEncrypted,
+      text: input.text,
+      reconciliation
+    };
+  }
+
+  if (input.provider === "whatsapp" && input.mode === "whatsapp_cloud") {
+    if (!input.whatsappPhoneNumberId || !input.whatsappAccessTokenEncrypted) {
+      throw new Error(
+        `WhatsApp Cloud account token is missing for outbox event ${input.outboxEventId}`
+      );
+    }
+
+    return {
+      outboxEventId: input.outboxEventId,
+      messageId: input.messageId,
+      messageStatus: input.messageStatus as MessagingMessageStatus,
+      provider: "whatsapp",
+      mode: "whatsapp_cloud",
+      channelConnectionId: input.channelConnectionId,
+      astrologerUserId: input.astrologerUserId,
+      phoneNumberId: input.whatsappPhoneNumberId,
+      providerChatId: input.providerChatId,
+      encryptedAccessToken: input.whatsappAccessTokenEncrypted,
       text: input.text,
       reconciliation
     };

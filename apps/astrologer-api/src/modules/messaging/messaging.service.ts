@@ -17,6 +17,7 @@ import {
   MessagingValidationError,
   bindTelegramBusinessConnectionUser,
   completeInstagramGraphConnection,
+  completeWhatsAppCloudConnection,
   createClientFromThread,
   createOutboundMessage,
   linkThreadToClient,
@@ -26,13 +27,25 @@ import {
   recordTelegramBusinessEditedMessage,
   recordTelegramBusinessMessage,
   recordInstagramGraphMessage,
+  recordWhatsAppCloudAccountUpdate,
+  recordWhatsAppCloudEcho,
+  recordWhatsAppCloudMessage,
+  recordWhatsAppCloudStatus,
+  recordWhatsAppCloudWebhookEvent,
   recordTelegramMtprotoCodeResult,
   recordTelegramMtprotoPasswordResult,
   revokeInstagramGraphConnectionByMetaUserId,
   requireTelegramMtprotoLoginSession,
   startInstagramGraphConnection,
+  startWhatsAppCloudConnection,
   startTelegramBusinessConnection,
   startTelegramMtprotoConnection,
+  whatsappCloudAccountUpdateEventKey,
+  whatsappCloudContactSyncEventKey,
+  whatsappCloudEchoEventKey,
+  whatsappCloudHistoryChunkEventKey,
+  whatsappCloudInboundMessageEventKey,
+  whatsappCloudStatusEventKey,
   type MessagingReadStore,
   type MessagingStore,
   type PrivateObjectStoragePort
@@ -53,6 +66,9 @@ import {
   SendMessagingMessageRequestSchema,
   StartTelegramBusinessConnectionResponseSchema,
   StartInstagramGraphConnectionResponseSchema,
+  StartWhatsAppCloudConnectionResponseSchema,
+  CompleteWhatsAppCloudConnectionBodySchema,
+  CompleteWhatsAppCloudConnectionResponseSchema,
   StartTelegramMtprotoConnectionRequestSchema,
   SubmitTelegramMtprotoCodeRequestSchema,
   SubmitTelegramMtprotoPasswordRequestSchema,
@@ -61,6 +77,8 @@ import {
   type MessagingMessageMediaSourceResponse,
   type MessagingMessageResponse,
   type StartInstagramGraphConnectionResponse,
+  type StartWhatsAppCloudConnectionResponse,
+  type CompleteWhatsAppCloudConnectionResponse,
   type StartTelegramBusinessConnectionResponse,
   type TelegramMtprotoLoginResponse,
   type MessagingThreadClientLinkResponse,
@@ -78,7 +96,8 @@ import {
   MESSAGING_READ_STORE,
   MESSAGING_STORE,
   TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
-  TELEGRAM_MTPROTO_AUTH_PROVIDER
+  TELEGRAM_MTPROTO_AUTH_PROVIDER,
+  WHATSAPP_CLOUD_AUTH_PROVIDER
 } from "./messaging.tokens";
 import { createMessagingRealtimeEventStream } from "./realtime-event-stream";
 import type { TelegramBusinessConnectionLookup } from "./telegram-business-connection-lookup";
@@ -86,6 +105,8 @@ import type { InstagramGraphAuthProvider } from "./instagram-graph-auth-provider
 import type { ParsedInstagramGraphWebhookUpdate } from "./instagram-graph-webhook";
 import type { ParsedTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
 import type { TelegramMtprotoAuthProvider } from "./telegram-mtproto-auth-provider";
+import type { WhatsAppCloudAuthProvider } from "./whatsapp-cloud-auth-provider";
+import type { ParsedWhatsAppCloudWebhookChange } from "./whatsapp-cloud-webhook";
 import { z } from "@elevenhouse/validation";
 
 @Injectable()
@@ -101,6 +122,8 @@ export class MessagingService {
     private readonly telegramMtprotoAuthProvider: TelegramMtprotoAuthProvider | null,
     @Inject(INSTAGRAM_GRAPH_AUTH_PROVIDER)
     private readonly instagramGraphAuthProvider: InstagramGraphAuthProvider | null,
+    @Inject(WHATSAPP_CLOUD_AUTH_PROVIDER)
+    private readonly whatsappCloudAuthProvider: WhatsAppCloudAuthProvider | null,
     @Inject(MEDIA_PRIVATE_OBJECT_STORAGE)
     private readonly privateObjectStorage: PrivateObjectStoragePort,
     private readonly clock: SystemClock,
@@ -191,6 +214,147 @@ export class MessagingService {
             issuedAtSeconds: Math.floor(this.clock.now().getTime() / 1000)
           })
         })
+      });
+    });
+  }
+
+  async startWhatsAppCloudConnection(
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<StartWhatsAppCloudConnectionResponse> {
+    return mapMessagingErrors(async () => {
+      const whatsappCloudConfig = this.requireWhatsAppCloudConfig();
+      const astrologerUserId = requireAstrologerUserId(request);
+      const result = await startWhatsAppCloudConnection({
+        store: this.store,
+        astrologerUserId,
+        now: this.clock.now()
+      });
+      const connections = await this.readStore.listChannelConnections({ astrologerUserId });
+      const connection = connections.channelConnections.find(
+        (candidate) => candidate.id === result.connectionId
+      );
+      if (!connection) {
+        throw new Error("Started WhatsApp Cloud connection was not available in the read model");
+      }
+
+      return StartWhatsAppCloudConnectionResponseSchema.parse({
+        channelConnection: connection,
+        appId: whatsappCloudConfig.appId,
+        configurationId: whatsappCloudConfig.configurationId,
+        graphApiVersion: graphApiVersionFromBaseUrl(whatsappCloudConfig.graphApiBaseUrl),
+        state: createWhatsAppCloudCallbackState({
+          config: whatsappCloudConfig,
+          astrologerUserId,
+          connectionId: result.connectionId,
+          issuedAtSeconds: Math.floor(this.clock.now().getTime() / 1000)
+        })
+      });
+    });
+  }
+
+  async completeWhatsAppCloudConnection(
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<CompleteWhatsAppCloudConnectionResponse> {
+    return mapMessagingErrors(async () => {
+      const whatsappCloudConfig = this.requireWhatsAppCloudConfig();
+      const command = parseContract(CompleteWhatsAppCloudConnectionBodySchema, body);
+      const signedInAstrologerUserId = requireAstrologerUserId(request);
+      const state = verifyWhatsAppCloudCallbackState({
+        config: whatsappCloudConfig,
+        state: command.state,
+        nowSeconds: Math.floor(this.clock.now().getTime() / 1000)
+      });
+      if (!state || state.astrologerUserId !== signedInAstrologerUserId) {
+        throw messagingHttpError(
+          400,
+          "whatsapp_cloud_state_invalid",
+          "WhatsApp Cloud connection state is invalid"
+        );
+      }
+      if (command.session.event !== "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+        return CompleteWhatsAppCloudConnectionResponseSchema.parse({
+          status: "ignored",
+          channelConnection: null,
+          code: "whatsapp_cloud_onboarding_not_finished"
+        });
+      }
+      if (!command.session.wabaId) {
+        throw messagingHttpError(
+          400,
+          "whatsapp_cloud_waba_missing",
+          "WhatsApp Cloud WABA id is required"
+        );
+      }
+      const authProvider = this.whatsappCloudAuthProvider;
+      if (!authProvider) {
+        throw messagingHttpError(
+          503,
+          "whatsapp_cloud_connection_unavailable",
+          "WhatsApp Cloud login is not configured"
+        );
+      }
+
+      const token = await authProvider.exchangeCode({ code: command.code });
+      const phone = await authProvider.resolvePhoneNumber({
+        accessToken: token.accessToken,
+        wabaId: command.session.wabaId,
+        phoneNumberId: command.session.phoneNumberId
+      });
+      await authProvider.subscribeWabaToWebhooks({
+        accessToken: token.accessToken,
+        wabaId: phone.wabaId
+      });
+      await authProvider.requestSmbAppDataSync({
+        accessToken: token.accessToken,
+        phoneNumberId: phone.phoneNumberId,
+        syncType: "smb_app_state_sync"
+      });
+      if (whatsappCloudConfig.historySyncEnabled) {
+        await authProvider.requestSmbAppDataSync({
+          accessToken: token.accessToken,
+          phoneNumberId: phone.phoneNumberId,
+          syncType: "history"
+        });
+      }
+
+      const cipher = createAes256GcmSecretCipher(whatsappCloudConfig.tokenEncryptionKey);
+      const result = await completeWhatsAppCloudConnection({
+        store: this.store,
+        astrologerUserId: state.astrologerUserId,
+        connectionId: state.connectionId,
+        wabaId: phone.wabaId,
+        businessId: command.session.businessId ?? phone.businessId,
+        phoneNumberId: phone.phoneNumberId,
+        displayPhoneNumber: phone.displayPhoneNumber,
+        verifiedName: phone.verifiedName,
+        platformType: phone.platformType,
+        isOnBizApp: phone.isOnBizApp,
+        encryptedAccessToken: encryptedMessagingSecret(
+          "whatsapp_cloud_v1",
+          cipher.encrypt({
+            plaintext: token.accessToken,
+            aad: whatsappCloudSecretAad(state.astrologerUserId, state.connectionId, "access_token")
+          })
+        ),
+        tokenScopes: token.grantedScopes,
+        tokenIssuedAt: this.clock.now().toISOString(),
+        tokenExpiresAt: token.expiresAt ? token.expiresAt.toISOString() : null,
+        historySyncStatus: whatsappCloudConfig.historySyncEnabled ? "requested" : "not_requested",
+        contactSyncStatus: "requested",
+        now: this.clock.now()
+      });
+      const connections = await this.readStore.listChannelConnections({
+        astrologerUserId: state.astrologerUserId
+      });
+      const connection = connections.channelConnections.find(
+        (candidate) => candidate.id === state.connectionId
+      );
+
+      return CompleteWhatsAppCloudConnectionResponseSchema.parse({
+        status: result.kind === "recorded" ? "connected" : "ignored",
+        channelConnection: result.kind === "recorded" ? (connection ?? null) : null,
+        code: result.kind === "recorded" ? null : "whatsapp_cloud_connection_not_found"
       });
     });
   }
@@ -330,6 +494,202 @@ export class MessagingService {
     };
   }
 
+  async handleWhatsAppCloudWebhookChanges(
+    changes: readonly ParsedWhatsAppCloudWebhookChange[]
+  ): Promise<void> {
+    const receivedAt = this.clock.now().toISOString();
+    for (const change of changes) {
+      if (change.accountUpdate) {
+        const eventKey = whatsappCloudAccountUpdateEventKey({
+          wabaId: change.wabaId,
+          phoneNumberId: change.phoneNumberId,
+          event: change.accountUpdate.event,
+          timestampOrReasonHash: new Date(change.accountUpdate.eventAt).getTime().toString()
+        });
+        const event = await recordWhatsAppCloudWebhookEvent({
+          store: this.store,
+          eventKey,
+          field: change.field,
+          externalAccountId: change.phoneNumberId,
+          externalOwnerUserId: change.wabaId,
+          normalizedSummary: {
+            event: change.accountUpdate.event,
+            hasReason: Boolean(change.accountUpdate.reason)
+          },
+          receivedAt
+        });
+        if (event.kind === "recorded") {
+          await recordWhatsAppCloudAccountUpdate({
+            store: this.store,
+            wabaId: change.wabaId,
+            phoneNumberId: change.phoneNumberId,
+            event: change.accountUpdate.event,
+            reason: change.accountUpdate.reason,
+            eventAt: change.accountUpdate.eventAt,
+            now: this.clock.now()
+          });
+        }
+      }
+
+      for (const syncEvent of change.syncEvents) {
+        if (syncEvent.kind === "history") {
+          await recordWhatsAppCloudWebhookEvent({
+            store: this.store,
+            eventKey: whatsappCloudHistoryChunkEventKey({
+              wabaId: change.wabaId,
+              phoneNumberId: change.phoneNumberId,
+              phase: syncEvent.action,
+              chunkOrder: syncEvent.keyPart
+            }),
+            field: change.field,
+            externalAccountId: change.phoneNumberId,
+            externalOwnerUserId: change.wabaId,
+            normalizedSummary: {
+              kind: syncEvent.kind,
+              action: syncEvent.action,
+              timestamp: syncEvent.timestamp,
+              ...syncEvent.summary
+            },
+            receivedAt
+          });
+          continue;
+        }
+
+        if (!change.phoneNumberId) {
+          this.logger.warn(
+            `WhatsApp Cloud contact sync skipped without phone_number_id field=${change.field} waba_id=${change.wabaId}`
+          );
+          continue;
+        }
+
+        await recordWhatsAppCloudWebhookEvent({
+          store: this.store,
+          eventKey: whatsappCloudContactSyncEventKey({
+            phoneNumberId: change.phoneNumberId,
+            contactWaIdOrPhone: syncEvent.keyPart,
+            action: syncEvent.action,
+            timestamp: new Date(syncEvent.timestamp).getTime().toString()
+          }),
+          field: change.field,
+          externalAccountId: change.phoneNumberId,
+          externalOwnerUserId: change.wabaId,
+          normalizedSummary: {
+            kind: syncEvent.kind,
+            action: syncEvent.action,
+            timestamp: syncEvent.timestamp,
+            ...syncEvent.summary
+          },
+          receivedAt
+        });
+      }
+
+      if (!change.phoneNumberId) {
+        if (change.messages.length > 0 || change.statuses.length > 0) {
+          this.logger.warn(
+            `WhatsApp Cloud webhook change skipped without phone_number_id field=${change.field} waba_id=${change.wabaId}`
+          );
+        }
+        continue;
+      }
+
+      for (const message of change.messages) {
+        const eventKey = whatsappCloudInboundMessageEventKey({
+          phoneNumberId: change.phoneNumberId,
+          messageId: message.id
+        });
+        const event = await recordWhatsAppCloudWebhookEvent({
+          store: this.store,
+          eventKey,
+          field: change.field,
+          externalAccountId: change.phoneNumberId,
+          externalOwnerUserId: change.wabaId,
+          normalizedSummary: {
+            messageId: message.id,
+            type: message.type,
+            hasText: Boolean(message.text)
+          },
+          receivedAt
+        });
+        if (event.kind === "duplicate" || !message.text) continue;
+        await recordWhatsAppCloudMessage({
+          store: this.store,
+          phoneNumberId: change.phoneNumberId,
+          providerMessageId: message.id,
+          senderWaId: message.from,
+          recipientWaId: change.displayPhoneNumber ?? change.phoneNumberId,
+          text: message.text,
+          providerSentAt: message.providerSentAt,
+          now: this.clock.now()
+        });
+      }
+
+      for (const echo of change.echoes) {
+        const eventKey = whatsappCloudEchoEventKey({
+          phoneNumberId: change.phoneNumberId,
+          messageId: echo.id
+        });
+        const event = await recordWhatsAppCloudWebhookEvent({
+          store: this.store,
+          eventKey,
+          field: change.field,
+          externalAccountId: change.phoneNumberId,
+          externalOwnerUserId: change.wabaId,
+          normalizedSummary: {
+            messageId: echo.id,
+            type: echo.type,
+            hasText: Boolean(echo.text),
+            recipientWaId: echo.to
+          },
+          receivedAt
+        });
+        if (event.kind === "duplicate" || !echo.text) continue;
+        await recordWhatsAppCloudEcho({
+          store: this.store,
+          phoneNumberId: change.phoneNumberId,
+          providerMessageId: echo.id,
+          senderWaId: echo.from,
+          recipientWaId: echo.to,
+          text: echo.text,
+          providerSentAt: echo.providerSentAt,
+          now: this.clock.now()
+        });
+      }
+
+      for (const status of change.statuses) {
+        const normalizedStatus = normalizeWhatsAppCloudStatus(status.status);
+        const eventKey = whatsappCloudStatusEventKey({
+          phoneNumberId: change.phoneNumberId,
+          messageId: status.id,
+          status: status.status,
+          timestamp: new Date(status.providerSentAt).getTime().toString()
+        });
+        const event = await recordWhatsAppCloudWebhookEvent({
+          store: this.store,
+          eventKey,
+          field: change.field,
+          externalAccountId: change.phoneNumberId,
+          externalOwnerUserId: change.wabaId,
+          normalizedSummary: {
+            messageId: status.id,
+            status: status.status,
+            recipientId: status.recipientId
+          },
+          receivedAt
+        });
+        if (event.kind === "duplicate" || !normalizedStatus) continue;
+        await recordWhatsAppCloudStatus({
+          store: this.store,
+          phoneNumberId: change.phoneNumberId,
+          providerMessageId: status.id,
+          status: normalizedStatus,
+          providerStatusAt: status.providerSentAt,
+          failureCode: normalizedStatus === "failed" ? "whatsapp_cloud_delivery_failed" : null,
+          now: this.clock.now()
+        });
+      }
+    }
+  }
+
   getInstagramGraphDataDeletionStatus(confirmationCode: string): {
     readonly status: "completed";
     readonly confirmation_code: string;
@@ -374,6 +734,20 @@ export class MessagingService {
       );
     }
     return instagramGraphConfig;
+  }
+
+  private requireWhatsAppCloudConfig(): WhatsAppCloudRuntimeConfig {
+    const whatsappCloudConfig =
+      this.configService.get<WhatsAppCloudRuntimeConfig | null>("astrologerApi.whatsappCloud") ??
+      null;
+    if (!whatsappCloudConfig) {
+      throw messagingHttpError(
+        503,
+        "whatsapp_cloud_connection_unavailable",
+        "WhatsApp Cloud login is not configured"
+      );
+    }
+    return whatsappCloudConfig;
   }
 
   async startTelegramMtprotoConnection(
@@ -1094,6 +1468,18 @@ type InstagramGraphRuntimeConfig = {
   readonly scopes: readonly string[];
 };
 
+type WhatsAppCloudRuntimeConfig = {
+  readonly enabled: true;
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly configurationId: string;
+  readonly graphApiBaseUrl: string;
+  readonly webhookVerifyToken: string;
+  readonly tokenEncryptionKey: Buffer;
+  readonly callbackStateTtlSeconds: number;
+  readonly historySyncEnabled: boolean;
+};
+
 const InstagramGraphCallbackQuerySchema = z.object({
   code: z.string().trim().min(1).optional(),
   state: z.string().trim().min(1).optional(),
@@ -1178,6 +1564,68 @@ const InstagramGraphCallbackStateSchema = z.object({
   issuedAtSeconds: z.number().int().positive()
 });
 
+type WhatsAppCloudCallbackState = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly issuedAtSeconds: number;
+};
+
+const whatsAppCloudCallbackStateVersion = "v1";
+
+const WhatsAppCloudCallbackStateSchema = z.object({
+  astrologerUserId: z.string().uuid(),
+  connectionId: z.string().uuid(),
+  issuedAtSeconds: z.number().int().positive()
+});
+
+function createWhatsAppCloudCallbackState(input: {
+  readonly config: WhatsAppCloudRuntimeConfig;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly issuedAtSeconds: number;
+}): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      astrologerUserId: input.astrologerUserId,
+      connectionId: input.connectionId,
+      issuedAtSeconds: input.issuedAtSeconds
+    }),
+    "utf8"
+  ).toString("base64url");
+  return [
+    whatsAppCloudCallbackStateVersion,
+    payload,
+    signWhatsAppCloudCallbackState(input.config, payload)
+  ].join(".");
+}
+
+function verifyWhatsAppCloudCallbackState(input: {
+  readonly config: WhatsAppCloudRuntimeConfig;
+  readonly state: string;
+  readonly nowSeconds: number;
+}): WhatsAppCloudCallbackState | null {
+  const [version, payload, signature] = input.state.split(".");
+  if (version !== whatsAppCloudCallbackStateVersion || !payload || !signature) return null;
+  const expectedSignature = signWhatsAppCloudCallbackState(input.config, payload);
+  if (!constantTimeEqual(signature, expectedSignature)) return null;
+  const payloadJson = parseInstagramGraphStatePayload(payload);
+  if (!payloadJson) return null;
+  const parsed = WhatsAppCloudCallbackStateSchema.safeParse(payloadJson);
+  if (!parsed.success) return null;
+  if (input.nowSeconds - parsed.data.issuedAtSeconds > input.config.callbackStateTtlSeconds) {
+    return null;
+  }
+  if (parsed.data.issuedAtSeconds > input.nowSeconds + 60) return null;
+  return parsed.data;
+}
+
+function signWhatsAppCloudCallbackState(
+  config: WhatsAppCloudRuntimeConfig,
+  payload: string
+): string {
+  return createHmac("sha256", config.appSecret).update(payload).digest("base64url");
+}
+
 function signInstagramGraphCallbackState(
   config: InstagramGraphRuntimeConfig,
   payload: string
@@ -1254,6 +1702,21 @@ function instagramGraphDeletionStatusUrl(input: {
   return url.toString();
 }
 
+function graphApiVersionFromBaseUrl(value: string): string {
+  const pathname = new URL(value).pathname;
+  const version = pathname.split("/").filter(Boolean).at(-1);
+  return version?.startsWith("v") ? version : "v26.0";
+}
+
+function normalizeWhatsAppCloudStatus(
+  value: string
+): "sent" | "delivered" | "read" | "failed" | null {
+  if (value === "sent" || value === "delivered" || value === "read" || value === "failed") {
+    return value;
+  }
+  return null;
+}
+
 function normalizeTelegramPhoneNumber(value: string): string {
   const trimmed = value.trim();
   const digits = trimmed.replace(/\D/g, "");
@@ -1284,6 +1747,14 @@ function instagramGraphSecretAad(
   purpose: "access_token"
 ): string {
   return `messaging:instagram_graph:${astrologerUserId}:${connectionId}:${purpose}`;
+}
+
+function whatsappCloudSecretAad(
+  astrologerUserId: string,
+  connectionId: string,
+  purpose: "access_token"
+): string {
+  return `messaging:whatsapp_cloud:${astrologerUserId}:${connectionId}:${purpose}`;
 }
 
 function encryptedMessagingSecret(

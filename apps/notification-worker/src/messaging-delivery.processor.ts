@@ -12,6 +12,10 @@ import type {
 } from "./telegram-business-provider";
 import type { TelegramMtprotoMessagingProviderResult } from "./telegram-mtproto-provider";
 import type { TelegramMtprotoDeliveryProvider } from "./telegram-mtproto-session-delivery-provider";
+import type {
+  WhatsAppCloudDeliveryProvider,
+  WhatsAppCloudDeliveryProviderResult
+} from "./whatsapp-cloud-delivery-provider";
 
 export type MessagingDeliveryProviders =
   | MessagingDeliveryProvider
@@ -19,12 +23,14 @@ export type MessagingDeliveryProviders =
       readonly telegramBusiness: MessagingDeliveryProvider;
       readonly telegramMtproto?: TelegramMtprotoDeliveryProvider;
       readonly instagramGraph?: InstagramGraphDeliveryProvider;
+      readonly whatsappCloud?: WhatsAppCloudDeliveryProvider;
     };
 
 type MessagingDeliveryResult =
   | MessagingDeliveryProviderResult
   | TelegramMtprotoMessagingProviderResult
-  | InstagramGraphDeliveryProviderResult;
+  | InstagramGraphDeliveryProviderResult
+  | WhatsAppCloudDeliveryProviderResult;
 
 export async function processMessagingDeliveryJob(input: {
   readonly job: Job<MessagingDeliveryJobData>;
@@ -218,6 +224,27 @@ function sendWithProvider(
     });
   }
 
+  if (workItem.mode === "whatsapp_cloud") {
+    if (!providers.whatsappCloud) {
+      return Promise.resolve({
+        provider: "whatsapp",
+        status: "failed",
+        retryable: true,
+        errorCode: "WHATSAPP_CLOUD_PROVIDER_NOT_CONFIGURED",
+        errorMessage: "WhatsApp Cloud delivery is not configured in this worker"
+      });
+    }
+    return providers.whatsappCloud.sendMessage({
+      messageId: workItem.messageId,
+      channelConnectionId: workItem.channelConnectionId,
+      astrologerUserId: workItem.astrologerUserId,
+      phoneNumberId: workItem.phoneNumberId,
+      recipientWaId: workItem.providerChatId,
+      text: workItem.text,
+      encryptedAccessToken: workItem.encryptedAccessToken
+    });
+  }
+
   if (!providers.telegramMtproto) {
     return Promise.resolve({
       provider: "telegram",
@@ -246,14 +273,14 @@ function isFinalAttempt(job: Job<MessagingDeliveryJobData>): boolean {
   return job.attemptsMade + 1 >= attempts;
 }
 
-function defaultDeliveryErrorCode(provider: "telegram" | "instagram"): string {
-  return provider === "instagram"
-    ? "INSTAGRAM_GRAPH_DELIVERY_FAILED"
-    : "TELEGRAM_BUSINESS_DELIVERY_FAILED";
+function defaultDeliveryErrorCode(provider: "telegram" | "instagram" | "whatsapp"): string {
+  if (provider === "instagram") return "INSTAGRAM_GRAPH_DELIVERY_FAILED";
+  if (provider === "whatsapp") return "WHATSAPP_CLOUD_DELIVERY_FAILED";
+  return "TELEGRAM_BUSINESS_DELIVERY_FAILED";
 }
 
-function defaultDeliveryErrorMessage(provider: "telegram" | "instagram"): string {
-  return provider === "instagram"
-    ? "Instagram Graph delivery failed"
-    : "Telegram Business delivery failed";
+function defaultDeliveryErrorMessage(provider: "telegram" | "instagram" | "whatsapp"): string {
+  if (provider === "instagram") return "Instagram Graph delivery failed";
+  if (provider === "whatsapp") return "WhatsApp Cloud delivery failed";
+  return "Telegram Business delivery failed";
 }

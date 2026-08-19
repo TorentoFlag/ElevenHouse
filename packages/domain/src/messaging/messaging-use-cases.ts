@@ -18,7 +18,10 @@ import type {
   TelegramMtprotoLoginResultStoreResult,
   RecordTelegramBusinessConnectionStoreResult,
   CompleteInstagramGraphConnectionStoreResult,
+  CompleteWhatsAppCloudConnectionStoreResult,
   RevokeInstagramGraphConnectionStoreResult,
+  RecordWhatsAppCloudAccountUpdateStoreResult,
+  RecordWhatsAppCloudWebhookEventStoreResult,
   TelegramBusinessConnectionRights
 } from "./messaging-store";
 import type {
@@ -30,7 +33,8 @@ import type {
   MessagingRealtimeEventType,
   MessagingThread,
   NormalizedSendMessageInput,
-  TelegramBusinessMediaAttachment
+  TelegramBusinessMediaAttachment,
+  WhatsAppCloudSyncStatus
 } from "./messaging-types";
 
 export function normalizeSendMessageInput(input: {
@@ -276,6 +280,64 @@ export async function completeInstagramGraphConnection(input: {
   });
 }
 
+export async function startWhatsAppCloudConnection(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly idGenerator?: () => string;
+  readonly now: Date;
+}): Promise<{ readonly connectionId: string }> {
+  return input.store.startWhatsAppCloudConnection({
+    connectionId: identifier(
+      input.idGenerator?.() ?? randomUUID(),
+      "Channel connection id is required"
+    ),
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    now: input.now.toISOString()
+  });
+}
+
+export async function completeWhatsAppCloudConnection(input: {
+  readonly store: MessagingStore;
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly wabaId: string;
+  readonly businessId: string | null;
+  readonly phoneNumberId: string;
+  readonly displayPhoneNumber: string | null;
+  readonly verifiedName: string | null;
+  readonly platformType: string | null;
+  readonly isOnBizApp: boolean | null;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
+  readonly tokenScopes: readonly string[];
+  readonly tokenIssuedAt: string | null;
+  readonly tokenExpiresAt: string | null;
+  readonly historySyncStatus: WhatsAppCloudSyncStatus;
+  readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  readonly now: Date;
+}): Promise<CompleteWhatsAppCloudConnectionStoreResult> {
+  return input.store.completeWhatsAppCloudConnection({
+    astrologerUserId: required(input.astrologerUserId, "Astrologer user id is required"),
+    connectionId: identifier(input.connectionId, "Channel connection id is required"),
+    wabaId: bounded(input.wabaId, 1, 200, "WhatsApp WABA id is required"),
+    businessId: optionalSnapshot(input.businessId),
+    phoneNumberId: bounded(input.phoneNumberId, 1, 200, "WhatsApp phone number id is required"),
+    displayPhoneNumber: optionalSnapshot(input.displayPhoneNumber),
+    verifiedName: optionalSnapshot(input.verifiedName),
+    platformType: optionalSnapshot(input.platformType),
+    isOnBizApp: input.isOnBizApp,
+    encryptedAccessToken: encryptedSecret(input.encryptedAccessToken),
+    tokenScopes: input.tokenScopes.map((scope) =>
+      bounded(scope, 1, 200, "WhatsApp token scope is invalid")
+    ),
+    connectedVia: "embedded_signup_coexistence",
+    tokenIssuedAt: input.tokenIssuedAt ? normalizeIsoInstant(input.tokenIssuedAt) : null,
+    tokenExpiresAt: input.tokenExpiresAt ? normalizeIsoInstant(input.tokenExpiresAt) : null,
+    historySyncStatus: whatsappCloudSyncStatus(input.historySyncStatus),
+    contactSyncStatus: whatsappCloudSyncStatus(input.contactSyncStatus),
+    now: input.now.toISOString()
+  });
+}
+
 export async function revokeInstagramGraphConnectionByMetaUserId(input: {
   readonly store: MessagingStore;
   readonly instagramAppScopedUserId: string;
@@ -460,6 +522,107 @@ export async function recordInstagramGraphMessage(input: {
   });
 }
 
+export async function recordWhatsAppCloudMessage(input: {
+  readonly store: MessagingStore;
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly senderWaId: string;
+  readonly recipientWaId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly now: Date;
+}): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
+  return input.store.recordWhatsAppCloudMessage({
+    phoneNumberId: bounded(input.phoneNumberId, 1, 200, "WhatsApp phone number id is required"),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "WhatsApp message id is required"),
+    senderWaId: bounded(input.senderWaId, 1, 200, "WhatsApp sender id is required"),
+    recipientWaId: bounded(input.recipientWaId, 1, 200, "WhatsApp recipient id is required"),
+    text: bounded(input.text, 1, 4000, "Message text is invalid"),
+    providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordWhatsAppCloudEcho(input: {
+  readonly store: MessagingStore;
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly senderWaId: string;
+  readonly recipientWaId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly now: Date;
+}): Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }> {
+  return input.store.recordWhatsAppCloudEcho({
+    phoneNumberId: bounded(input.phoneNumberId, 1, 200, "WhatsApp phone number id is required"),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "WhatsApp message id is required"),
+    senderWaId: bounded(input.senderWaId, 1, 200, "WhatsApp sender id is required"),
+    recipientWaId: bounded(input.recipientWaId, 1, 200, "WhatsApp recipient id is required"),
+    text: bounded(input.text, 1, 4000, "WhatsApp message text is required"),
+    providerSentAt: normalizeIsoInstant(input.providerSentAt),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordWhatsAppCloudStatus(input: {
+  readonly store: MessagingStore;
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly status: "sent" | "delivered" | "read" | "failed";
+  readonly providerStatusAt: string;
+  readonly failureCode: string | null;
+  readonly now: Date;
+}): Promise<{ readonly kind: "recorded" | "unmatched"; readonly updatedCount: number }> {
+  return input.store.recordWhatsAppCloudStatus({
+    phoneNumberId: bounded(input.phoneNumberId, 1, 200, "WhatsApp phone number id is required"),
+    providerMessageId: bounded(input.providerMessageId, 1, 200, "WhatsApp message id is required"),
+    status: whatsappCloudDeliveryStatus(input.status),
+    providerStatusAt: normalizeIsoInstant(input.providerStatusAt),
+    failureCode: optionalSnapshot(input.failureCode),
+    now: input.now.toISOString()
+  });
+}
+
+export async function recordWhatsAppCloudWebhookEvent(input: {
+  readonly store: MessagingStore;
+  readonly eventKey: string;
+  readonly field: string;
+  readonly externalAccountId: string | null;
+  readonly externalOwnerUserId: string | null;
+  readonly normalizedSummary: Readonly<Record<string, unknown>>;
+  readonly receivedAt: string;
+}): Promise<RecordWhatsAppCloudWebhookEventStoreResult> {
+  return input.store.recordWhatsAppCloudWebhookEvent({
+    eventKey: bounded(input.eventKey, 1, 500, "WhatsApp webhook event key is required"),
+    field: bounded(input.field, 1, 200, "WhatsApp webhook field is required"),
+    externalAccountId: optionalSnapshot(input.externalAccountId),
+    externalOwnerUserId: optionalSnapshot(input.externalOwnerUserId),
+    normalizedSummary: input.normalizedSummary,
+    receivedAt: normalizeIsoInstant(input.receivedAt)
+  });
+}
+
+export async function recordWhatsAppCloudAccountUpdate(input: {
+  readonly store: MessagingStore;
+  readonly wabaId: string;
+  readonly phoneNumberId: string | null;
+  readonly event: string;
+  readonly reason: string | null;
+  readonly eventAt: string;
+  readonly now: Date;
+}): Promise<RecordWhatsAppCloudAccountUpdateStoreResult> {
+  return input.store.recordWhatsAppCloudAccountUpdate({
+    wabaId: bounded(input.wabaId, 1, 200, "WhatsApp WABA id is required"),
+    phoneNumberId: input.phoneNumberId
+      ? bounded(input.phoneNumberId, 1, 200, "WhatsApp phone number id is required")
+      : null,
+    event: bounded(input.event, 1, 200, "WhatsApp account update event is required"),
+    reason: optionalSnapshot(input.reason),
+    eventAt: normalizeIsoInstant(input.eventAt),
+    now: input.now.toISOString()
+  });
+}
+
 export async function recordTelegramMtprotoMessage(input: {
   readonly store: MessagingStore;
   readonly channelConnectionId: string;
@@ -634,6 +797,107 @@ export function normalizeRealtimeEvent(input: {
     eventId: bounded(input.eventId, 1, 200, "Realtime event id is required"),
     ...normalizeRealtimeEventDraft(input)
   };
+}
+
+export function whatsappCloudInboundMessageEventKey(input: {
+  readonly phoneNumberId: string;
+  readonly messageId: string;
+}): string {
+  return `whatsapp:message:${whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required")}:${whatsAppKeyPart(input.messageId, "WhatsApp message id is required")}`;
+}
+
+export function whatsappCloudStatusEventKey(input: {
+  readonly phoneNumberId: string;
+  readonly messageId: string;
+  readonly status: string;
+  readonly timestamp: string;
+}): string {
+  return [
+    "whatsapp:status",
+    whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required"),
+    whatsAppKeyPart(input.messageId, "WhatsApp message id is required"),
+    whatsAppKeyPart(input.status, "WhatsApp message status is required"),
+    whatsAppKeyPart(input.timestamp, "WhatsApp status timestamp is required")
+  ].join(":");
+}
+
+export function whatsappCloudEchoEventKey(input: {
+  readonly phoneNumberId: string;
+  readonly messageId: string;
+}): string {
+  return [
+    "whatsapp:echo",
+    whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required"),
+    whatsAppKeyPart(input.messageId, "WhatsApp message id is required"),
+    "smb_message_echoes"
+  ].join(":");
+}
+
+export function whatsappCloudHistoryChunkEventKey(input: {
+  readonly wabaId: string;
+  readonly phoneNumberId: string | null;
+  readonly phase: string;
+  readonly chunkOrder: string;
+}): string {
+  return [
+    "whatsapp:history-chunk",
+    whatsAppKeyPart(input.wabaId, "WhatsApp WABA id is required"),
+    input.phoneNumberId
+      ? whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required")
+      : "unknown",
+    whatsAppKeyPart(input.phase, "WhatsApp history phase is required"),
+    whatsAppKeyPart(input.chunkOrder, "WhatsApp history chunk order is required")
+  ].join(":");
+}
+
+export function whatsappCloudHistoryMessageEventKey(input: {
+  readonly phoneNumberId: string;
+  readonly threadOrWaId: string;
+  readonly messageId: string;
+  readonly directionOrSource: string;
+}): string {
+  return [
+    "whatsapp:history-message",
+    whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required"),
+    whatsAppKeyPart(input.threadOrWaId, "WhatsApp history thread id is required"),
+    whatsAppKeyPart(input.messageId, "WhatsApp message id is required"),
+    whatsAppKeyPart(input.directionOrSource, "WhatsApp history message source is required")
+  ].join(":");
+}
+
+export function whatsappCloudContactSyncEventKey(input: {
+  readonly phoneNumberId: string;
+  readonly contactWaIdOrPhone: string;
+  readonly action: string;
+  readonly timestamp: string;
+}): string {
+  return [
+    "whatsapp:contact-sync",
+    whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required"),
+    whatsAppKeyPart(input.contactWaIdOrPhone, "WhatsApp contact id is required"),
+    whatsAppKeyPart(input.action, "WhatsApp contact sync action is required"),
+    whatsAppKeyPart(input.timestamp, "WhatsApp contact sync timestamp is required")
+  ].join(":");
+}
+
+export function whatsappCloudAccountUpdateEventKey(input: {
+  readonly wabaId: string;
+  readonly phoneNumberId: string | null;
+  readonly event: string;
+  readonly timestampOrReasonHash: string;
+}): string {
+  return [
+    "whatsapp:account-update",
+    whatsAppKeyPart(input.wabaId, "WhatsApp WABA id is required"),
+    input.phoneNumberId
+      ? whatsAppKeyPart(input.phoneNumberId, "WhatsApp phone number id is required")
+      : "none",
+    whatsAppKeyPart(input.event, "WhatsApp account update event is required"),
+    whatsAppKeyPart(
+      input.timestampOrReasonHash,
+      "WhatsApp account update timestamp or reason hash is required"
+    )
+  ].join(":");
 }
 
 function normalizeRealtimeEventDraft(input: {
@@ -859,10 +1123,42 @@ function optionalSnapshot(value: string | null | undefined): string | null {
   return normalized.length > 200 ? normalized.slice(0, 200) : normalized;
 }
 
+function whatsappCloudSyncStatus(value: WhatsAppCloudSyncStatus): WhatsAppCloudSyncStatus {
+  if (
+    [
+      "not_requested",
+      "requested",
+      "syncing",
+      "completed",
+      "declined",
+      "failed",
+      "partial"
+    ].includes(value)
+  ) {
+    return value;
+  }
+  throw new MessagingValidationError("WhatsApp sync status is invalid");
+}
+
+function whatsappCloudDeliveryStatus(
+  value: "sent" | "delivered" | "read" | "failed"
+): "sent" | "delivered" | "read" | "failed" {
+  if (["sent", "delivered", "read", "failed"].includes(value)) return value;
+  throw new MessagingValidationError("WhatsApp message status is invalid");
+}
+
 function bounded(value: string, minimum: number, maximum: number, message: string): string {
   const normalized = required(value, message);
   if (normalized.length < minimum || normalized.length > maximum) {
     throw new MessagingValidationError(message);
+  }
+  return normalized;
+}
+
+function whatsAppKeyPart(value: string, message: string): string {
+  const normalized = bounded(value, 1, 200, message);
+  if (normalized.includes(":")) {
+    throw new MessagingValidationError("WhatsApp webhook event key part must not contain colon");
   }
   return normalized;
 }

@@ -4,13 +4,14 @@ const UuidSchema = z.string().uuid();
 const TimestampSchema = z.string().datetime({ offset: true });
 const NullableSnapshotSchema = z.string().trim().min(1).max(200).nullable();
 
-export const MessagingProviderSchema = z.enum(["telegram", "instagram"]);
+export const MessagingProviderSchema = z.enum(["telegram", "instagram", "whatsapp"]);
 export type MessagingProvider = z.infer<typeof MessagingProviderSchema>;
 
 export const MessagingChannelModeSchema = z.enum([
   "telegram_business_bot",
   "telegram_mtproto_account",
-  "instagram_graph"
+  "instagram_graph",
+  "whatsapp_cloud"
 ]);
 export type MessagingChannelMode = z.infer<typeof MessagingChannelModeSchema>;
 
@@ -77,6 +78,40 @@ export const StartInstagramGraphConnectionResponseSchema = z.strictObject({
 });
 export type StartInstagramGraphConnectionResponse = z.infer<
   typeof StartInstagramGraphConnectionResponseSchema
+>;
+
+export const StartWhatsAppCloudConnectionResponseSchema = z.strictObject({
+  channelConnection: MessagingChannelConnectionSchema,
+  appId: z.string().trim().min(1).max(200),
+  configurationId: z.string().trim().min(1).max(200),
+  graphApiVersion: z.string().trim().min(1).max(32),
+  state: z.string().trim().min(1).max(2000)
+});
+export type StartWhatsAppCloudConnectionResponse = z.infer<
+  typeof StartWhatsAppCloudConnectionResponseSchema
+>;
+
+export const CompleteWhatsAppCloudConnectionBodySchema = z.strictObject({
+  state: z.string().trim().min(1).max(2000),
+  code: z.string().trim().min(1).max(2000),
+  session: z.strictObject({
+    event: z.string().trim().min(1).max(200),
+    wabaId: z.string().trim().min(1).max(200).optional(),
+    phoneNumberId: z.string().trim().min(1).max(200).optional(),
+    businessId: z.string().trim().min(1).max(200).optional()
+  })
+});
+export type CompleteWhatsAppCloudConnectionBody = z.infer<
+  typeof CompleteWhatsAppCloudConnectionBodySchema
+>;
+
+export const CompleteWhatsAppCloudConnectionResponseSchema = z.strictObject({
+  status: z.enum(["connected", "ignored"]),
+  channelConnection: MessagingChannelConnectionSchema.nullable(),
+  code: z.string().trim().min(1).max(100).nullable()
+});
+export type CompleteWhatsAppCloudConnectionResponse = z.infer<
+  typeof CompleteWhatsAppCloudConnectionResponseSchema
 >;
 
 export const StartTelegramMtprotoConnectionRequestSchema = z.strictObject({

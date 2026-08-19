@@ -21,12 +21,17 @@ import {
   MESSAGING_STORE,
   INSTAGRAM_GRAPH_AUTH_PROVIDER,
   TELEGRAM_BUSINESS_CONNECTION_LOOKUP,
-  TELEGRAM_MTPROTO_AUTH_PROVIDER
+  TELEGRAM_MTPROTO_AUTH_PROVIDER,
+  WHATSAPP_CLOUD_AUTH_PROVIDER
 } from "./messaging.tokens";
 import {
   HttpInstagramGraphAuthProvider,
   type InstagramGraphAuthProviderOptions
 } from "./instagram-graph-auth-provider";
+import {
+  HttpWhatsAppCloudAuthProvider,
+  type WhatsAppCloudAuthProviderOptions
+} from "./whatsapp-cloud-auth-provider";
 import {
   TelegramBusinessBotApiConnectionLookup,
   type TelegramBusinessConnectionLookupOptions
@@ -86,6 +91,16 @@ import {
           "astrologerApi.instagramGraph"
         );
         return options ? new HttpInstagramGraphAuthProvider(options) : null;
+      },
+      inject: [ConfigService]
+    },
+    {
+      provide: WHATSAPP_CLOUD_AUTH_PROVIDER,
+      useFactory: (configService: ConfigService) => {
+        const options = configService.get<WhatsAppCloudAuthProviderOptions | null>(
+          "astrologerApi.whatsappCloud"
+        );
+        return options ? new HttpWhatsAppCloudAuthProvider(options) : null;
       },
       inject: [ConfigService]
     }

@@ -3,6 +3,7 @@ import { z } from "@elevenhouse/validation";
 
 const officialGeoapifyBaseUrl = "https://api.geoapify.com";
 const officialOpenAiApiBaseUrl = "https://api.openai.com/v1";
+const officialWhatsAppCloudGraphApiBaseUrl = "https://graph.facebook.com/v26.0";
 const productionChartEngineBaseUrl = "http://chart-engine:8012";
 
 const localAstrologerSessionCookieName = "elevenhouse_astrologer_session";
@@ -115,6 +116,30 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .string()
     .trim()
     .default("instagram_business_basic,instagram_business_manage_messages"),
+  ASTROLOGER_API_WHATSAPP_CLOUD_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  ASTROLOGER_API_WHATSAPP_CLOUD_APP_ID: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_WHATSAPP_CLOUD_APP_SECRET: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_WHATSAPP_CLOUD_CONFIGURATION_ID: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_WHATSAPP_CLOUD_GRAPH_API_BASE_URL: z
+    .string()
+    .trim()
+    .url()
+    .default(officialWhatsAppCloudGraphApiBaseUrl),
+  ASTROLOGER_API_WHATSAPP_CLOUD_WEBHOOK_VERIFY_TOKEN: optionalTrimmedNonEmptyStringSchema,
+  ASTROLOGER_API_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY: z.string().trim().min(1).optional(),
+  ASTROLOGER_API_WHATSAPP_CLOUD_CALLBACK_STATE_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(900)
+    .default(30),
+  ASTROLOGER_API_WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL: z.string().trim().url().default("http://localhost:5174"),
   ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED: z
     .enum(["true", "false"])
@@ -330,6 +355,17 @@ export type AstrologerApiRuntimeConfig = {
     readonly astrologerWebBaseUrl: string;
     readonly scopes: readonly string[];
   } | null;
+  readonly whatsappCloud: {
+    readonly enabled: true;
+    readonly appId: string;
+    readonly appSecret: string;
+    readonly configurationId: string;
+    readonly graphApiBaseUrl: string;
+    readonly webhookVerifyToken: string;
+    readonly tokenEncryptionKey: Buffer;
+    readonly callbackStateTtlSeconds: number;
+    readonly historySyncEnabled: boolean;
+  } | null;
   readonly birthPlaceSearch: {
     readonly enabled: boolean;
     readonly provider: "geoapify";
@@ -512,6 +548,17 @@ export function createAstrologerApiRuntimeConfig(
     astrologerWebBaseUrl: config.ASTROLOGER_API_ASTROLOGER_WEB_BASE_URL,
     scopes: config.ASTROLOGER_API_INSTAGRAM_GRAPH_SCOPES
   });
+  const whatsappCloud = toWhatsAppCloudConfig({
+    enabled: config.ASTROLOGER_API_WHATSAPP_CLOUD_ENABLED,
+    appId: config.ASTROLOGER_API_WHATSAPP_CLOUD_APP_ID,
+    appSecret: config.ASTROLOGER_API_WHATSAPP_CLOUD_APP_SECRET,
+    configurationId: config.ASTROLOGER_API_WHATSAPP_CLOUD_CONFIGURATION_ID,
+    graphApiBaseUrl: config.ASTROLOGER_API_WHATSAPP_CLOUD_GRAPH_API_BASE_URL,
+    webhookVerifyToken: config.ASTROLOGER_API_WHATSAPP_CLOUD_WEBHOOK_VERIFY_TOKEN,
+    tokenEncryptionKey: config.ASTROLOGER_API_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY,
+    callbackStateTtlSeconds: config.ASTROLOGER_API_WHATSAPP_CLOUD_CALLBACK_STATE_TTL_SECONDS,
+    historySyncEnabled: config.ASTROLOGER_API_WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED
+  });
 
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_PASSWORDLESS_CODE_SECRET) {
     throw new Error("ASTROLOGER_API_PASSWORDLESS_CODE_SECRET is required in production");
@@ -621,6 +668,7 @@ export function createAstrologerApiRuntimeConfig(
     telegramBusinessBotUsername: config.ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME ?? null,
     telegramMtproto,
     instagramGraph,
+    whatsappCloud,
     birthPlaceSearch: {
       enabled: config.ASTROLOGER_API_BIRTH_PLACE_SEARCH_ENABLED,
       provider: "geoapify",
@@ -892,5 +940,40 @@ function toInstagramGraphConfig(input: {
     graphApiBaseUrl: stripTrailingSlashes(input.graphApiBaseUrl),
     astrologerWebBaseUrl: stripTrailingSlashes(input.astrologerWebBaseUrl),
     scopes
+  };
+}
+
+function toWhatsAppCloudConfig(input: {
+  readonly enabled: boolean;
+  readonly appId: string | undefined;
+  readonly appSecret: string | undefined;
+  readonly configurationId: string | undefined;
+  readonly graphApiBaseUrl: string;
+  readonly webhookVerifyToken: string | undefined;
+  readonly tokenEncryptionKey: string | undefined;
+  readonly callbackStateTtlSeconds: number;
+  readonly historySyncEnabled: boolean;
+}): AstrologerApiRuntimeConfig["whatsappCloud"] {
+  if (!input.enabled) return null;
+  if (
+    !input.appId ||
+    !input.appSecret ||
+    !input.configurationId ||
+    !input.webhookVerifyToken ||
+    !input.tokenEncryptionKey
+  ) {
+    throw new Error("WhatsApp Cloud settings are required when WhatsApp Cloud is enabled");
+  }
+
+  return {
+    enabled: true,
+    appId: input.appId,
+    appSecret: input.appSecret,
+    configurationId: input.configurationId,
+    graphApiBaseUrl: stripTrailingSlashes(input.graphApiBaseUrl),
+    webhookVerifyToken: input.webhookVerifyToken,
+    tokenEncryptionKey: parseBase64Aes256GcmKey(input.tokenEncryptionKey),
+    callbackStateTtlSeconds: input.callbackStateTtlSeconds,
+    historySyncEnabled: input.historySyncEnabled
   };
 }

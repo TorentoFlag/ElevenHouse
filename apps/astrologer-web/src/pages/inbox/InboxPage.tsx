@@ -14,6 +14,7 @@ import {
   type InboxThreadFilter
 } from "../../features/messaging/model/inboxThreadFilters";
 import {
+  connectWhatsAppCloudConnectionMutationOptions,
   createMessagingThreadClientMutationOptions,
   getMessagingThreadQueryOptions,
   handleMessagingRealtimeEvent,
@@ -74,6 +75,9 @@ export function InboxPage() {
   );
   const startInstagramGraphMutation = useMutation(
     startInstagramGraphConnectionMutationOptions(queryClient)
+  );
+  const connectWhatsAppCloudMutation = useMutation(
+    connectWhatsAppCloudConnectionMutationOptions(queryClient)
   );
   const startTelegramMtprotoMutation = useMutation(
     startTelegramMtprotoConnectionMutationOptions(queryClient)
@@ -193,6 +197,10 @@ export function InboxPage() {
     startInstagramGraphMutation.error instanceof Error
       ? startInstagramGraphMutation.error.message
       : null;
+  const whatsappCloudError =
+    connectWhatsAppCloudMutation.error instanceof Error
+      ? connectWhatsAppCloudMutation.error.message
+      : null;
   const clientActionError =
     linkClientMutation.error instanceof Error
       ? linkClientMutation.error.message
@@ -222,6 +230,8 @@ export function InboxPage() {
       telegramBusinessStartError={telegramBusinessStartError}
       isStartingInstagramGraphConnection={startInstagramGraphMutation.isPending}
       instagramGraphStartError={instagramGraphStartError}
+      isStartingWhatsAppCloudConnection={connectWhatsAppCloudMutation.isPending}
+      whatsappCloudError={whatsappCloudError}
       telegramMtprotoStep={telegramMtprotoWizard.step}
       telegramMtprotoPhoneNumber={telegramMtprotoPhoneNumber}
       telegramMtprotoCode={telegramMtprotoCode}
@@ -258,6 +268,16 @@ export function InboxPage() {
         startInstagramGraphMutation
           .mutateAsync()
           .then((result) => window.location.assign(result.authorizationUrl))
+          .catch(() => undefined);
+      }}
+      onStartWhatsAppCloudConnection={() => {
+        connectWhatsAppCloudMutation
+          .mutateAsync()
+          .then((result) => {
+            if (result.status === "connected") {
+              setIsTelegramBusinessGuideOpen(false);
+            }
+          })
           .catch(() => undefined);
       }}
       onTelegramMtprotoPhoneNumberChange={setTelegramMtprotoPhoneNumber}

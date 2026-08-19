@@ -21,6 +21,10 @@ import {
 } from "./instagram-graph-webhook";
 import { MessagingService } from "./messaging.service";
 import { parseTelegramBusinessWebhookUpdate } from "./telegram-business-webhook";
+import {
+  parseWhatsAppCloudWebhookChanges,
+  type ParsedWhatsAppCloudWebhookChange
+} from "./whatsapp-cloud-webhook";
 
 @Controller("messaging/webhooks")
 export class MessagingWebhooksController {
@@ -98,6 +102,62 @@ export class MessagingWebhooksController {
     return { ok: true };
   }
 
+  @Get("whatsapp/cloud")
+  @Header("content-type", "text/plain")
+  verifyWhatsAppCloudWebhook(
+    @Query("hub.mode") mode: string | undefined,
+    @Query("hub.verify_token") verifyToken: string | undefined,
+    @Query("hub.challenge") challenge: string | undefined
+  ): string {
+    const config = this.getWhatsAppCloudConfig();
+    if (
+      mode !== "subscribe" ||
+      !challenge ||
+      !verifyToken ||
+      !constantTimeEquals(verifyToken, config.webhookVerifyToken)
+    ) {
+      this.logger.warn(
+        `WhatsApp Cloud webhook verification rejected mode=${mode ?? "missing"} challenge=${
+          challenge ? "present" : "missing"
+        } token=${verifyToken ? "present" : "missing"}`
+      );
+      throw new UnauthorizedException("Valid WhatsApp webhook verification token is required");
+    }
+
+    this.logger.log("WhatsApp Cloud webhook verification accepted");
+    return challenge;
+  }
+
+  @Post("whatsapp/cloud")
+  @HttpCode(200)
+  async handleWhatsAppCloudWebhook(
+    @Body() body: unknown,
+    @Headers("x-hub-signature-256") signature: string | undefined,
+    @Req() request: { readonly rawBody?: Buffer }
+  ) {
+    const config = this.getWhatsAppCloudConfig();
+    this.logger.log(
+      `WhatsApp Cloud webhook received rawBodyBytes=${request.rawBody?.length ?? 0} hasSignature=${
+        signature ? "true" : "false"
+      }`
+    );
+    try {
+      assertMetaWebhookSignature({
+        providerName: "WhatsApp",
+        appSecret: config.appSecret,
+        rawBody: request.rawBody,
+        signature
+      });
+    } catch (error) {
+      this.logger.warn("WhatsApp Cloud webhook rejected: invalid signature");
+      throw error;
+    }
+    const changes = parseWhatsAppCloudWebhookChangesSafely(body, this.logger);
+    this.logger.log(`WhatsApp Cloud webhook accepted ${summarizeWhatsAppCloudChanges(changes)}`);
+    await this.service.handleWhatsAppCloudWebhookChanges(changes);
+    return { ok: true };
+  }
+
   private assertTelegramSecret(secretToken: string | undefined): void {
     const expected = this.configService.getOrThrow<string | null>(
       "astrologerApi.telegramBotWebhookSecret"
@@ -114,6 +174,17 @@ export class MessagingWebhooksController {
       ) ?? null;
     if (!config) {
       throw new UnauthorizedException("Valid Instagram webhook configuration is required");
+    }
+    return config;
+  }
+
+  private getWhatsAppCloudConfig(): NonNullable<AstrologerApiRuntimeConfig["whatsappCloud"]> {
+    const config =
+      this.configService.get<AstrologerApiRuntimeConfig["whatsappCloud"]>(
+        "astrologerApi.whatsappCloud"
+      ) ?? null;
+    if (!config) {
+      throw new UnauthorizedException("Valid WhatsApp webhook configuration is required");
     }
     return config;
   }
@@ -138,6 +209,16 @@ function parseInstagramGraphWebhookUpdatesSafely(body: unknown, logger: Logger) 
   }
 }
 
+function parseWhatsAppCloudWebhookChangesSafely(body: unknown, logger: Logger) {
+  try {
+    return parseWhatsAppCloudWebhookChanges(body);
+  } catch (error) {
+    if (error instanceof UnauthorizedException) throw error;
+    logger.warn(`WhatsApp Cloud webhook rejected: invalid payload ${summarizeWebhookBody(body)}`);
+    throw new BadRequestException("Invalid WhatsApp webhook payload");
+  }
+}
+
 function constantTimeEquals(left: string, right: string): boolean {
   const leftBytes = Buffer.from(left);
   const rightBytes = Buffer.from(right);
@@ -150,6 +231,17 @@ function summarizeInstagramGraphUpdates(
   const accountIds = uniquePreview(updates.map((update) => update.instagramAccountId));
   const messageIds = uniquePreview(updates.map((update) => update.providerMessageId));
   return `updateCount=${updates.length} instagramAccountIds=${accountIds} providerMessageIds=${messageIds}`;
+}
+
+function summarizeWhatsAppCloudChanges(
+  changes: readonly ParsedWhatsAppCloudWebhookChange[]
+): string {
+  const wabaIds = uniquePreview(changes.map((change) => change.wabaId));
+  const phoneNumberIds = uniquePreview(
+    changes.map((change) => change.phoneNumberId).filter((id): id is string => Boolean(id))
+  );
+  const fields = uniquePreview(changes.map((change) => change.field));
+  return `changeCount=${changes.length} fields=${fields} wabaIds=${wabaIds} phoneNumberIds=${phoneNumberIds}`;
 }
 
 function uniquePreview(values: readonly string[]): string {
@@ -208,5 +300,29 @@ function assertInstagramGraphSignature(input: {
     !timingSafeEqual(signatureBytes, expectedBytes)
   ) {
     throw new UnauthorizedException("Valid Instagram webhook signature is required");
+  }
+}
+
+function assertMetaWebhookSignature(input: {
+  readonly providerName: "WhatsApp";
+  readonly appSecret: string;
+  readonly rawBody: Buffer | undefined;
+  readonly signature: string | undefined;
+}): void {
+  if (!input.rawBody || !input.signature?.startsWith("sha256=")) {
+    throw new UnauthorizedException(`Valid ${input.providerName} webhook signature is required`);
+  }
+  const signatureHex = input.signature.slice("sha256=".length);
+  if (!/^[a-f0-9]+$/i.test(signatureHex)) {
+    throw new UnauthorizedException(`Valid ${input.providerName} webhook signature is required`);
+  }
+  const expectedHex = createHmac("sha256", input.appSecret).update(input.rawBody).digest("hex");
+  const signatureBytes = Buffer.from(signatureHex, "hex");
+  const expectedBytes = Buffer.from(expectedHex, "hex");
+  if (
+    signatureBytes.length !== expectedBytes.length ||
+    !timingSafeEqual(signatureBytes, expectedBytes)
+  ) {
+    throw new UnauthorizedException(`Valid ${input.providerName} webhook signature is required`);
   }
 }

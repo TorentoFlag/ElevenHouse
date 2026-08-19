@@ -170,6 +170,8 @@ This is the current route inventory. API ownership, authorization and contract r
 | POST | `/messaging/channel-connections/telegram/mtproto/code` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | POST | `/messaging/channel-connections/telegram/mtproto/password` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | POST | `/messaging/channel-connections/telegram/mtproto/start` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
+| POST | `/messaging/channel-connections/whatsapp/cloud/complete` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
+| POST | `/messaging/channel-connections/whatsapp/cloud/start` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | GET | `/messaging/messages/:messageId/media/source` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | GET | `/messaging/threads` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | GET | `/messaging/threads/:threadId` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
@@ -180,6 +182,8 @@ This is the current route inventory. API ownership, authorization and contract r
 | GET | `/messaging/webhooks/instagram/graph` | `apps/astrologer-api/src/modules/messaging/messaging-webhooks.controller.ts` |
 | POST | `/messaging/webhooks/instagram/graph` | `apps/astrologer-api/src/modules/messaging/messaging-webhooks.controller.ts` |
 | POST | `/messaging/webhooks/telegram/bot` | `apps/astrologer-api/src/modules/messaging/messaging-webhooks.controller.ts` |
+| GET | `/messaging/webhooks/whatsapp/cloud` | `apps/astrologer-api/src/modules/messaging/messaging-webhooks.controller.ts` |
+| POST | `/messaging/webhooks/whatsapp/cloud` | `apps/astrologer-api/src/modules/messaging/messaging-webhooks.controller.ts` |
 | POST | `/numerology/calculations` | `apps/astrologer-api/src/modules/numerology/numerology.controller.ts` |
 | POST | `/numerology/calculations/:calculationId/ai-draft` | `apps/astrologer-api/src/modules/numerology/numerology.controller.ts` |
 | POST | `/numerology/calculations/:calculationId/recalculate` | `apps/astrologer-api/src/modules/numerology/numerology.controller.ts` |

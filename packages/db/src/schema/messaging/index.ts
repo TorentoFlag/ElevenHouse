@@ -7,6 +7,8 @@ export * from "./messages.schema";
 export * from "./message-media-ingestions.schema";
 export * from "./message-delivery-attempts.schema";
 export * from "./instagram-graph-accounts.schema";
+export * from "./whatsapp-cloud-accounts.schema";
+export * from "./provider-webhook-events.schema";
 export * from "./telegram-mtproto-sessions.schema";
 export * from "./realtime-events.schema";
 export * from "./relations.schema";

@@ -44,8 +44,83 @@ require_geoapify_provider() {
   esac
 }
 
+require_non_placeholder() {
+  local key="$1"
+  local value
+  value="$(read_env_value "${key}")"
+  case "${value}" in
+    ""|replace-with-*|elevenhouse-example-*) fail "${key}_REQUIRED" ;;
+  esac
+}
+
+require_https_origin() {
+  local key="$1"
+  local value
+  value="$(read_env_value "${key}")"
+  case "${value}" in
+    https://*) ;;
+    *) fail "${key}_HTTPS_REQUIRED" ;;
+  esac
+}
+
+require_base64_32_byte_key() {
+  local key="$1"
+  local value
+  value="$(read_env_value "${key}")"
+  case "${value}" in
+    ""|replace-with-*|elevenhouse-example-*) fail "${key}_REQUIRED" ;;
+  esac
+  node -e "const value = process.argv[1]; const decoded = Buffer.from(value, 'base64'); if (decoded.length !== 32 || decoded.toString('base64') !== value) process.exit(1)" "${value}" \
+    || fail "${key}_MUST_BE_BASE64_32_BYTES"
+}
+
+require_positive_integer() {
+  local key="$1"
+  local value
+  value="$(read_env_value "${key}")"
+  case "${value}" in
+    ""|*[!0-9]*) fail "${key}_POSITIVE_INTEGER_REQUIRED" ;;
+  esac
+  test "${value}" -gt 0 || fail "${key}_POSITIVE_INTEGER_REQUIRED"
+}
+
+require_whatsapp_cloud_astrologer_api() {
+  local enabled
+  enabled="$(read_env_value ASTROLOGER_API_WHATSAPP_CLOUD_ENABLED)"
+  test "${enabled}" = "true" || return 0
+
+  require_non_placeholder ASTROLOGER_API_WHATSAPP_CLOUD_APP_ID
+  require_non_placeholder ASTROLOGER_API_WHATSAPP_CLOUD_APP_SECRET
+  require_non_placeholder ASTROLOGER_API_WHATSAPP_CLOUD_CONFIGURATION_ID
+  require_non_placeholder ASTROLOGER_API_WHATSAPP_CLOUD_WEBHOOK_VERIFY_TOKEN
+  require_https_origin ASTROLOGER_API_WHATSAPP_CLOUD_GRAPH_API_BASE_URL
+  require_base64_32_byte_key ASTROLOGER_API_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY
+}
+
+require_whatsapp_cloud_notification_worker() {
+  local enabled
+  enabled="$(read_env_value NOTIFICATION_WORKER_WHATSAPP_CLOUD_DELIVERY_ENABLED)"
+  test "${enabled}" = "true" || return 0
+
+  require_https_origin NOTIFICATION_WORKER_WHATSAPP_CLOUD_GRAPH_API_BASE_URL
+  require_base64_32_byte_key NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY
+}
+
+require_messaging_provider_webhook_processing_worker() {
+  local enabled
+  enabled="$(read_env_value NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ENABLED)"
+  test "${enabled}" = "true" || return 0
+
+  require_positive_integer NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_ATTEMPTS
+  require_positive_integer NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BACKOFF_MS
+  require_positive_integer NOTIFICATION_WORKER_MESSAGING_PROVIDER_WEBHOOK_PROCESSING_BATCH_SIZE
+}
+
 test -f "${env_file}" || fail "PRODUCTION_ENV_MISSING"
 require_geoapify_provider PUBLIC_API
 require_geoapify_provider ASTROLOGER_API
+require_whatsapp_cloud_astrologer_api
+require_whatsapp_cloud_notification_worker
+require_messaging_provider_webhook_processing_worker
 
 printf '%s\n' "production provider preflight passed"

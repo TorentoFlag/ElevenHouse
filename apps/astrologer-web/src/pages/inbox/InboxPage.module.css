@@ -85,7 +85,8 @@
 
 .channelBadge,
 .providerTelegram,
-.providerInstagram {
+.providerInstagram,
+.providerWhatsApp {
   display: inline-grid;
   width: 22px;
   height: 22px;
@@ -103,6 +104,10 @@
 
 .providerInstagram {
   background: #e1306c;
+}
+
+.providerWhatsApp {
+  background: #25d366;
 }
 
 .connectButton,
@@ -1090,7 +1095,8 @@
 
 .channelSetupBadgeTelegram,
 .channelSetupBadgeTelegramMuted,
-.channelSetupBadgeInstagram {
+.channelSetupBadgeInstagram,
+.channelSetupBadgeWhatsApp {
   display: grid;
   width: 36px;
   height: 36px;
@@ -1112,6 +1118,10 @@
 
 .channelSetupBadgeInstagram {
   background: #e1306c;
+}
+
+.channelSetupBadgeWhatsApp {
+  background: #25d366;
 }
 
 .channelSetupRowText,

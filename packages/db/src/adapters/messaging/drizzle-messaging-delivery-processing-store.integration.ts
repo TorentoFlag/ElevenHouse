@@ -9,6 +9,7 @@ import {
   messagingChannelConnections,
   messagingExternalIdentities,
   messagingInstagramGraphAccounts,
+  messagingWhatsappCloudAccounts,
   messagingMessages,
   messagingThreadIdentities,
   messagingThreads,
@@ -163,6 +164,147 @@ describe.sequential("Drizzle messaging delivery processing store", () => {
       astrologerUserId,
       instagramAccountId: `ig-account-${channelConnectionId}`,
       providerChatId: "ig-client-chat",
+      text
+    });
+  });
+
+  it("loads a WhatsApp Cloud delivery work item from a delivery-request outbox event", async () => {
+    const now = new Date("2026-08-18T16:05:00.000Z");
+    const astrologerUserId = randomUUID();
+    const threadId = randomUUID();
+    const channelConnectionId = randomUUID();
+    const externalIdentityId = randomUUID();
+    const messageId = randomUUID();
+    const outboxEventId = randomUUID();
+    const text = "whatsapp delivery regression smoke";
+
+    await runtime.database.transaction(async (transaction) => {
+      await transaction.insert(users).values({ id: astrologerUserId });
+      await transaction.insert(messagingChannelConnections).values({
+        id: channelConnectionId,
+        astrologerUserId,
+        provider: "whatsapp",
+        mode: "whatsapp_cloud",
+        status: "active",
+        externalAccountId: `wa-phone-${channelConnectionId}`,
+        externalOwnerUserId: `waba-${channelConnectionId}`,
+        displayNameSnapshot: "Astrolog",
+        usernameSnapshot: "+15551234567",
+        capabilities: { canRead: true, canSend: true, canReceive: true },
+        consentRecordId: null,
+        connectedAt: now,
+        lastSyncedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        createdAt: now,
+        updatedAt: now
+      });
+      await transaction.insert(messagingWhatsappCloudAccounts).values({
+        id: randomUUID(),
+        channelConnectionId,
+        wabaId: `waba-${channelConnectionId}`,
+        businessId: `business-${channelConnectionId}`,
+        phoneNumberId: `wa-phone-${channelConnectionId}`,
+        displayPhoneNumber: "+15551234567",
+        verifiedName: "Astrolog",
+        platformType: "CLOUD_API",
+        isOnBizApp: true,
+        accessTokenEncrypted: encryptedSecretFixture(),
+        tokenScopes: ["whatsapp_business_messaging"],
+        connectedVia: "embedded_signup_coexistence",
+        historySyncStatus: "requested",
+        contactSyncStatus: "requested",
+        tokenIssuedAt: now,
+        tokenExpiresAt: null,
+        createdAt: now,
+        updatedAt: now
+      });
+      await transaction.insert(messagingThreads).values({
+        id: threadId,
+        astrologerUserId,
+        clientUserId: null,
+        status: "open",
+        lastMessageId: null,
+        lastMessageAt: now,
+        unreadAstrologerCount: 0,
+        createdAt: now,
+        updatedAt: now
+      });
+      await transaction.insert(messagingExternalIdentities).values({
+        id: externalIdentityId,
+        channelConnectionId,
+        provider: "whatsapp",
+        providerUserId: "wa-client-user",
+        providerChatId: "wa-client-chat",
+        usernameSnapshot: null,
+        displayNameSnapshot: "Client",
+        avatarMediaId: null,
+        linkedClientUserId: null,
+        linkStatus: "unlinked",
+        firstSeenAt: now,
+        lastSeenAt: now
+      });
+      await transaction.insert(messagingThreadIdentities).values({
+        threadId,
+        externalIdentityId,
+        provider: "whatsapp",
+        isPrimary: true,
+        createdAt: now
+      });
+      await transaction.insert(messagingMessages).values({
+        id: messageId,
+        threadId,
+        channelConnectionId,
+        externalIdentityId,
+        direction: "outbound",
+        senderKind: "astrologer",
+        providerMessageId: null,
+        providerUpdateId: null,
+        providerSentAt: null,
+        contentType: "text",
+        text,
+        mediaAssetId: null,
+        status: "queued",
+        failureCode: null,
+        idempotencyKey: `delivery-${messageId}`,
+        requestHash: sha256(text),
+        createdAt: now,
+        updatedAt: now
+      });
+      await transaction.insert(outboxEvents).values({
+        id: outboxEventId,
+        eventType: messagingMessageDeliveryRequestedEventType,
+        aggregateId: messageId,
+        payload: {
+          messageId,
+          threadId,
+          channelConnectionId,
+          astrologerUserId
+        },
+        status: "published",
+        attempts: 0,
+        availableAt: now,
+        lockedAt: null,
+        publishedAt: now,
+        quarantinedAt: null,
+        quarantineReasonCode: null,
+        lastError: null,
+        createdAt: now,
+        updatedAt: now
+      });
+    });
+
+    const store = createDrizzleMessagingDeliveryProcessingStore(runtime.database);
+    await expect(store.findByOutboxEventId(outboxEventId)).resolves.toMatchObject({
+      outboxEventId,
+      messageId,
+      messageStatus: "queued",
+      provider: "whatsapp",
+      mode: "whatsapp_cloud",
+      channelConnectionId,
+      astrologerUserId,
+      phoneNumberId: `wa-phone-${channelConnectionId}`,
+      providerChatId: "wa-client-chat",
       text
     });
   });

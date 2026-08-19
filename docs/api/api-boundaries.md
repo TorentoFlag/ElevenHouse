@@ -267,6 +267,10 @@ POST /calculations/:calculationId/publish
 POST /calculations/:calculationId/archive
 GET  /messaging/channel-connections
 POST /messaging/channel-connections/telegram/business/start
+POST /messaging/channel-connections/instagram/graph/start
+GET  /messaging/channel-connections/instagram/graph/callback
+POST /messaging/channel-connections/whatsapp/cloud/start
+POST /messaging/channel-connections/whatsapp/cloud/complete
 GET  /messaging/threads
 GET  /messaging/threads/:threadId
 GET  /messaging/messages/:messageId/media/source
@@ -275,6 +279,10 @@ POST /messaging/threads/:threadId/link-client
 POST /messaging/threads/:threadId/create-client
 POST /messaging/threads/:threadId/read
 POST /messaging/webhooks/telegram/bot
+GET  /messaging/webhooks/instagram/graph
+POST /messaging/webhooks/instagram/graph
+GET  /messaging/webhooks/whatsapp/cloud
+POST /messaging/webhooks/whatsapp/cloud
 GET  /messaging/events
 ```
 
@@ -449,9 +457,31 @@ Messaging commands are authenticated and owner scoped. State-changing
 delivery is performed later by `notification-worker`, which reloads
 authoritative state by identifier. `GET /messaging/events` is an SSE freshness
 transport behind an app-local `RealtimeGateway`, not a message write path.
-`POST /messaging/webhooks/telegram/bot` is CSRF-exempt only because it is a
-provider-authenticated webhook; it must validate provider authenticity and
-dedupe provider update/message ids before acknowledgement.
+Provider webhooks are CSRF-exempt only because they are provider-authenticated
+webhook boundaries. Telegram validates its configured webhook secret; Instagram
+Graph and WhatsApp Cloud validate Meta signatures/challenges. Webhook handlers
+must dedupe provider update/message ids before acknowledgement.
+WhatsApp history and SMB app-state sync webhooks are recorded as durable
+provider-webhook events before acknowledgement and relayed to
+`notification-worker` for retryable async processing; the worker does not create
+CRM clients from contact-sync data.
+
+WhatsApp Cloud uses Meta Embedded Signup Coexistence for astrologer-owned
+WhatsApp Business app phone numbers. `start` and `complete` are authenticated
+CSRF-protected commands. `complete` treats browser-returned WABA/phone ids as
+evidence only: `astrologer-api` exchanges the short-lived code server-side,
+resolves the WABA/phone number through Graph API, subscribes webhooks and stores
+the access token encrypted before marking a channel active. External production
+webhook URL:
+`https://app.elevenhouse.ai/api/messaging/webhooks/whatsapp/cloud`.
+
+Meta prerequisites for production are outside HTTP API authority: WhatsApp
+product enabled, Facebook Login for Business Embedded Signup configuration,
+Coexistence enabled, valid HTTPS domains/OAuth settings, approved permissions
+for `whatsapp_business_management` and `whatsapp_business_messaging`, callback
+verify token matching `ASTROLOGER_API_WHATSAPP_CLOUD_WEBHOOK_VERIFY_TOKEN`, and
+webhook fields `messages`, `account_update`, `history`,
+`smb_app_state_sync` and `smb_message_echoes` selected in Meta Dashboard.
 
 Telegram Business voice, image and video-note webhooks persist message text
 fallback plus private provider file metadata and acknowledge before download.
@@ -465,8 +495,8 @@ only for ready media and returns a typed `message_media_not_ready` conflict for
 pending/failed ingestion.
 
 Messaging logging must never include phone numbers, Telegram verification or
-2FA codes, business-connection secrets, raw provider payloads, session strings,
-credentials or message bodies.
+2FA codes, Meta codes/tokens, business-connection secrets, raw provider
+payloads, session strings, credentials or message bodies.
 
 `POST /numerology/preview` is authenticated and read-only, so it does not require
 CSRF and must not create calculation, participant-link or interpretation rows.

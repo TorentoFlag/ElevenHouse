@@ -38,6 +38,8 @@ export type InboxPageViewProps = {
   readonly telegramBusinessStartError: string | null;
   readonly isStartingInstagramGraphConnection: boolean;
   readonly instagramGraphStartError: string | null;
+  readonly isStartingWhatsAppCloudConnection: boolean;
+  readonly whatsappCloudError: string | null;
   readonly telegramMtprotoStep: TelegramMtprotoWizardStep;
   readonly telegramMtprotoPhoneNumber: string;
   readonly telegramMtprotoCode: string;
@@ -66,6 +68,7 @@ export type InboxPageViewProps = {
   readonly onCloseTelegramBusinessGuide: () => void;
   readonly onStartTelegramBusinessConnection: () => void;
   readonly onStartInstagramGraphConnection: () => void;
+  readonly onStartWhatsAppCloudConnection: () => void;
   readonly onTelegramMtprotoPhoneNumberChange: (value: string) => void;
   readonly onTelegramMtprotoConsentAcceptedChange: (value: boolean) => void;
   readonly onTelegramMtprotoCodeChange: (value: string) => void;
@@ -108,6 +111,8 @@ export function InboxPageView({
   telegramBusinessStartError,
   isStartingInstagramGraphConnection,
   instagramGraphStartError,
+  isStartingWhatsAppCloudConnection,
+  whatsappCloudError,
   telegramMtprotoStep,
   telegramMtprotoPhoneNumber,
   telegramMtprotoCode,
@@ -136,6 +141,7 @@ export function InboxPageView({
   onCloseTelegramBusinessGuide,
   onStartTelegramBusinessConnection,
   onStartInstagramGraphConnection,
+  onStartWhatsAppCloudConnection,
   onTelegramMtprotoPhoneNumberChange,
   onTelegramMtprotoConsentAcceptedChange,
   onTelegramMtprotoCodeChange,
@@ -164,6 +170,9 @@ export function InboxPageView({
   );
   const instagramGraph = channelConnections.find(
     (connection) => connection.mode === "instagram_graph"
+  );
+  const whatsappCloud = channelConnections.find(
+    (connection) => connection.mode === "whatsapp_cloud"
   );
   const selectedChannelConnection = selectedIdentity
     ? channelConnections.find(
@@ -526,10 +535,13 @@ export function InboxPageView({
           connection={telegramBusiness}
           mtprotoConnection={telegramMtproto}
           instagramConnection={instagramGraph}
+          whatsappConnection={whatsappCloud}
           isStarting={isStartingTelegramBusinessConnection}
           errorMessage={telegramBusinessStartError}
           isStartingInstagramGraph={isStartingInstagramGraphConnection}
           instagramGraphErrorMessage={instagramGraphStartError}
+          isStartingWhatsAppCloud={isStartingWhatsAppCloudConnection}
+          whatsappCloudErrorMessage={whatsappCloudError}
           telegramBotUsername={telegramBusinessBotUsername}
           telegramBotUrl={telegramBusinessBotUrl}
           mtprotoStep={telegramMtprotoStep}
@@ -545,6 +557,7 @@ export function InboxPageView({
           mtprotoErrorMessage={telegramMtprotoError}
           onStartConnection={onStartTelegramBusinessConnection}
           onStartInstagramGraphConnection={onStartInstagramGraphConnection}
+          onStartWhatsAppCloudConnection={onStartWhatsAppCloudConnection}
           onMtprotoPhoneNumberChange={onTelegramMtprotoPhoneNumberChange}
           onMtprotoConsentAcceptedChange={onTelegramMtprotoConsentAcceptedChange}
           onMtprotoCodeChange={onTelegramMtprotoCodeChange}
@@ -572,27 +585,35 @@ function compareMessagesByCreatedAt(left: MessagingMessage, right: MessagingMess
 function ChannelBadge({ connection }: { readonly connection: MessagingChannelConnection }) {
   return (
     <span
-      className={
-        connection.provider === "telegram" ? styles.providerTelegram : styles.providerInstagram
-      }
+      className={providerClassName(connection.provider)}
       title={connection.displayName ?? connection.mode}
       aria-label={`Подключен ${providerLabel(connection.provider)}: ${channelDisplayName(connection)}`}
     >
-      {connection.provider === "telegram" ? "T" : "I"}
+      {providerInitial(connection.provider)}
     </span>
   );
 }
 
-function ProviderPill({ provider }: { readonly provider: "telegram" | "instagram" }) {
-  return (
-    <span className={provider === "telegram" ? styles.providerTelegram : styles.providerInstagram}>
-      {provider === "telegram" ? "T" : "I"}
-    </span>
-  );
+function ProviderPill({ provider }: { readonly provider: MessagingChannelConnection["provider"] }) {
+  return <span className={providerClassName(provider)}>{providerInitial(provider)}</span>;
 }
 
-function providerLabel(provider: "telegram" | "instagram") {
-  return provider === "telegram" ? "Telegram" : "Instagram";
+function providerLabel(provider: MessagingChannelConnection["provider"]) {
+  if (provider === "telegram") return "Telegram";
+  if (provider === "instagram") return "Instagram";
+  return "WhatsApp";
+}
+
+function providerInitial(provider: MessagingChannelConnection["provider"]) {
+  if (provider === "telegram") return "T";
+  if (provider === "instagram") return "I";
+  return "W";
+}
+
+function providerClassName(provider: MessagingChannelConnection["provider"]) {
+  if (provider === "telegram") return styles.providerTelegram;
+  if (provider === "instagram") return styles.providerInstagram;
+  return styles.providerWhatsApp;
 }
 
 function uniqueProviders(channelConnections: MessagingChannelConnection[]) {

@@ -26,6 +26,18 @@ export class MessagingController {
     return this.service.startInstagramGraphConnection(request);
   }
 
+  @Post("channel-connections/whatsapp/cloud/start")
+  @RequireCsrf()
+  startWhatsAppCloudConnection(@Req() request: AstrologerSessionRequest) {
+    return this.service.startWhatsAppCloudConnection(request);
+  }
+
+  @Post("channel-connections/whatsapp/cloud/complete")
+  @RequireCsrf()
+  completeWhatsAppCloudConnection(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.service.completeWhatsAppCloudConnection(body, request);
+  }
+
   @Post("channel-connections/telegram/mtproto/start")
   @RequireCsrf()
   startTelegramMtprotoConnection(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {

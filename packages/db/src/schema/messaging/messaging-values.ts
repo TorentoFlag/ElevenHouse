@@ -1,9 +1,10 @@
-export const messagingProviderValues = ["telegram", "instagram"] as const;
+export const messagingProviderValues = ["telegram", "instagram", "whatsapp"] as const;
 
 export const messagingChannelModeValues = [
   "telegram_business_bot",
   "telegram_mtproto_account",
-  "instagram_graph"
+  "instagram_graph",
+  "whatsapp_cloud"
 ] as const;
 
 export const messagingChannelConnectionStatusValues = [
@@ -70,6 +71,24 @@ export const messagingRealtimeEventTypeValues = [
   "channelConnection.updated",
   "identity.linked",
   "delivery.failed"
+] as const;
+
+export const messagingWhatsappCloudSyncStatusValues = [
+  "not_requested",
+  "requested",
+  "syncing",
+  "completed",
+  "declined",
+  "failed",
+  "partial"
+] as const;
+
+export const messagingProviderWebhookEventStatusValues = [
+  "pending",
+  "processing",
+  "processed",
+  "failed",
+  "ignored"
 ] as const;
 
 export function formatMessagingSqlValues(values: readonly string[]): string {

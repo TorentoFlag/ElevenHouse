@@ -5,9 +5,11 @@ import { messageDeliveryAttempts } from "./message-delivery-attempts.schema";
 import { messagingExternalIdentities } from "./external-identities.schema";
 import { messagingInstagramGraphAccounts } from "./instagram-graph-accounts.schema";
 import { messagingMessages } from "./messages.schema";
+import { messagingProviderWebhookEvents } from "./provider-webhook-events.schema";
 import { messagingRealtimeEvents } from "./realtime-events.schema";
 import { messagingThreadIdentities } from "./thread-identities.schema";
 import { messagingThreads } from "./threads.schema";
+import { messagingWhatsappCloudAccounts } from "./whatsapp-cloud-accounts.schema";
 
 export const messagingChannelConnectionsRelations = relations(
   messagingChannelConnections,
@@ -18,6 +20,7 @@ export const messagingChannelConnectionsRelations = relations(
     }),
     externalIdentities: many(messagingExternalIdentities),
     instagramGraphAccounts: many(messagingInstagramGraphAccounts),
+    whatsappCloudAccounts: many(messagingWhatsappCloudAccounts),
     messages: many(messagingMessages)
   })
 );
@@ -27,6 +30,16 @@ export const messagingInstagramGraphAccountsRelations = relations(
   ({ one }) => ({
     channelConnection: one(messagingChannelConnections, {
       fields: [messagingInstagramGraphAccounts.channelConnectionId],
+      references: [messagingChannelConnections.id]
+    })
+  })
+);
+
+export const messagingWhatsappCloudAccountsRelations = relations(
+  messagingWhatsappCloudAccounts,
+  ({ one }) => ({
+    channelConnection: one(messagingChannelConnections, {
+      fields: [messagingWhatsappCloudAccounts.channelConnectionId],
       references: [messagingChannelConnections.id]
     })
   })
@@ -104,3 +117,8 @@ export const messagingRealtimeEventsRelations = relations(messagingRealtimeEvent
     references: [users.id]
   })
 }));
+
+export const messagingProviderWebhookEventsRelations = relations(
+  messagingProviderWebhookEvents,
+  () => ({})
+);

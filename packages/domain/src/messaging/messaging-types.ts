@@ -1,9 +1,10 @@
-export type MessagingProvider = "telegram" | "instagram";
+export type MessagingProvider = "telegram" | "instagram" | "whatsapp";
 
 export type MessagingChannelMode =
   | "telegram_business_bot"
   | "telegram_mtproto_account"
-  | "instagram_graph";
+  | "instagram_graph"
+  | "whatsapp_cloud";
 
 export type MessagingChannelStatus =
   | "connecting"
@@ -58,6 +59,15 @@ export type EncryptedMessagingSecret = {
 };
 
 export type TelegramMtprotoLoginStep = "code_required" | "password_required" | "connected";
+
+export type WhatsAppCloudSyncStatus =
+  | "not_requested"
+  | "requested"
+  | "syncing"
+  | "completed"
+  | "declined"
+  | "failed"
+  | "partial";
 
 export type MessagingThreadExternalIdentity = {
   readonly id: string;

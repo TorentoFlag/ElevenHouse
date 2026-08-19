@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core";
 import { users } from "../identity/accounts.schema";
 import {
   formatMessagingSqlValues,
@@ -42,7 +52,7 @@ export const messagingChannelConnections = pgTable(
     ),
     check(
       "messaging_channel_connections_provider_mode_check",
-      sql`(${table.provider} = 'telegram' and ${table.mode} in ('telegram_business_bot', 'telegram_mtproto_account')) or (${table.provider} = 'instagram' and ${table.mode} = 'instagram_graph')`
+      sql`(${table.provider} = 'telegram' and ${table.mode} in ('telegram_business_bot', 'telegram_mtproto_account')) or (${table.provider} = 'instagram' and ${table.mode} = 'instagram_graph') or (${table.provider} = 'whatsapp' and ${table.mode} = 'whatsapp_cloud')`
     ),
     check(
       "messaging_channel_connections_status_check",

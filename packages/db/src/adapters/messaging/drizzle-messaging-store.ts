@@ -15,6 +15,8 @@ import type {
   BindTelegramBusinessConnectionUserStoreResult,
   CompleteInstagramGraphConnectionStoreInput,
   CompleteInstagramGraphConnectionStoreResult,
+  CompleteWhatsAppCloudConnectionStoreInput,
+  CompleteWhatsAppCloudConnectionStoreResult,
   CreateClientFromThreadStoreInput,
   CreateOutboundMessageStoreInput,
   LinkThreadToClientStoreInput,
@@ -36,12 +38,21 @@ import type {
   RecordTelegramBusinessEditedMessageStoreResult,
   RecordTelegramBusinessMessageStoreInput,
   RecordTelegramMtprotoMessageStoreInput,
+  RecordWhatsAppCloudAccountUpdateStoreInput,
+  RecordWhatsAppCloudAccountUpdateStoreResult,
+  RecordWhatsAppCloudEchoStoreInput,
+  RecordWhatsAppCloudMessageStoreInput,
+  RecordWhatsAppCloudStatusStoreInput,
+  RecordWhatsAppCloudWebhookEventStoreInput,
+  RecordWhatsAppCloudWebhookEventStoreResult,
   RecordTelegramMtprotoCodeResultStoreInput,
   RecordTelegramMtprotoPasswordResultStoreInput,
   RevokeInstagramGraphConnectionStoreInput,
   RevokeInstagramGraphConnectionStoreResult,
   StartInstagramGraphConnectionStoreInput,
   StartInstagramGraphConnectionStoreResult,
+  StartWhatsAppCloudConnectionStoreInput,
+  StartWhatsAppCloudConnectionStoreResult,
   StartTelegramBusinessConnectionStoreInput,
   StartTelegramBusinessConnectionStoreResult,
   StartTelegramMtprotoConnectionStoreInput,
@@ -57,8 +68,10 @@ import {
   messagingChannelConnections,
   messagingExternalIdentities,
   messagingInstagramGraphAccounts,
+  messagingWhatsappCloudAccounts,
   messageMediaIngestions,
   messagingMessages,
+  messagingProviderWebhookEvents,
   messagingRealtimeEvents,
   messagingTelegramMtprotoSessions,
   messagingThreadIdentities,
@@ -85,6 +98,7 @@ type ThreadProjection = {
 
 const inboundProviderDedupeConstraint = "messages_inbound_provider_dedupe_unique";
 const outboundIdempotencyConstraint = "messages_outbound_idempotency_unique";
+const providerWebhookEventKeyConstraint = "messaging_provider_webhook_events_event_key_unique";
 const threadIdentityExternalIdentityConstraint =
   "messaging_thread_identities_external_identity_unique";
 const threadClientIdempotencyConstraint = "idempotency_commands_scope_key_unique";
@@ -106,6 +120,8 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
     startTelegramBusinessConnection: (input) => startTelegramBusinessConnection(database, input),
     startInstagramGraphConnection: (input) => startInstagramGraphConnection(database, input),
     completeInstagramGraphConnection: (input) => completeInstagramGraphConnection(database, input),
+    startWhatsAppCloudConnection: (input) => startWhatsAppCloudConnection(database, input),
+    completeWhatsAppCloudConnection: (input) => completeWhatsAppCloudConnection(database, input),
     revokeInstagramGraphConnectionByMetaUserId: (input) =>
       revokeInstagramGraphConnectionByMetaUserId(database, input),
     startTelegramMtprotoConnection: (input) => startTelegramMtprotoConnection(database, input),
@@ -115,6 +131,13 @@ export function createDrizzleMessagingStore(database: ElevenHouseDatabase): Mess
       recordTelegramMtprotoPasswordResult(database, input),
     recordTelegramBusinessMessage: (input) => recordTelegramBusinessMessage(database, input),
     recordInstagramGraphMessage: (input) => recordInstagramGraphMessage(database, input),
+    recordWhatsAppCloudMessage: (input) => recordWhatsAppCloudMessage(database, input),
+    recordWhatsAppCloudEcho: (input) => recordWhatsAppCloudEcho(database, input),
+    recordWhatsAppCloudStatus: (input) => recordWhatsAppCloudStatus(database, input),
+    recordWhatsAppCloudWebhookEvent: (input) =>
+      recordWhatsAppCloudWebhookEvent(database, input),
+    recordWhatsAppCloudAccountUpdate: (input) =>
+      recordWhatsAppCloudAccountUpdate(database, input),
     recordTelegramMtprotoMessage: (input) => recordTelegramMtprotoMessage(database, input),
     recordTelegramBusinessDeletedMessages: (input) =>
       recordTelegramBusinessDeletedMessages(database, input),
@@ -749,6 +772,169 @@ async function completeInstagramGraphConnection(
   });
 }
 
+async function startWhatsAppCloudConnection(
+  database: ElevenHouseDatabase,
+  input: StartWhatsAppCloudConnectionStoreInput
+): Promise<StartWhatsAppCloudConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    await lockWhatsAppCloudConnectionStart(transaction, input);
+    const existing = await findWhatsAppCloudConnectionForAstrologer(transaction, input);
+    if (existing) {
+      if (["revoked", "paused", "error", "reauth_required"].includes(existing.status)) {
+        const timestamp = new Date(input.now);
+        await transaction
+          .update(messagingChannelConnections)
+          .set({
+            status: "connecting",
+            externalAccountId: null,
+            externalOwnerUserId: null,
+            displayNameSnapshot: null,
+            usernameSnapshot: null,
+            capabilities: whatsappCloudPendingCapabilities(),
+            connectedAt: null,
+            lastSyncedAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: timestamp
+          })
+          .where(eq(messagingChannelConnections.id, existing.id));
+      }
+      return { connectionId: existing.id };
+    }
+
+    const timestamp = new Date(input.now);
+    const [row] = await transaction
+      .insert(messagingChannelConnections)
+      .values({
+        id: input.connectionId,
+        astrologerUserId: input.astrologerUserId,
+        provider: "whatsapp",
+        mode: "whatsapp_cloud",
+        status: "connecting",
+        externalAccountId: null,
+        externalOwnerUserId: null,
+        displayNameSnapshot: null,
+        usernameSnapshot: null,
+        capabilities: whatsappCloudPendingCapabilities(),
+        consentRecordId: null,
+        connectedAt: null,
+        lastSyncedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: messagingChannelConnections.id });
+    if (!row) throw new Error("Expected WhatsApp Cloud channel connection insert to return a row");
+    return { connectionId: row.id };
+  });
+}
+
+async function completeWhatsAppCloudConnection(
+  database: ElevenHouseDatabase,
+  input: CompleteWhatsAppCloudConnectionStoreInput
+): Promise<CompleteWhatsAppCloudConnectionStoreResult> {
+  return database.transaction(async (transaction) => {
+    const [connection] = await transaction
+      .select({
+        id: messagingChannelConnections.id,
+        astrologerUserId: messagingChannelConnections.astrologerUserId
+      })
+      .from(messagingChannelConnections)
+      .where(
+        and(
+          eq(messagingChannelConnections.id, input.connectionId),
+          eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+          eq(messagingChannelConnections.provider, "whatsapp"),
+          eq(messagingChannelConnections.mode, "whatsapp_cloud")
+        )
+      )
+      .limit(1);
+    if (!connection) return { kind: "unmatched" };
+
+    const timestamp = new Date(input.now);
+    await transaction
+      .insert(messagingWhatsappCloudAccounts)
+      .values({
+        channelConnectionId: connection.id,
+        wabaId: input.wabaId,
+        businessId: input.businessId,
+        phoneNumberId: input.phoneNumberId,
+        displayPhoneNumber: input.displayPhoneNumber,
+        verifiedName: input.verifiedName,
+        platformType: input.platformType,
+        isOnBizApp: input.isOnBizApp,
+        accessTokenEncrypted: input.encryptedAccessToken,
+        tokenScopes: input.tokenScopes,
+        connectedVia: input.connectedVia,
+        historySyncStatus: input.historySyncStatus,
+        contactSyncStatus: input.contactSyncStatus,
+        tokenIssuedAt: input.tokenIssuedAt ? new Date(input.tokenIssuedAt) : null,
+        tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .onConflictDoUpdate({
+        target: messagingWhatsappCloudAccounts.channelConnectionId,
+        set: {
+          wabaId: input.wabaId,
+          businessId: input.businessId,
+          phoneNumberId: input.phoneNumberId,
+          displayPhoneNumber: input.displayPhoneNumber,
+          verifiedName: input.verifiedName,
+          platformType: input.platformType,
+          isOnBizApp: input.isOnBizApp,
+          accessTokenEncrypted: input.encryptedAccessToken,
+          tokenScopes: input.tokenScopes,
+          connectedVia: input.connectedVia,
+          historySyncStatus: input.historySyncStatus,
+          contactSyncStatus: input.contactSyncStatus,
+          tokenIssuedAt: input.tokenIssuedAt ? new Date(input.tokenIssuedAt) : null,
+          tokenExpiresAt: input.tokenExpiresAt ? new Date(input.tokenExpiresAt) : null,
+          updatedAt: timestamp
+        }
+      });
+
+    const [updated] = await transaction
+      .update(messagingChannelConnections)
+      .set({
+        status: "active",
+        externalAccountId: input.phoneNumberId,
+        externalOwnerUserId: input.wabaId,
+        displayNameSnapshot: input.verifiedName,
+        usernameSnapshot: input.displayPhoneNumber,
+        capabilities: whatsappCloudAuthorizedCapabilities(),
+        connectedAt: timestamp,
+        lastSyncedAt: timestamp,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: timestamp
+      })
+      .where(
+        and(
+          eq(messagingChannelConnections.id, connection.id),
+          eq(messagingChannelConnections.astrologerUserId, connection.astrologerUserId),
+          eq(messagingChannelConnections.provider, "whatsapp"),
+          eq(messagingChannelConnections.mode, "whatsapp_cloud")
+        )
+      )
+      .returning({ id: messagingChannelConnections.id });
+    if (!updated) return { kind: "unmatched" };
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: connection.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" };
+  });
+}
+
 async function revokeInstagramGraphConnectionByMetaUserId(
   database: ElevenHouseDatabase,
   input: RevokeInstagramGraphConnectionStoreInput
@@ -1036,6 +1222,15 @@ async function lockInstagramGraphConnectionStart(
   );
 }
 
+async function lockWhatsAppCloudConnectionStart(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<void> {
+  await database.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`messaging:whatsapp_cloud:${input.astrologerUserId}`}))`
+  );
+}
+
 async function findTelegramBusinessConnectionForAstrologer(
   database: MessagingDatabase,
   input: { readonly astrologerUserId: string }
@@ -1072,6 +1267,27 @@ async function findInstagramGraphConnectionForAstrologer(
         eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
         eq(messagingChannelConnections.provider, "instagram"),
         eq(messagingChannelConnections.mode, "instagram_graph")
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+async function findWhatsAppCloudConnectionForAstrologer(
+  database: MessagingDatabase,
+  input: { readonly astrologerUserId: string }
+): Promise<{ readonly id: string; readonly status: string } | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      status: messagingChannelConnections.status
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.astrologerUserId, input.astrologerUserId),
+        eq(messagingChannelConnections.provider, "whatsapp"),
+        eq(messagingChannelConnections.mode, "whatsapp_cloud")
       )
     )
     .limit(1);
@@ -1488,6 +1704,300 @@ async function recordInstagramGraphMessage(
   if (!existing)
     throw new Error("Expected existing Instagram Graph message after duplicate conflict");
   return { kind: "duplicate", message: existing };
+}
+
+async function recordWhatsAppCloudMessage(
+  database: ElevenHouseDatabase,
+  input: RecordWhatsAppCloudMessageStoreInput
+): Promise<
+  | { readonly kind: "created" | "duplicate"; readonly message: MessagingMessage }
+  | { readonly kind: "unmatched" }
+> {
+  try {
+    return await database.transaction(async (transaction) => {
+      const connection = await findWhatsAppCloudConnectionByPhoneNumberId(transaction, {
+        phoneNumberId: input.phoneNumberId,
+        activeOnly: true
+      });
+      if (!connection) return { kind: "unmatched" as const };
+
+      const timestamp = new Date(input.now);
+      const providerSentAt = new Date(input.providerSentAt);
+      const identity = await upsertWhatsAppExternalIdentity(transaction, {
+        channelConnectionId: connection.id,
+        providerUserId: input.senderWaId,
+        providerChatId: input.senderWaId,
+        now: timestamp
+      });
+      const thread = await findOrCreateWhatsAppThread(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        externalIdentityId: identity.id,
+        now: timestamp
+      });
+
+      const [row] = await transaction
+        .insert(messagingMessages)
+        .values({
+          threadId: thread.id,
+          channelConnectionId: connection.id,
+          externalIdentityId: identity.id,
+          direction: "inbound",
+          senderKind: "client",
+          providerMessageId: input.providerMessageId,
+          providerUpdateId: null,
+          providerSentAt,
+          contentType: "text",
+          text: input.text,
+          mediaAssetId: null,
+          status: "received",
+          failureCode: null,
+          idempotencyKey: null,
+          requestHash: null,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        })
+        .returning();
+      if (!row) throw new Error("Expected WhatsApp Cloud message insert to return a row");
+
+      const [updatedThread] = await transaction
+        .update(messagingThreads)
+        .set({
+          lastMessageId: row.id,
+          lastMessageAt: providerSentAt,
+          unreadAstrologerCount: sql`${messagingThreads.unreadAstrologerCount} + 1`,
+          updatedAt: timestamp
+        })
+        .where(
+          and(
+            eq(messagingThreads.id, thread.id),
+            eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+          )
+        )
+        .returning({ id: messagingThreads.id });
+      if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+      await appendRealtimeEvent(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        type: messagingMessageReceivedEventType,
+        occurredAt: input.now,
+        threadId: thread.id,
+        messageId: row.id,
+        channelConnectionId: connection.id,
+        externalIdentityId: identity.id
+      });
+
+      return { kind: "created" as const, message: toMessagingMessage(row) };
+    });
+  } catch (error) {
+    if (!isInboundProviderDedupeViolation(error)) throw error;
+  }
+
+  const existing = await findWhatsAppCloudMessage(database, input);
+  if (!existing)
+    throw new Error("Expected existing WhatsApp Cloud message after duplicate conflict");
+  return { kind: "duplicate", message: existing };
+}
+
+async function recordWhatsAppCloudEcho(
+  database: ElevenHouseDatabase,
+  input: RecordWhatsAppCloudEchoStoreInput
+): Promise<
+  | { readonly kind: "created" | "duplicate"; readonly message: MessagingMessage }
+  | { readonly kind: "unmatched" }
+> {
+  try {
+    return await database.transaction(async (transaction) => {
+      const connection = await findWhatsAppCloudConnectionByPhoneNumberId(transaction, {
+        phoneNumberId: input.phoneNumberId,
+        activeOnly: true
+      });
+      if (!connection) return { kind: "unmatched" as const };
+
+      const timestamp = new Date(input.now);
+      const providerSentAt = new Date(input.providerSentAt);
+      const identity = await upsertWhatsAppExternalIdentity(transaction, {
+        channelConnectionId: connection.id,
+        providerUserId: input.recipientWaId,
+        providerChatId: input.recipientWaId,
+        now: timestamp
+      });
+      const thread = await findOrCreateWhatsAppThread(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        externalIdentityId: identity.id,
+        now: timestamp
+      });
+      const existingOutbound = await reconcileWhatsAppCloudObservedOutbound(transaction, {
+        channelConnectionId: connection.id,
+        externalIdentityId: identity.id,
+        threadId: thread.id,
+        providerMessageId: input.providerMessageId,
+        providerSentAt,
+        text: input.text,
+        now: timestamp
+      });
+      if (existingOutbound) return { kind: "duplicate" as const, message: existingOutbound };
+
+      const [row] = await transaction
+        .insert(messagingMessages)
+        .values({
+          threadId: thread.id,
+          channelConnectionId: connection.id,
+          externalIdentityId: identity.id,
+          direction: "outbound",
+          senderKind: "astrologer",
+          providerMessageId: input.providerMessageId,
+          providerUpdateId: null,
+          providerSentAt,
+          contentType: "text",
+          text: input.text,
+          mediaAssetId: null,
+          status: "sent",
+          failureCode: null,
+          idempotencyKey: whatsappCloudObservedOutboundIdempotencyKey(input),
+          requestHash: hashWhatsAppCloudMessageRequest(input),
+          createdAt: timestamp,
+          updatedAt: timestamp
+        })
+        .returning();
+      if (!row) throw new Error("Expected WhatsApp Cloud echo insert to return a row");
+
+      const [updatedThread] = await transaction
+        .update(messagingThreads)
+        .set({
+          lastMessageId: row.id,
+          lastMessageAt: providerSentAt,
+          updatedAt: timestamp
+        })
+        .where(
+          and(
+            eq(messagingThreads.id, thread.id),
+            eq(messagingThreads.astrologerUserId, connection.astrologerUserId)
+          )
+        )
+        .returning({ id: messagingThreads.id });
+      if (!updatedThread) throw new Error("Messaging thread is not owned by the astrologer");
+
+      await appendRealtimeEvent(transaction, {
+        astrologerUserId: connection.astrologerUserId,
+        type: messagingMessageUpdatedEventType,
+        occurredAt: input.now,
+        threadId: thread.id,
+        messageId: row.id,
+        channelConnectionId: connection.id,
+        externalIdentityId: identity.id
+      });
+
+      return { kind: "created" as const, message: toMessagingMessage(row) };
+    });
+  } catch (error) {
+    if (!isInboundProviderDedupeViolation(error) && !isOutboundIdempotencyViolation(error)) {
+      throw error;
+    }
+  }
+
+  const existing = await findWhatsAppCloudEcho(database, input);
+  if (!existing) throw new Error("Expected existing WhatsApp Cloud echo after duplicate conflict");
+  return { kind: "duplicate", message: existing };
+}
+
+async function recordWhatsAppCloudStatus(
+  database: ElevenHouseDatabase,
+  input: RecordWhatsAppCloudStatusStoreInput
+): Promise<{ readonly kind: "recorded" | "unmatched"; readonly updatedCount: number }> {
+  const connection = await findWhatsAppCloudConnectionByPhoneNumberId(database, {
+    phoneNumberId: input.phoneNumberId,
+    activeOnly: false
+  });
+  if (!connection) return { kind: "unmatched", updatedCount: 0 };
+
+  const timestamp = new Date(input.now);
+  const updatedRows = await database
+    .update(messagingMessages)
+    .set({
+      status: input.status,
+      failureCode: input.failureCode,
+      providerSentAt: new Date(input.providerStatusAt),
+      updatedAt: timestamp
+    })
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, connection.id),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound"),
+        ne(messagingMessages.status, "deleted")
+      )
+    )
+    .returning({ id: messagingMessages.id });
+
+  return { kind: "recorded", updatedCount: updatedRows.length };
+}
+
+async function recordWhatsAppCloudWebhookEvent(
+  database: ElevenHouseDatabase,
+  input: RecordWhatsAppCloudWebhookEventStoreInput
+): Promise<RecordWhatsAppCloudWebhookEventStoreResult> {
+  try {
+    await database.insert(messagingProviderWebhookEvents).values({
+      provider: "whatsapp",
+      mode: "whatsapp_cloud",
+      eventKey: input.eventKey,
+      field: input.field,
+      externalAccountId: input.externalAccountId,
+      externalOwnerUserId: input.externalOwnerUserId,
+      normalizedSummary: input.normalizedSummary,
+      receivedAt: new Date(input.receivedAt)
+    });
+    return { kind: "recorded" };
+  } catch (error) {
+    if (!isProviderWebhookEventKeyViolation(error)) throw error;
+    return { kind: "duplicate" };
+  }
+}
+
+async function recordWhatsAppCloudAccountUpdate(
+  database: ElevenHouseDatabase,
+  input: RecordWhatsAppCloudAccountUpdateStoreInput
+): Promise<RecordWhatsAppCloudAccountUpdateStoreResult> {
+  return database.transaction(async (transaction) => {
+    const connection = input.phoneNumberId
+      ? await findWhatsAppCloudConnectionByPhoneNumberId(transaction, {
+          phoneNumberId: input.phoneNumberId,
+          activeOnly: false
+        })
+      : await findWhatsAppCloudConnectionByWabaId(transaction, input.wabaId);
+    if (!connection || connection.externalOwnerUserId !== input.wabaId) {
+      return { kind: "unmatched" as const };
+    }
+
+    const timestamp = new Date(input.now);
+    const update = whatsappCloudAccountUpdateConnectionPatch(input, timestamp);
+    if (update) {
+      const [updated] = await transaction
+        .update(messagingChannelConnections)
+        .set(update)
+        .where(
+          and(
+            eq(messagingChannelConnections.id, connection.id),
+            eq(messagingChannelConnections.provider, "whatsapp"),
+            eq(messagingChannelConnections.mode, "whatsapp_cloud")
+          )
+        )
+        .returning({ id: messagingChannelConnections.id });
+      if (!updated) return { kind: "unmatched" as const };
+    }
+
+    await transaction.insert(messagingRealtimeEvents).values({
+      astrologerUserId: connection.astrologerUserId,
+      type: "channelConnection.updated",
+      threadId: null,
+      messageId: null,
+      channelConnectionId: connection.id,
+      externalIdentityId: null,
+      createdAt: timestamp
+    });
+
+    return { kind: "recorded" as const };
+  });
 }
 
 async function recordTelegramBusinessDeletedMessages(
@@ -1963,6 +2473,45 @@ async function upsertInstagramExternalIdentity(
   return row;
 }
 
+async function upsertWhatsAppExternalIdentity(
+  database: MessagingTransaction,
+  input: {
+    readonly channelConnectionId: string;
+    readonly providerUserId: string;
+    readonly providerChatId: string;
+    readonly now: Date;
+  }
+): Promise<MessagingExternalIdentityRow> {
+  const [row] = await database
+    .insert(messagingExternalIdentities)
+    .values({
+      channelConnectionId: input.channelConnectionId,
+      provider: "whatsapp",
+      providerUserId: input.providerUserId,
+      providerChatId: input.providerChatId,
+      usernameSnapshot: null,
+      displayNameSnapshot: null,
+      avatarMediaId: null,
+      linkedClientUserId: null,
+      linkStatus: "unlinked",
+      firstSeenAt: input.now,
+      lastSeenAt: input.now
+    })
+    .onConflictDoUpdate({
+      target: [
+        messagingExternalIdentities.channelConnectionId,
+        messagingExternalIdentities.providerChatId
+      ],
+      set: {
+        providerUserId: input.providerUserId,
+        lastSeenAt: input.now
+      }
+    })
+    .returning();
+  if (!row) throw new Error("Expected WhatsApp external identity upsert to return a row");
+  return row;
+}
+
 async function findTelegramExternalIdentityByChat(
   database: MessagingDatabase,
   input: { readonly channelConnectionId: string; readonly providerChatId: string }
@@ -2073,6 +2622,60 @@ async function findInstagramGraphConnection(
   return row;
 }
 
+async function findWhatsAppCloudConnectionByPhoneNumberId(
+  database: MessagingDatabase,
+  input: { readonly phoneNumberId: string; readonly activeOnly: boolean }
+): Promise<{
+  readonly id: string;
+  readonly astrologerUserId: string;
+  readonly externalOwnerUserId: string | null;
+} | null> {
+  const filters = [
+    eq(messagingChannelConnections.provider, "whatsapp"),
+    eq(messagingChannelConnections.mode, "whatsapp_cloud"),
+    eq(messagingChannelConnections.externalAccountId, input.phoneNumberId)
+  ];
+  if (input.activeOnly) {
+    filters.push(eq(messagingChannelConnections.status, "active"));
+  }
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId,
+      externalOwnerUserId: messagingChannelConnections.externalOwnerUserId
+    })
+    .from(messagingChannelConnections)
+    .where(and(...filters))
+    .limit(1);
+  return row ?? null;
+}
+
+async function findWhatsAppCloudConnectionByWabaId(
+  database: MessagingDatabase,
+  wabaId: string
+): Promise<{
+  readonly id: string;
+  readonly astrologerUserId: string;
+  readonly externalOwnerUserId: string | null;
+} | null> {
+  const [row] = await database
+    .select({
+      id: messagingChannelConnections.id,
+      astrologerUserId: messagingChannelConnections.astrologerUserId,
+      externalOwnerUserId: messagingChannelConnections.externalOwnerUserId
+    })
+    .from(messagingChannelConnections)
+    .where(
+      and(
+        eq(messagingChannelConnections.provider, "whatsapp"),
+        eq(messagingChannelConnections.mode, "whatsapp_cloud"),
+        eq(messagingChannelConnections.externalOwnerUserId, wabaId)
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 async function findOrCreateTelegramThread(
   database: MessagingTransaction,
   input: {
@@ -2156,6 +2759,49 @@ async function findOrCreateInstagramThread(
 
   const created = await findThreadByExternalIdentity(database, input);
   if (!created) throw new Error("Expected Instagram messaging thread identity link");
+  return created;
+}
+
+async function findOrCreateWhatsAppThread(
+  database: MessagingTransaction,
+  input: {
+    readonly astrologerUserId: string;
+    readonly externalIdentityId: string;
+    readonly now: Date;
+  }
+): Promise<MessagingThread> {
+  const existing = await findThreadByExternalIdentity(database, input);
+  if (existing) return existing;
+
+  try {
+    const [thread] = await database
+      .insert(messagingThreads)
+      .values({
+        astrologerUserId: input.astrologerUserId,
+        clientUserId: null,
+        status: "open",
+        lastMessageId: null,
+        lastMessageAt: null,
+        unreadAstrologerCount: 0,
+        createdAt: input.now,
+        updatedAt: input.now
+      })
+      .returning({ id: messagingThreads.id });
+    if (!thread) throw new Error("Expected WhatsApp messaging thread insert to return a row");
+
+    await database.insert(messagingThreadIdentities).values({
+      threadId: thread.id,
+      externalIdentityId: input.externalIdentityId,
+      provider: "whatsapp",
+      isPrimary: true,
+      createdAt: input.now
+    });
+  } catch (error) {
+    if (!isThreadIdentityExternalIdentityViolation(error)) throw error;
+  }
+
+  const created = await findThreadByExternalIdentity(database, input);
+  if (!created) throw new Error("Expected WhatsApp messaging thread identity link");
   return created;
 }
 
@@ -2293,7 +2939,166 @@ async function findInstagramGraphMessage(
   return row ? toMessagingMessage(row.message) : null;
 }
 
+async function findWhatsAppCloudMessage(
+  database: MessagingDatabase,
+  input: RecordWhatsAppCloudMessageStoreInput
+): Promise<MessagingMessage | null> {
+  const connection = await findWhatsAppCloudConnectionByPhoneNumberId(database, {
+    phoneNumberId: input.phoneNumberId,
+    activeOnly: false
+  });
+  if (!connection) return null;
+  const [row] = await database
+    .select({ message: messagingMessages })
+    .from(messagingMessages)
+    .innerJoin(
+      messagingExternalIdentities,
+      eq(messagingExternalIdentities.id, messagingMessages.externalIdentityId)
+    )
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, connection.id),
+        eq(messagingExternalIdentities.providerChatId, input.senderWaId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "inbound")
+      )
+    )
+    .limit(1);
+
+  return row ? toMessagingMessage(row.message) : null;
+}
+
+async function findWhatsAppCloudEcho(
+  database: MessagingDatabase,
+  input: RecordWhatsAppCloudEchoStoreInput
+): Promise<MessagingMessage | null> {
+  const connection = await findWhatsAppCloudConnectionByPhoneNumberId(database, {
+    phoneNumberId: input.phoneNumberId,
+    activeOnly: false
+  });
+  if (!connection) return null;
+  const [row] = await database
+    .select({ message: messagingMessages })
+    .from(messagingMessages)
+    .innerJoin(
+      messagingExternalIdentities,
+      eq(messagingExternalIdentities.id, messagingMessages.externalIdentityId)
+    )
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, connection.id),
+        eq(messagingExternalIdentities.providerChatId, input.recipientWaId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound")
+      )
+    )
+    .limit(1);
+
+  return row ? toMessagingMessage(row.message) : null;
+}
+
+function whatsappCloudAccountUpdateConnectionPatch(
+  input: RecordWhatsAppCloudAccountUpdateStoreInput,
+  timestamp: Date
+) {
+  if (input.event === "PARTNER_REMOVED" || input.event === "ACCOUNT_OFFBOARDED") {
+    return {
+      status: "revoked" as const,
+      capabilities: whatsappCloudPendingCapabilities(),
+      lastSyncedAt: timestamp,
+      lastErrorCode:
+        input.event === "ACCOUNT_OFFBOARDED"
+          ? "whatsapp_cloud_account_offboarded"
+          : "whatsapp_cloud_partner_removed",
+      lastErrorMessage: input.reason ?? `WhatsApp ${input.event}`,
+      updatedAt: timestamp
+    };
+  }
+
+  if (input.event === "ACCOUNT_RECONNECTED") {
+    return {
+      status: "reauth_required" as const,
+      capabilities: whatsappCloudPendingCapabilities(),
+      lastSyncedAt: timestamp,
+      lastErrorCode: "whatsapp_cloud_reconnect_requires_verification",
+      lastErrorMessage: input.reason ?? "WhatsApp account reconnect requires Graph verification",
+      updatedAt: timestamp
+    };
+  }
+
+  return {
+    lastSyncedAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
 async function reconcileInstagramGraphObservedOutbound(
+  database: MessagingDatabase,
+  input: {
+    readonly channelConnectionId: string;
+    readonly externalIdentityId: string;
+    readonly threadId: string;
+    readonly providerMessageId: string;
+    readonly providerSentAt: Date;
+    readonly text: string;
+    readonly now: Date;
+  }
+): Promise<MessagingMessage | null> {
+  const [existingExactRow] = await database
+    .select()
+    .from(messagingMessages)
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        eq(messagingMessages.externalIdentityId, input.externalIdentityId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound")
+      )
+    )
+    .limit(1);
+  if (existingExactRow) return toMessagingMessage(existingExactRow);
+
+  const [candidate] = await database
+    .select({ id: messagingMessages.id })
+    .from(messagingMessages)
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        isNull(messagingMessages.externalIdentityId),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound"),
+        ne(messagingMessages.status, "deleted")
+      )
+    )
+    .orderBy(desc(messagingMessages.createdAt), desc(messagingMessages.id))
+    .limit(1);
+  if (!candidate) return null;
+
+  const [row] = await database
+    .update(messagingMessages)
+    .set({
+      threadId: input.threadId,
+      externalIdentityId: input.externalIdentityId,
+      providerSentAt: input.providerSentAt,
+      text: input.text,
+      status: "sent",
+      failureCode: null,
+      updatedAt: input.now
+    })
+    .where(
+      and(
+        eq(messagingMessages.channelConnectionId, input.channelConnectionId),
+        eq(messagingMessages.id, candidate.id),
+        eq(messagingMessages.providerMessageId, input.providerMessageId),
+        eq(messagingMessages.direction, "outbound")
+      )
+    )
+    .returning();
+
+  return row ? toMessagingMessage(row) : null;
+}
+
+async function reconcileWhatsAppCloudObservedOutbound(
   database: MessagingDatabase,
   input: {
     readonly channelConnectionId: string;
@@ -2411,6 +3216,17 @@ function instagramGraphObservedOutboundIdempotencyKey(
   ].join(":");
 }
 
+function whatsappCloudObservedOutboundIdempotencyKey(
+  input: RecordWhatsAppCloudEchoStoreInput
+): string {
+  return [
+    "whatsapp-cloud",
+    input.phoneNumberId,
+    input.recipientWaId,
+    input.providerMessageId
+  ].join(":");
+}
+
 function hashTelegramBusinessMessageRequest(
   input: RecordTelegramBusinessMessageStoreInput
 ): `sha256:${string}` {
@@ -2453,6 +3269,23 @@ function hashInstagramGraphMessageRequest(
         instagramAccountId: input.instagramAccountId,
         senderId: input.senderId,
         recipientId: input.recipientId,
+        providerMessageId: input.providerMessageId,
+        text: input.text,
+        providerSentAt: input.providerSentAt
+      })
+    )
+    .digest("hex")}`;
+}
+
+function hashWhatsAppCloudMessageRequest(
+  input: RecordWhatsAppCloudEchoStoreInput
+): `sha256:${string}` {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        phoneNumberId: input.phoneNumberId,
+        senderWaId: input.senderWaId,
+        recipientWaId: input.recipientWaId,
         providerMessageId: input.providerMessageId,
         text: input.text,
         providerSentAt: input.providerSentAt
@@ -2543,6 +3376,30 @@ function instagramGraphAuthorizedCapabilities(): Record<string, boolean> {
     canReceive: true,
     canRead: true,
     supportsHistoryImport: false,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
+    supportsAttachments: false
+  };
+}
+
+function whatsappCloudPendingCapabilities(): Record<string, boolean> {
+  return {
+    canSend: false,
+    canReceive: false,
+    canRead: false,
+    supportsHistoryImport: true,
+    supportsMessageEdits: false,
+    supportsMessageDeletes: false,
+    supportsAttachments: false
+  };
+}
+
+function whatsappCloudAuthorizedCapabilities(): Record<string, boolean> {
+  return {
+    canSend: true,
+    canReceive: true,
+    canRead: true,
+    supportsHistoryImport: true,
     supportsMessageEdits: false,
     supportsMessageDeletes: false,
     supportsAttachments: false
@@ -2816,6 +3673,10 @@ function isOutboundIdempotencyViolation(error: unknown): boolean {
 
 function isTelegramBusinessMessageDedupeViolation(error: unknown): boolean {
   return isInboundProviderDedupeViolation(error) || isOutboundIdempotencyViolation(error);
+}
+
+function isProviderWebhookEventKeyViolation(error: unknown): boolean {
+  return hasPostgresConstraintViolation(error, "23505", providerWebhookEventKeyConstraint);
 }
 
 function isThreadIdentityExternalIdentityViolation(error: unknown): boolean {

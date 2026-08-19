@@ -8,7 +8,8 @@ import type {
   MessagingRealtimeEventDraft,
   MessagingThread,
   MessagingThreadExternalIdentity,
-  TelegramBusinessMediaAttachment
+  TelegramBusinessMediaAttachment,
+  WhatsAppCloudSyncStatus
 } from "./messaging-types";
 
 export type CreateOutboundMessageStoreInput = {
@@ -124,6 +125,40 @@ export type CompleteInstagramGraphConnectionStoreResult = {
   readonly kind: "recorded" | "unmatched";
 };
 
+export type StartWhatsAppCloudConnectionStoreInput = {
+  readonly connectionId: string;
+  readonly astrologerUserId: string;
+  readonly now: string;
+};
+
+export type StartWhatsAppCloudConnectionStoreResult = {
+  readonly connectionId: string;
+};
+
+export type CompleteWhatsAppCloudConnectionStoreInput = {
+  readonly astrologerUserId: string;
+  readonly connectionId: string;
+  readonly wabaId: string;
+  readonly businessId: string | null;
+  readonly phoneNumberId: string;
+  readonly displayPhoneNumber: string | null;
+  readonly verifiedName: string | null;
+  readonly platformType: string | null;
+  readonly isOnBizApp: boolean | null;
+  readonly encryptedAccessToken: EncryptedMessagingSecret;
+  readonly tokenScopes: readonly string[];
+  readonly connectedVia: "embedded_signup_coexistence";
+  readonly tokenIssuedAt: string | null;
+  readonly tokenExpiresAt: string | null;
+  readonly historySyncStatus: WhatsAppCloudSyncStatus;
+  readonly contactSyncStatus: WhatsAppCloudSyncStatus;
+  readonly now: string;
+};
+
+export type CompleteWhatsAppCloudConnectionStoreResult = {
+  readonly kind: "recorded" | "unmatched";
+};
+
 export type RevokeInstagramGraphConnectionStoreInput = {
   readonly instagramAppScopedUserId: string;
   readonly reason: "deauthorized" | "data_deletion";
@@ -217,6 +252,61 @@ export type RecordInstagramGraphMessageStoreInput = {
   readonly text: string;
   readonly providerSentAt: string;
   readonly now: string;
+};
+
+export type RecordWhatsAppCloudMessageStoreInput = {
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly senderWaId: string;
+  readonly recipientWaId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly now: string;
+};
+
+export type RecordWhatsAppCloudEchoStoreInput = {
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly senderWaId: string;
+  readonly recipientWaId: string;
+  readonly text: string;
+  readonly providerSentAt: string;
+  readonly now: string;
+};
+
+export type RecordWhatsAppCloudStatusStoreInput = {
+  readonly phoneNumberId: string;
+  readonly providerMessageId: string;
+  readonly status: "sent" | "delivered" | "read" | "failed";
+  readonly providerStatusAt: string;
+  readonly failureCode: string | null;
+  readonly now: string;
+};
+
+export type RecordWhatsAppCloudWebhookEventStoreInput = {
+  readonly eventKey: string;
+  readonly field: string;
+  readonly externalAccountId: string | null;
+  readonly externalOwnerUserId: string | null;
+  readonly normalizedSummary: Readonly<Record<string, unknown>>;
+  readonly receivedAt: string;
+};
+
+export type RecordWhatsAppCloudWebhookEventStoreResult = {
+  readonly kind: "recorded" | "duplicate";
+};
+
+export type RecordWhatsAppCloudAccountUpdateStoreInput = {
+  readonly wabaId: string;
+  readonly phoneNumberId: string | null;
+  readonly event: string;
+  readonly reason: string | null;
+  readonly eventAt: string;
+  readonly now: string;
+};
+
+export type RecordWhatsAppCloudAccountUpdateStoreResult = {
+  readonly kind: "recorded" | "unmatched";
 };
 
 export type TelegramMtprotoUpdateCursor = {
@@ -346,6 +436,12 @@ export type MessagingStore = {
   readonly completeInstagramGraphConnection: (
     input: CompleteInstagramGraphConnectionStoreInput
   ) => Promise<CompleteInstagramGraphConnectionStoreResult>;
+  readonly startWhatsAppCloudConnection: (
+    input: StartWhatsAppCloudConnectionStoreInput
+  ) => Promise<StartWhatsAppCloudConnectionStoreResult>;
+  readonly completeWhatsAppCloudConnection: (
+    input: CompleteWhatsAppCloudConnectionStoreInput
+  ) => Promise<CompleteWhatsAppCloudConnectionStoreResult>;
   readonly revokeInstagramGraphConnectionByMetaUserId: (
     input: RevokeInstagramGraphConnectionStoreInput
   ) => Promise<RevokeInstagramGraphConnectionStoreResult>;
@@ -368,6 +464,21 @@ export type MessagingStore = {
   readonly recordInstagramGraphMessage: (
     input: RecordInstagramGraphMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordWhatsAppCloudMessage: (
+    input: RecordWhatsAppCloudMessageStoreInput
+  ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordWhatsAppCloudEcho: (
+    input: RecordWhatsAppCloudEchoStoreInput
+  ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
+  readonly recordWhatsAppCloudStatus: (
+    input: RecordWhatsAppCloudStatusStoreInput
+  ) => Promise<{ readonly kind: "recorded" | "unmatched"; readonly updatedCount: number }>;
+  readonly recordWhatsAppCloudWebhookEvent: (
+    input: RecordWhatsAppCloudWebhookEventStoreInput
+  ) => Promise<RecordWhatsAppCloudWebhookEventStoreResult>;
+  readonly recordWhatsAppCloudAccountUpdate: (
+    input: RecordWhatsAppCloudAccountUpdateStoreInput
+  ) => Promise<RecordWhatsAppCloudAccountUpdateStoreResult>;
   readonly recordTelegramMtprotoMessage: (
     input: RecordTelegramMtprotoMessageStoreInput
   ) => Promise<InboundMessageRecordResult | { readonly kind: "unmatched" }>;
