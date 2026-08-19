@@ -103,6 +103,23 @@ describe("ClientAstroDiaryWorkspaceView", () => {
     fireEvent.click(retry);
     expect(onRetryEntryAuthority).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the Russian read-only entry error subscription-neutral", () => {
+    render(
+      <MemoryRouter>
+        <ClientAstroDiaryWorkspaceView
+          copy={clientCopyByLocale.ru.astroDiary}
+          locale="ru"
+          state={readyState({ entryBody: "Текст", entryError: "read_only" })}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Оплаченный период завершён. Журнал доступен только для чтения."
+    );
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Подписка");
+  });
 });
 
 function readyState(overrides: Record<string, unknown> = {}) {
