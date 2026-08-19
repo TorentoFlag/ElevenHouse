@@ -130,15 +130,45 @@ const publicApiRuntimeConfigSchema = z.object({
     .default(2500),
   PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: z.enum(["true", "false"]).default("false"),
   PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS: z.string().trim().min(1).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY: z.string().trim().min(1).default(".local/finance-artifacts"),
-  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z.string().trim().min(1).default("provider-request"),
-  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z.string().regex(/^[1-9][0-9]*$/).default("1"),
+  PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY: z
+    .string()
+    .trim()
+    .min(1)
+    .default(".local/finance-artifacts"),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT: z.string().url().optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_REGION: z.string().trim().min(1).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET: z.string().trim().min(1).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
+  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .default("provider-request"),
+  PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .default("1")
 });
 
-const financeCheckoutPaymentMethodSchema = z.object({
-  method: z.enum(["bank_card", "sbp", "sberpay", "tpay", "alfapay", "dolyami", "mirpay", "applepay", "googlepay"]),
-  paymentMode: z.enum(["h2h", "redirect"])
-}).strict();
+const financeCheckoutPaymentMethodSchema = z
+  .object({
+    method: z.enum([
+      "bank_card",
+      "sbp",
+      "sberpay",
+      "tpay",
+      "alfapay",
+      "dolyami",
+      "mirpay",
+      "applepay",
+      "googlepay"
+    ]),
+    paymentMode: z.enum(["h2h", "redirect"])
+  })
+  .strict();
 type FinanceCheckoutPaymentMethod = z.infer<typeof financeCheckoutPaymentMethodSchema>;
 
 export type PublicApiRuntimeConfig = {
@@ -210,7 +240,18 @@ export type PublicApiRuntimeConfig = {
   };
   readonly financeCheckout: Readonly<{
     paymentMethods: readonly FinanceCheckoutPaymentMethod[];
-    artifactDirectory: string;
+    artifactStorage:
+      | Readonly<{ kind: "filesystem"; rootDirectory: string }>
+      | Readonly<{
+          kind: "s3";
+          endpoint: string;
+          region: string;
+          bucket: string;
+          accessKeyId: string;
+          secretAccessKey: string;
+          forcePathStyle: boolean;
+          kmsKeyArn: string;
+        }>;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
   }> | null;
 };
@@ -397,23 +438,78 @@ function resolveLiveKitRuntimeOptions(config: {
   };
 }
 
-function resolveFinanceCheckout(config: z.infer<typeof publicApiRuntimeConfigSchema>): PublicApiRuntimeConfig["financeCheckout"] {
+function resolveFinanceCheckout(
+  config: z.infer<typeof publicApiRuntimeConfigSchema>
+): PublicApiRuntimeConfig["financeCheckout"] {
   if (config.PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED === "false") return null;
   return Object.freeze({
     paymentMethods: parseFinanceCheckoutPaymentMethods(
       requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS)
     ),
-    artifactDirectory: config.PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY,
+    artifactStorage: resolveFinanceCheckoutArtifactStorage(config),
     requestArtifactRetention: Object.freeze({
-      policyId: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID),
-      policyVersion: requiredFinanceCheckoutConfig(config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION)
+      policyId: requiredFinanceCheckoutConfig(
+        config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID
+      ),
+      policyVersion: requiredFinanceCheckoutConfig(
+        config.PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_VERSION
+      )
     })
   });
 }
 
-function parseFinanceCheckoutPaymentMethods(value: string): readonly FinanceCheckoutPaymentMethod[] {
+function resolveFinanceCheckoutArtifactStorage(
+  config: z.infer<typeof publicApiRuntimeConfigSchema>
+): NonNullable<PublicApiRuntimeConfig["financeCheckout"]>["artifactStorage"] {
+  if (config.NODE_ENV === "production" || config.PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT) {
+    return resolveFinanceCheckoutS3Storage(config);
+  }
+  return Object.freeze({
+    kind: "filesystem" as const,
+    rootDirectory: config.PUBLIC_API_FINANCE_ARTIFACT_DIRECTORY
+  });
+}
+
+function resolveFinanceCheckoutS3Storage(config: z.infer<typeof publicApiRuntimeConfigSchema>) {
+  const endpoint = requiredFinanceCheckoutS3Config(config.PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT);
+  if (new URL(endpoint).protocol !== "https:") {
+    throw new Error("PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT must use HTTPS");
+  }
+  const forcePathStyle = config.PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE;
+  if (forcePathStyle === undefined) {
+    throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires S3 artifact storage");
+  }
+  const kmsKeyArn = requiredFinanceCheckoutS3Config(config.PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
+  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
+    throw new Error(
+      "PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN"
+    );
+  }
+  return Object.freeze({
+    kind: "s3" as const,
+    endpoint,
+    region: requiredFinanceCheckoutS3Config(config.PUBLIC_API_FINANCE_ARTIFACT_S3_REGION),
+    bucket: requiredFinanceCheckoutS3Config(config.PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET),
+    accessKeyId: requiredFinanceCheckoutS3Config(
+      config.PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID
+    ),
+    secretAccessKey: requiredFinanceCheckoutS3Config(
+      config.PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY
+    ),
+    forcePathStyle: forcePathStyle === "true",
+    kmsKeyArn
+  });
+}
+
+function parseFinanceCheckoutPaymentMethods(
+  value: string
+): readonly FinanceCheckoutPaymentMethod[] {
   let parsed: unknown;
-  try { parsed = JSON.parse(value); } catch { throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS must be valid JSON"); }
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS must be valid JSON");
+  }
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS must be a non-empty JSON array");
   }
@@ -421,7 +517,15 @@ function parseFinanceCheckoutPaymentMethods(value: string): readonly FinanceChec
 }
 
 function requiredFinanceCheckoutConfig(value: string | undefined): string {
-  if (!value) throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires payment methods");
+  if (!value)
+    throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires payment methods");
+  return value;
+}
+
+function requiredFinanceCheckoutS3Config(value: string | undefined): string {
+  if (!value) {
+    throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires S3 artifact storage");
+  }
   return value;
 }
 

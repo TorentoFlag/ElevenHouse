@@ -64,7 +64,9 @@ import { createPlatformTariffInvoiceChargeCommandFactory } from "@elevenhouse/do
 import {
   createFinanceTransientSecretVault,
   createFinanceRestrictedProviderCredentialVault,
-  createFilesystemFinancePrivateObjectStorage
+  createFilesystemFinancePrivateObjectStorage,
+  createS3FinancePrivateObjectStorage,
+  type FinancePrivateObjectStorageRuntime
 } from "@elevenhouse/finance-infrastructure";
 import { createArcPayCanonicalPaymentReader } from "./arc-pay/arc-pay-canonical-payment-reader";
 import { createArcPayCheckoutSessionClient } from "./arc-pay/arc-pay-checkout-session-client";
@@ -182,9 +184,9 @@ async function startPaymentWorker(): Promise<void> {
   const readinessServer = createBasicWorkerReadinessServer({ service });
 
   if (config.financeProviderDispatch) {
-    const privateStorage = createFilesystemFinancePrivateObjectStorage({
-      rootDirectory: config.financeProviderDispatch.artifactDirectory
-    });
+    const privateStorage = createFinancePrivateObjectStorage(
+      config.financeProviderDispatch.artifactStorage
+    );
     await privateStorage.checkReady();
     const artifactRegistry = createFinanceArtifactRegistry(postgresRuntime.database);
     financeIngress = createFinanceWebhookIngress({
@@ -817,6 +819,16 @@ function listenServer(
       resolve();
     });
   });
+}
+
+function createFinancePrivateObjectStorage(
+  config: NonNullable<
+    ReturnType<typeof createPaymentWorkerRuntimeConfig>["financeProviderDispatch"]
+  >["artifactStorage"]
+): FinancePrivateObjectStorageRuntime {
+  return config.kind === "filesystem"
+    ? createFilesystemFinancePrivateObjectStorage({ rootDirectory: config.rootDirectory })
+    : createS3FinancePrivateObjectStorage(config);
 }
 
 startPaymentWorker().catch((error: unknown) => {

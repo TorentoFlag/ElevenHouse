@@ -12,7 +12,11 @@ import {
   createFinanceArtifactRegistry
 } from "@elevenhouse/db/finance";
 import { createClientOrderCheckoutCommandFactory } from "@elevenhouse/domain/finance-core";
-import { createFilesystemFinancePrivateObjectStorage } from "@elevenhouse/finance-infrastructure";
+import {
+  createFilesystemFinancePrivateObjectStorage,
+  createS3FinancePrivateObjectStorage,
+  type FinancePrivateObjectStorageRuntime
+} from "@elevenhouse/finance-infrastructure";
 import type { PublicApiRuntimeConfig } from "../../config/runtime-config.js";
 import { SystemClock } from "../../common/system-clock.js";
 import { DatabaseModule } from "../database/database.module";
@@ -48,9 +52,7 @@ import {
         const config =
           configService.getOrThrow<PublicApiRuntimeConfig>("publicApi").financeCheckout;
         if (!config) return null;
-        const privateStorage = createFilesystemFinancePrivateObjectStorage({
-          rootDirectory: config.artifactDirectory
-        });
+        const privateStorage = createFinancePrivateObjectStorage(config.artifactStorage);
         await privateStorage.checkReady();
         return privateStorage;
       },
@@ -62,7 +64,7 @@ import {
         postgresRuntime: PostgresRuntimeService,
         configService: ConfigService,
         clock: SystemClock,
-        privateStorage: ReturnType<typeof createFilesystemFinancePrivateObjectStorage> | null
+        privateStorage: FinancePrivateObjectStorageRuntime | null
       ) => {
         const config =
           configService.getOrThrow<PublicApiRuntimeConfig>("publicApi").financeCheckout;
@@ -100,7 +102,7 @@ import {
       provide: PAYMENTS_CHECKOUT_ACTION_SERVICE,
       useFactory: (
         postgresRuntime: PostgresRuntimeService,
-        privateStorage: ReturnType<typeof createFilesystemFinancePrivateObjectStorage> | null
+        privateStorage: FinancePrivateObjectStorageRuntime | null
       ) => {
         if (!privateStorage) return null;
         return new ClientCheckoutActionService(
@@ -114,3 +116,13 @@ import {
   ]
 })
 export class PaymentsModule {}
+
+function createFinancePrivateObjectStorage(
+  config: NonNullable<PublicApiRuntimeConfig["financeCheckout"]>["artifactStorage"]
+): FinancePrivateObjectStorageRuntime {
+  return config.kind === "filesystem"
+    ? createFilesystemFinancePrivateObjectStorage({
+        rootDirectory: config.rootDirectory
+      })
+    : createS3FinancePrivateObjectStorage(config);
+}
