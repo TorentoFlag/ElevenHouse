@@ -496,7 +496,7 @@ export type FlowClientEventEnrollmentRequestedPayloadV1 =
   | FlowAstroEventEnrollmentRequestedPayloadV1
   | FlowClientLifecycleChangedEnrollmentRequestedPayloadV1
   | FlowScheduleTimeEnrollmentRequestedPayloadV1
-  | FlowReviewReceivedEnrollmentRequestedPayloadV1
+  | FlowReviewFirstPublishedEnrollmentRequestedPayloadV1
   | FlowSubscriptionEventEnrollmentRequestedPayloadV1;
 
 export function createClientLifecycleChangedFlowEnrollmentRequestedPayload(input: {
@@ -609,12 +609,12 @@ export function createScheduleTimeFlowEnrollmentRequestedPayload(input: {
   };
 }
 
-export const FLOW_REVIEW_RECEIVED_ENROLLMENT_REQUESTED_EVENT =
-  "flows.review_received.enrollment_requested.v1" as const;
+export const FLOW_REVIEW_FIRST_PUBLISHED_ENROLLMENT_REQUESTED_EVENT =
+  "flows.review_first_published.enrollment_requested.v1" as const;
 
-export type FlowReviewReceivedEnrollmentRequestedPayloadV1 = {
-  readonly schemaVersion: "flow-review-received-enrollment-request.v1";
-  readonly eventKind: "review_received";
+export type FlowReviewFirstPublishedEnrollmentRequestedPayloadV1 = {
+  readonly schemaVersion: "flow-review-first-published-enrollment-request.v1";
+  readonly eventKind: "review_first_published";
   readonly source: "crm";
   readonly sourceEventId: string;
   readonly subjectType: "client";
@@ -622,14 +622,18 @@ export type FlowReviewReceivedEnrollmentRequestedPayloadV1 = {
   readonly occurrenceKey: string;
   readonly occurredAt: string;
   readonly payloadSchemaVersion: 1;
-  readonly payload: { readonly reviewId: string; readonly relationshipId: string };
+  readonly payload: {
+    readonly reviewId: string;
+    readonly relationshipId: string;
+    readonly firstApprovedVersionId: string;
+  };
 };
 
-export const flowReviewReceivedEnrollmentRequestedPayloadV1Schema: z.ZodType<FlowReviewReceivedEnrollmentRequestedPayloadV1> =
+export const flowReviewFirstPublishedEnrollmentRequestedPayloadV1Schema: z.ZodType<FlowReviewFirstPublishedEnrollmentRequestedPayloadV1> =
   z
     .object({
-      schemaVersion: z.literal("flow-review-received-enrollment-request.v1"),
-      eventKind: z.literal("review_received"),
+      schemaVersion: z.literal("flow-review-first-published-enrollment-request.v1"),
+      eventKind: z.literal("review_first_published"),
       source: z.literal("crm"),
       sourceEventId: z.string().trim().min(1).max(180),
       subjectType: z.literal("client"),
@@ -637,40 +641,51 @@ export const flowReviewReceivedEnrollmentRequestedPayloadV1Schema: z.ZodType<Flo
       occurrenceKey: z.string().uuid(),
       occurredAt: z.string().datetime(),
       payloadSchemaVersion: z.literal(1),
-      payload: z.object({ reviewId: z.string().uuid(), relationshipId: z.string().uuid() }).strict()
+      payload: z
+        .object({
+          reviewId: z.string().uuid(),
+          relationshipId: z.string().uuid(),
+          firstApprovedVersionId: z.string().uuid()
+        })
+        .strict()
     })
     .strict()
     .superRefine((value, context) => {
       if (
         value.occurrenceKey !== value.payload.reviewId ||
-        value.sourceEventId !== `review:${value.payload.reviewId}:received`
+        value.sourceEventId !== `review:${value.payload.reviewId}:first_published`
       ) {
         context.addIssue({
           code: "custom",
-          message: "Review-received enrollment transport identities must agree"
+          message: "Review-first-published enrollment transport identities must agree"
         });
       }
     });
 
-export function createReviewReceivedFlowEnrollmentRequestedPayload(input: {
+export function createReviewFirstPublishedFlowEnrollmentRequestedPayload(input: {
   readonly reviewId: string;
   readonly ownerUserId: string;
   readonly clientUserId: string;
   readonly relationshipId: string;
-  readonly receivedAt: string;
-}): FlowReviewReceivedEnrollmentRequestedPayloadV1 {
+  readonly firstApprovedVersionId: string;
+  readonly publishedAt: string;
+}): FlowReviewFirstPublishedEnrollmentRequestedPayloadV1 {
   void input.ownerUserId;
   return {
-    schemaVersion: "flow-review-received-enrollment-request.v1",
-    eventKind: "review_received",
+    schemaVersion: "flow-review-first-published-enrollment-request.v1",
+    eventKind: "review_first_published",
     source: "crm",
-    sourceEventId: `review:${input.reviewId}:received`,
+    sourceEventId: `review:${input.reviewId}:first_published`,
     subjectType: "client",
     subjectId: input.clientUserId,
     occurrenceKey: input.reviewId,
-    occurredAt: input.receivedAt,
+    occurredAt: input.publishedAt,
     payloadSchemaVersion: 1,
-    payload: { reviewId: input.reviewId, relationshipId: input.relationshipId }
+    payload: {
+      reviewId: input.reviewId,
+      relationshipId: input.relationshipId,
+      firstApprovedVersionId: input.firstApprovedVersionId
+    }
   };
 }
 

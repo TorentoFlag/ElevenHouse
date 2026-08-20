@@ -44,7 +44,7 @@ export const flowNodeKindV2Values = [
   "astro_event",
   "client_lifecycle_changed",
   "schedule_time",
-  "review_received",
+  "review_first_published",
   "subscription_event",
   "birth_data_available",
   "natal_chart_request",
@@ -69,7 +69,7 @@ export const flowTriggerNodeKindV2Values = [
   "astro_event",
   "client_lifecycle_changed",
   "schedule_time",
-  "review_received",
+  "review_first_published",
   "subscription_event"
 ] as const;
 export const flowTriggerNodeKindV2Schema = z.enum(flowTriggerNodeKindV2Values);
@@ -262,14 +262,16 @@ export const flowScheduleTimeNodeV2Schema = z
   .strict();
 export type FlowScheduleTimeNodeV2 = z.infer<typeof flowScheduleTimeNodeV2Schema>;
 
-export const flowReviewReceivedNodeV2Schema = z
+export const flowReviewFirstPublishedNodeV2Schema = z
   .object({
     ...nodeBaseShape,
-    kind: z.literal("review_received"),
+    kind: z.literal("review_first_published"),
     config: enrollmentPolicyConfigSchema
   })
   .strict();
-export type FlowReviewReceivedNodeV2 = z.infer<typeof flowReviewReceivedNodeV2Schema>;
+export type FlowReviewFirstPublishedNodeV2 = z.infer<
+  typeof flowReviewFirstPublishedNodeV2Schema
+>;
 
 export const flowSubscriptionEventTypeV2Values = [
   "started",
@@ -498,7 +500,7 @@ export const flowNodeV2Schema = z.discriminatedUnion("kind", [
   flowAstroEventNodeV2Schema,
   flowClientLifecycleChangedNodeV2Schema,
   flowScheduleTimeNodeV2Schema,
-  flowReviewReceivedNodeV2Schema,
+  flowReviewFirstPublishedNodeV2Schema,
   flowSubscriptionEventNodeV2Schema,
   flowBirthDataAvailableNodeV2Schema,
   flowNatalChartRequestNodeV2Schema,
@@ -570,7 +572,7 @@ export const flowCapabilityRequirementValues = [
   "astro.events.calendar",
   "clients.events.lifecycle_changed",
   "schedule.events.time",
-  "reviews.events.received",
+  "reviews.events.first_published",
   "subscriptions.events.changed",
   "clients.birth_data.read.service_preparation",
   "products.read",

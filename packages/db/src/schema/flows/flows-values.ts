@@ -65,7 +65,7 @@ export const flowRuntimeEventKindValues = [
   "astro_event",
   "client_lifecycle_changed",
   "schedule_time",
-  "review_received",
+  "review_first_published",
   "subscription_event"
 ] as const;
 

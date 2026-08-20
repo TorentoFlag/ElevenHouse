@@ -25,6 +25,11 @@
       "import": "./dist/astro-diary.js",
       "require": "./dist/astro-diary.js"
     },
+    "./reviews": {
+      "types": "./dist/reviews.d.ts",
+      "import": "./dist/reviews.js",
+      "require": "./dist/reviews.js"
+    },
     "./media": {
       "types": "./dist/media.d.ts",
       "import": "./dist/media.js",

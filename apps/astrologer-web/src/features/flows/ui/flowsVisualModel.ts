@@ -213,9 +213,9 @@ const flowNodeVisualByKind = {
     labels: ["Расписание", "Schedule"],
     tone: "trigger"
   },
-  review_received: {
+  review_first_published: {
     iconName: "doc",
-    labels: ["Отзыв", "Review"],
+    labels: ["Отзыв опубликован", "Review published"],
     tone: "trigger"
   },
   subscription_event: {

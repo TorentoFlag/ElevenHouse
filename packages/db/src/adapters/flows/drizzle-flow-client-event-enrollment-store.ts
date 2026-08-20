@@ -300,24 +300,25 @@ function normalizeClientEventRequest(
       dedupeKey: request.sourceEventId
     });
   }
-  if (request.eventKind === "review_received") {
+  if (request.eventKind === "review_first_published") {
     return normalizeFlowClientEvent({
       ownerUserId: subject.ownerUserId,
       relationshipId: subject.relationshipId,
       source: "crm",
       sourceEventId: request.sourceEventId,
-      event: { eventKind: "review_received", clientUserId: subject.clientUserId },
+      event: { eventKind: "review_first_published", clientUserId: subject.clientUserId },
       occurrenceKey: request.occurrenceKey,
       occurredAtUtc: request.occurredAt,
       payloadSchemaVersion: 1,
       allowlistedPayload: {
         clientUserId: subject.clientUserId,
         relationshipId: subject.relationshipId,
-        reviewId: request.payload.reviewId
+        reviewId: request.payload.reviewId,
+        firstApprovedVersionId: request.payload.firstApprovedVersionId
       },
       classification: "personal",
       redactionVersion: 1,
-      retentionPolicyId: "flows.review-received.v1",
+      retentionPolicyId: "flows.review-first-published.v1",
       dedupeKey: request.sourceEventId
     });
   }

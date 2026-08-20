@@ -243,7 +243,7 @@ export function createFlowClientEventEnrollmentWorkerRequirementKeys(): readonly
     "capability:messaging.events.first_inbound_message",
     "capability:products.events.free_product_received",
     "capability:products.read",
-    "capability:reviews.events.received",
+    "capability:reviews.events.first_published",
     "capability:schedule.events.time",
     "capability:subscriptions.events.changed",
     `runtime:${FLOW_EXECUTION_SEMANTICS_VERSION}`,
@@ -253,7 +253,7 @@ export function createFlowClientEventEnrollmentWorkerRequirementKeys(): readonly
     "trigger:free_product_received:1:1:1",
     "trigger:new_lead:1:1:1",
     "trigger:product_purchased:1:1:1",
-    "trigger:review_received:1:1:1",
+    "trigger:review_first_published:1:1:1",
     "trigger:schedule_time:1:1:1",
     "trigger:subscription_event:1:1:1"
   ];

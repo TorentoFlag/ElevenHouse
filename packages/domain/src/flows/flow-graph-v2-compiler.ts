@@ -137,10 +137,10 @@ const nodeRules = {
     terminal: false,
     trigger: true
   },
-  review_received: {
+  review_first_published: {
     allowedHandles: nextHandle,
     requiredHandles: nextHandle,
-    capabilities: ["reviews.events.received"],
+    capabilities: ["reviews.events.first_published"],
     branching: false,
     terminal: false,
     trigger: true
@@ -702,7 +702,7 @@ function isTriggerNode(node: FlowNodeV2): node is Extract<
       | "astro_event"
       | "client_lifecycle_changed"
       | "schedule_time"
-      | "review_received"
+      | "review_first_published"
       | "subscription_event";
   }
 > {
@@ -716,7 +716,7 @@ function isTriggerNode(node: FlowNodeV2): node is Extract<
     node.kind === "astro_event" ||
     node.kind === "client_lifecycle_changed" ||
     node.kind === "schedule_time" ||
-    node.kind === "review_received" ||
+    node.kind === "review_first_published" ||
     node.kind === "subscription_event"
   );
 }

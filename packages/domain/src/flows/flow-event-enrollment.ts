@@ -46,7 +46,7 @@ export type FlowClientTriggerEvent =
       readonly scheduleKey: string;
     }
   | {
-      readonly eventKind: "review_received";
+      readonly eventKind: "review_first_published";
       readonly clientUserId: string;
     }
   | {
@@ -142,8 +142,8 @@ export function matchFlowClientTriggerEvent(input: {
     };
   }
 
-  if (input.event.eventKind === "review_received") {
-    const trigger = input.graph.nodes.find((node) => node.kind === "review_received");
+  if (input.event.eventKind === "review_first_published") {
+    const trigger = input.graph.nodes.find((node) => node.kind === "review_first_published");
     if (!trigger) return { status: "not_matched", reason: "trigger_kind" };
     return {
       status: "matched",

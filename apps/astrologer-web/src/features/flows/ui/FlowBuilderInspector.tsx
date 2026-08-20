@@ -169,7 +169,7 @@ function StartNodeConfigFields({
   if (node.kind === "manual_client") {
     return <p className={className}>{copy.manualTrigger}</p>;
   }
-  if (node.kind === "new_lead" || node.kind === "review_received") {
+  if (node.kind === "new_lead" || node.kind === "review_first_published") {
     return (
       <EnrollmentPolicyField
         className={className}
@@ -812,7 +812,7 @@ function createStartNodeFromKind(
   if (kind === "schedule_time") {
     return { ...base, kind, config: { scheduleKey: "", enrollmentPolicy } };
   }
-  if (kind === "review_received") return { ...base, kind, config: { enrollmentPolicy } };
+  if (kind === "review_first_published") return { ...base, kind, config: { enrollmentPolicy } };
   return { ...base, kind: "subscription_event", config: { eventTypes: [], enrollmentPolicy } };
 }
 
@@ -835,7 +835,7 @@ const startEventKindLabels = {
     astro_event: "Астрособытие",
     client_lifecycle_changed: "Изменение статуса",
     schedule_time: "Дата / расписание",
-    review_received: "Получен отзыв",
+    review_first_published: "Отзыв опубликован",
     subscription_event: "Событие подписки"
   },
   en: {
@@ -848,7 +848,7 @@ const startEventKindLabels = {
     astro_event: "Astro event",
     client_lifecycle_changed: "Status changed",
     schedule_time: "Date / schedule",
-    review_received: "Review received",
+    review_first_published: "Review published",
     subscription_event: "Subscription event"
   }
 } satisfies Record<"ru" | "en", Record<FlowTriggerNodeKindV2, string>>;
