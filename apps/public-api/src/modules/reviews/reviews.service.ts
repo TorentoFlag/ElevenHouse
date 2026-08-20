@@ -2,21 +2,40 @@ import { createHash } from "node:crypto";
 
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  clientReviewDetailSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
+  reviewVersionSubmissionSchema,
+  type ClientReviewDetail,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewPublicListResponse
 } from "@elevenhouse/contracts";
-import type { CreateReviewCaseMessageResult, ReviewReadStore } from "@elevenhouse/domain";
+import type {
+  CreateReviewCaseMessageResult,
+  ReviewReadStore,
+  SubmitReviewVersionResult
+} from "@elevenhouse/domain";
 
 import { SystemClock } from "../../common/system-clock.js";
 import { PUBLIC_REVIEWS_COMMAND_STORE, PUBLIC_REVIEWS_READ_STORE } from "./reviews.tokens";
 
 type PublicReviewCommandStore = {
+  readonly submitReviewVersion: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewableInstanceId: string;
+    readonly nextReviewId: string;
+    readonly nextVersionId: string;
+    readonly submission: {
+      readonly rating: number;
+      readonly text: string;
+      readonly publicIdentityMode: "named" | "secret_user";
+    };
+  }) => Promise<SubmitReviewVersionResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -34,7 +53,7 @@ export class PublicReviewsService {
     @Inject(PUBLIC_REVIEWS_READ_STORE)
     private readonly readStore: Pick<
       ReviewReadStore,
-      "listPublicReviews" | "getModerationCaseDetail"
+      "listPublicReviews" | "getClientReviewDetail" | "getModerationCaseDetail"
     >,
     @Inject(PUBLIC_REVIEWS_COMMAND_STORE)
     private readonly commandStore: PublicReviewCommandStore,
@@ -48,6 +67,50 @@ export class PublicReviewsService {
       throw new BadRequestException("astrologerUserId is required");
     }
     return reviewPublicListResponseSchema.parse(await this.readStore.listPublicReviews(normalized));
+  }
+
+  async getClientReviewDetail(
+    clientUserId: string,
+    reviewableInstanceId: string
+  ): Promise<ClientReviewDetail> {
+    return this.readRequiredClientReviewDetail(
+      requireUuid(clientUserId),
+      requireUuid(reviewableInstanceId)
+    );
+  }
+
+  async submitClientReviewVersion(
+    clientUserId: string,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ClientReviewDetail> {
+    const parsed = reviewVersionSubmissionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review version submission");
+
+    const safeClientUserId = requireUuid(clientUserId);
+    const safeReviewableInstanceId = requireUuid(parsed.data.reviewableInstanceId);
+    const result = await this.commandStore.submitReviewVersion({
+      actorUserId: safeClientUserId,
+      now: this.clock.now().toISOString(),
+      reviewableInstanceId: safeReviewableInstanceId,
+      nextReviewId: deterministicUuid(
+        `${safeClientUserId}:${safeReviewableInstanceId}:${idempotencyKey}:review`
+      ),
+      nextVersionId: deterministicUuid(
+        `${safeClientUserId}:${safeReviewableInstanceId}:${idempotencyKey}:version`
+      ),
+      submission: {
+        rating: parsed.data.rating,
+        text: parsed.data.text,
+        publicIdentityMode: parsed.data.publicIdentityMode
+      }
+    });
+
+    if (result.kind === "rejected" && result.reason !== "pending_version_exists") {
+      throw new BadRequestException("Review version cannot be submitted");
+    }
+
+    return this.readRequiredClientReviewDetail(safeClientUserId, safeReviewableInstanceId);
   }
 
   async getClientModerationCaseDetail(
@@ -99,6 +162,18 @@ export class PublicReviewsService {
       body: result.message.body,
       createdAt: result.message.createdAt
     });
+  }
+
+  private async readRequiredClientReviewDetail(
+    clientUserId: string,
+    reviewableInstanceId: string
+  ): Promise<ClientReviewDetail> {
+    const detail = await this.readStore.getClientReviewDetail({
+      clientUserId,
+      reviewableInstanceId
+    });
+    if (!detail) throw new NotFoundException("Review was not found");
+    return clientReviewDetailSchema.parse(detail);
   }
 }
 

@@ -13,6 +13,7 @@ import {
   UseGuards
 } from "@nestjs/common";
 import type {
+  ClientReviewDetail,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
   ReviewPublicListResponse
@@ -37,6 +38,29 @@ export class PublicReviewsController {
 @UseGuards(PublicSessionAuthGuard)
 export class PublicMyReviewsController {
   constructor(@Inject(PublicReviewsService) private readonly service: PublicReviewsService) {}
+
+  @Get("reviewable-instances/:reviewableInstanceId")
+  getClientReviewDetail(
+    @Req() request: PublicSessionRequest,
+    @Param("reviewableInstanceId") reviewableInstanceId: string
+  ): Promise<ClientReviewDetail> {
+    return this.service.getClientReviewDetail(requireCustomerUserId(request), reviewableInstanceId);
+  }
+
+  @Post("versions")
+  @RequireCsrf()
+  @RequireIdempotency({ scope: "reviews.client-version.submit" })
+  submitReviewVersion(
+    @Req() request: PublicSessionRequest,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined
+  ): Promise<ClientReviewDetail> {
+    return this.service.submitClientReviewVersion(
+      requireCustomerUserId(request),
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
 
   @Get("moderation-cases/:caseId")
   getModerationCaseDetail(

@@ -2,6 +2,7 @@ import "reflect-metadata";
 
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import type { ClientReviewDetail } from "@elevenhouse/contracts";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -26,11 +27,15 @@ describe("public reviews HTTP API", () => {
   let receivedQuery: unknown;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
+  let receivedSubmissionCommand: unknown;
+  let reviewSubmitted: boolean;
 
   beforeEach(async () => {
     receivedQuery = null;
     receivedCaseRead = null;
     receivedMessageCommand = null;
+    receivedSubmissionCommand = null;
+    reviewSubmitted = true;
     const builder = Test.createTestingModule({
       controllers: [PublicReviewsController, PublicMyReviewsController],
       providers: [
@@ -65,6 +70,13 @@ describe("public reviews HTTP API", () => {
                 nextCursor: null
               };
             },
+            async getClientReviewDetail(input) {
+              return input.clientUserId === clientUserId &&
+                input.reviewableInstanceId === reviewableInstanceId &&
+                reviewSubmitted
+                ? clientReviewDetail()
+                : null;
+            },
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
               return input.caseId === caseId
@@ -90,11 +102,34 @@ describe("public reviews HTTP API", () => {
                   }
                 : null;
             }
-          } satisfies Pick<ReviewReadStore, "listPublicReviews" | "getModerationCaseDetail">
+          } satisfies Pick<
+            ReviewReadStore,
+            "listPublicReviews" | "getClientReviewDetail" | "getModerationCaseDetail"
+          >
         },
         {
           provide: PUBLIC_REVIEWS_COMMAND_STORE,
           useValue: {
+            async submitReviewVersion(command: {
+              readonly actorUserId: string;
+              readonly now: string;
+              readonly reviewableInstanceId: string;
+              readonly nextReviewId: string;
+              readonly nextVersionId: string;
+              readonly submission: {
+                readonly rating: number;
+                readonly text: string;
+                readonly publicIdentityMode: string;
+              };
+            }) {
+              receivedSubmissionCommand = command;
+              reviewSubmitted = true;
+              return {
+                kind: "create_review",
+                review: { id: command.nextReviewId },
+                version: { id: command.nextVersionId }
+              };
+            },
             async createReviewCaseMessage(command: {
               readonly messageId: string;
               readonly caseId: string;
@@ -171,6 +206,94 @@ describe("public reviews HTTP API", () => {
     expect(receivedQuery).toBeNull();
   });
 
+  it("reads current client review detail by reviewable instance", async () => {
+    const response = await fetch(
+      `${baseUrl}/me/reviews/reviewable-instances/${reviewableInstanceId}`
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      reviewableInstance: { id: reviewableInstanceId },
+      pendingVersion: { moderationStatus: "pending" },
+      canSubmitNewVersion: false
+    });
+  });
+
+  it("submits client review versions and returns refreshed detail", async () => {
+    reviewSubmitted = false;
+    const response = await fetch(`${baseUrl}/me/reviews/versions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-version-client-1"
+      },
+      body: JSON.stringify({
+        reviewableInstanceId,
+        rating: 5,
+        text: "Очень полезная консультация.",
+        publicIdentityMode: "secret_user"
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      pendingVersion: {
+        rating: 5,
+        text: "Очень полезная консультация.",
+        publicIdentityMode: "secret_user",
+        moderationStatus: "pending"
+      }
+    });
+    expect(receivedSubmissionCommand).toMatchObject({
+      actorUserId: clientUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewableInstanceId,
+      submission: {
+        rating: 5,
+        text: "Очень полезная консультация.",
+        publicIdentityMode: "secret_user"
+      }
+    });
+    expect(receivedSubmissionCommand).toHaveProperty("nextReviewId", expect.any(String));
+    expect(receivedSubmissionCommand).toHaveProperty("nextVersionId", expect.any(String));
+  });
+
+  it("replays pending client review submission detail for repeated idempotency keys", async () => {
+    const commandStore = app.get(PUBLIC_REVIEWS_COMMAND_STORE) as {
+      submitReviewVersion: (command: unknown) => Promise<unknown>;
+    };
+    commandStore.submitReviewVersion = async (command: unknown) => {
+      receivedSubmissionCommand = command;
+      return { kind: "rejected", reason: "pending_version_exists" };
+    };
+
+    const response = await fetch(`${baseUrl}/me/reviews/versions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-version-client-1"
+      },
+      body: JSON.stringify({
+        reviewableInstanceId,
+        rating: 5,
+        text: "Очень полезная консультация.",
+        publicIdentityMode: "secret_user"
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      pendingVersion: { moderationStatus: "pending" }
+    });
+    expect(receivedSubmissionCommand).toMatchObject({
+      actorUserId: clientUserId,
+      reviewableInstanceId
+    });
+  });
+
   it("reads moderation case detail for the current client", async () => {
     const response = await fetch(`${baseUrl}/me/reviews/moderation-cases/${caseId}`);
 
@@ -235,3 +358,33 @@ describe("public reviews HTTP API", () => {
     expect(receivedMessageCommand).toBeNull();
   });
 });
+
+function clientReviewDetail(): ClientReviewDetail {
+  return {
+    reviewId,
+    reviewableInstance: {
+      id: reviewableInstanceId,
+      kind: "booking",
+      status: "review_submitted",
+      title: "Солярная консультация",
+      contextLabel: "60 минут",
+      receivedAt: "2026-08-19T10:00:00.000Z",
+      reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+      windowPolicy: "standard_14_days_after_receipt"
+    },
+    activePublicVersion: null,
+    pendingVersion: {
+      id: "10000000-0000-4000-8000-000000000107",
+      versionNumber: 1,
+      rating: 5,
+      text: "Очень полезная консультация.",
+      publicIdentityMode: "secret_user",
+      moderationStatus: "pending",
+      moderationReasonCode: null,
+      submittedAt: "2026-08-20T12:00:00.000Z",
+      decidedAt: null
+    },
+    canSubmitNewVersion: false,
+    canEditLatestVersion: false
+  };
+}
