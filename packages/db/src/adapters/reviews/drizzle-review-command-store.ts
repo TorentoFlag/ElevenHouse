@@ -5,6 +5,7 @@ import {
   reviewableInstanceStatusSchema,
   reviewVisibilityStatusSchema,
   type ReviewDisputeStatus,
+  type ReviewModerationReasonCode,
   type ReviewModerationStatus,
   type ReviewPublicIdentityMode,
   type ReviewableInstanceStatus,
@@ -13,10 +14,12 @@ import {
 import {
   approveReviewVersion,
   planSubmitReviewVersion,
+  rejectReviewVersion,
   type ApproveReviewVersionResult,
   type ReviewLifecycleState,
   type ReviewSubmissionLifecycleInput,
   type ReviewVersionLifecycleState,
+  type RejectReviewVersionResult,
   type SubmitReviewVersionResult
 } from "@elevenhouse/domain";
 import { and, eq, sql } from "drizzle-orm";
@@ -50,6 +53,14 @@ export type DrizzleReviewCommandStore = {
     readonly versionId: string;
     readonly nextPublicationEventId: string;
   }) => Promise<ApproveReviewVersionResult>;
+  readonly rejectReviewVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly versionId: string;
+    readonly reasonCode: ReviewModerationReasonCode;
+    readonly note: string | null;
+  }) => Promise<RejectReviewVersionResult>;
 };
 
 export function createDrizzleReviewCommandStore(
@@ -209,6 +220,45 @@ export function createDrizzleReviewCommandStore(
             createdAt: new Date(input.now)
           });
         }
+
+        return result;
+      }),
+    rejectReviewVersion: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        const versionRow = await readReviewVersion(transaction, input.reviewId, input.versionId);
+        if (!reviewRow || !versionRow) return { kind: "not_rejected", reason: "not_review_version" };
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const result = rejectReviewVersion({
+          now: input.now,
+          moderatorUserId: input.moderatorUserId,
+          reasonCode: input.reasonCode,
+          note: input.note,
+          review: currentReview,
+          version: mapVersion(versionRow)
+        });
+        if (result.kind === "not_rejected") return result;
+
+        await transaction
+          .update(reviewVersions)
+          .set({
+            moderationStatus: "rejected",
+            moderationReasonCode: result.version.moderationReasonCode,
+            moderationNote: result.version.moderationNote,
+            decidedAt: new Date(input.now),
+            decidedByUserId: input.moderatorUserId
+          })
+          .where(eq(reviewVersions.id, result.version.id));
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            pendingVersionId: result.review.pendingVersion?.id ?? null,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
 
         return result;
       })

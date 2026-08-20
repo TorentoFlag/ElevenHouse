@@ -329,6 +329,12 @@ and API slices.
 - Product aggregates use the same transaction path when the reviewable instance has a product id.
 - Remaining aggregate work: dispute hide/restore deltas, public read-store hydration and reconciliation/recompute checks.
 
+**Progress 2026-08-20:** Review rejection command path
+
+- Added moderator rejection persistence for pending review versions.
+- Rejection clears the pending pointer, keeps the review non-public unless an older approved version exists, and does not write publication receipts or rating aggregates.
+- Remaining moderation command work: reply rejection/approval, dispute transactions and audit/case rows.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

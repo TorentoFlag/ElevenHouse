@@ -185,6 +185,80 @@ describe.sequential("Drizzle review command store", () => {
       ])
     );
   });
+
+  it("rejects pending review versions without publishing or updating aggregates", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+
+    const submitted = await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 2,
+        text: "Текст не относится к услуге.",
+        publicIdentityMode: "named"
+      }
+    });
+    expect(submitted.kind).toBe("create_review");
+
+    const rejected = await store.rejectReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      reasonCode: "off_topic",
+      note: "Не про оказанную услугу."
+    });
+
+    expect(rejected).toMatchObject({
+      kind: "rejected",
+      review: {
+        revision: 2,
+        visibilityStatus: "not_public",
+        activePublicVersion: null,
+        pendingVersion: null
+      },
+      version: {
+        id: fixture.firstVersionId,
+        moderationStatus: "rejected",
+        moderationReasonCode: "off_topic",
+        moderationNote: "Не про оказанную услугу.",
+        decidedByUserId: fixture.moderatorUserId
+      }
+    });
+
+    const [reviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(reviewRow).toMatchObject({
+      revision: 2,
+      activePublicVersionId: null,
+      pendingVersionId: null,
+      visibilityStatus: "not_public"
+    });
+
+    const [versionRow] = await runtime.database
+      .select()
+      .from(reviewVersions)
+      .where(eq(reviewVersions.id, fixture.firstVersionId));
+    expect(versionRow).toMatchObject({
+      moderationStatus: "rejected",
+      moderationReasonCode: "off_topic",
+      moderationNote: "Не про оказанную услугу.",
+      decidedByUserId: fixture.moderatorUserId
+    });
+
+    const [publicationCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewPublicationEvents)
+      .where(eq(reviewPublicationEvents.reviewId, fixture.reviewId));
+    expect(publicationCount?.value).toBe(0);
+    await expectNoAstrologerAggregate(runtime, fixture.astrologerUserId);
+  });
 });
 
 async function seedReviewableFixture(runtime: PostgresRuntime) {
@@ -312,4 +386,23 @@ async function expectProductAggregate(
       and product_id = ${productId}
   `);
   expect(result.rows).toEqual([expectation]);
+}
+
+async function expectNoAstrologerAggregate(
+  runtime: PostgresRuntime,
+  astrologerUserId: string
+): Promise<void> {
+  const result = await runtime.database.execute<AstrologerAggregateExpectation>(sql`
+    select
+      visible_review_count as "visibleReviewCount",
+      approved_review_count as "approvedReviewCount",
+      rating_sum as "ratingSum",
+      star_4_count as "star4Count",
+      star_5_count as "star5Count"
+    from review_rating_aggregates
+    where scope = 'astrologer'
+      and astrologer_user_id = ${astrologerUserId}
+      and product_id is null
+  `);
+  expect(result.rows).toEqual([]);
 }
