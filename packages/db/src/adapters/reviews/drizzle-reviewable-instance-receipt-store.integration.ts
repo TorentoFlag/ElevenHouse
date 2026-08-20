@@ -17,6 +17,7 @@ import {
   users
 } from "../../schema";
 import {
+  createActiveClientSubscriptionFixture,
   createClientSubscriptionIntegrationDatabase,
   seedClientSubscriptionOrderPrerequisites,
   type ClientSubscriptionIntegrationDatabase
@@ -131,6 +132,47 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
         bookingLifecycleEventId: fixture.completedEventId,
         nextReviewableInstanceId: randomUUID(),
         now: "2026-08-20T10:02:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "existing",
+      instance: { id: created.kind === "created" ? created.instance.id : "" }
+    });
+  });
+
+  it("creates an AstroDiary reviewable instance from an active entitlement period", async () => {
+    const fixture = await createActiveClientSubscriptionFixture(
+      runtime,
+      "2026-08-01T10:00:00.000Z"
+    );
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    const created = await store.upsertFromAstroDiaryPeriod({
+      periodId: fixture.periodId,
+      nextReviewableInstanceId: randomUUID(),
+      now: "2026-08-01T10:01:00.000Z"
+    });
+
+    expect(created).toMatchObject({
+      kind: "created",
+      instance: {
+        clientUserId: fixture.authority.clientUserId,
+        astrologerUserId: fixture.authority.astrologerUserId,
+        relationshipId: fixture.authority.relationshipId,
+        kind: "astro_diary_period",
+        sourceResourceKey: `astro_diary_period:${fixture.periodId}`,
+        productId: fixture.authority.productId,
+        orderId: null,
+        titleSnapshot: "AstroDiary integration",
+        receivedAt: "2026-08-01T10:00:00.000Z",
+        reviewWindowClosesAt: "2026-08-15T10:00:00.000Z"
+      }
+    });
+
+    await expect(
+      store.upsertFromAstroDiaryPeriod({
+        periodId: fixture.periodId,
+        nextReviewableInstanceId: randomUUID(),
+        now: "2026-08-01T10:02:00.000Z"
       })
     ).resolves.toMatchObject({
       kind: "existing",

@@ -11,6 +11,8 @@ import {
   bookingLifecycleEvents,
   bookings,
   clientAstrologerRelationships,
+  clientEntitlementGrants,
+  clientSubscriptions,
   orders,
   products,
   reviewableInstances
@@ -66,6 +68,8 @@ export type UpsertReviewableInstanceFromReceiptResult =
         | "relationship_not_active"
         | "booking_completion_not_found"
         | "booking_not_completed"
+        | "astro_diary_period_not_found"
+        | "astro_diary_period_not_reviewable"
         | "product_not_found"
         | "order_not_found"
         | "order_identity_mismatch"
@@ -81,6 +85,11 @@ export type DrizzleReviewableInstanceReceiptStore = {
   ) => Promise<UpsertReviewableInstanceFromReceiptResult>;
   readonly upsertFromCompletedBookingEvent: (input: {
     readonly bookingLifecycleEventId: string;
+    readonly nextReviewableInstanceId: string;
+    readonly now: string;
+  }) => Promise<UpsertReviewableInstanceFromReceiptResult>;
+  readonly upsertFromAstroDiaryPeriod: (input: {
+    readonly periodId: string;
     readonly nextReviewableInstanceId: string;
     readonly now: string;
   }) => Promise<UpsertReviewableInstanceFromReceiptResult>;
@@ -154,6 +163,66 @@ export function createDrizzleReviewableInstanceReceiptStore(
           titleSnapshot: row.productTitleSnapshot,
           contextLabelSnapshot: `${row.durationMinutesSnapshot} минут`,
           receivedAt: row.occurredAt.toISOString(),
+          windowPolicy: "standard_14_days_after_receipt",
+          now: input.now
+        });
+      }),
+    upsertFromAstroDiaryPeriod: (input) =>
+      database.transaction(async (transaction) => {
+        const [row] = await transaction
+          .select({
+            grantId: clientEntitlementGrants.id,
+            grantState: clientEntitlementGrants.state,
+            capability: clientEntitlementGrants.capability,
+            periodId: clientEntitlementGrants.periodId,
+            startsAt: clientEntitlementGrants.startsAt,
+            endsAt: clientEntitlementGrants.endsAt,
+            grantCreatedAt: clientEntitlementGrants.createdAt,
+            subscriptionState: clientSubscriptions.state,
+            productId: clientSubscriptions.productId,
+            relationshipId: clientAstrologerRelationships.id,
+            clientUserId: clientAstrologerRelationships.clientUserId,
+            astrologerUserId: clientAstrologerRelationships.astrologerUserId,
+            productTitle: products.title
+          })
+          .from(clientEntitlementGrants)
+          .innerJoin(
+            clientSubscriptions,
+            eq(clientSubscriptions.id, clientEntitlementGrants.subscriptionId)
+          )
+          .innerJoin(
+            clientAstrologerRelationships,
+            eq(clientAstrologerRelationships.id, clientEntitlementGrants.relationshipId)
+          )
+          .innerJoin(products, eq(products.id, clientSubscriptions.productId))
+          .where(
+            and(
+              eq(clientEntitlementGrants.periodId, input.periodId),
+              eq(clientEntitlementGrants.capability, "astro_diary")
+            )
+          )
+          .limit(1);
+
+        if (!row) return { kind: "rejected", reason: "astro_diary_period_not_found" };
+        if (
+          (row.grantState !== "active" && row.grantState !== "ended") ||
+          (row.subscriptionState !== "active" && row.subscriptionState !== "ended")
+        ) {
+          return { kind: "rejected", reason: "astro_diary_period_not_reviewable" };
+        }
+
+        return upsertReceiptInTransaction(transaction, {
+          nextReviewableInstanceId: input.nextReviewableInstanceId,
+          clientUserId: row.clientUserId,
+          astrologerUserId: row.astrologerUserId,
+          kind: "astro_diary_period",
+          sourceResourceKey: `astro_diary_period:${row.periodId}`,
+          productId: row.productId,
+          orderId: null,
+          bookingId: null,
+          titleSnapshot: row.productTitle,
+          contextLabelSnapshot: `AstroDiary ${row.startsAt.toISOString()} - ${row.endsAt.toISOString()}`,
+          receivedAt: row.grantCreatedAt.toISOString(),
           windowPolicy: "standard_14_days_after_receipt",
           now: input.now
         });
