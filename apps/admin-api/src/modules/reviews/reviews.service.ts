@@ -7,6 +7,7 @@ import {
   reviewModerationDecisionSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewModerationCaseStatusUpdateSchema,
   reviewModerationQueueQuerySchema,
   reviewModerationQueueResponseSchema,
   type ReviewAdminDetail,
@@ -22,6 +23,7 @@ import type {
   RejectReviewVersionResult,
   HideReviewByModerationResult,
   RestoreReviewAfterDisputeResult,
+  UpdateReviewModerationCaseStatusResult,
   ReviewReadStore
 } from "@elevenhouse/domain";
 
@@ -74,6 +76,12 @@ type AdminReviewCommandStore = {
     readonly reasonCode: string;
     readonly note: string | null;
   }) => Promise<HideReviewByModerationResult>;
+  readonly updateReviewModerationCaseStatus: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly caseId: string;
+    readonly status: "open" | "waiting_client" | "waiting_astrologer" | "consensus_reached";
+  }) => Promise<UpdateReviewModerationCaseStatusResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -270,6 +278,27 @@ export class AdminReviewsService {
     });
     if (!detail) throw new NotFoundException("Review moderation case was not found");
     return reviewModerationCaseDetailSchema.parse(detail);
+  }
+
+  async updateModerationCaseStatus(
+    adminUserId: string,
+    caseId: string,
+    body: unknown
+  ): Promise<ReviewModerationCaseDetail> {
+    const parsed = reviewModerationCaseStatusUpdateSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review case status update");
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeCaseId = requireUuid(caseId);
+    const result = await this.commandStore.updateReviewModerationCaseStatus({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      caseId: safeCaseId,
+      status: parsed.data.status
+    });
+    if (result.kind === "rejected") {
+      throw new BadRequestException("Review case status cannot be updated");
+    }
+    return this.getModerationCaseDetail(safeAdminUserId, safeCaseId);
   }
 
   async createModerationCaseMessage(

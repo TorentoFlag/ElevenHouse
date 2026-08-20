@@ -26,6 +26,7 @@ import {
   rejectReviewReplyVersion,
   rejectReviewVersion,
   restoreReviewAfterDispute,
+  updateReviewModerationCaseStatus,
   type ApproveReviewReplyVersionResult,
   type ApproveReviewVersionResult,
   type CreateReviewCaseMessageResult,
@@ -33,6 +34,7 @@ import {
   type OpenReviewDisputeResult,
   type ReviewCaseMessageLifecycleState,
   type ReviewLifecycleState,
+  type ReviewModerationCaseLifecycleState,
   type ReviewReplyVersionLifecycleState,
   type ReviewSubmissionLifecycleInput,
   type ReviewVersionLifecycleState,
@@ -40,7 +42,8 @@ import {
   type RejectReviewVersionResult,
   type RestoreReviewAfterDisputeResult,
   type SubmitReviewReplyVersionResult,
-  type SubmitReviewVersionResult
+  type SubmitReviewVersionResult,
+  type UpdateReviewModerationCaseStatusResult
 } from "@elevenhouse/domain";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -60,6 +63,7 @@ type ReviewRow = typeof reviews.$inferSelect;
 type ReviewVersionRow = typeof reviewVersions.$inferSelect;
 type ReviewReplyVersionRow = typeof reviewReplyVersions.$inferSelect;
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
+type ReviewModerationCaseRow = typeof reviewModerationCases.$inferSelect;
 type ReviewModerationCaseMessageRow = typeof reviewModerationCaseMessages.$inferSelect;
 
 export type DrizzleReviewCommandStore = {
@@ -130,6 +134,12 @@ export type DrizzleReviewCommandStore = {
     readonly reasonCode: ReviewModerationReasonCode;
     readonly note: string | null;
   }) => Promise<HideReviewByModerationResult>;
+  readonly updateReviewModerationCaseStatus: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly caseId: string;
+    readonly status: "open" | "waiting_client" | "waiting_astrologer" | "consensus_reached";
+  }) => Promise<UpdateReviewModerationCaseStatusResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -662,6 +672,41 @@ export function createDrizzleReviewCommandStore(
 
         return result;
       }),
+    updateReviewModerationCaseStatus: (input) =>
+      database.transaction(async (transaction) => {
+        const moderationCaseRow = await readReviewModerationCase(transaction, input.caseId);
+        if (!moderationCaseRow) return { kind: "rejected", reason: "not_review_case" };
+        await lockReview(transaction, moderationCaseRow.reviewId);
+        const reviewRow = await readReview(transaction, moderationCaseRow.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "not_review_case" };
+
+        const result = updateReviewModerationCaseStatus({
+          now: input.now,
+          moderatorUserId: input.moderatorUserId,
+          targetStatus: input.status,
+          review: await hydrateReviewState(transaction, reviewRow),
+          moderationCase: mapReviewModerationCase(moderationCaseRow)
+        });
+        if (result.kind === "rejected") return result;
+
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            visibilityStatus: result.review.visibilityStatus,
+            disputeStatus: result.review.disputeStatus,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
+        await transaction
+          .update(reviewModerationCases)
+          .set({
+            status: result.moderationCase.status
+          })
+          .where(eq(reviewModerationCases.id, result.moderationCase.caseId));
+
+        return result;
+      }),
     createReviewCaseMessage: async (input) => {
       const result = createReviewCaseMessage({
         messageId: input.messageId,
@@ -734,6 +779,17 @@ async function readReview(
   reviewId: string
 ): Promise<ReviewRow | null> {
   const [row] = await transaction.select().from(reviews).where(eq(reviews.id, reviewId));
+  return row ?? null;
+}
+
+async function readReviewModerationCase(
+  transaction: ReviewCommandTransaction,
+  caseId: string
+): Promise<ReviewModerationCaseRow | null> {
+  const [row] = await transaction
+    .select()
+    .from(reviewModerationCases)
+    .where(eq(reviewModerationCases.id, caseId));
   return row ?? null;
 }
 
@@ -1153,6 +1209,17 @@ function mapReviewCaseMessage(
     visibility: reviewModerationCaseMessageVisibilitySchema.parse(row.visibility),
     body: row.body,
     createdAt: toIso(row.createdAt)
+  };
+}
+
+function mapReviewModerationCase(row: ReviewModerationCaseRow): ReviewModerationCaseLifecycleState {
+  return {
+    caseId: row.id,
+    reviewId: row.reviewId,
+    status: row.status as ReviewModerationCaseLifecycleState["status"],
+    openedAt: toIso(row.openedAt),
+    closedAt: row.closedAt ? toIso(row.closedAt) : null,
+    reasonCode: row.reasonCode as ReviewModerationCaseLifecycleState["reasonCode"]
   };
 }
 

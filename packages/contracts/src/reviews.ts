@@ -460,6 +460,15 @@ export type ReviewModerationCaseMessageCreate = z.infer<
   typeof reviewModerationCaseMessageCreateSchema
 >;
 
+export const reviewModerationCaseStatusUpdateSchema = z
+  .object({
+    status: z.enum(["open", "waiting_client", "waiting_astrologer", "consensus_reached"])
+  })
+  .strict();
+export type ReviewModerationCaseStatusUpdate = z.infer<
+  typeof reviewModerationCaseStatusUpdateSchema
+>;
+
 export const reviewModerationCaseMessageSchema = z
   .object({
     messageId: uuidSchema,

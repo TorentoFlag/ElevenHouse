@@ -5,6 +5,7 @@ import {
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewModerationCaseStatusUpdateSchema,
   reviewModerationQueueResponseSchema,
   reviewModerationReasonCodeSchema,
   reviewPublicListResponseSchema,
@@ -393,5 +394,17 @@ describe("Reviews contracts", () => {
         createdAt: "2026-08-20T10:20:00.000Z"
       }).success
     ).toBe(false);
+  });
+
+  it("allows moderators to move open review cases without using status update as a closing decision", () => {
+    expect(reviewModerationCaseStatusUpdateSchema.parse({ status: "waiting_client" })).toEqual({
+      status: "waiting_client"
+    });
+    expect(reviewModerationCaseStatusUpdateSchema.parse({ status: "consensus_reached" })).toEqual({
+      status: "consensus_reached"
+    });
+    expect(reviewModerationCaseStatusUpdateSchema.safeParse({ status: "closed" }).success).toBe(
+      false
+    );
   });
 });

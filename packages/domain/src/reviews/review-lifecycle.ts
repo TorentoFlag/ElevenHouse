@@ -197,6 +197,19 @@ export type HideReviewByModerationResult =
       readonly reason: "review_not_public" | "already_hidden_by_moderation";
     };
 
+export type ReviewModerationCaseOpenStatus = Exclude<ReviewModerationCaseStatus, "closed">;
+
+export type UpdateReviewModerationCaseStatusResult =
+  | {
+      readonly kind: "updated";
+      readonly review: ReviewLifecycleState;
+      readonly moderationCase: ReviewModerationCaseLifecycleState;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "case_closed" | "not_review_case" | "review_not_in_dispute";
+    };
+
 export type ReviewModerationCaseLifecycleState = {
   readonly caseId: string;
   readonly reviewId: string;
@@ -607,6 +620,44 @@ export function hideReviewByModeration(input: {
   };
 }
 
+export function updateReviewModerationCaseStatus(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly targetStatus: ReviewModerationCaseOpenStatus;
+  readonly review: ReviewLifecycleState;
+  readonly moderationCase: ReviewModerationCaseLifecycleState;
+}): UpdateReviewModerationCaseStatusResult {
+  void input.now;
+  void input.moderatorUserId;
+  if (input.moderationCase.reviewId !== input.review.id) {
+    return { kind: "rejected", reason: "not_review_case" };
+  }
+  if (input.moderationCase.status === "closed") {
+    return { kind: "rejected", reason: "case_closed" };
+  }
+  if (
+    input.review.visibilityStatus !== "temporarily_hidden_by_dispute" ||
+    !isActiveDisputeStatus(input.review.disputeStatus)
+  ) {
+    return { kind: "rejected", reason: "review_not_in_dispute" };
+  }
+
+  return {
+    kind: "updated",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      disputeStatus: mapCaseStatusToDisputeStatus(input.targetStatus),
+      visibilityStatus: "temporarily_hidden_by_dispute"
+    },
+    moderationCase: {
+      ...input.moderationCase,
+      status: input.targetStatus,
+      closedAt: null
+    }
+  };
+}
+
 export function createReviewCaseMessage(input: {
   readonly messageId: string;
   readonly caseId: string;
@@ -748,4 +799,11 @@ function buildInitials(firstName: string, lastName: string): string {
 
 function isActiveDisputeStatus(status: ReviewLifecycleState["disputeStatus"]): boolean {
   return ["open", "under_review", "waiting_client", "waiting_astrologer"].includes(status);
+}
+
+function mapCaseStatusToDisputeStatus(
+  status: ReviewModerationCaseOpenStatus
+): ReviewLifecycleState["disputeStatus"] {
+  if (status === "consensus_reached") return "under_review";
+  return status;
 }

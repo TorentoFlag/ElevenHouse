@@ -454,6 +454,39 @@ describe.sequential("Drizzle review command store", () => {
       star5Count: 0
     });
 
+    const statusUpdate = await store.updateReviewModerationCaseStatus({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T12:05:00.000Z",
+      caseId,
+      status: "waiting_astrologer"
+    });
+
+    expect(statusUpdate).toMatchObject({
+      kind: "updated",
+      review: {
+        disputeStatus: "waiting_astrologer",
+        visibilityStatus: "temporarily_hidden_by_dispute"
+      },
+      moderationCase: {
+        caseId,
+        status: "waiting_astrologer",
+        closedAt: null
+      }
+    });
+    const [waitingCaseRow] = await runtime.database
+      .select()
+      .from(reviewModerationCases)
+      .where(eq(reviewModerationCases.id, caseId));
+    expect(waitingCaseRow).toMatchObject({ status: "waiting_astrologer", closedByUserId: null });
+    const [waitingReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(waitingReviewRow).toMatchObject({
+      visibilityStatus: "temporarily_hidden_by_dispute",
+      disputeStatus: "waiting_astrologer"
+    });
+
     const clientMessageId = randomUUID();
     const astrologerMessageId = randomUUID();
     const moderatorToClient = await store.createReviewCaseMessage({

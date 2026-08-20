@@ -13,6 +13,7 @@ import {
   rejectReviewVersion,
   restoreReviewAfterDispute,
   planSubmitReviewReplyVersion,
+  updateReviewModerationCaseStatus,
   type ReviewLifecycleState,
   type ReviewableInstanceLifecycleState
 } from "./review-lifecycle";
@@ -519,6 +520,59 @@ describe("Review lifecycle domain policy", () => {
       },
       noteMessage: null
     });
+  });
+
+  it("moves open moderation cases while keeping the disputed review hidden", () => {
+    const result = updateReviewModerationCaseStatus({
+      now: "2026-08-22T12:30:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      targetStatus: "waiting_client",
+      review: approvedReview({
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "open"
+      }),
+      moderationCase: {
+        caseId: ids.caseId,
+        reviewId: ids.reviewId,
+        status: "open",
+        openedAt: "2026-08-20T10:00:00.000Z",
+        closedAt: null,
+        reasonCode: "other"
+      }
+    });
+
+    expect(result).toMatchObject({
+      kind: "updated",
+      review: {
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "waiting_client"
+      },
+      moderationCase: {
+        caseId: ids.caseId,
+        status: "waiting_client",
+        closedAt: null
+      }
+    });
+
+    expect(
+      updateReviewModerationCaseStatus({
+        now: "2026-08-22T12:30:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        targetStatus: "waiting_client",
+        review: approvedReview({
+          visibilityStatus: "temporarily_hidden_by_dispute",
+          disputeStatus: "resolved_closed"
+        }),
+        moderationCase: {
+          caseId: ids.caseId,
+          reviewId: ids.reviewId,
+          status: "closed",
+          openedAt: "2026-08-20T10:00:00.000Z",
+          closedAt: "2026-08-21T10:00:00.000Z",
+          reasonCode: "other"
+        }
+      })
+    ).toMatchObject({ kind: "rejected", reason: "case_closed" });
   });
 
   it("keeps moderation case message visibility party-safe", () => {

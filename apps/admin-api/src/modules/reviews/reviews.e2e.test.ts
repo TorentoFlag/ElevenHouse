@@ -34,6 +34,7 @@ describe("admin reviews HTTP API", () => {
   let replyDecisionStatus: "pending" | "approved" | "rejected";
   let reviewVisibilityStatus: ReviewVisibilityStatus;
   let reviewDisputeStatus: ReviewDisputeStatus;
+  let moderationCaseStatus: "open" | "waiting_client" | "waiting_astrologer" | "consensus_reached";
 
   beforeEach(async () => {
     receivedCaseRead = null;
@@ -44,6 +45,7 @@ describe("admin reviews HTTP API", () => {
     replyDecisionStatus = "pending";
     reviewVisibilityStatus = "visible";
     reviewDisputeStatus = "none";
+    moderationCaseStatus = "open";
     const builder = Test.createTestingModule({
       controllers: [AdminReviewsController],
       providers: [
@@ -68,7 +70,7 @@ describe("admin reviews HTTP API", () => {
                 ? {
                     caseId,
                     reviewId,
-                    status: "open",
+                    status: moderationCaseStatus,
                     openedAt: "2026-08-20T10:00:00.000Z",
                     closedAt: null,
                     serviceContext: {
@@ -259,6 +261,27 @@ describe("admin reviews HTTP API", () => {
                 moderationCase: {},
                 noteMessage: command.nextCaseMessageId ? {} : null
               };
+            },
+            async updateReviewModerationCaseStatus(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly caseId: string;
+              readonly status:
+                | "open"
+                | "waiting_client"
+                | "waiting_astrologer"
+                | "consensus_reached";
+            }) {
+              receivedDecisionCommand = command;
+              moderationCaseStatus = command.status;
+              return {
+                kind: "updated",
+                review: {},
+                moderationCase: {
+                  caseId: command.caseId,
+                  status: command.status
+                }
+              };
             }
           }
         }
@@ -372,6 +395,34 @@ describe("admin reviews HTTP API", () => {
       now: "2026-08-20T11:00:00.000Z"
     });
     expect(receivedMessageCommand).toHaveProperty("messageId", expect.any(String));
+  });
+
+  it("updates moderation case status", async () => {
+    const response = await fetch(`${baseUrl}/admin/reviews/moderation-cases/${caseId}/status`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-case-status-1"
+      },
+      body: JSON.stringify({ status: "waiting_client" })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      caseId,
+      status: "waiting_client"
+    });
+    expect(receivedDecisionCommand).toEqual({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      caseId,
+      status: "waiting_client"
+    });
+    expect(receivedCaseRead).toEqual({
+      caseId,
+      actorUserId: adminUserId,
+      actorRole: "moderator"
+    });
   });
 
   it("approves review versions and returns refreshed admin detail", async () => {

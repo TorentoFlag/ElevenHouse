@@ -59,6 +59,17 @@ export class AdminReviewsController {
     );
   }
 
+  @Post("moderation-cases/:caseId/status")
+  @RequireCsrf()
+  @RequireIdempotency()
+  updateModerationCaseStatus(
+    @Req() request: AdminSessionRequest,
+    @Param("caseId") caseId: string,
+    @Body() body: unknown
+  ): Promise<ReviewModerationCaseDetail> {
+    return this.service.updateModerationCaseStatus(requireAdminUserId(request), caseId, body);
+  }
+
   @Post(":reviewId/versions/:versionId/approve")
   @RequireCsrf()
   @RequireIdempotency()
