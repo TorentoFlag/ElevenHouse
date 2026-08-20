@@ -455,6 +455,15 @@ export type ClientsCrmCopy = {
     readonly birthTime: string;
     readonly updatedAt: string;
   };
+  readonly serviceWork: {
+    readonly title: string;
+    readonly upcomingBookings: string;
+    readonly recentBookings: string;
+    readonly upcomingSessions: string;
+    readonly recentSessions: string;
+    readonly empty: string;
+    readonly unavailable: string;
+  };
   readonly missingBirthData: string;
   readonly emptyRelatedProfiles: string;
   readonly emptyActivity: string;
@@ -750,6 +759,15 @@ export const astrologerCopyByLocale = {
           place: "Место",
           birthTime: "Время рождения",
           updatedAt: "Обновлено"
+        },
+        serviceWork: {
+          title: "Работа с клиентом",
+          upcomingBookings: "Ближайшие записи",
+          recentBookings: "Прошедшие записи",
+          upcomingSessions: "Ближайшие сессии",
+          recentSessions: "Прошедшие сессии",
+          empty: "Записей и сессий пока нет",
+          unavailable: "Не удалось загрузить записи и сессии"
         },
         missingBirthData: "Данных рождения пока нет",
         emptyRelatedProfiles: "Связанных профилей пока нет",
@@ -1351,6 +1369,15 @@ export const astrologerCopyByLocale = {
           place: "Place",
           birthTime: "Birth time",
           updatedAt: "Updated"
+        },
+        serviceWork: {
+          title: "Client work",
+          upcomingBookings: "Upcoming bookings",
+          recentBookings: "Recent bookings",
+          upcomingSessions: "Upcoming sessions",
+          recentSessions: "Recent sessions",
+          empty: "There are no bookings or sessions yet",
+          unavailable: "Could not load bookings and sessions"
         },
         missingBirthData: "Birth data is not available yet",
         emptyRelatedProfiles: "There are no related profiles yet",

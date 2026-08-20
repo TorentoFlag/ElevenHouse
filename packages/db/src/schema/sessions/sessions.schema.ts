@@ -104,6 +104,12 @@ export const sessions = pgTable(
     check("sessions_message_sequence_check", sql`${table.latestMessageSequence} >= 0`),
     check("sessions_distinct_users_check", sql`${table.ownerUserId} <> ${table.clientUserId}`),
     index("sessions_owner_schedule_idx").on(table.ownerUserId, table.scheduledStartAt, table.id),
+    index("sessions_owner_client_schedule_idx").on(
+      table.ownerUserId,
+      table.clientUserId,
+      table.scheduledStartAt,
+      table.id
+    ),
     index("sessions_client_schedule_idx").on(table.clientUserId, table.scheduledStartAt, table.id),
     index("sessions_state_schedule_idx").on(table.state, table.scheduledEndAt, table.id)
   ]

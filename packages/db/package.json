@@ -210,6 +210,16 @@
       "import": "./dist/adapters/scheduling/index.js",
       "require": "./dist/adapters/scheduling/index.js"
     },
+    "./sessions": {
+      "types": "./dist/adapters/sessions/index.d.ts",
+      "import": "./dist/adapters/sessions/index.js",
+      "require": "./dist/adapters/sessions/index.js"
+    },
+    "./adapters/sessions": {
+      "types": "./dist/adapters/sessions/index.d.ts",
+      "import": "./dist/adapters/sessions/index.js",
+      "require": "./dist/adapters/sessions/index.js"
+    },
     "./messaging": {
       "types": "./dist/adapters/messaging/index.d.ts",
       "import": "./dist/adapters/messaging/index.js",

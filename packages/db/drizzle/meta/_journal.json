@@ -449,6 +449,13 @@
       "when": 1787247000000,
       "tag": "0066_client_order_capture_resource_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787250000000,
+      "tag": "0067_client_crm_service_work_pair_indexes",
+      "breakpoints": true
     }
   ]
 }

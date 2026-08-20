@@ -13,7 +13,10 @@ import {
 const clientUserId = "018f7f0a-6d77-7f72-9b63-7e24c9901111";
 const relationshipId = "018f7f0a-6d77-7f72-9b63-7e24c9902222";
 const relatedProfileId = "018f7f0a-6d77-7f72-9b63-7e24c9903333";
+const bookingId = "018f7f0a-6d77-7f72-9b63-7e24c9905555";
+const sessionId = "018f7f0a-6d77-7f72-9b63-7e24c9906666";
 const occurredAt = "2026-08-20T10:00:00.000Z";
+const laterAt = "2026-08-21T10:00:00.000Z";
 
 function activityItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -188,5 +191,141 @@ describe("Clients CRM contracts", () => {
         })
       ).success
     ).toBe(false);
+  });
+
+  it("accepts bounded service work summaries without messages or provider payloads", () => {
+    const parsed = astrologerClientCrmDetailResponseSchema.parse(
+      detailResponse({
+        serviceWork: {
+          status: "available",
+          bookings: {
+            upcomingTotal: 1,
+            upcoming: [
+              {
+                id: bookingId,
+                state: "confirmed",
+                productTitle: "Natal consultation",
+                startAt: laterAt,
+                endAt: "2026-08-21T11:00:00.000Z",
+                timeZone: "Europe/Moscow",
+                href: `/calendar?bookingId=${bookingId}&startAt=${encodeURIComponent(laterAt)}`
+              }
+            ],
+            recentTotal: 0,
+            recent: []
+          },
+          sessions: {
+            upcomingTotal: 1,
+            upcoming: [
+              {
+                id: sessionId,
+                bookingId,
+                state: "scheduled",
+                productTitle: "Natal consultation",
+                scheduledStartAt: laterAt,
+                scheduledEndAt: "2026-08-21T11:00:00.000Z",
+                timeZone: "Europe/Moscow",
+                href: `/sessions/${sessionId}`
+              }
+            ],
+            recentTotal: 0,
+            recent: []
+          }
+        }
+      })
+    );
+
+    expect(parsed.client.serviceWork).toMatchObject({
+      status: "available",
+      bookings: { upcomingTotal: 1, recentTotal: 0 },
+      sessions: { upcomingTotal: 1, recentTotal: 0 }
+    });
+    expect(JSON.stringify(parsed.client.serviceWork)).not.toMatch(
+      /message|provider|room|participant|policySnapshot/i
+    );
+
+    expect(
+      astrologerClientCrmDetailResponseSchema.safeParse(
+        detailResponse({
+          serviceWork: {
+            status: "available",
+            bookings: {
+              upcomingTotal: 0,
+              upcoming: Array.from({ length: 4 }, () => ({
+                id: bookingId,
+                state: "confirmed",
+                productTitle: "Natal consultation",
+                startAt: laterAt,
+                endAt: "2026-08-21T11:00:00.000Z",
+                timeZone: "Europe/Moscow",
+                href: `/calendar?bookingId=${bookingId}&startAt=${encodeURIComponent(laterAt)}`
+              })),
+              recentTotal: 0,
+              recent: []
+            },
+            sessions: {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            }
+          }
+        })
+      ).success
+    ).toBe(false);
+    expect(
+      astrologerClientCrmDetailResponseSchema.safeParse(
+        detailResponse({
+          serviceWork: {
+            status: "available",
+            bookings: {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            },
+            sessions: {
+              upcomingTotal: 1,
+              upcoming: [
+                {
+                  id: sessionId,
+                  bookingId,
+                  state: "scheduled",
+                  productTitle: "Natal consultation",
+                  scheduledStartAt: laterAt,
+                  scheduledEndAt: "2026-08-21T11:00:00.000Z",
+                  timeZone: "Europe/Moscow",
+                  href: `https://provider.example/sessions/${sessionId}`,
+                  providerRoomName: "private-room",
+                  lastMessage: "private message"
+                }
+              ],
+              recentTotal: 0,
+              recent: []
+            }
+          }
+        })
+      ).success
+    ).toBe(false);
+  });
+
+  it("keeps source failures distinct from empty service work", () => {
+    expect(
+      astrologerClientCrmDetailResponseSchema.parse(
+        detailResponse({
+          serviceWork: {
+            status: "unavailable",
+            source: "sessions",
+            code: "summary_unavailable",
+            retryable: true
+          }
+        })
+      ).client.serviceWork
+    ).toEqual({
+      status: "unavailable",
+      source: "sessions",
+      code: "summary_unavailable",
+      retryable: true
+    });
   });
 });

@@ -27,14 +27,59 @@ describe("Clients CRM HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let crmStore: ClientCrmReadStore;
+  let bookingServiceWorkReader: {
+    readonly listClientServiceWorkBookings: ReturnType<typeof vi.fn>;
+  };
+  let sessionServiceWorkReader: {
+    readonly listClientServiceWorkSessions: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     crmStore = createCrmReadStore();
-    const service = new ClientsService(
+    bookingServiceWorkReader = {
+      listClientServiceWorkBookings: vi.fn().mockResolvedValue({
+        upcomingTotal: 1,
+        upcoming: [
+          {
+            id: "10000000-0000-4000-8000-000000000020",
+            state: "confirmed",
+            productTitle: "Natal consultation",
+            startAt: "2026-08-21T10:00:00.000Z",
+            endAt: "2026-08-21T11:00:00.000Z",
+            timeZone: "Europe/Moscow",
+            href: "/calendar?bookingId=10000000-0000-4000-8000-000000000020&startAt=2026-08-21T10%3A00%3A00.000Z"
+          }
+        ],
+        recentTotal: 0,
+        recent: []
+      })
+    };
+    sessionServiceWorkReader = {
+      listClientServiceWorkSessions: vi.fn().mockResolvedValue({
+        upcomingTotal: 0,
+        upcoming: [],
+        recentTotal: 1,
+        recent: [
+          {
+            id: "10000000-0000-4000-8000-000000000021",
+            bookingId: "10000000-0000-4000-8000-000000000020",
+            state: "ended",
+            productTitle: "Natal consultation",
+            scheduledStartAt: "2026-08-19T10:00:00.000Z",
+            scheduledEndAt: "2026-08-19T11:00:00.000Z",
+            timeZone: "Europe/Moscow",
+            href: "/sessions/10000000-0000-4000-8000-000000000021"
+          }
+        ]
+      })
+    };
+    const service = new (ClientsService as new (...args: unknown[]) => ClientsService)(
       {} as never,
       { now: () => new Date("2026-08-20T10:00:00.000Z") } as SystemClock,
       birthPlaceSearchProvider(),
-      crmStore
+      crmStore,
+      bookingServiceWorkReader,
+      sessionServiceWorkReader
     );
     const builder = Test.createTestingModule({
       controllers: [ClientsController],
@@ -111,7 +156,19 @@ describe("Clients CRM HTTP API", () => {
     const response = await request(`/clients/crm/${clientUserId}`, { role: "astrologer" });
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ client: crmDetail() });
+    expect(response.body).toEqual({ client: crmDetail({ serviceWork: serviceWorkSummary() }) });
+    expect(bookingServiceWorkReader.listClientServiceWorkBookings).toHaveBeenCalledWith({
+      ownerUserId: astrologerUserId,
+      clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      limit: 3
+    });
+    expect(sessionServiceWorkReader.listClientServiceWorkSessions).toHaveBeenCalledWith({
+      ownerUserId: astrologerUserId,
+      clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      limit: 3
+    });
     expect(JSON.stringify(response.body)).not.toMatch(
       /messageBody|providerPayload|preview|composer/i
     );
@@ -191,7 +248,7 @@ function birthPlaceSearchProvider(): ClientBirthPlaceSearchProvider {
   };
 }
 
-function crmDetail() {
+function crmDetail(overrides: Record<string, unknown> = {}) {
   return {
     clientUserId,
     displayName: "Client",
@@ -221,6 +278,46 @@ function crmDetail() {
         }
       ],
       nextCursor: null
+    },
+    ...overrides
+  };
+}
+
+function serviceWorkSummary() {
+  return {
+    status: "available",
+    bookings: {
+      upcomingTotal: 1,
+      upcoming: [
+        {
+          id: "10000000-0000-4000-8000-000000000020",
+          state: "confirmed",
+          productTitle: "Natal consultation",
+          startAt: "2026-08-21T10:00:00.000Z",
+          endAt: "2026-08-21T11:00:00.000Z",
+          timeZone: "Europe/Moscow",
+          href: "/calendar?bookingId=10000000-0000-4000-8000-000000000020&startAt=2026-08-21T10%3A00%3A00.000Z"
+        }
+      ],
+      recentTotal: 0,
+      recent: []
+    },
+    sessions: {
+      upcomingTotal: 0,
+      upcoming: [],
+      recentTotal: 1,
+      recent: [
+        {
+          id: "10000000-0000-4000-8000-000000000021",
+          bookingId: "10000000-0000-4000-8000-000000000020",
+          state: "ended",
+          productTitle: "Natal consultation",
+          scheduledStartAt: "2026-08-19T10:00:00.000Z",
+          scheduledEndAt: "2026-08-19T11:00:00.000Z",
+          timeZone: "Europe/Moscow",
+          href: "/sessions/10000000-0000-4000-8000-000000000021"
+        }
+      ]
     }
   };
 }

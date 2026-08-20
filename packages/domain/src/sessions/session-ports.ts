@@ -158,6 +158,33 @@ export type SessionReadStore = {
   listRealtimeEvents(input: ListSessionRealtimeEventsInput): Promise<SessionRealtimeEventPage>;
 };
 
+export type ClientServiceWorkSessionItem = Pick<
+  SessionSummary,
+  "id" | "bookingId" | "state" | "productTitle" | "scheduledStartAt" | "scheduledEndAt" | "timeZone"
+> & {
+  readonly href: string;
+};
+
+export type ClientServiceWorkSessionSummary = {
+  readonly upcomingTotal: number;
+  readonly upcoming: readonly ClientServiceWorkSessionItem[];
+  readonly recentTotal: number;
+  readonly recent: readonly ClientServiceWorkSessionItem[];
+};
+
+export type ClientServiceWorkSessionSummaryResult =
+  | ClientServiceWorkSessionSummary
+  | { readonly kind: "unavailable"; readonly retryable: boolean };
+
+export type SessionClientServiceWorkSummaryReader = {
+  readonly listClientServiceWorkSessions: (input: {
+    readonly ownerUserId: string;
+    readonly clientUserId: string;
+    readonly now: string;
+    readonly limit: number;
+  }) => Promise<ClientServiceWorkSessionSummaryResult>;
+};
+
 export type MediaRoomProviderPort = {
   createJoinCredential(input: MediaRoomJoinInput): Promise<MediaRoomJoinCredential>;
   removeParticipant(input: MediaRoomParticipantCommand): Promise<MediaRoomCommandResult>;

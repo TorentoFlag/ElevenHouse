@@ -97,6 +97,15 @@ describe("ClientsPage", () => {
     expect(screen.getByRole("tab", { name: "Обзор" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("Источник")).toBeVisible();
     expect(screen.getAllByText("20 авг. 2026 г.").length).toBeGreaterThan(0);
+    expect(screen.getByText("Работа с клиентом")).toBeVisible();
+    expect(screen.getByRole("link", { name: /Natal consultation.*21 авг. 2026 г./ })).toHaveAttribute(
+      "href",
+      "/calendar?bookingId=41111111-1111-4111-8111-111111111111&startAt=2026-08-21T10%3A00%3A00.000Z"
+    );
+    expect(screen.getByRole("link", { name: /Session review.*19 авг. 2026 г./ })).toHaveAttribute(
+      "href",
+      "/sessions/51111111-1111-4111-8111-111111111111"
+    );
 
     const overviewTab = screen.getByRole("tab", { name: "Обзор" });
     overviewTab.focus();
@@ -306,5 +315,41 @@ const adaDetail = {
       updatedAt: "2026-08-19T10:00:00.000Z"
     }
   ],
+  serviceWork: {
+    status: "available",
+    bookings: {
+      upcomingTotal: 1,
+      upcoming: [
+        {
+          id: "41111111-1111-4111-8111-111111111111",
+          state: "confirmed",
+          productTitle: "Natal consultation",
+          startAt: "2026-08-21T10:00:00.000Z",
+          endAt: "2026-08-21T11:00:00.000Z",
+          timeZone: "Europe/Moscow",
+          href: "/calendar?bookingId=41111111-1111-4111-8111-111111111111&startAt=2026-08-21T10%3A00%3A00.000Z"
+        }
+      ],
+      recentTotal: 0,
+      recent: []
+    },
+    sessions: {
+      upcomingTotal: 0,
+      upcoming: [],
+      recentTotal: 1,
+      recent: [
+        {
+          id: "51111111-1111-4111-8111-111111111111",
+          bookingId: "41111111-1111-4111-8111-111111111111",
+          state: "ended",
+          productTitle: "Session review",
+          scheduledStartAt: "2026-08-19T10:00:00.000Z",
+          scheduledEndAt: "2026-08-19T11:00:00.000Z",
+          timeZone: "Europe/Moscow",
+          href: "/sessions/51111111-1111-4111-8111-111111111111"
+        }
+      ]
+    }
+  },
   activity: { items: [activityItem], nextCursor: null }
 } as const satisfies AstrologerClientCrmDetail;

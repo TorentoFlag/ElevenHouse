@@ -120,6 +120,114 @@ describe("Clients CRM domain read model", () => {
     }
   });
 
+  it("adds service work from source-owned booking and session readers", async () => {
+    const result = await getAstrologerClientCrmDetail({
+      store: store(),
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      now: "2026-08-20T10:00:00.000Z",
+      serviceWorkSources: {
+        bookings: {
+          async listClientServiceWorkBookings(input: unknown) {
+            expect(input).toEqual({
+              ownerUserId: "astrologer-1",
+              clientUserId: "client-1",
+              now: "2026-08-20T10:00:00.000Z",
+              limit: 3
+            });
+            return {
+              upcomingTotal: 1,
+              upcoming: [
+                {
+                  id: "booking-1",
+                  state: "confirmed",
+                  productTitle: "Natal consultation",
+                  startAt: "2026-08-21T10:00:00.000Z",
+                  endAt: "2026-08-21T11:00:00.000Z",
+                  timeZone: "Europe/Moscow",
+                  href: "/calendar?bookingId=booking-1&startAt=2026-08-21T10%3A00%3A00.000Z"
+                }
+              ],
+              recentTotal: 0,
+              recent: []
+            };
+          }
+        },
+        sessions: {
+          async listClientServiceWorkSessions(input: unknown) {
+            expect(input).toEqual({
+              ownerUserId: "astrologer-1",
+              clientUserId: "client-1",
+              now: "2026-08-20T10:00:00.000Z",
+              limit: 3
+            });
+            return {
+              upcomingTotal: 1,
+              upcoming: [
+                {
+                  id: "session-1",
+                  bookingId: "booking-1",
+                  state: "scheduled",
+                  productTitle: "Natal consultation",
+                  scheduledStartAt: "2026-08-21T10:00:00.000Z",
+                  scheduledEndAt: "2026-08-21T11:00:00.000Z",
+                  timeZone: "Europe/Moscow",
+                  href: "/sessions/session-1"
+                }
+              ],
+              recentTotal: 0,
+              recent: []
+            };
+          }
+        }
+      }
+    } as unknown as Parameters<typeof getAstrologerClientCrmDetail>[0]);
+
+    expect(result).toMatchObject({
+      kind: "found",
+      detail: {
+        serviceWork: {
+          status: "available",
+          bookings: { upcomingTotal: 1, recentTotal: 0 },
+          sessions: { upcomingTotal: 1, recentTotal: 0 }
+        }
+      }
+    });
+  });
+
+  it("maps source reader failures to unavailable service work", async () => {
+    const result = await getAstrologerClientCrmDetail({
+      store: store(),
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      now: "2026-08-20T10:00:00.000Z",
+      serviceWorkSources: {
+        bookings: {
+          async listClientServiceWorkBookings() {
+            return { kind: "unavailable", retryable: true };
+          }
+        },
+        sessions: {
+          async listClientServiceWorkSessions() {
+            throw new Error("Should not read sessions after booking source failure");
+          }
+        }
+      }
+    } as unknown as Parameters<typeof getAstrologerClientCrmDetail>[0]);
+
+    expect(result).toMatchObject({
+      kind: "found",
+      detail: {
+        serviceWork: {
+          status: "unavailable",
+          source: "bookings",
+          code: "summary_unavailable",
+          retryable: true
+        }
+      }
+    });
+  });
+
   it("returns invalid_command without querying the read store", async () => {
     let called = false;
     const result = await getAstrologerClientCrmDetail({

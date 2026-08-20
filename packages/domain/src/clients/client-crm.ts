@@ -1,3 +1,11 @@
+import type {
+  BookingClientServiceWorkSummaryReader,
+  ClientServiceWorkBookingSummary
+} from "../bookings";
+import type {
+  ClientServiceWorkSessionSummary,
+  SessionClientServiceWorkSummaryReader
+} from "../sessions";
 import type { ClientLifecycleMode, ClientLifecycleStatus } from "./client-lifecycle";
 import {
   clientLifecycleStatusValues,
@@ -34,6 +42,19 @@ export type ClientCrmReadiness = {
   readonly birthData: "ready" | "missing";
   readonly relatedProfiles: "ready" | "missing";
 };
+
+export type ClientCrmServiceWorkSummary =
+  | {
+      readonly status: "available";
+      readonly bookings: ClientServiceWorkBookingSummary;
+      readonly sessions: ClientServiceWorkSessionSummary;
+    }
+  | {
+      readonly status: "unavailable";
+      readonly source: "bookings" | "sessions";
+      readonly code: "summary_unavailable";
+      readonly retryable: boolean;
+    };
 
 type ClientCrmActivityBase = {
   readonly id: string;
@@ -127,6 +148,7 @@ export type ClientCrmListPage = {
 export type ClientCrmDetail = ClientCrmListItem & {
   readonly birthData: ClientBirthData | null;
   readonly relatedBirthProfiles: readonly ClientRelatedBirthProfile[];
+  readonly serviceWork?: ClientCrmServiceWorkSummary;
   readonly activity: ClientCrmActivityPage;
 };
 
@@ -171,6 +193,11 @@ export type ClientCrmReadStore = {
   }) => Promise<ClientCrmDetailResult>;
 };
 
+export type ClientCrmServiceWorkSources = {
+  readonly bookings: BookingClientServiceWorkSummaryReader;
+  readonly sessions: SessionClientServiceWorkSummaryReader;
+};
+
 export async function listAstrologerClientCrmPage(input: {
   readonly store: ClientCrmReadStore;
   readonly astrologerUserId: string;
@@ -193,21 +220,101 @@ export async function getAstrologerClientCrmDetail(input: {
   readonly store: ClientCrmReadStore;
   readonly astrologerUserId: string;
   readonly clientUserId: string;
+  readonly now?: string;
+  readonly serviceWorkSources?: ClientCrmServiceWorkSources;
 }): Promise<ClientCrmDetailResult> {
   try {
+    const astrologerUserId = normalizeRequiredId(input.astrologerUserId);
+    const clientUserId = normalizeRequiredId(input.clientUserId);
     const result = await input.store.getAstrologerClientCrmDetail({
-      astrologerUserId: normalizeRequiredId(input.astrologerUserId),
-      clientUserId: normalizeRequiredId(input.clientUserId)
+      astrologerUserId,
+      clientUserId
     });
-    return result.kind === "found"
-      ? { kind: "found", detail: sortClientCrmDetailActivity(result.detail) }
-      : result;
+    if (result.kind !== "found") return result;
+
+    const detail = sortClientCrmDetailActivity(result.detail);
+    if (!input.serviceWorkSources) {
+      return { kind: "found", detail };
+    }
+
+    return {
+      kind: "found",
+      detail: {
+        ...detail,
+        serviceWork: await readClientCrmServiceWork({
+          sources: input.serviceWorkSources,
+          astrologerUserId,
+          clientUserId,
+          now: validateInstant(input.now, "CRM service-work timestamp is invalid")
+        })
+      }
+    };
   } catch (error) {
     if (error instanceof ClientCrmCommandValidationError) {
       return { kind: "invalid_command" };
     }
     throw error;
   }
+}
+
+async function readClientCrmServiceWork(input: {
+  readonly sources: ClientCrmServiceWorkSources;
+  readonly astrologerUserId: string;
+  readonly clientUserId: string;
+  readonly now: string;
+}): Promise<ClientCrmServiceWorkSummary> {
+  const readerInput = {
+    ownerUserId: input.astrologerUserId,
+    clientUserId: input.clientUserId,
+    now: input.now,
+    limit: 3
+  };
+  let bookings;
+  try {
+    bookings = await input.sources.bookings.listClientServiceWorkBookings(readerInput);
+  } catch {
+    return unavailableServiceWork("bookings", true);
+  }
+  if (isUnavailableServiceWorkSource(bookings)) {
+    return unavailableServiceWork("bookings", bookings.retryable);
+  }
+
+  let sessions;
+  try {
+    sessions = await input.sources.sessions.listClientServiceWorkSessions(readerInput);
+  } catch {
+    return unavailableServiceWork("sessions", true);
+  }
+  if (isUnavailableServiceWorkSource(sessions)) {
+    return unavailableServiceWork("sessions", sessions.retryable);
+  }
+
+  return {
+    status: "available",
+    bookings,
+    sessions
+  };
+}
+
+function isUnavailableServiceWorkSource(
+  value:
+    | ClientServiceWorkBookingSummary
+    | ClientServiceWorkSessionSummary
+    | { readonly kind: "unavailable"; readonly retryable: boolean }
+): value is { readonly kind: "unavailable"; readonly retryable: boolean } {
+  return "kind" in value && value.kind === "unavailable";
+}
+
+function unavailableServiceWork(
+  source: "bookings" | "sessions",
+  retryable: boolean
+): ClientCrmServiceWorkSummary {
+  return {
+    status: "unavailable",
+    source,
+    code: "summary_unavailable",
+    retryable
+  };
 }
 
 export function createClientCrmActivityItem(
@@ -361,6 +468,13 @@ function validateRequiredString(value: string, message: string, maxLength = Numb
     throw new ClientCrmCommandValidationError(message);
   }
   return normalized;
+}
+
+function validateInstant(value: string | undefined, message: string): string {
+  if (value === undefined || !Number.isFinite(Date.parse(value))) {
+    throw new ClientCrmCommandValidationError(message);
+  }
+  return value;
 }
 
 function isLifecycleStatus(value: string): value is ClientLifecycleStatus {

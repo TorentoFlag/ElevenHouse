@@ -2,6 +2,8 @@ import type {
   AstrologerClientCrmDetail,
   ClientCrmActivityItem,
   ClientBirthDataResponse,
+  ClientCrmServiceWorkBookingItem,
+  ClientCrmServiceWorkSessionItem,
   ClientRelatedBirthProfileResponse
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
@@ -209,6 +211,10 @@ function OverviewPanel({
         </div>
       </section>
 
+      {client.serviceWork ? (
+        <ServiceWorkPanel copy={copy} locale={locale} serviceWork={client.serviceWork} />
+      ) : null}
+
       <section className={`${styles.card} ${styles.wideCard}`}>
         <div className={styles.kicker}>{copy.tabs.activity}</div>
         <ClientCrmActivityTimeline
@@ -222,6 +228,107 @@ function OverviewPanel({
       </section>
     </div>
   );
+}
+
+function ServiceWorkPanel({
+  copy,
+  locale,
+  serviceWork
+}: {
+  readonly copy: ClientsCrmCopy;
+  readonly locale: SupportedLocale;
+  readonly serviceWork: AstrologerClientCrmDetail["serviceWork"];
+}) {
+  if (!serviceWork) return null;
+  if (serviceWork.status === "unavailable") {
+    return (
+      <section className={`${styles.card} ${styles.wideCard}`}>
+        <div className={styles.kicker}>{copy.serviceWork.title}</div>
+        <div className={styles.emptyStateCompact}>{copy.serviceWork.unavailable}</div>
+      </section>
+    );
+  }
+
+  const hasItems =
+    serviceWork.bookings.upcoming.length > 0 ||
+    serviceWork.bookings.recent.length > 0 ||
+    serviceWork.sessions.upcoming.length > 0 ||
+    serviceWork.sessions.recent.length > 0;
+
+  return (
+    <section className={`${styles.card} ${styles.wideCard}`}>
+      <div className={styles.kicker}>{copy.serviceWork.title}</div>
+      {hasItems ? (
+        <div className={styles.workGrid}>
+          <ServiceWorkGroup
+            title={copy.serviceWork.upcomingBookings}
+            total={serviceWork.bookings.upcomingTotal}
+            items={serviceWork.bookings.upcoming}
+            locale={locale}
+          />
+          <ServiceWorkGroup
+            title={copy.serviceWork.recentBookings}
+            total={serviceWork.bookings.recentTotal}
+            items={serviceWork.bookings.recent}
+            locale={locale}
+          />
+          <ServiceWorkGroup
+            title={copy.serviceWork.upcomingSessions}
+            total={serviceWork.sessions.upcomingTotal}
+            items={serviceWork.sessions.upcoming}
+            locale={locale}
+          />
+          <ServiceWorkGroup
+            title={copy.serviceWork.recentSessions}
+            total={serviceWork.sessions.recentTotal}
+            items={serviceWork.sessions.recent}
+            locale={locale}
+          />
+        </div>
+      ) : (
+        <div className={styles.emptyStateCompact}>{copy.serviceWork.empty}</div>
+      )}
+    </section>
+  );
+}
+
+function ServiceWorkGroup({
+  title,
+  total,
+  items,
+  locale
+}: {
+  readonly title: string;
+  readonly total: number;
+  readonly items: readonly (ClientCrmServiceWorkBookingItem | ClientCrmServiceWorkSessionItem)[];
+  readonly locale: SupportedLocale;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className={styles.workGroup}>
+      <div className={styles.workGroupTitle}>
+        <span>{title}</span>
+        <span className={styles.workCount}>{total}</span>
+      </div>
+      <div className={styles.workList}>
+        {items.map((item) => (
+          <a className={styles.workItem} href={item.href} key={item.id}>
+            <span className={styles.workTitle}>{item.productTitle}</span>
+            <span className={styles.workMeta}>
+              {formatClientCrmDate(getServiceWorkStartAt(item), locale)} · {item.state}
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getServiceWorkStartAt(
+  item: ClientCrmServiceWorkBookingItem | ClientCrmServiceWorkSessionItem
+): string {
+  return "startAt" in item ? item.startAt : item.scheduledStartAt;
 }
 
 function BirthDataPanel({

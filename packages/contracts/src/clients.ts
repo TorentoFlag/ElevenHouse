@@ -1,5 +1,7 @@
 import { ianaTimeZoneSchema, nonEmptyStringSchema, z } from "@elevenhouse/validation";
 import { astrologerPublicHandleSchema } from "./astrologer-profile";
+import { bookingLifecycleStateSchema } from "./calendar";
+import { SessionStateSchema } from "./sessions";
 
 const uuidSchema = z.string().uuid();
 const timestampSchema = z.string().datetime();
@@ -429,6 +431,90 @@ export const clientCrmReadinessSchema = z
   .strict();
 export type ClientCrmReadiness = z.infer<typeof clientCrmReadinessSchema>;
 
+export const clientCrmServiceWorkBookingItemSchema = z
+  .object({
+    id: uuidSchema,
+    state: bookingLifecycleStateSchema,
+    productTitle: z.string().trim().min(1).max(200),
+    startAt: timestampSchema,
+    endAt: timestampSchema,
+    timeZone: ianaTimeZoneSchema,
+    href: clientCrmRelativeHrefSchema
+  })
+  .strict()
+  .superRefine((item, context) => {
+    if (Date.parse(item.startAt) >= Date.parse(item.endAt)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endAt"],
+        message: "CRM service-work booking end must be after start"
+      });
+    }
+  });
+export type ClientCrmServiceWorkBookingItem = z.infer<
+  typeof clientCrmServiceWorkBookingItemSchema
+>;
+
+export const clientCrmServiceWorkSessionItemSchema = z
+  .object({
+    id: uuidSchema,
+    bookingId: uuidSchema,
+    state: SessionStateSchema,
+    productTitle: z.string().trim().min(1).max(200),
+    scheduledStartAt: timestampSchema,
+    scheduledEndAt: timestampSchema,
+    timeZone: ianaTimeZoneSchema,
+    href: clientCrmRelativeHrefSchema
+  })
+  .strict()
+  .superRefine((item, context) => {
+    if (Date.parse(item.scheduledStartAt) >= Date.parse(item.scheduledEndAt)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scheduledEndAt"],
+        message: "CRM service-work session end must be after start"
+      });
+    }
+  });
+export type ClientCrmServiceWorkSessionItem = z.infer<
+  typeof clientCrmServiceWorkSessionItemSchema
+>;
+
+export const clientCrmServiceWorkSummarySchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("available"),
+      bookings: z
+        .object({
+          upcomingTotal: z.number().int().min(0),
+          upcoming: z.array(clientCrmServiceWorkBookingItemSchema).max(3),
+          recentTotal: z.number().int().min(0),
+          recent: z.array(clientCrmServiceWorkBookingItemSchema).max(3)
+        })
+        .strict(),
+      sessions: z
+        .object({
+          upcomingTotal: z.number().int().min(0),
+          upcoming: z.array(clientCrmServiceWorkSessionItemSchema).max(3),
+          recentTotal: z.number().int().min(0),
+          recent: z.array(clientCrmServiceWorkSessionItemSchema).max(3)
+        })
+        .strict()
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("unavailable"),
+      source: z.enum(["bookings", "sessions"]),
+      code: z.literal("summary_unavailable"),
+      retryable: z.boolean()
+    })
+    .strict()
+]);
+export type ClientCrmServiceWorkSummary = z.infer<
+  typeof clientCrmServiceWorkSummarySchema
+>;
+
 const clientCrmRelationshipCreatedActivityMetadataSchema = z
   .object({
     source: clientRelationshipSourceSchema
@@ -558,6 +644,7 @@ export const astrologerClientCrmDetailSchema = z
     birthData: clientBirthDataResponseSchema.nullable(),
     relatedBirthProfiles: z.array(clientRelatedBirthProfileResponseSchema).max(50),
     readiness: clientCrmReadinessSchema,
+    serviceWork: clientCrmServiceWorkSummarySchema.optional(),
     activity: clientCrmActivityPageResponseSchema
   })
   .strict();

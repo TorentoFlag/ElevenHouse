@@ -16,6 +16,8 @@ import {
   ClientBirthDataRevisionConflictError,
   writeClientBirthProfile,
   writeClientRelatedBirthProfile,
+  type BookingClientServiceWorkSummaryReader,
+  type SessionClientServiceWorkSummaryReader,
   type ClientCrmReadStore,
   type ClientRelatedBirthProfileStore,
   type ClientStore
@@ -52,7 +54,13 @@ import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import type { ClientBirthPlaceSearchProvider } from "./birth-place-search.provider";
-import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_CRM_READ_STORE, CLIENT_STORE } from "./clients.tokens";
+import {
+  BIRTH_PLACE_SEARCH_PROVIDER,
+  CLIENT_BOOKING_SERVICE_WORK_READER,
+  CLIENT_CRM_READ_STORE,
+  CLIENT_SESSION_SERVICE_WORK_READER,
+  CLIENT_STORE
+} from "./clients.tokens";
 
 @Injectable()
 export class ClientsService {
@@ -64,7 +72,11 @@ export class ClientsService {
     @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
     private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider,
     @Inject(CLIENT_CRM_READ_STORE)
-    private readonly clientCrmReadStore: ClientCrmReadStore
+    private readonly clientCrmReadStore: ClientCrmReadStore,
+    @Inject(CLIENT_BOOKING_SERVICE_WORK_READER)
+    private readonly bookingServiceWorkReader: BookingClientServiceWorkSummaryReader,
+    @Inject(CLIENT_SESSION_SERVICE_WORK_READER)
+    private readonly sessionServiceWorkReader: SessionClientServiceWorkSummaryReader
   ) {}
 
   async listClients(
@@ -277,7 +289,12 @@ export class ClientsService {
     const result = await getAstrologerClientCrmDetail({
       store: this.clientCrmReadStore,
       astrologerUserId,
-      clientUserId: params.clientUserId
+      clientUserId: params.clientUserId,
+      now: this.clock.now().toISOString(),
+      serviceWorkSources: {
+        bookings: this.bookingServiceWorkReader,
+        sessions: this.sessionServiceWorkReader
+      }
     });
 
     if (result.kind === "found") return result.detail;

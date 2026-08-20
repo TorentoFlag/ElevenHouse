@@ -172,6 +172,33 @@ export type BookingCommandStore = {
   }) => Promise<Booking | null>;
 };
 
+export type ClientServiceWorkBookingItem = Pick<
+  Booking,
+  "id" | "state" | "productTitle" | "startAt" | "endAt" | "timeZone"
+> & {
+  readonly href: string;
+};
+
+export type ClientServiceWorkBookingSummary = {
+  readonly upcomingTotal: number;
+  readonly upcoming: readonly ClientServiceWorkBookingItem[];
+  readonly recentTotal: number;
+  readonly recent: readonly ClientServiceWorkBookingItem[];
+};
+
+export type ClientServiceWorkBookingSummaryResult =
+  | ClientServiceWorkBookingSummary
+  | { readonly kind: "unavailable"; readonly retryable: boolean };
+
+export type BookingClientServiceWorkSummaryReader = {
+  readonly listClientServiceWorkBookings: (input: {
+    readonly ownerUserId: string;
+    readonly clientUserId: string;
+    readonly now: string;
+    readonly limit: number;
+  }) => Promise<ClientServiceWorkBookingSummaryResult>;
+};
+
 export type BookingClientReader = {
   readonly hasActiveRelationship: (input: {
     readonly ownerUserId: string;

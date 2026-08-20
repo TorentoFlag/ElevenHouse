@@ -237,6 +237,12 @@ export const bookings = pgTable(
       table.clientUserId,
       table.createdAt,
       table.id
+    ),
+    index("bookings_owner_client_service_idx").on(
+      table.ownerUserId,
+      table.clientUserId,
+      table.serviceStartAt,
+      table.id
     )
   ]
 );
