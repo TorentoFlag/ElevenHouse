@@ -67,11 +67,6 @@ export const reviewableInstances = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    unique("reviewable_instances_relationship_identity_unique").on(
-      table.relationshipId,
-      table.clientUserId,
-      table.astrologerUserId
-    ),
     uniqueIndex("reviewable_instances_source_unique").on(
       table.astrologerUserId,
       table.clientUserId,

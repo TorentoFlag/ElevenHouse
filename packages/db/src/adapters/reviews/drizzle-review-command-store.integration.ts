@@ -34,6 +34,43 @@ describe.sequential("Drizzle review command store", () => {
     await integration?.close();
   }, 30_000);
 
+  it("allows multiple reviewable instances for the same client-astrologer relationship", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const secondReviewableInstanceId = randomUUID();
+    const now = new Date("2026-08-20T09:30:00.000Z");
+
+    await expect(
+      runtime.database.insert(reviewableInstances).values({
+        id: secondReviewableInstanceId,
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.clientUserId,
+        relationshipId: fixture.relationshipId,
+        kind: "instant_delivery",
+        status: "reviewable",
+        windowPolicy: "standard_14_days_after_receipt",
+        sourceResourceKey: `order:${randomUUID()}:instant_delivery`,
+        productId: fixture.productId,
+        orderId: null,
+        bookingId: null,
+        titleSnapshot: "Письменный разбор",
+        contextLabelSnapshot: "Заказ получен",
+        receivedAt: new Date("2026-08-20T09:30:00.000Z"),
+        reviewWindowClosesAt: new Date("2026-09-03T09:30:00.000Z"),
+        blockedReasonCode: null,
+        createdAt: now,
+        updatedAt: now
+      })
+    ).resolves.toBeDefined();
+
+    const rows = await runtime.database
+      .select()
+      .from(reviewableInstances)
+      .where(eq(reviewableInstances.relationshipId, fixture.relationshipId));
+    expect(rows.map((row) => row.id).sort()).toEqual(
+      [fixture.reviewableInstanceId, secondReviewableInstanceId].sort()
+    );
+  });
+
   it("submits, publishes first review once, and does not duplicate publication events for edits", async () => {
     const fixture = await seedReviewableFixture(runtime);
     const store = createDrizzleReviewCommandStore(runtime.database);
