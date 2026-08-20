@@ -23,6 +23,7 @@ import {
   runFlowWorkerRegistrationRetention,
   createDrizzleAiUsageRecorder,
   createDrizzleAiUsageStore,
+  createDrizzleReviewableInstanceReceiptStore,
   createDrizzleSessionLifecycleStore
 } from "@elevenhouse/db";
 import {
@@ -97,6 +98,9 @@ const config = createWorkersRuntimeConfig();
 const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const sessionLifecycleStore = createDrizzleSessionLifecycleStore(postgres.database);
+const reviewableInstanceReceiptStore = createDrizzleReviewableInstanceReceiptStore(
+  postgres.database
+);
 const calculationStore = createDrizzleCalculationStore(postgres.database);
 const flowWorkerSessionId = randomUUID();
 const flowWorkerIdentity = {
@@ -300,14 +304,24 @@ const flowExecutionRuntime = createFlowExecutionRuntime({
 const sessionRuntime = createSessionRuntime({
   projectionIntervalMs: config.sessions.projectionIntervalMs,
   maintenanceIntervalMs: config.sessions.maintenanceIntervalMs,
-  project: () =>
-    config.sessions.enabled
-      ? processSessionBookingLifecycleEvents({
-          store: sessionLifecycleStore,
-          now: new Date(),
-          batchSize: config.sessions.projectionBatchSize
-        })
-      : Promise.resolve(),
+  project: async () => {
+    if (!config.sessions.enabled) return;
+    const now = new Date();
+    const [, reviewSources] = await Promise.all([
+      processSessionBookingLifecycleEvents({
+        store: sessionLifecycleStore,
+        now,
+        batchSize: config.sessions.projectionBatchSize
+      }),
+      reviewableInstanceReceiptStore.upsertPendingCompletedBookingEvents({
+        limit: config.sessions.projectionBatchSize,
+        now: now.toISOString()
+      })
+    ]);
+    if (reviewSources.scanned > 0 || reviewSources.rejected > 0) {
+      logger.info("review completed booking sources projected", reviewSources);
+    }
+  },
   maintain: () =>
     config.sessions.enabled
       ? maintainSessions({
