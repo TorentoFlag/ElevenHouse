@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import type {
   ReviewWindowPolicy,
   ReviewableInstanceKind,
   ReviewableInstanceStatus
 } from "@elevenhouse/contracts";
 import { planReviewableInstanceFromReceipt } from "@elevenhouse/domain";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -93,6 +95,16 @@ export type DrizzleReviewableInstanceReceiptStore = {
     readonly nextReviewableInstanceId: string;
     readonly now: string;
   }) => Promise<UpsertReviewableInstanceFromReceiptResult>;
+  readonly upsertPendingCompletedBookingEvents: (input: {
+    readonly limit: number;
+    readonly now: string;
+    readonly idGenerator?: () => string;
+  }) => Promise<{
+    readonly scanned: number;
+    readonly created: number;
+    readonly existing: number;
+    readonly rejected: number;
+  }>;
 };
 
 export function createDrizzleReviewableInstanceReceiptStore(
@@ -102,71 +114,9 @@ export function createDrizzleReviewableInstanceReceiptStore(
     upsertFromReceipt: (input) =>
       database.transaction((transaction) => upsertReceiptInTransaction(transaction, input)),
     upsertFromCompletedBookingEvent: (input) =>
-      database.transaction(async (transaction) => {
-        const [row] = await transaction
-          .select({
-            eventId: bookingLifecycleEvents.id,
-            eventKind: bookingLifecycleEvents.eventKind,
-            revision: bookingLifecycleEvents.revision,
-            occurredAt: bookingLifecycleEvents.occurredAt,
-            bookingId: bookings.id,
-            bookingState: bookings.state,
-            bookingLifecycleRevision: bookings.lifecycleRevision,
-            clientUserId: bookings.clientUserId,
-            astrologerUserId: bookings.ownerUserId,
-            productId: bookings.productId,
-            productTitleSnapshot: bookings.productTitleSnapshot,
-            durationMinutesSnapshot: bookings.durationMinutesSnapshot
-          })
-          .from(bookingLifecycleEvents)
-          .innerJoin(
-            bookings,
-            and(
-              eq(bookings.id, bookingLifecycleEvents.bookingId),
-              eq(bookings.ownerUserId, bookingLifecycleEvents.ownerUserId)
-            )
-          )
-          .where(
-            and(
-              eq(bookingLifecycleEvents.id, input.bookingLifecycleEventId),
-              eq(bookingLifecycleEvents.eventKind, "completed")
-            )
-          )
-          .limit(1);
-
-        if (!row) return { kind: "rejected", reason: "booking_completion_not_found" };
-        if (row.bookingState !== "completed" || row.bookingLifecycleRevision !== row.revision) {
-          return { kind: "rejected", reason: "booking_not_completed" };
-        }
-
-        const [order] = await transaction
-          .select({
-            id: orders.id,
-            status: orders.status
-          })
-          .from(orders)
-          .where(eq(orders.bookingId, row.bookingId))
-          .limit(1);
-        if (order && order.status !== "paid" && order.status !== "fulfilled") {
-          return { kind: "rejected", reason: "order_not_reviewable" };
-        }
-
-        return upsertReceiptInTransaction(transaction, {
-          nextReviewableInstanceId: input.nextReviewableInstanceId,
-          clientUserId: row.clientUserId,
-          astrologerUserId: row.astrologerUserId,
-          kind: "booking",
-          sourceResourceKey: `booking:${row.bookingId}`,
-          productId: row.productId,
-          orderId: order?.id ?? null,
-          bookingId: row.bookingId,
-          titleSnapshot: row.productTitleSnapshot,
-          contextLabelSnapshot: `${row.durationMinutesSnapshot} минут`,
-          receivedAt: row.occurredAt.toISOString(),
-          windowPolicy: "standard_14_days_after_receipt",
-          now: input.now
-        });
-      }),
+      database.transaction((transaction) =>
+        upsertCompletedBookingEventInTransaction(transaction, input)
+      ),
     upsertFromAstroDiaryPeriod: (input) =>
       database.transaction(async (transaction) => {
         const [row] = await transaction
@@ -226,8 +176,134 @@ export function createDrizzleReviewableInstanceReceiptStore(
           windowPolicy: "standard_14_days_after_receipt",
           now: input.now
         });
-      })
+      }),
+    upsertPendingCompletedBookingEvents: async (input) => {
+      if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500) {
+        throw new Error("Review completed booking source batch limit must be between 1 and 500");
+      }
+      const rows = await database
+        .select({ lifecycleEventId: bookingLifecycleEvents.id })
+        .from(bookingLifecycleEvents)
+        .innerJoin(
+          bookings,
+          and(
+            eq(bookings.id, bookingLifecycleEvents.bookingId),
+            eq(bookings.ownerUserId, bookingLifecycleEvents.ownerUserId)
+          )
+        )
+        .leftJoin(
+          reviewableInstances,
+          and(
+            eq(reviewableInstances.kind, "booking"),
+            eq(reviewableInstances.bookingId, bookings.id),
+            eq(reviewableInstances.clientUserId, bookings.clientUserId),
+            eq(reviewableInstances.astrologerUserId, bookings.ownerUserId)
+          )
+        )
+        .where(
+          and(
+            eq(bookingLifecycleEvents.eventKind, "completed"),
+            eq(bookings.state, "completed"),
+            eq(bookings.lifecycleRevision, bookingLifecycleEvents.revision),
+            isNull(reviewableInstances.id)
+          )
+        )
+        .orderBy(asc(bookingLifecycleEvents.occurredAt), asc(bookingLifecycleEvents.id))
+        .limit(input.limit);
+
+      let created = 0;
+      let existing = 0;
+      let rejected = 0;
+      const idGenerator = input.idGenerator ?? randomUUID;
+      for (const row of rows) {
+        const result = await database.transaction((transaction) =>
+          upsertCompletedBookingEventInTransaction(transaction, {
+            bookingLifecycleEventId: row.lifecycleEventId,
+            nextReviewableInstanceId: idGenerator(),
+            now: input.now
+          })
+        );
+        if (result.kind === "created") created += 1;
+        else if (result.kind === "existing") existing += 1;
+        else rejected += 1;
+      }
+
+      return { scanned: rows.length, created, existing, rejected };
+    }
   };
+}
+
+async function upsertCompletedBookingEventInTransaction(
+  transaction: ReviewReceiptTransaction,
+  input: {
+    readonly bookingLifecycleEventId: string;
+    readonly nextReviewableInstanceId: string;
+    readonly now: string;
+  }
+): Promise<UpsertReviewableInstanceFromReceiptResult> {
+  const [row] = await transaction
+    .select({
+      eventId: bookingLifecycleEvents.id,
+      eventKind: bookingLifecycleEvents.eventKind,
+      revision: bookingLifecycleEvents.revision,
+      occurredAt: bookingLifecycleEvents.occurredAt,
+      bookingId: bookings.id,
+      bookingState: bookings.state,
+      bookingLifecycleRevision: bookings.lifecycleRevision,
+      clientUserId: bookings.clientUserId,
+      astrologerUserId: bookings.ownerUserId,
+      productId: bookings.productId,
+      productTitleSnapshot: bookings.productTitleSnapshot,
+      durationMinutesSnapshot: bookings.durationMinutesSnapshot
+    })
+    .from(bookingLifecycleEvents)
+    .innerJoin(
+      bookings,
+      and(
+        eq(bookings.id, bookingLifecycleEvents.bookingId),
+        eq(bookings.ownerUserId, bookingLifecycleEvents.ownerUserId)
+      )
+    )
+    .where(
+      and(
+        eq(bookingLifecycleEvents.id, input.bookingLifecycleEventId),
+        eq(bookingLifecycleEvents.eventKind, "completed")
+      )
+    )
+    .limit(1);
+
+  if (!row) return { kind: "rejected", reason: "booking_completion_not_found" };
+  if (row.bookingState !== "completed" || row.bookingLifecycleRevision !== row.revision) {
+    return { kind: "rejected", reason: "booking_not_completed" };
+  }
+
+  const [order] = await transaction
+    .select({
+      id: orders.id,
+      status: orders.status
+    })
+    .from(orders)
+    .where(eq(orders.bookingId, row.bookingId))
+    .limit(1);
+  if (order && order.status !== "paid" && order.status !== "fulfilled") {
+    return { kind: "rejected", reason: "order_not_reviewable" };
+  }
+
+  return upsertReceiptInTransaction(transaction, {
+    nextReviewableInstanceId: input.nextReviewableInstanceId,
+    clientUserId: row.clientUserId,
+    astrologerUserId: row.astrologerUserId,
+    kind: "booking",
+    sourceResourceKey: `booking:${row.bookingId}`,
+    productId: row.productId,
+    orderId: order?.id ?? null,
+    bookingId: row.bookingId,
+    titleSnapshot: row.productTitleSnapshot,
+    contextLabelSnapshot: `${row.durationMinutesSnapshot} минут`,
+    receivedAt: row.occurredAt.toISOString(),
+    windowPolicy: "standard_14_days_after_receipt",
+    now: input.now
+  });
 }
 
 async function upsertReceiptInTransaction(

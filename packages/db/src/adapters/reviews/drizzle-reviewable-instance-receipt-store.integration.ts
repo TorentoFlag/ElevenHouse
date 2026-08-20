@@ -139,6 +139,31 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("scans pending completed booking events and opens missing reviewable instances", async () => {
+    const fixture = await seedCompletedBookingFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.upsertPendingCompletedBookingEvents({
+        limit: 10,
+        now: "2026-08-20T10:03:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 1, created: 1, existing: 0, rejected: 0 });
+
+    const [rowCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewableInstances)
+      .where(eq(reviewableInstances.sourceResourceKey, `booking:${fixture.bookingId}`));
+    expect(Number(rowCount?.value ?? 0)).toBe(1);
+
+    await expect(
+      store.upsertPendingCompletedBookingEvents({
+        limit: 10,
+        now: "2026-08-20T10:04:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 0, created: 0, existing: 0, rejected: 0 });
+  });
+
   it("creates an AstroDiary reviewable instance from an active entitlement period", async () => {
     const fixture = await createActiveClientSubscriptionFixture(
       runtime,
