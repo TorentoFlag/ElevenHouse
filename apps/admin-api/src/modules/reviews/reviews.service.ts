@@ -7,9 +7,12 @@ import {
   reviewModerationDecisionSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewModerationQueueQuerySchema,
+  reviewModerationQueueResponseSchema,
   type ReviewAdminDetail,
   type ReviewModerationCaseDetail,
-  type ReviewModerationCaseMessage
+  type ReviewModerationCaseMessage,
+  type ReviewModerationQueueResponse
 } from "@elevenhouse/contracts";
 import type {
   ApproveReviewReplyVersionResult,
@@ -92,7 +95,7 @@ export class AdminReviewsService {
     @Inject(ADMIN_REVIEWS_READ_STORE)
     private readonly readStore: Pick<
       ReviewReadStore,
-      "getAdminReviewDetail" | "getModerationCaseDetail"
+      "getAdminReviewDetail" | "getModerationCaseDetail" | "listModerationQueue"
     >,
     @Inject(ADMIN_REVIEWS_COMMAND_STORE)
     private readonly commandStore: AdminReviewCommandStore,
@@ -102,6 +105,14 @@ export class AdminReviewsService {
 
   async getReviewDetail(reviewId: string): Promise<ReviewAdminDetail> {
     return this.readRequiredReviewDetail(requireUuid(reviewId));
+  }
+
+  async listModerationQueue(query: unknown): Promise<ReviewModerationQueueResponse> {
+    const parsed = reviewModerationQueueQuerySchema.safeParse(normalizeQueueQuery(query));
+    if (!parsed.success) throw new BadRequestException("Invalid review moderation queue query");
+    return reviewModerationQueueResponseSchema.parse(
+      await this.readStore.listModerationQueue(parsed.data)
+    );
   }
 
   async approveReviewVersion(
@@ -312,4 +323,14 @@ function requireUuid(value: string): string {
     throw new BadRequestException("Valid UUID is required");
   }
   return value;
+}
+
+function normalizeQueueQuery(value: unknown): { limit?: number; cursor?: string | null } {
+  const input = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const limit = Array.isArray(input.limit) ? input.limit[0] : input.limit;
+  const cursor = Array.isArray(input.cursor) ? input.cursor[0] : input.cursor;
+  return {
+    limit: typeof limit === "string" && limit.trim() !== "" ? Number(limit) : undefined,
+    cursor: typeof cursor === "string" && cursor.trim() !== "" ? cursor : null
+  };
 }

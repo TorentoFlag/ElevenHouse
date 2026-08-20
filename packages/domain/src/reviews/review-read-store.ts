@@ -2,6 +2,8 @@ import type {
   ClientReviewDetail,
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
+  ReviewModerationQueueQuery,
+  ReviewModerationQueueResponse,
   ReviewPublicListQuery,
   ReviewPublicListResponse
 } from "@elevenhouse/contracts";
@@ -9,9 +11,10 @@ import type {
 export type ReviewModerationCaseActorRole = "moderator" | "client" | "astrologer";
 
 export type ReviewReadStore = {
-  readonly listPublicReviews: (
-    query: ReviewPublicListQuery
-  ) => Promise<ReviewPublicListResponse>;
+  readonly listPublicReviews: (query: ReviewPublicListQuery) => Promise<ReviewPublicListResponse>;
+  readonly listModerationQueue: (
+    query: ReviewModerationQueueQuery
+  ) => Promise<ReviewModerationQueueResponse>;
   readonly getClientReviewDetail: (input: {
     readonly clientUserId: string;
     readonly reviewableInstanceId: string;

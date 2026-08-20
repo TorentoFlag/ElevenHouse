@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards
@@ -14,7 +15,8 @@ import {
 import type {
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
-  ReviewModerationCaseMessage
+  ReviewModerationCaseMessage,
+  ReviewModerationQueueResponse
 } from "@elevenhouse/contracts";
 
 import { AdminSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -26,6 +28,11 @@ import { AdminReviewsService } from "./reviews.service";
 @UseGuards(AdminSessionAuthGuard)
 export class AdminReviewsController {
   constructor(@Inject(AdminReviewsService) private readonly service: AdminReviewsService) {}
+
+  @Get("moderation-queue")
+  listModerationQueue(@Query() query: unknown): Promise<ReviewModerationQueueResponse> {
+    return this.service.listModerationQueue(query);
+  }
 
   @Get("moderation-cases/:caseId")
   getModerationCaseDetail(

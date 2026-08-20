@@ -5,6 +5,7 @@ import {
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewModerationQueueResponseSchema,
   reviewModerationReasonCodeSchema,
   reviewPublicListResponseSchema,
   reviewPublicAuthorSchema,
@@ -262,6 +263,85 @@ describe("Reviews contracts", () => {
     expect(parsed.client.displayName).toBe("Анна Петрова");
     expect(parsed.visibilityStatus).toBe("temporarily_hidden_by_dispute");
     expect(parsed.replyVersions[0]?.moderationStatus).toBe("pending");
+  });
+
+  it("models the admin moderation queue with explicit review or reply targets", () => {
+    const parsed = reviewModerationQueueResponseSchema.parse({
+      items: [
+        {
+          queueItemId: "review_version:10000000-0000-4000-8000-000000000061",
+          kind: "review_version",
+          reviewId: "10000000-0000-4000-8000-000000000060",
+          reviewVersionId: "10000000-0000-4000-8000-000000000061",
+          replyVersionId: null,
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          client: {
+            clientUserId: "10000000-0000-4000-8000-000000000062",
+            displayName: "Анна Петрова",
+            initials: "АП",
+            avatarUrl: null
+          },
+          publicIdentityMode: "secret_user",
+          visibilityStatus: "visible",
+          disputeStatus: "none",
+          reviewableInstance: {
+            id: "10000000-0000-4000-8000-000000000063",
+            kind: "booking",
+            status: "review_submitted",
+            title: "Консультация",
+            contextLabel: "60 минут",
+            receivedAt: "2026-08-19T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          },
+          rating: 5,
+          text: "Текст отзыва на модерации."
+        },
+        {
+          queueItemId: "reply_version:10000000-0000-4000-8000-000000000064",
+          kind: "reply_version",
+          reviewId: "10000000-0000-4000-8000-000000000060",
+          reviewVersionId: null,
+          replyVersionId: "10000000-0000-4000-8000-000000000064",
+          submittedAt: "2026-08-20T11:00:00.000Z",
+          client: {
+            clientUserId: "10000000-0000-4000-8000-000000000062",
+            displayName: "Анна Петрова",
+            initials: "АП",
+            avatarUrl: null
+          },
+          publicIdentityMode: "secret_user",
+          visibilityStatus: "visible",
+          disputeStatus: "none",
+          reviewableInstance: {
+            id: "10000000-0000-4000-8000-000000000063",
+            kind: "booking",
+            status: "review_submitted",
+            title: "Консультация",
+            contextLabel: "60 минут",
+            receivedAt: "2026-08-19T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          },
+          rating: null,
+          text: "Ответ астролога на модерации."
+        }
+      ],
+      nextCursor: null
+    });
+
+    expect(parsed.items.map((item) => item.kind)).toEqual(["review_version", "reply_version"]);
+    expect(
+      reviewModerationQueueResponseSchema.safeParse({
+        items: [
+          {
+            ...parsed.items[0],
+            replyVersionId: "10000000-0000-4000-8000-000000000064"
+          }
+        ],
+        nextCursor: null
+      }).success
+    ).toBe(false);
   });
 
   it("models moderation case communication visibility without leaking private threads", () => {

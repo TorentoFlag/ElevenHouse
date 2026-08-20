@@ -372,6 +372,76 @@ export const reviewAdminDetailSchema = z
   .strict();
 export type ReviewAdminDetail = z.infer<typeof reviewAdminDetailSchema>;
 
+export const reviewModerationQueueItemKindValues = ["review_version", "reply_version"] as const;
+export const reviewModerationQueueItemKindSchema = z.enum(reviewModerationQueueItemKindValues);
+export type ReviewModerationQueueItemKind = z.infer<typeof reviewModerationQueueItemKindSchema>;
+
+export const reviewModerationQueueItemSchema = z
+  .object({
+    queueItemId: z.string().trim().min(1).max(160),
+    kind: reviewModerationQueueItemKindSchema,
+    reviewId: uuidSchema,
+    reviewVersionId: uuidSchema.nullable(),
+    replyVersionId: uuidSchema.nullable(),
+    submittedAt: instantSchema,
+    client: reviewAdminAuthorSchema,
+    publicIdentityMode: reviewPublicIdentityModeSchema,
+    visibilityStatus: reviewVisibilityStatusSchema,
+    disputeStatus: reviewDisputeStatusSchema,
+    reviewableInstance: reviewableInstanceSummarySchema,
+    rating: z.number().int().min(1).max(5).nullable(),
+    text: textWithoutControlCharsSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.kind === "review_version" && value.reviewVersionId === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reviewVersionId"],
+        message: "Review-version queue items require reviewVersionId"
+      });
+    }
+    if (value.kind === "reply_version" && value.replyVersionId === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["replyVersionId"],
+        message: "Reply-version queue items require replyVersionId"
+      });
+    }
+    if (value.kind === "review_version" && value.replyVersionId !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["replyVersionId"],
+        message: "Review-version queue items cannot target replyVersionId"
+      });
+    }
+    if (value.kind === "reply_version" && value.reviewVersionId !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reviewVersionId"],
+        message: "Reply-version queue items cannot target reviewVersionId"
+      });
+    }
+  });
+export type ReviewModerationQueueItem = z.infer<typeof reviewModerationQueueItemSchema>;
+
+export const reviewModerationQueueQuerySchema = z
+  .object({
+    limit: z.number().int().min(1).max(100).optional().default(50),
+    cursor: cursorSchema.nullish().default(null)
+  })
+  .strict();
+export type ReviewModerationQueueQueryInput = z.input<typeof reviewModerationQueueQuerySchema>;
+export type ReviewModerationQueueQuery = z.infer<typeof reviewModerationQueueQuerySchema>;
+
+export const reviewModerationQueueResponseSchema = z
+  .object({
+    items: z.array(reviewModerationQueueItemSchema).max(100),
+    nextCursor: cursorSchema.nullable()
+  })
+  .strict();
+export type ReviewModerationQueueResponse = z.infer<typeof reviewModerationQueueResponseSchema>;
+
 export const reviewModerationDecisionSchema = z
   .object({
     reasonCode: reviewModerationReasonCodeSchema,

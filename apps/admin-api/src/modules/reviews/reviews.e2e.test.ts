@@ -27,6 +27,7 @@ describe("admin reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let receivedCaseRead: unknown;
+  let receivedQueueRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedDecisionCommand: unknown;
   let decisionStatus: "pending" | "approved" | "rejected";
@@ -36,6 +37,7 @@ describe("admin reviews HTTP API", () => {
 
   beforeEach(async () => {
     receivedCaseRead = null;
+    receivedQueueRead = null;
     receivedMessageCommand = null;
     receivedDecisionCommand = null;
     decisionStatus = "pending";
@@ -84,8 +86,48 @@ describe("admin reviews HTTP API", () => {
                     ]
                   }
                 : null;
+            },
+            async listModerationQueue(input) {
+              receivedQueueRead = input;
+              return {
+                items: [
+                  {
+                    queueItemId: `review_version:${reviewVersionId}`,
+                    kind: "review_version",
+                    reviewId,
+                    reviewVersionId,
+                    replyVersionId: null,
+                    submittedAt: "2026-08-20T09:00:00.000Z",
+                    client: {
+                      clientUserId,
+                      displayName: "Анна Петрова",
+                      initials: "АП",
+                      avatarUrl: null
+                    },
+                    publicIdentityMode: "secret_user",
+                    visibilityStatus: "visible",
+                    disputeStatus: "none",
+                    reviewableInstance: {
+                      id: reviewableInstanceId,
+                      kind: "booking",
+                      status: "review_submitted",
+                      title: "Солярная консультация",
+                      contextLabel: "60 минут",
+                      receivedAt: "2026-08-19T10:00:00.000Z",
+                      reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+                      windowPolicy: "standard_14_days_after_receipt"
+                    },
+                    rating: 5,
+                    text: "Очень полезно."
+                  }
+                ],
+                nextCursor: null
+              };
             }
-          } satisfies Pick<ReviewReadStore, "getAdminReviewDetail" | "getModerationCaseDetail">
+          } satisfies Pick<
+            ReviewReadStore,
+            "getAdminReviewDetail" | "getModerationCaseDetail" | "listModerationQueue"
+          >
         },
         {
           provide: ADMIN_REVIEWS_COMMAND_STORE,
@@ -278,6 +320,27 @@ describe("admin reviews HTTP API", () => {
     const response = await fetch(`${baseUrl}/admin/reviews/10000000-0000-4000-8000-000000000299`);
 
     expect(response.status).toBe(404);
+  });
+
+  it("lists pending moderation queue items", async () => {
+    const response = await fetch(`${baseUrl}/admin/reviews/moderation-queue?limit=20`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [
+        {
+          kind: "review_version",
+          reviewId,
+          reviewVersionId,
+          replyVersionId: null,
+          client: { clientUserId, displayName: "Анна Петрова" },
+          rating: 5,
+          text: "Очень полезно."
+        }
+      ],
+      nextCursor: null
+    });
+    expect(receivedQueueRead).toEqual({ limit: 20, cursor: null });
   });
 
   it("creates moderator case messages", async () => {

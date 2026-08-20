@@ -2,11 +2,14 @@ import {
   clientReviewDetailSchema,
   reviewAdminDetailSchema,
   reviewModerationCaseDetailSchema,
+  reviewModerationQueueQuerySchema,
+  reviewModerationQueueResponseSchema,
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseSummary,
+  type ReviewModerationQueueItem,
   type ReviewPublicItem,
   type ReviewPublicIdentityMode,
   type ReviewPublicListQuery,
@@ -15,7 +18,7 @@ import {
   type ReviewableInstanceSummary
 } from "@elevenhouse/contracts";
 import { buildReviewPublicAuthor, type ReviewReadStore } from "@elevenhouse/domain";
-import { and, asc, desc, eq, inArray, isNotNull, lt, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -48,16 +51,118 @@ type PublicReviewCursor = {
   readonly publishedAt: string;
   readonly reviewId: string;
 };
+type ModerationQueueCursor = {
+  readonly submittedAt: string;
+  readonly queueItemId: string;
+};
 
 const publicCursorVersion = "reviews_public_v1";
+const moderationQueueCursorVersion = "reviews_moderation_queue_v1";
 
 export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): ReviewReadStore {
   return {
     listPublicReviews: (query) => listPublicReviews(database, query),
+    listModerationQueue: (query) => listModerationQueue(database, query),
     getClientReviewDetail: (input) => getClientReviewDetail(database, input),
     getAdminReviewDetail: (input) => getAdminReviewDetail(database, input),
     getModerationCaseDetail: (input) => getModerationCaseDetail(database, input)
   };
+}
+
+async function listModerationQueue(
+  database: ElevenHouseDatabase,
+  input: Parameters<ReviewReadStore["listModerationQueue"]>[0]
+): Promise<Awaited<ReturnType<ReviewReadStore["listModerationQueue"]>>> {
+  const query = reviewModerationQueueQuerySchema.parse(input);
+  const cursor = query.cursor ? parseModerationQueueCursor(query.cursor) : null;
+  if (query.cursor && !cursor) return { items: [], nextCursor: null };
+
+  const reviewVersionConditions: SQL[] = [
+    eq(reviewVersions.moderationStatus, "pending"),
+    eq(reviews.pendingVersionId, reviewVersions.id)
+  ];
+  const replyVersionConditions: SQL[] = [
+    eq(reviewReplyVersions.moderationStatus, "pending"),
+    eq(reviews.pendingReplyVersionId, reviewReplyVersions.id)
+  ];
+  if (cursor) {
+    reviewVersionConditions.push(
+      moderationQueueCursorCondition(
+        reviewVersions.submittedAt,
+        sql<string>`'review_version:' || ${reviewVersions.id}`,
+        cursor
+      )
+    );
+    replyVersionConditions.push(
+      moderationQueueCursorCondition(
+        reviewReplyVersions.submittedAt,
+        sql<string>`'reply_version:' || ${reviewReplyVersions.id}`,
+        cursor
+      )
+    );
+  }
+
+  const pendingReviewVersions = await database
+    .select({
+      review: reviews,
+      reviewableInstance: reviewableInstances,
+      version: reviewVersions,
+      clientProfile: userProfiles
+    })
+    .from(reviewVersions)
+    .innerJoin(reviews, eq(reviews.id, reviewVersions.reviewId))
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviews.clientUserId))
+    .where(and(...reviewVersionConditions))
+    .orderBy(desc(reviewVersions.submittedAt), desc(reviewVersions.id))
+    .limit(query.limit + 1);
+
+  const pendingReplyVersions = await database
+    .select({
+      review: reviews,
+      reviewableInstance: reviewableInstances,
+      replyVersion: reviewReplyVersions,
+      clientProfile: userProfiles
+    })
+    .from(reviewReplyVersions)
+    .innerJoin(reviews, eq(reviews.id, reviewReplyVersions.reviewId))
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviews.clientUserId))
+    .where(and(...replyVersionConditions))
+    .orderBy(desc(reviewReplyVersions.submittedAt), desc(reviewReplyVersions.id))
+    .limit(query.limit + 1);
+
+  const merged = [
+    ...pendingReviewVersions.map((row) =>
+      toReviewVersionModerationQueueItem(
+        row.review,
+        row.reviewableInstance,
+        row.version,
+        row.clientProfile
+      )
+    ),
+    ...pendingReplyVersions.map((row) =>
+      toReplyVersionModerationQueueItem(
+        row.review,
+        row.reviewableInstance,
+        row.replyVersion,
+        row.clientProfile
+      )
+    )
+  ].sort(compareModerationQueueItems);
+
+  const pageItems = merged.slice(0, query.limit);
+  const last = pageItems.at(-1) ?? null;
+  return reviewModerationQueueResponseSchema.parse({
+    items: pageItems,
+    nextCursor:
+      merged.length > query.limit && last
+        ? encodeModerationQueueCursor({
+            submittedAt: last.submittedAt,
+            queueItemId: last.queueItemId
+          })
+        : null
+  });
 }
 
 async function listPublicReviews(
@@ -363,6 +468,54 @@ function toAdminAuthor(clientUserId: string, profile: UserProfileRow | null): Re
   };
 }
 
+function toReviewVersionModerationQueueItem(
+  review: ReviewRow,
+  reviewableInstance: ReviewableInstanceRow,
+  version: ReviewVersionRow,
+  clientProfile: UserProfileRow | null
+): ReviewModerationQueueItem {
+  return {
+    queueItemId: `review_version:${version.id}`,
+    kind: "review_version",
+    reviewId: review.id,
+    reviewVersionId: version.id,
+    replyVersionId: null,
+    submittedAt: version.submittedAt.toISOString(),
+    client: toAdminAuthor(review.clientUserId, clientProfile),
+    publicIdentityMode:
+      version.publicIdentityMode as ReviewModerationQueueItem["publicIdentityMode"],
+    visibilityStatus: review.visibilityStatus as ReviewModerationQueueItem["visibilityStatus"],
+    disputeStatus: review.disputeStatus as ReviewModerationQueueItem["disputeStatus"],
+    reviewableInstance: toReviewableInstanceSummary(reviewableInstance),
+    rating: version.rating,
+    text: version.text
+  };
+}
+
+function toReplyVersionModerationQueueItem(
+  review: ReviewRow,
+  reviewableInstance: ReviewableInstanceRow,
+  replyVersion: ReviewReplyVersionRow,
+  clientProfile: UserProfileRow | null
+): ReviewModerationQueueItem {
+  return {
+    queueItemId: `reply_version:${replyVersion.id}`,
+    kind: "reply_version",
+    reviewId: review.id,
+    reviewVersionId: null,
+    replyVersionId: replyVersion.id,
+    submittedAt: replyVersion.submittedAt.toISOString(),
+    client: toAdminAuthor(review.clientUserId, clientProfile),
+    publicIdentityMode:
+      review.publicIdentityMode as ReviewModerationQueueItem["publicIdentityMode"],
+    visibilityStatus: review.visibilityStatus as ReviewModerationQueueItem["visibilityStatus"],
+    disputeStatus: review.disputeStatus as ReviewModerationQueueItem["disputeStatus"],
+    reviewableInstance: toReviewableInstanceSummary(reviewableInstance),
+    rating: null,
+    text: replyVersion.text
+  };
+}
+
 function toModerationCaseSummary(row: ReviewModerationCaseRow): ReviewModerationCaseSummary {
   return {
     caseId: row.id,
@@ -428,6 +581,45 @@ function parsePublicCursor(value: string): PublicReviewCursor | null {
     if (typeof parsed.publishedAt !== "string" || typeof parsed.reviewId !== "string") return null;
     if (Number.isNaN(Date.parse(parsed.publishedAt))) return null;
     return { publishedAt: parsed.publishedAt, reviewId: parsed.reviewId };
+  } catch {
+    return null;
+  }
+}
+
+function compareModerationQueueItems(
+  left: ReviewModerationQueueItem,
+  right: ReviewModerationQueueItem
+): number {
+  const timeDiff = Date.parse(right.submittedAt) - Date.parse(left.submittedAt);
+  if (timeDiff !== 0) return timeDiff;
+  return right.queueItemId.localeCompare(left.queueItemId);
+}
+
+function moderationQueueCursorCondition(
+  submittedAtColumn: typeof reviewVersions.submittedAt | typeof reviewReplyVersions.submittedAt,
+  queueItemIdExpression: SQL<string>,
+  cursor: ModerationQueueCursor
+): SQL {
+  const submittedAt = new Date(cursor.submittedAt);
+  return sql`(${submittedAtColumn} < ${submittedAt} or (${submittedAtColumn} = ${submittedAt} and ${queueItemIdExpression} < ${cursor.queueItemId}))`;
+}
+
+function encodeModerationQueueCursor(cursor: ModerationQueueCursor): string {
+  return `${moderationQueueCursorVersion}.${Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")}`;
+}
+
+function parseModerationQueueCursor(value: string): ModerationQueueCursor | null {
+  const [version, payload] = value.split(".");
+  if (version !== moderationQueueCursorVersion || !payload) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as Partial<ModerationQueueCursor>;
+    if (typeof parsed.submittedAt !== "string" || typeof parsed.queueItemId !== "string") {
+      return null;
+    }
+    if (Number.isNaN(Date.parse(parsed.submittedAt))) return null;
+    return { submittedAt: parsed.submittedAt, queueItemId: parsed.queueItemId };
   } catch {
     return null;
   }

@@ -295,6 +295,89 @@ describe.sequential("Drizzle review read store", () => {
       })
     ).resolves.toBeNull();
   });
+
+  it("lists pending review and reply versions for admin moderation", async () => {
+    const fixture = await seedReviewReadFixture(runtime);
+    const commands = createDrizzleReviewCommandStore(runtime.database);
+    const reads = createDrizzleReviewReadStore(runtime.database);
+
+    await commands.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Первый отзыв.",
+        publicIdentityMode: "secret_user"
+      }
+    });
+    await commands.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await commands.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-22T12:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.pendingEditVersionId,
+      submission: {
+        rating: 4,
+        text: "Редакция отзыва ждет проверки.",
+        publicIdentityMode: "named"
+      }
+    });
+    await commands.submitReviewReplyVersion({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-22T13:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextReplyVersionId: fixture.replyVersionId,
+      text: "Ответ астролога ждет проверки."
+    });
+
+    const queue = await reads.listModerationQueue({ limit: 10, cursor: null });
+
+    expect(queue.nextCursor).toBeNull();
+    expect(queue.items.slice(0, 2)).toMatchObject([
+      {
+        kind: "reply_version",
+        reviewId: fixture.reviewId,
+        reviewVersionId: null,
+        replyVersionId: fixture.replyVersionId,
+        submittedAt: "2026-08-22T13:00:00.000Z",
+        client: {
+          clientUserId: fixture.clientUserId,
+          displayName: "Анна Петрова"
+        },
+        publicIdentityMode: "secret_user",
+        rating: null,
+        text: "Ответ астролога ждет проверки."
+      },
+      {
+        kind: "review_version",
+        reviewId: fixture.reviewId,
+        reviewVersionId: fixture.pendingEditVersionId,
+        replyVersionId: null,
+        submittedAt: "2026-08-22T12:00:00.000Z",
+        client: {
+          clientUserId: fixture.clientUserId,
+          displayName: "Анна Петрова"
+        },
+        publicIdentityMode: "named",
+        rating: 4,
+        text: "Редакция отзыва ждет проверки."
+      }
+    ]);
+    expect(queue.items.slice(0, 2).map((item) => item.reviewableInstance.title)).toEqual([
+      "Солярная консультация",
+      "Солярная консультация"
+    ]);
+  });
 });
 
 async function seedReviewReadFixture(runtime: PostgresRuntime) {
@@ -307,11 +390,9 @@ async function seedReviewReadFixture(runtime: PostgresRuntime) {
   const now = new Date("2026-08-20T09:00:00.000Z");
 
   await runtime.database.transaction(async (transaction) => {
-    await transaction.insert(users).values([
-      { id: astrologerUserId },
-      { id: clientUserId },
-      { id: moderatorUserId }
-    ]);
+    await transaction
+      .insert(users)
+      .values([{ id: astrologerUserId }, { id: clientUserId }, { id: moderatorUserId }]);
     await transaction.insert(userProfiles).values([
       { userId: astrologerUserId, displayName: "Мария Астролог" },
       { userId: clientUserId, displayName: "Анна Петрова" },
