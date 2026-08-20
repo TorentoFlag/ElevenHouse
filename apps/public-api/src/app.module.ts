@@ -12,6 +12,7 @@ import { ClientCommerceModule } from "./modules/client-commerce/client-commerce.
 import { RefundCandidatesModule } from "./modules/refund-candidates/refund-candidates.module";
 import { SessionsModule } from "./modules/sessions/sessions.module";
 import { ClientAstroDiaryModule } from "./modules/astro-diary/astro-diary.module";
+import { PublicReviewsModule } from "./modules/reviews/reviews.module";
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { ClientAstroDiaryModule } from "./modules/astro-diary/astro-diary.module
     OrdersModule,
     PaymentsModule,
     SessionsModule,
-    ClientAstroDiaryModule
+    ClientAstroDiaryModule,
+    PublicReviewsModule
   ]
 })
 export class AppModule {}
