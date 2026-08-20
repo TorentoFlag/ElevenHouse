@@ -70,8 +70,21 @@ require_base64_32_byte_key() {
   case "${value}" in
     ""|replace-with-*|elevenhouse-example-*) fail "${key}_REQUIRED" ;;
   esac
-  node -e "const value = process.argv[1]; const decoded = Buffer.from(value, 'base64'); if (decoded.length !== 32 || decoded.toString('base64') !== value) process.exit(1)" "${value}" \
-    || fail "${key}_MUST_BE_BASE64_32_BYTES"
+
+  local decoded_file encoded_value byte_count
+  decoded_file="$(mktemp)"
+  if ! printf '%s' "${value}" | base64 --decode > "${decoded_file}" 2>/dev/null; then
+    rm -f -- "${decoded_file}"
+    fail "${key}_MUST_BE_BASE64_32_BYTES"
+  fi
+
+  byte_count="$(wc -c < "${decoded_file}" | tr -d ' ')"
+  encoded_value="$(base64 < "${decoded_file}" | tr -d '\n')"
+  rm -f -- "${decoded_file}"
+
+  if [ "${byte_count}" != "32" ] || [ "${encoded_value}" != "${value}" ]; then
+    fail "${key}_MUST_BE_BASE64_32_BYTES"
+  fi
 }
 
 require_positive_integer() {

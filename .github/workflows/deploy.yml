@@ -26,8 +26,12 @@ env:
   IMAGE_TAG: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  plan-images:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - elevenhouse-stage
     if: >-
       ${{
         (
@@ -42,82 +46,124 @@ jobs:
       }}
     permissions:
       contents: read
-      packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: elevenhouse-landing
-            dockerfile: deployment/docker/frontend.Dockerfile
-            app_filter: "@elevenhouse/landing"
-            app_dir: landing
-            build_args: |
-              VITE_ASTROLOGER_WEB_ORIGIN=https://app.elevenhouse.ai
-          - image: elevenhouse-client-web
-            dockerfile: deployment/docker/frontend.Dockerfile
-            app_filter: "@elevenhouse/client-web"
-            app_dir: client-web
-            build_args: ""
-          - image: elevenhouse-astrologer-web
-            dockerfile: deployment/docker/frontend.Dockerfile
-            app_filter: "@elevenhouse/astrologer-web"
-            app_dir: astrologer-web
-            build_args: ""
-          - image: elevenhouse-admin-web
-            dockerfile: deployment/docker/frontend.Dockerfile
-            app_filter: "@elevenhouse/admin-web"
-            app_dir: admin-web
-            build_args: ""
-          - image: elevenhouse-public-api
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/public-api"
-            app_dir: public-api
-            build_args: ""
-          - image: elevenhouse-astrologer-api
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/astrologer-api"
-            app_dir: astrologer-api
-            build_args: ""
-          - image: elevenhouse-admin-api
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/admin-api"
-            app_dir: admin-api
-            build_args: ""
-          - image: elevenhouse-workers
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/workers"
-            app_dir: workers
-            build_args: ""
-          - image: elevenhouse-payment-worker
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/payment-worker"
-            app_dir: payment-worker
-            build_args: ""
-          - image: elevenhouse-chart-worker
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/chart-worker"
-            app_dir: chart-worker
-            build_args: ""
-          - image: elevenhouse-chart-engine
-            dockerfile: deployment/docker/chart-engine.Dockerfile
-            app_filter: ""
-            app_dir: chart-engine
-            build_args: ""
-          - image: elevenhouse-notification-worker
-            dockerfile: deployment/docker/backend.Dockerfile
-            app_filter: "@elevenhouse/notification-worker"
-            app_dir: notification-worker
-            build_args: ""
-          - image: elevenhouse-db-migrator
-            dockerfile: deployment/docker/db-migrator.Dockerfile
-            app_filter: ""
-            app_dir: ""
-            build_args: ""
+    outputs:
+      deploy_required: ${{ steps.plan.outputs.deploy_required }}
+      has_build: ${{ steps.plan.outputs.has_build }}
+      has_promote: ${{ steps.plan.outputs.has_promote }}
+      build_matrix: ${{ steps.plan.outputs.build_matrix }}
+      promote_matrix: ${{ steps.plan.outputs.promote_matrix }}
+      current_image_tag: ${{ steps.plan.outputs.current_image_tag }}
     steps:
+      - name: Validate runner identity
+        run: |
+          if [ "$(id -u)" = "0" ]; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
+            exit 1
+          fi
+          case "${GITHUB_WORKSPACE:-}" in
+            /opt/* | /root/* | /)
+              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ env.IMAGE_TAG }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Prepare SSH
+        env:
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+        run: |
+          install -m 0700 -d ~/.ssh
+          printf '%s\n' "${PRODUCTION_SSH_KEY}" > ~/.ssh/elevenhouse
+          chmod 0600 ~/.ssh/elevenhouse
+          printf '%s\n' "${PRODUCTION_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/known_hosts
+
+      - name: Read current production image tag
+        id: current
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          current_image_tag="$(
+            ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
+              "awk -F= '\$1 == \"IMAGE_TAG\" { print \$2 }' /opt/elevenhouse/env/.env.deploy 2>/dev/null || true"
+          )"
+          if [ -n "${current_image_tag}" ] && ! [[ "${current_image_tag}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "CURRENT_IMAGE_TAG_INVALID value=${current_image_tag}" >&2
+            exit 1
+          fi
+          printf 'current_image_tag=%s\n' "${current_image_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Plan production images
+        id: plan
+        env:
+          BASE_REF: ${{ steps.current.outputs.current_image_tag }}
+          CURRENT_IMAGE_TAG: ${{ steps.current.outputs.current_image_tag }}
+          FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: |
+          bash deployment/scripts/validate-self-hosted-runner.sh
+          if [ -z "${BASE_REF}" ]; then
+            BASE_REF="$(git rev-parse "${IMAGE_TAG}^")"
+          fi
+          node deployment/scripts/plan-production-images.mjs "${BASE_REF}" "${IMAGE_TAG}"
+
+  build-and-push:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - elevenhouse-stage
+    if: ${{ needs.plan-images.outputs.deploy_required == 'true' && needs.plan-images.outputs.has_build == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - plan-images
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(needs.plan-images.outputs.build_matrix) }}
+    steps:
+      - name: Validate runner identity
+        run: |
+          if [ "$(id -u)" = "0" ]; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
+            exit 1
+          fi
+          case "${GITHUB_WORKSPACE:-}" in
+            /opt/* | /root/* | /)
+              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - name: Validate rootless Docker
+        run: bash deployment/scripts/validate-self-hosted-runner.sh --require-rootless-docker
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -129,7 +175,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push changed image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -145,15 +191,115 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
+  promote-unchanged:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - elevenhouse-stage
+    if: ${{ needs.plan-images.outputs.deploy_required == 'true' && needs.plan-images.outputs.has_promote == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    needs:
+      - plan-images
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(needs.plan-images.outputs.promote_matrix) }}
+    steps:
+      - name: Validate runner identity
+        run: |
+          if [ "$(id -u)" = "0" ]; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
+            exit 1
+          fi
+          case "${GITHUB_WORKSPACE:-}" in
+            /opt/* | /root/* | /)
+              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - name: Validate rootless Docker
+        run: bash deployment/scripts/validate-self-hosted-runner.sh --require-rootless-docker
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote unchanged image tag
+        env:
+          CURRENT_IMAGE_TAG: ${{ needs.plan-images.outputs.current_image_tag }}
+        run: |
+          if [ -z "${CURRENT_IMAGE_TAG}" ]; then
+            echo "CURRENT_IMAGE_TAG_REQUIRED_FOR_IMAGE_PROMOTION" >&2
+            exit 1
+          fi
+          if [ "${CURRENT_IMAGE_TAG}" = "${IMAGE_TAG}" ]; then
+            echo "Image ${{ matrix.image }} already has target tag ${IMAGE_TAG}."
+            exit 0
+          fi
+          docker buildx imagetools create \
+            -t "${IMAGE_NAMESPACE}/${{ matrix.image }}:${IMAGE_TAG}" \
+            -t "${IMAGE_NAMESPACE}/${{ matrix.image }}:latest" \
+            "${IMAGE_NAMESPACE}/${{ matrix.image }}:${CURRENT_IMAGE_TAG}"
+
   deploy:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - elevenhouse-stage
     environment: production
     timeout-minutes: 30
     permissions:
       contents: read
     needs:
+      - plan-images
       - build-and-push
+      - promote-unchanged
+    if: >-
+      ${{
+        always() &&
+        needs.plan-images.result == 'success' &&
+        needs.plan-images.outputs.deploy_required == 'true' &&
+        (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') &&
+        (needs.promote-unchanged.result == 'success' || needs.promote-unchanged.result == 'skipped')
+      }}
     steps:
+      - name: Validate runner identity
+        run: |
+          if [ "$(id -u)" = "0" ]; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
+            exit 1
+          fi
+          case "${GITHUB_WORKSPACE:-}" in
+            /opt/* | /root/* | /)
+              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -352,5 +498,50 @@ jobs:
           set -euo pipefail
           cd /opt/elevenhouse
           ./cleanup-docker-retention.sh record-successful-release "${RELEASE_ID}"
-          ./cleanup-docker-retention.sh cleanup-after-success
+          ./cleanup-docker-retention.sh cleanup-current-only
           REMOTE
+
+  cleanup-runner:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - elevenhouse-stage
+    needs:
+      - deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Validate runner identity
+        run: |
+          if [ "$(id -u)" = "0" ]; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
+            exit 1
+          fi
+          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
+            exit 1
+          fi
+          case "${GITHUB_WORKSPACE:-}" in
+            /opt/* | /root/* | /)
+              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.IMAGE_TAG }}
+
+      - name: Validate rootless Docker
+        run: bash deployment/scripts/validate-self-hosted-runner.sh --require-rootless-docker
+
+      - name: Cleanup runner Docker artifacts
+        run: |
+          docker container prune -f
+          docker builder prune -af
+          docker image prune -af
+          docker network prune -f
+          docker system df

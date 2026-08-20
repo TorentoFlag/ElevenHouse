@@ -110,9 +110,11 @@ A failed rollout retains the verified PostgreSQL archive and does not change the
 last-successful release history. Each successful release atomically publishes a
 mode-`0600` snapshot containing the exact Compose file, the validated
 `IMAGE_NAMESPACE`/`IMAGE_TAG`/project deploy env and all project image IDs;
-cleanup retains the current containers and the last two successful image sets.
-Database restoration remains an explicit operator action: automatic restore
-could destroy valid writes made after the backup.
+cleanup retains only images referenced by currently running containers.
+Rollback by local Docker image set is intentionally unavailable after successful
+cleanup; a rollback requires pulling the required release images from GHCR.
+Database restoration remains an explicit operator action: automatic restore could
+destroy valid writes made after the backup.
 
 External infrastructure images are pinned by immutable multi-platform manifest
 digest. The current manifests were verified on 2026-08-03 with
@@ -160,10 +162,10 @@ smoke checks. The first hardened rollout bootstraps the existing Compose file
 and image IDs once. Failed and retried rollouts never overwrite that evidence.
 After every verified success, `deployment/server/cleanup-docker-retention.sh`
 records the new Compose file, validated non-secret deploy env and project image
-IDs, then removes stopped containers, images not referenced by current
-containers or the last two successful releases, build cache and unused
-networks. Snapshot and Docker image IDs are validated before any cleanup
-deletion.
+IDs, then `cleanup-current-only` removes stopped containers, local images not
+referenced by currently running containers, build cache and unused networks.
+Snapshot and Docker image IDs are validated before evidence publication, but
+successful cleanup does not preserve rollback image layers locally.
 
 The cleanup step intentionally does not prune Docker volumes. PostgreSQL, Redis
 and MinIO data live in Docker volumes, so volume deletion is a separate

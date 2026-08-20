@@ -141,6 +141,13 @@ all_container_image_ids() {
   done | sorted_unique_ids
 }
 
+running_container_image_ids() {
+  docker_cmd ps -q | while IFS= read -r container_id; do
+    [ -n "${container_id}" ] || continue
+    docker_cmd inspect --format '{{.Image}}' "${container_id}"
+  done | sorted_unique_ids
+}
+
 validate_release_id() {
   local release_id="$1"
   if [[ ! "${release_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
@@ -305,6 +312,39 @@ cleanup_after_success() {
   docker_cmd system df
 }
 
+cleanup_current_only() {
+  ensure_retention_directories
+
+  local keep_file all_images_file removable_file
+  keep_file="$(mktemp)"
+  all_images_file="$(mktemp)"
+  removable_file="$(mktemp)"
+  trap 'rm -f "${keep_file}" "${all_images_file}" "${removable_file}"' RETURN
+
+  running_container_image_ids > "${keep_file}"
+  if [ ! -s "${keep_file}" ]; then
+    fail "RUNNING_CONTAINER_IMAGE_SET_EMPTY"
+  fi
+
+  docker_cmd container prune -f
+  docker_cmd image ls --all --quiet --no-trunc | sorted_unique_ids > "${all_images_file}"
+  comm -23 "${all_images_file}" "${keep_file}" > "${removable_file}"
+
+  local removable_count
+  removable_count="$(wc -l < "${removable_file}" | tr -d ' ')"
+  printf 'Removing %s image ids; retaining only currently running container images.\n' "${removable_count}"
+
+  while IFS= read -r image_id; do
+    [ -n "${image_id}" ] || continue
+    docker_cmd image rm -f "${image_id}"
+  done < "${removable_file}"
+
+  docker_cmd builder prune -af
+  docker_cmd image prune -f
+  docker_cmd network prune -f
+  docker_cmd system df
+}
+
 case "${1:-}" in
   bootstrap-successful-release)
     bootstrap_successful_release
@@ -316,8 +356,11 @@ case "${1:-}" in
   cleanup-after-success)
     cleanup_after_success
     ;;
+  cleanup-current-only)
+    cleanup_current_only
+    ;;
   *)
-    printf 'Usage: %s {bootstrap-successful-release|record-successful-release <release-id>|cleanup-after-success}\n' "$0" >&2
+    printf 'Usage: %s {bootstrap-successful-release|record-successful-release <release-id>|cleanup-after-success|cleanup-current-only}\n' "$0" >&2
     exit 64
     ;;
 esac
