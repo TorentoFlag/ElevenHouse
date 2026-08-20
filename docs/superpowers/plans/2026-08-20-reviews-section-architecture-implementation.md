@@ -314,6 +314,14 @@ and API slices.
 - Worker retry cannot duplicate `review_first_published`.
 - Public read-store cannot hydrate hidden/pending/rejected content.
 
+**Progress 2026-08-20:** Review command store foundation
+
+- Added a Drizzle review command store for client review submission/edit and moderator approval of review versions.
+- Added review revision persistence for CAS-style update planning.
+- Added a publication receipt table path in the command store so first approval emits one `review_first_published` receipt and approved edits do not emit another one.
+- Added an integration test that exercises submit -> first approval -> edit pending -> edit approval against local PostgreSQL.
+- Remaining Slice 4 scope: aggregate updates, audit rows, moderation case/message persistence, reply version commands, dispute transactions, notification/outbox writes and public/admin read stores.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

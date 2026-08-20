@@ -140,6 +140,7 @@ export const reviews = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     publicIdentityMode: text("public_identity_mode").notNull(),
+    revision: integer("revision").notNull().default(1),
     visibilityStatus: text("visibility_status").notNull().default("not_public"),
     disputeStatus: text("dispute_status").notNull().default("none"),
     activePublicVersionId: uuid("active_public_version_id"),
@@ -166,6 +167,7 @@ export const reviews = pgTable(
       "reviews_dispute_status_check",
       sql`${table.disputeStatus} in ${sql.raw(formatReviewsSqlValues(reviewDisputeStatusValues))}`
     ),
+    check("reviews_revision_check", sql`${table.revision} >= 1`),
     check(
       "reviews_visible_version_check",
       sql`(${table.visibilityStatus} = 'visible' and ${table.activePublicVersionId} is not null and ${table.firstPublishedAt} is not null) or ${table.visibilityStatus} <> 'visible'`

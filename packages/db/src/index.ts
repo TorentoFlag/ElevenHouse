@@ -11,3 +11,4 @@ export * from "./adapters/audit-log/index";
 export * from "./adapters/flows/index";
 export * from "./adapters/ai/index";
 export * from "./adapters/sessions/index";
+export * from "./adapters/reviews/index";

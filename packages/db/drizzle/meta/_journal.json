@@ -477,6 +477,13 @@
       "when": 1787259000000,
       "tag": "0070_reviews_publication_and_ai_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1787262000000,
+      "tag": "0071_reviews_revision",
+      "breakpoints": true
     }
   ]
 }

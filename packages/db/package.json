@@ -249,6 +249,16 @@
       "types": "./dist/adapters/audit-log/index.d.ts",
       "import": "./dist/adapters/audit-log/index.js",
       "require": "./dist/adapters/audit-log/index.js"
+    },
+    "./reviews": {
+      "types": "./dist/adapters/reviews/index.d.ts",
+      "import": "./dist/adapters/reviews/index.js",
+      "require": "./dist/adapters/reviews/index.js"
+    },
+    "./adapters/reviews": {
+      "types": "./dist/adapters/reviews/index.d.ts",
+      "import": "./dist/adapters/reviews/index.js",
+      "require": "./dist/adapters/reviews/index.js"
     }
   },
   "scripts": {
