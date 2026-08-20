@@ -346,15 +346,15 @@ async function seedArcPayProviderAccount() {
          head_version,
          created_at
        )
-       select $1,
-              $2,
-              $3,
-              $3::text,
+       select $1::varchar,
+              $2::text,
+              $3::integer,
+              $3::numeric,
               now()
        where not exists (
          select 1
          from finance_provider_account_series
-         where provider = $2
+         where provider = $2::text
        )`,
       [seed.seriesId, seed.provider, seed.identityVersion]
     );
@@ -371,27 +371,27 @@ async function seedArcPayProviderAccount() {
          predecessor_identity_version,
          created_at
        )
-       select $1,
-              $2,
-              $3,
-              $4,
-              $5,
-              $6,
-              $7,
+       select $1::varchar,
+              $2::varchar,
+              $3::integer,
+              $4::text,
+              $5::varchar,
+              $6::varchar,
+              $7::varchar,
               null,
               null,
               now()
        where exists (
          select 1
          from finance_provider_account_series
-         where series_id = $1
-           and provider = $4
-           and active_identity_version = $3
+         where series_id = $1::varchar
+           and provider = $4::text
+           and active_identity_version = $3::integer
        )
          and not exists (
            select 1
            from finance_provider_accounts
-           where provider = $4
+           where provider = $4::text
          )`,
       [
         seed.seriesId,
