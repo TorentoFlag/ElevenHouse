@@ -28,6 +28,8 @@ export const reviewableInstanceStatusValues = [
   "review_submitted"
 ] as const;
 
+export const reviewSourceReceiptStatusValues = ["received", "revoked"] as const;
+
 export const reviewPublicIdentityModeValues = ["named", "secret_user"] as const;
 
 export const reviewModerationStatusValues = ["pending", "approved", "rejected"] as const;

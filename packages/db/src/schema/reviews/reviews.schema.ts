@@ -28,6 +28,7 @@ import {
   reviewAiReplyDraftStatusValues,
   reviewPublicIdentityModeValues,
   reviewRatingAggregateScopeValues,
+  reviewSourceReceiptStatusValues,
   reviewVisibilityStatusValues,
   reviewWindowPolicyValues,
   reviewableInstanceKindValues,
@@ -99,7 +100,10 @@ export const reviewableInstances = pgTable(
       sql`${table.receivedAt} < ${table.reviewWindowClosesAt}`
     ),
     check("reviewable_instances_title_check", textSnapshotCheck(table.titleSnapshot)),
-    check("reviewable_instances_context_label_check", textSnapshotCheck(table.contextLabelSnapshot)),
+    check(
+      "reviewable_instances_context_label_check",
+      textSnapshotCheck(table.contextLabelSnapshot)
+    ),
     check(
       "reviewable_instances_source_resource_key_check",
       sql`length(trim(${table.sourceResourceKey})) between 1 and 180 and ${table.sourceResourceKey} = trim(${table.sourceResourceKey})`
@@ -118,6 +122,80 @@ export const reviewableInstances = pgTable(
       table.kind,
       table.receivedAt
     )
+  ]
+);
+
+export const reviewSourceReceipts = pgTable(
+  "review_source_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    astrologerUserId: uuid("astrologer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    relationshipId: uuid("relationship_id").notNull(),
+    kind: text("kind").notNull(),
+    sourceResourceKey: varchar("source_resource_key", { length: 180 }).notNull(),
+    productId: uuid("product_id").references(() => products.id, { onDelete: "restrict" }),
+    orderId: uuid("order_id").references(() => orders.id, { onDelete: "restrict" }),
+    titleSnapshot: text("title_snapshot").notNull(),
+    contextLabelSnapshot: text("context_label_snapshot").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    windowPolicy: text("window_policy").notNull(),
+    activePeriodEndsAt: timestamp("active_period_ends_at", { withTimezone: true }),
+    status: text("status").notNull().default("received"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("review_source_receipts_source_unique").on(
+      table.astrologerUserId,
+      table.clientUserId,
+      table.kind,
+      table.sourceResourceKey
+    ),
+    foreignKey({
+      columns: [table.relationshipId, table.clientUserId, table.astrologerUserId],
+      foreignColumns: [
+        clientAstrologerRelationships.id,
+        clientAstrologerRelationships.clientUserId,
+        clientAstrologerRelationships.astrologerUserId
+      ],
+      name: "review_source_receipts_relationship_fk"
+    }).onDelete("restrict"),
+    check(
+      "review_source_receipts_kind_check",
+      sql`${table.kind} in ${sql.raw(formatReviewsSqlValues(reviewableInstanceKindValues))}`
+    ),
+    check(
+      "review_source_receipts_window_policy_check",
+      sql`${table.windowPolicy} in ${sql.raw(formatReviewsSqlValues(reviewWindowPolicyValues))}`
+    ),
+    check(
+      "review_source_receipts_status_check",
+      sql`${table.status} in ${sql.raw(formatReviewsSqlValues(reviewSourceReceiptStatusValues))}`
+    ),
+    check("review_source_receipts_title_check", textSnapshotCheck(table.titleSnapshot)),
+    check(
+      "review_source_receipts_context_label_check",
+      textSnapshotCheck(table.contextLabelSnapshot)
+    ),
+    check(
+      "review_source_receipts_source_resource_key_check",
+      sql`length(trim(${table.sourceResourceKey})) between 1 and 180 and ${table.sourceResourceKey} = trim(${table.sourceResourceKey})`
+    ),
+    check(
+      "review_source_receipts_active_period_check",
+      sql`(${table.windowPolicy} = 'active_period_plus_14_days' and ${table.activePeriodEndsAt} is not null and ${table.receivedAt} <= ${table.activePeriodEndsAt}) or (${table.windowPolicy} <> 'active_period_plus_14_days' and ${table.activePeriodEndsAt} is null)`
+    ),
+    index("review_source_receipts_pending_idx").on(
+      table.status,
+      table.receivedAt,
+      table.astrologerUserId
+    ),
+    index("review_source_receipts_client_idx").on(table.clientUserId, table.receivedAt)
   ]
 );
 

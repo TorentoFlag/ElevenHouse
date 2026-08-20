@@ -505,6 +505,13 @@
       "when": 1787271000000,
       "tag": "0074_reviews_reviewable_instance_source_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1787274000000,
+      "tag": "0075_reviews_source_receipts",
+      "breakpoints": true
     }
   ]
 }

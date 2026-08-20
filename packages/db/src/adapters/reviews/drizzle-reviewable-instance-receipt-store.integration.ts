@@ -12,6 +12,7 @@ import {
   bookings,
   clientAstrologerRelationships,
   products,
+  reviewSourceReceipts,
   reviewableInstances,
   scheduleReservations,
   users
@@ -229,6 +230,73 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
       store.upsertPendingAstroDiaryPeriods({
         limit: 10,
         now: "2026-08-02T10:02:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 0, created: 0, existing: 0, rejected: 0 });
+  });
+
+  it("records a durable generic source receipt and opens it through the scanner", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+    const receiptId = randomUUID();
+    const sourceResourceKey = `astro_calendar_service_period:${randomUUID()}`;
+
+    await expect(
+      store.recordSourceReceipt({
+        id: receiptId,
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        kind: "astro_calendar_service_period",
+        sourceResourceKey,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        titleSnapshot: "AstroCalendar",
+        contextLabelSnapshot: "Период услуги 20-25 августа",
+        receivedAt: "2026-08-20T00:00:00.000Z",
+        windowPolicy: "active_period_plus_14_days",
+        activePeriodEndsAt: "2026-08-25T23:59:59.000Z",
+        now: "2026-08-20T00:01:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      receipt: {
+        id: receiptId,
+        relationshipId: fixture.relationshipId,
+        kind: "astro_calendar_service_period",
+        sourceResourceKey,
+        status: "received"
+      }
+    });
+
+    const [receiptCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewSourceReceipts)
+      .where(eq(reviewSourceReceipts.sourceResourceKey, sourceResourceKey));
+    expect(Number(receiptCount?.value ?? 0)).toBe(1);
+
+    await expect(
+      store.upsertPendingSourceReceipts({
+        limit: 10,
+        now: "2026-08-20T00:02:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 1, created: 1, existing: 0, rejected: 0 });
+
+    const [instance] = await runtime.database
+      .select({
+        sourceResourceKey: reviewableInstances.sourceResourceKey,
+        reviewWindowClosesAt: reviewableInstances.reviewWindowClosesAt
+      })
+      .from(reviewableInstances)
+      .where(eq(reviewableInstances.sourceResourceKey, sourceResourceKey))
+      .limit(1);
+    expect(instance).toEqual({
+      sourceResourceKey,
+      reviewWindowClosesAt: new Date("2026-09-08T23:59:59.000Z")
+    });
+
+    await expect(
+      store.upsertPendingSourceReceipts({
+        limit: 10,
+        now: "2026-08-20T00:03:00.000Z"
       })
     ).resolves.toEqual({ scanned: 0, created: 0, existing: 0, rejected: 0 });
   });

@@ -307,26 +307,34 @@ const sessionRuntime = createSessionRuntime({
   project: async () => {
     if (!config.sessions.enabled) return;
     const now = new Date();
-    const [, bookingReviewSources, astroDiaryReviewSources] = await Promise.all([
-      processSessionBookingLifecycleEvents({
-        store: sessionLifecycleStore,
-        now,
-        batchSize: config.sessions.projectionBatchSize
-      }),
-      reviewableInstanceReceiptStore.upsertPendingCompletedBookingEvents({
-        limit: config.sessions.projectionBatchSize,
-        now: now.toISOString()
-      }),
-      reviewableInstanceReceiptStore.upsertPendingAstroDiaryPeriods({
-        limit: config.sessions.projectionBatchSize,
-        now: now.toISOString()
-      })
-    ]);
+    const [, bookingReviewSources, astroDiaryReviewSources, genericReviewSources] =
+      await Promise.all([
+        processSessionBookingLifecycleEvents({
+          store: sessionLifecycleStore,
+          now,
+          batchSize: config.sessions.projectionBatchSize
+        }),
+        reviewableInstanceReceiptStore.upsertPendingCompletedBookingEvents({
+          limit: config.sessions.projectionBatchSize,
+          now: now.toISOString()
+        }),
+        reviewableInstanceReceiptStore.upsertPendingAstroDiaryPeriods({
+          limit: config.sessions.projectionBatchSize,
+          now: now.toISOString()
+        }),
+        reviewableInstanceReceiptStore.upsertPendingSourceReceipts({
+          limit: config.sessions.projectionBatchSize,
+          now: now.toISOString()
+        })
+      ]);
     if (bookingReviewSources.scanned > 0 || bookingReviewSources.rejected > 0) {
       logger.info("review completed booking sources projected", bookingReviewSources);
     }
     if (astroDiaryReviewSources.scanned > 0 || astroDiaryReviewSources.rejected > 0) {
       logger.info("review AstroDiary period sources projected", astroDiaryReviewSources);
+    }
+    if (genericReviewSources.scanned > 0 || genericReviewSources.rejected > 0) {
+      logger.info("review generic source receipts projected", genericReviewSources);
     }
   },
   maintain: () =>
