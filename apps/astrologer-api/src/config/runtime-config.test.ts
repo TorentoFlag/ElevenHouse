@@ -15,6 +15,26 @@ function baseEnv(overrides: Record<string, string | undefined> = {}) {
 }
 
 describe("createAstrologerApiRuntimeConfig WhatsApp Cloud", () => {
+  it("provides a typed local CRM cursor secret and requires an explicit production secret", () => {
+    expect(createAstrologerApiRuntimeConfig(baseEnv()).clientCrm.cursorSecret).toHaveLength(80);
+
+    expect(() =>
+      createAstrologerApiRuntimeConfig(
+        baseEnv({
+          NODE_ENV: "production",
+          ASTROLOGER_API_SESSION_COOKIE_SECURE: "true",
+          ASTROLOGER_API_CSRF_SECRET: "a".repeat(32),
+          ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET: "telegram-webhook-secret",
+          ASTROLOGER_API_TELEGRAM_BOT_TOKEN: "telegram-bot-token",
+          ASTROLOGER_API_TELEGRAM_BUSINESS_BOT_USERNAME: "elevenhouse_bot",
+          ASTROLOGER_API_PASSWORDLESS_CODE_SECRET: "passwordless-code-secret",
+          ASTROLOGER_API_ALLOWED_ORIGINS: "https://astrologer.elevenhouse.ai",
+          CHART_ENGINE_BASE_URL: "http://chart-engine:8012"
+        })
+      )
+    ).toThrow("ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET is required in production");
+  });
+
   it("keeps WhatsApp Cloud disabled by default", () => {
     const config = createAstrologerApiRuntimeConfig(baseEnv());
 

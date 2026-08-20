@@ -8,6 +8,8 @@ export const astrologerRouteContract = {
   protected: {
     dashboard: "/dashboard",
     calendar: "/calendar",
+    clients: "/clients",
+    clientDetail: "/clients/:clientUserId",
     finance: "/finance",
     flows: "/flows",
     products: "/products",

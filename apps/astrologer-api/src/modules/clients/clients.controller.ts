@@ -14,6 +14,25 @@ export class ClientsController {
     return this.clientsService.listClients(query, request);
   }
 
+  @Get("crm")
+  listClientCrm(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.clientsService.listClientCrm(query, request);
+  }
+
+  @Get("crm/:clientUserId/activity")
+  getClientCrmActivity(
+    @Param("clientUserId") clientUserId: string,
+    @Query() query: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.clientsService.getClientCrmActivity(clientUserId, query, request);
+  }
+
+  @Get("crm/:clientUserId")
+  getClientCrm(@Param("clientUserId") clientUserId: string, @Req() request: AstrologerSessionRequest) {
+    return this.clientsService.getClientCrm(clientUserId, request);
+  }
+
   @Get("birth-places")
   searchBirthPlaces(@Query() query: unknown, @Req() request: AstrologerSessionRequest) {
     return this.clientsService.searchBirthPlaces(query, request);

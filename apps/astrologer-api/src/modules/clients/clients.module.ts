@@ -1,6 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { createDrizzleClientStore } from "@elevenhouse/db/clients";
+import { createDrizzleClientCrmReadStore, createDrizzleClientStore } from "@elevenhouse/db/clients";
 import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
@@ -14,7 +14,7 @@ import { ClientsController } from "./clients.controller";
 import { ClientsService } from "./clients.service";
 import { GeoapifyBirthPlaceSearchProvider } from "./geoapify-birth-place-search.provider";
 import { RedisBirthPlaceSearchProvider } from "./redis-birth-place-search.provider";
-import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
+import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_CRM_READ_STORE, CLIENT_STORE } from "./clients.tokens";
 
 @Module({
   imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, RedisModule, SecurityModule],
@@ -27,6 +27,16 @@ import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleClientStore(postgresRuntime.database),
       inject: [PostgresRuntimeService]
+    },
+    {
+      provide: CLIENT_CRM_READ_STORE,
+      useFactory: (postgresRuntime: PostgresRuntimeService, configService: ConfigService) => {
+        const config = configService.getOrThrow<AstrologerApiRuntimeConfig["clientCrm"]>(
+          "astrologerApi.clientCrm"
+        );
+        return createDrizzleClientCrmReadStore(postgresRuntime.database, config);
+      },
+      inject: [PostgresRuntimeService, ConfigService]
     },
     {
       provide: BIRTH_PLACE_SEARCH_PROVIDER,
@@ -50,6 +60,6 @@ import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
       inject: [REDIS_CLIENT, GeoapifyBirthPlaceSearchProvider, ConfigService]
     }
   ],
-  exports: [CLIENT_STORE, BIRTH_PLACE_SEARCH_PROVIDER]
+  exports: [CLIENT_STORE, CLIENT_CRM_READ_STORE, BIRTH_PLACE_SEARCH_PROVIDER]
 })
 export class ClientsModule {}

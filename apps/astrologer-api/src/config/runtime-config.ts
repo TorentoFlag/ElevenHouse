@@ -60,6 +60,7 @@ const astrologerApiRuntimeConfigSchema = z.object({
     .transform((value) => value === "true"),
   ASTROLOGER_API_SESSION_COOKIE_NAME: z.string().trim().min(1).optional(),
   ASTROLOGER_API_CSRF_SECRET: z.string().trim().min(32).optional(),
+  ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET: z.string().trim().min(32).optional(),
   ASTROLOGER_API_CSRF_COOKIE_NAME: z.string().trim().min(1).default("elevenhouse_astrologer_csrf"),
   ASTROLOGER_API_CSRF_HEADER_NAME: z.string().trim().min(1).default("x-csrf-token"),
   ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
@@ -325,6 +326,9 @@ export type AstrologerApiRuntimeConfig = {
   readonly sessionCookieSecure: boolean;
   readonly sessionCookieName: string;
   readonly csrfSecret: string;
+  readonly clientCrm: {
+    readonly cursorSecret: string;
+  };
   readonly csrfCookieName: string;
   readonly csrfHeaderName: string;
   readonly csrfTokenTtlSeconds: number;
@@ -508,6 +512,10 @@ export function createAstrologerApiRuntimeConfig(
     throw new Error("ASTROLOGER_API_CSRF_SECRET is required in production");
   }
 
+  if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET) {
+    throw new Error("ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET is required in production");
+  }
+
   if (config.NODE_ENV === "production" && !config.ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET) {
     throw new Error("ASTROLOGER_API_TELEGRAM_BOT_WEBHOOK_SECRET is required in production");
   }
@@ -655,6 +663,11 @@ export function createAstrologerApiRuntimeConfig(
     csrfSecret:
       config.ASTROLOGER_API_CSRF_SECRET ??
       "elevenhouse-dev-astrologer-api-csrf-secret-change-before-production",
+    clientCrm: {
+      cursorSecret:
+        config.ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET ??
+        "elevenhouse-dev-astrologer-api-client-crm-cursor-secret-change-before-production"
+    },
     csrfCookieName: config.ASTROLOGER_API_CSRF_COOKIE_NAME,
     csrfHeaderName: config.ASTROLOGER_API_CSRF_HEADER_NAME.toLowerCase(),
     csrfTokenTtlSeconds: config.ASTROLOGER_API_CSRF_TOKEN_TTL_SECONDS,

@@ -83,6 +83,11 @@ export type AstrologerCopy = {
     documentTitle: string;
     title: string;
   };
+  clients: {
+    documentTitle: string;
+    title: string;
+    crm: ClientsCrmCopy;
+  };
   astroDiary: {
     documentTitle: string;
     title: string;
@@ -405,6 +410,57 @@ export type AstrologerCopy = {
   };
 };
 
+export type ClientsCrmCopy = {
+  readonly loadingListLabel: string;
+  readonly loadingDetailLabel: string;
+  readonly loadingActivityLabel: string;
+  readonly emptyTitle: string;
+  readonly emptyDescription: string;
+  readonly filteredEmptyTitle: string;
+  readonly filteredEmptyDescription: string;
+  readonly listErrorTitle: string;
+  readonly detailErrorTitle: string;
+  readonly activityErrorTitle: string;
+  readonly retryLabel: string;
+  readonly searchLabel: string;
+  readonly searchPlaceholder: string;
+  readonly allLabel: string;
+  readonly lifecycleFilterLabel: string;
+  readonly sourceFilterLabel: string;
+  readonly loadMoreLabel: string;
+  readonly loadingMoreLabel: string;
+  readonly backToListLabel: string;
+  readonly selectClientTitle: string;
+  readonly selectClientDescription: string;
+  readonly tabs: {
+    readonly overview: string;
+    readonly birthData: string;
+    readonly relatedProfiles: string;
+    readonly activity: string;
+  };
+  readonly facts: {
+    readonly relationship: string;
+    readonly source: string;
+    readonly lifecycle: string;
+    readonly firstLinkedAt: string;
+    readonly lastLinkedAt: string;
+    readonly lastActivityAt: string;
+    readonly readiness: string;
+    readonly birthData: string;
+    readonly relatedProfiles: string;
+    readonly status: string;
+    readonly revision: string;
+    readonly timezone: string;
+    readonly place: string;
+    readonly birthTime: string;
+    readonly updatedAt: string;
+  };
+  readonly missingBirthData: string;
+  readonly emptyRelatedProfiles: string;
+  readonly emptyActivity: string;
+  readonly conflictTitle: string;
+};
+
 export type AppShellHeaderCopy = {
   searchPlaceholder: string;
   createLabel: string;
@@ -615,6 +671,7 @@ export const astrologerCopyByLocale = {
         items: [
           { id: "dashboard", title: "Дашборд", href: "/dashboard" },
           { id: "calendar", title: "Календарь", href: "/calendar" },
+          { id: "clients", title: "Клиенты", href: "/clients" },
           { id: "finance", title: "Финансы", href: "/finance" },
           { id: "funnels", title: "Воронки", href: "/flows" },
           { id: "products", title: "Продукты", href: "/products" },
@@ -644,6 +701,61 @@ export const astrologerCopyByLocale = {
     finance: {
       documentTitle: "ElevenHouse | Финансы",
       title: "Финансы"
+    },
+    clients: {
+      documentTitle: "ElevenHouse | Клиенты",
+      title: "Клиенты",
+      crm: {
+        loadingListLabel: "Загрузка клиентов",
+        loadingDetailLabel: "Загрузка карточки клиента",
+        loadingActivityLabel: "Загрузка активности",
+        emptyTitle: "Клиентов пока нет",
+        emptyDescription:
+          "Активные связи появятся после прямой ссылки, записи, заказа или лид-магнита.",
+        filteredEmptyTitle: "По этому фильтру клиентов нет",
+        filteredEmptyDescription: "Измените поиск, статус или источник связи.",
+        listErrorTitle: "Не удалось загрузить клиентов",
+        detailErrorTitle: "Не удалось загрузить карточку",
+        activityErrorTitle: "Не удалось загрузить активность",
+        retryLabel: "Повторить",
+        searchLabel: "Поиск клиентов",
+        searchPlaceholder: "Поиск по имени клиента…",
+        allLabel: "Все",
+        lifecycleFilterLabel: "Фильтр по статусу клиента",
+        sourceFilterLabel: "Источник связи",
+        loadMoreLabel: "Загрузить еще",
+        loadingMoreLabel: "Загружаем еще…",
+        backToListLabel: "Назад к списку клиентов",
+        selectClientTitle: "Выберите клиента",
+        selectClientDescription: "Карточка откроется из активной связи с этим астрологом.",
+        tabs: {
+          overview: "Обзор",
+          birthData: "Данные рождения",
+          relatedProfiles: "Связанные профили",
+          activity: "Активность"
+        },
+        facts: {
+          relationship: "Связь",
+          source: "Источник",
+          lifecycle: "Статус",
+          firstLinkedAt: "С нами",
+          lastLinkedAt: "Последняя связь",
+          lastActivityAt: "Последняя активность",
+          readiness: "Готовность",
+          birthData: "Данные рождения",
+          relatedProfiles: "Связанные профили",
+          status: "Доступ",
+          revision: "Ревизия",
+          timezone: "Часовой пояс",
+          place: "Место",
+          birthTime: "Время рождения",
+          updatedAt: "Обновлено"
+        },
+        missingBirthData: "Данных рождения пока нет",
+        emptyRelatedProfiles: "Связанных профилей пока нет",
+        emptyActivity: "Безопасных событий пока нет",
+        conflictTitle: "Данные изменились"
+      }
     },
     astroDiary: {
       documentTitle: "ElevenHouse | Астродневник",
@@ -1160,6 +1272,7 @@ export const astrologerCopyByLocale = {
         items: [
           { id: "dashboard", title: "Dashboard", href: "/dashboard" },
           { id: "calendar", title: "Calendar", href: "/calendar" },
+          { id: "clients", title: "Clients", href: "/clients" },
           { id: "finance", title: "Finance", href: "/finance" },
           { id: "funnels", title: "Flows", href: "/flows" },
           { id: "products", title: "Products", href: "/products" },
@@ -1189,6 +1302,61 @@ export const astrologerCopyByLocale = {
     finance: {
       documentTitle: "ElevenHouse | Finance",
       title: "Finance"
+    },
+    clients: {
+      documentTitle: "ElevenHouse | Clients",
+      title: "Clients",
+      crm: {
+        loadingListLabel: "Loading clients",
+        loadingDetailLabel: "Loading client profile",
+        loadingActivityLabel: "Loading activity",
+        emptyTitle: "No clients yet",
+        emptyDescription:
+          "Active relationships appear after a direct link, booking, order or lead magnet.",
+        filteredEmptyTitle: "No clients match this filter",
+        filteredEmptyDescription: "Change search, lifecycle or relationship source.",
+        listErrorTitle: "Could not load clients",
+        detailErrorTitle: "Could not load client profile",
+        activityErrorTitle: "Could not load activity",
+        retryLabel: "Retry",
+        searchLabel: "Search clients",
+        searchPlaceholder: "Search by client name…",
+        allLabel: "All",
+        lifecycleFilterLabel: "Client lifecycle filter",
+        sourceFilterLabel: "Relationship source",
+        loadMoreLabel: "Load more",
+        loadingMoreLabel: "Loading more…",
+        backToListLabel: "Back to client list",
+        selectClientTitle: "Select a client",
+        selectClientDescription: "The profile opens from an active relationship with this astrologer.",
+        tabs: {
+          overview: "Overview",
+          birthData: "Birth data",
+          relatedProfiles: "Related profiles",
+          activity: "Activity"
+        },
+        facts: {
+          relationship: "Relationship",
+          source: "Source",
+          lifecycle: "Lifecycle",
+          firstLinkedAt: "Since",
+          lastLinkedAt: "Last linked",
+          lastActivityAt: "Last activity",
+          readiness: "Readiness",
+          birthData: "Birth data",
+          relatedProfiles: "Related profiles",
+          status: "Access",
+          revision: "Revision",
+          timezone: "Timezone",
+          place: "Place",
+          birthTime: "Birth time",
+          updatedAt: "Updated"
+        },
+        missingBirthData: "Birth data is not available yet",
+        emptyRelatedProfiles: "There are no related profiles yet",
+        emptyActivity: "There are no safe events yet",
+        conflictTitle: "Data changed"
+      }
     },
     astroDiary: {
       documentTitle: "ElevenHouse | AstroDiary",

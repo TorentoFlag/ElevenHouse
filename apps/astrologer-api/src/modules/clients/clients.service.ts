@@ -8,18 +8,24 @@ import {
 } from "@nestjs/common";
 import {
   getAstrologerClient,
+  getAstrologerClientCrmDetail,
   ClientBirthDataRelationshipDeniedError,
   ClientRelatedBirthProfileNotFoundError,
   listAstrologerClients,
+  listAstrologerClientCrmPage,
   ClientBirthDataRevisionConflictError,
   writeClientBirthProfile,
   writeClientRelatedBirthProfile,
+  type ClientCrmReadStore,
   type ClientRelatedBirthProfileStore,
   type ClientStore
 } from "@elevenhouse/domain";
 import {
   astrologerClientListQuerySchema,
   astrologerClientListResponseSchema,
+  astrologerClientCrmDetailResponseSchema,
+  astrologerClientCrmListQuerySchema,
+  astrologerClientCrmListResponseSchema,
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
   clientBirthDataUpsertRequestSchema,
@@ -30,8 +36,13 @@ import {
   clientBirthPlaceReferenceResponseSchema,
   clientBirthPlaceSearchQuerySchema,
   clientBirthPlaceSearchResponseSchema,
+  clientCrmActivityPageResponseSchema,
+  clientCrmActivityQuerySchema,
   type AstrologerClientListResponse,
+  type AstrologerClientCrmDetailResponse,
+  type AstrologerClientCrmListResponse,
   type AstrologerClientResponse,
+  type ClientCrmActivityPageResponse,
   type ClientBirthPlaceReferenceResponse,
   type ClientBirthPlaceSearchResponse,
   type ClientRelatedBirthProfileUpsertRequest,
@@ -41,7 +52,7 @@ import type { ZodType } from "@elevenhouse/validation";
 import { SystemClock } from "../clock/system-clock.service";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
 import type { ClientBirthPlaceSearchProvider } from "./birth-place-search.provider";
-import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_STORE } from "./clients.tokens";
+import { BIRTH_PLACE_SEARCH_PROVIDER, CLIENT_CRM_READ_STORE, CLIENT_STORE } from "./clients.tokens";
 
 @Injectable()
 export class ClientsService {
@@ -51,7 +62,9 @@ export class ClientsService {
       Pick<ClientRelatedBirthProfileStore, "writeClientRelatedBirthProfile">,
     private readonly clock: SystemClock,
     @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
-    private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider
+    private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider,
+    @Inject(CLIENT_CRM_READ_STORE)
+    private readonly clientCrmReadStore: ClientCrmReadStore
   ) {}
 
   async listClients(
@@ -88,6 +101,46 @@ export class ClientsService {
     }
 
     return astrologerClientResponseSchema.parse({ client });
+  }
+
+  async listClientCrm(
+    query: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<AstrologerClientCrmListResponse> {
+    const parsedQuery = parseContract(astrologerClientCrmListQuerySchema, query);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await listAstrologerClientCrmPage({
+      store: this.clientCrmReadStore,
+      astrologerUserId,
+      query: parsedQuery
+    });
+
+    if (result.kind === "found") {
+      return astrologerClientCrmListResponseSchema.parse(result.page);
+    }
+
+    throwClientCrmReadFailure(result.kind);
+  }
+
+  async getClientCrm(
+    clientUserId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<AstrologerClientCrmDetailResponse> {
+    const detail = await this.readClientCrmDetail(clientUserId, request);
+    return astrologerClientCrmDetailResponseSchema.parse({ client: detail });
+  }
+
+  async getClientCrmActivity(
+    clientUserId: string,
+    query: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<ClientCrmActivityPageResponse> {
+    const parsedQuery = parseContract(clientCrmActivityQuerySchema, query);
+    if (parsedQuery.cursor !== null || hasOwnQueryKey(query, "limit")) {
+      throw new BadRequestException("Client CRM activity pagination is not available");
+    }
+    const detail = await this.readClientCrmDetail(clientUserId, request);
+    return clientCrmActivityPageResponseSchema.parse(detail.activity);
   }
 
   async searchBirthPlaces(
@@ -215,6 +268,22 @@ export class ClientsService {
     }
   }
 
+  private async readClientCrmDetail(
+    clientUserId: string,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ) {
+    const params = parseContract(astrologerClientParamsSchema, { clientUserId });
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await getAstrologerClientCrmDetail({
+      store: this.clientCrmReadStore,
+      astrologerUserId,
+      clientUserId: params.clientUserId
+    });
+
+    if (result.kind === "found") return result.detail;
+    throwClientCrmReadFailure(result.kind);
+  }
+
   private async writeRelatedBirthProfile(
     astrologerUserId: string,
     clientUserId: string,
@@ -262,6 +331,21 @@ function parseBirthPlaceReferenceParams(providerPlaceId: string) {
   return result.data;
 }
 
+function throwClientCrmReadFailure(
+  kind: "not_found" | "not_related" | "blocked_or_archived" | "conflict" | "invalid_command"
+): never {
+  if (kind === "conflict") {
+    throw new ConflictException({
+      code: "CLIENT_CRM_READ_CONFLICT",
+      message: "Client CRM data is inconsistent. Refresh and try again."
+    });
+  }
+  if (kind === "invalid_command") {
+    throw new BadRequestException("Invalid client CRM request");
+  }
+  throw new NotFoundException("Client was not found");
+}
+
 function requireAstrologerUserId(
   request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
 ): string {
@@ -280,4 +364,8 @@ function parseContract<T>(schema: ZodType<T>, value: unknown): T {
   }
 
   return result.data;
+}
+
+function hasOwnQueryKey(query: unknown, key: string): boolean {
+  return typeof query === "object" && query !== null && Object.hasOwn(query, key);
 }

@@ -435,6 +435,13 @@
       "when": 1787234100000,
       "tag": "0065_finance_provider_canonical_read",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1787244000000,
+      "tag": "0064_client_crm_relationship_keyset_index",
+      "breakpoints": true
     }
   ]
 }

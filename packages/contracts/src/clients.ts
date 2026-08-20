@@ -369,3 +369,203 @@ export const astrologerClientResponseSchema = z
   })
   .strict();
 export type AstrologerClientResponse = z.infer<typeof astrologerClientResponseSchema>;
+
+export const clientRelationshipSourceSchema = z.enum([
+  "direct_link",
+  "booking",
+  "order",
+  "lead_magnet",
+  "manual"
+]);
+export type ClientRelationshipSource = z.infer<typeof clientRelationshipSourceSchema>;
+
+export const clientLifecycleStatusSchema = z.enum([
+  "new",
+  "active",
+  "waiting_for_client",
+  "in_service",
+  "inactive"
+]);
+export type ClientLifecycleStatus = z.infer<typeof clientLifecycleStatusSchema>;
+
+export const clientLifecycleModeSchema = z.enum(["automatic", "manual_override"]);
+export type ClientLifecycleMode = z.infer<typeof clientLifecycleModeSchema>;
+
+const clientCrmCursorSchema = z.string().trim().min(1).max(512);
+const clientCrmRelativeHrefSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .regex(/^\/(?!\/)/, "CRM activity links must be relative internal paths")
+  .refine((value) => !value.includes("\\"), "CRM activity links cannot contain backslashes");
+
+export const clientCrmRelationshipSchema = z
+  .object({
+    id: uuidSchema,
+    status: clientRelationshipStatusSchema,
+    source: clientRelationshipSourceSchema,
+    firstLinkedAt: timestampSchema,
+    lastLinkedAt: timestampSchema
+  })
+  .strict();
+export type ClientCrmRelationship = z.infer<typeof clientCrmRelationshipSchema>;
+
+export const clientCrmLifecycleSchema = z
+  .object({
+    status: clientLifecycleStatusSchema,
+    mode: clientLifecycleModeSchema,
+    revision: z.number().int().min(1),
+    lastActivityAt: timestampSchema
+  })
+  .strict();
+export type ClientCrmLifecycle = z.infer<typeof clientCrmLifecycleSchema>;
+
+export const clientCrmReadinessSchema = z
+  .object({
+    birthData: z.enum(["ready", "missing"]),
+    relatedProfiles: z.enum(["ready", "missing"])
+  })
+  .strict();
+export type ClientCrmReadiness = z.infer<typeof clientCrmReadinessSchema>;
+
+const clientCrmRelationshipCreatedActivityMetadataSchema = z
+  .object({
+    source: clientRelationshipSourceSchema
+  })
+  .strict();
+
+const clientCrmLifecycleChangedActivityMetadataSchema = z
+  .object({
+    previousStatus: clientLifecycleStatusSchema.nullable(),
+    status: clientLifecycleStatusSchema,
+    mode: clientLifecycleModeSchema
+  })
+  .strict();
+
+const clientCrmBirthDataUpdatedActivityMetadataSchema = z
+  .object({
+    revision: z.number().int().min(1)
+  })
+  .strict();
+
+const clientCrmRelatedBirthProfileUpdatedActivityMetadataSchema = z
+  .object({
+    relatedProfileId: uuidSchema,
+    revision: z.number().int().min(1)
+  })
+  .strict();
+
+export const clientCrmActivityItemSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      id: z.string().trim().min(1).max(200),
+      occurredAt: timestampSchema,
+      kind: z.literal("relationship_created"),
+      metadata: clientCrmRelationshipCreatedActivityMetadataSchema,
+      href: clientCrmRelativeHrefSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().trim().min(1).max(200),
+      occurredAt: timestampSchema,
+      kind: z.literal("lifecycle_changed"),
+      metadata: clientCrmLifecycleChangedActivityMetadataSchema,
+      href: clientCrmRelativeHrefSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().trim().min(1).max(200),
+      occurredAt: timestampSchema,
+      kind: z.literal("birth_data_updated"),
+      metadata: clientCrmBirthDataUpdatedActivityMetadataSchema,
+      href: clientCrmRelativeHrefSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().trim().min(1).max(200),
+      occurredAt: timestampSchema,
+      kind: z.literal("related_birth_profile_updated"),
+      metadata: clientCrmRelatedBirthProfileUpdatedActivityMetadataSchema,
+      href: clientCrmRelativeHrefSchema.optional()
+    })
+    .strict()
+]);
+export type ClientCrmActivityItem = z.infer<typeof clientCrmActivityItemSchema>;
+
+export const clientCrmActivityQuerySchema = z
+  .object({
+    cursor: clientCrmCursorSchema.nullish().default(null),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(20)
+  })
+  .strict();
+export type ClientCrmActivityQuery = z.infer<typeof clientCrmActivityQuerySchema>;
+
+export const clientCrmActivityPageResponseSchema = z
+  .object({
+    items: z.array(clientCrmActivityItemSchema).max(50),
+    nextCursor: clientCrmCursorSchema.nullable()
+  })
+  .strict();
+export type ClientCrmActivityPageResponse = z.infer<typeof clientCrmActivityPageResponseSchema>;
+
+export const astrologerClientCrmListQuerySchema = z
+  .object({
+    query: z
+      .string()
+      .trim()
+      .max(100)
+      .transform((value) => value.replace(/\s+/g, " "))
+      .optional()
+      .default(""),
+    cursor: clientCrmCursorSchema.nullish().default(null),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+    lifecycle: clientLifecycleStatusSchema.optional(),
+    source: clientRelationshipSourceSchema.optional(),
+    sort: z.literal("last_linked_at_desc").optional().default("last_linked_at_desc")
+  })
+  .strict();
+export type AstrologerClientCrmListQuery = z.infer<typeof astrologerClientCrmListQuerySchema>;
+
+export const astrologerClientCrmListItemSchema = z
+  .object({
+    clientUserId: uuidSchema,
+    displayName: z.string().trim().min(1).max(200).nullable(),
+    relationship: clientCrmRelationshipSchema,
+    lifecycle: clientCrmLifecycleSchema,
+    readiness: clientCrmReadinessSchema
+  })
+  .strict();
+export type AstrologerClientCrmListItem = z.infer<typeof astrologerClientCrmListItemSchema>;
+
+export const astrologerClientCrmListResponseSchema = z
+  .object({
+    items: z.array(astrologerClientCrmListItemSchema).max(50),
+    nextCursor: clientCrmCursorSchema.nullable()
+  })
+  .strict();
+export type AstrologerClientCrmListResponse = z.infer<typeof astrologerClientCrmListResponseSchema>;
+
+export const astrologerClientCrmDetailSchema = z
+  .object({
+    clientUserId: uuidSchema,
+    displayName: z.string().trim().min(1).max(200).nullable(),
+    relationship: clientCrmRelationshipSchema,
+    lifecycle: clientCrmLifecycleSchema,
+    birthData: clientBirthDataResponseSchema.nullable(),
+    relatedBirthProfiles: z.array(clientRelatedBirthProfileResponseSchema).max(50),
+    readiness: clientCrmReadinessSchema,
+    activity: clientCrmActivityPageResponseSchema
+  })
+  .strict();
+export type AstrologerClientCrmDetail = z.infer<typeof astrologerClientCrmDetailSchema>;
+
+export const astrologerClientCrmDetailResponseSchema = z
+  .object({
+    client: astrologerClientCrmDetailSchema
+  })
+  .strict();
+export type AstrologerClientCrmDetailResponse = z.infer<typeof astrologerClientCrmDetailResponseSchema>;

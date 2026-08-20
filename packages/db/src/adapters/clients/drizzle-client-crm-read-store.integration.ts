@@ -1,0 +1,487 @@
+import { randomUUID } from "node:crypto";
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import type { PostgresRuntime } from "../../runtime";
+import {
+  clientAstrologerRelationships,
+  clientBirthData,
+  clientBirthDataHistory,
+  clientLifecycleHistory,
+  clientLifecycleStates,
+  clientProfiles,
+  clientRelatedBirthProfileHistory,
+  clientRelatedBirthProfiles,
+  users
+} from "../../schema";
+import {
+  createClientSubscriptionIntegrationDatabase,
+  type ClientSubscriptionIntegrationDatabase
+} from "../client-subscriptions/client-subscription-integration-fixture";
+import { createDrizzleClientCrmReadStore } from "./drizzle-client-crm-read-store";
+
+const cursorSecret = "client-crm-integration-cursor-secret";
+
+describe.sequential("Drizzle client CRM read store", () => {
+  let integration: ClientSubscriptionIntegrationDatabase;
+  let runtime: PostgresRuntime;
+
+  beforeAll(async () => {
+    integration = await createClientSubscriptionIntegrationDatabase();
+    runtime = integration.runtime;
+  }, 60_000);
+
+  afterAll(async () => {
+    await integration?.close();
+  }, 30_000);
+
+  it("reads only active relationships and orders Clients-owned activity", async () => {
+    const fixture = await seedCrmFixture(runtime);
+    const store = createDrizzleClientCrmReadStore(runtime.database, { cursorSecret });
+
+    const detail = await store.getAstrologerClientCrmDetail({
+      astrologerUserId: fixture.astrologerUserId,
+      clientUserId: fixture.clientUserId
+    });
+    expect(detail).toMatchObject({
+      kind: "found",
+      detail: {
+        clientUserId: fixture.clientUserId,
+        relationship: { id: fixture.relationshipId, status: "active" },
+        lifecycle: { status: "in_service", mode: "automatic", revision: 2 },
+        readiness: { birthData: "ready", relatedProfiles: "ready" },
+        relatedBirthProfiles: [{ id: fixture.relatedBirthProfileId }],
+        activity: {
+          items: [
+            { id: `clients:related-birth-profile:${fixture.relatedBirthProfileHistoryId}` },
+            { id: `clients:lifecycle:${fixture.lifecycleHistoryId}` },
+            { id: `clients:birth-data:${fixture.birthDataHistoryId}` },
+            { id: `clients:relationship:${fixture.relationshipId}` }
+          ]
+        }
+      }
+    });
+    if (detail.kind !== "found") throw new Error("Expected CRM detail");
+    expect(JSON.stringify(detail.detail.activity.items)).not.toMatch(
+      /messageBody|provider|snapshot|birthDate|birthTime/i
+    );
+
+    await expect(
+      store.getAstrologerClientCrmDetail({
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.newestClientUserId
+      })
+    ).resolves.toMatchObject({
+      kind: "found",
+      detail: {
+        birthData: null,
+        relatedBirthProfiles: [],
+        readiness: { birthData: "missing", relatedProfiles: "ready" }
+      }
+    });
+
+    await expect(
+      store.getAstrologerClientCrmDetail({
+        astrologerUserId: fixture.unrelatedAstrologerUserId,
+        clientUserId: fixture.clientUserId
+      })
+    ).resolves.toEqual({ kind: "not_related" });
+
+    await expect(
+      store.getAstrologerClientCrmDetail({
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.archivedClientUserId
+      })
+    ).resolves.toEqual({ kind: "blocked_or_archived" });
+
+    await expect(
+      store.getAstrologerClientCrmDetail({
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.blockedClientUserId
+      })
+    ).resolves.toEqual({ kind: "blocked_or_archived" });
+  });
+
+  it("traverses active CRM relationships by last-linked keyset cursor", async () => {
+    const fixture = await seedCrmFixture(runtime);
+    const store = createDrizzleClientCrmReadStore(runtime.database, { cursorSecret });
+
+    const full = await store.listAstrologerClientCrmPage({
+      astrologerUserId: fixture.astrologerUserId,
+      query: emptyQuery({ limit: 20 })
+    });
+    if (full.kind !== "found") throw new Error("Expected CRM list page");
+    expect(full.page.items.map((item) => item.relationship.id)).not.toEqual(
+      expect.arrayContaining([fixture.archivedRelationshipId, fixture.blockedRelationshipId])
+    );
+
+    const first = await store.listAstrologerClientCrmPage({
+      astrologerUserId: fixture.astrologerUserId,
+      query: emptyQuery({ limit: 1 })
+    });
+    expect(first).toMatchObject({
+      kind: "found",
+      page: { items: [{ relationship: { id: fixture.newestRelationshipId } }] }
+    });
+    if (first.kind !== "found") throw new Error("Expected CRM list page");
+    expect(first.page.nextCursor).toEqual(expect.any(String));
+    if (first.page.nextCursor === null) throw new Error("Expected CRM next cursor");
+
+    await expect(
+      store.listAstrologerClientCrmPage({
+        astrologerUserId: fixture.astrologerUserId,
+        query: emptyQuery({ cursor: "not-a-valid-cursor-token" })
+      })
+    ).resolves.toEqual({ kind: "invalid_command" });
+
+    await expect(
+      store.listAstrologerClientCrmPage({
+        astrologerUserId: fixture.astrologerUserId,
+        query: emptyQuery({ cursor: tamperCursorPosition(first.page.nextCursor), limit: 1 })
+      })
+    ).resolves.toEqual({ kind: "invalid_command" });
+
+    await expect(
+      store.listAstrologerClientCrmPage({
+        astrologerUserId: fixture.astrologerUserId,
+        query: emptyQuery({ cursor: first.page.nextCursor, query: "CRM" })
+      })
+    ).resolves.toEqual({ kind: "invalid_command" });
+
+    const second = await store.listAstrologerClientCrmPage({
+      astrologerUserId: fixture.astrologerUserId,
+      query: emptyQuery({ limit: 1, cursor: first.page.nextCursor })
+    });
+    expect(second).toMatchObject({
+      kind: "found",
+      page: { items: [{ relationship: { id: fixture.sameTimestampRelationshipId } }] }
+    });
+    if (second.kind !== "found") throw new Error("Expected CRM list page");
+    expect(second.page.nextCursor).toEqual(expect.any(String));
+
+    const third = await store.listAstrologerClientCrmPage({
+      astrologerUserId: fixture.astrologerUserId,
+      query: emptyQuery({ limit: 1, cursor: second.page.nextCursor })
+    });
+    expect(third).toMatchObject({
+      kind: "found",
+      page: { items: [{ relationship: { id: fixture.relationshipId } }], nextCursor: null }
+    });
+  });
+
+  it("fails closed when lifecycle state is missing under a lifecycle filter", async () => {
+    const fixture = await seedMissingLifecycleFixture(runtime);
+    const store = createDrizzleClientCrmReadStore(runtime.database, { cursorSecret });
+
+    await expect(
+      store.listAstrologerClientCrmPage({
+        astrologerUserId: fixture.astrologerUserId,
+        query: emptyQuery({ lifecycle: "new" })
+      })
+    ).resolves.toEqual({ kind: "conflict" });
+  });
+});
+
+function emptyQuery(
+  overrides: Partial<{
+    cursor: string | null;
+    lifecycle: "new" | "active" | "waiting_for_client" | "in_service" | "inactive";
+    limit: number;
+    query: string;
+    source: "direct_link" | "booking" | "order" | "lead_magnet" | "manual";
+  }> = {}
+) {
+  return {
+    query: "",
+    cursor: null,
+    limit: 20,
+    lifecycle: undefined,
+    source: undefined,
+    sort: "last_linked_at_desc" as const,
+    ...overrides
+  };
+}
+
+function tamperCursorPosition(cursor: string): string {
+  const [version, payload, signature] = cursor.split(".");
+  if (!version || !payload || !signature) throw new Error("Expected sealed CRM cursor");
+  const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+    lastLinkedAt: string;
+  };
+  decoded.lastLinkedAt = "2026-08-20T09:00:00.000Z";
+  const tamperedPayload = Buffer.from(JSON.stringify(decoded)).toString("base64url");
+  return `${version}.${tamperedPayload}.${signature}`;
+}
+
+async function seedCrmFixture(runtime: PostgresRuntime) {
+  const now = new Date("2026-08-20T10:00:00.000Z");
+  const activityAt = new Date("2026-08-20T11:00:00.000Z");
+  const relatedActivityAt = new Date("2026-08-20T11:01:00.000Z");
+  const astrologerUserId = randomUUID();
+  const unrelatedAstrologerUserId = randomUUID();
+  const clientUserId = randomUUID();
+  const archivedClientUserId = randomUUID();
+  const blockedClientUserId = randomUUID();
+  const newestClientUserId = randomUUID();
+  const sameTimestampClientUserId = randomUUID();
+  const relationshipIdPrefix = randomUUID().slice(0, -1);
+  const relationshipId = `${relationshipIdPrefix}1`;
+  const sameTimestampRelationshipId = `${relationshipIdPrefix}2`;
+  const newestRelationshipId = `${relationshipIdPrefix}3`;
+  const lifecycleHistoryId = randomUUID();
+  const birthDataId = randomUUID();
+  const birthDataHistoryId = randomUUID();
+  const relatedBirthProfileId = randomUUID();
+  const relatedBirthProfileHistoryId = randomUUID();
+  const archivedRelationshipId = randomUUID();
+  const blockedRelationshipId = randomUUID();
+
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(users).values([
+      { id: astrologerUserId },
+      { id: unrelatedAstrologerUserId },
+      { id: clientUserId },
+      { id: archivedClientUserId },
+      { id: blockedClientUserId },
+      { id: newestClientUserId },
+      { id: sameTimestampClientUserId }
+    ]);
+    await transaction.insert(clientProfiles).values([
+      {
+        userId: clientUserId,
+        displayNameSnapshot: "CRM Active Client",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        userId: newestClientUserId,
+        displayNameSnapshot: "CRM Newest Client",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow",
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        userId: sameTimestampClientUserId,
+        displayNameSnapshot: "CRM Same Timestamp Client",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow",
+        createdAt: now,
+        updatedAt: now
+      }
+    ]);
+    await transaction.insert(clientAstrologerRelationships).values([
+      relationship({
+        id: relationshipId,
+        clientUserId,
+        astrologerUserId,
+        status: "active",
+        lastLinkedAt: now
+      }),
+      relationship({
+        id: newestRelationshipId,
+        clientUserId: newestClientUserId,
+        astrologerUserId,
+        status: "active",
+        lastLinkedAt: new Date("2026-08-20T12:00:00.000Z")
+      }),
+      relationship({
+        id: sameTimestampRelationshipId,
+        clientUserId: sameTimestampClientUserId,
+        astrologerUserId,
+        status: "active",
+        lastLinkedAt: now
+      }),
+      relationship({
+        id: archivedRelationshipId,
+        clientUserId: archivedClientUserId,
+        astrologerUserId,
+        status: "archived",
+        lastLinkedAt: now
+      }),
+      relationship({
+        id: blockedRelationshipId,
+        clientUserId: blockedClientUserId,
+        astrologerUserId,
+        status: "blocked",
+        lastLinkedAt: now
+      })
+    ]);
+    await transaction.insert(clientLifecycleStates).values({
+      relationshipId,
+      status: "in_service",
+      mode: "automatic",
+      latestAutomaticCandidateStatus: "in_service",
+      revision: 2,
+      lastActivityAt: activityAt,
+      createdAt: now,
+      updatedAt: activityAt
+    });
+    await transaction.insert(clientLifecycleStates).values({
+      relationshipId: newestRelationshipId,
+      status: "new",
+      mode: "automatic",
+      latestAutomaticCandidateStatus: null,
+      revision: 1,
+      lastActivityAt: new Date("2026-08-20T12:00:00.000Z"),
+      createdAt: now,
+      updatedAt: new Date("2026-08-20T12:00:00.000Z")
+    });
+    await transaction.insert(clientLifecycleStates).values({
+      relationshipId: sameTimestampRelationshipId,
+      status: "new",
+      mode: "automatic",
+      latestAutomaticCandidateStatus: null,
+      revision: 1,
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(clientLifecycleHistory).values({
+      id: lifecycleHistoryId,
+      relationshipId,
+      sourceEventId: `integration:${lifecycleHistoryId}`,
+      causeKind: "relationship_created",
+      beforeStatus: "new",
+      afterStatus: "in_service",
+      disposition: "applied",
+      actorUserId: astrologerUserId,
+      occurredAt: activityAt,
+      createdAt: activityAt
+    });
+    await transaction.insert(clientBirthData).values({
+      id: birthDataId,
+      clientUserId,
+      label: null,
+      birthDate: "1990-01-01",
+      birthTime: null,
+      birthTimePrecision: "unknown",
+      birthPlaceText: null,
+      birthCountryCode: null,
+      birthCity: null,
+      birthRegion: null,
+      birthTimezone: null,
+      birthTimeDstOccurrence: null,
+      birthLatitude: null,
+      birthLongitude: null,
+      source: "manual",
+      revision: 1,
+      lastEditedByUserId: astrologerUserId,
+      lastEditedByRole: "astrologer",
+      createdAt: activityAt,
+      updatedAt: activityAt
+    });
+    await transaction.insert(clientBirthDataHistory).values({
+      id: birthDataHistoryId,
+      birthDataId,
+      clientUserId,
+      revision: 1,
+      actorUserId: astrologerUserId,
+      actorRole: "astrologer",
+      source: "manual",
+      snapshot: {},
+      recordedAt: activityAt
+    });
+    await transaction.insert(clientRelatedBirthProfiles).values({
+      id: relatedBirthProfileId,
+      clientUserId,
+      displayName: "CRM Partner",
+      relationshipLabel: "Partner",
+      birthDate: null,
+      birthTime: null,
+      birthTimePrecision: "unknown",
+      birthPlaceText: null,
+      birthCountryCode: null,
+      birthCity: null,
+      birthRegion: null,
+      birthTimezone: null,
+      birthTimeDstOccurrence: null,
+      birthLatitude: null,
+      birthLongitude: null,
+      source: "manual",
+      revision: 1,
+      lastEditedByUserId: astrologerUserId,
+      lastEditedByRole: "astrologer",
+      createdAt: relatedActivityAt,
+      updatedAt: relatedActivityAt
+    });
+    await transaction.insert(clientRelatedBirthProfileHistory).values({
+      id: relatedBirthProfileHistoryId,
+      relatedProfileId: relatedBirthProfileId,
+      clientUserId,
+      revision: 1,
+      actorUserId: astrologerUserId,
+      actorRole: "astrologer",
+      source: "manual",
+      snapshot: {},
+      recordedAt: relatedActivityAt
+    });
+  });
+
+  return {
+    astrologerUserId,
+    unrelatedAstrologerUserId,
+    clientUserId,
+    newestClientUserId,
+    archivedClientUserId,
+    blockedClientUserId,
+    relationshipId,
+    archivedRelationshipId,
+    blockedRelationshipId,
+    sameTimestampRelationshipId,
+    newestRelationshipId,
+    lifecycleHistoryId,
+    birthDataHistoryId,
+    relatedBirthProfileId,
+    relatedBirthProfileHistoryId
+  };
+}
+
+async function seedMissingLifecycleFixture(runtime: PostgresRuntime) {
+  const now = new Date("2026-08-20T10:00:00.000Z");
+  const astrologerUserId = randomUUID();
+  const clientUserId = randomUUID();
+
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(users).values([{ id: astrologerUserId }, { id: clientUserId }]);
+    await transaction.insert(clientProfiles).values({
+      userId: clientUserId,
+      displayNameSnapshot: "CRM Missing Lifecycle Client",
+      preferredLocale: "ru",
+      timezone: "Europe/Moscow",
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(clientAstrologerRelationships).values(
+      relationship({
+        id: randomUUID(),
+        clientUserId,
+        astrologerUserId,
+        status: "active",
+        lastLinkedAt: now
+      })
+    );
+  });
+
+  return { astrologerUserId, clientUserId };
+}
+
+function relationship(input: {
+  readonly id: string;
+  readonly clientUserId: string;
+  readonly astrologerUserId: string;
+  readonly status: "active" | "archived" | "blocked";
+  readonly lastLinkedAt: Date;
+}) {
+  return {
+    ...input,
+    source: "manual" as const,
+    firstLinkedAt: input.lastLinkedAt,
+    archivedAt: input.status === "archived" ? input.lastLinkedAt : null,
+    blockedAt: input.status === "blocked" ? input.lastLinkedAt : null,
+    createdAt: input.lastLinkedAt,
+    updatedAt: input.lastLinkedAt
+  };
+}

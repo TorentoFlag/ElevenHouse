@@ -49,6 +49,12 @@ export const clientAstrologerRelationships = pgTable(
       table.astrologerUserId,
       table.status
     ),
+    index("client_astrologer_relationships_astrologer_status_last_linked_id_idx").on(
+      table.astrologerUserId,
+      table.status,
+      table.lastLinkedAt,
+      table.id
+    ),
     index("client_astrologer_relationships_client_status_idx").on(
       table.clientUserId,
       table.status
