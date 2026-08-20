@@ -172,6 +172,19 @@ describe("admin reviews HTTP API", () => {
                 review: {},
                 replyVersion: {}
               };
+            },
+            async restoreReviewAfterDispute(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly caseId: string;
+            }) {
+              receivedDecisionCommand = command;
+              return {
+                kind: "restored",
+                review: {},
+                flowEvent: null
+              };
             }
           }
         }
@@ -374,6 +387,31 @@ describe("admin reviews HTTP API", () => {
       replyVersionId,
       reasonCode: "abuse_or_hate",
       note: null
+    });
+  });
+
+  it("restores reviews after dispute resolution and returns refreshed admin detail", async () => {
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/moderation-cases/${caseId}/restore`,
+      {
+        method: "POST",
+        headers: {
+          "idempotency-key": "reviews-dispute-restore-1"
+        }
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      visibilityStatus: "visible",
+      disputeStatus: "none"
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      caseId
     });
   });
 });

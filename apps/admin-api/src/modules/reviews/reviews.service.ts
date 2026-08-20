@@ -17,6 +17,7 @@ import type {
   CreateReviewCaseMessageResult,
   RejectReviewReplyVersionResult,
   RejectReviewVersionResult,
+  RestoreReviewAfterDisputeResult,
   ReviewReadStore
 } from "@elevenhouse/domain";
 
@@ -53,6 +54,12 @@ type AdminReviewCommandStore = {
     readonly reasonCode: string;
     readonly note: string | null;
   }) => Promise<RejectReviewReplyVersionResult>;
+  readonly restoreReviewAfterDispute: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly caseId: string;
+  }) => Promise<RestoreReviewAfterDisputeResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -173,6 +180,26 @@ export class AdminReviewsService {
     });
     if (result.kind === "not_rejected") {
       throw new BadRequestException("Review reply version cannot be rejected");
+    }
+    return this.readRequiredReviewDetail(safeReviewId);
+  }
+
+  async restoreReviewAfterDispute(
+    adminUserId: string,
+    reviewId: string,
+    caseId: string
+  ): Promise<ReviewAdminDetail> {
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeCaseId = requireUuid(caseId);
+    const result = await this.commandStore.restoreReviewAfterDispute({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      caseId: safeCaseId
+    });
+    if (result.kind === "rejected") {
+      throw new BadRequestException("Review dispute cannot be restored");
     }
     return this.readRequiredReviewDetail(safeReviewId);
   }

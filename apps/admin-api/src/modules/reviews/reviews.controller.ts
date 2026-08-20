@@ -113,6 +113,17 @@ export class AdminReviewsController {
     );
   }
 
+  @Post(":reviewId/moderation-cases/:caseId/restore")
+  @RequireCsrf()
+  @RequireIdempotency()
+  restoreReviewAfterDispute(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("caseId") caseId: string
+  ): Promise<ReviewAdminDetail> {
+    return this.service.restoreReviewAfterDispute(requireAdminUserId(request), reviewId, caseId);
+  }
+
   @Get(":reviewId")
   getReviewDetail(@Param("reviewId") reviewId: string): Promise<ReviewAdminDetail> {
     return this.service.getReviewDetail(reviewId);
