@@ -8,9 +8,18 @@ const textWithoutControlCharsSchema = z
   .trim()
   .min(1)
   .max(4_000)
-  .refine((value) => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value), {
+  .refine((value) => !containsDisallowedControlCharacter(value), {
     message: "Review text cannot contain control characters"
   });
+
+function containsDisallowedControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if ((code >= 0x00 && code <= 0x08) || code === 0x0b || code === 0x0c) return true;
+    if ((code >= 0x0e && code <= 0x1f) || code === 0x7f) return true;
+  }
+  return false;
+}
 
 export const reviewableInstanceKindValues = [
   "booking",
@@ -90,7 +99,12 @@ export const reviewModerationReasonCodeValues = [
 export const reviewModerationReasonCodeSchema = z.enum(reviewModerationReasonCodeValues);
 export type ReviewModerationReasonCode = z.infer<typeof reviewModerationReasonCodeSchema>;
 
-export const reviewReplyModerationStatusValues = ["none", "pending", "approved", "rejected"] as const;
+export const reviewReplyModerationStatusValues = [
+  "none",
+  "pending",
+  "approved",
+  "rejected"
+] as const;
 export const reviewReplyModerationStatusSchema = z.enum(reviewReplyModerationStatusValues);
 export type ReviewReplyModerationStatus = z.infer<typeof reviewReplyModerationStatusSchema>;
 
@@ -409,6 +423,4 @@ export const reviewFirstPublicationFlowEventSchema = z
     publishedAt: instantSchema
   })
   .strict();
-export type ReviewFirstPublicationFlowEvent = z.infer<
-  typeof reviewFirstPublicationFlowEventSchema
->;
+export type ReviewFirstPublicationFlowEvent = z.infer<typeof reviewFirstPublicationFlowEventSchema>;
