@@ -348,6 +348,12 @@ and API slices.
 - Rejected replies clear `pending_reply_version_id`, never set `active_public_reply_version_id`, and keep the public review state unchanged.
 - Remaining reply work: edit-reply replacement tests and API/audit wiring.
 
+**Progress 2026-08-20:** Dispute hide and restore transaction path
+
+- Added dispute opening persistence that immediately moves the review to `temporarily_hidden_by_dispute`, creates a moderation case row and removes the review from visible rating aggregates in the same transaction.
+- Added moderator restore persistence that closes the case, returns the review to `visible`, keeps Flow quiet and restores visible aggregate counts/star buckets.
+- Remaining dispute work: case message persistence, richer case status transitions and admin API audit wiring.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

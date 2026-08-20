@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PostgresRuntime } from "../../runtime";
 import {
   clientAstrologerRelationships,
+  reviewModerationCases,
   reviewPublicationEvents,
   reviewVersions,
   reviewableInstances,
@@ -368,6 +369,128 @@ describe.sequential("Drizzle review command store", () => {
     expect(reviewRow).toMatchObject({
       activePublicReplyVersionId: null,
       pendingReplyVersionId: null
+    });
+  });
+
+  it("opens and restores disputes with public aggregate deltas", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+    const caseId = randomUUID();
+
+    await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Полезная консультация.",
+        publicIdentityMode: "named"
+      }
+    });
+    await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 5,
+      star4Count: 0,
+      star5Count: 1
+    });
+
+    const opened = await store.openReviewDispute({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextCaseId: caseId,
+      reasonCode: "fraud_or_conflict"
+    });
+
+    expect(opened).toMatchObject({
+      kind: "opened",
+      review: {
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "open"
+      },
+      moderationCase: {
+        caseId,
+        reviewId: fixture.reviewId,
+        status: "open",
+        reasonCode: "fraud_or_conflict"
+      }
+    });
+
+    const [hiddenReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(hiddenReviewRow).toMatchObject({
+      visibilityStatus: "temporarily_hidden_by_dispute",
+      disputeStatus: "open"
+    });
+    const [caseRow] = await runtime.database
+      .select()
+      .from(reviewModerationCases)
+      .where(eq(reviewModerationCases.id, caseId));
+    expect(caseRow).toMatchObject({
+      reviewId: fixture.reviewId,
+      status: "open",
+      reasonCode: "fraud_or_conflict",
+      openedByUserId: fixture.astrologerUserId,
+      closedByUserId: null
+    });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 0,
+      approvedReviewCount: 1,
+      ratingSum: 0,
+      star4Count: 0,
+      star5Count: 0
+    });
+
+    const restored = await store.restoreReviewAfterDispute({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId: fixture.reviewId,
+      caseId
+    });
+
+    expect(restored).toMatchObject({
+      kind: "restored",
+      review: {
+        visibilityStatus: "visible",
+        disputeStatus: "resolved_closed"
+      },
+      flowEvent: null
+    });
+    const [restoredReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(restoredReviewRow).toMatchObject({
+      visibilityStatus: "visible",
+      disputeStatus: "resolved_closed"
+    });
+    const [closedCaseRow] = await runtime.database
+      .select()
+      .from(reviewModerationCases)
+      .where(eq(reviewModerationCases.id, caseId));
+    expect(closedCaseRow).toMatchObject({
+      status: "closed",
+      closedByUserId: fixture.moderatorUserId
+    });
+    expect(closedCaseRow?.closedAt).toEqual(new Date("2026-08-20T13:00:00.000Z"));
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 5,
+      star4Count: 0,
+      star5Count: 1
     });
   });
 });

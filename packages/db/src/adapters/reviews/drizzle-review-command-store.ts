@@ -14,18 +14,22 @@ import {
 import {
   approveReviewReplyVersion,
   approveReviewVersion,
+  openReviewDispute,
   planSubmitReviewVersion,
   planSubmitReviewReplyVersion,
   rejectReviewReplyVersion,
   rejectReviewVersion,
+  restoreReviewAfterDispute,
   type ApproveReviewReplyVersionResult,
   type ApproveReviewVersionResult,
+  type OpenReviewDisputeResult,
   type ReviewLifecycleState,
   type ReviewReplyVersionLifecycleState,
   type ReviewSubmissionLifecycleInput,
   type ReviewVersionLifecycleState,
   type RejectReviewReplyVersionResult,
   type RejectReviewVersionResult,
+  type RestoreReviewAfterDisputeResult,
   type SubmitReviewReplyVersionResult,
   type SubmitReviewVersionResult
 } from "@elevenhouse/domain";
@@ -33,6 +37,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
+  reviewModerationCases,
   reviewPublicationEvents,
   reviewReplyVersions,
   reviewVersions,
@@ -91,6 +96,19 @@ export type DrizzleReviewCommandStore = {
     readonly reasonCode: ReviewModerationReasonCode;
     readonly note: string | null;
   }) => Promise<RejectReviewReplyVersionResult>;
+  readonly openReviewDispute: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly nextCaseId: string;
+    readonly reasonCode: ReviewModerationReasonCode;
+  }) => Promise<OpenReviewDisputeResult>;
+  readonly restoreReviewAfterDispute: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly caseId: string;
+  }) => Promise<RestoreReviewAfterDisputeResult>;
 };
 
 export function createDrizzleReviewCommandStore(
@@ -413,6 +431,118 @@ export function createDrizzleReviewCommandStore(
           .where(eq(reviews.id, result.review.id));
 
         return result;
+      }),
+    openReviewDispute: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const result = openReviewDispute({
+          actorUserId: input.actorUserId,
+          now: input.now,
+          nextCaseId: input.nextCaseId,
+          review: currentReview,
+          reasonCode: input.reasonCode
+        });
+        if (result.kind === "rejected") return result;
+
+        const reviewableInstance = await readReviewableInstance(
+          transaction,
+          result.review.reviewableInstanceId
+        );
+        if (!reviewableInstance) return { kind: "rejected", reason: "review_not_public" };
+
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            visibilityStatus: result.review.visibilityStatus,
+            disputeStatus: result.review.disputeStatus,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
+        await transaction.insert(reviewModerationCases).values({
+          id: result.moderationCase.caseId,
+          reviewId: result.moderationCase.reviewId,
+          status: result.moderationCase.status,
+          reasonCode: result.moderationCase.reasonCode,
+          openedByUserId: input.actorUserId,
+          openedAt: new Date(result.moderationCase.openedAt),
+          closedAt: null,
+          closedByUserId: null
+        });
+        await applyReviewApprovalAggregateDelta(transaction, {
+          astrologerUserId: result.review.astrologerUserId,
+          productId: reviewableInstance.productId,
+          previousVisibleRating:
+            currentReview.visibilityStatus === "visible"
+              ? (currentReview.activePublicVersion?.rating ?? null)
+              : null,
+          nextVisibleRating:
+            result.review.visibilityStatus === "visible"
+              ? (result.review.activePublicVersion?.rating ?? null)
+              : null,
+          approvedDelta: 0,
+          publishedAt: new Date(input.now),
+          updatedAt: new Date(input.now)
+        });
+
+        return result;
+      }),
+    restoreReviewAfterDispute: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const result = restoreReviewAfterDispute({
+          now: input.now,
+          moderatorUserId: input.moderatorUserId,
+          review: currentReview
+        });
+        if (result.kind === "rejected") return result;
+
+        const reviewableInstance = await readReviewableInstance(
+          transaction,
+          result.review.reviewableInstanceId
+        );
+        if (!reviewableInstance) return { kind: "rejected", reason: "review_not_public" };
+
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            visibilityStatus: result.review.visibilityStatus,
+            disputeStatus: result.review.disputeStatus,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
+        await closeReviewModerationCase(transaction, {
+          caseId: input.caseId,
+          reviewId: input.reviewId,
+          closedAt: new Date(input.now),
+          closedByUserId: input.moderatorUserId
+        });
+        await applyReviewApprovalAggregateDelta(transaction, {
+          astrologerUserId: result.review.astrologerUserId,
+          productId: reviewableInstance.productId,
+          previousVisibleRating:
+            currentReview.visibilityStatus === "visible"
+              ? (currentReview.activePublicVersion?.rating ?? null)
+              : null,
+          nextVisibleRating:
+            result.review.visibilityStatus === "visible"
+              ? (result.review.activePublicVersion?.rating ?? null)
+              : null,
+          approvedDelta: 0,
+          publishedAt: new Date(input.now),
+          updatedAt: new Date(input.now)
+        });
+
+        return result;
       })
   };
 }
@@ -552,6 +682,35 @@ async function insertReviewReplyVersion(
     decidedByUserId: null,
     createdAt: new Date(replyVersion.submittedAt)
   });
+}
+
+async function closeReviewModerationCase(
+  transaction: ReviewCommandTransaction,
+  input: {
+    readonly caseId: string;
+    readonly reviewId: string;
+    readonly closedAt: Date;
+    readonly closedByUserId: string;
+  }
+): Promise<void> {
+  const result = await transaction
+    .update(reviewModerationCases)
+    .set({
+      status: "closed",
+      closedAt: input.closedAt,
+      closedByUserId: input.closedByUserId
+    })
+    .where(
+      and(
+        eq(reviewModerationCases.id, input.caseId),
+        eq(reviewModerationCases.reviewId, input.reviewId),
+        eq(reviewModerationCases.status, "open")
+      )
+    )
+    .returning({ id: reviewModerationCases.id });
+  if (result.length !== 1) {
+    throw new Error("review_moderation_case_missing");
+  }
 }
 
 type ReviewAggregateDeltaInput = {
@@ -770,6 +929,7 @@ function isInsertableAggregateDelta(
   return (
     input.approvedDelta >= 0 &&
     delta.visibleDelta >= 0 &&
+    input.approvedDelta >= delta.visibleDelta &&
     delta.ratingSumDelta >= 0 &&
     delta.starDeltas.every((value) => value >= 0)
   );
