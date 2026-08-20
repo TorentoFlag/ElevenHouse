@@ -22,10 +22,12 @@ describe("astrologer reviews HTTP API", () => {
   let baseUrl: string;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
+  let receivedReplyCommand: unknown;
 
   beforeEach(async () => {
     receivedCaseRead = null;
     receivedMessageCommand = null;
+    receivedReplyCommand = null;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
       providers: [
@@ -64,6 +66,29 @@ describe("astrologer reviews HTTP API", () => {
         {
           provide: ASTROLOGER_REVIEWS_COMMAND_STORE,
           useValue: {
+            async submitReviewReplyVersion(command: {
+              readonly actorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly nextReplyVersionId: string;
+              readonly text: string;
+            }) {
+              receivedReplyCommand = command;
+              return {
+                kind: "create_pending_reply_version",
+                reviewId: command.reviewId,
+                expectedReviewRevision: 2,
+                keepActivePublicReplyVersionId: null,
+                replyVersion: {
+                  id: command.nextReplyVersionId,
+                  versionNumber: 1,
+                  text: command.text,
+                  moderationStatus: "pending",
+                  submittedAt: command.now,
+                  decidedAt: null
+                }
+              };
+            },
             async createReviewCaseMessage(command: {
               readonly messageId: string;
               readonly caseId: string;
@@ -113,6 +138,36 @@ describe("astrologer reviews HTTP API", () => {
 
   afterEach(async () => {
     await app?.close();
+  });
+
+  it("submits astrologer review reply versions for moderation", async () => {
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/reply-versions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-reply-version-astrologer-1"
+      },
+      body: JSON.stringify({
+        text: "Спасибо за отзыв. Рад, что консультация была полезной."
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      versionNumber: 1,
+      text: "Спасибо за отзыв. Рад, что консультация была полезной.",
+      moderationStatus: "pending",
+      moderationReasonCode: null,
+      submittedAt: "2026-08-20T13:00:00.000Z",
+      decidedAt: null
+    });
+    expect(receivedReplyCommand).toMatchObject({
+      actorUserId: astrologerUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId,
+      text: "Спасибо за отзыв. Рад, что консультация была полезной."
+    });
+    expect(receivedReplyCommand).toHaveProperty("nextReplyVersionId", expect.any(String));
   });
 
   it("reads moderation case detail for the current astrologer", async () => {

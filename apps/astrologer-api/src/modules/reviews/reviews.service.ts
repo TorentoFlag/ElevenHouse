@@ -5,15 +5,29 @@ import {
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewReplySubmissionSchema,
+  reviewReplyVersionSchema,
   type ReviewModerationCaseDetail,
-  type ReviewModerationCaseMessage
+  type ReviewModerationCaseMessage,
+  type ReviewReplyVersion
 } from "@elevenhouse/contracts";
-import type { CreateReviewCaseMessageResult, ReviewReadStore } from "@elevenhouse/domain";
+import type {
+  CreateReviewCaseMessageResult,
+  ReviewReadStore,
+  SubmitReviewReplyVersionResult
+} from "@elevenhouse/domain";
 
 import { SystemClock } from "../clock/system-clock.service";
 import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from "./reviews.tokens";
 
 type AstrologerReviewCommandStore = {
+  readonly submitReviewReplyVersion: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly nextReplyVersionId: string;
+    readonly text: string;
+  }) => Promise<SubmitReviewReplyVersionResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -34,6 +48,40 @@ export class AstrologerReviewsService {
     private readonly commandStore: AstrologerReviewCommandStore,
     private readonly clock: SystemClock
   ) {}
+
+  async submitReviewReplyVersion(
+    astrologerUserId: string,
+    reviewId: string,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ReviewReplyVersion> {
+    const parsed = reviewReplySubmissionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review reply submission");
+
+    const safeAstrologerUserId = requireUuid(astrologerUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const result = await this.commandStore.submitReviewReplyVersion({
+      actorUserId: safeAstrologerUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      nextReplyVersionId: deterministicUuid(
+        `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:reply`
+      ),
+      text: parsed.data.text
+    });
+    if (result.kind === "rejected") {
+      throw new BadRequestException("Review reply version cannot be submitted");
+    }
+    return reviewReplyVersionSchema.parse({
+      id: result.replyVersion.id,
+      versionNumber: result.replyVersion.versionNumber,
+      text: result.replyVersion.text,
+      moderationStatus: result.replyVersion.moderationStatus,
+      moderationReasonCode: null,
+      submittedAt: result.replyVersion.submittedAt,
+      decidedAt: result.replyVersion.decidedAt
+    });
+  }
 
   async getModerationCaseDetail(
     astrologerUserId: string,

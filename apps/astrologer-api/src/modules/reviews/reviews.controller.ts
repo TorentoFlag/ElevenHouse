@@ -12,7 +12,8 @@ import {
 } from "@nestjs/common";
 import type {
   ReviewModerationCaseDetail,
-  ReviewModerationCaseMessage
+  ReviewModerationCaseMessage,
+  ReviewReplyVersion
 } from "@elevenhouse/contracts";
 
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -24,6 +25,23 @@ import { AstrologerReviewsService } from "./reviews.service";
 @UseGuards(AstrologerSessionAuthGuard)
 export class AstrologerReviewsController {
   constructor(private readonly service: AstrologerReviewsService) {}
+
+  @Post(":reviewId/reply-versions")
+  @RequireIdempotency({ scope: "reviews.reply-version.astrologer.submit" })
+  @RequireCsrf()
+  submitReviewReplyVersion(
+    @Param("reviewId") reviewId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ): Promise<ReviewReplyVersion> {
+    return this.service.submitReviewReplyVersion(
+      requireAstrologerUserId(request),
+      reviewId,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
 
   @Get("moderation-cases/:caseId")
   getModerationCaseDetail(
