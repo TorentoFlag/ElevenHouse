@@ -1,0 +1,345 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  approveReviewVersion,
+  buildReviewPublicAuthor,
+  createReviewCaseMessage,
+  createReviewFirstPublishedFlowEvent,
+  openReviewDispute,
+  planSubmitReviewVersion,
+  type ReviewLifecycleState,
+  type ReviewableInstanceLifecycleState
+} from "./review-lifecycle";
+
+const ids = {
+  reviewableInstanceId: "10000000-0000-4000-8000-000000000001",
+  reviewId: "10000000-0000-4000-8000-000000000002",
+  clientUserId: "10000000-0000-4000-8000-000000000003",
+  astrologerUserId: "10000000-0000-4000-8000-000000000004",
+  versionId: "10000000-0000-4000-8000-000000000005",
+  pendingVersionId: "10000000-0000-4000-8000-000000000006",
+  moderatorUserId: "10000000-0000-4000-8000-000000000007",
+  caseId: "10000000-0000-4000-8000-000000000008",
+  messageId: "10000000-0000-4000-8000-000000000009"
+} as const;
+
+const reviewableInstance = (
+  overrides: Partial<ReviewableInstanceLifecycleState> = {}
+): ReviewableInstanceLifecycleState => ({
+  id: ids.reviewableInstanceId,
+  clientUserId: ids.clientUserId,
+  astrologerUserId: ids.astrologerUserId,
+  status: "reviewable",
+  receivedAt: "2026-08-10T10:00:00.000Z",
+  reviewWindowClosesAt: "2026-08-24T10:00:00.000Z",
+  ...overrides
+});
+
+const approvedReview = (overrides: Partial<ReviewLifecycleState> = {}): ReviewLifecycleState => ({
+  id: ids.reviewId,
+  reviewableInstanceId: ids.reviewableInstanceId,
+  clientUserId: ids.clientUserId,
+  astrologerUserId: ids.astrologerUserId,
+  revision: 3,
+  publicIdentityMode: "named",
+  visibilityStatus: "visible",
+  disputeStatus: "none",
+  firstPublishedAt: "2026-08-12T10:00:00.000Z",
+  activePublicVersion: {
+    id: ids.versionId,
+    versionNumber: 1,
+    rating: 5,
+    text: "Одобренный текст остается публичным.",
+    publicIdentityMode: "named",
+    moderationStatus: "approved",
+    submittedAt: "2026-08-11T10:00:00.000Z",
+    decidedAt: "2026-08-12T10:00:00.000Z"
+  },
+  pendingVersion: null,
+  activePublicReplyVersion: null,
+  pendingReplyVersion: null,
+  ...overrides
+});
+
+describe("Review lifecycle domain policy", () => {
+  it("creates a pending first review version only for the client within the open review window", () => {
+    const planned = planSubmitReviewVersion({
+      actorUserId: ids.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstance: reviewableInstance(),
+      existingReview: null,
+      nextReviewId: ids.reviewId,
+      nextVersionId: ids.versionId,
+      submission: {
+        rating: 5,
+        text: "Очень точная консультация.",
+        publicIdentityMode: "secret_user"
+      }
+    });
+
+    expect(planned).toMatchObject({
+      kind: "create_review",
+      review: {
+        id: ids.reviewId,
+        visibilityStatus: "not_public",
+        publicIdentityMode: "secret_user"
+      },
+      version: {
+        id: ids.versionId,
+        versionNumber: 1,
+        moderationStatus: "pending",
+        publicIdentityMode: "secret_user"
+      }
+    });
+
+    expect(
+      planSubmitReviewVersion({
+        actorUserId: ids.astrologerUserId,
+        now: "2026-08-20T10:00:00.000Z",
+        reviewableInstance: reviewableInstance(),
+        existingReview: null,
+        nextReviewId: ids.reviewId,
+        nextVersionId: ids.versionId,
+        submission: {
+          rating: 5,
+          text: "Чужой отзыв.",
+          publicIdentityMode: "named"
+        }
+      })
+    ).toMatchObject({ kind: "rejected", reason: "not_review_author" });
+
+    expect(
+      planSubmitReviewVersion({
+        actorUserId: ids.clientUserId,
+        now: "2026-08-24T10:00:00.000Z",
+        reviewableInstance: reviewableInstance(),
+        existingReview: null,
+        nextReviewId: ids.reviewId,
+        nextVersionId: ids.versionId,
+        submission: {
+          rating: 5,
+          text: "Поздний отзыв.",
+          publicIdentityMode: "named"
+        }
+      })
+    ).toMatchObject({ kind: "rejected", reason: "review_window_closed" });
+  });
+
+  it("creates a pending edit while keeping the old approved version public", () => {
+    const planned = planSubmitReviewVersion({
+      actorUserId: ids.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstance: reviewableInstance({ status: "review_submitted" }),
+      existingReview: approvedReview(),
+      nextReviewId: ids.reviewId,
+      nextVersionId: ids.pendingVersionId,
+      submission: {
+        rating: 4,
+        text: "Обновленный текст ждет модерации.",
+        publicIdentityMode: "named"
+      }
+    });
+
+    expect(planned).toMatchObject({
+      kind: "create_pending_version",
+      keepActivePublicVersionId: ids.versionId,
+      version: {
+        id: ids.pendingVersionId,
+        versionNumber: 2,
+        moderationStatus: "pending"
+      }
+    });
+
+    expect(
+      planSubmitReviewVersion({
+        actorUserId: ids.clientUserId,
+        now: "2026-08-20T10:00:00.000Z",
+        reviewableInstance: reviewableInstance({ status: "review_submitted" }),
+        existingReview: approvedReview({
+          pendingVersion: {
+            id: ids.pendingVersionId,
+            versionNumber: 2,
+            rating: 4,
+            text: "Уже есть pending.",
+            publicIdentityMode: "named",
+            moderationStatus: "pending",
+            submittedAt: "2026-08-19T10:00:00.000Z",
+            decidedAt: null
+          }
+        }),
+        nextReviewId: ids.reviewId,
+        nextVersionId: "10000000-0000-4000-8000-000000000010",
+        submission: {
+          rating: 3,
+          text: "Дубликат pending.",
+          publicIdentityMode: "named"
+        }
+      })
+    ).toMatchObject({ kind: "rejected", reason: "pending_version_exists" });
+  });
+
+  it("publishes first approval once and does not fire Flow for later edits", () => {
+    const firstApproval = approveReviewVersion({
+      now: "2026-08-20T10:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      review: approvedReview({
+        visibilityStatus: "not_public",
+        firstPublishedAt: null,
+        activePublicVersion: null,
+        revision: 1,
+        pendingVersion: {
+          id: ids.versionId,
+          versionNumber: 1,
+          rating: 5,
+          text: "Первый публичный отзыв.",
+          publicIdentityMode: "named",
+          moderationStatus: "pending",
+          submittedAt: "2026-08-19T10:00:00.000Z",
+          decidedAt: null
+        }
+      }),
+      version: {
+        id: ids.versionId,
+        versionNumber: 1,
+        rating: 5,
+        text: "Первый публичный отзыв.",
+        publicIdentityMode: "named",
+        moderationStatus: "pending",
+        submittedAt: "2026-08-19T10:00:00.000Z",
+        decidedAt: null
+      }
+    });
+
+    expect(firstApproval).toMatchObject({
+      kind: "approved",
+      review: {
+        visibilityStatus: "visible",
+        firstPublishedAt: "2026-08-20T10:00:00.000Z",
+        activePublicVersion: { id: ids.versionId }
+      },
+      flowEvent: {
+        eventType: "review_first_published",
+        firstApprovedVersionId: ids.versionId
+      }
+    });
+
+    const editApproval = approveReviewVersion({
+      now: "2026-08-21T10:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      review: approvedReview({
+        pendingVersion: {
+          id: ids.pendingVersionId,
+          versionNumber: 2,
+          rating: 4,
+          text: "Новая версия.",
+          publicIdentityMode: "named",
+          moderationStatus: "pending",
+          submittedAt: "2026-08-20T12:00:00.000Z",
+          decidedAt: null
+        }
+      }),
+      version: {
+        id: ids.pendingVersionId,
+        versionNumber: 2,
+        rating: 4,
+        text: "Новая версия.",
+        publicIdentityMode: "named",
+        moderationStatus: "pending",
+        submittedAt: "2026-08-20T12:00:00.000Z",
+        decidedAt: null
+      }
+    });
+
+    expect(editApproval).toMatchObject({
+      kind: "approved",
+      review: { activePublicVersion: { id: ids.pendingVersionId } },
+      flowEvent: null
+    });
+  });
+
+  it("opens a dispute by hiding the review and creating a case command", () => {
+    const planned = openReviewDispute({
+      actorUserId: ids.astrologerUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      nextCaseId: ids.caseId,
+      review: approvedReview(),
+      reasonCode: "other"
+    });
+
+    expect(planned).toMatchObject({
+      kind: "opened",
+      review: {
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "open"
+      },
+      moderationCase: {
+        caseId: ids.caseId,
+        status: "open",
+        reasonCode: "other"
+      }
+    });
+
+    expect(
+      openReviewDispute({
+        actorUserId: ids.astrologerUserId,
+        now: "2026-08-20T10:00:00.000Z",
+        nextCaseId: ids.caseId,
+        review: approvedReview({ disputeStatus: "open" }),
+        reasonCode: "other"
+      })
+    ).toMatchObject({ kind: "rejected", reason: "active_dispute_exists" });
+  });
+
+  it("keeps moderation case message visibility party-safe", () => {
+    expect(
+      createReviewCaseMessage({
+        authorRole: "moderator",
+        authorUserId: ids.moderatorUserId,
+        body: "Клиенту отдельный вопрос.",
+        caseId: ids.caseId,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        messageId: ids.messageId,
+        visibility: "client_and_moderators"
+      })
+    ).toMatchObject({ kind: "created", message: { visibility: "client_and_moderators" } });
+
+    expect(
+      createReviewCaseMessage({
+        authorRole: "client",
+        authorUserId: ids.clientUserId,
+        body: "Скрыто только для модераторов нельзя.",
+        caseId: ids.caseId,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        messageId: ids.messageId,
+        visibility: "moderators_only"
+      })
+    ).toMatchObject({ kind: "rejected", reason: "visibility_not_allowed_for_author" });
+  });
+
+  it("projects secret public authors and validates the first published Flow payload", () => {
+    expect(
+      buildReviewPublicAuthor({
+        publicIdentityMode: "secret_user",
+        firstName: "Анна",
+        lastName: "Петрова",
+        avatarUrl: "https://example.com/avatar.png"
+      })
+    ).toEqual({
+      publicIdentityMode: "secret_user",
+      displayName: "Секретный пользователь",
+      initials: null,
+      avatarUrl: null
+    });
+
+    expect(
+      createReviewFirstPublishedFlowEvent({
+        reviewId: ids.reviewId,
+        reviewableInstanceId: ids.reviewableInstanceId,
+        astrologerUserId: ids.astrologerUserId,
+        clientUserId: ids.clientUserId,
+        firstApprovedVersionId: ids.versionId,
+        publishedAt: "2026-08-20T10:00:00.000Z"
+      })
+    ).toMatchObject({ eventType: "review_first_published" });
+  });
+});

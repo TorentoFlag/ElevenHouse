@@ -277,6 +277,11 @@ and API slices.
 - Domain tests prove eligibility, windows, versions, reply moderation, disputes, anonymity projection, case communication visibility and Flow event cardinality.
 - Every mutation returns a receipt suitable for API response/audit.
 
+**Progress 2026-08-20:** Domain lifecycle core
+
+- Added pure Reviews domain lifecycle functions for submit/edit planning, first approval publication, first-publication Flow event creation, dispute opening, case message visibility policy and public author projection.
+- Added behavioral tests for review window half-open checks, old-version preservation during pending edit, one-time Flow event on first publication, dispute hide and case message visibility.
+
 ### Slice 4: DB Adapters And Outbox
 
 **Purpose:** Wire domain ports to PostgreSQL and transactional outbox.
