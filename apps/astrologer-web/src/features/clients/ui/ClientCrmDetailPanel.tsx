@@ -316,7 +316,7 @@ function ServiceWorkGroup({
           <a className={styles.workItem} href={item.href} key={item.id}>
             <span className={styles.workTitle}>{item.productTitle}</span>
             <span className={styles.workMeta}>
-              {formatClientCrmDate(getServiceWorkStartAt(item), locale)} · {item.state}
+              {formatClientCrmDate(getServiceWorkStartAt(item), locale, item.timeZone)} · {item.state}
             </span>
           </a>
         ))}

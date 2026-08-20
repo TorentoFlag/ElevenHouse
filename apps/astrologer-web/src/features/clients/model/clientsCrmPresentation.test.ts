@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatClientCrmActivityItem,
+  formatClientCrmDate,
+  formatClientCrmDateTime,
   formatClientCrmDisplayName,
   formatClientCrmLifecycle,
   formatClientCrmReadiness,
@@ -78,5 +80,14 @@ describe("clientsCrmPresentation", () => {
     expect(formatClientCrmDisplayName("11111111-1111-4111-8111-111111111111", "Ada", "ru")).toBe(
       "Ada"
     );
+  });
+
+  it("formats CRM instants in the provided user or service timezone", () => {
+    expect(formatClientCrmDate("2026-08-20T21:30:00.000Z", "ru", "Europe/Moscow")).toBe(
+      "21 авг. 2026 г."
+    );
+    expect(
+      formatClientCrmDateTime("2026-08-20T21:30:00.000Z", "en", "America/New_York")
+    ).toContain("Aug 20, 2026");
   });
 });

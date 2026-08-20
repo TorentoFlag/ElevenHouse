@@ -9,6 +9,14 @@ import { bookings, clientAstrologerRelationships } from "../../schema";
 
 const upcomingBookingStates = ["confirmed"] as const;
 const recentBookingStates = ["completed", "cancelled", "no_show", "expired"] as const;
+type ClientServiceWorkBookingRow = {
+  readonly id: string;
+  readonly state: string;
+  readonly productTitle: string;
+  readonly startAt: Date;
+  readonly endAt: Date;
+  readonly timeZone: string;
+};
 
 export function createDrizzleBookingClientServiceWorkSummaryReader(
   database: ElevenHouseDatabase
@@ -28,7 +36,14 @@ export function createDrizzleBookingClientServiceWorkSummaryReader(
       const [upcomingTotal, upcoming, recentTotal, recent] = await Promise.all([
         countBookings(database, upcomingWhere),
         database
-          .select({ booking: bookings })
+          .select({
+            id: bookings.id,
+            state: bookings.state,
+            productTitle: bookings.productTitleSnapshot,
+            startAt: bookings.serviceStartAt,
+            endAt: bookings.serviceEndAt,
+            timeZone: bookings.timeZoneSnapshot
+          })
           .from(bookings)
           .innerJoin(
             clientAstrologerRelationships,
@@ -39,7 +54,14 @@ export function createDrizzleBookingClientServiceWorkSummaryReader(
           .limit(limit),
         countBookings(database, recentWhere),
         database
-          .select({ booking: bookings })
+          .select({
+            id: bookings.id,
+            state: bookings.state,
+            productTitle: bookings.productTitleSnapshot,
+            startAt: bookings.serviceStartAt,
+            endAt: bookings.serviceEndAt,
+            timeZone: bookings.timeZoneSnapshot
+          })
           .from(bookings)
           .innerJoin(
             clientAstrologerRelationships,
@@ -52,9 +74,9 @@ export function createDrizzleBookingClientServiceWorkSummaryReader(
 
       return {
         upcomingTotal,
-        upcoming: upcoming.map(({ booking }) => toBookingItem(booking)),
+        upcoming: upcoming.map(toBookingItem),
         recentTotal,
-        recent: recent.map(({ booking }) => toBookingItem(booking))
+        recent: recent.map(toBookingItem)
       };
     }
   };
@@ -101,15 +123,15 @@ async function countBookings(
   return Number(row?.count ?? 0);
 }
 
-function toBookingItem(booking: typeof bookings.$inferSelect): ClientServiceWorkBookingItem {
-  const startAt = booking.serviceStartAt.toISOString();
+function toBookingItem(booking: ClientServiceWorkBookingRow): ClientServiceWorkBookingItem {
+  const startAt = booking.startAt.toISOString();
   return {
     id: booking.id,
     state: booking.state as ClientServiceWorkBookingItem["state"],
-    productTitle: booking.productTitleSnapshot,
+    productTitle: booking.productTitle,
     startAt,
-    endAt: booking.serviceEndAt.toISOString(),
-    timeZone: booking.timeZoneSnapshot,
+    endAt: booking.endAt.toISOString(),
+    timeZone: booking.timeZone,
     href: `/calendar?bookingId=${booking.id}&startAt=${encodeURIComponent(startAt)}`
   };
 }

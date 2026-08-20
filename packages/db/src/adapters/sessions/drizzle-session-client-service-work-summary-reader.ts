@@ -9,6 +9,15 @@ import { clientAstrologerRelationships, sessions } from "../../schema";
 
 const upcomingSessionStates = ["scheduled", "active"] as const;
 const recentSessionStates = ["ended", "cancelled", "expired"] as const;
+type ClientServiceWorkSessionRow = {
+  readonly id: string;
+  readonly bookingId: string;
+  readonly state: string;
+  readonly productTitle: string;
+  readonly scheduledStartAt: Date;
+  readonly scheduledEndAt: Date;
+  readonly timeZone: string;
+};
 
 export function createDrizzleSessionClientServiceWorkSummaryReader(
   database: ElevenHouseDatabase
@@ -28,7 +37,15 @@ export function createDrizzleSessionClientServiceWorkSummaryReader(
       const [upcomingTotal, upcoming, recentTotal, recent] = await Promise.all([
         countSessions(database, upcomingWhere),
         database
-          .select({ session: sessions })
+          .select({
+            id: sessions.id,
+            bookingId: sessions.bookingId,
+            state: sessions.state,
+            productTitle: sessions.productTitleSnapshot,
+            scheduledStartAt: sessions.scheduledStartAt,
+            scheduledEndAt: sessions.scheduledEndAt,
+            timeZone: sessions.timeZoneSnapshot
+          })
           .from(sessions)
           .innerJoin(
             clientAstrologerRelationships,
@@ -39,7 +56,15 @@ export function createDrizzleSessionClientServiceWorkSummaryReader(
           .limit(limit),
         countSessions(database, recentWhere),
         database
-          .select({ session: sessions })
+          .select({
+            id: sessions.id,
+            bookingId: sessions.bookingId,
+            state: sessions.state,
+            productTitle: sessions.productTitleSnapshot,
+            scheduledStartAt: sessions.scheduledStartAt,
+            scheduledEndAt: sessions.scheduledEndAt,
+            timeZone: sessions.timeZoneSnapshot
+          })
           .from(sessions)
           .innerJoin(
             clientAstrologerRelationships,
@@ -52,9 +77,9 @@ export function createDrizzleSessionClientServiceWorkSummaryReader(
 
       return {
         upcomingTotal,
-        upcoming: upcoming.map(({ session }) => toSessionItem(session)),
+        upcoming: upcoming.map(toSessionItem),
         recentTotal,
-        recent: recent.map(({ session }) => toSessionItem(session))
+        recent: recent.map(toSessionItem)
       };
     }
   };
@@ -101,15 +126,15 @@ async function countSessions(
   return Number(row?.count ?? 0);
 }
 
-function toSessionItem(session: typeof sessions.$inferSelect): ClientServiceWorkSessionItem {
+function toSessionItem(session: ClientServiceWorkSessionRow): ClientServiceWorkSessionItem {
   return {
     id: session.id,
     bookingId: session.bookingId,
     state: session.state as ClientServiceWorkSessionItem["state"],
-    productTitle: session.productTitleSnapshot,
+    productTitle: session.productTitle,
     scheduledStartAt: session.scheduledStartAt.toISOString(),
     scheduledEndAt: session.scheduledEndAt.toISOString(),
-    timeZone: session.timeZoneSnapshot,
+    timeZone: session.timeZone,
     href: `/sessions/${session.id}`
   };
 }

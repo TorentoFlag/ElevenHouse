@@ -149,17 +149,25 @@ export function formatClientCrmDisplayName(
   return `${locale === "ru" ? "Клиент" : "Client"} ${clientUserId.slice(0, 8)}`;
 }
 
-export function formatClientCrmDate(value: string, locale: SupportedLocale = "en"): string {
+export function formatClientCrmDate(
+  value: string,
+  locale: SupportedLocale = "en",
+  timeZone?: string
+): string {
   return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", {
     dateStyle: "medium",
-    timeZone: "UTC"
+    ...(timeZone ? { timeZone } : {})
   }).format(new Date(value));
 }
 
-export function formatClientCrmDateTime(value: string, locale: SupportedLocale = "en"): string {
+export function formatClientCrmDateTime(
+  value: string,
+  locale: SupportedLocale = "en",
+  timeZone?: string
+): string {
   return new Intl.DateTimeFormat(locale === "ru" ? "ru-RU" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "UTC"
+    ...(timeZone ? { timeZone } : {})
   }).format(new Date(value));
 }
