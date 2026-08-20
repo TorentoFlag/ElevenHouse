@@ -378,6 +378,11 @@ export const reviewRatingAggregates = pgTable(
     visibleReviewCount: integer("visible_review_count").notNull().default(0),
     approvedReviewCount: integer("approved_review_count").notNull().default(0),
     ratingSum: integer("rating_sum").notNull().default(0),
+    star1Count: integer("star_1_count").notNull().default(0),
+    star2Count: integer("star_2_count").notNull().default(0),
+    star3Count: integer("star_3_count").notNull().default(0),
+    star4Count: integer("star_4_count").notNull().default(0),
+    star5Count: integer("star_5_count").notNull().default(0),
     lastPublishedAt: timestamp("last_published_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -399,6 +404,10 @@ export const reviewRatingAggregates = pgTable(
     check(
       "review_rating_aggregates_counts_check",
       sql`${table.visibleReviewCount} >= 0 and ${table.approvedReviewCount} >= ${table.visibleReviewCount} and ${table.ratingSum} >= 0 and ${table.ratingSum} <= ${table.approvedReviewCount} * 5`
+    ),
+    check(
+      "review_rating_aggregates_star_counts_check",
+      sql`${table.star1Count} >= 0 and ${table.star2Count} >= 0 and ${table.star3Count} >= 0 and ${table.star4Count} >= 0 and ${table.star5Count} >= 0 and ${table.star1Count} + ${table.star2Count} + ${table.star3Count} + ${table.star4Count} + ${table.star5Count} = ${table.visibleReviewCount} and ${table.ratingSum} = ${table.star1Count} + ${table.star2Count} * 2 + ${table.star3Count} * 3 + ${table.star4Count} * 4 + ${table.star5Count} * 5`
     )
   ]
 );

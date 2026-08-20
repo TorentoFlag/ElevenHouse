@@ -322,6 +322,13 @@ and API slices.
 - Added an integration test that exercises submit -> first approval -> edit pending -> edit approval against local PostgreSQL.
 - Remaining Slice 4 scope: aggregate updates, audit rows, moderation case/message persistence, reply version commands, dispute transactions, notification/outbox writes and public/admin read stores.
 
+**Progress 2026-08-20:** Rating aggregate transaction path
+
+- Added star bucket columns to review rating aggregates with a DB check that keeps visible count and rating sum consistent.
+- Updated review approval transaction to write astrologer aggregates on first publication and to replace aggregate rating buckets when an approved edit becomes public.
+- Product aggregates use the same transaction path when the reviewable instance has a product id.
+- Remaining aggregate work: dispute hide/restore deltas, public read-store hydration and reconciliation/recompute checks.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

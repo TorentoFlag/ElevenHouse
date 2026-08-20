@@ -149,6 +149,12 @@ export function createDrizzleReviewCommandStore(
         });
         if (result.kind === "rejected") return result;
 
+        const reviewableInstance = await readReviewableInstance(
+          transaction,
+          result.review.reviewableInstanceId
+        );
+        if (!reviewableInstance) return { kind: "rejected", reason: "not_review_version" };
+
         await transaction
           .update(reviewVersions)
           .set({
@@ -173,6 +179,21 @@ export function createDrizzleReviewCommandStore(
             updatedAt: new Date(input.now)
           })
           .where(eq(reviews.id, result.review.id));
+        await applyReviewApprovalAggregateDelta(transaction, {
+          astrologerUserId: result.review.astrologerUserId,
+          productId: reviewableInstance.productId,
+          previousVisibleRating:
+            currentReview.visibilityStatus === "visible"
+              ? (currentReview.activePublicVersion?.rating ?? null)
+              : null,
+          nextVisibleRating:
+            result.review.visibilityStatus === "visible"
+              ? (result.review.activePublicVersion?.rating ?? null)
+              : null,
+          approvedDelta: currentReview.activePublicVersion ? 0 : 1,
+          publishedAt: new Date(input.now),
+          updatedAt: new Date(input.now)
+        });
 
         if (result.flowEvent) {
           await transaction.insert(reviewPublicationEvents).values({
@@ -289,6 +310,236 @@ async function insertReviewVersion(
     decidedByUserId: null,
     createdAt: new Date(version.submittedAt)
   });
+}
+
+type ReviewAggregateDeltaInput = {
+  readonly astrologerUserId: string;
+  readonly productId: string | null;
+  readonly previousVisibleRating: number | null;
+  readonly nextVisibleRating: number | null;
+  readonly approvedDelta: number;
+  readonly publishedAt: Date;
+  readonly updatedAt: Date;
+};
+
+async function applyReviewApprovalAggregateDelta(
+  transaction: ReviewCommandTransaction,
+  input: ReviewAggregateDeltaInput
+): Promise<void> {
+  const visibleDelta = (input.nextVisibleRating ? 1 : 0) - (input.previousVisibleRating ? 1 : 0);
+  const ratingSumDelta = (input.nextVisibleRating ?? 0) - (input.previousVisibleRating ?? 0);
+  const starDeltas = buildStarDeltas(input.previousVisibleRating, input.nextVisibleRating);
+  const delta = {
+    visibleDelta,
+    ratingSumDelta,
+    starDeltas
+  };
+  await writeAstrologerAggregateDelta(transaction, input, delta);
+  const productId = input.productId;
+  if (productId) {
+    await writeProductAggregateDelta(transaction, { ...input, productId }, delta);
+  }
+}
+
+type ReviewAggregateComputedDelta = {
+  readonly visibleDelta: number;
+  readonly ratingSumDelta: number;
+  readonly starDeltas: readonly [number, number, number, number, number];
+};
+
+async function writeAstrologerAggregateDelta(
+  transaction: ReviewCommandTransaction,
+  input: ReviewAggregateDeltaInput,
+  delta: ReviewAggregateComputedDelta
+): Promise<void> {
+  if (!isInsertableAggregateDelta(input, delta)) {
+    await updateAstrologerAggregateDelta(transaction, input, delta);
+    return;
+  }
+  await transaction.execute(sql`
+    insert into review_rating_aggregates (
+      scope,
+      astrologer_user_id,
+      product_id,
+      visible_review_count,
+      approved_review_count,
+      rating_sum,
+      star_1_count,
+      star_2_count,
+      star_3_count,
+      star_4_count,
+      star_5_count,
+      last_published_at,
+      updated_at
+    )
+    values (
+      'astrologer',
+      ${input.astrologerUserId}::uuid,
+      null,
+      ${delta.visibleDelta},
+      ${input.approvedDelta},
+      ${delta.ratingSumDelta},
+      ${delta.starDeltas[0]},
+      ${delta.starDeltas[1]},
+      ${delta.starDeltas[2]},
+      ${delta.starDeltas[3]},
+      ${delta.starDeltas[4]},
+      ${input.publishedAt},
+      ${input.updatedAt}
+    )
+    on conflict (astrologer_user_id)
+      where scope = 'astrologer' and product_id is null
+    do update set
+      visible_review_count = review_rating_aggregates.visible_review_count + excluded.visible_review_count,
+      approved_review_count = review_rating_aggregates.approved_review_count + excluded.approved_review_count,
+      rating_sum = review_rating_aggregates.rating_sum + excluded.rating_sum,
+      star_1_count = review_rating_aggregates.star_1_count + excluded.star_1_count,
+      star_2_count = review_rating_aggregates.star_2_count + excluded.star_2_count,
+      star_3_count = review_rating_aggregates.star_3_count + excluded.star_3_count,
+      star_4_count = review_rating_aggregates.star_4_count + excluded.star_4_count,
+      star_5_count = review_rating_aggregates.star_5_count + excluded.star_5_count,
+      last_published_at = greatest(
+        coalesce(review_rating_aggregates.last_published_at, excluded.last_published_at),
+        excluded.last_published_at
+      ),
+      updated_at = excluded.updated_at
+  `);
+}
+
+async function updateAstrologerAggregateDelta(
+  transaction: ReviewCommandTransaction,
+  input: ReviewAggregateDeltaInput,
+  delta: ReviewAggregateComputedDelta
+): Promise<void> {
+  const result = await transaction.execute<{ id: string }>(sql`
+    update review_rating_aggregates
+    set
+      visible_review_count = visible_review_count + ${delta.visibleDelta},
+      approved_review_count = approved_review_count + ${input.approvedDelta},
+      rating_sum = rating_sum + ${delta.ratingSumDelta},
+      star_1_count = star_1_count + ${delta.starDeltas[0]},
+      star_2_count = star_2_count + ${delta.starDeltas[1]},
+      star_3_count = star_3_count + ${delta.starDeltas[2]},
+      star_4_count = star_4_count + ${delta.starDeltas[3]},
+      star_5_count = star_5_count + ${delta.starDeltas[4]},
+      last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
+      updated_at = ${input.updatedAt}
+    where scope = 'astrologer'
+      and astrologer_user_id = ${input.astrologerUserId}::uuid
+      and product_id is null
+    returning id
+  `);
+  if (result.rows.length !== 1) {
+    throw new Error("review_rating_aggregate_missing");
+  }
+}
+
+async function writeProductAggregateDelta(
+  transaction: ReviewCommandTransaction,
+  input: ReviewAggregateDeltaInput & { readonly productId: string },
+  delta: ReviewAggregateComputedDelta
+): Promise<void> {
+  if (!isInsertableAggregateDelta(input, delta)) {
+    await updateProductAggregateDelta(transaction, input, delta);
+    return;
+  }
+  await transaction.execute(sql`
+    insert into review_rating_aggregates (
+      scope,
+      astrologer_user_id,
+      product_id,
+      visible_review_count,
+      approved_review_count,
+      rating_sum,
+      star_1_count,
+      star_2_count,
+      star_3_count,
+      star_4_count,
+      star_5_count,
+      last_published_at,
+      updated_at
+    )
+    values (
+      'product',
+      ${input.astrologerUserId}::uuid,
+      ${input.productId}::uuid,
+      ${delta.visibleDelta},
+      ${input.approvedDelta},
+      ${delta.ratingSumDelta},
+      ${delta.starDeltas[0]},
+      ${delta.starDeltas[1]},
+      ${delta.starDeltas[2]},
+      ${delta.starDeltas[3]},
+      ${delta.starDeltas[4]},
+      ${input.publishedAt},
+      ${input.updatedAt}
+    )
+    on conflict (astrologer_user_id, product_id)
+      where scope = 'product' and product_id is not null
+    do update set
+      visible_review_count = review_rating_aggregates.visible_review_count + excluded.visible_review_count,
+      approved_review_count = review_rating_aggregates.approved_review_count + excluded.approved_review_count,
+      rating_sum = review_rating_aggregates.rating_sum + excluded.rating_sum,
+      star_1_count = review_rating_aggregates.star_1_count + excluded.star_1_count,
+      star_2_count = review_rating_aggregates.star_2_count + excluded.star_2_count,
+      star_3_count = review_rating_aggregates.star_3_count + excluded.star_3_count,
+      star_4_count = review_rating_aggregates.star_4_count + excluded.star_4_count,
+      star_5_count = review_rating_aggregates.star_5_count + excluded.star_5_count,
+      last_published_at = greatest(
+        coalesce(review_rating_aggregates.last_published_at, excluded.last_published_at),
+        excluded.last_published_at
+      ),
+      updated_at = excluded.updated_at
+  `);
+}
+
+async function updateProductAggregateDelta(
+  transaction: ReviewCommandTransaction,
+  input: ReviewAggregateDeltaInput & { readonly productId: string },
+  delta: ReviewAggregateComputedDelta
+): Promise<void> {
+  const result = await transaction.execute<{ id: string }>(sql`
+    update review_rating_aggregates
+    set
+      visible_review_count = visible_review_count + ${delta.visibleDelta},
+      approved_review_count = approved_review_count + ${input.approvedDelta},
+      rating_sum = rating_sum + ${delta.ratingSumDelta},
+      star_1_count = star_1_count + ${delta.starDeltas[0]},
+      star_2_count = star_2_count + ${delta.starDeltas[1]},
+      star_3_count = star_3_count + ${delta.starDeltas[2]},
+      star_4_count = star_4_count + ${delta.starDeltas[3]},
+      star_5_count = star_5_count + ${delta.starDeltas[4]},
+      last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
+      updated_at = ${input.updatedAt}
+    where scope = 'product'
+      and astrologer_user_id = ${input.astrologerUserId}::uuid
+      and product_id = ${input.productId}::uuid
+    returning id
+  `);
+  if (result.rows.length !== 1) {
+    throw new Error("review_rating_aggregate_missing");
+  }
+}
+
+function isInsertableAggregateDelta(
+  input: ReviewAggregateDeltaInput,
+  delta: ReviewAggregateComputedDelta
+): boolean {
+  return (
+    input.approvedDelta >= 0 &&
+    delta.visibleDelta >= 0 &&
+    delta.ratingSumDelta >= 0 &&
+    delta.starDeltas.every((value) => value >= 0)
+  );
+}
+
+function buildStarDeltas(
+  previousRating: number | null,
+  nextRating: number | null
+): readonly [number, number, number, number, number] {
+  return [1, 2, 3, 4, 5].map(
+    (rating) => (nextRating === rating ? 1 : 0) - (previousRating === rating ? 1 : 0)
+  ) as [number, number, number, number, number];
 }
 
 function mapVersion(row: ReviewVersionRow): ReviewVersionLifecycleState {

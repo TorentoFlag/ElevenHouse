@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { PostgresRuntime } from "../../runtime";
@@ -10,6 +10,7 @@ import {
   reviewVersions,
   reviewableInstances,
   reviews,
+  products,
   users
 } from "../../schema";
 import {
@@ -79,6 +80,20 @@ describe.sequential("Drizzle review command store", () => {
         firstApprovedVersionId: fixture.firstVersionId
       }
     });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 5,
+      star4Count: 0,
+      star5Count: 1
+    });
+    await expectProductAggregate(runtime, fixture.astrologerUserId, fixture.productId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 5,
+      star4Count: 0,
+      star5Count: 1
+    });
 
     const edit = await store.submitReviewVersion({
       actorUserId: fixture.clientUserId,
@@ -138,6 +153,20 @@ describe.sequential("Drizzle review command store", () => {
       publicIdentityMode: "secret_user",
       visibilityStatus: "visible"
     });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 4,
+      star4Count: 1,
+      star5Count: 0
+    });
+    await expectProductAggregate(runtime, fixture.astrologerUserId, fixture.productId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 4,
+      star4Count: 1,
+      star5Count: 0
+    });
 
     const [publicationCount] = await runtime.database
       .select({ value: count() })
@@ -164,6 +193,7 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
   const moderatorUserId = randomUUID();
   const relationshipId = randomUUID();
   const reviewableInstanceId = randomUUID();
+  const productId = randomUUID();
   const now = new Date("2026-08-20T09:00:00.000Z");
 
   await runtime.database.transaction(async (transaction) => {
@@ -183,6 +213,22 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
       createdAt: now,
       updatedAt: now
     });
+    await transaction.insert(products).values({
+      id: productId,
+      ownerUserId: astrologerUserId,
+      type: "single",
+      status: "active",
+      revision: 1,
+      title: "Солярная консультация",
+      priceMinor: 12000,
+      currency: "RUB",
+      executionMode: "live",
+      paymentModel: "once",
+      durationMinutes: 60,
+      participantMode: "solo",
+      createdAt: now,
+      updatedAt: now
+    });
     await transaction.insert(reviewableInstances).values({
       id: reviewableInstanceId,
       astrologerUserId,
@@ -192,7 +238,7 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
       status: "reviewable",
       windowPolicy: "standard_14_days_after_receipt",
       sourceResourceKey: `booking:${randomUUID()}`,
-      productId: null,
+      productId,
       orderId: null,
       bookingId: null,
       titleSnapshot: "Солярная консультация",
@@ -210,10 +256,60 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
     clientUserId,
     moderatorUserId,
     relationshipId,
+    productId,
     reviewableInstanceId,
     reviewId: randomUUID(),
     firstVersionId: randomUUID(),
     editVersionId: randomUUID(),
     publicationEventId: randomUUID()
   };
+}
+
+type AstrologerAggregateExpectation = {
+  readonly visibleReviewCount: number;
+  readonly approvedReviewCount: number;
+  readonly ratingSum: number;
+  readonly star4Count: number;
+  readonly star5Count: number;
+};
+
+async function expectAstrologerAggregate(
+  runtime: PostgresRuntime,
+  astrologerUserId: string,
+  expectation: AstrologerAggregateExpectation
+): Promise<void> {
+  const result = await runtime.database.execute<AstrologerAggregateExpectation>(sql`
+    select
+      visible_review_count as "visibleReviewCount",
+      approved_review_count as "approvedReviewCount",
+      rating_sum as "ratingSum",
+      star_4_count as "star4Count",
+      star_5_count as "star5Count"
+    from review_rating_aggregates
+    where scope = 'astrologer'
+      and astrologer_user_id = ${astrologerUserId}
+      and product_id is null
+  `);
+  expect(result.rows).toEqual([expectation]);
+}
+
+async function expectProductAggregate(
+  runtime: PostgresRuntime,
+  astrologerUserId: string,
+  productId: string,
+  expectation: AstrologerAggregateExpectation
+): Promise<void> {
+  const result = await runtime.database.execute<AstrologerAggregateExpectation>(sql`
+    select
+      visible_review_count as "visibleReviewCount",
+      approved_review_count as "approvedReviewCount",
+      rating_sum as "ratingSum",
+      star_4_count as "star4Count",
+      star_5_count as "star5Count"
+    from review_rating_aggregates
+    where scope = 'product'
+      and astrologer_user_id = ${astrologerUserId}
+      and product_id = ${productId}
+  `);
+  expect(result.rows).toEqual([expectation]);
 }
