@@ -84,6 +84,13 @@ export const reviewModerationCaseMessageVisibilityValues = [
 
 export const reviewRatingAggregateScopeValues = ["astrologer", "product"] as const;
 
+export const reviewAiReplyDraftStatusValues = [
+  "pending",
+  "succeeded",
+  "failed",
+  "superseded"
+] as const;
+
 export function formatReviewsSqlValues(values: readonly string[]): string {
   return `(${values.map((value) => `'${value}'`).join(", ")})`;
 }

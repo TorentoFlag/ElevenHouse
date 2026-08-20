@@ -25,6 +25,7 @@ import {
   reviewModerationCaseStatusValues,
   reviewModerationReasonCodeValues,
   reviewModerationStatusValues,
+  reviewAiReplyDraftStatusValues,
   reviewPublicIdentityModeValues,
   reviewRatingAggregateScopeValues,
   reviewVisibilityStatusValues,
@@ -397,5 +398,97 @@ export const reviewRatingAggregates = pgTable(
       "review_rating_aggregates_counts_check",
       sql`${table.visibleReviewCount} >= 0 and ${table.approvedReviewCount} >= ${table.visibleReviewCount} and ${table.ratingSum} >= 0 and ${table.ratingSum} <= ${table.approvedReviewCount} * 5`
     )
+  ]
+);
+
+export const reviewPublicationEvents = pgTable(
+  "review_publication_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => reviews.id, { onDelete: "restrict" }),
+    reviewableInstanceId: uuid("reviewable_instance_id")
+      .notNull()
+      .references(() => reviewableInstances.id, { onDelete: "restrict" }),
+    astrologerUserId: uuid("astrologer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    clientUserId: uuid("client_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    firstApprovedVersionId: uuid("first_approved_version_id")
+      .notNull()
+      .references(() => reviewVersions.id, { onDelete: "restrict" }),
+    occurrenceKey: varchar("occurrence_key", { length: 180 }).notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    flowEnrollmentRequestedAt: timestamp("flow_enrollment_requested_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    unique("review_publication_events_review_unique").on(table.reviewId),
+    unique("review_publication_events_version_unique").on(table.firstApprovedVersionId),
+    uniqueIndex("review_publication_events_occurrence_unique").on(
+      table.astrologerUserId,
+      table.occurrenceKey
+    ),
+    check(
+      "review_publication_events_occurrence_key_check",
+      sql`length(trim(${table.occurrenceKey})) between 1 and 180 and ${table.occurrenceKey} = trim(${table.occurrenceKey})`
+    ),
+    index("review_publication_events_flow_pending_idx")
+      .on(table.publishedAt, table.id)
+      .where(sql`${table.flowEnrollmentRequestedAt} is null`)
+  ]
+);
+
+export const reviewAiReplyDrafts = pgTable(
+  "review_ai_reply_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => reviews.id, { onDelete: "cascade" }),
+    astrologerUserId: uuid("astrologer_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    aiUsageAttemptId: uuid("ai_usage_attempt_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    promptId: varchar("prompt_id", { length: 160 }).notNull(),
+    promptVersion: integer("prompt_version").notNull(),
+    promptInputDigest: varchar("prompt_input_digest", { length: 71 }).notNull(),
+    draftText: text("draft_text"),
+    safeErrorCode: varchar("safe_error_code", { length: 120 }),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    unique("review_ai_reply_drafts_attempt_unique").on(table.aiUsageAttemptId),
+    check(
+      "review_ai_reply_drafts_status_check",
+      sql`${table.status} in ${sql.raw(formatReviewsSqlValues(reviewAiReplyDraftStatusValues))}`
+    ),
+    check("review_ai_reply_drafts_prompt_version_check", sql`${table.promptVersion} >= 1`),
+    check(
+      "review_ai_reply_drafts_prompt_input_digest_check",
+      sql`${table.promptInputDigest} ~ '^sha256:[a-f0-9]{64}$'`
+    ),
+    check(
+      "review_ai_reply_drafts_prompt_id_check",
+      sql`length(trim(${table.promptId})) between 1 and 160 and ${table.promptId} = trim(${table.promptId})`
+    ),
+    check(
+      "review_ai_reply_drafts_draft_text_check",
+      sql`${table.draftText} is null or (length(trim(${table.draftText})) between 1 and 4000 and ${table.draftText} = trim(${table.draftText}) and ${table.draftText} !~ '[[:cntrl:]]')`
+    ),
+    check(
+      "review_ai_reply_drafts_completion_shape_check",
+      sql`(${table.status} = 'pending' and ${table.completedAt} is null and ${table.draftText} is null and ${table.safeErrorCode} is null) or (${table.status} = 'succeeded' and ${table.completedAt} is not null and ${table.draftText} is not null and ${table.safeErrorCode} is null) or (${table.status} = 'failed' and ${table.completedAt} is not null and ${table.draftText} is null and ${table.safeErrorCode} is not null) or (${table.status} = 'superseded' and ${table.completedAt} is not null)`
+    ),
+    index("review_ai_reply_drafts_review_created_idx").on(table.reviewId, table.createdAt),
+    index("review_ai_reply_drafts_pending_idx")
+      .on(table.requestedAt, table.id)
+      .where(sql`${table.status} = 'pending'`)
   ]
 );
