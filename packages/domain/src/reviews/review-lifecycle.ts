@@ -103,6 +103,66 @@ export type ApproveReviewVersionResult =
       readonly reason: "version_already_decided" | "not_review_version";
     };
 
+export type RejectReviewVersionResult =
+  | {
+      readonly kind: "rejected";
+      readonly review: ReviewLifecycleState;
+      readonly version: ReviewRejectedVersionLifecycleState;
+    }
+  | {
+      readonly kind: "not_rejected";
+      readonly reason: "version_already_decided" | "not_review_version";
+    };
+
+export type ReviewRejectedVersionLifecycleState = ReviewVersionLifecycleState & {
+  readonly moderationStatus: "rejected";
+  readonly moderationReasonCode: ReviewModerationReasonCode;
+  readonly moderationNote: string | null;
+  readonly decidedByUserId: string;
+};
+
+export type ReviewRejectedReplyVersionLifecycleState = ReviewReplyVersionLifecycleState & {
+  readonly moderationStatus: "rejected";
+  readonly moderationReasonCode: ReviewModerationReasonCode;
+  readonly moderationNote: string | null;
+  readonly decidedByUserId: string;
+};
+
+export type SubmitReviewReplyVersionResult =
+  | {
+      readonly kind: "create_pending_reply_version";
+      readonly reviewId: string;
+      readonly expectedReviewRevision: number;
+      readonly keepActivePublicReplyVersionId: string | null;
+      readonly replyVersion: ReviewReplyVersionLifecycleState;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "not_review_astrologer" | "review_not_public" | "pending_reply_exists";
+    };
+
+export type ApproveReviewReplyVersionResult =
+  | {
+      readonly kind: "approved";
+      readonly review: ReviewLifecycleState;
+      readonly replyVersion: ReviewReplyVersionLifecycleState;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "reply_already_decided" | "not_review_reply_version";
+    };
+
+export type RejectReviewReplyVersionResult =
+  | {
+      readonly kind: "rejected";
+      readonly review: ReviewLifecycleState;
+      readonly replyVersion: ReviewRejectedReplyVersionLifecycleState;
+    }
+  | {
+      readonly kind: "not_rejected";
+      readonly reason: "reply_already_decided" | "not_review_reply_version";
+    };
+
 export type OpenReviewDisputeResult =
   | {
       readonly kind: "opened";
@@ -112,6 +172,17 @@ export type OpenReviewDisputeResult =
   | {
       readonly kind: "rejected";
       readonly reason: "not_review_astrologer" | "active_dispute_exists" | "review_not_public";
+    };
+
+export type RestoreReviewAfterDisputeResult =
+  | {
+      readonly kind: "restored";
+      readonly review: ReviewLifecycleState;
+      readonly flowEvent: null;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "review_not_public" | "no_active_dispute";
     };
 
 export type ReviewModerationCaseLifecycleState = {
@@ -258,6 +329,150 @@ export function approveReviewVersion(input: {
   };
 }
 
+export function rejectReviewVersion(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly reasonCode: ReviewModerationReasonCode;
+  readonly note: string | null;
+  readonly review: ReviewLifecycleState;
+  readonly version: ReviewVersionLifecycleState;
+}): RejectReviewVersionResult {
+  if (input.version.moderationStatus !== "pending") {
+    return { kind: "not_rejected", reason: "version_already_decided" };
+  }
+  if (!input.review.pendingVersion || input.review.pendingVersion.id !== input.version.id) {
+    return { kind: "not_rejected", reason: "not_review_version" };
+  }
+
+  return {
+    kind: "rejected",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      pendingVersion: null
+    },
+    version: {
+      ...input.version,
+      moderationStatus: "rejected",
+      moderationReasonCode: input.reasonCode,
+      moderationNote: input.note,
+      decidedAt: input.now,
+      decidedByUserId: input.moderatorUserId
+    }
+  };
+}
+
+export function planSubmitReviewReplyVersion(input: {
+  readonly actorUserId: string;
+  readonly now: string;
+  readonly review: ReviewLifecycleState;
+  readonly nextReplyVersionId: string;
+  readonly text: string;
+}): SubmitReviewReplyVersionResult {
+  if (input.actorUserId !== input.review.astrologerUserId) {
+    return { kind: "rejected", reason: "not_review_astrologer" };
+  }
+  if (!input.review.activePublicVersion) {
+    return { kind: "rejected", reason: "review_not_public" };
+  }
+  if (input.review.pendingReplyVersion) {
+    return { kind: "rejected", reason: "pending_reply_exists" };
+  }
+
+  const replyVersion: ReviewReplyVersionLifecycleState = {
+    id: input.nextReplyVersionId,
+    versionNumber: nextReplyVersionNumber(input.review),
+    text: input.text,
+    moderationStatus: "pending",
+    submittedAt: input.now,
+    decidedAt: null
+  };
+
+  return {
+    kind: "create_pending_reply_version",
+    reviewId: input.review.id,
+    expectedReviewRevision: input.review.revision,
+    keepActivePublicReplyVersionId: input.review.activePublicReplyVersion?.id ?? null,
+    replyVersion
+  };
+}
+
+export function approveReviewReplyVersion(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly review: ReviewLifecycleState;
+  readonly replyVersion: ReviewReplyVersionLifecycleState;
+}): ApproveReviewReplyVersionResult {
+  if (input.replyVersion.moderationStatus !== "pending") {
+    return { kind: "rejected", reason: "reply_already_decided" };
+  }
+  if (
+    input.review.pendingReplyVersion &&
+    input.review.pendingReplyVersion.id !== input.replyVersion.id
+  ) {
+    return { kind: "rejected", reason: "not_review_reply_version" };
+  }
+  if (
+    !input.review.pendingReplyVersion &&
+    input.review.activePublicReplyVersion?.id !== input.replyVersion.id
+  ) {
+    return { kind: "rejected", reason: "not_review_reply_version" };
+  }
+
+  const approvedReplyVersion: ReviewReplyVersionLifecycleState = {
+    ...input.replyVersion,
+    moderationStatus: "approved",
+    decidedAt: input.now
+  };
+
+  return {
+    kind: "approved",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      activePublicReplyVersion: approvedReplyVersion,
+      pendingReplyVersion:
+        input.review.pendingReplyVersion?.id === approvedReplyVersion.id
+          ? null
+          : input.review.pendingReplyVersion
+    },
+    replyVersion: approvedReplyVersion
+  };
+}
+
+export function rejectReviewReplyVersion(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly reasonCode: ReviewModerationReasonCode;
+  readonly note: string | null;
+  readonly review: ReviewLifecycleState;
+  readonly replyVersion: ReviewReplyVersionLifecycleState;
+}): RejectReviewReplyVersionResult {
+  if (input.replyVersion.moderationStatus !== "pending") {
+    return { kind: "not_rejected", reason: "reply_already_decided" };
+  }
+  if (!input.review.pendingReplyVersion || input.review.pendingReplyVersion.id !== input.replyVersion.id) {
+    return { kind: "not_rejected", reason: "not_review_reply_version" };
+  }
+
+  return {
+    kind: "rejected",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      pendingReplyVersion: null
+    },
+    replyVersion: {
+      ...input.replyVersion,
+      moderationStatus: "rejected",
+      moderationReasonCode: input.reasonCode,
+      moderationNote: input.note,
+      decidedAt: input.now,
+      decidedByUserId: input.moderatorUserId
+    }
+  };
+}
+
 export function openReviewDispute(input: {
   readonly actorUserId: string;
   readonly now: string;
@@ -291,6 +506,28 @@ export function openReviewDispute(input: {
       closedAt: null,
       reasonCode: input.reasonCode
     }
+  };
+}
+
+export function restoreReviewAfterDispute(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly review: ReviewLifecycleState;
+}): RestoreReviewAfterDisputeResult {
+  if (!input.review.activePublicVersion) return { kind: "rejected", reason: "review_not_public" };
+  if (!["open", "under_review", "waiting_client", "waiting_astrologer"].includes(input.review.disputeStatus)) {
+    return { kind: "rejected", reason: "no_active_dispute" };
+  }
+
+  return {
+    kind: "restored",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      visibilityStatus: "visible",
+      disputeStatus: "resolved_closed"
+    },
+    flowEvent: null
   };
 }
 
@@ -397,6 +634,13 @@ function nextReviewVersionNumber(review: ReviewLifecycleState | null): number {
   return Math.max(
     review.activePublicVersion?.versionNumber ?? 0,
     review.pendingVersion?.versionNumber ?? 0
+  ) + 1;
+}
+
+function nextReplyVersionNumber(review: ReviewLifecycleState): number {
+  return Math.max(
+    review.activePublicReplyVersion?.versionNumber ?? 0,
+    review.pendingReplyVersion?.versionNumber ?? 0
   ) + 1;
 }
 

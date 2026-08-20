@@ -281,6 +281,7 @@ and API slices.
 
 - Added pure Reviews domain lifecycle functions for submit/edit planning, first approval publication, first-publication Flow event creation, dispute opening, case message visibility policy and public author projection.
 - Added behavioral tests for review window half-open checks, old-version preservation during pending edit, one-time Flow event on first publication, dispute hide and case message visibility.
+- Extended domain lifecycle with review rejection, moderated astrologer reply approval/rejection and dispute restore transitions that do not re-trigger Flow.
 
 ### Slice 4: DB Adapters And Outbox
 

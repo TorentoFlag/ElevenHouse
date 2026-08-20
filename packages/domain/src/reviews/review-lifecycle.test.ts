@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   approveReviewVersion,
+  approveReviewReplyVersion,
   buildReviewPublicAuthor,
   createReviewCaseMessage,
   createReviewFirstPublishedFlowEvent,
   openReviewDispute,
   planSubmitReviewVersion,
+  rejectReviewReplyVersion,
+  rejectReviewVersion,
+  restoreReviewAfterDispute,
+  planSubmitReviewReplyVersion,
   type ReviewLifecycleState,
   type ReviewableInstanceLifecycleState
 } from "./review-lifecycle";
@@ -20,7 +25,9 @@ const ids = {
   pendingVersionId: "10000000-0000-4000-8000-000000000006",
   moderatorUserId: "10000000-0000-4000-8000-000000000007",
   caseId: "10000000-0000-4000-8000-000000000008",
-  messageId: "10000000-0000-4000-8000-000000000009"
+  messageId: "10000000-0000-4000-8000-000000000009",
+  replyVersionId: "10000000-0000-4000-8000-000000000011",
+  pendingReplyVersionId: "10000000-0000-4000-8000-000000000012"
 } as const;
 
 const reviewableInstance = (
@@ -257,6 +264,147 @@ describe("Review lifecycle domain policy", () => {
     });
   });
 
+  it("rejects a pending review edit without replacing the old public version", () => {
+    const result = rejectReviewVersion({
+      now: "2026-08-21T10:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      reasonCode: "off_topic",
+      note: "Не относится к услуге.",
+      review: approvedReview({
+        pendingVersion: {
+          id: ids.pendingVersionId,
+          versionNumber: 2,
+          rating: 3,
+          text: "Новая версия не пройдет.",
+          publicIdentityMode: "named",
+          moderationStatus: "pending",
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          decidedAt: null
+        }
+      }),
+      version: {
+        id: ids.pendingVersionId,
+        versionNumber: 2,
+        rating: 3,
+        text: "Новая версия не пройдет.",
+        publicIdentityMode: "named",
+        moderationStatus: "pending",
+        submittedAt: "2026-08-20T10:00:00.000Z",
+        decidedAt: null
+      }
+    });
+
+    expect(result).toMatchObject({
+      kind: "rejected",
+      review: {
+        activePublicVersion: { id: ids.versionId },
+        pendingVersion: null,
+        visibilityStatus: "visible"
+      },
+      version: {
+        id: ids.pendingVersionId,
+        moderationStatus: "rejected",
+        moderationReasonCode: "off_topic"
+      }
+    });
+  });
+
+  it("keeps astrologer replies moderated and preserves the old approved reply on edit rejection", () => {
+    const planned = planSubmitReviewReplyVersion({
+      actorUserId: ids.astrologerUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      review: approvedReview(),
+      nextReplyVersionId: ids.replyVersionId,
+      text: "Спасибо за отзыв."
+    });
+
+    expect(planned).toMatchObject({
+      kind: "create_pending_reply_version",
+      replyVersion: {
+        id: ids.replyVersionId,
+        versionNumber: 1,
+        moderationStatus: "pending"
+      }
+    });
+
+    const approvedReply = approveReviewReplyVersion({
+      now: "2026-08-20T11:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      review: approvedReview({
+        pendingReplyVersion: {
+          id: ids.replyVersionId,
+          versionNumber: 1,
+          text: "Спасибо за отзыв.",
+          moderationStatus: "pending",
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          decidedAt: null
+        }
+      }),
+      replyVersion: {
+        id: ids.replyVersionId,
+        versionNumber: 1,
+        text: "Спасибо за отзыв.",
+        moderationStatus: "pending",
+        submittedAt: "2026-08-20T10:00:00.000Z",
+        decidedAt: null
+      }
+    });
+
+    expect(approvedReply).toMatchObject({
+      kind: "approved",
+      review: {
+        activePublicReplyVersion: { id: ids.replyVersionId },
+        pendingReplyVersion: null
+      }
+    });
+
+    const rejectedEdit = rejectReviewReplyVersion({
+      now: "2026-08-21T10:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      reasonCode: "abuse_or_hate",
+      note: null,
+      review: approvedReview({
+        activePublicReplyVersion: {
+          id: ids.replyVersionId,
+          versionNumber: 1,
+          text: "Спасибо за отзыв.",
+          moderationStatus: "approved",
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          decidedAt: "2026-08-20T11:00:00.000Z"
+        },
+        pendingReplyVersion: {
+          id: ids.pendingReplyVersionId,
+          versionNumber: 2,
+          text: "Новая версия ответа.",
+          moderationStatus: "pending",
+          submittedAt: "2026-08-21T09:00:00.000Z",
+          decidedAt: null
+        }
+      }),
+      replyVersion: {
+        id: ids.pendingReplyVersionId,
+        versionNumber: 2,
+        text: "Новая версия ответа.",
+        moderationStatus: "pending",
+        submittedAt: "2026-08-21T09:00:00.000Z",
+        decidedAt: null
+      }
+    });
+
+    expect(rejectedEdit).toMatchObject({
+      kind: "rejected",
+      review: {
+        activePublicReplyVersion: { id: ids.replyVersionId },
+        pendingReplyVersion: null
+      },
+      replyVersion: {
+        id: ids.pendingReplyVersionId,
+        moderationStatus: "rejected",
+        moderationReasonCode: "abuse_or_hate"
+      }
+    });
+  });
+
   it("opens a dispute by hiding the review and creating a case command", () => {
     const planned = openReviewDispute({
       actorUserId: ids.astrologerUserId,
@@ -288,6 +436,27 @@ describe("Review lifecycle domain policy", () => {
         reasonCode: "other"
       })
     ).toMatchObject({ kind: "rejected", reason: "active_dispute_exists" });
+  });
+
+  it("restores a disputed review only through moderator decision and without creating a Flow event", () => {
+    const result = restoreReviewAfterDispute({
+      now: "2026-08-22T10:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      review: approvedReview({
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "under_review"
+      })
+    });
+
+    expect(result).toMatchObject({
+      kind: "restored",
+      review: {
+        visibilityStatus: "visible",
+        disputeStatus: "resolved_closed",
+        activePublicVersion: { id: ids.versionId }
+      },
+      flowEvent: null
+    });
   });
 
   it("keeps moderation case message visibility party-safe", () => {
