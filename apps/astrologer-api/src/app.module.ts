@@ -26,6 +26,7 @@ import { NumerologyModule } from "./modules/numerology/numerology.module";
 import { AstrologerTariffsModule } from "./modules/platform-tariffs/platform-tariffs.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RedisModule } from "./modules/redis/redis.module";
+import { AstrologerReviewsModule } from "./modules/reviews/reviews.module";
 import { VerificationModule } from "./modules/verification/verification.module";
 import { SessionsModule } from "./modules/sessions/sessions.module";
 
@@ -64,6 +65,7 @@ import { SessionsModule } from "./modules/sessions/sessions.module";
     HumanDesignModule,
     MessagingModule,
     AstrologerProfileModule,
+    AstrologerReviewsModule,
     SessionsModule,
     HealthModule
   ]
