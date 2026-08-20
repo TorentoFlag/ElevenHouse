@@ -5,6 +5,7 @@ import {
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewModerationDecisionSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type ReviewModerationCaseDetail,
@@ -13,6 +14,7 @@ import {
 } from "@elevenhouse/contracts";
 import type {
   CreateReviewCaseMessageResult,
+  OpenReviewDisputeResult,
   ReviewReadStore,
   SubmitReviewReplyVersionResult
 } from "@elevenhouse/domain";
@@ -21,6 +23,13 @@ import { SystemClock } from "../clock/system-clock.service";
 import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from "./reviews.tokens";
 
 type AstrologerReviewCommandStore = {
+  readonly openReviewDispute: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly nextCaseId: string;
+    readonly reasonCode: string;
+  }) => Promise<OpenReviewDisputeResult>;
   readonly submitReviewReplyVersion: (input: {
     readonly actorUserId: string;
     readonly now: string;
@@ -81,6 +90,39 @@ export class AstrologerReviewsService {
       submittedAt: result.replyVersion.submittedAt,
       decidedAt: result.replyVersion.decidedAt
     });
+  }
+
+  async openReviewDispute(
+    astrologerUserId: string,
+    reviewId: string,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ReviewModerationCaseDetail> {
+    const parsed = reviewModerationDecisionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review dispute request");
+
+    const safeAstrologerUserId = requireUuid(astrologerUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const result = await this.commandStore.openReviewDispute({
+      actorUserId: safeAstrologerUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      nextCaseId: deterministicUuid(
+        `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case`
+      ),
+      reasonCode: parsed.data.reasonCode
+    });
+    if (result.kind === "rejected") {
+      throw new BadRequestException("Review dispute cannot be opened");
+    }
+
+    const detail = await this.readStore.getModerationCaseDetail({
+      caseId: result.moderationCase.caseId,
+      actorUserId: safeAstrologerUserId,
+      actorRole: "astrologer"
+    });
+    if (!detail) throw new NotFoundException("Review moderation case was not found");
+    return reviewModerationCaseDetailSchema.parse(detail);
   }
 
   async getModerationCaseDetail(

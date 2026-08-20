@@ -43,6 +43,23 @@ export class AstrologerReviewsController {
     );
   }
 
+  @Post(":reviewId/disputes")
+  @RequireIdempotency({ scope: "reviews.dispute.astrologer.open" })
+  @RequireCsrf()
+  openReviewDispute(
+    @Param("reviewId") reviewId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ): Promise<ReviewModerationCaseDetail> {
+    return this.service.openReviewDispute(
+      requireAstrologerUserId(request),
+      reviewId,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
   @Get("moderation-cases/:caseId")
   getModerationCaseDetail(
     @Param("caseId") caseId: string,

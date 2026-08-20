@@ -23,11 +23,15 @@ describe("astrologer reviews HTTP API", () => {
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedReplyCommand: unknown;
+  let receivedDisputeCommand: unknown;
+  let disputeOpened: boolean;
 
   beforeEach(async () => {
     receivedCaseRead = null;
     receivedMessageCommand = null;
     receivedReplyCommand = null;
+    receivedDisputeCommand = null;
+    disputeOpened = true;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
       providers: [
@@ -38,7 +42,7 @@ describe("astrologer reviews HTTP API", () => {
           useValue: {
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
-              return input.caseId === caseId
+              return input.caseId === caseId && disputeOpened
                 ? {
                     caseId,
                     reviewId,
@@ -66,6 +70,32 @@ describe("astrologer reviews HTTP API", () => {
         {
           provide: ASTROLOGER_REVIEWS_COMMAND_STORE,
           useValue: {
+            async openReviewDispute(command: {
+              readonly actorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly nextCaseId: string;
+              readonly reasonCode: string;
+            }) {
+              receivedDisputeCommand = command;
+              disputeOpened = true;
+              return {
+                kind: "opened",
+                review: {
+                  id: command.reviewId,
+                  visibilityStatus: "temporarily_hidden_by_dispute",
+                  disputeStatus: "open"
+                },
+                moderationCase: {
+                  caseId,
+                  reviewId: command.reviewId,
+                  status: "open",
+                  openedAt: command.now,
+                  closedAt: null,
+                  reasonCode: command.reasonCode
+                }
+              };
+            },
             async submitReviewReplyVersion(command: {
               readonly actorUserId: string;
               readonly now: string;
@@ -168,6 +198,40 @@ describe("astrologer reviews HTTP API", () => {
       text: "Спасибо за отзыв. Рад, что консультация была полезной."
     });
     expect(receivedReplyCommand).toHaveProperty("nextReplyVersionId", expect.any(String));
+  });
+
+  it("opens review disputes and returns moderation case detail", async () => {
+    disputeOpened = false;
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/disputes`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-dispute-astrologer-1"
+      },
+      body: JSON.stringify({
+        reasonCode: "fraud_or_conflict",
+        note: "Нужна проверка контекста услуги."
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      caseId,
+      reviewId,
+      status: "open"
+    });
+    expect(receivedDisputeCommand).toMatchObject({
+      actorUserId: astrologerUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId,
+      reasonCode: "fraud_or_conflict"
+    });
+    expect(receivedDisputeCommand).toHaveProperty("nextCaseId", expect.any(String));
+    expect(receivedCaseRead).toEqual({
+      caseId,
+      actorUserId: astrologerUserId,
+      actorRole: "astrologer"
+    });
   });
 
   it("reads moderation case detail for the current astrologer", async () => {
