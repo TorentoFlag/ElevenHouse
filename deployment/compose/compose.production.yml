@@ -347,7 +347,13 @@ services:
             },
             {
               "Effect": "Allow",
-              "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion"
+              ],
               "Resource": [
                 "arn:aws:s3:::$${MINIO_MEDIA_BUCKET}/*",
                 "arn:aws:s3:::$${MINIO_PRIVATE_BUCKET}/*"
@@ -374,6 +380,7 @@ services:
         }
         EOF
         mc admin user svcacct remove local "$${MINIO_APP_USER}" >/dev/null 2>&1 || true
+        mc version enable "local/$${MINIO_PRIVATE_BUCKET}"
         mc admin user svcacct add local "$${MINIO_ROOT_USER}" \
           --access-key "$${MINIO_APP_USER}" \
           --secret-key "$${MINIO_APP_PASSWORD}" \
