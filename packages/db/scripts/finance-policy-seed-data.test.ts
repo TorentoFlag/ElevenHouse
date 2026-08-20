@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  defaultClientOrderCapturePolicySeedData,
   defaultClientCheckoutPreparePolicySeedData,
   defaultFinanceArtifactRetentionPolicySeedData,
-  defaultFinancePolicySeedData
+  defaultFinancePolicySeedData,
+  defaultFinanceRiskPolicyAuthoritySeedData
 } from "./finance-policy-seed-data";
 
 describe("default finance policy seed", () => {
@@ -14,6 +16,14 @@ describe("default finance policy seed", () => {
       reserveBps: 0,
       reserveReleaseDelayDays: 0,
       providerSettlementRequired: true
+    });
+  });
+
+  it("defines the immutable risk authority required by checkout capture", () => {
+    expect(defaultFinanceRiskPolicyAuthoritySeedData).toEqual({
+      holdAnchor: "booking_completed",
+      payoutMinimumAmountMinor: 100_000,
+      payoutMinimumCurrency: "RUB"
     });
   });
 
@@ -30,6 +40,22 @@ describe("default finance policy seed", () => {
       canonicalPreimage:
         '{"maximumArtifactBytes":65536,"maximumDecimalDigits":38,"maximumRows":100,"operationKind":"client_checkout_prepare","policyId":"default-client-checkout-prepare","version":1}',
       canonicalDigest: "sha256:f4a054273879d230e093a06e8312567861173c2a5005b1012d89c933385f3f94"
+    });
+  });
+
+  it("defines the published resource policy required to commit captured client orders", () => {
+    expect(defaultClientOrderCapturePolicySeedData).toEqual({
+      policyId: "default-client-order-capture",
+      version: 1,
+      draftRevision: 1,
+      operationKind: "client_order_capture",
+      lifecycle: "published",
+      maximumRows: 100,
+      maximumDecimalDigits: 38,
+      maximumArtifactBytes: 65_536,
+      canonicalPreimage:
+        '{"maximumArtifactBytes":65536,"maximumDecimalDigits":38,"maximumRows":100,"operationKind":"client_order_capture","policyId":"default-client-order-capture","version":1}',
+      canonicalDigest: "sha256:f7fe5811e818ebdf601482438da232be34a00017cf40cba1a1a09030fc6c655c"
     });
   });
 

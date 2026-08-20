@@ -10,9 +10,11 @@ import {
 } from "./dictionary-seed-data/index";
 import { resolveArcPayProviderAccountSeedData } from "./finance-provider-account-seed-data";
 import {
+  defaultClientOrderCapturePolicySeedData,
   defaultClientCheckoutPreparePolicySeedData,
   defaultFinanceArtifactRetentionPolicySeedData,
-  defaultFinancePolicySeedData
+  defaultFinancePolicySeedData,
+  defaultFinanceRiskPolicyAuthoritySeedData
 } from "./finance-policy-seed-data";
 import { reconcileFlowRuntimeControlAuthority } from "./flow-runtime-control-reconciliation";
 import { productTemplateSeedData } from "./product-template-seed-data/index";
@@ -32,8 +34,9 @@ async function main() {
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
     await seedDefaultFinancePolicy();
+    await seedDefaultFinanceRiskPolicyAuthority();
     await seedDefaultFinanceArtifactRetentionPolicies();
-    await seedDefaultClientCheckoutPreparePolicy();
+    await seedDefaultClientOrderResourcePolicies();
     await seedArcPayProviderAccount();
     await seedProductTemplates();
     console.log(
@@ -170,9 +173,100 @@ async function seedDefaultFinancePolicy() {
   );
 }
 
-async function seedDefaultClientCheckoutPreparePolicy() {
-  const seed = defaultClientCheckoutPreparePolicySeedData;
+async function seedDefaultFinanceRiskPolicyAuthority() {
+  const seed = defaultFinanceRiskPolicyAuthoritySeedData;
 
+  await pool.query(
+    `insert into finance_risk_policy_versions (
+       policy_id,
+       policy_version,
+       effective_risk_tier,
+       hold_anchor,
+       hold_duration_hours,
+       reserve_bps,
+       reserve_release_delay_days,
+       provider_settlement_required,
+       payout_minimum_amount_minor,
+       payout_minimum_currency,
+       exception_authority_id,
+       exception_authority_version,
+       effective_at
+     )
+     select active_policy.id::varchar,
+            active_policy.policy_version::numeric,
+            active_policy.risk_tier,
+            $2,
+            active_policy.hold_duration_hours,
+            active_policy.reserve_bps,
+            active_policy.reserve_release_delay_days,
+            active_policy.provider_settlement_required,
+            $3::numeric,
+            $4,
+            null,
+            null,
+            to_char(active_policy.snapshotted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+     from finance_policies active_policy
+     where active_policy.risk_tier = $1
+       and active_policy.is_active = true
+     on conflict (policy_id, policy_version) do nothing`,
+    [
+      defaultFinancePolicySeedData.riskTier,
+      seed.holdAnchor,
+      seed.payoutMinimumAmountMinor,
+      seed.payoutMinimumCurrency
+    ]
+  );
+
+  const result = await pool.query<{
+    effective_risk_tier: string;
+    hold_anchor: string;
+    hold_duration_hours: number;
+    reserve_bps: number;
+    reserve_release_delay_days: number;
+    provider_settlement_required: boolean;
+    payout_minimum_amount_minor: string;
+    payout_minimum_currency: string;
+  }>(
+    `select risk.effective_risk_tier,
+            risk.hold_anchor,
+            risk.hold_duration_hours,
+            risk.reserve_bps,
+            risk.reserve_release_delay_days,
+            risk.provider_settlement_required,
+            risk.payout_minimum_amount_minor::text,
+            risk.payout_minimum_currency
+     from finance_policies active_policy
+     inner join finance_risk_policy_versions risk
+       on risk.policy_id = active_policy.id::varchar
+      and risk.policy_version = active_policy.policy_version::numeric
+     where active_policy.risk_tier = $1
+       and active_policy.is_active = true`,
+    [defaultFinancePolicySeedData.riskTier]
+  );
+
+  const row = result.rows[0];
+  if (
+    result.rowCount !== 1 ||
+    !row ||
+    row.effective_risk_tier !== defaultFinancePolicySeedData.riskTier ||
+    row.hold_anchor !== seed.holdAnchor ||
+    row.hold_duration_hours !== defaultFinancePolicySeedData.holdDurationHours ||
+    row.reserve_bps !== defaultFinancePolicySeedData.reserveBps ||
+    row.reserve_release_delay_days !== defaultFinancePolicySeedData.reserveReleaseDelayDays ||
+    row.provider_settlement_required !== defaultFinancePolicySeedData.providerSettlementRequired ||
+    row.payout_minimum_amount_minor !== String(seed.payoutMinimumAmountMinor) ||
+    row.payout_minimum_currency !== seed.payoutMinimumCurrency
+  ) {
+    throw new Error("Active standard finance risk authority does not match the canonical seed");
+  }
+}
+
+async function seedDefaultClientOrderResourcePolicies() {
+  await seedDefaultClientOrderResourcePolicy(defaultClientCheckoutPreparePolicySeedData);
+  await seedDefaultClientOrderResourcePolicy(defaultClientOrderCapturePolicySeedData);
+}
+
+async function seedDefaultClientOrderResourcePolicy(seed: typeof defaultClientCheckoutPreparePolicySeedData) {
   await pool.query(
     `insert into finance_operation_resource_policy_versions (
        policy_id,

@@ -442,6 +442,13 @@
       "when": 1787244000000,
       "tag": "0064_client_crm_relationship_keyset_index",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787247000000,
+      "tag": "0066_client_order_capture_resource_policy",
+      "breakpoints": true
     }
   ]
 }
