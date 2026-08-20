@@ -6,7 +6,7 @@ import type {
   ReviewableInstanceStatus
 } from "@elevenhouse/contracts";
 import { planReviewableInstanceFromReceipt } from "@elevenhouse/domain";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -105,6 +105,16 @@ export type DrizzleReviewableInstanceReceiptStore = {
     readonly existing: number;
     readonly rejected: number;
   }>;
+  readonly upsertPendingAstroDiaryPeriods: (input: {
+    readonly limit: number;
+    readonly now: string;
+    readonly idGenerator?: () => string;
+  }) => Promise<{
+    readonly scanned: number;
+    readonly created: number;
+    readonly existing: number;
+    readonly rejected: number;
+  }>;
 };
 
 export function createDrizzleReviewableInstanceReceiptStore(
@@ -118,65 +128,9 @@ export function createDrizzleReviewableInstanceReceiptStore(
         upsertCompletedBookingEventInTransaction(transaction, input)
       ),
     upsertFromAstroDiaryPeriod: (input) =>
-      database.transaction(async (transaction) => {
-        const [row] = await transaction
-          .select({
-            grantId: clientEntitlementGrants.id,
-            grantState: clientEntitlementGrants.state,
-            capability: clientEntitlementGrants.capability,
-            periodId: clientEntitlementGrants.periodId,
-            startsAt: clientEntitlementGrants.startsAt,
-            endsAt: clientEntitlementGrants.endsAt,
-            grantCreatedAt: clientEntitlementGrants.createdAt,
-            subscriptionState: clientSubscriptions.state,
-            productId: clientSubscriptions.productId,
-            relationshipId: clientAstrologerRelationships.id,
-            clientUserId: clientAstrologerRelationships.clientUserId,
-            astrologerUserId: clientAstrologerRelationships.astrologerUserId,
-            productTitle: products.title
-          })
-          .from(clientEntitlementGrants)
-          .innerJoin(
-            clientSubscriptions,
-            eq(clientSubscriptions.id, clientEntitlementGrants.subscriptionId)
-          )
-          .innerJoin(
-            clientAstrologerRelationships,
-            eq(clientAstrologerRelationships.id, clientEntitlementGrants.relationshipId)
-          )
-          .innerJoin(products, eq(products.id, clientSubscriptions.productId))
-          .where(
-            and(
-              eq(clientEntitlementGrants.periodId, input.periodId),
-              eq(clientEntitlementGrants.capability, "astro_diary")
-            )
-          )
-          .limit(1);
-
-        if (!row) return { kind: "rejected", reason: "astro_diary_period_not_found" };
-        if (
-          (row.grantState !== "active" && row.grantState !== "ended") ||
-          (row.subscriptionState !== "active" && row.subscriptionState !== "ended")
-        ) {
-          return { kind: "rejected", reason: "astro_diary_period_not_reviewable" };
-        }
-
-        return upsertReceiptInTransaction(transaction, {
-          nextReviewableInstanceId: input.nextReviewableInstanceId,
-          clientUserId: row.clientUserId,
-          astrologerUserId: row.astrologerUserId,
-          kind: "astro_diary_period",
-          sourceResourceKey: `astro_diary_period:${row.periodId}`,
-          productId: row.productId,
-          orderId: null,
-          bookingId: null,
-          titleSnapshot: row.productTitle,
-          contextLabelSnapshot: `AstroDiary ${row.startsAt.toISOString()} - ${row.endsAt.toISOString()}`,
-          receivedAt: row.grantCreatedAt.toISOString(),
-          windowPolicy: "standard_14_days_after_receipt",
-          now: input.now
-        });
-      }),
+      database.transaction((transaction) =>
+        upsertAstroDiaryPeriodInTransaction(transaction, input)
+      ),
     upsertPendingCompletedBookingEvents: async (input) => {
       if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500) {
         throw new Error("Review completed booking source batch limit must be between 1 and 500");
@@ -229,8 +183,126 @@ export function createDrizzleReviewableInstanceReceiptStore(
       }
 
       return { scanned: rows.length, created, existing, rejected };
+    },
+    upsertPendingAstroDiaryPeriods: async (input) => {
+      if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500) {
+        throw new Error("Review AstroDiary period source batch limit must be between 1 and 500");
+      }
+      const rows = await database
+        .select({ periodId: clientEntitlementGrants.periodId })
+        .from(clientEntitlementGrants)
+        .innerJoin(
+          clientSubscriptions,
+          eq(clientSubscriptions.id, clientEntitlementGrants.subscriptionId)
+        )
+        .leftJoin(
+          reviewableInstances,
+          and(
+            eq(reviewableInstances.kind, "astro_diary_period"),
+            eq(
+              reviewableInstances.sourceResourceKey,
+              sql<string>`'astro_diary_period:' || ${clientEntitlementGrants.periodId}::text`
+            )
+          )
+        )
+        .where(
+          and(
+            eq(clientEntitlementGrants.capability, "astro_diary"),
+            sql`${clientEntitlementGrants.state} in ('active', 'ended')`,
+            sql`${clientSubscriptions.state} in ('active', 'ended')`,
+            isNull(reviewableInstances.id)
+          )
+        )
+        .orderBy(asc(clientEntitlementGrants.startsAt), asc(clientEntitlementGrants.periodId))
+        .limit(input.limit);
+
+      let created = 0;
+      let existing = 0;
+      let rejected = 0;
+      const idGenerator = input.idGenerator ?? randomUUID;
+      for (const row of rows) {
+        const result = await database.transaction((transaction) =>
+          upsertAstroDiaryPeriodInTransaction(transaction, {
+            periodId: row.periodId,
+            nextReviewableInstanceId: idGenerator(),
+            now: input.now
+          })
+        );
+        if (result.kind === "created") created += 1;
+        else if (result.kind === "existing") existing += 1;
+        else rejected += 1;
+      }
+
+      return { scanned: rows.length, created, existing, rejected };
     }
   };
+}
+
+async function upsertAstroDiaryPeriodInTransaction(
+  transaction: ReviewReceiptTransaction,
+  input: {
+    readonly periodId: string;
+    readonly nextReviewableInstanceId: string;
+    readonly now: string;
+  }
+): Promise<UpsertReviewableInstanceFromReceiptResult> {
+  const [row] = await transaction
+    .select({
+      grantId: clientEntitlementGrants.id,
+      grantState: clientEntitlementGrants.state,
+      capability: clientEntitlementGrants.capability,
+      periodId: clientEntitlementGrants.periodId,
+      startsAt: clientEntitlementGrants.startsAt,
+      endsAt: clientEntitlementGrants.endsAt,
+      grantCreatedAt: clientEntitlementGrants.createdAt,
+      subscriptionState: clientSubscriptions.state,
+      productId: clientSubscriptions.productId,
+      relationshipId: clientAstrologerRelationships.id,
+      clientUserId: clientAstrologerRelationships.clientUserId,
+      astrologerUserId: clientAstrologerRelationships.astrologerUserId,
+      productTitle: products.title
+    })
+    .from(clientEntitlementGrants)
+    .innerJoin(
+      clientSubscriptions,
+      eq(clientSubscriptions.id, clientEntitlementGrants.subscriptionId)
+    )
+    .innerJoin(
+      clientAstrologerRelationships,
+      eq(clientAstrologerRelationships.id, clientEntitlementGrants.relationshipId)
+    )
+    .innerJoin(products, eq(products.id, clientSubscriptions.productId))
+    .where(
+      and(
+        eq(clientEntitlementGrants.periodId, input.periodId),
+        eq(clientEntitlementGrants.capability, "astro_diary")
+      )
+    )
+    .limit(1);
+
+  if (!row) return { kind: "rejected", reason: "astro_diary_period_not_found" };
+  if (
+    (row.grantState !== "active" && row.grantState !== "ended") ||
+    (row.subscriptionState !== "active" && row.subscriptionState !== "ended")
+  ) {
+    return { kind: "rejected", reason: "astro_diary_period_not_reviewable" };
+  }
+
+  return upsertReceiptInTransaction(transaction, {
+    nextReviewableInstanceId: input.nextReviewableInstanceId,
+    clientUserId: row.clientUserId,
+    astrologerUserId: row.astrologerUserId,
+    kind: "astro_diary_period",
+    sourceResourceKey: `astro_diary_period:${row.periodId}`,
+    productId: row.productId,
+    orderId: null,
+    bookingId: null,
+    titleSnapshot: row.productTitle,
+    contextLabelSnapshot: `AstroDiary ${row.startsAt.toISOString()} - ${row.endsAt.toISOString()}`,
+    receivedAt: row.grantCreatedAt.toISOString(),
+    windowPolicy: "standard_14_days_after_receipt",
+    now: input.now
+  });
 }
 
 async function upsertCompletedBookingEventInTransaction(

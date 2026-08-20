@@ -205,6 +205,34 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("scans pending AstroDiary entitlement periods and opens missing reviewable instances", async () => {
+    const fixture = await createActiveClientSubscriptionFixture(
+      runtime,
+      "2026-08-02T10:00:00.000Z"
+    );
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.upsertPendingAstroDiaryPeriods({
+        limit: 10,
+        now: "2026-08-02T10:01:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 1, created: 1, existing: 0, rejected: 0 });
+
+    const [rowCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewableInstances)
+      .where(eq(reviewableInstances.sourceResourceKey, `astro_diary_period:${fixture.periodId}`));
+    expect(Number(rowCount?.value ?? 0)).toBe(1);
+
+    await expect(
+      store.upsertPendingAstroDiaryPeriods({
+        limit: 10,
+        now: "2026-08-02T10:02:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 0, created: 0, existing: 0, rejected: 0 });
+  });
+
   it("allows several received products within the same client relationship", async () => {
     const fixture = await seedPaidOrderFixture(runtime);
     const secondOrderInput = {
