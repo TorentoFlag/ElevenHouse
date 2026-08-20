@@ -2,15 +2,14 @@ import type {
   BookingClientServiceWorkSummaryReader,
   ClientServiceWorkBookingSummary
 } from "../bookings";
+import type { OrderStatus } from "../orders";
+import type { PaymentAttemptStatus } from "../payments";
 import type {
   ClientServiceWorkSessionSummary,
   SessionClientServiceWorkSummaryReader
 } from "../sessions";
 import type { ClientLifecycleMode, ClientLifecycleStatus } from "./client-lifecycle";
-import {
-  clientLifecycleStatusValues,
-  clientLifecycleModeValues
-} from "./client-lifecycle";
+import { clientLifecycleStatusValues, clientLifecycleModeValues } from "./client-lifecycle";
 import type {
   ClientAstrologerRelationship,
   ClientBirthData,
@@ -48,13 +47,53 @@ export type ClientCrmServiceWorkSummary =
       readonly status: "available";
       readonly bookings: ClientServiceWorkBookingSummary;
       readonly sessions: ClientServiceWorkSessionSummary;
+      readonly orders: ClientServiceWorkOrderSummary;
+      readonly payments: ClientServiceWorkPaymentSummary;
     }
   | {
       readonly status: "unavailable";
-      readonly source: "bookings" | "sessions";
+      readonly source: "bookings" | "sessions" | "finance";
       readonly code: "summary_unavailable";
       readonly retryable: boolean;
     };
+
+export type ClientServiceWorkOrderItem = {
+  readonly id: string;
+  readonly status: OrderStatus;
+  readonly productTitle: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly bookingId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly href?: string;
+};
+
+export type ClientServiceWorkOrderSummary = {
+  readonly recentTotal: number;
+  readonly recent: readonly ClientServiceWorkOrderItem[];
+};
+
+export type ClientServiceWorkPaymentItem = {
+  readonly id: string;
+  readonly orderId: string;
+  readonly status: PaymentAttemptStatus;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly href?: string;
+};
+
+export type ClientServiceWorkPaymentSummary = {
+  readonly recentTotal: number;
+  readonly recent: readonly ClientServiceWorkPaymentItem[];
+};
+
+export type ClientServiceWorkFinanceSummary = {
+  readonly orders: ClientServiceWorkOrderSummary;
+  readonly payments: ClientServiceWorkPaymentSummary;
+};
 
 type ClientCrmActivityBase = {
   readonly id: string;
@@ -153,7 +192,12 @@ export type ClientCrmDetail = ClientCrmListItem & {
 };
 
 export type ClientCrmFailure = {
-  readonly kind: "not_found" | "not_related" | "blocked_or_archived" | "conflict" | "invalid_command";
+  readonly kind:
+    | "not_found"
+    | "not_related"
+    | "blocked_or_archived"
+    | "conflict"
+    | "invalid_command";
 };
 
 export type ClientCrmListResult =
@@ -196,6 +240,18 @@ export type ClientCrmReadStore = {
 export type ClientCrmServiceWorkSources = {
   readonly bookings: BookingClientServiceWorkSummaryReader;
   readonly sessions: SessionClientServiceWorkSummaryReader;
+  readonly finance: FinanceClientServiceWorkSummaryReader;
+};
+
+export type FinanceClientServiceWorkSummaryReader = {
+  readonly listClientServiceWorkFinance: (input: {
+    readonly ownerUserId: string;
+    readonly clientUserId: string;
+    readonly now: string;
+    readonly limit: number;
+  }) => Promise<
+    ClientServiceWorkFinanceSummary | { readonly kind: "unavailable"; readonly retryable: boolean }
+  >;
 };
 
 export async function listAstrologerClientCrmPage(input: {
@@ -289,10 +345,22 @@ async function readClientCrmServiceWork(input: {
     return unavailableServiceWork("sessions", sessions.retryable);
   }
 
+  let finance;
+  try {
+    finance = await input.sources.finance.listClientServiceWorkFinance(readerInput);
+  } catch {
+    return unavailableServiceWork("finance", true);
+  }
+  if (isUnavailableServiceWorkSource(finance)) {
+    return unavailableServiceWork("finance", finance.retryable);
+  }
+
   return {
     status: "available",
     bookings,
-    sessions
+    sessions,
+    orders: finance.orders,
+    payments: finance.payments
   };
 }
 
@@ -300,13 +368,14 @@ function isUnavailableServiceWorkSource(
   value:
     | ClientServiceWorkBookingSummary
     | ClientServiceWorkSessionSummary
+    | ClientServiceWorkFinanceSummary
     | { readonly kind: "unavailable"; readonly retryable: boolean }
 ): value is { readonly kind: "unavailable"; readonly retryable: boolean } {
   return "kind" in value && value.kind === "unavailable";
 }
 
 function unavailableServiceWork(
-  source: "bookings" | "sessions",
+  source: "bookings" | "sessions" | "finance",
   retryable: boolean
 ): ClientCrmServiceWorkSummary {
   return {
@@ -327,12 +396,15 @@ export function createClientCrmActivityItem(
       if (!isOneOf(clientRelationshipSourceValues, input.source.source)) {
         throw new ClientCrmCommandValidationError("CRM relationship source is invalid");
       }
-      return withHref({
-        id: input.id,
-        kind: input.kind,
-        occurredAt: input.occurredAt,
-        metadata: { source: input.source.source }
-      }, input.href);
+      return withHref(
+        {
+          id: input.id,
+          kind: input.kind,
+          occurredAt: input.occurredAt,
+          metadata: { source: input.source.source }
+        },
+        input.href
+      );
     case "lifecycle_changed":
       if (
         !isLifecycleStatus(input.source.status) ||
@@ -341,44 +413,57 @@ export function createClientCrmActivityItem(
       ) {
         throw new ClientCrmCommandValidationError("CRM lifecycle activity is invalid");
       }
-      return withHref({
-        id: input.id,
-        kind: input.kind,
-        occurredAt: input.occurredAt,
-        metadata: {
-          previousStatus: input.source.previousStatus,
-          status: input.source.status,
-          mode: input.source.mode
-        }
-      }, input.href);
+      return withHref(
+        {
+          id: input.id,
+          kind: input.kind,
+          occurredAt: input.occurredAt,
+          metadata: {
+            previousStatus: input.source.previousStatus,
+            status: input.source.status,
+            mode: input.source.mode
+          }
+        },
+        input.href
+      );
     case "birth_data_updated":
       validateRevision(input.source.revision);
-      return withHref({
-        id: input.id,
-        kind: input.kind,
-        occurredAt: input.occurredAt,
-        metadata: { revision: input.source.revision }
-      }, input.href);
+      return withHref(
+        {
+          id: input.id,
+          kind: input.kind,
+          occurredAt: input.occurredAt,
+          metadata: { revision: input.source.revision }
+        },
+        input.href
+      );
     case "related_birth_profile_updated":
-      validateRequiredString(input.source.relatedProfileId, "CRM related birth profile id is required");
+      validateRequiredString(
+        input.source.relatedProfileId,
+        "CRM related birth profile id is required"
+      );
       validateRevision(input.source.revision);
-      return withHref({
-        id: input.id,
-        kind: input.kind,
-        occurredAt: input.occurredAt,
-        metadata: {
-          relatedProfileId: input.source.relatedProfileId,
-          revision: input.source.revision
-        }
-      }, input.href);
+      return withHref(
+        {
+          id: input.id,
+          kind: input.kind,
+          occurredAt: input.occurredAt,
+          metadata: {
+            relatedProfileId: input.source.relatedProfileId,
+            revision: input.source.revision
+          }
+        },
+        input.href
+      );
   }
 }
 
 function normalizeListQuery(input: ClientCrmListQueryInput | undefined): ClientCrmListQuery {
   const query = normalizeOptionalString(input?.query, 100);
-  const cursor = input?.cursor === undefined || input.cursor === null
-    ? null
-    : validateRequiredString(input.cursor, "CRM cursor is required", 512);
+  const cursor =
+    input?.cursor === undefined || input.cursor === null
+      ? null
+      : validateRequiredString(input.cursor, "CRM cursor is required", 512);
   const limit = input?.limit ?? 20;
   if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
     throw new ClientCrmCommandValidationError("CRM list limit is invalid");
@@ -462,7 +547,11 @@ function normalizeOptionalString(value: string | null | undefined, maxLength: nu
   return normalized;
 }
 
-function validateRequiredString(value: string, message: string, maxLength = Number.POSITIVE_INFINITY): string {
+function validateRequiredString(
+  value: string,
+  message: string,
+  maxLength = Number.POSITIVE_INFINITY
+): string {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > maxLength) {
     throw new ClientCrmCommandValidationError(message);

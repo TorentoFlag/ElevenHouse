@@ -15,6 +15,8 @@ const relationshipId = "018f7f0a-6d77-7f72-9b63-7e24c9902222";
 const relatedProfileId = "018f7f0a-6d77-7f72-9b63-7e24c9903333";
 const bookingId = "018f7f0a-6d77-7f72-9b63-7e24c9905555";
 const sessionId = "018f7f0a-6d77-7f72-9b63-7e24c9906666";
+const orderId = "018f7f0a-6d77-7f72-9b63-7e24c9907777";
+const paymentAttemptId = "018f7f0a-6d77-7f72-9b63-7e24c9908888";
 const occurredAt = "2026-08-20T10:00:00.000Z";
 const laterAt = "2026-08-21T10:00:00.000Z";
 
@@ -112,7 +114,9 @@ describe("Clients CRM contracts", () => {
     });
     expect(astrologerClientCrmListQuerySchema.safeParse({ offset: 0 }).success).toBe(false);
     expect(astrologerClientCrmListQuerySchema.safeParse({ sort: "name_asc" }).success).toBe(false);
-    expect(astrologerClientCrmListQuerySchema.safeParse({ cursor: "x".repeat(513) }).success).toBe(false);
+    expect(astrologerClientCrmListQuerySchema.safeParse({ cursor: "x".repeat(513) }).success).toBe(
+      false
+    );
   });
 
   it("reuses lifecycle values without accepting lifecycle labels as relationship statuses", () => {
@@ -152,18 +156,21 @@ describe("Clients CRM contracts", () => {
       )
     ).toThrow();
     expect(
-      clientCrmActivityItemSchema.safeParse(activityItem({ href: "https://provider.example/thread/1" }))
+      clientCrmActivityItemSchema.safeParse(
+        activityItem({ href: "https://provider.example/thread/1" })
+      ).success
+    ).toBe(false);
+    expect(
+      clientCrmActivityItemSchema.safeParse(activityItem({ href: "//evil.example/thread/1" }))
         .success
     ).toBe(false);
-    expect(clientCrmActivityItemSchema.safeParse(activityItem({ href: "//evil.example/thread/1" })).success).toBe(
-      false
-    );
-    expect(clientCrmActivityItemSchema.safeParse(activityItem({ href: "/\\evil.example/thread/1" })).success).toBe(
-      false
-    );
-    expect(clientCrmActivityItemSchema.parse(activityItem({ href: "/clients/" + clientUserId })).href).toBe(
-      "/clients/" + clientUserId
-    );
+    expect(
+      clientCrmActivityItemSchema.safeParse(activityItem({ href: "/\\evil.example/thread/1" }))
+        .success
+    ).toBe(false);
+    expect(
+      clientCrmActivityItemSchema.parse(activityItem({ href: "/clients/" + clientUserId })).href
+    ).toBe("/clients/" + clientUserId);
   });
 
   it("bounds CRM activity and exposes only server-provided Clients-owned readiness", () => {
@@ -173,7 +180,9 @@ describe("Clients CRM contracts", () => {
         nextCursor: null
       }).success
     ).toBe(false);
-    expect(astrologerClientCrmDetailResponseSchema.parse(detailResponse()).client.readiness).toEqual({
+    expect(
+      astrologerClientCrmDetailResponseSchema.parse(detailResponse()).client.readiness
+    ).toEqual({
       birthData: "missing",
       relatedProfiles: "ready"
     });
@@ -230,6 +239,35 @@ describe("Clients CRM contracts", () => {
             ],
             recentTotal: 0,
             recent: []
+          },
+          orders: {
+            recentTotal: 1,
+            recent: [
+              {
+                id: orderId,
+                status: "paid",
+                productTitle: "Natal consultation",
+                amountMinor: 12000,
+                currency: "RUB",
+                bookingId,
+                createdAt: occurredAt,
+                updatedAt: laterAt
+              }
+            ]
+          },
+          payments: {
+            recentTotal: 1,
+            recent: [
+              {
+                id: paymentAttemptId,
+                orderId,
+                status: "captured",
+                amountMinor: 12000,
+                currency: "RUB",
+                createdAt: occurredAt,
+                updatedAt: laterAt
+              }
+            ]
           }
         }
       })
@@ -238,10 +276,12 @@ describe("Clients CRM contracts", () => {
     expect(parsed.client.serviceWork).toMatchObject({
       status: "available",
       bookings: { upcomingTotal: 1, recentTotal: 0 },
-      sessions: { upcomingTotal: 1, recentTotal: 0 }
+      sessions: { upcomingTotal: 1, recentTotal: 0 },
+      orders: { recentTotal: 1 },
+      payments: { recentTotal: 1 }
     });
     expect(JSON.stringify(parsed.client.serviceWork)).not.toMatch(
-      /message|provider|room|participant|policySnapshot/i
+      /message|provider|room|participant|policySnapshot|providerPaymentId|providerCheckoutId/i
     );
 
     expect(
@@ -266,6 +306,14 @@ describe("Clients CRM contracts", () => {
             sessions: {
               upcomingTotal: 0,
               upcoming: [],
+              recentTotal: 0,
+              recent: []
+            },
+            orders: {
+              recentTotal: 0,
+              recent: []
+            },
+            payments: {
               recentTotal: 0,
               recent: []
             }
@@ -302,6 +350,56 @@ describe("Clients CRM contracts", () => {
               ],
               recentTotal: 0,
               recent: []
+            },
+            orders: {
+              recentTotal: 0,
+              recent: []
+            },
+            payments: {
+              recentTotal: 0,
+              recent: []
+            }
+          }
+        })
+      ).success
+    ).toBe(false);
+    expect(
+      astrologerClientCrmDetailResponseSchema.safeParse(
+        detailResponse({
+          serviceWork: {
+            status: "available",
+            bookings: {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            },
+            sessions: {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            },
+            orders: {
+              recentTotal: 1,
+              recent: [
+                {
+                  id: orderId,
+                  status: "paid",
+                  productTitle: "Natal consultation",
+                  amountMinor: 12000,
+                  currency: "RUB",
+                  bookingId,
+                  createdAt: occurredAt,
+                  updatedAt: laterAt,
+                  financePolicySnapshotId: "policy-private",
+                  providerPaymentId: "provider-private"
+                }
+              ]
+            },
+            payments: {
+              recentTotal: 0,
+              recent: []
             }
           }
         })
@@ -315,7 +413,7 @@ describe("Clients CRM contracts", () => {
         detailResponse({
           serviceWork: {
             status: "unavailable",
-            source: "sessions",
+            source: "finance",
             code: "summary_unavailable",
             retryable: true
           }
@@ -323,7 +421,7 @@ describe("Clients CRM contracts", () => {
       ).client.serviceWork
     ).toEqual({
       status: "unavailable",
-      source: "sessions",
+      source: "finance",
       code: "summary_unavailable",
       retryable: true
     });

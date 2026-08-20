@@ -121,6 +121,7 @@ describe("Clients CRM domain read model", () => {
   });
 
   it("adds service work from source-owned booking and session readers", async () => {
+    let financeReaderCalled = false;
     const result = await getAstrologerClientCrmDetail({
       store: store(),
       astrologerUserId: "astrologer-1",
@@ -179,17 +180,62 @@ describe("Clients CRM domain read model", () => {
               recent: []
             };
           }
+        },
+        finance: {
+          async listClientServiceWorkFinance(input: unknown) {
+            financeReaderCalled = true;
+            expect(input).toEqual({
+              ownerUserId: "astrologer-1",
+              clientUserId: "client-1",
+              now: "2026-08-20T10:00:00.000Z",
+              limit: 3
+            });
+            return {
+              orders: {
+                recentTotal: 1,
+                recent: [
+                  {
+                    id: "order-1",
+                    status: "paid",
+                    productTitle: "Natal consultation",
+                    amountMinor: 12_000,
+                    currency: "RUB",
+                    bookingId: "booking-1",
+                    createdAt: "2026-08-20T09:00:00.000Z",
+                    updatedAt: "2026-08-20T09:05:00.000Z"
+                  }
+                ]
+              },
+              payments: {
+                recentTotal: 1,
+                recent: [
+                  {
+                    id: "payment-1",
+                    orderId: "order-1",
+                    status: "captured",
+                    amountMinor: 12_000,
+                    currency: "RUB",
+                    createdAt: "2026-08-20T09:01:00.000Z",
+                    updatedAt: "2026-08-20T09:05:00.000Z"
+                  }
+                ]
+              }
+            };
+          }
         }
       }
     } as unknown as Parameters<typeof getAstrologerClientCrmDetail>[0]);
 
+    expect(financeReaderCalled).toBe(true);
     expect(result).toMatchObject({
       kind: "found",
       detail: {
         serviceWork: {
           status: "available",
           bookings: { upcomingTotal: 1, recentTotal: 0 },
-          sessions: { upcomingTotal: 1, recentTotal: 0 }
+          sessions: { upcomingTotal: 1, recentTotal: 0 },
+          orders: { recentTotal: 1 },
+          payments: { recentTotal: 1 }
         }
       }
     });
@@ -223,6 +269,54 @@ describe("Clients CRM domain read model", () => {
           source: "bookings",
           code: "summary_unavailable",
           retryable: true
+        }
+      }
+    });
+  });
+
+  it("maps finance reader failures to unavailable service work without dropping booking and session isolation", async () => {
+    const result = await getAstrologerClientCrmDetail({
+      store: store(),
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      now: "2026-08-20T10:00:00.000Z",
+      serviceWorkSources: {
+        bookings: {
+          async listClientServiceWorkBookings() {
+            return {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            };
+          }
+        },
+        sessions: {
+          async listClientServiceWorkSessions() {
+            return {
+              upcomingTotal: 0,
+              upcoming: [],
+              recentTotal: 0,
+              recent: []
+            };
+          }
+        },
+        finance: {
+          async listClientServiceWorkFinance() {
+            return { kind: "unavailable", retryable: false };
+          }
+        }
+      }
+    } as unknown as Parameters<typeof getAstrologerClientCrmDetail>[0]);
+
+    expect(result).toMatchObject({
+      kind: "found",
+      detail: {
+        serviceWork: {
+          status: "unavailable",
+          source: "finance",
+          code: "summary_unavailable",
+          retryable: false
         }
       }
     });

@@ -18,6 +18,7 @@ import {
   writeClientRelatedBirthProfile,
   type BookingClientServiceWorkSummaryReader,
   type SessionClientServiceWorkSummaryReader,
+  type FinanceClientServiceWorkSummaryReader,
   type ClientCrmReadStore,
   type ClientRelatedBirthProfileStore,
   type ClientStore
@@ -58,6 +59,7 @@ import {
   BIRTH_PLACE_SEARCH_PROVIDER,
   CLIENT_BOOKING_SERVICE_WORK_READER,
   CLIENT_CRM_READ_STORE,
+  CLIENT_FINANCE_SERVICE_WORK_READER,
   CLIENT_SESSION_SERVICE_WORK_READER,
   CLIENT_STORE
 } from "./clients.tokens";
@@ -76,7 +78,9 @@ export class ClientsService {
     @Inject(CLIENT_BOOKING_SERVICE_WORK_READER)
     private readonly bookingServiceWorkReader: BookingClientServiceWorkSummaryReader,
     @Inject(CLIENT_SESSION_SERVICE_WORK_READER)
-    private readonly sessionServiceWorkReader: SessionClientServiceWorkSummaryReader
+    private readonly sessionServiceWorkReader: SessionClientServiceWorkSummaryReader,
+    @Inject(CLIENT_FINANCE_SERVICE_WORK_READER)
+    private readonly financeServiceWorkReader: FinanceClientServiceWorkSummaryReader
   ) {}
 
   async listClients(
@@ -293,7 +297,8 @@ export class ClientsService {
       now: this.clock.now().toISOString(),
       serviceWorkSources: {
         bookings: this.bookingServiceWorkReader,
-        sessions: this.sessionServiceWorkReader
+        sessions: this.sessionServiceWorkReader,
+        finance: this.financeServiceWorkReader
       }
     });
 

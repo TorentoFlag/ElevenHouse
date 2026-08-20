@@ -4,6 +4,7 @@ export * from "./drizzle-captured-sale-unit-of-work";
 export * from "./drizzle-finance-policy-store";
 export * from "./drizzle-financial-inventory-reader";
 export * from "./drizzle-finance-readiness-evidence-reader";
+export * from "./drizzle-finance-client-service-work-summary-reader";
 export * from "./drizzle-fiscal-profile-reader";
 export * from "./drizzle-verified-fiscal-buyer-contact-reader";
 export * from "./drizzle-fiscal-profile-authority-store";

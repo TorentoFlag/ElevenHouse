@@ -1,6 +1,9 @@
 import { ianaTimeZoneSchema, nonEmptyStringSchema, z } from "@elevenhouse/validation";
 import { astrologerPublicHandleSchema } from "./astrologer-profile";
 import { bookingLifecycleStateSchema } from "./calendar";
+import { moneyAmountMinorSchema, rubCurrencySchema } from "./money";
+import { orderStatusSchema } from "./orders";
+import { paymentAttemptStatusSchema } from "./payments";
 import { SessionStateSchema } from "./sessions";
 
 const uuidSchema = z.string().uuid();
@@ -451,9 +454,7 @@ export const clientCrmServiceWorkBookingItemSchema = z
       });
     }
   });
-export type ClientCrmServiceWorkBookingItem = z.infer<
-  typeof clientCrmServiceWorkBookingItemSchema
->;
+export type ClientCrmServiceWorkBookingItem = z.infer<typeof clientCrmServiceWorkBookingItemSchema>;
 
 export const clientCrmServiceWorkSessionItemSchema = z
   .object({
@@ -476,9 +477,36 @@ export const clientCrmServiceWorkSessionItemSchema = z
       });
     }
   });
-export type ClientCrmServiceWorkSessionItem = z.infer<
-  typeof clientCrmServiceWorkSessionItemSchema
->;
+export type ClientCrmServiceWorkSessionItem = z.infer<typeof clientCrmServiceWorkSessionItemSchema>;
+
+export const clientCrmServiceWorkOrderItemSchema = z
+  .object({
+    id: uuidSchema,
+    status: orderStatusSchema,
+    productTitle: z.string().trim().min(1).max(200),
+    amountMinor: moneyAmountMinorSchema,
+    currency: rubCurrencySchema,
+    bookingId: uuidSchema.nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    href: clientCrmRelativeHrefSchema.optional()
+  })
+  .strict();
+export type ClientCrmServiceWorkOrderItem = z.infer<typeof clientCrmServiceWorkOrderItemSchema>;
+
+export const clientCrmServiceWorkPaymentItemSchema = z
+  .object({
+    id: uuidSchema,
+    orderId: uuidSchema,
+    status: paymentAttemptStatusSchema,
+    amountMinor: moneyAmountMinorSchema,
+    currency: rubCurrencySchema,
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    href: clientCrmRelativeHrefSchema.optional()
+  })
+  .strict();
+export type ClientCrmServiceWorkPaymentItem = z.infer<typeof clientCrmServiceWorkPaymentItemSchema>;
 
 export const clientCrmServiceWorkSummarySchema = z.discriminatedUnion("status", [
   z
@@ -499,21 +527,31 @@ export const clientCrmServiceWorkSummarySchema = z.discriminatedUnion("status", 
           recentTotal: z.number().int().min(0),
           recent: z.array(clientCrmServiceWorkSessionItemSchema).max(3)
         })
+        .strict(),
+      orders: z
+        .object({
+          recentTotal: z.number().int().min(0),
+          recent: z.array(clientCrmServiceWorkOrderItemSchema).max(3)
+        })
+        .strict(),
+      payments: z
+        .object({
+          recentTotal: z.number().int().min(0),
+          recent: z.array(clientCrmServiceWorkPaymentItemSchema).max(3)
+        })
         .strict()
     })
     .strict(),
   z
     .object({
       status: z.literal("unavailable"),
-      source: z.enum(["bookings", "sessions"]),
+      source: z.enum(["bookings", "sessions", "finance"]),
       code: z.literal("summary_unavailable"),
       retryable: z.boolean()
     })
     .strict()
 ]);
-export type ClientCrmServiceWorkSummary = z.infer<
-  typeof clientCrmServiceWorkSummarySchema
->;
+export type ClientCrmServiceWorkSummary = z.infer<typeof clientCrmServiceWorkSummarySchema>;
 
 const clientCrmRelationshipCreatedActivityMetadataSchema = z
   .object({
@@ -655,4 +693,6 @@ export const astrologerClientCrmDetailResponseSchema = z
     client: astrologerClientCrmDetailSchema
   })
   .strict();
-export type AstrologerClientCrmDetailResponse = z.infer<typeof astrologerClientCrmDetailResponseSchema>;
+export type AstrologerClientCrmDetailResponse = z.infer<
+  typeof astrologerClientCrmDetailResponseSchema
+>;

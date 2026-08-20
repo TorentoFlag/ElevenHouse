@@ -33,6 +33,9 @@ describe("Clients CRM HTTP API", () => {
   let sessionServiceWorkReader: {
     readonly listClientServiceWorkSessions: ReturnType<typeof vi.fn>;
   };
+  let financeServiceWorkReader: {
+    readonly listClientServiceWorkFinance: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     crmStore = createCrmReadStore();
@@ -73,13 +76,47 @@ describe("Clients CRM HTTP API", () => {
         ]
       })
     };
+    financeServiceWorkReader = {
+      listClientServiceWorkFinance: vi.fn().mockResolvedValue({
+        orders: {
+          recentTotal: 1,
+          recent: [
+            {
+              id: "10000000-0000-4000-8000-000000000022",
+              status: "paid",
+              productTitle: "Natal consultation",
+              amountMinor: 12000,
+              currency: "RUB",
+              bookingId: "10000000-0000-4000-8000-000000000020",
+              createdAt: "2026-08-20T09:00:00.000Z",
+              updatedAt: "2026-08-20T09:05:00.000Z"
+            }
+          ]
+        },
+        payments: {
+          recentTotal: 1,
+          recent: [
+            {
+              id: "10000000-0000-4000-8000-000000000023",
+              orderId: "10000000-0000-4000-8000-000000000022",
+              status: "captured",
+              amountMinor: 12000,
+              currency: "RUB",
+              createdAt: "2026-08-20T09:01:00.000Z",
+              updatedAt: "2026-08-20T09:05:00.000Z"
+            }
+          ]
+        }
+      })
+    };
     const service = new (ClientsService as new (...args: unknown[]) => ClientsService)(
       {} as never,
       { now: () => new Date("2026-08-20T10:00:00.000Z") } as SystemClock,
       birthPlaceSearchProvider(),
       crmStore,
       bookingServiceWorkReader,
-      sessionServiceWorkReader
+      sessionServiceWorkReader,
+      financeServiceWorkReader
     );
     const builder = Test.createTestingModule({
       controllers: [ClientsController],
@@ -93,7 +130,9 @@ describe("Clients CRM HTTP API", () => {
     });
     builder.overrideGuard(AstrologerSessionAuthGuard).useValue({
       canActivate(context: {
-        switchToHttp(): { getRequest(): AstrologerSessionRequest & { headers: Record<string, string> } };
+        switchToHttp(): {
+          getRequest(): AstrologerSessionRequest & { headers: Record<string, string> };
+        };
       }) {
         const request = context.switchToHttp().getRequest();
         const role = request.headers["x-test-role"];
@@ -169,8 +208,14 @@ describe("Clients CRM HTTP API", () => {
       now: "2026-08-20T10:00:00.000Z",
       limit: 3
     });
+    expect(financeServiceWorkReader.listClientServiceWorkFinance).toHaveBeenCalledWith({
+      ownerUserId: astrologerUserId,
+      clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      limit: 3
+    });
     expect(JSON.stringify(response.body)).not.toMatch(
-      /messageBody|providerPayload|preview|composer/i
+      /messageBody|providerPayload|providerPaymentId|providerCheckoutId|policySnapshot|preview|composer/i
     );
   });
 
@@ -226,7 +271,9 @@ describe("Clients CRM HTTP API", () => {
   });
 
   it("maps a CRM persistence conflict to an observable 409", async () => {
-    const response = await request(`/clients/crm/${foreignAstrologerUserId}`, { role: "astrologer" });
+    const response = await request(`/clients/crm/${foreignAstrologerUserId}`, {
+      role: "astrologer"
+    });
     expect(response.status).toBe(409);
   });
 
@@ -249,14 +296,21 @@ function createCrmReadStore(): ClientCrmReadStore {
       if (query.cursor === "tampered") return Promise.resolve({ kind: "invalid_command" });
       return Promise.resolve({ kind: "found", page: { items: [crmListItem()], nextCursor: null } });
     }),
-    getAstrologerClientCrmDetail: vi.fn().mockImplementation(({ clientUserId: requestedClientUserId }) => {
-      if (requestedClientUserId === unrelatedClientUserId) return Promise.resolve({ kind: "not_related" });
-      if (requestedClientUserId === archivedClientUserId || requestedClientUserId === blockedClientUserId) {
-        return Promise.resolve({ kind: "blocked_or_archived" });
-      }
-      if (requestedClientUserId === foreignAstrologerUserId) return Promise.resolve({ kind: "conflict" });
-      return Promise.resolve({ kind: "found", detail: crmDetail() });
-    })
+    getAstrologerClientCrmDetail: vi
+      .fn()
+      .mockImplementation(({ clientUserId: requestedClientUserId }) => {
+        if (requestedClientUserId === unrelatedClientUserId)
+          return Promise.resolve({ kind: "not_related" });
+        if (
+          requestedClientUserId === archivedClientUserId ||
+          requestedClientUserId === blockedClientUserId
+        ) {
+          return Promise.resolve({ kind: "blocked_or_archived" });
+        }
+        if (requestedClientUserId === foreignAstrologerUserId)
+          return Promise.resolve({ kind: "conflict" });
+        return Promise.resolve({ kind: "found", detail: crmDetail() });
+      })
   };
 }
 
@@ -335,6 +389,35 @@ function serviceWorkSummary() {
           scheduledEndAt: "2026-08-19T11:00:00.000Z",
           timeZone: "Europe/Moscow",
           href: "/sessions/10000000-0000-4000-8000-000000000021"
+        }
+      ]
+    },
+    orders: {
+      recentTotal: 1,
+      recent: [
+        {
+          id: "10000000-0000-4000-8000-000000000022",
+          status: "paid",
+          productTitle: "Natal consultation",
+          amountMinor: 12000,
+          currency: "RUB",
+          bookingId: "10000000-0000-4000-8000-000000000020",
+          createdAt: "2026-08-20T09:00:00.000Z",
+          updatedAt: "2026-08-20T09:05:00.000Z"
+        }
+      ]
+    },
+    payments: {
+      recentTotal: 1,
+      recent: [
+        {
+          id: "10000000-0000-4000-8000-000000000023",
+          orderId: "10000000-0000-4000-8000-000000000022",
+          status: "captured",
+          amountMinor: 12000,
+          currency: "RUB",
+          createdAt: "2026-08-20T09:01:00.000Z",
+          updatedAt: "2026-08-20T09:05:00.000Z"
         }
       ]
     }

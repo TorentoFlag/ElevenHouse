@@ -74,7 +74,8 @@ describe("ClientsPage", () => {
     expect(http.get).toHaveBeenCalledWith(expect.stringContaining("query=Ada"));
     expect(
       http.get.mock.calls.some(
-        ([path]) => typeof path === "string" && path.includes("query=Ada") && path.includes("cursor=")
+        ([path]) =>
+          typeof path === "string" && path.includes("query=Ada") && path.includes("cursor=")
       )
     ).toBe(false);
   });
@@ -98,7 +99,9 @@ describe("ClientsPage", () => {
     expect(screen.getByText("Источник")).toBeVisible();
     expect(screen.getAllByText("20 авг. 2026 г.").length).toBeGreaterThan(0);
     expect(screen.getByText("Работа с клиентом")).toBeVisible();
-    expect(screen.getByRole("link", { name: /Natal consultation.*21 авг. 2026 г./ })).toHaveAttribute(
+    expect(
+      screen.getByRole("link", { name: /Natal consultation.*21 авг. 2026 г./ })
+    ).toHaveAttribute(
       "href",
       "/calendar?bookingId=41111111-1111-4111-8111-111111111111&startAt=2026-08-21T10%3A00%3A00.000Z"
     );
@@ -106,6 +109,10 @@ describe("ClientsPage", () => {
       "href",
       "/sessions/51111111-1111-4111-8111-111111111111"
     );
+    expect(screen.getByText("Заказы")).toBeVisible();
+    expect(screen.getByText("Paid report")).toBeVisible();
+    expect(screen.getByText("Платежи")).toBeVisible();
+    expect(screen.getByText(/Платеж 61111111/)).toBeVisible();
 
     const overviewTab = screen.getByRole("tab", { name: "Обзор" });
     overviewTab.focus();
@@ -162,7 +169,7 @@ describe("ClientsPage", () => {
 
     renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
 
-    expect(await screen.findByText("Не удалось загрузить записи и сессии")).toBeVisible();
+    expect(await screen.findByText("Не удалось загрузить работу с клиентом")).toBeVisible();
     expect(screen.queryByRole("link", { name: /Natal consultation/ })).not.toBeInTheDocument();
 
     cleanup();
@@ -180,7 +187,7 @@ describe("ClientsPage", () => {
 
     renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
 
-    expect(await screen.findByText("Записей и сессий пока нет")).toBeVisible();
+    expect(await screen.findByText("Работы, заказов и платежей пока нет")).toBeVisible();
     expect(screen.queryByRole("link", { name: /Session review/ })).not.toBeInTheDocument();
   });
 
@@ -195,9 +202,9 @@ describe("ClientsPage", () => {
 
     renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
 
-    expect(await screen.findByRole("alert", { name: "Не удалось загрузить карточку" })).toHaveTextContent(
-      "Не удалось загрузить карточку"
-    );
+    expect(
+      await screen.findByRole("alert", { name: "Не удалось загрузить карточку" })
+    ).toHaveTextContent("Не удалось загрузить карточку");
     expect(screen.getByRole("button", { name: "Назад к списку клиентов" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Назад к списку клиентов" }));
@@ -385,6 +392,35 @@ const adaDetail = {
           href: "/sessions/51111111-1111-4111-8111-111111111111"
         }
       ]
+    },
+    orders: {
+      recentTotal: 1,
+      recent: [
+        {
+          id: "61111111-1111-4111-8111-111111111111",
+          status: "paid",
+          productTitle: "Paid report",
+          amountMinor: 12000,
+          currency: "RUB",
+          bookingId: null,
+          createdAt: "2026-08-20T09:00:00.000Z",
+          updatedAt: "2026-08-20T09:05:00.000Z"
+        }
+      ]
+    },
+    payments: {
+      recentTotal: 1,
+      recent: [
+        {
+          id: "71111111-1111-4111-8111-111111111111",
+          orderId: "61111111-1111-4111-8111-111111111111",
+          status: "captured",
+          amountMinor: 12000,
+          currency: "RUB",
+          createdAt: "2026-08-20T09:01:00.000Z",
+          updatedAt: "2026-08-20T09:05:00.000Z"
+        }
+      ]
     }
   },
   activity: { items: [activityItem], nextCursor: null }
@@ -413,6 +449,14 @@ const emptyServiceWorkDetail = {
     sessions: {
       upcomingTotal: 0,
       upcoming: [],
+      recentTotal: 0,
+      recent: []
+    },
+    orders: {
+      recentTotal: 0,
+      recent: []
+    },
+    payments: {
       recentTotal: 0,
       recent: []
     }

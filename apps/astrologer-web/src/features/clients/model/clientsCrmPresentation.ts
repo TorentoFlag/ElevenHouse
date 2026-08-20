@@ -28,7 +28,10 @@ const readinessLabels = {
     ready: "Ready",
     missing: "Missing"
   }
-} as const satisfies Record<SupportedLocale, Record<ClientCrmReadiness[keyof ClientCrmReadiness], string>>;
+} as const satisfies Record<
+  SupportedLocale,
+  Record<ClientCrmReadiness[keyof ClientCrmReadiness], string>
+>;
 
 const lifecyclePresentationByStatus = {
   new: { tone: "neutral", labels: { ru: "Новый", en: "New" } },
@@ -170,4 +173,15 @@ export function formatClientCrmDateTime(
     timeStyle: "short",
     ...(timeZone ? { timeZone } : {})
   }).format(new Date(value));
+}
+
+export function formatClientCrmMoney(
+  amountMinor: number,
+  currency: string,
+  locale: SupportedLocale = "en"
+): string {
+  return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US", {
+    style: "currency",
+    currency
+  }).format(amountMinor / 100);
 }

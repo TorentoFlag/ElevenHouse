@@ -3,6 +3,8 @@ import type {
   ClientCrmActivityItem,
   ClientBirthDataResponse,
   ClientCrmServiceWorkBookingItem,
+  ClientCrmServiceWorkOrderItem,
+  ClientCrmServiceWorkPaymentItem,
   ClientCrmServiceWorkSessionItem,
   ClientRelatedBirthProfileResponse
 } from "@elevenhouse/contracts";
@@ -14,6 +16,7 @@ import {
   formatClientCrmDate,
   formatClientCrmDisplayName,
   formatClientCrmLifecycle,
+  formatClientCrmMoney,
   formatClientCrmReadiness,
   formatClientCrmSource
 } from "../model/clientsCrmPresentation";
@@ -104,20 +107,36 @@ export function ClientCrmDetailPanel({
               <div className={styles.profileMain}>
                 <div className={styles.profileTitleRow}>
                   <h2 className={styles.profileTitle}>{displayName}</h2>
-                  <span className={styles.badge} data-tone={formatClientCrmLifecycle(client.lifecycle.status, locale).tone}>
+                  <span
+                    className={styles.badge}
+                    data-tone={formatClientCrmLifecycle(client.lifecycle.status, locale).tone}
+                  >
                     {formatClientCrmLifecycle(client.lifecycle.status, locale).label}
                   </span>
                 </div>
                 <div className={styles.profileMeta}>
                   <span>{formatClientCrmSource(client.relationship.source, locale).label}</span>
-                  <span>{copy.facts.status}: {client.relationship.status}</span>
-                  <span>{copy.facts.revision}: {client.lifecycle.revision}</span>
+                  <span>
+                    {copy.facts.status}: {client.relationship.status}
+                  </span>
+                  <span>
+                    {copy.facts.revision}: {client.lifecycle.revision}
+                  </span>
                 </div>
               </div>
               <div className={styles.statStrip} aria-label={copy.facts.relationship}>
-                <Stat label={copy.facts.firstLinkedAt} value={formatClientCrmDate(client.relationship.firstLinkedAt, locale)} />
-                <Stat label={copy.facts.lastLinkedAt} value={formatClientCrmDate(client.relationship.lastLinkedAt, locale)} />
-                <Stat label={copy.facts.lastActivityAt} value={formatClientCrmDate(client.lifecycle.lastActivityAt, locale)} />
+                <Stat
+                  label={copy.facts.firstLinkedAt}
+                  value={formatClientCrmDate(client.relationship.firstLinkedAt, locale)}
+                />
+                <Stat
+                  label={copy.facts.lastLinkedAt}
+                  value={formatClientCrmDate(client.relationship.lastLinkedAt, locale)}
+                />
+                <Stat
+                  label={copy.facts.lastActivityAt}
+                  value={formatClientCrmDate(client.lifecycle.lastActivityAt, locale)}
+                />
               </div>
             </div>
             <ClientCrmTabs activeTab={activeTab} copy={copy} onTabChange={onTabChange} />
@@ -134,7 +153,11 @@ export function ClientCrmDetailPanel({
             ) : activeTab === "birthData" ? (
               <BirthDataPanel birthData={client.birthData} copy={copy} locale={locale} />
             ) : activeTab === "relatedProfiles" ? (
-              <RelatedProfilesPanel copy={copy} profiles={client.relatedBirthProfiles} locale={locale} />
+              <RelatedProfilesPanel
+                copy={copy}
+                profiles={client.relatedBirthProfiles}
+                locale={locale}
+              />
             ) : (
               <ClientCrmActivityTimeline
                 copy={copy}
@@ -178,7 +201,11 @@ function OverviewPanel({
   const lifecycle = formatClientCrmLifecycle(client.lifecycle.status, locale);
   const readiness = {
     birthData: formatClientCrmReadiness("birthData", client.readiness.birthData, locale),
-    relatedProfiles: formatClientCrmReadiness("relatedProfiles", client.readiness.relatedProfiles, locale)
+    relatedProfiles: formatClientCrmReadiness(
+      "relatedProfiles",
+      client.readiness.relatedProfiles,
+      locale
+    )
   };
 
   return (
@@ -186,10 +213,19 @@ function OverviewPanel({
       <section className={styles.card}>
         <div className={styles.kicker}>{copy.facts.relationship}</div>
         <div className={styles.factList}>
-          <Fact label={copy.facts.source} value={formatClientCrmSource(client.relationship.source, locale).label} />
+          <Fact
+            label={copy.facts.source}
+            value={formatClientCrmSource(client.relationship.source, locale).label}
+          />
           <Fact label={copy.facts.status} value={client.relationship.status} />
-          <Fact label={copy.facts.firstLinkedAt} value={formatClientCrmDate(client.relationship.firstLinkedAt, locale)} />
-          <Fact label={copy.facts.lastLinkedAt} value={formatClientCrmDate(client.relationship.lastLinkedAt, locale)} />
+          <Fact
+            label={copy.facts.firstLinkedAt}
+            value={formatClientCrmDate(client.relationship.firstLinkedAt, locale)}
+          />
+          <Fact
+            label={copy.facts.lastLinkedAt}
+            value={formatClientCrmDate(client.relationship.lastLinkedAt, locale)}
+          />
         </div>
       </section>
 
@@ -198,15 +234,27 @@ function OverviewPanel({
         <div className={styles.factList}>
           <Fact
             label={copy.facts.lifecycle}
-            value={<span className={styles.badge} data-tone={lifecycle.tone}>{lifecycle.label}</span>}
+            value={
+              <span className={styles.badge} data-tone={lifecycle.tone}>
+                {lifecycle.label}
+              </span>
+            }
           />
           <Fact
             label={copy.facts.birthData}
-            value={<span className={styles.badge} data-tone={readiness.birthData.tone}>{readiness.birthData.label}</span>}
+            value={
+              <span className={styles.badge} data-tone={readiness.birthData.tone}>
+                {readiness.birthData.label}
+              </span>
+            }
           />
           <Fact
             label={copy.facts.relatedProfiles}
-            value={<span className={styles.badge} data-tone={readiness.relatedProfiles.tone}>{readiness.relatedProfiles.label}</span>}
+            value={
+              <span className={styles.badge} data-tone={readiness.relatedProfiles.tone}>
+                {readiness.relatedProfiles.label}
+              </span>
+            }
           />
         </div>
       </section>
@@ -253,7 +301,9 @@ function ServiceWorkPanel({
     serviceWork.bookings.upcoming.length > 0 ||
     serviceWork.bookings.recent.length > 0 ||
     serviceWork.sessions.upcoming.length > 0 ||
-    serviceWork.sessions.recent.length > 0;
+    serviceWork.sessions.recent.length > 0 ||
+    serviceWork.orders.recent.length > 0 ||
+    serviceWork.payments.recent.length > 0;
 
   return (
     <section className={`${styles.card} ${styles.wideCard}`}>
@@ -284,6 +334,18 @@ function ServiceWorkPanel({
             items={serviceWork.sessions.recent}
             locale={locale}
           />
+          <ServiceWorkGroup
+            title={copy.serviceWork.recentOrders}
+            total={serviceWork.orders.recentTotal}
+            items={serviceWork.orders.recent}
+            locale={locale}
+          />
+          <ServiceWorkGroup
+            title={copy.serviceWork.recentPayments}
+            total={serviceWork.payments.recentTotal}
+            items={serviceWork.payments.recent}
+            locale={locale}
+          />
         </div>
       ) : (
         <div className={styles.emptyStateCompact}>{copy.serviceWork.empty}</div>
@@ -300,7 +362,7 @@ function ServiceWorkGroup({
 }: {
   readonly title: string;
   readonly total: number;
-  readonly items: readonly (ClientCrmServiceWorkBookingItem | ClientCrmServiceWorkSessionItem)[];
+  readonly items: readonly ServiceWorkItem[];
   readonly locale: SupportedLocale;
 }) {
   if (items.length === 0) return null;
@@ -314,15 +376,37 @@ function ServiceWorkGroup({
       <div className={styles.workList}>
         {items.map((item) => (
           <a className={styles.workItem} href={item.href} key={item.id}>
-            <span className={styles.workTitle}>{item.productTitle}</span>
-            <span className={styles.workMeta}>
-              {formatClientCrmDate(getServiceWorkStartAt(item), locale, item.timeZone)} · {item.state}
-            </span>
+            <span className={styles.workTitle}>{getServiceWorkTitle(item, locale)}</span>
+            <span className={styles.workMeta}>{getServiceWorkMeta(item, locale)}</span>
           </a>
         ))}
       </div>
     </div>
   );
+}
+
+type ServiceWorkItem =
+  | ClientCrmServiceWorkBookingItem
+  | ClientCrmServiceWorkSessionItem
+  | ClientCrmServiceWorkOrderItem
+  | ClientCrmServiceWorkPaymentItem;
+
+function getServiceWorkTitle(item: ServiceWorkItem, locale: SupportedLocale): string {
+  if ("productTitle" in item) return item.productTitle;
+  const shortOrderId = item.orderId.slice(0, 8);
+  return `${locale === "ru" ? "Платеж" : "Payment"} ${shortOrderId}`;
+}
+
+function getServiceWorkMeta(item: ServiceWorkItem, locale: SupportedLocale): string {
+  if ("state" in item) {
+    return `${formatClientCrmDate(getServiceWorkStartAt(item), locale, item.timeZone)} · ${item.state}`;
+  }
+
+  return `${formatClientCrmDate(item.createdAt, locale)} · ${item.status} · ${formatClientCrmMoney(
+    item.amountMinor,
+    item.currency,
+    locale
+  )}`;
 }
 
 function getServiceWorkStartAt(
@@ -360,7 +444,10 @@ function BirthDataPanel({
         <Fact label={copy.facts.place} value={birthData.birthPlaceText ?? "—"} />
         <Fact label={copy.facts.timezone} value={birthData.birthTimezone ?? "—"} />
         <Fact label={copy.facts.revision} value={String(birthData.revision)} />
-        <Fact label={copy.facts.updatedAt} value={formatClientCrmDate(birthData.updatedAt, locale)} />
+        <Fact
+          label={copy.facts.updatedAt}
+          value={formatClientCrmDate(birthData.updatedAt, locale)}
+        />
       </div>
     </section>
   );
@@ -400,13 +487,7 @@ function RelatedProfilesPanel({
   );
 }
 
-function Fact({
-  label,
-  value
-}: {
-  readonly label: string;
-  readonly value: ReactNode;
-}) {
+function Fact({ label, value }: { readonly label: string; readonly value: ReactNode }) {
   return (
     <div className={styles.factRow}>
       <span className={styles.factLabel}>{label}</span>

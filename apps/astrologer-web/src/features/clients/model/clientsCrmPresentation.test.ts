@@ -5,6 +5,7 @@ import {
   formatClientCrmDateTime,
   formatClientCrmDisplayName,
   formatClientCrmLifecycle,
+  formatClientCrmMoney,
   formatClientCrmReadiness,
   formatClientCrmSource,
   mapClientCrmLifecycleToPresentation,
@@ -15,10 +16,7 @@ import {
 describe("clientsCrmPresentation", () => {
   it("maps only validated server readiness values to localized presentation state", () => {
     expect(
-      mapClientCrmReadinessToPresentation(
-        { birthData: "missing", relatedProfiles: "ready" },
-        "ru"
-      )
+      mapClientCrmReadinessToPresentation({ birthData: "missing", relatedProfiles: "ready" }, "ru")
     ).toEqual({
       birthData: { label: "Нет данных", tone: "neutral" },
       relatedProfiles: { label: "Готово", tone: "positive" }
@@ -86,8 +84,13 @@ describe("clientsCrmPresentation", () => {
     expect(formatClientCrmDate("2026-08-20T21:30:00.000Z", "ru", "Europe/Moscow")).toBe(
       "21 авг. 2026 г."
     );
-    expect(
-      formatClientCrmDateTime("2026-08-20T21:30:00.000Z", "en", "America/New_York")
-    ).toContain("Aug 20, 2026");
+    expect(formatClientCrmDateTime("2026-08-20T21:30:00.000Z", "en", "America/New_York")).toContain(
+      "Aug 20, 2026"
+    );
+  });
+
+  it("formats explicit minor-unit money without changing the source currency", () => {
+    expect(formatClientCrmMoney(12000, "RUB", "ru")).toContain("120");
+    expect(formatClientCrmMoney(12000, "RUB", "en")).toContain("RUB");
   });
 });

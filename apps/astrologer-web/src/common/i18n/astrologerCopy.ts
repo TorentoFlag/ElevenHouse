@@ -135,6 +135,11 @@ export type AstrologerCopy = {
       unsavedLabel: string;
       publishLabel: string;
       publishingLabel: string;
+      attachFileLabel: string;
+      attachVoiceLabel: string;
+      uploadingAttachmentLabel: string;
+      attachmentErrorLabel: string;
+      removeAttachmentLabel: (fileName: string) => string;
       loadingDraftLabel: string;
       draftLoadErrorLabel: string;
       reloadLatestLabel: string;
@@ -461,6 +466,8 @@ export type ClientsCrmCopy = {
     readonly recentBookings: string;
     readonly upcomingSessions: string;
     readonly recentSessions: string;
+    readonly recentOrders: string;
+    readonly recentPayments: string;
     readonly empty: string;
     readonly unavailable: string;
   };
@@ -766,8 +773,10 @@ export const astrologerCopyByLocale = {
           recentBookings: "Прошедшие записи",
           upcomingSessions: "Ближайшие сессии",
           recentSessions: "Прошедшие сессии",
-          empty: "Записей и сессий пока нет",
-          unavailable: "Не удалось загрузить записи и сессии"
+          recentOrders: "Заказы",
+          recentPayments: "Платежи",
+          empty: "Работы, заказов и платежей пока нет",
+          unavailable: "Не удалось загрузить работу с клиентом"
         },
         missingBirthData: "Данных рождения пока нет",
         emptyRelatedProfiles: "Связанных профилей пока нет",
@@ -845,6 +854,11 @@ export const astrologerCopyByLocale = {
         unsavedLabel: "Есть несохранённые изменения",
         publishLabel: "Опубликовать ответ",
         publishingLabel: "Публикуем…",
+        attachFileLabel: "Прикрепить файл",
+        attachVoiceLabel: "Голос",
+        uploadingAttachmentLabel: "Загружаем вложение…",
+        attachmentErrorLabel: "Не удалось прикрепить файл. Проверьте формат и повторите.",
+        removeAttachmentLabel: (fileName) => `Убрать ${fileName}`,
         loadingDraftLabel: "Загружаем сохранённый черновик…",
         draftLoadErrorLabel: "Не удалось загрузить сохранённый черновик.",
         reloadLatestLabel: "Загрузить актуальную версию",
@@ -1346,7 +1360,8 @@ export const astrologerCopyByLocale = {
         loadingMoreLabel: "Loading more…",
         backToListLabel: "Back to client list",
         selectClientTitle: "Select a client",
-        selectClientDescription: "The profile opens from an active relationship with this astrologer.",
+        selectClientDescription:
+          "The profile opens from an active relationship with this astrologer.",
         tabs: {
           overview: "Overview",
           birthData: "Birth data",
@@ -1376,8 +1391,10 @@ export const astrologerCopyByLocale = {
           recentBookings: "Recent bookings",
           upcomingSessions: "Upcoming sessions",
           recentSessions: "Recent sessions",
-          empty: "There are no bookings or sessions yet",
-          unavailable: "Could not load bookings and sessions"
+          recentOrders: "Orders",
+          recentPayments: "Payments",
+          empty: "There is no client work, orders, or payments yet",
+          unavailable: "Could not load client work"
         },
         missingBirthData: "Birth data is not available yet",
         emptyRelatedProfiles: "There are no related profiles yet",
@@ -1455,6 +1472,11 @@ export const astrologerCopyByLocale = {
         unsavedLabel: "Unsaved changes",
         publishLabel: "Publish reply",
         publishingLabel: "Publishing…",
+        attachFileLabel: "Attach file",
+        attachVoiceLabel: "Voice",
+        uploadingAttachmentLabel: "Uploading attachment…",
+        attachmentErrorLabel: "Could not attach the file. Check the format and retry.",
+        removeAttachmentLabel: (fileName) => `Remove ${fileName}`,
         loadingDraftLabel: "Loading the saved draft…",
         draftLoadErrorLabel: "Could not load the saved draft.",
         reloadLatestLabel: "Load latest",

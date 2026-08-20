@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { createDrizzleClientCrmReadStore, createDrizzleClientStore } from "@elevenhouse/db/clients";
+import { createDrizzleFinanceClientServiceWorkSummaryReader } from "@elevenhouse/db/finance";
 import { createDrizzleBookingClientServiceWorkSummaryReader } from "@elevenhouse/db/scheduling";
 import { createDrizzleSessionClientServiceWorkSummaryReader } from "@elevenhouse/db/sessions";
 import type { AstrologerApiRuntimeConfig } from "../../config/runtime-config";
@@ -20,6 +21,7 @@ import {
   BIRTH_PLACE_SEARCH_PROVIDER,
   CLIENT_BOOKING_SERVICE_WORK_READER,
   CLIENT_CRM_READ_STORE,
+  CLIENT_FINANCE_SERVICE_WORK_READER,
   CLIENT_SESSION_SERVICE_WORK_READER,
   CLIENT_STORE
 } from "./clients.tokens";
@@ -39,9 +41,10 @@ import {
     {
       provide: CLIENT_CRM_READ_STORE,
       useFactory: (postgresRuntime: PostgresRuntimeService, configService: ConfigService) => {
-        const config = configService.getOrThrow<AstrologerApiRuntimeConfig["clientCrm"]>(
-          "astrologerApi.clientCrm"
-        );
+        const config =
+          configService.getOrThrow<AstrologerApiRuntimeConfig["clientCrm"]>(
+            "astrologerApi.clientCrm"
+          );
         return createDrizzleClientCrmReadStore(postgresRuntime.database, config);
       },
       inject: [PostgresRuntimeService, ConfigService]
@@ -56,6 +59,12 @@ import {
       provide: CLIENT_SESSION_SERVICE_WORK_READER,
       useFactory: (postgresRuntime: PostgresRuntimeService) =>
         createDrizzleSessionClientServiceWorkSummaryReader(postgresRuntime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: CLIENT_FINANCE_SERVICE_WORK_READER,
+      useFactory: (postgresRuntime: PostgresRuntimeService) =>
+        createDrizzleFinanceClientServiceWorkSummaryReader(postgresRuntime.database),
       inject: [PostgresRuntimeService]
     },
     {
@@ -85,6 +94,7 @@ import {
     CLIENT_CRM_READ_STORE,
     CLIENT_BOOKING_SERVICE_WORK_READER,
     CLIENT_SESSION_SERVICE_WORK_READER,
+    CLIENT_FINANCE_SERVICE_WORK_READER,
     BIRTH_PLACE_SEARCH_PROVIDER
   ]
 })
