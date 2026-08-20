@@ -13,6 +13,7 @@ const iconByNavigationItemId = {
   clients: <Icon iconName="chat" width={20} height={20} aria-hidden="true" />,
   finance: <Icon iconName="wallet" width={20} height={20} aria-hidden="true" />,
   products: <Icon iconName="box" width={20} height={20} aria-hidden="true" />,
+  reviews: <Icon iconName="star" width={20} height={20} aria-hidden="true" />,
   funnels: <Icon iconName="flow" width={20} height={20} aria-hidden="true" />,
   chartEngine: <Icon iconName="orbit" width={20} height={20} aria-hidden="true" />,
   numerology: <Icon iconName="numerology" width={20} height={20} aria-hidden="true" />,

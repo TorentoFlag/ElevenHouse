@@ -512,6 +512,7 @@ export type AppShellNavigationItemId =
   | "clients"
   | "finance"
   | "products"
+  | "reviews"
   | "funnels"
   | "chartEngine"
   | "numerology"
@@ -704,6 +705,7 @@ export const astrologerCopyByLocale = {
           { id: "finance", title: "Финансы", href: "/finance" },
           { id: "funnels", title: "Воронки", href: "/flows" },
           { id: "products", title: "Продукты", href: "/products" },
+          { id: "reviews", title: "Отзывы", href: "/reviews" },
           { id: "chartEngine", title: "Движок карт", href: "/chart-engine" },
           { id: "numerology", title: "Нумерология", href: "/numerology" },
           { id: "destinyMatrix", title: "Матрица судьбы", href: "/matrix" },
@@ -1334,6 +1336,7 @@ export const astrologerCopyByLocale = {
           { id: "finance", title: "Finance", href: "/finance" },
           { id: "funnels", title: "Flows", href: "/flows" },
           { id: "products", title: "Products", href: "/products" },
+          { id: "reviews", title: "Reviews", href: "/reviews" },
           { id: "chartEngine", title: "Chart engine", href: "/chart-engine" },
           { id: "numerology", title: "Numerology", href: "/numerology" },
           { id: "destinyMatrix", title: "Destiny Matrix", href: "/matrix" },

@@ -56,6 +56,25 @@ describe("AstrologerNavigationDrawer", () => {
     expect(document.body).not.toHaveTextContent("alisa-vega");
     expect(document.body).not.toHaveTextContent("elevenhouse.app");
   });
+
+  it("exposes Reviews as an astrologer workspace section", async () => {
+    render(
+      <MemoryRouter>
+        <QueryClientProvider client={createQueryClient()}>
+          <I18nProvider
+            dictionaries={astrologerCopyByLocale}
+            initialLocale="ru"
+            storage={null}
+            documentElement={null}
+          >
+            <AstrologerNavigationDrawer />
+          </I18nProvider>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("link", { name: "Отзывы" })).toHaveAttribute("href", "/reviews");
+  });
 });
 
 function createQueryClient(): QueryClient {

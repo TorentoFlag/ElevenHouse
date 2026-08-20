@@ -8,6 +8,7 @@ import { NotFoundPage } from "./pages/not-found/NotFoundPage";
 import { MatrixPage } from "./pages/matrix/MatrixPage";
 import { NumerologyPage } from "./pages/numerology/NumerologyPage";
 import { ProductsPage } from "./pages/products/ProductsPage";
+import { ReviewsPage } from "./pages/reviews/ReviewsPage";
 import { ReferencePage } from "./pages/reference/ReferencePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { CalendarPage } from "./pages/calendar/CalendarPage";
@@ -71,6 +72,10 @@ export const astrologerRoutes = [
           {
             path: astrologerRouteContract.protected.products,
             element: <ProductsPage />
+          },
+          {
+            path: astrologerRouteContract.protected.reviews,
+            element: <ReviewsPage />
           },
           {
             path: astrologerRouteContract.protected.reference,

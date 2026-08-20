@@ -13,6 +13,7 @@ export const astrologerRouteContract = {
     finance: "/finance",
     flows: "/flows",
     products: "/products",
+    reviews: "/reviews",
     reference: "/reference",
     inbox: "/inbox",
     numerology: "/numerology",
