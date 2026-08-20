@@ -6,10 +6,13 @@ import type { ReviewAdminDetail } from "@elevenhouse/contracts";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { SystemClock } from "../../common/system-clock.js";
 import { AdminSessionAuthGuard } from "../identity/auth/identity-auth.guard";
+import { CsrfGuard } from "../security/csrf/csrf.guard";
+import { AdminIdempotencyGuard } from "../security/idempotency/admin-idempotency.guard";
 import { AdminReviewsController } from "./reviews.controller";
 import { AdminReviewsService } from "./reviews.service";
-import { ADMIN_REVIEWS_READ_STORE } from "./reviews.tokens";
+import { ADMIN_REVIEWS_COMMAND_STORE, ADMIN_REVIEWS_READ_STORE } from "./reviews.tokens";
 
 const adminUserId = "10000000-0000-4000-8000-000000000201";
 const reviewId = "10000000-0000-4000-8000-000000000202";
@@ -21,13 +24,16 @@ describe("admin reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let receivedCaseRead: unknown;
+  let receivedMessageCommand: unknown;
 
   beforeEach(async () => {
     receivedCaseRead = null;
+    receivedMessageCommand = null;
     const builder = Test.createTestingModule({
       controllers: [AdminReviewsController],
       providers: [
         AdminReviewsService,
+        { provide: SystemClock, useValue: { now: () => new Date("2026-08-20T11:00:00.000Z") } },
         {
           provide: ADMIN_REVIEWS_READ_STORE,
           useValue: {
@@ -60,6 +66,34 @@ describe("admin reviews HTTP API", () => {
                 : null;
             }
           } satisfies Pick<ReviewReadStore, "getAdminReviewDetail" | "getModerationCaseDetail">
+        },
+        {
+          provide: ADMIN_REVIEWS_COMMAND_STORE,
+          useValue: {
+            async createReviewCaseMessage(command: {
+              readonly messageId: string;
+              readonly caseId: string;
+              readonly authorUserId: string | null;
+              readonly authorRole: "moderator";
+              readonly visibility: string;
+              readonly body: string;
+              readonly now: string;
+            }) {
+              receivedMessageCommand = command;
+              return {
+                kind: "created",
+                message: {
+                  messageId: command.messageId,
+                  caseId: command.caseId,
+                  authorUserId: command.authorUserId,
+                  authorRole: command.authorRole,
+                  visibility: command.visibility,
+                  body: command.body,
+                  createdAt: command.now
+                }
+              };
+            }
+          }
         }
       ]
     });
@@ -74,6 +108,8 @@ describe("admin reviews HTTP API", () => {
         return true;
       }
     });
+    builder.overrideGuard(CsrfGuard).useValue({ canActivate: () => true });
+    builder.overrideGuard(AdminIdempotencyGuard).useValue({ canActivate: () => true });
     const moduleRef = await builder.compile();
     app = moduleRef.createNestApplication();
     await app.listen(0, "127.0.0.1");
@@ -119,6 +155,37 @@ describe("admin reviews HTTP API", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("creates moderator case messages", async () => {
+    const response = await fetch(`${baseUrl}/admin/reviews/moderation-cases/${caseId}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-case-message-1"
+      },
+      body: JSON.stringify({
+        visibility: "client_and_moderators",
+        body: "Клиенту: уточните дату получения услуги."
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      authorRole: "moderator",
+      visibility: "client_and_moderators",
+      body: "Клиенту: уточните дату получения услуги.",
+      createdAt: "2026-08-20T11:00:00.000Z"
+    });
+    expect(receivedMessageCommand).toMatchObject({
+      caseId,
+      authorUserId: adminUserId,
+      authorRole: "moderator",
+      visibility: "client_and_moderators",
+      body: "Клиенту: уточните дату получения услуги.",
+      now: "2026-08-20T11:00:00.000Z"
+    });
+    expect(receivedMessageCommand).toHaveProperty("messageId", expect.any(String));
   });
 });
 
