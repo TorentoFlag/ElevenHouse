@@ -307,7 +307,7 @@ const sessionRuntime = createSessionRuntime({
   project: async () => {
     if (!config.sessions.enabled) return;
     const now = new Date();
-    const [, reviewSources] = await Promise.all([
+    const [, bookingReviewSources, astroDiaryReviewSources] = await Promise.all([
       processSessionBookingLifecycleEvents({
         store: sessionLifecycleStore,
         now,
@@ -316,10 +316,17 @@ const sessionRuntime = createSessionRuntime({
       reviewableInstanceReceiptStore.upsertPendingCompletedBookingEvents({
         limit: config.sessions.projectionBatchSize,
         now: now.toISOString()
+      }),
+      reviewableInstanceReceiptStore.upsertPendingAstroDiaryPeriods({
+        limit: config.sessions.projectionBatchSize,
+        now: now.toISOString()
       })
     ]);
-    if (reviewSources.scanned > 0 || reviewSources.rejected > 0) {
-      logger.info("review completed booking sources projected", reviewSources);
+    if (bookingReviewSources.scanned > 0 || bookingReviewSources.rejected > 0) {
+      logger.info("review completed booking sources projected", bookingReviewSources);
+    }
+    if (astroDiaryReviewSources.scanned > 0 || astroDiaryReviewSources.rejected > 0) {
+      logger.info("review AstroDiary period sources projected", astroDiaryReviewSources);
     }
   },
   maintain: () =>
