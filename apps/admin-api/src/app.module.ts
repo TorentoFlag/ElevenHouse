@@ -12,6 +12,7 @@ import { AdminRefundCandidatesModule } from "./modules/refund-candidates/refund-
 import { AdminFinanceAuthorizationsModule } from "./modules/finance-authorizations/finance-authorizations.module";
 import { AdminOnlineWalletRefundsModule } from "./modules/online-wallet-refunds/online-wallet-refunds.module";
 import { AdminChargebackResolutionsModule } from "./modules/chargeback-resolutions/chargeback-resolutions.module";
+import { AdminReviewsModule } from "./modules/reviews/reviews.module";
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { AdminChargebackResolutionsModule } from "./modules/chargeback-resolutio
     AdminRefundCandidatesModule,
     AdminFinanceAuthorizationsModule,
     AdminOnlineWalletRefundsModule,
-    AdminChargebackResolutionsModule
+    AdminChargebackResolutionsModule,
+    AdminReviewsModule
   ]
 })
 export class AppModule {}
