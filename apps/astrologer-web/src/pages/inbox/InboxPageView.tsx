@@ -294,7 +294,9 @@ export function InboxPageView({
               </p>
             )}
             {!isThreadsLoading && !isThreadsError && threads.length === 0 && (
-              <p className={styles.stateText}>{emptyThreadListMessage(activeThreadFilter)}</p>
+              <p className={styles.stateText}>
+                {emptyThreadListMessage(activeThreadFilter, search)}
+              </p>
             )}
             {threads.map((thread) => (
               <button
@@ -719,7 +721,9 @@ function threadTitle(thread: MessagingThread) {
   );
 }
 
-function emptyThreadListMessage(activeFilter: InboxThreadFilter) {
+function emptyThreadListMessage(activeFilter: InboxThreadFilter, search: string) {
+  if (search.trim()) return "Ничего не найдено по запросу.";
+
   if (activeFilter === "telegram") return "Пока нет диалогов Telegram.";
   if (activeFilter === "instagram") return "Пока нет диалогов Instagram.";
   if (activeFilter === "whatsapp") return "Пока нет диалогов WhatsApp.";

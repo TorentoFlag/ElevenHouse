@@ -30,6 +30,18 @@ describe("InboxPageView", () => {
     expect(screen.getByText("Пока нет диалогов WhatsApp.")).toBeInTheDocument();
   });
 
+  it("uses search-aware empty copy when no thread matches the query", () => {
+    renderInbox({
+      threads: [],
+      selectedThreadId: null,
+      selectedThreadResponse: null,
+      search: "марина"
+    });
+
+    expect(screen.getByText("Ничего не найдено по запросу.")).toBeInTheDocument();
+    expect(screen.queryByText("Пока нет диалогов. Подключите канал.")).not.toBeInTheDocument();
+  });
+
   it("exposes mobile pane state and calls back from the mobile back button", () => {
     const onMobileBack = vi.fn();
     const { container } = renderInbox({

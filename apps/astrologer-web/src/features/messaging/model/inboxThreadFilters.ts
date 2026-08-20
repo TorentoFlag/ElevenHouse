@@ -22,6 +22,7 @@ export function filterInboxThreads(
 
     const identity = thread.primaryIdentity;
     return [
+      thread.linkedClient?.displayName,
       identity?.displayName,
       identity?.username,
       identity?.providerChatId,
