@@ -148,6 +148,42 @@ describe("ClientsPage", () => {
     expect(document.querySelector("[data-chat-bubble]")).not.toBeInTheDocument();
   });
 
+  it("renders service-work unavailable and empty states without fake module data", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: unavailableServiceWorkDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    expect(await screen.findByText("Не удалось загрузить записи и сессии")).toBeVisible();
+    expect(screen.queryByRole("link", { name: /Natal consultation/ })).not.toBeInTheDocument();
+
+    cleanup();
+    http.get.mockReset();
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: emptyServiceWorkDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    expect(await screen.findByText("Записей и сессий пока нет")).toBeVisible();
+    expect(screen.queryByRole("link", { name: /Session review/ })).not.toBeInTheDocument();
+  });
+
   it("renders detail failure and mobile back-to-list behavior", async () => {
     http.get.mockImplementation(async (path: string) => {
       if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
@@ -352,4 +388,33 @@ const adaDetail = {
     }
   },
   activity: { items: [activityItem], nextCursor: null }
+} as const satisfies AstrologerClientCrmDetail;
+
+const unavailableServiceWorkDetail = {
+  ...adaDetail,
+  serviceWork: {
+    status: "unavailable",
+    source: "bookings",
+    code: "summary_unavailable",
+    retryable: true
+  }
+} as const satisfies AstrologerClientCrmDetail;
+
+const emptyServiceWorkDetail = {
+  ...adaDetail,
+  serviceWork: {
+    status: "available",
+    bookings: {
+      upcomingTotal: 0,
+      upcoming: [],
+      recentTotal: 0,
+      recent: []
+    },
+    sessions: {
+      upcomingTotal: 0,
+      upcoming: [],
+      recentTotal: 0,
+      recent: []
+    }
+  }
 } as const satisfies AstrologerClientCrmDetail;

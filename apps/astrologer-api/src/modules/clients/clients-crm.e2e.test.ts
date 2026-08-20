@@ -174,6 +174,25 @@ describe("Clients CRM HTTP API", () => {
     );
   });
 
+  it("keeps service-work source failures observable in the CRM detail response", async () => {
+    bookingServiceWorkReader.listClientServiceWorkBookings.mockRejectedValueOnce(
+      new Error("booking reader unavailable")
+    );
+
+    const response = await request(`/clients/crm/${clientUserId}`, { role: "astrologer" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.client.serviceWork).toEqual({
+      status: "unavailable",
+      source: "bookings",
+      code: "summary_unavailable",
+      retryable: true
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /messageBody|providerPayload|providerRoom|composer/i
+    );
+  });
+
   it("returns only the redacted CRM activity page", async () => {
     const response = await request(`/clients/crm/${clientUserId}/activity`, { role: "astrologer" });
 
