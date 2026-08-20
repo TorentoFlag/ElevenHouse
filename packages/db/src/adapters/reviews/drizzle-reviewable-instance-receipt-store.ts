@@ -7,8 +7,16 @@ import { planReviewableInstanceFromReceipt } from "@elevenhouse/domain";
 import { and, eq } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
-import { clientAstrologerRelationships, orders, products, reviewableInstances } from "../../schema";
+import {
+  bookingLifecycleEvents,
+  bookings,
+  clientAstrologerRelationships,
+  orders,
+  products,
+  reviewableInstances
+} from "../../schema";
 
+type ReviewReceiptTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
 
 export type ReviewableInstanceReceiptCommandInput = {
@@ -56,6 +64,8 @@ export type UpsertReviewableInstanceFromReceiptResult =
       readonly kind: "rejected";
       readonly reason:
         | "relationship_not_active"
+        | "booking_completion_not_found"
+        | "booking_not_completed"
         | "product_not_found"
         | "order_not_found"
         | "order_identity_mismatch"
@@ -69,6 +79,11 @@ export type DrizzleReviewableInstanceReceiptStore = {
   readonly upsertFromReceipt: (
     input: ReviewableInstanceReceiptCommandInput
   ) => Promise<UpsertReviewableInstanceFromReceiptResult>;
+  readonly upsertFromCompletedBookingEvent: (input: {
+    readonly bookingLifecycleEventId: string;
+    readonly nextReviewableInstanceId: string;
+    readonly now: string;
+  }) => Promise<UpsertReviewableInstanceFromReceiptResult>;
 };
 
 export function createDrizzleReviewableInstanceReceiptStore(
@@ -76,112 +91,180 @@ export function createDrizzleReviewableInstanceReceiptStore(
 ): DrizzleReviewableInstanceReceiptStore {
   return {
     upsertFromReceipt: (input) =>
+      database.transaction((transaction) => upsertReceiptInTransaction(transaction, input)),
+    upsertFromCompletedBookingEvent: (input) =>
       database.transaction(async (transaction) => {
-        const existing = await readBySource(transaction, input);
-        if (existing) return { kind: "existing", instance: toRecord(existing) };
-
-        const [relationship] = await transaction
+        const [row] = await transaction
           .select({
-            id: clientAstrologerRelationships.id,
-            status: clientAstrologerRelationships.status
+            eventId: bookingLifecycleEvents.id,
+            eventKind: bookingLifecycleEvents.eventKind,
+            revision: bookingLifecycleEvents.revision,
+            occurredAt: bookingLifecycleEvents.occurredAt,
+            bookingId: bookings.id,
+            bookingState: bookings.state,
+            bookingLifecycleRevision: bookings.lifecycleRevision,
+            clientUserId: bookings.clientUserId,
+            astrologerUserId: bookings.ownerUserId,
+            productId: bookings.productId,
+            productTitleSnapshot: bookings.productTitleSnapshot,
+            durationMinutesSnapshot: bookings.durationMinutesSnapshot
           })
-          .from(clientAstrologerRelationships)
+          .from(bookingLifecycleEvents)
+          .innerJoin(
+            bookings,
+            and(
+              eq(bookings.id, bookingLifecycleEvents.bookingId),
+              eq(bookings.ownerUserId, bookingLifecycleEvents.ownerUserId)
+            )
+          )
           .where(
             and(
-              eq(clientAstrologerRelationships.clientUserId, input.clientUserId),
-              eq(clientAstrologerRelationships.astrologerUserId, input.astrologerUserId)
+              eq(bookingLifecycleEvents.id, input.bookingLifecycleEventId),
+              eq(bookingLifecycleEvents.eventKind, "completed")
             )
           )
           .limit(1);
 
-        if (input.productId) {
-          const [product] = await transaction
-            .select({ id: products.id })
-            .from(products)
-            .where(
-              and(
-                eq(products.id, input.productId),
-                eq(products.ownerUserId, input.astrologerUserId)
-              )
-            )
-            .limit(1);
-          if (!product) return { kind: "rejected", reason: "product_not_found" };
+        if (!row) return { kind: "rejected", reason: "booking_completion_not_found" };
+        if (row.bookingState !== "completed" || row.bookingLifecycleRevision !== row.revision) {
+          return { kind: "rejected", reason: "booking_not_completed" };
         }
 
-        if (input.orderId) {
-          const [order] = await transaction
-            .select({
-              id: orders.id,
-              clientUserId: orders.clientUserId,
-              astrologerUserId: orders.astrologerUserId,
-              productId: orders.productId,
-              status: orders.status
-            })
-            .from(orders)
-            .where(eq(orders.id, input.orderId))
-            .limit(1);
-          if (!order) return { kind: "rejected", reason: "order_not_found" };
-          if (
-            order.clientUserId !== input.clientUserId ||
-            order.astrologerUserId !== input.astrologerUserId ||
-            (input.productId !== null && order.productId !== input.productId)
-          ) {
-            return { kind: "rejected", reason: "order_identity_mismatch" };
-          }
-          if (order.status !== "paid" && order.status !== "fulfilled") {
-            return { kind: "rejected", reason: "order_not_reviewable" };
-          }
-        }
-
-        const planned = planReviewableInstanceFromReceipt({
-          ...input,
-          relationship:
-            relationship && relationship.status === "active"
-              ? { id: relationship.id, status: "active" }
-              : relationship
-                ? { id: relationship.id, status: relationship.status as "archived" | "blocked" }
-                : null
-        });
-        if (planned.kind === "rejected") return planned;
-
-        const [created] = await transaction
-          .insert(reviewableInstances)
-          .values({
-            id: planned.instance.id,
-            astrologerUserId: planned.instance.astrologerUserId,
-            clientUserId: planned.instance.clientUserId,
-            relationshipId: planned.instance.relationshipId,
-            kind: planned.instance.kind,
-            status: planned.instance.status,
-            windowPolicy: planned.instance.windowPolicy,
-            sourceResourceKey: planned.instance.sourceResourceKey,
-            productId: planned.instance.productId,
-            orderId: planned.instance.orderId,
-            bookingId: planned.instance.bookingId,
-            titleSnapshot: planned.instance.titleSnapshot,
-            contextLabelSnapshot: planned.instance.contextLabelSnapshot,
-            receivedAt: new Date(planned.instance.receivedAt),
-            reviewWindowClosesAt: new Date(planned.instance.reviewWindowClosesAt),
-            blockedReasonCode: planned.instance.blockedReasonCode,
-            createdAt: new Date(input.now),
-            updatedAt: new Date(input.now)
+        const [order] = await transaction
+          .select({
+            id: orders.id,
+            status: orders.status
           })
-          .onConflictDoNothing()
-          .returning();
-
-        if (created) return { kind: "created", instance: toRecord(created) };
-
-        const afterConflict = await readBySource(transaction, input);
-        if (!afterConflict) {
-          throw new Error("Expected reviewable instance source conflict to be readable");
+          .from(orders)
+          .where(eq(orders.bookingId, row.bookingId))
+          .limit(1);
+        if (order && order.status !== "paid" && order.status !== "fulfilled") {
+          return { kind: "rejected", reason: "order_not_reviewable" };
         }
-        return { kind: "existing", instance: toRecord(afterConflict) };
+
+        return upsertReceiptInTransaction(transaction, {
+          nextReviewableInstanceId: input.nextReviewableInstanceId,
+          clientUserId: row.clientUserId,
+          astrologerUserId: row.astrologerUserId,
+          kind: "booking",
+          sourceResourceKey: `booking:${row.bookingId}`,
+          productId: row.productId,
+          orderId: order?.id ?? null,
+          bookingId: row.bookingId,
+          titleSnapshot: row.productTitleSnapshot,
+          contextLabelSnapshot: `${row.durationMinutesSnapshot} минут`,
+          receivedAt: row.occurredAt.toISOString(),
+          windowPolicy: "standard_14_days_after_receipt",
+          now: input.now
+        });
       })
   };
 }
 
+async function upsertReceiptInTransaction(
+  transaction: ReviewReceiptTransaction,
+  input: ReviewableInstanceReceiptCommandInput
+): Promise<UpsertReviewableInstanceFromReceiptResult> {
+  const existing = await readBySource(transaction, input);
+  if (existing) return { kind: "existing", instance: toRecord(existing) };
+
+  const [relationship] = await transaction
+    .select({
+      id: clientAstrologerRelationships.id,
+      status: clientAstrologerRelationships.status
+    })
+    .from(clientAstrologerRelationships)
+    .where(
+      and(
+        eq(clientAstrologerRelationships.clientUserId, input.clientUserId),
+        eq(clientAstrologerRelationships.astrologerUserId, input.astrologerUserId)
+      )
+    )
+    .limit(1);
+
+  if (input.productId) {
+    const [product] = await transaction
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(eq(products.id, input.productId), eq(products.ownerUserId, input.astrologerUserId))
+      )
+      .limit(1);
+    if (!product) return { kind: "rejected", reason: "product_not_found" };
+  }
+
+  if (input.orderId) {
+    const [order] = await transaction
+      .select({
+        id: orders.id,
+        clientUserId: orders.clientUserId,
+        astrologerUserId: orders.astrologerUserId,
+        productId: orders.productId,
+        status: orders.status
+      })
+      .from(orders)
+      .where(eq(orders.id, input.orderId))
+      .limit(1);
+    if (!order) return { kind: "rejected", reason: "order_not_found" };
+    if (
+      order.clientUserId !== input.clientUserId ||
+      order.astrologerUserId !== input.astrologerUserId ||
+      (input.productId !== null && order.productId !== input.productId)
+    ) {
+      return { kind: "rejected", reason: "order_identity_mismatch" };
+    }
+    if (order.status !== "paid" && order.status !== "fulfilled") {
+      return { kind: "rejected", reason: "order_not_reviewable" };
+    }
+  }
+
+  const planned = planReviewableInstanceFromReceipt({
+    ...input,
+    relationship:
+      relationship && relationship.status === "active"
+        ? { id: relationship.id, status: "active" }
+        : relationship
+          ? { id: relationship.id, status: relationship.status as "archived" | "blocked" }
+          : null
+  });
+  if (planned.kind === "rejected") return planned;
+
+  const [created] = await transaction
+    .insert(reviewableInstances)
+    .values({
+      id: planned.instance.id,
+      astrologerUserId: planned.instance.astrologerUserId,
+      clientUserId: planned.instance.clientUserId,
+      relationshipId: planned.instance.relationshipId,
+      kind: planned.instance.kind,
+      status: planned.instance.status,
+      windowPolicy: planned.instance.windowPolicy,
+      sourceResourceKey: planned.instance.sourceResourceKey,
+      productId: planned.instance.productId,
+      orderId: planned.instance.orderId,
+      bookingId: planned.instance.bookingId,
+      titleSnapshot: planned.instance.titleSnapshot,
+      contextLabelSnapshot: planned.instance.contextLabelSnapshot,
+      receivedAt: new Date(planned.instance.receivedAt),
+      reviewWindowClosesAt: new Date(planned.instance.reviewWindowClosesAt),
+      blockedReasonCode: planned.instance.blockedReasonCode,
+      createdAt: new Date(input.now),
+      updatedAt: new Date(input.now)
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (created) return { kind: "created", instance: toRecord(created) };
+
+  const afterConflict = await readBySource(transaction, input);
+  if (!afterConflict) {
+    throw new Error("Expected reviewable instance source conflict to be readable");
+  }
+  return { kind: "existing", instance: toRecord(afterConflict) };
+}
+
 async function readBySource(
-  database: Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0],
+  database: ReviewReceiptTransaction,
   input: Pick<
     ReviewableInstanceReceiptCommandInput,
     "astrologerUserId" | "clientUserId" | "kind" | "sourceResourceKey"

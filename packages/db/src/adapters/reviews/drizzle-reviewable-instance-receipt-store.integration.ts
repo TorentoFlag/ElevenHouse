@@ -6,7 +6,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CreateFinanceOrderRecordInput } from "@elevenhouse/domain";
 
 import type { PostgresRuntime } from "../../runtime";
-import { reviewableInstances } from "../../schema";
+import {
+  availabilitySchedules,
+  bookingLifecycleEvents,
+  bookings,
+  clientAstrologerRelationships,
+  products,
+  reviewableInstances,
+  scheduleReservations,
+  users
+} from "../../schema";
 import {
   createClientSubscriptionIntegrationDatabase,
   seedClientSubscriptionOrderPrerequisites,
@@ -87,6 +96,46 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
       .from(reviewableInstances)
       .where(eq(reviewableInstances.sourceResourceKey, sourceResourceKey));
     expect(Number(rowCount?.value ?? 0)).toBe(1);
+  });
+
+  it("creates a booking reviewable instance from an immutable completed booking event", async () => {
+    const fixture = await seedCompletedBookingFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    const created = await store.upsertFromCompletedBookingEvent({
+      bookingLifecycleEventId: fixture.completedEventId,
+      nextReviewableInstanceId: randomUUID(),
+      now: "2026-08-20T10:01:00.000Z"
+    });
+
+    expect(created).toMatchObject({
+      kind: "created",
+      instance: {
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        relationshipId: fixture.relationshipId,
+        kind: "booking",
+        sourceResourceKey: `booking:${fixture.bookingId}`,
+        bookingId: fixture.bookingId,
+        productId: fixture.productId,
+        orderId: null,
+        titleSnapshot: "Natal consultation",
+        contextLabelSnapshot: "60 минут",
+        receivedAt: "2026-08-19T11:00:00.000Z",
+        reviewWindowClosesAt: "2026-09-02T11:00:00.000Z"
+      }
+    });
+
+    await expect(
+      store.upsertFromCompletedBookingEvent({
+        bookingLifecycleEventId: fixture.completedEventId,
+        nextReviewableInstanceId: randomUUID(),
+        now: "2026-08-20T10:02:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "existing",
+      instance: { id: created.kind === "created" ? created.instance.id : "" }
+    });
   });
 
   it("allows several received products within the same client relationship", async () => {
@@ -178,6 +227,160 @@ async function seedPaidOrderFixture(runtime: PostgresRuntime): Promise<OrderFixt
 
 async function seedPendingOrderFixture(runtime: PostgresRuntime): Promise<OrderFixture> {
   return seedOrderFixture(runtime, "pending_payment");
+}
+
+type CompletedBookingFixture = {
+  readonly clientUserId: string;
+  readonly astrologerUserId: string;
+  readonly relationshipId: string;
+  readonly productId: string;
+  readonly bookingId: string;
+  readonly completedEventId: string;
+};
+
+async function seedCompletedBookingFixture(
+  runtime: PostgresRuntime
+): Promise<CompletedBookingFixture> {
+  const clientUserId = randomUUID();
+  const astrologerUserId = randomUUID();
+  const relationshipId = randomUUID();
+  const productId = randomUUID();
+  const scheduleId = randomUUID();
+  const bookingId = randomUUID();
+  const reservationId = randomUUID();
+  const confirmedEventId = randomUUID();
+  const completedEventId = randomUUID();
+  const now = new Date("2026-08-20T09:00:00.000Z");
+  const serviceStartAt = new Date("2026-08-19T10:00:00.000Z");
+  const serviceEndAt = new Date("2026-08-19T11:00:00.000Z");
+
+  await runtime.database.transaction(async (transaction) => {
+    await transaction.insert(users).values([{ id: clientUserId }, { id: astrologerUserId }]);
+    await transaction.insert(clientAstrologerRelationships).values({
+      id: relationshipId,
+      clientUserId,
+      astrologerUserId,
+      source: "booking",
+      status: "active",
+      firstLinkedAt: now,
+      lastLinkedAt: now,
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(products).values({
+      id: productId,
+      ownerUserId: astrologerUserId,
+      type: "single",
+      status: "active",
+      revision: 1,
+      title: "Natal consultation",
+      priceMinor: 12000,
+      currency: "RUB",
+      executionMode: "live",
+      paymentModel: "once",
+      durationMinutes: 60,
+      participantMode: "solo",
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(availabilitySchedules).values({
+      id: scheduleId,
+      ownerUserId: astrologerUserId,
+      name: "Reviews completed booking",
+      timeZone: "Europe/Moscow",
+      isDefault: true,
+      version: 1,
+      startIntervalMinutes: 60,
+      bookingHorizonDays: 365,
+      createdAt: now,
+      updatedAt: now
+    });
+    await transaction.insert(scheduleReservations).values({
+      id: reservationId,
+      ownerUserId: astrologerUserId,
+      scheduleId,
+      kind: "booking",
+      lifecycle: "active",
+      serviceStartAt,
+      serviceEndAt,
+      occupiedStartAt: serviceStartAt,
+      occupiedEndAt: serviceEndAt,
+      sourceAggregateId: bookingId,
+      createdAt: serviceStartAt,
+      updatedAt: serviceStartAt
+    });
+    await transaction.insert(bookings).values({
+      id: bookingId,
+      ownerUserId: astrologerUserId,
+      clientUserId,
+      productId,
+      reservationId,
+      source: "manual",
+      state: "completed",
+      lifecycleRevision: 2,
+      holdExpiresAt: null,
+      serviceStartAt,
+      serviceEndAt,
+      productTitleSnapshot: "Natal consultation",
+      durationMinutesSnapshot: 60,
+      deliveryFormatSnapshot: "video",
+      priceMinorSnapshot: 12000,
+      currencySnapshot: "RUB",
+      timeZoneSnapshot: "Europe/Moscow",
+      policySnapshot: { bufferBeforeMinutes: 0, bufferAfterMinutes: 0, minimumNoticeMinutes: 0 },
+      clientDataRequirementsSnapshot: {
+        schemaVersion: "booking-client-data-requirements.v1",
+        executionMode: "live",
+        participantMode: "solo",
+        requiredClientData: [],
+        methods: []
+      },
+      createdAt: serviceStartAt,
+      updatedAt: serviceEndAt
+    });
+    await transaction.insert(bookingLifecycleEvents).values([
+      {
+        id: confirmedEventId,
+        bookingId,
+        ownerUserId: astrologerUserId,
+        revision: 1,
+        eventKind: "confirmed",
+        actorKind: "system",
+        actorUserId: null,
+        reasonCode: null,
+        beforeStartAt: null,
+        beforeEndAt: null,
+        beforeTimeZone: null,
+        afterStartAt: serviceStartAt,
+        afterEndAt: serviceEndAt,
+        afterTimeZone: "Europe/Moscow",
+        canonicalDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        occurredAt: serviceStartAt,
+        createdAt: serviceStartAt
+      },
+      {
+        id: completedEventId,
+        bookingId,
+        ownerUserId: astrologerUserId,
+        revision: 2,
+        eventKind: "completed",
+        actorKind: "system",
+        actorUserId: null,
+        reasonCode: null,
+        beforeStartAt: serviceStartAt,
+        beforeEndAt: serviceEndAt,
+        beforeTimeZone: "Europe/Moscow",
+        afterStartAt: null,
+        afterEndAt: null,
+        afterTimeZone: null,
+        canonicalDigest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        occurredAt: serviceEndAt,
+        createdAt: serviceEndAt
+      }
+    ]);
+  });
+
+  return { clientUserId, astrologerUserId, relationshipId, productId, bookingId, completedEventId };
 }
 
 async function seedOrderFixture(
