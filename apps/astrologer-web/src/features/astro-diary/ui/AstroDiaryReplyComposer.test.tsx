@@ -16,9 +16,14 @@ describe("AstroDiaryReplyComposer", () => {
       <ControlledComposer
         copy={astrologerCopyByLocale.en.astroDiary}
         draft={null}
+        attachments={[]}
+        attachmentError={false}
+        isUploadingAttachment={false}
         error={null}
         isSaving={false}
         isPublishing={false}
+        onAttachFile={vi.fn()}
+        onRemoveAttachment={vi.fn()}
         onReloadLatest={vi.fn()}
         onSave={onSave}
         onPublish={vi.fn()}
@@ -31,7 +36,44 @@ describe("AstroDiaryReplyComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
 
     expect(textbox).toHaveFocus();
-    expect(onSave).toHaveBeenCalledWith("A considered answer");
+    expect(onSave).toHaveBeenCalledWith("A considered answer", []);
+  });
+
+  it("submits uploaded attachment ids with the reply draft", () => {
+    const onSave = vi.fn();
+    const onAttachFile = vi.fn();
+    render(
+      <ControlledComposer
+        copy={astrologerCopyByLocale.en.astroDiary}
+        draft={null}
+        attachments={[
+          {
+            mediaId: "21111111-1111-4111-8111-111111111111",
+            fileName: "voice.ogg",
+            purpose: "astro_diary_voice"
+          }
+        ]}
+        attachmentError={false}
+        isUploadingAttachment={false}
+        error={null}
+        isSaving={false}
+        isPublishing={false}
+        onAttachFile={onAttachFile}
+        onRemoveAttachment={vi.fn()}
+        onReloadLatest={vi.fn()}
+        onSave={onSave}
+        onPublish={vi.fn()}
+      />
+    );
+
+    const textbox = screen.getByRole("textbox", { name: "Reply text" });
+    fireEvent.change(textbox, { target: { value: "Reply with a voice note" } });
+    expect(screen.getByText("voice.ogg")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    expect(onSave).toHaveBeenCalledWith("Reply with a voice note", [
+      "21111111-1111-4111-8111-111111111111"
+    ]);
   });
 
   it("publishes only an acknowledged server draft and announces typed errors", () => {
@@ -46,11 +88,16 @@ describe("AstroDiaryReplyComposer", () => {
           attachmentIds: []
         }}
         body="Saved answer"
+        attachments={[]}
+        attachmentError={false}
+        isUploadingAttachment={false}
         error={null}
         isSaving={false}
         isPublishing={false}
         onReloadLatest={vi.fn()}
         onBodyChange={vi.fn()}
+        onAttachFile={vi.fn()}
+        onRemoveAttachment={vi.fn()}
         onSave={vi.fn()}
         onPublish={onPublish}
       />
@@ -69,11 +116,16 @@ describe("AstroDiaryReplyComposer", () => {
           attachmentIds: []
         }}
         body="Saved answer"
+        attachments={[]}
+        attachmentError={false}
+        isUploadingAttachment={false}
         error="stale"
         isSaving={false}
         isPublishing={false}
         onReloadLatest={vi.fn()}
         onBodyChange={vi.fn()}
+        onAttachFile={vi.fn()}
+        onRemoveAttachment={vi.fn()}
         onSave={vi.fn()}
         onPublish={onPublish}
       />
@@ -96,11 +148,16 @@ describe("AstroDiaryReplyComposer", () => {
           attachmentIds: []
         }}
         body="Saved answer"
+        attachments={[]}
+        attachmentError={false}
+        isUploadingAttachment={false}
         error="no_obligation"
         isSaving={false}
         isPublishing={false}
         onReloadLatest={onReloadLatest}
         onBodyChange={vi.fn()}
+        onAttachFile={vi.fn()}
+        onRemoveAttachment={vi.fn()}
         onSave={vi.fn()}
         onPublish={vi.fn()}
       />

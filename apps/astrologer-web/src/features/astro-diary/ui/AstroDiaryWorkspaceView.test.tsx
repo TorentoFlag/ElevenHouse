@@ -53,6 +53,9 @@ describe("AstroDiaryWorkspaceView", () => {
           loadMoreTimelineError: false,
           replyDraft: null,
           replyBody: "",
+          replyAttachments: [],
+          replyAttachmentError: false,
+          isUploadingReplyAttachment: false,
           replyDraftStatus: "ready",
           replyError: null,
           isSavingReply: false,
@@ -64,6 +67,8 @@ describe("AstroDiaryWorkspaceView", () => {
           onLoadMoreTimeline: vi.fn(),
           onOpenReply: vi.fn(),
           onReplyBodyChange: vi.fn(),
+          onAttachReplyFile: vi.fn(),
+          onRemoveReplyAttachment: vi.fn(),
           onRetryReplyDraft: vi.fn(),
           onSaveReply: vi.fn(),
           onPublishReply: vi.fn(),
@@ -94,6 +99,9 @@ describe("AstroDiaryWorkspaceView", () => {
           loadMoreTimelineError: false,
           replyDraft: null,
           replyBody: "",
+          replyAttachments: [],
+          replyAttachmentError: false,
+          isUploadingReplyAttachment: false,
           replyDraftStatus: "ready",
           replyError: null,
           isSavingReply: false,
@@ -105,6 +113,8 @@ describe("AstroDiaryWorkspaceView", () => {
           onLoadMoreTimeline: vi.fn(),
           onOpenReply: vi.fn(),
           onReplyBodyChange: vi.fn(),
+          onAttachReplyFile: vi.fn(),
+          onRemoveReplyAttachment: vi.fn(),
           onRetryReplyDraft: vi.fn(),
           onSaveReply: vi.fn(),
           onPublishReply: vi.fn(),
@@ -125,10 +135,15 @@ describe("AstroDiaryWorkspaceView", () => {
         copy={astrologerCopyByLocale.ru.astroDiary}
         draft={null}
         body="Ответ"
+        attachments={[]}
+        attachmentError={false}
+        isUploadingAttachment={false}
         error="read_only"
         isSaving={false}
         isPublishing={false}
         onBodyChange={vi.fn()}
+        onAttachFile={vi.fn()}
+        onRemoveAttachment={vi.fn()}
         onReloadLatest={vi.fn()}
         onSave={vi.fn()}
         onPublish={vi.fn()}

@@ -4,6 +4,7 @@ import {
   getAstroDiaryJournal,
   getAstroDiaryReplyDraft,
   publishAstroDiaryReplyDraft,
+  uploadAstroDiaryMediaFile,
   updateAstroDiaryReplyDraft
 } from "./astroDiaryApi";
 
@@ -103,6 +104,63 @@ describe("astroDiaryApi paid-core commands", () => {
       `/astro-diary/journals/${journalId}/astrologer-reply/drafts/${draftId}/publish`,
       { expectedJournalVersion: 6, expectedDraftVersion: 2 },
       { csrf: true, headers: { "idempotency-key": "astro-diary:publish:one" } }
+    );
+  });
+
+  it("uploads astrologer journal media through the journal-scoped private media flow", async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    post
+      .mockResolvedValueOnce({
+        mediaId: attachmentId,
+        status: "uploading",
+        upload: {
+          method: "PUT",
+          url: "https://storage.local/astro-diary/reply.ogg",
+          headers: { "content-type": "audio/ogg" },
+          expiresAt: "2026-08-20T10:00:00.000Z"
+        }
+      })
+      .mockResolvedValueOnce({
+        mediaId: attachmentId,
+        status: "ready",
+        purpose: "astro_diary_voice",
+        mimeType: "audio/ogg",
+        sizeBytes: 5,
+        checksumSha256: null,
+        width: null,
+        height: null
+      });
+
+    await expect(
+      uploadAstroDiaryMediaFile({
+        journalId,
+        purpose: "astro_diary_voice",
+        file: new File(["voice"], "reply.ogg", { type: "audio/ogg" }),
+        fetcher
+      })
+    ).resolves.toMatchObject({ mediaId: attachmentId, status: "ready" });
+
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      `/astro-diary/journals/${journalId}/media/upload-intents`,
+      {
+        purpose: "astro_diary_voice",
+        fileName: "reply.ogg",
+        mimeType: "audio/ogg",
+        sizeBytes: 5
+      },
+      { csrf: true }
+    );
+    expect(fetcher).toHaveBeenCalledWith("https://storage.local/astro-diary/reply.ogg", {
+      method: "PUT",
+      headers: { "content-type": "audio/ogg" },
+      body: expect.any(File)
+    });
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      `/astro-diary/journals/${journalId}/media/${attachmentId}/complete`,
+      {},
+      { csrf: true }
     );
   });
 });

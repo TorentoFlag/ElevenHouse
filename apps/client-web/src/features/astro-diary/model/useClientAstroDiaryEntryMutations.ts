@@ -25,6 +25,7 @@ export type SaveClientAstroDiaryEntryInput = Readonly<{
   expectedJournalVersion: number;
   body: string;
   moodId: AstroDiaryMoodId | null;
+  attachmentIds: readonly string[];
   draft: ClientAstroDiaryEntryDraftState | null;
 }>;
 
@@ -46,7 +47,7 @@ export function useClientAstroDiaryEntryMutations() {
         expectedDraftVersion: input.draft?.version ?? null,
         body: input.body,
         moodId: input.moodId,
-        attachmentIds: input.draft?.attachmentIds ?? []
+        attachmentIds: input.attachmentIds
       };
       const idempotencyKey = attempts.acquire("save", intent);
       const result = input.draft
@@ -58,7 +59,7 @@ export function useClientAstroDiaryEntryMutations() {
               expectedJournalVersion: input.expectedJournalVersion,
               expectedDraftVersion: input.draft.version,
               body: input.body,
-              attachmentIds: [...input.draft.attachmentIds],
+              attachmentIds: [...input.attachmentIds],
               moodId: input.moodId
             }
           })
@@ -68,7 +69,7 @@ export function useClientAstroDiaryEntryMutations() {
             body: {
               expectedJournalVersion: input.expectedJournalVersion,
               body: input.body,
-              attachmentIds: [],
+              attachmentIds: [...input.attachmentIds],
               moodId: input.moodId
             }
           });
@@ -78,7 +79,7 @@ export function useClientAstroDiaryEntryMutations() {
           version: result.version,
           body: input.body,
           moodId: input.moodId,
-          attachmentIds: input.draft?.attachmentIds ?? []
+          attachmentIds: input.attachmentIds
         },
         idempotencyKey
       };

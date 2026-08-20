@@ -12,6 +12,7 @@
 .openButton,
 .secondaryButton,
 .publishButton,
+.attachmentButton,
 .error button {
   display: inline-flex;
   min-height: 44px;
@@ -53,6 +54,7 @@
 .title,
 .saveStatus,
 .error p,
+.attachmentError,
 .textareaLabel,
 .characterCount {
   margin: 0;
@@ -80,22 +82,31 @@
   font-size: 12px;
 }
 
-.error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.error,
+.attachmentError {
   border: 1px solid rgb(244 196 48 / 0.42);
   border-radius: 14px;
-  padding: 10px 12px;
   background: rgb(244 196 48 / 0.1);
   color: #f4f2fb;
   font-size: 12px;
   line-height: 1.45;
 }
 
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.attachmentError {
+  padding: 9px 12px;
+}
+
 .error button,
-.secondaryButton {
+.secondaryButton,
+.attachmentButton {
   border: 1px solid rgb(216 212 236 / 0.16);
   background: rgb(33 29 61 / 0.72);
   color: #f4f2fb;
@@ -123,10 +134,66 @@
   line-height: 1.45;
 }
 
+.attachmentBar,
+.attachmentList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attachmentButton {
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.attachmentButton[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.attachmentList {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.attachmentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgb(216 212 236 / 0.14);
+  border-radius: 999px;
+  padding: 6px 8px 6px 11px;
+  background: rgb(33 29 61 / 0.6);
+  color: #f4f2fb;
+  font-size: 12px;
+}
+
+.attachmentChip button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #aaa6c7;
+  font: inherit;
+  cursor: pointer;
+}
+
 .textarea:focus-visible,
 .openButton:focus-visible,
 .secondaryButton:focus-visible,
 .publishButton:focus-visible,
+.attachmentButton:focus-within,
+.attachmentChip button:focus-visible,
 .error button:focus-visible {
   outline: 2px solid #f4c430;
   outline-offset: 2px;

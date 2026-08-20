@@ -8,7 +8,10 @@ import type { AstrologerCopy } from "../../../common/i18n/astrologerCopy";
 import type { AstroDiaryActionError } from "../model/astroDiaryErrorModel";
 import type { AstroDiaryReplyDraftState } from "../model/useAstroDiaryReplyMutations";
 import { AstroDiaryJournalRail } from "./AstroDiaryJournalRail";
-import { AstroDiaryReplyComposer } from "./AstroDiaryReplyComposer";
+import {
+  AstroDiaryReplyComposer,
+  type AstroDiaryReplyComposerAttachment
+} from "./AstroDiaryReplyComposer";
 import { AstroDiaryTimeline } from "./AstroDiaryTimeline";
 import styles from "./AstroDiaryWorkspaceView.module.css";
 
@@ -27,6 +30,9 @@ export type AstroDiaryWorkspaceState =
       loadMoreTimelineError: boolean;
       replyDraft: AstroDiaryReplyDraftState | null;
       replyBody: string;
+      replyAttachments: readonly AstroDiaryReplyComposerAttachment[];
+      replyAttachmentError: boolean;
+      isUploadingReplyAttachment: boolean;
       replyDraftStatus: "loading" | "error" | "ready";
       replyError: AstroDiaryActionError | null;
       isSavingReply: boolean;
@@ -40,8 +46,10 @@ export type AstroDiaryWorkspaceState =
       onLoadMoreTimeline: () => void;
       onOpenReply: () => void;
       onReplyBodyChange: (body: string) => void;
+      onAttachReplyFile: Parameters<typeof AstroDiaryReplyComposer>[0]["onAttachFile"];
+      onRemoveReplyAttachment: (mediaId: string) => void;
       onRetryReplyDraft: () => void;
-      onSaveReply: (body: string) => void;
+      onSaveReply: (body: string, attachmentIds: readonly string[]) => void;
       onPublishReply: () => void;
       onReloadLatest: () => void;
     }>;
@@ -184,11 +192,16 @@ function ReadyWorkspace({
               copy={copy}
               draft={state.replyDraft}
               body={state.replyBody}
+              attachments={state.replyAttachments}
+              attachmentError={state.replyAttachmentError}
+              isUploadingAttachment={state.isUploadingReplyAttachment}
               error={state.replyError}
               isSaving={state.isSavingReply}
               isPublishing={state.isPublishingReply}
               onOpen={state.onOpenReply}
               onBodyChange={state.onReplyBodyChange}
+              onAttachFile={state.onAttachReplyFile}
+              onRemoveAttachment={state.onRemoveReplyAttachment}
               onReloadLatest={state.onReloadLatest}
               onSave={state.onSaveReply}
               onPublish={state.onPublishReply}

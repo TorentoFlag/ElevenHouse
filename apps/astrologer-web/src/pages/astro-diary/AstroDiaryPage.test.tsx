@@ -18,7 +18,10 @@ const http = vi.hoisted(() => ({
 
 vi.mock("../../Application", () => ({ application: { http } }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("AstroDiaryPage reply recovery", () => {
   let journalReads: number;
@@ -144,6 +147,66 @@ describe("AstroDiaryPage reply recovery", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load more entries");
     expect(screen.getByText("Existing journal entry")).toBeVisible();
     expect(screen.getByRole("button", { name: "Retry loading entries" })).toBeVisible();
+  });
+
+  it("uploads a private voice attachment and saves the returned media id with the reply draft", async () => {
+    http.post.mockImplementation(async (path: string) => {
+      if (path.endsWith("/media/upload-intents")) {
+        return {
+          mediaId: attachmentId,
+          status: "uploading",
+          upload: {
+            url: "https://storage.local/reply.ogg",
+            method: "PUT",
+            headers: { "content-type": "audio/ogg" },
+            expiresAt: "2026-08-18T10:15:00.000Z"
+          }
+        };
+      }
+      if (path.endsWith(`/media/${attachmentId}/complete`)) {
+        return {
+          mediaId: attachmentId,
+          status: "ready",
+          purpose: "astro_diary_voice",
+          mimeType: "audio/ogg",
+          sizeBytes: 8,
+          checksumSha256: null,
+          width: null,
+          height: null
+        };
+      }
+      if (path.endsWith("/astrologer-reply/drafts")) {
+        return { outcome: "applied", draftId, version: 1 };
+      }
+      throw new Error(`Unexpected POST ${path}`);
+    });
+    const uploadFetch = vi.fn(async () => new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", uploadFetch);
+
+    renderPage(createQueryClient());
+
+    fireEvent.click(await screen.findByRole("button", { name: "Write reply" }));
+    fireEvent.change(screen.getByLabelText("Voice"), {
+      target: { files: [new File(["voice"], "reply.ogg", { type: "audio/ogg" })] }
+    });
+    await waitFor(() => expect(uploadFetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("reply.ogg")).toBeVisible();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Reply text" }), {
+      target: { value: "Reply with voice" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        expect.stringMatching(/\/astrologer-reply\/drafts$/),
+        expect.objectContaining({
+          body: "Reply with voice",
+          attachmentIds: [attachmentId]
+        }),
+        expect.anything()
+      )
+    );
   });
 });
 

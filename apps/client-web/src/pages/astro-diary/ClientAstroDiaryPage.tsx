@@ -16,7 +16,12 @@ import { useClientAstroDiaryJournalListQuery } from "../../features/astro-diary/
 import { useClientAstroDiaryJournalQuery } from "../../features/astro-diary/model/useClientAstroDiaryJournalQuery";
 import { useClientAstroDiaryRelationshipQuery } from "../../features/astro-diary/model/useClientAstroDiaryRelationshipQuery";
 import { useClientAstroDiaryTimelineQuery } from "../../features/astro-diary/model/useClientAstroDiaryTimelineQuery";
-import { ClientAstroDiaryWorkspaceView, type ClientAstroDiaryWorkspaceState } from "../../features/astro-diary/ui/ClientAstroDiaryWorkspaceView";
+import { uploadClientAstroDiaryMediaFile } from "../../features/astro-diary/api/astroDiaryApi";
+import {
+  ClientAstroDiaryWorkspaceView,
+  type ClientAstroDiaryWorkspaceState
+} from "../../features/astro-diary/ui/ClientAstroDiaryWorkspaceView";
+import type { ClientAstroDiaryComposerAttachment } from "../../features/astro-diary/ui/ClientAstroDiaryEntryComposer";
 
 export function ClientAstroDiaryPage() {
   const { astrologerId } = useParams<{ astrologerId: string }>();
@@ -31,7 +36,16 @@ export function ClientAstroDiaryPage() {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [entryBodies, setEntryBodies] = useState<Record<string, string>>({});
   const [entryMoods, setEntryMoods] = useState<Record<string, AstroDiaryMoodId | null>>({});
-  const [entryErrors, setEntryErrors] = useState<Record<string, ReturnType<typeof toClientAstroDiaryActionError> | undefined>>({});
+  const [entryErrors, setEntryErrors] = useState<
+    Record<string, ReturnType<typeof toClientAstroDiaryActionError> | undefined>
+  >({});
+  const [entryAttachments, setEntryAttachments] = useState<
+    Record<string, readonly ClientAstroDiaryComposerAttachment[]>
+  >({});
+  const [entryAttachmentErrors, setEntryAttachmentErrors] = useState<Record<string, boolean>>({});
+  const [uploadingAttachmentJournals, setUploadingAttachmentJournals] = useState<
+    Record<string, boolean>
+  >({});
   const selection = resolveRelationshipJournalSelection({
     astrologerId: astrologerId ?? "",
     requestedJournalId,
@@ -48,10 +62,21 @@ export function ClientAstroDiaryPage() {
 
   const selectedJournal = journalQuery.data ?? listSummary;
   const timelineItems = collectAstroDiaryTimelineItems(timelineQuery.data?.pages);
-  const draft = selectedJournalId ? entryDraftQuery.data?.draft ?? null : null;
-  const body = selectedJournalId ? entryBodies[selectedJournalId] ?? draft?.body ?? "" : "";
-  const moodId = selectedJournalId ? entryMoods[selectedJournalId] ?? draft?.moodId ?? null : null;
-  const error = selectedJournalId ? entryErrors[selectedJournalId] ?? null : null;
+  const draft = selectedJournalId ? (entryDraftQuery.data?.draft ?? null) : null;
+  const body = selectedJournalId ? (entryBodies[selectedJournalId] ?? draft?.body ?? "") : "";
+  const moodId = selectedJournalId
+    ? (entryMoods[selectedJournalId] ?? draft?.moodId ?? null)
+    : null;
+  const error = selectedJournalId ? (entryErrors[selectedJournalId] ?? null) : null;
+  const attachments = selectedJournalId
+    ? (entryAttachments[selectedJournalId] ??
+      draft?.attachmentIds.map((mediaId, index) => ({
+        mediaId,
+        fileName: `${copy.entry.attachFileLabel} ${index + 1}`,
+        purpose: "astro_diary_attachment" as const
+      })) ??
+      [])
+    : [];
 
   const state: ClientAstroDiaryWorkspaceState = relationshipQuery.isLoading
     ? { kind: "loading" }
@@ -73,7 +98,9 @@ export function ClientAstroDiaryPage() {
                   timelineItems,
                   timelineStatus: resolveTimelineStatus({
                     isLoading: timelineQuery.isLoading,
-                    isError: (timelineQuery.isError && !timelineQuery.isFetchNextPageError) || journalQuery.isError,
+                    isError:
+                      (timelineQuery.isError && !timelineQuery.isFetchNextPageError) ||
+                      journalQuery.isError,
                     itemCount: timelineItems.length
                   }),
                   hasMoreTimeline: Boolean(timelineQuery.hasNextPage),
@@ -82,39 +109,130 @@ export function ClientAstroDiaryPage() {
                   entryDraft: draft,
                   entryBody: body,
                   entryMoodId: moodId,
+                  entryAttachments: attachments,
+                  entryAttachmentError: Boolean(entryAttachmentErrors[selectedJournalId]),
+                  isUploadingEntryAttachment: Boolean(
+                    uploadingAttachmentJournals[selectedJournalId]
+                  ),
                   entryError: error,
                   isSavingEntry: mutations.save.isPending,
                   isPublishingEntry: mutations.publish.isPending,
                   mobileDetailOpen,
-                  canWrite: Boolean(journalQuery.data && isClientEntryActionable(journalQuery.data)),
-                  entryAuthorityStatus: journalQuery.isPending || entryDraftQuery.isPending
-                    ? "loading"
-                    : journalQuery.isError || entryDraftQuery.isError
-                      ? "error"
-                      : "ready",
-                  onSelectJournal: (journalId) => { setRequestedJournalId(journalId); setMobileDetailOpen(true); },
+                  canWrite: Boolean(
+                    journalQuery.data && isClientEntryActionable(journalQuery.data)
+                  ),
+                  entryAuthorityStatus:
+                    journalQuery.isPending || entryDraftQuery.isPending
+                      ? "loading"
+                      : journalQuery.isError || entryDraftQuery.isError
+                        ? "error"
+                        : "ready",
+                  onSelectJournal: (journalId) => {
+                    setRequestedJournalId(journalId);
+                    setMobileDetailOpen(true);
+                  },
                   onBackToList: () => setMobileDetailOpen(false),
-                  onRetryTimeline: () => { void Promise.all([journalQuery.refetch(), timelineQuery.refetch()]); },
+                  onRetryTimeline: () => {
+                    void Promise.all([journalQuery.refetch(), timelineQuery.refetch()]);
+                  },
                   onLoadMoreTimeline: () => void timelineQuery.fetchNextPage(),
                   onOpenEntry: () => clearEntryError(selectedJournalId, setEntryErrors),
                   onRetryEntryAuthority: () => {
                     void Promise.all([journalQuery.refetch(), entryDraftQuery.refetch()]);
                   },
-                  onEntryBodyChange: (nextBody) => setEntryBodies((current) => ({ ...current, [selectedJournalId]: nextBody })),
-                  onEntryMoodChange: (nextMood) => setEntryMoods((current) => ({ ...current, [selectedJournalId]: nextMood })),
-                  onSaveEntry: (nextBody, nextMoodId) => {
+                  onEntryBodyChange: (nextBody) =>
+                    setEntryBodies((current) => ({ ...current, [selectedJournalId]: nextBody })),
+                  onEntryMoodChange: (nextMood) =>
+                    setEntryMoods((current) => ({ ...current, [selectedJournalId]: nextMood })),
+                  onAttachEntryFile: (file, purpose) => {
+                    setEntryAttachmentErrors((current) => ({
+                      ...current,
+                      [selectedJournalId]: false
+                    }));
+                    setUploadingAttachmentJournals((current) => ({
+                      ...current,
+                      [selectedJournalId]: true
+                    }));
+                    void uploadClientAstroDiaryMediaFile({
+                      journalId: selectedJournalId,
+                      purpose,
+                      file
+                    })
+                      .then((uploaded) => {
+                        setEntryAttachments((current) => ({
+                          ...current,
+                          [selectedJournalId]: [
+                            ...(current[selectedJournalId] ?? attachments),
+                            {
+                              mediaId: uploaded.mediaId,
+                              fileName: file.name,
+                              purpose: uploaded.purpose
+                            }
+                          ]
+                        }));
+                      })
+                      .catch(() => {
+                        setEntryAttachmentErrors((current) => ({
+                          ...current,
+                          [selectedJournalId]: true
+                        }));
+                      })
+                      .finally(() => {
+                        setUploadingAttachmentJournals((current) => ({
+                          ...current,
+                          [selectedJournalId]: false
+                        }));
+                      });
+                  },
+                  onRemoveEntryAttachment: (mediaId) => {
+                    setEntryAttachments((current) => ({
+                      ...current,
+                      [selectedJournalId]: (current[selectedJournalId] ?? attachments).filter(
+                        (attachment) => attachment.mediaId !== mediaId
+                      )
+                    }));
+                  },
+                  onSaveEntry: (nextBody, nextMoodId, attachmentIds) => {
                     if (!journalQuery.data) return;
-                    void mutations.save.mutateAsync({ journalId: selectedJournalId, expectedJournalVersion: journalQuery.data.journal.version, body: nextBody, moodId: nextMoodId, draft }).then(() => {
-                      clearEntryError(selectedJournalId, setEntryErrors);
-                    }).catch((caught: unknown) => setEntryErrors((current) => ({ ...current, [selectedJournalId]: toClientAstroDiaryActionError(caught) })));
+                    void mutations.save
+                      .mutateAsync({
+                        journalId: selectedJournalId,
+                        expectedJournalVersion: journalQuery.data.journal.version,
+                        body: nextBody,
+                        moodId: nextMoodId,
+                        attachmentIds,
+                        draft
+                      })
+                      .then(() => {
+                        clearEntryError(selectedJournalId, setEntryErrors);
+                      })
+                      .catch((caught: unknown) =>
+                        setEntryErrors((current) => ({
+                          ...current,
+                          [selectedJournalId]: toClientAstroDiaryActionError(caught)
+                        }))
+                      );
                   },
                   onPublishEntry: () => {
                     if (!journalQuery.data || !draft) return;
-                    void mutations.publish.mutateAsync({ journalId: selectedJournalId, expectedJournalVersion: journalQuery.data.journal.version, draft }).then(() => {
-                      setEntryBodies((current) => omit(current, selectedJournalId));
-                      setEntryMoods((current) => omit(current, selectedJournalId));
-                      clearEntryError(selectedJournalId, setEntryErrors);
-                    }).catch((caught: unknown) => setEntryErrors((current) => ({ ...current, [selectedJournalId]: toClientAstroDiaryActionError(caught) })));
+                    void mutations.publish
+                      .mutateAsync({
+                        journalId: selectedJournalId,
+                        expectedJournalVersion: journalQuery.data.journal.version,
+                        draft
+                      })
+                      .then(() => {
+                        setEntryBodies((current) => omit(current, selectedJournalId));
+                        setEntryMoods((current) => omit(current, selectedJournalId));
+                        setEntryAttachments((current) => omit(current, selectedJournalId));
+                        clearEntryError(selectedJournalId, setEntryErrors);
+                      })
+                      .catch((caught: unknown) =>
+                        setEntryErrors((current) => ({
+                          ...current,
+                          [selectedJournalId]: toClientAstroDiaryActionError(caught)
+                        }))
+                      );
                   },
                   onReloadLatest: () => {
                     clearEntryError(selectedJournalId, setEntryErrors);
@@ -130,7 +248,11 @@ export function ClientAstroDiaryPage() {
   return <ClientAstroDiaryWorkspaceView copy={copy} locale={locale} state={state} />;
 }
 
-function resolveTimelineStatus(input: { readonly isLoading: boolean; readonly isError: boolean; readonly itemCount: number }): "loading" | "empty" | "error" | "ready" {
+function resolveTimelineStatus(input: {
+  readonly isLoading: boolean;
+  readonly isError: boolean;
+  readonly itemCount: number;
+}): "loading" | "empty" | "error" | "ready" {
   if (input.isLoading) return "loading";
   if (input.isError) return "error";
   return input.itemCount === 0 ? "empty" : "ready";
@@ -144,7 +266,11 @@ function omit<T>(current: Record<string, T>, key: string): Record<string, T> {
 
 function clearEntryError(
   journalId: string,
-  setErrors: React.Dispatch<React.SetStateAction<Record<string, ReturnType<typeof toClientAstroDiaryActionError> | undefined>>>
+  setErrors: React.Dispatch<
+    React.SetStateAction<
+      Record<string, ReturnType<typeof toClientAstroDiaryActionError> | undefined>
+    >
+  >
 ): void {
   setErrors((current) => ({ ...current, [journalId]: undefined }));
 }

@@ -8,6 +8,10 @@ import {
   astroDiaryJournalSummaryResponseSchema,
   astroDiaryPaidCoreDraftPublishRequestSchema,
   astroDiaryTimelinePageSchema,
+  astroDiaryMediaUploadCompletionResponseSchema,
+  createAstroDiaryMediaUploadIntentRequestSchema,
+  mediaMimeTypeSchema,
+  mediaUploadIntentResponseSchema,
   type AstroDiaryClientEntryDraftCreateRequest,
   type AstroDiaryClientEntryDraftResponse,
   type AstroDiaryClientEntryDraftUpdateRequest,
@@ -15,7 +19,10 @@ import {
   type AstroDiaryDraftMutationResponse,
   type AstroDiaryJournalListResponse,
   type AstroDiaryJournalSummaryResponse,
+  type AstroDiaryMediaUploadCompletionResponse,
+  type AstroDiaryMediaUploadPurpose,
   type AstroDiaryPaidCoreDraftPublishRequest,
+  type MediaUploadIntentResponse,
   type AstroDiaryTimelinePage
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -103,6 +110,68 @@ export async function publishClientAstroDiaryEntryDraft(
       commandRequestOptions(input.idempotencyKey)
     )
   );
+}
+
+export async function createClientAstroDiaryMediaUploadIntent(input: {
+  readonly journalId: string;
+  readonly purpose: AstroDiaryMediaUploadPurpose;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+}): Promise<MediaUploadIntentResponse> {
+  const body = createAstroDiaryMediaUploadIntentRequestSchema.parse({
+    purpose: input.purpose,
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes
+  });
+  return mediaUploadIntentResponseSchema.parse(
+    await application.http.post(
+      `/astro-diary/journals/${encodeURIComponent(input.journalId)}/media/upload-intents`,
+      body,
+      { csrf: true }
+    )
+  );
+}
+
+export async function completeClientAstroDiaryMediaUpload(input: {
+  readonly journalId: string;
+  readonly mediaId: string;
+}): Promise<AstroDiaryMediaUploadCompletionResponse> {
+  return astroDiaryMediaUploadCompletionResponseSchema.parse(
+    await application.http.post(
+      `/astro-diary/journals/${encodeURIComponent(input.journalId)}/media/${encodeURIComponent(input.mediaId)}/complete`,
+      {},
+      { csrf: true }
+    )
+  );
+}
+
+export async function uploadClientAstroDiaryMediaFile(input: {
+  readonly journalId: string;
+  readonly purpose: AstroDiaryMediaUploadPurpose;
+  readonly file: File;
+  readonly fetcher?: typeof fetch;
+}): Promise<AstroDiaryMediaUploadCompletionResponse> {
+  const uploadIntent = await createClientAstroDiaryMediaUploadIntent({
+    journalId: input.journalId,
+    purpose: input.purpose,
+    fileName: input.file.name.trim(),
+    mimeType: mediaMimeTypeSchema.parse(input.file.type),
+    sizeBytes: input.file.size
+  });
+  const uploadResponse = await (input.fetcher ?? globalThis.fetch)(uploadIntent.upload.url, {
+    method: uploadIntent.upload.method,
+    headers: uploadIntent.upload.headers,
+    body: input.file
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`AstroDiary media object upload failed with status ${uploadResponse.status}`);
+  }
+  return completeClientAstroDiaryMediaUpload({
+    journalId: input.journalId,
+    mediaId: uploadIntent.mediaId
+  });
 }
 
 function commandRequestOptions(idempotencyKey: string) {

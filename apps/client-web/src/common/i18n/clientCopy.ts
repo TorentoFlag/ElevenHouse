@@ -159,6 +159,11 @@ export type ClientAstroDiaryCopy = {
     unsavedLabel: string;
     publishLabel: string;
     publishingLabel: string;
+    attachFileLabel: string;
+    attachVoiceLabel: string;
+    uploadingAttachmentLabel: string;
+    attachmentErrorLabel: string;
+    removeAttachmentLabel: (fileName: string) => string;
     reloadLatestLabel: string;
     reviewDraftLabel: string;
     characterCountLabel: (count: number, maximum: number) => string;
@@ -254,6 +259,11 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       unsavedLabel: "Есть несохранённые изменения",
       publishLabel: "Опубликовать запись",
       publishingLabel: "Публикуем…",
+      attachFileLabel: "Прикрепить файл",
+      attachVoiceLabel: "Голос",
+      uploadingAttachmentLabel: "Загружаем вложение…",
+      attachmentErrorLabel: "Не удалось прикрепить файл. Проверьте формат и повторите.",
+      removeAttachmentLabel: (fileName) => `Убрать ${fileName}`,
       reloadLatestLabel: "Загрузить актуальную версию",
       reviewDraftLabel: "Проверить черновик",
       characterCountLabel: (count, maximum) => `${count} из ${maximum}`,
@@ -345,6 +355,11 @@ const clientAstroDiaryCopyByLocale: Record<SupportedLocale, ClientAstroDiaryCopy
       unsavedLabel: "Unsaved changes",
       publishLabel: "Publish entry",
       publishingLabel: "Publishing…",
+      attachFileLabel: "Attach file",
+      attachVoiceLabel: "Voice",
+      uploadingAttachmentLabel: "Uploading attachment…",
+      attachmentErrorLabel: "Could not attach the file. Check the format and retry.",
+      removeAttachmentLabel: (fileName) => `Remove ${fileName}`,
       reloadLatestLabel: "Load latest",
       reviewDraftLabel: "Review draft",
       characterCountLabel: (count, maximum) => `${count} of ${maximum}`,

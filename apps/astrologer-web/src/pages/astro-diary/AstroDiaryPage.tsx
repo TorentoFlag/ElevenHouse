@@ -14,10 +14,12 @@ import { useAstroDiaryJournalQuery } from "../../features/astro-diary/model/useA
 import { useAstroDiaryReplyMutations } from "../../features/astro-diary/model/useAstroDiaryReplyMutations";
 import { useAstroDiaryReplyDraftQuery } from "../../features/astro-diary/model/useAstroDiaryReplyDraftQuery";
 import { useAstroDiaryTimelineQuery } from "../../features/astro-diary/model/useAstroDiaryTimelineQuery";
+import { uploadAstroDiaryMediaFile } from "../../features/astro-diary/api/astroDiaryApi";
 import {
   AstroDiaryWorkspaceView,
   type AstroDiaryWorkspaceState
 } from "../../features/astro-diary/ui/AstroDiaryWorkspaceView";
+import type { AstroDiaryReplyComposerAttachment } from "../../features/astro-diary/ui/AstroDiaryReplyComposer";
 
 export function AstroDiaryPage() {
   const { dictionary, locale } = useI18n<AstrologerCopy>();
@@ -27,6 +29,13 @@ export function AstroDiaryPage() {
   const [requestedJournalId, setRequestedJournalId] = useState<string>();
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [replyBuffers, setReplyBuffers] = useState<Record<string, string>>({});
+  const [replyAttachments, setReplyAttachments] = useState<
+    Record<string, readonly AstroDiaryReplyComposerAttachment[]>
+  >({});
+  const [replyAttachmentErrors, setReplyAttachmentErrors] = useState<Record<string, boolean>>({});
+  const [uploadingReplyAttachments, setUploadingReplyAttachments] = useState<
+    Record<string, boolean>
+  >({});
   const [replyErrors, setReplyErrors] = useState<
     Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>
   >({});
@@ -51,6 +60,15 @@ export function AstroDiaryPage() {
   const currentReplyBody = selectedJournalId
     ? (replyBuffers[selectedJournalId] ?? currentDraft?.body ?? "")
     : "";
+  const currentReplyAttachments = selectedJournalId
+    ? (replyAttachments[selectedJournalId] ??
+      currentDraft?.attachmentIds.map((mediaId, index) => ({
+        mediaId,
+        fileName: `${copy.reply.attachFileLabel} ${index + 1}`,
+        purpose: "astro_diary_attachment" as const
+      })) ??
+      [])
+    : [];
   const currentError = selectedJournalId ? (replyErrors[selectedJournalId] ?? null) : null;
 
   const state: AstroDiaryWorkspaceState = journalsQuery.isLoading
@@ -70,6 +88,9 @@ export function AstroDiaryPage() {
             loadMoreTimelineError: timelineQuery.isFetchNextPageError,
             replyDraft: currentDraft,
             replyBody: currentReplyBody,
+            replyAttachments: currentReplyAttachments,
+            replyAttachmentError: Boolean(replyAttachmentErrors[selectedJournalId]),
+            isUploadingReplyAttachment: Boolean(uploadingReplyAttachments[selectedJournalId]),
             replyDraftStatus: replyDraftQuery.isPending
               ? "loading"
               : replyDraftQuery.isError
@@ -96,14 +117,60 @@ export function AstroDiaryPage() {
             onReplyBodyChange: (body) => {
               setReplyBuffers((current) => ({ ...current, [selectedJournalId]: body }));
             },
+            onAttachReplyFile: (file, purpose) => {
+              setReplyAttachmentErrors((current) => ({ ...current, [selectedJournalId]: false }));
+              setUploadingReplyAttachments((current) => ({
+                ...current,
+                [selectedJournalId]: true
+              }));
+              void uploadAstroDiaryMediaFile({
+                journalId: selectedJournalId,
+                purpose,
+                file
+              })
+                .then((uploaded) => {
+                  setReplyAttachments((current) => ({
+                    ...current,
+                    [selectedJournalId]: [
+                      ...(current[selectedJournalId] ?? currentReplyAttachments),
+                      {
+                        mediaId: uploaded.mediaId,
+                        fileName: file.name,
+                        purpose: uploaded.purpose
+                      }
+                    ]
+                  }));
+                })
+                .catch(() => {
+                  setReplyAttachmentErrors((current) => ({
+                    ...current,
+                    [selectedJournalId]: true
+                  }));
+                })
+                .finally(() => {
+                  setUploadingReplyAttachments((current) => ({
+                    ...current,
+                    [selectedJournalId]: false
+                  }));
+                });
+            },
+            onRemoveReplyAttachment: (mediaId) => {
+              setReplyAttachments((current) => ({
+                ...current,
+                [selectedJournalId]: (current[selectedJournalId] ?? currentReplyAttachments).filter(
+                  (attachment) => attachment.mediaId !== mediaId
+                )
+              }));
+            },
             onRetryReplyDraft: () => void replyDraftQuery.refetch(),
-            onSaveReply: (body) => {
+            onSaveReply: (body, attachmentIds) => {
               if (!journalQuery.data) return;
               void replyMutations.save
                 .mutateAsync({
                   journalId: selectedJournalId,
                   expectedJournalVersion: journalQuery.data.journal.version,
                   body,
+                  attachmentIds,
                   draft: currentDraft
                 })
                 .then(() => {
@@ -127,6 +194,7 @@ export function AstroDiaryPage() {
                 })
                 .then(() => {
                   setReplyBuffers((current) => omitJournalValue(current, selectedJournalId));
+                  setReplyAttachments((current) => omitJournalValue(current, selectedJournalId));
                   clearReplyError(selectedJournalId, setReplyErrors);
                 })
                 .catch((error: unknown) => {
@@ -168,9 +236,7 @@ function resolveTimelineStatus(input: {
 function clearReplyError(
   journalId: string,
   setReplyErrors: React.Dispatch<
-    React.SetStateAction<
-      Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>
-    >
+    React.SetStateAction<Record<string, ReturnType<typeof toAstroDiaryActionError> | undefined>>
   >
 ): void {
   setReplyErrors((current) => ({ ...current, [journalId]: undefined }));

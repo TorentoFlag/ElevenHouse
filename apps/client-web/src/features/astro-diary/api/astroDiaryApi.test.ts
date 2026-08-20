@@ -4,6 +4,7 @@ import {
   getClientAstroDiaryEntryDraft,
   getClientAstroDiaryJournal,
   publishClientAstroDiaryEntryDraft,
+  uploadClientAstroDiaryMediaFile,
   updateClientAstroDiaryEntryDraft
 } from "./astroDiaryApi";
 
@@ -46,9 +47,7 @@ describe("client AstroDiary API", () => {
         attachmentIds: [attachmentId]
       }
     });
-    expect(get).toHaveBeenCalledWith(
-      `/astro-diary/journals/${journalId}/client-entry/draft`
-    );
+    expect(get).toHaveBeenCalledWith(`/astro-diary/journals/${journalId}/client-entry/draft`);
   });
 
   it("creates and updates a client draft with CSRF and caller-owned stable keys", async () => {
@@ -105,6 +104,63 @@ describe("client AstroDiary API", () => {
       `/astro-diary/journals/${journalId}/client-entry/drafts/${draftId}/publish`,
       { expectedJournalVersion: 6, expectedDraftVersion: 2 },
       { csrf: true, idempotencyKey: "astro-diary:publish:one" }
+    );
+  });
+
+  it("uploads client journal media through the journal-scoped private media flow", async () => {
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    post
+      .mockResolvedValueOnce({
+        mediaId: attachmentId,
+        status: "uploading",
+        upload: {
+          method: "PUT",
+          url: "https://storage.local/astro-diary/client-note.pdf",
+          headers: { "content-type": "application/pdf" },
+          expiresAt: "2026-08-20T10:00:00.000Z"
+        }
+      })
+      .mockResolvedValueOnce({
+        mediaId: attachmentId,
+        status: "ready",
+        purpose: "astro_diary_attachment",
+        mimeType: "application/pdf",
+        sizeBytes: 512,
+        checksumSha256: null,
+        width: null,
+        height: null
+      });
+
+    await expect(
+      uploadClientAstroDiaryMediaFile({
+        journalId,
+        purpose: "astro_diary_attachment",
+        file: new File(["private note"], "client-note.pdf", { type: "application/pdf" }),
+        fetcher
+      })
+    ).resolves.toMatchObject({ mediaId: attachmentId, status: "ready" });
+
+    expect(post).toHaveBeenNthCalledWith(
+      1,
+      `/astro-diary/journals/${journalId}/media/upload-intents`,
+      {
+        purpose: "astro_diary_attachment",
+        fileName: "client-note.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 12
+      },
+      { csrf: true }
+    );
+    expect(fetcher).toHaveBeenCalledWith("https://storage.local/astro-diary/client-note.pdf", {
+      method: "PUT",
+      headers: { "content-type": "application/pdf" },
+      body: expect.any(File)
+    });
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      `/astro-diary/journals/${journalId}/media/${attachmentId}/complete`,
+      {},
+      { csrf: true }
     );
   });
 });
