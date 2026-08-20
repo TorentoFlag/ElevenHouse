@@ -463,6 +463,13 @@
       "when": 1787253000000,
       "tag": "0068_reviews_flow_first_published_event",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1787256000000,
+      "tag": "0069_reviews_core_tables",
+      "breakpoints": true
     }
   ]
 }
