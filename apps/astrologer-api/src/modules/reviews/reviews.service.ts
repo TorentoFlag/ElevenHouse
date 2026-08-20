@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { reviewReplyDraftPromptV1, type ReviewReplyDraftPromptOutput } from "@elevenhouse/ai";
 import {
+  createReviewReplyAiDraftRequestSchema,
+  createReviewReplyAiDraftResponseSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
@@ -13,14 +16,20 @@ import {
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
 import type {
+  CreateReviewReplyDraftCommandResult,
   CreateReviewCaseMessageResult,
   OpenReviewDisputeResult,
   ReviewReadStore,
   SubmitReviewReplyVersionResult
 } from "@elevenhouse/domain";
 
+import { AiGenerationService } from "../ai/ai-generation.service";
 import { SystemClock } from "../clock/system-clock.service";
-import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from "./reviews.tokens";
+import {
+  ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
+  ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_READ_STORE
+} from "./reviews.tokens";
 
 type AstrologerReviewCommandStore = {
   readonly openReviewDispute: (input: {
@@ -48,6 +57,26 @@ type AstrologerReviewCommandStore = {
   }) => Promise<CreateReviewCaseMessageResult>;
 };
 
+type AstrologerReviewAiReplyDraftStore = {
+  readonly createReplyDraftCommand: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly nextDraftId: string;
+    readonly attemptId: string;
+  }) => Promise<CreateReviewReplyDraftCommandResult>;
+  readonly markReplyDraftSucceeded: (input: {
+    readonly attemptId: string;
+    readonly now: string;
+    readonly draftText: string;
+  }) => Promise<unknown>;
+  readonly markReplyDraftFailed: (input: {
+    readonly attemptId: string;
+    readonly now: string;
+    readonly safeErrorCode: string;
+  }) => Promise<unknown>;
+};
+
 @Injectable()
 export class AstrologerReviewsService {
   constructor(
@@ -55,8 +84,80 @@ export class AstrologerReviewsService {
     private readonly readStore: Pick<ReviewReadStore, "getModerationCaseDetail">,
     @Inject(ASTROLOGER_REVIEWS_COMMAND_STORE)
     private readonly commandStore: AstrologerReviewCommandStore,
+    @Inject(ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE)
+    private readonly aiReplyDraftStore: AstrologerReviewAiReplyDraftStore,
+    private readonly aiGeneration: AiGenerationService,
     private readonly clock: SystemClock
   ) {}
+
+  async createReplyAiDraft(
+    astrologerUserId: string,
+    reviewId: string,
+    body: unknown,
+    idempotencyKey: string
+  ) {
+    const parsed = createReviewReplyAiDraftRequestSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review reply AI draft request");
+
+    const safeAstrologerUserId = requireUuid(astrologerUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const draftId = deterministicUuid(
+      `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:draft`
+    );
+    const attemptId = deterministicUuid(
+      `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:attempt`
+    );
+    const created = await this.aiReplyDraftStore.createReplyDraftCommand({
+      actorUserId: safeAstrologerUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      nextDraftId: draftId,
+      attemptId
+    });
+    if (created.kind === "rejected") {
+      throw new BadRequestException("Review reply AI draft cannot be created");
+    }
+
+    let generated: Awaited<ReturnType<AiGenerationService["generate"]>>;
+    try {
+      generated = await this.aiGeneration.generate({
+        prompt: reviewReplyDraftPromptV1,
+        input: reviewReplyDraftPromptV1.inputSchema.parse({
+          locale: parsed.data.locale,
+          ...created.command.promptInput
+        }),
+        ownerUserId: safeAstrologerUserId,
+        feature: created.command.feature,
+        resourceEvidence: created.command.resourceEvidence
+      });
+    } catch (error) {
+      await this.aiReplyDraftStore.markReplyDraftFailed({
+        attemptId,
+        now: this.clock.now().toISOString(),
+        safeErrorCode: "AI_PROVIDER_UNKNOWN_FAILURE"
+      });
+      throw error;
+    }
+
+    const output = generated.output as ReviewReplyDraftPromptOutput;
+    await this.aiReplyDraftStore.markReplyDraftSucceeded({
+      attemptId,
+      now: this.clock.now().toISOString(),
+      draftText: output.draftText
+    });
+
+    return createReviewReplyAiDraftResponseSchema.parse({
+      draftId,
+      attemptId,
+      draftText: output.draftText,
+      provider: generated.provider,
+      model: generated.model,
+      promptId: reviewReplyDraftPromptV1.id,
+      promptVersion: reviewReplyDraftPromptV1.version,
+      finishReason: generated.finishReason,
+      usage: generated.usage
+    });
+  }
 
   async submitReviewReplyVersion(
     astrologerUserId: string,

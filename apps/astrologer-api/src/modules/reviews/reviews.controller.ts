@@ -18,13 +18,37 @@ import type {
 
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
 import type { AstrologerSessionRequest } from "../identity/session/identity-current-session.service";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
+import { RequirePlatformTariffCapability } from "../platform-entitlements/platform-tariff-capability.policy";
 import { RequireCsrf, RequireIdempotency } from "../security/route-policy/route-security-policy";
 import { AstrologerReviewsService } from "./reviews.service";
 
 @Controller("reviews")
-@UseGuards(AstrologerSessionAuthGuard)
+@UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class AstrologerReviewsController {
   constructor(private readonly service: AstrologerReviewsService) {}
+
+  @Post(":reviewId/reply-drafts/ai")
+  @RequirePlatformTariffCapability({
+    surfaceId: "ai.reviews.reply_draft",
+    capability: "ai",
+    operation: "generation"
+  })
+  @RequireIdempotency({ scope: "reviews.reply-draft.ai.create" })
+  @RequireCsrf()
+  createReplyAiDraft(
+    @Param("reviewId") reviewId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.service.createReplyAiDraft(
+      requireAstrologerUserId(request),
+      reviewId,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
 
   @Post(":reviewId/reply-versions")
   @RequireIdempotency({ scope: "reviews.reply-version.astrologer.submit" })

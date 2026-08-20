@@ -1,20 +1,34 @@
 import { Module } from "@nestjs/common";
 import {
+  createDrizzleReviewAiReplyDraftStore,
   createDrizzleReviewCommandStore,
   createDrizzleReviewReadStore
 } from "@elevenhouse/db/reviews";
 
+import { AiModule } from "../ai/ai.module";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
 import { IdentityModule } from "../identity/identity.module";
+import { PlatformEntitlementsModule } from "../platform-entitlements/platform-entitlements.module";
 import { SecurityModule } from "../security/security.module";
 import { AstrologerReviewsController } from "./reviews.controller";
 import { AstrologerReviewsService } from "./reviews.service";
-import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from "./reviews.tokens";
+import {
+  ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
+  ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_READ_STORE
+} from "./reviews.tokens";
 
 @Module({
-  imports: [ClockModule, DatabaseModule, IdentityModule, SecurityModule],
+  imports: [
+    AiModule,
+    ClockModule,
+    DatabaseModule,
+    IdentityModule,
+    PlatformEntitlementsModule,
+    SecurityModule
+  ],
   controllers: [AstrologerReviewsController],
   providers: [
     AstrologerReviewsService,
@@ -28,6 +42,12 @@ import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from 
       provide: ASTROLOGER_REVIEWS_COMMAND_STORE,
       useFactory: (runtime: PostgresRuntimeService) =>
         createDrizzleReviewCommandStore(runtime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
+      useFactory: (runtime: PostgresRuntimeService) =>
+        createDrizzleReviewAiReplyDraftStore(runtime.database),
       inject: [PostgresRuntimeService]
     }
   ]

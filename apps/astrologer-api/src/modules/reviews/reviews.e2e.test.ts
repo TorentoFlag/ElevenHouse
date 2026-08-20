@@ -5,13 +5,19 @@ import { Test } from "@nestjs/testing";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { AiGenerationService } from "../ai/ai-generation.service";
 import { SystemClock } from "../clock/system-clock.service";
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
+import { PlatformTariffCapabilityGuard } from "../platform-entitlements/platform-tariff-capability.guard";
 import { CsrfGuard } from "../security/csrf/csrf.guard";
 import { IdempotencyGuard } from "../security/idempotency/idempotency.guard";
 import { AstrologerReviewsController } from "./reviews.controller";
 import { AstrologerReviewsService } from "./reviews.service";
-import { ASTROLOGER_REVIEWS_COMMAND_STORE, ASTROLOGER_REVIEWS_READ_STORE } from "./reviews.tokens";
+import {
+  ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
+  ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_READ_STORE
+} from "./reviews.tokens";
 
 const astrologerUserId = "10000000-0000-4000-8000-000000000301";
 const reviewId = "10000000-0000-4000-8000-000000000302";
@@ -24,6 +30,9 @@ describe("astrologer reviews HTTP API", () => {
   let receivedMessageCommand: unknown;
   let receivedReplyCommand: unknown;
   let receivedDisputeCommand: unknown;
+  let receivedAiDraftCommand: unknown;
+  let receivedAiGeneration: unknown;
+  let receivedAiDraftCompletion: unknown;
   let disputeOpened: boolean;
 
   beforeEach(async () => {
@@ -31,12 +40,34 @@ describe("astrologer reviews HTTP API", () => {
     receivedMessageCommand = null;
     receivedReplyCommand = null;
     receivedDisputeCommand = null;
+    receivedAiDraftCommand = null;
+    receivedAiGeneration = null;
+    receivedAiDraftCompletion = null;
     disputeOpened = true;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
       providers: [
         AstrologerReviewsService,
         { provide: SystemClock, useValue: { now: () => new Date("2026-08-20T13:00:00.000Z") } },
+        {
+          provide: AiGenerationService,
+          useValue: {
+            async generate(input: unknown) {
+              receivedAiGeneration = input;
+              return {
+                output: { draftText: "Спасибо за отзыв. Рад, что консультация помогла." },
+                provider: "openai",
+                model: "gpt-5.5",
+                finishReason: "completed",
+                usage: {
+                  promptTokens: 100,
+                  completionTokens: 20,
+                  totalTokens: 120
+                }
+              };
+            }
+          }
+        },
         {
           provide: ASTROLOGER_REVIEWS_READ_STORE,
           useValue: {
@@ -143,6 +174,54 @@ describe("astrologer reviews HTTP API", () => {
               };
             }
           }
+        },
+        {
+          provide: ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
+          useValue: {
+            async createReplyDraftCommand(command: {
+              readonly actorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly nextDraftId: string;
+              readonly attemptId: string;
+            }) {
+              receivedAiDraftCommand = command;
+              return {
+                kind: "created",
+                command: {
+                  attemptId: command.attemptId,
+                  feature: "reviews.reply_draft",
+                  promptId: "reviews.replyDraft",
+                  promptVersion: 1,
+                  provider: "openai",
+                  outputMode: "draft_only",
+                  canSubmitOrPublish: false,
+                  ownerSafetyId: command.actorUserId,
+                  resourceEvidence: {
+                    resourceType: "review",
+                    resourceId: command.reviewId,
+                    sourceChecksum: "sha256:test"
+                  },
+                  promptInput: {
+                    rating: 5,
+                    reviewText: "Помогло понять следующие шаги.",
+                    publicIdentityMode: "secret_user",
+                    serviceTitle: "Солярная консультация",
+                    serviceContextLabel: "60 минут"
+                  },
+                  requestedAt: command.now
+                }
+              };
+            },
+            async markReplyDraftSucceeded(input: unknown) {
+              receivedAiDraftCompletion = input;
+              return { kind: "updated" };
+            },
+            async markReplyDraftFailed(input: unknown) {
+              receivedAiDraftCompletion = input;
+              return { kind: "updated" };
+            }
+          }
         }
       ]
     });
@@ -158,6 +237,7 @@ describe("astrologer reviews HTTP API", () => {
         return true;
       }
     });
+    builder.overrideGuard(PlatformTariffCapabilityGuard).useValue({ canActivate: () => true });
     builder.overrideGuard(CsrfGuard).useValue({ canActivate: () => true });
     builder.overrideGuard(IdempotencyGuard).useValue({ canActivate: () => true });
     const moduleRef = await builder.compile();
@@ -168,6 +248,57 @@ describe("astrologer reviews HTTP API", () => {
 
   afterEach(async () => {
     await app?.close();
+  });
+
+  it("creates astrologer AI reply drafts without submitting replies", async () => {
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/reply-drafts/ai`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-ai-reply-draft-1"
+      },
+      body: JSON.stringify({ locale: "ru" })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      draftText: "Спасибо за отзыв. Рад, что консультация помогла.",
+      provider: "openai",
+      model: "gpt-5.5",
+      promptId: "reviews.replyDraft",
+      promptVersion: 1,
+      finishReason: "completed",
+      usage: {
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120
+      }
+    });
+    expect(receivedAiDraftCommand).toMatchObject({
+      actorUserId: astrologerUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId
+    });
+    expect(receivedAiDraftCommand).toHaveProperty("nextDraftId", expect.any(String));
+    expect(receivedAiDraftCommand).toHaveProperty("attemptId", expect.any(String));
+    expect(receivedAiGeneration).toMatchObject({
+      ownerUserId: astrologerUserId,
+      feature: "reviews.reply_draft",
+      input: {
+        locale: "ru",
+        rating: 5,
+        reviewText: "Помогло понять следующие шаги.",
+        publicIdentityMode: "secret_user"
+      },
+      resourceEvidence: {
+        resourceType: "review",
+        resourceId: reviewId,
+        sourceChecksum: "sha256:test"
+      }
+    });
+    expect(receivedAiDraftCompletion).toMatchObject({
+      draftText: "Спасибо за отзыв. Рад, что консультация помогла."
+    });
   });
 
   it("submits astrologer review reply versions for moderation", async () => {

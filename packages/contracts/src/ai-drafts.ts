@@ -30,9 +30,7 @@ export const createDictionaryAiDraftRequestSchema = z
     title: dictionaryAiDraftTitleRequestSchema
   })
   .strict();
-export type CreateDictionaryAiDraftRequest = z.infer<
-  typeof createDictionaryAiDraftRequestSchema
->;
+export type CreateDictionaryAiDraftRequest = z.infer<typeof createDictionaryAiDraftRequestSchema>;
 
 export const aiDraftUsageSchema = z
   .object({
@@ -54,6 +52,28 @@ export const createDictionaryAiDraftResponseSchema = z
     usage: aiDraftUsageSchema.optional()
   })
   .strict();
-export type CreateDictionaryAiDraftResponse = z.infer<
-  typeof createDictionaryAiDraftResponseSchema
+export type CreateDictionaryAiDraftResponse = z.infer<typeof createDictionaryAiDraftResponseSchema>;
+
+export const createReviewReplyAiDraftRequestSchema = z
+  .object({
+    locale: dictionaryLocaleSchema.default("ru")
+  })
+  .strict();
+export type CreateReviewReplyAiDraftRequest = z.infer<typeof createReviewReplyAiDraftRequestSchema>;
+
+export const createReviewReplyAiDraftResponseSchema = z
+  .object({
+    draftId: uuidSchema,
+    attemptId: uuidSchema,
+    draftText: nonEmptyStringSchema.max(4_000),
+    provider: aiDraftProviderSchema,
+    model: aiDraftModelSchema,
+    promptId: z.literal("reviews.replyDraft"),
+    promptVersion: z.literal(1),
+    finishReason: aiDraftFinishReasonSchema,
+    usage: aiDraftUsageSchema.optional()
+  })
+  .strict();
+export type CreateReviewReplyAiDraftResponse = z.infer<
+  typeof createReviewReplyAiDraftResponseSchema
 >;

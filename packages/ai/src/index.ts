@@ -19,3 +19,4 @@ export * from "./prompts/numerology-interpretation-draft.v1";
 export * from "./prompts/human-design-interpretation-draft.v1";
 export * from "./prompts/chart-interpretation-draft.v1";
 export * from "./prompts/chart-interpretation-draft.v2";
+export * from "./prompts/review-reply-draft.v1";
