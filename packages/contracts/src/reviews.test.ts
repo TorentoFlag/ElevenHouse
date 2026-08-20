@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   reviewFirstPublicationFlowEventSchema,
+  reviewModerationCaseDetailSchema,
+  reviewModerationCaseMessageCreateSchema,
+  reviewModerationCaseMessageSchema,
   reviewModerationReasonCodeSchema,
+  reviewPublicListResponseSchema,
   reviewPublicAuthorSchema,
+  reviewAdminDetailSchema,
+  clientReviewDetailSchema,
   reviewPublicIdentityModeSchema,
+  reviewPublicItemSchema,
   reviewVersionSubmissionSchema,
   reviewableInstanceKindSchema,
   reviewWindowPolicySchema
@@ -120,6 +127,178 @@ describe("Reviews contracts", () => {
         clientUserId: "10000000-0000-4000-8000-000000000013",
         firstApprovedVersionId: "10000000-0000-4000-8000-000000000014",
         publishedAt: "2026-08-20T10:00:00.000Z"
+      }).success
+    ).toBe(false);
+  });
+
+  it("separates client pending edits from the currently displayed approved version", () => {
+    const parsed = clientReviewDetailSchema.parse({
+      reviewId: "10000000-0000-4000-8000-000000000020",
+      reviewableInstance: {
+        id: "10000000-0000-4000-8000-000000000021",
+        kind: "booking",
+        status: "review_submitted",
+        title: "Консультация по соляру",
+        contextLabel: "60 минут",
+        receivedAt: "2026-08-18T10:00:00.000Z",
+        reviewWindowClosesAt: "2026-09-01T10:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt"
+      },
+      activePublicVersion: {
+        id: "10000000-0000-4000-8000-000000000022",
+        versionNumber: 1,
+        rating: 5,
+        text: "Первый одобренный текст.",
+        publicIdentityMode: "named",
+        moderationStatus: "approved",
+        moderationReasonCode: null,
+        submittedAt: "2026-08-18T11:00:00.000Z",
+        decidedAt: "2026-08-18T12:00:00.000Z"
+      },
+      pendingVersion: {
+        id: "10000000-0000-4000-8000-000000000023",
+        versionNumber: 2,
+        rating: 4,
+        text: "Отредактированный текст ждет проверки.",
+        publicIdentityMode: "named",
+        moderationStatus: "pending",
+        moderationReasonCode: null,
+        submittedAt: "2026-08-19T11:00:00.000Z",
+        decidedAt: null
+      },
+      canSubmitNewVersion: false,
+      canEditLatestVersion: true
+    });
+
+    expect(parsed.activePublicVersion?.versionNumber).toBe(1);
+    expect(parsed.pendingVersion?.moderationStatus).toBe("pending");
+
+    expect(
+      clientReviewDetailSchema.safeParse({
+        ...parsed,
+        activePublicVersion: { ...parsed.pendingVersion, moderationStatus: "pending" }
+      }).success
+    ).toBe(false);
+  });
+
+  it("keeps public review lists anonymous and free from admin-only identity fields", () => {
+    const parsed = reviewPublicListResponseSchema.parse({
+      items: [
+        {
+          reviewId: "10000000-0000-4000-8000-000000000030",
+          reviewableInstanceId: "10000000-0000-4000-8000-000000000031",
+          astrologerUserId: "10000000-0000-4000-8000-000000000032",
+          productId: null,
+          title: "Астрокалендарь",
+          contextLabel: "Август 2026",
+          rating: 5,
+          text: "Точно и полезно.",
+          author: {
+            publicIdentityMode: "secret_user",
+            displayName: "Секретный пользователь",
+            initials: null,
+            avatarUrl: null
+          },
+          publishedAt: "2026-08-20T10:00:00.000Z",
+          astrologerReply: null
+        }
+      ],
+      nextCursor: null
+    });
+
+    expect(parsed.items[0]?.author.displayName).toBe("Секретный пользователь");
+    expect(
+      reviewPublicItemSchema.safeParse({
+        ...parsed.items[0],
+        clientUserId: "10000000-0000-4000-8000-000000000033"
+      }).success
+    ).toBe(false);
+  });
+
+  it("lets admin projections include real client identity and full moderation context", () => {
+    const parsed = reviewAdminDetailSchema.parse({
+      reviewId: "10000000-0000-4000-8000-000000000040",
+      client: {
+        clientUserId: "10000000-0000-4000-8000-000000000041",
+        displayName: "Анна Петрова",
+        initials: "АП",
+        avatarUrl: null
+      },
+      publicIdentityMode: "secret_user",
+      visibilityStatus: "temporarily_hidden_by_dispute",
+      disputeStatus: "open",
+      reviewableInstance: {
+        id: "10000000-0000-4000-8000-000000000042",
+        kind: "astro_calendar_service_period",
+        status: "review_submitted",
+        title: "Астрокалендарь",
+        contextLabel: "01.08-31.08",
+        receivedAt: "2026-08-01T00:00:00.000Z",
+        reviewWindowClosesAt: "2026-09-14T00:00:00.000Z",
+        windowPolicy: "active_period_plus_14_days"
+      },
+      versions: [],
+      moderationCase: {
+        caseId: "10000000-0000-4000-8000-000000000043",
+        status: "open",
+        openedAt: "2026-08-20T10:00:00.000Z",
+        closedAt: null,
+        reasonCode: "other"
+      },
+      auditCursor: "audit:1"
+    });
+
+    expect(parsed.client.displayName).toBe("Анна Петрова");
+    expect(parsed.visibilityStatus).toBe("temporarily_hidden_by_dispute");
+  });
+
+  it("models moderation case communication visibility without leaking private threads", () => {
+    const caseDetail = reviewModerationCaseDetailSchema.parse({
+      caseId: "10000000-0000-4000-8000-000000000050",
+      reviewId: "10000000-0000-4000-8000-000000000051",
+      status: "waiting_client",
+      openedAt: "2026-08-20T10:00:00.000Z",
+      closedAt: null,
+      serviceContext: {
+        title: "Консультация",
+        contextLabel: "Заказ #42"
+      },
+      messages: [
+        {
+          messageId: "10000000-0000-4000-8000-000000000052",
+          authorRole: "moderator",
+          visibility: "client_and_moderators",
+          body: "Уточните, пожалуйста, что именно произошло.",
+          createdAt: "2026-08-20T10:05:00.000Z"
+        },
+        {
+          messageId: "10000000-0000-4000-8000-000000000053",
+          authorRole: "client",
+          visibility: "all_case_participants",
+          body: "Готова обсудить решение.",
+          createdAt: "2026-08-20T10:10:00.000Z"
+        }
+      ]
+    });
+
+    expect(caseDetail.messages.map((message) => message.visibility)).toEqual([
+      "client_and_moderators",
+      "all_case_participants"
+    ]);
+
+    expect(
+      reviewModerationCaseMessageCreateSchema.parse({
+        visibility: "astrologer_and_moderators",
+        body: "Нужен ваш комментарий."
+      })
+    ).toMatchObject({ visibility: "astrologer_and_moderators" });
+    expect(
+      reviewModerationCaseMessageSchema.safeParse({
+        messageId: "10000000-0000-4000-8000-000000000054",
+        authorRole: "client",
+        visibility: "moderators_only",
+        body: "hidden",
+        createdAt: "2026-08-20T10:20:00.000Z"
       }).success
     ).toBe(false);
   });
