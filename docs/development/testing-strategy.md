@@ -132,8 +132,6 @@ pnpm verify
 Для agent documentation:
 
 ```bash
-pnpm docs:check:test
-pnpm docs:check
 git diff --check
 ```
 

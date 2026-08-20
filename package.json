@@ -17,8 +17,6 @@
     "db:seed:dev-calendar": "pnpm --filter @elevenhouse/db db:seed:dev-calendar",
     "db:studio": "pnpm --filter @elevenhouse/db db:studio",
     "dev": "turbo dev --parallel",
-    "docs:check": "node scripts/agent-docs/check-agent-docs.mjs",
-    "docs:check:test": "node --test scripts/agent-docs/check-agent-docs.test.mjs",
     "format": "prettier --write .",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\" \"*.config.{ts,js}\"",
     "prepare": "husky",

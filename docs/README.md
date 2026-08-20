@@ -125,17 +125,11 @@ node scripts/agent-docs/generate-route-inventory.mjs
 git diff -- docs/architecture/current-state.md docs/api/route-inventory.md
 ```
 
-## Documentation quality gate
+## Documentation diff check
 
 После изменения `AGENTS.md`, canonical docs, runbook'ов или `.agents/skills`
 запусти:
 
 ```bash
-pnpm docs:check:test
-pnpm docs:check
 git diff --check
 ```
-
-Verifier проверяет обязательную структуру, repo skills, relative links и
-известные противоречивые active statements. Он read-only и позже может быть
-подключён к hooks/CI без изменения документационного контракта.

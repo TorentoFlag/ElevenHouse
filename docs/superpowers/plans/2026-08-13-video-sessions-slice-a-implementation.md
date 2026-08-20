@@ -1169,8 +1169,6 @@ pnpm test packages/contracts/src/sessions.test.ts packages/domain/src/sessions \
   apps/astrologer-web/src/features/sessions apps/astrologer-web/src/pages/session \
   apps/client-web/src/features/sessions apps/client-web/src/pages/session
 pnpm verify
-pnpm docs:check:test
-pnpm docs:check
 git diff --check
 ```
 

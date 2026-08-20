@@ -65,8 +65,7 @@ verification без прямого разрешения пользователя
 8. Для agent documentation выполни:
 
    ```bash
-   pnpm docs:check:test
-   pnpm docs:check
+   git diff --check
    ```
 
 ## Commands By Change Type

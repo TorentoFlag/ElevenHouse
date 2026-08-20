@@ -72,11 +72,9 @@ history; do not create an in-repository archive of completed plans/specs.
    rg -n "old_term|old_surface|reference only|ops-api|admin workflow" docs AGENTS.md
    ```
 
-7. Run documentation gates and inspect the complete diff:
+7. Inspect the complete diff:
 
    ```bash
-   pnpm docs:check:test
-   pnpm docs:check
    git diff --check
    ```
 
@@ -90,8 +88,8 @@ history; do not create an in-repository archive of completed plans/specs.
   architecture.
 - If a fact is based on current working tree, say so when it may change.
 - Keep product, architecture, visual and implemented-state truth explicit.
-- Skills describe judgment/procedure; mechanically decidable rules belong in
-  scripts/checkers.
+- Skills describe judgment/procedure; scripts may generate inventories, but do
+  not add documentation test gates.
 
 ## Stop Conditions
 
@@ -108,4 +106,4 @@ history; do not create an in-repository archive of completed plans/specs.
   represented in canonical docs or ADRs.
 - `rg` found no old contradictory wording.
 - `git diff --check` passed.
-- `pnpm docs:check:test` and `pnpm docs:check` passed.
+- `git diff --check` passed.

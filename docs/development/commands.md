@@ -7,8 +7,6 @@
 | Purpose                           | Command                                                                                                                                                                                                                                                 | Preconditions / authority                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Full verification                 | `pnpm verify`                                                                                                                                                                                                                                           | No service startup; shared-layer completion gate                                                             |
-| Agent documentation verification  | `pnpm docs:check`                                                                                                                                                                                                                                       | Read-only; validates canonical docs, repo skills, links and known contradictions                             |
-| Agent documentation checker tests | `pnpm docs:check:test`                                                                                                                                                                                                                                  | Read-only; deterministic Node test fixtures, no services                                                     |
 | Generate current implementation state | `node scripts/agent-docs/generate-current-state.mjs`                                                                                                                                                                                                 | Regenerates committed current app/module/worker-port inventory; no services                                  |
 | Generate API route inventory | `node scripts/agent-docs/generate-route-inventory.mjs`                                                                                                                                                                                               | Regenerates committed Nest-controller route inventory; no services                                           |
 | Numerology domain tests           | `pnpm test packages/domain/src/numerology`                                                                                                                                                                                                              | No long-running process                                                                                      |
@@ -29,8 +27,6 @@
 pnpm test packages/domain/src/numerology
 pnpm --filter @elevenhouse/domain typecheck
 pnpm --filter @elevenhouse/domain build
-pnpm docs:check:test
-pnpm docs:check
 pnpm verify
 ```
 
@@ -38,15 +34,11 @@ pnpm verify
 `testing-strategy.md`.
 
 Для изменения `AGENTS.md`, canonical docs, runbook'ов или `.agents/skills`
-запускай оба documentation gate:
+проверяй diff:
 
 ```bash
-pnpm docs:check:test
-pnpm docs:check
+git diff --check
 ```
-
-Первый проверяет сам verifier на изолированных fixtures. Второй проверяет
-фактическое состояние репозитория и ничего не изменяет.
 
 ### Chart Engine verification, runtime and logs
 

@@ -153,6 +153,16 @@ reusable visual primitives, не unresolved business workflow.
 
 ## Production integrity
 
+- Абсолютный инвариант данных: для каждого domain concept существует один
+  canonical contract, schema shape и state machine. Запрещены ad hoc `v1`/`v2`/
+  `vN`, parallel DTO/schema/event/cache/table/column namespaces, compatibility
+  readers/writers, fallback branches, silent converters, backfills, old-data
+  migrations и поддержка старых данных в базе как production behavior.
+- Если контракт меняется, все production, local и test contours в scope должны
+  перейти на новый единый контракт или fail closed с observable error. Forward
+  schema migrations допустимы только как механика установки/эволюции этой
+  единственной canonical schema, не как слой совместимости, legacy translator
+  или сохранение параллельной модели данных.
 - Не выдавай temporary workaround за конечное состояние.
 - Не добавляй mocks, fake success, browser-only business state, silent
   fallback, guessed response shape или скрыто disabled behavior вместо
