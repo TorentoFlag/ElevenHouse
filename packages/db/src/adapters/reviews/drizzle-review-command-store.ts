@@ -12,14 +12,19 @@ import {
   type ReviewVisibilityStatus
 } from "@elevenhouse/contracts";
 import {
+  approveReviewReplyVersion,
   approveReviewVersion,
   planSubmitReviewVersion,
+  planSubmitReviewReplyVersion,
   rejectReviewVersion,
+  type ApproveReviewReplyVersionResult,
   type ApproveReviewVersionResult,
   type ReviewLifecycleState,
+  type ReviewReplyVersionLifecycleState,
   type ReviewSubmissionLifecycleInput,
   type ReviewVersionLifecycleState,
   type RejectReviewVersionResult,
+  type SubmitReviewReplyVersionResult,
   type SubmitReviewVersionResult
 } from "@elevenhouse/domain";
 import { and, eq, sql } from "drizzle-orm";
@@ -27,6 +32,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   reviewPublicationEvents,
+  reviewReplyVersions,
   reviewVersions,
   reviewableInstances,
   reviews
@@ -35,6 +41,7 @@ import {
 type ReviewCommandTransaction = Parameters<Parameters<ElevenHouseDatabase["transaction"]>[0]>[0];
 type ReviewRow = typeof reviews.$inferSelect;
 type ReviewVersionRow = typeof reviewVersions.$inferSelect;
+type ReviewReplyVersionRow = typeof reviewReplyVersions.$inferSelect;
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
 
 export type DrizzleReviewCommandStore = {
@@ -61,6 +68,19 @@ export type DrizzleReviewCommandStore = {
     readonly reasonCode: ReviewModerationReasonCode;
     readonly note: string | null;
   }) => Promise<RejectReviewVersionResult>;
+  readonly submitReviewReplyVersion: (input: {
+    readonly actorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly nextReplyVersionId: string;
+    readonly text: string;
+  }) => Promise<SubmitReviewReplyVersionResult>;
+  readonly approveReviewReplyVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly replyVersionId: string;
+  }) => Promise<ApproveReviewReplyVersionResult>;
 };
 
 export function createDrizzleReviewCommandStore(
@@ -261,6 +281,83 @@ export function createDrizzleReviewCommandStore(
           .where(eq(reviews.id, result.review.id));
 
         return result;
+      }),
+    submitReviewReplyVersion: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const planned = planSubmitReviewReplyVersion({
+          actorUserId: input.actorUserId,
+          now: input.now,
+          review: currentReview,
+          nextReplyVersionId: input.nextReplyVersionId,
+          text: input.text
+        });
+        if (planned.kind === "rejected") return planned;
+
+        await insertReviewReplyVersion(transaction, planned.reviewId, currentReview.astrologerUserId, planned.replyVersion);
+        await transaction
+          .update(reviews)
+          .set({
+            revision: planned.expectedReviewRevision + 1,
+            pendingReplyVersionId: planned.replyVersion.id,
+            updatedAt: new Date(input.now)
+          })
+          .where(
+            and(
+              eq(reviews.id, planned.reviewId),
+              eq(reviews.revision, planned.expectedReviewRevision)
+            )
+          );
+
+        return planned;
+      }),
+    approveReviewReplyVersion: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        const replyVersionRow = await readReviewReplyVersion(
+          transaction,
+          input.reviewId,
+          input.replyVersionId
+        );
+        if (!reviewRow || !replyVersionRow) {
+          return { kind: "rejected", reason: "not_review_reply_version" };
+        }
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const result = approveReviewReplyVersion({
+          now: input.now,
+          moderatorUserId: input.moderatorUserId,
+          review: currentReview,
+          replyVersion: mapReplyVersion(replyVersionRow)
+        });
+        if (result.kind === "rejected") return result;
+
+        await transaction
+          .update(reviewReplyVersions)
+          .set({
+            moderationStatus: "approved",
+            moderationReasonCode: null,
+            moderationNote: null,
+            decidedAt: new Date(input.now),
+            decidedByUserId: input.moderatorUserId
+          })
+          .where(eq(reviewReplyVersions.id, result.replyVersion.id));
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            activePublicReplyVersionId: result.review.activePublicReplyVersion?.id ?? null,
+            pendingReplyVersionId: result.review.pendingReplyVersion?.id ?? null,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
+
+        return result;
       })
   };
 }
@@ -311,18 +408,34 @@ async function readReviewVersion(
   return row ?? null;
 }
 
+async function readReviewReplyVersion(
+  transaction: ReviewCommandTransaction,
+  reviewId: string,
+  replyVersionId: string
+): Promise<ReviewReplyVersionRow | null> {
+  const [row] = await transaction
+    .select()
+    .from(reviewReplyVersions)
+    .where(and(eq(reviewReplyVersions.reviewId, reviewId), eq(reviewReplyVersions.id, replyVersionId)));
+  return row ?? null;
+}
+
 async function hydrateReviewState(
   transaction: ReviewCommandTransaction,
   review: ReviewRow
 ): Promise<ReviewLifecycleState> {
-  const [activePublicVersion, pendingVersion] = await Promise.all([
-    review.activePublicVersionId
-      ? readReviewVersion(transaction, review.id, review.activePublicVersionId)
-      : Promise.resolve(null),
-    review.pendingVersionId
-      ? readReviewVersion(transaction, review.id, review.pendingVersionId)
-      : Promise.resolve(null)
-  ]);
+  const activePublicVersion = review.activePublicVersionId
+    ? await readReviewVersion(transaction, review.id, review.activePublicVersionId)
+    : null;
+  const pendingVersion = review.pendingVersionId
+    ? await readReviewVersion(transaction, review.id, review.pendingVersionId)
+    : null;
+  const activePublicReplyVersion = review.activePublicReplyVersionId
+    ? await readReviewReplyVersion(transaction, review.id, review.activePublicReplyVersionId)
+    : null;
+  const pendingReplyVersion = review.pendingReplyVersionId
+    ? await readReviewReplyVersion(transaction, review.id, review.pendingReplyVersionId)
+    : null;
   return {
     id: review.id,
     reviewableInstanceId: review.reviewableInstanceId,
@@ -335,8 +448,10 @@ async function hydrateReviewState(
     firstPublishedAt: review.firstPublishedAt ? toIso(review.firstPublishedAt) : null,
     activePublicVersion: activePublicVersion ? mapVersion(activePublicVersion) : null,
     pendingVersion: pendingVersion ? mapVersion(pendingVersion) : null,
-    activePublicReplyVersion: null,
-    pendingReplyVersion: null
+    activePublicReplyVersion: activePublicReplyVersion
+      ? mapReplyVersion(activePublicReplyVersion)
+      : null,
+    pendingReplyVersion: pendingReplyVersion ? mapReplyVersion(pendingReplyVersion) : null
   };
 }
 
@@ -359,6 +474,28 @@ async function insertReviewVersion(
     decidedAt: version.decidedAt ? new Date(version.decidedAt) : null,
     decidedByUserId: null,
     createdAt: new Date(version.submittedAt)
+  });
+}
+
+async function insertReviewReplyVersion(
+  transaction: ReviewCommandTransaction,
+  reviewId: string,
+  astrologerUserId: string,
+  replyVersion: ReviewReplyVersionLifecycleState
+): Promise<void> {
+  await transaction.insert(reviewReplyVersions).values({
+    id: replyVersion.id,
+    reviewId,
+    astrologerUserId,
+    versionNumber: replyVersion.versionNumber,
+    text: replyVersion.text,
+    moderationStatus: replyVersion.moderationStatus,
+    moderationReasonCode: null,
+    moderationNote: null,
+    submittedAt: new Date(replyVersion.submittedAt),
+    decidedAt: replyVersion.decidedAt ? new Date(replyVersion.decidedAt) : null,
+    decidedByUserId: null,
+    createdAt: new Date(replyVersion.submittedAt)
   });
 }
 
@@ -599,6 +736,17 @@ function mapVersion(row: ReviewVersionRow): ReviewVersionLifecycleState {
     rating: row.rating,
     text: row.text,
     publicIdentityMode: parseReviewPublicIdentityMode(row.publicIdentityMode),
+    moderationStatus: parseReviewModerationStatus(row.moderationStatus),
+    submittedAt: toIso(row.submittedAt),
+    decidedAt: row.decidedAt ? toIso(row.decidedAt) : null
+  };
+}
+
+function mapReplyVersion(row: ReviewReplyVersionRow): ReviewReplyVersionLifecycleState {
+  return {
+    id: row.id,
+    versionNumber: row.versionNumber,
+    text: row.text,
     moderationStatus: parseReviewModerationStatus(row.moderationStatus),
     submittedAt: toIso(row.submittedAt),
     decidedAt: row.decidedAt ? toIso(row.decidedAt) : null

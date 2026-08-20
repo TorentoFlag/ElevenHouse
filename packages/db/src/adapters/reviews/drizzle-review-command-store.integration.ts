@@ -95,6 +95,52 @@ describe.sequential("Drizzle review command store", () => {
       star5Count: 1
     });
 
+    const submittedReply = await store.submitReviewReplyVersion({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextReplyVersionId: fixture.firstReplyVersionId,
+      text: "Спасибо за отзыв."
+    });
+
+    expect(submittedReply).toMatchObject({
+      kind: "create_pending_reply_version",
+      keepActivePublicReplyVersionId: null,
+      replyVersion: {
+        id: fixture.firstReplyVersionId,
+        versionNumber: 1,
+        moderationStatus: "pending"
+      }
+    });
+
+    const [pendingReplyReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(pendingReplyReviewRow).toMatchObject({
+      activePublicReplyVersionId: null,
+      pendingReplyVersionId: fixture.firstReplyVersionId
+    });
+
+    const approvedReply = await store.approveReviewReplyVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId: fixture.reviewId,
+      replyVersionId: fixture.firstReplyVersionId
+    });
+
+    expect(approvedReply).toMatchObject({
+      kind: "approved",
+      review: {
+        activePublicReplyVersion: { id: fixture.firstReplyVersionId },
+        pendingReplyVersion: null
+      },
+      replyVersion: {
+        id: fixture.firstReplyVersionId,
+        moderationStatus: "approved"
+      }
+    });
+
     const edit = await store.submitReviewVersion({
       actorUserId: fixture.clientUserId,
       now: "2026-08-21T10:00:00.000Z",
@@ -135,7 +181,7 @@ describe.sequential("Drizzle review command store", () => {
     expect(editApproval).toMatchObject({
       kind: "approved",
       review: {
-        revision: 4,
+        revision: 6,
         activePublicVersion: { id: fixture.editVersionId },
         pendingVersion: null
       },
@@ -147,7 +193,7 @@ describe.sequential("Drizzle review command store", () => {
       .from(reviews)
       .where(eq(reviews.id, fixture.reviewId));
     expect(reviewRow).toMatchObject({
-      revision: 4,
+      revision: 6,
       activePublicVersionId: fixture.editVersionId,
       pendingVersionId: null,
       publicIdentityMode: "secret_user",
@@ -335,6 +381,7 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
     reviewId: randomUUID(),
     firstVersionId: randomUUID(),
     editVersionId: randomUUID(),
+    firstReplyVersionId: randomUUID(),
     publicationEventId: randomUUID()
   };
 }

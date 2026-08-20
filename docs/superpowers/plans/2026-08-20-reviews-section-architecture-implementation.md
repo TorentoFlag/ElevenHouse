@@ -335,6 +335,13 @@ and API slices.
 - Rejection clears the pending pointer, keeps the review non-public unless an older approved version exists, and does not write publication receipts or rating aggregates.
 - Remaining moderation command work: reply rejection/approval, dispute transactions and audit/case rows.
 
+**Progress 2026-08-20:** Review reply moderation publish path
+
+- Added astrologer reply submission persistence for already published reviews.
+- Added moderator approval persistence for reply versions; pending replies remain hidden until approval updates `active_public_reply_version_id`.
+- Updated review hydration to load active/pending reply versions sequentially inside the transaction.
+- Remaining reply work: rejected reply persistence and edit-reply replacement tests.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.
