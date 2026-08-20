@@ -10,4 +10,8 @@ describe("client AstroDiary route contract", () => {
       "/me/astrologers/41111111-1111-4111-8111-111111111111/journal"
     );
   });
+
+  it("keeps client reviews inside authenticated cabinet scope", () => {
+    expect(clientRouteContract.authenticatedReviews).toBe("/me/reviews");
+  });
 });

@@ -6,6 +6,7 @@ import { HomePage } from "./pages/home/HomePage";
 import { MePage } from "./pages/me/MePage";
 import { NotFoundPage } from "./pages/not-found/NotFoundPage";
 import { PublicAstrologerPage } from "./pages/public-astrologer/PublicAstrologerPage";
+import { ClientReviewsPage } from "./pages/reviews/ClientReviewsPage";
 import { clientRouteContract } from "./router.contract";
 
 export const router = createBrowserRouter([
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
             element: <MePage />
           },
           {
+            path: clientRouteContract.authenticatedReviews,
+            element: <ClientReviewsPage />
+          },
+          {
             path: clientRouteContract.authenticatedAstroDiary,
             lazy: async () => ({
               Component: (await import("./pages/astro-diary/ClientAstroDiaryPage"))
@@ -40,7 +45,9 @@ export const router = createBrowserRouter([
           },
           {
             path: clientRouteContract.authenticatedSession,
-            lazy: async () => ({ Component: (await import("./pages/session/SessionPage")).SessionPage })
+            lazy: async () => ({
+              Component: (await import("./pages/session/SessionPage")).SessionPage
+            })
           }
         ]
       },
