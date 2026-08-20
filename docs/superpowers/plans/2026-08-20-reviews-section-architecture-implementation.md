@@ -354,6 +354,12 @@ and API slices.
 - Added moderator restore persistence that closes the case, returns the review to `visible`, keeps Flow quiet and restores visible aggregate counts/star buckets.
 - Remaining dispute work: case message persistence, richer case status transitions and admin API audit wiring.
 
+**Progress 2026-08-20:** Moderation case message persistence
+
+- Added case-owned message persistence for moderator/client/astrologer/system authors using the domain visibility policy.
+- Covered moderator-to-client and moderator-to-astrologer separated visibility, plus rejection of a client-authored astrologer-only message before DB insert.
+- Remaining communication work: read projections per participant and admin API wiring.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

@@ -5,6 +5,8 @@ import {
   reviewableInstanceStatusSchema,
   reviewVisibilityStatusSchema,
   type ReviewDisputeStatus,
+  type ReviewModerationCaseMessageAuthorRole,
+  type ReviewModerationCaseMessageVisibility,
   type ReviewModerationReasonCode,
   type ReviewModerationStatus,
   type ReviewPublicIdentityMode,
@@ -14,6 +16,7 @@ import {
 import {
   approveReviewReplyVersion,
   approveReviewVersion,
+  createReviewCaseMessage,
   openReviewDispute,
   planSubmitReviewVersion,
   planSubmitReviewReplyVersion,
@@ -22,6 +25,7 @@ import {
   restoreReviewAfterDispute,
   type ApproveReviewReplyVersionResult,
   type ApproveReviewVersionResult,
+  type CreateReviewCaseMessageResult,
   type OpenReviewDisputeResult,
   type ReviewLifecycleState,
   type ReviewReplyVersionLifecycleState,
@@ -38,6 +42,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   reviewModerationCases,
+  reviewModerationCaseMessages,
   reviewPublicationEvents,
   reviewReplyVersions,
   reviewVersions,
@@ -109,6 +114,15 @@ export type DrizzleReviewCommandStore = {
     readonly reviewId: string;
     readonly caseId: string;
   }) => Promise<RestoreReviewAfterDisputeResult>;
+  readonly createReviewCaseMessage: (input: {
+    readonly messageId: string;
+    readonly caseId: string;
+    readonly authorUserId: string | null;
+    readonly authorRole: ReviewModerationCaseMessageAuthorRole;
+    readonly visibility: ReviewModerationCaseMessageVisibility;
+    readonly body: string;
+    readonly now: string;
+  }) => Promise<CreateReviewCaseMessageResult>;
 };
 
 export function createDrizzleReviewCommandStore(
@@ -543,7 +557,31 @@ export function createDrizzleReviewCommandStore(
         });
 
         return result;
-      })
+      }),
+    createReviewCaseMessage: async (input) => {
+      const result = createReviewCaseMessage({
+        messageId: input.messageId,
+        caseId: input.caseId,
+        authorUserId: input.authorUserId,
+        authorRole: input.authorRole,
+        visibility: input.visibility,
+        body: input.body,
+        createdAt: input.now
+      });
+      if (result.kind === "rejected") return result;
+
+      await database.insert(reviewModerationCaseMessages).values({
+        id: result.message.messageId,
+        caseId: result.message.caseId,
+        authorUserId: result.message.authorUserId,
+        authorRole: result.message.authorRole,
+        visibility: result.message.visibility,
+        body: result.message.body,
+        createdAt: new Date(result.message.createdAt)
+      });
+
+      return result;
+    }
   };
 }
 
@@ -601,7 +639,9 @@ async function readReviewReplyVersion(
   const [row] = await transaction
     .select()
     .from(reviewReplyVersions)
-    .where(and(eq(reviewReplyVersions.reviewId, reviewId), eq(reviewReplyVersions.id, replyVersionId)));
+    .where(
+      and(eq(reviewReplyVersions.reviewId, reviewId), eq(reviewReplyVersions.id, replyVersionId))
+    );
   return row ?? null;
 }
 

@@ -7,6 +7,7 @@ import type { PostgresRuntime } from "../../runtime";
 import {
   clientAstrologerRelationships,
   reviewModerationCases,
+  reviewModerationCaseMessages,
   reviewPublicationEvents,
   reviewVersions,
   reviewableInstances,
@@ -452,6 +453,74 @@ describe.sequential("Drizzle review command store", () => {
       star4Count: 0,
       star5Count: 0
     });
+
+    const clientMessageId = randomUUID();
+    const astrologerMessageId = randomUUID();
+    const moderatorToClient = await store.createReviewCaseMessage({
+      messageId: clientMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "client_and_moderators",
+      body: "Уточните, пожалуйста, что именно произошло.",
+      now: "2026-08-20T12:10:00.000Z"
+    });
+    const moderatorToAstrologer = await store.createReviewCaseMessage({
+      messageId: astrologerMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "astrologer_and_moderators",
+      body: "Пришлите контекст оказанной услуги.",
+      now: "2026-08-20T12:11:00.000Z"
+    });
+    const rejectedClientMessage = await store.createReviewCaseMessage({
+      messageId: randomUUID(),
+      caseId,
+      authorUserId: fixture.clientUserId,
+      authorRole: "client",
+      visibility: "astrologer_and_moderators",
+      body: "Так писать нельзя.",
+      now: "2026-08-20T12:12:00.000Z"
+    });
+
+    expect(moderatorToClient).toMatchObject({
+      kind: "created",
+      message: {
+        messageId: clientMessageId,
+        caseId,
+        authorUserId: fixture.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "client_and_moderators"
+      }
+    });
+    expect(moderatorToAstrologer).toMatchObject({
+      kind: "created",
+      message: {
+        messageId: astrologerMessageId,
+        caseId,
+        authorUserId: fixture.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "astrologer_and_moderators"
+      }
+    });
+    expect(rejectedClientMessage).toEqual({
+      kind: "rejected",
+      reason: "visibility_not_allowed_for_author"
+    });
+
+    const messageRows = await runtime.database
+      .select()
+      .from(reviewModerationCaseMessages)
+      .where(eq(reviewModerationCaseMessages.caseId, caseId));
+    expect(messageRows.map((row) => [row.id, row.visibility, row.body])).toEqual([
+      [
+        clientMessageId,
+        "client_and_moderators",
+        "Уточните, пожалуйста, что именно произошло."
+      ],
+      [astrologerMessageId, "astrologer_and_moderators", "Пришлите контекст оказанной услуги."]
+    ]);
 
     const restored = await store.restoreReviewAfterDispute({
       moderatorUserId: fixture.moderatorUserId,
