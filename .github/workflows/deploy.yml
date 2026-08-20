@@ -32,6 +32,9 @@ jobs:
       - Linux
       - X64
       - elevenhouse-stage
+    environment:
+      name: production
+      deployment: false
     if: >-
       ${{
         (

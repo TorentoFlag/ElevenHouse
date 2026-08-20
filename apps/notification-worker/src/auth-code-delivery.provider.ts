@@ -193,8 +193,8 @@ function createEmailAuthCodeMessage(
     from: options.from,
     to: input.identifier,
     subject: "Your ElevenHouse sign-in code",
-    text: `Your ElevenHouse sign-in code is ${input.code}. It expires at ${input.expiresAt}.`,
-    html: `<p>Your ElevenHouse sign-in code is <strong>${input.code}</strong>.</p><p>It expires at ${input.expiresAt}.</p>`
+    text: `Your ElevenHouse sign-in code is ${input.code}.`,
+    html: `<p>Your ElevenHouse sign-in code is <strong>${input.code}</strong>.</p>`
   };
 }
 

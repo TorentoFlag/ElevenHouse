@@ -20,6 +20,8 @@ jobs:
       - Linux
       - X64
       - elevenhouse-stage
+    env:
+      TURBO_CONCURRENCY: 2
     steps:
       - name: Validate runner identity
         run: |

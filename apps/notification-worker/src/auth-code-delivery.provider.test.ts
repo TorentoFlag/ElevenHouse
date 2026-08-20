@@ -47,8 +47,8 @@ describe("SmtpEmailAuthCodeDeliveryProvider", () => {
         from: "ElevenHouse <support@elevenhouse.ai>",
         to: "client@example.com",
         subject: "Your ElevenHouse sign-in code",
-        text: "Your ElevenHouse sign-in code is 123456. It expires at 2026-08-20T12:00:00.000Z.",
-        html: "<p>Your ElevenHouse sign-in code is <strong>123456</strong>.</p><p>It expires at 2026-08-20T12:00:00.000Z.</p>"
+        text: "Your ElevenHouse sign-in code is 123456.",
+        html: "<p>Your ElevenHouse sign-in code is <strong>123456</strong>.</p>"
       }
     ]);
   });
