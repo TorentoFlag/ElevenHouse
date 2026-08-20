@@ -508,17 +508,35 @@ describe.sequential("Drizzle review command store", () => {
       kind: "rejected",
       reason: "visibility_not_allowed_for_author"
     });
+    await expect(
+      store.createReviewCaseMessage({
+        messageId: clientMessageId,
+        caseId,
+        authorUserId: fixture.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "client_and_moderators",
+        body: "Уточните, пожалуйста, что именно произошло.",
+        now: "2026-08-20T12:15:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      message: {
+        messageId: clientMessageId,
+        caseId,
+        authorUserId: fixture.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "client_and_moderators",
+        body: "Уточните, пожалуйста, что именно произошло.",
+        createdAt: "2026-08-20T12:10:00.000Z"
+      }
+    });
 
     const messageRows = await runtime.database
       .select()
       .from(reviewModerationCaseMessages)
       .where(eq(reviewModerationCaseMessages.caseId, caseId));
     expect(messageRows.map((row) => [row.id, row.visibility, row.body])).toEqual([
-      [
-        clientMessageId,
-        "client_and_moderators",
-        "Уточните, пожалуйста, что именно произошло."
-      ],
+      [clientMessageId, "client_and_moderators", "Уточните, пожалуйста, что именно произошло."],
       [astrologerMessageId, "astrologer_and_moderators", "Пришлите контекст оказанной услуги."]
     ]);
 
@@ -574,11 +592,9 @@ async function seedReviewableFixture(runtime: PostgresRuntime) {
   const now = new Date("2026-08-20T09:00:00.000Z");
 
   await runtime.database.transaction(async (transaction) => {
-    await transaction.insert(users).values([
-      { id: astrologerUserId },
-      { id: clientUserId },
-      { id: moderatorUserId }
-    ]);
+    await transaction
+      .insert(users)
+      .values([{ id: astrologerUserId }, { id: clientUserId }, { id: moderatorUserId }]);
     await transaction.insert(clientAstrologerRelationships).values({
       id: relationshipId,
       astrologerUserId,
