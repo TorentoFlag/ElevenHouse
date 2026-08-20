@@ -28,6 +28,14 @@ session. Reusing it as a capture result would falsely assert that its
 `providerOperationId` is the payment ID and would mix two independently
 idempotent provider facts.
 
+ArcPay owns the cardholder-data surface for hosted checkout and H2H-hosted
+payment modes. ElevenHouse does not receive or store PAN/CVV from this flow.
+Finance private objects are operational evidence payloads: provider requests,
+provider responses, signed webhook bodies and canonical reads. They are stored
+in a private versioned object bucket and bound from PostgreSQL by object
+VersionId, byte length and SHA-256 digest. Server-side object encryption is not
+part of this authority model.
+
 ## Decision
 
 1. Hosted-checkout session creation and a hosted payment capture are distinct
@@ -49,6 +57,9 @@ idempotent provider facts.
 5. Browser return URLs and the initial HPP session response are client UX
    facts only. They may show a pending/success hint, but cannot fulfil an order
    or credit an astrologer's wallet.
+6. Finance artifact storage requires private bucket access, object versioning
+   and digest verification. It does not require SSE-KMS because cardholder data
+   stays with ArcPay; do not configure fake KMS identities for these artifacts.
 
 ## Consequences
 
@@ -63,3 +74,6 @@ idempotent provider facts.
 - Settlement, refund, chargeback and fiscal receipt polling remain separate
   facts. In particular, a fiscal receipt's asynchronous status is not a reason
   to post a capture without valid fiscal configuration.
+- Production checkout readiness depends on a private versioned object bucket
+  and retention-policy rows. Missing object versioning remains a hard failure;
+  missing provider-side encryption does not block this payment contour.

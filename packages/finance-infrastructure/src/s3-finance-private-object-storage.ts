@@ -22,8 +22,6 @@ export type S3FinancePrivateObjectStorageConfig = Readonly<{
   accessKeyId: string;
   secretAccessKey: string;
   forcePathStyle: boolean;
-  /** Customer-managed KMS key ARN, not an alias. It is recorded with every immutable object. */
-  kmsKeyArn: string;
 }>;
 
 type S3Command = PutObjectCommand | GetObjectCommand | DeleteObjectCommand | HeadBucketCommand;
@@ -47,9 +45,12 @@ export class FinancePrivateObjectStorageError extends Error {
   }
 }
 
+const financeArtifactEnvelopeKeyVersion = "private-versioned-object:v1";
+
 /**
- * Stores finance artifacts only in a versioned private bucket with SSE-KMS.  There is no
- * unencrypted/local fallback: production credentials need both object and KMS permissions.
+ * Stores finance operational evidence in a private versioned bucket. Cardholder data stays inside
+ * ArcPay; this store records request/response/webhook evidence and relies on object VersionId plus
+ * PostgreSQL digests for immutable auditability.
  */
 export function createS3FinancePrivateObjectStorage(
   config: S3FinancePrivateObjectStorageConfig,
@@ -86,8 +87,6 @@ export function createS3FinancePrivateObjectStorage(
             ContentLength: normalized.bytes.length,
             ChecksumSHA256: normalized.sha256Base64,
             IfNoneMatch: "*",
-            ServerSideEncryption: "aws:kms",
-            SSEKMSKeyId: config.kmsKeyArn,
             Metadata: {
               "finance-sha256": normalized.expectedSha256Digest,
               "finance-content-type": normalized.contentType
@@ -100,7 +99,7 @@ export function createS3FinancePrivateObjectStorage(
           s3,
           bucket: config.bucket,
           privateObjectKey,
-          envelopeKeyVersion: config.kmsKeyArn,
+          envelopeKeyVersion: financeArtifactEnvelopeKeyVersion,
           expected: normalized
         });
       }
@@ -110,14 +109,14 @@ export function createS3FinancePrivateObjectStorage(
       return Object.freeze({
         privateObjectKey,
         privateObjectVersion: result.VersionId,
-        envelopeKeyVersion: config.kmsKeyArn,
+        envelopeKeyVersion: financeArtifactEnvelopeKeyVersion,
         sha256Digest: normalized.expectedSha256Digest,
         byteLength: normalized.bytes.length,
         contentType: normalized.contentType
       });
     },
     readImmutable: async (input) => {
-      const locator = normalizeLocator(input, config.kmsKeyArn);
+      const locator = normalizeLocator(input);
       const result = (await s3.send(
         new GetObjectCommand({
           Bucket: config.bucket,
@@ -155,7 +154,7 @@ export function createS3FinancePrivateObjectStorage(
       }) as FinancePrivateObjectRead;
     },
     deleteImmutable: async (input) => {
-      const locator = normalizeLocator(input, config.kmsKeyArn);
+      const locator = normalizeLocator(input);
       await s3.send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
@@ -235,15 +234,12 @@ function normalizeWrite(input: Parameters<FinancePrivateObjectStoragePort["write
   });
 }
 
-function normalizeLocator(
-  input: FinancePrivateObjectLocator,
-  expectedKmsKeyArn: string
-): FinancePrivateObjectLocator {
+function normalizeLocator(input: FinancePrivateObjectLocator): FinancePrivateObjectLocator {
   if (
     !input ||
     !/^finance\/artifacts\/[A-Za-z0-9][A-Za-z0-9._:-]{0,159}\.json$/.test(input.privateObjectKey) ||
     !input.privateObjectVersion.trim() ||
-    input.envelopeKeyVersion !== expectedKmsKeyArn
+    input.envelopeKeyVersion !== financeArtifactEnvelopeKeyVersion
   ) {
     throw new FinancePrivateObjectStorageError("invalid_input");
   }
@@ -266,8 +262,7 @@ function assertConfig(config: S3FinancePrivateObjectStorageConfig): void {
     !config.region.trim() ||
     !config.bucket.trim() ||
     !config.accessKeyId.trim() ||
-    !config.secretAccessKey.trim() ||
-    !/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(config.kmsKeyArn)
+    !config.secretAccessKey.trim()
   ) {
     throw new FinancePrivateObjectStorageError("invalid_input");
   }

@@ -113,7 +113,6 @@ const runtimeConfigSchema = z.object({
   PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
-  PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
   PAYMENT_WORKER_FINANCE_PROVIDER_RESPONSE_RETENTION_POLICY_ID: z
     .string()
     .trim()
@@ -208,7 +207,6 @@ export type PaymentWorkerRuntimeConfig = {
           accessKeyId: string;
           secretAccessKey: string;
           forcePathStyle: boolean;
-          kmsKeyArn: string;
         }>;
     responseArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
     canonicalReadArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
@@ -365,12 +363,6 @@ function resolveFinanceProviderDispatchS3Storage(config: z.infer<typeof runtimeC
       "PAYMENT_WORKER_FINANCE_PROVIDER_DISPATCH_ENABLED requires S3 artifact storage"
     );
   }
-  const kmsKeyArn = requiredS3(config.PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN);
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error(
-      "PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN"
-    );
-  }
   return Object.freeze({
     kind: "s3" as const,
     endpoint,
@@ -378,8 +370,7 @@ function resolveFinanceProviderDispatchS3Storage(config: z.infer<typeof runtimeC
     bucket: requiredS3(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_BUCKET),
     accessKeyId: requiredS3(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID),
     secretAccessKey: requiredS3(config.PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY),
-    forcePathStyle: forcePathStyle === "true",
-    kmsKeyArn
+    forcePathStyle: forcePathStyle === "true"
   });
 }
 

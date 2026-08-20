@@ -39,9 +39,7 @@ describe("payment worker finance provider dispatch runtime config", () => {
       PAYMENT_WORKER_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance-private",
       PAYMENT_WORKER_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "finance-access-key",
       PAYMENT_WORKER_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "finance-secret-key",
-      PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
-      PAYMENT_WORKER_FINANCE_ARTIFACT_KMS_KEY_ARN:
-        "arn:aws:kms:eu-central-1:123456789012:key/00000000-0000-4000-8000-000000000000"
+      PAYMENT_WORKER_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false"
     });
 
     expect(config.financeProviderDispatch?.artifactStorage).toEqual({
@@ -51,8 +49,7 @@ describe("payment worker finance provider dispatch runtime config", () => {
       bucket: "elevenhouse-finance-private",
       accessKeyId: "finance-access-key",
       secretAccessKey: "finance-secret-key",
-      forcePathStyle: false,
-      kmsKeyArn: "arn:aws:kms:eu-central-1:123456789012:key/00000000-0000-4000-8000-000000000000"
+      forcePathStyle: false
     });
   });
 });

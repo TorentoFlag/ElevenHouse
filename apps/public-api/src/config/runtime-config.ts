@@ -141,7 +141,6 @@ const publicApiRuntimeConfigSchema = z.object({
   PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
   PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
   PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
-  PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN: z.string().trim().min(1).optional(),
   PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z
     .string()
     .trim()
@@ -250,7 +249,6 @@ export type PublicApiRuntimeConfig = {
           accessKeyId: string;
           secretAccessKey: string;
           forcePathStyle: boolean;
-          kmsKeyArn: string;
         }>;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
   }> | null;
@@ -479,12 +477,6 @@ function resolveFinanceCheckoutS3Storage(config: z.infer<typeof publicApiRuntime
   if (forcePathStyle === undefined) {
     throw new Error("PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED requires S3 artifact storage");
   }
-  const kmsKeyArn = requiredFinanceCheckoutS3Config(config.PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN);
-  if (!/^arn:aws[a-z-]*:kms:[a-z0-9-]+:\d{12}:key\/[0-9a-f-]{36}$/i.test(kmsKeyArn)) {
-    throw new Error(
-      "PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN must be a customer-managed KMS key ARN"
-    );
-  }
   return Object.freeze({
     kind: "s3" as const,
     endpoint,
@@ -496,8 +488,7 @@ function resolveFinanceCheckoutS3Storage(config: z.infer<typeof publicApiRuntime
     secretAccessKey: requiredFinanceCheckoutS3Config(
       config.PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY
     ),
-    forcePathStyle: forcePathStyle === "true",
-    kmsKeyArn
+    forcePathStyle: forcePathStyle === "true"
   });
 }
 

@@ -11,6 +11,7 @@ import {
 import { resolveArcPayProviderAccountSeedData } from "./finance-provider-account-seed-data";
 import {
   defaultClientCheckoutPreparePolicySeedData,
+  defaultFinanceArtifactRetentionPolicySeedData,
   defaultFinancePolicySeedData
 } from "./finance-policy-seed-data";
 import { reconcileFlowRuntimeControlAuthority } from "./flow-runtime-control-reconciliation";
@@ -31,6 +32,7 @@ async function main() {
     await seedDictionaryCategories();
     await seedDictionaryPlatformEntries();
     await seedDefaultFinancePolicy();
+    await seedDefaultFinanceArtifactRetentionPolicies();
     await seedDefaultClientCheckoutPreparePolicy();
     await seedArcPayProviderAccount();
     await seedProductTemplates();
@@ -232,6 +234,98 @@ async function seedDefaultClientCheckoutPreparePolicy() {
     throw new Error(
       `Published ${seed.operationKind} resource policy does not match the canonical seed`
     );
+  }
+}
+
+async function seedDefaultFinanceArtifactRetentionPolicies() {
+  if (defaultFinanceArtifactRetentionPolicySeedData.length === 0) {
+    return;
+  }
+
+  const valuesSql = defaultFinanceArtifactRetentionPolicySeedData
+    .map((_, index) => {
+      const parameterOffset = index * 5;
+
+      return `($${parameterOffset + 1}, $${parameterOffset + 2}, $${parameterOffset + 3}, $${parameterOffset + 4}, $${parameterOffset + 5})`;
+    })
+    .join(", ");
+  const values = defaultFinanceArtifactRetentionPolicySeedData.flatMap((policy) => [
+    policy.policyId,
+    policy.policyVersion,
+    policy.artifactClass,
+    policy.retainForSeconds,
+    policy.authorityRef
+  ]);
+
+  await pool.query(
+    `insert into finance_artifact_retention_policies (
+       policy_id,
+       policy_version,
+       artifact_class,
+       retain_for_seconds,
+       authority_ref,
+       effective_at,
+       created_at
+     )
+     select seed_policies.policy_id,
+            seed_policies.policy_version::numeric,
+            seed_policies.artifact_class,
+            seed_policies.retain_for_seconds::numeric,
+            seed_policies.authority_ref,
+            timestamp with time zone '2026-08-20 00:00:00+00',
+            now()
+     from (values ${valuesSql})
+       as seed_policies(policy_id, policy_version, artifact_class, retain_for_seconds, authority_ref)
+     on conflict (policy_id, policy_version) do nothing`,
+    values
+  );
+
+  const result = await pool.query<{
+    policy_id: string;
+    policy_version: string;
+    artifact_class: string;
+    retain_for_seconds: string;
+    authority_ref: string;
+  }>(
+    `select policy_id,
+            policy_version::text,
+            artifact_class,
+            retain_for_seconds::text,
+            authority_ref
+     from finance_artifact_retention_policies
+     where (policy_id, policy_version) in (${defaultFinanceArtifactRetentionPolicySeedData
+       .map((_, index) => `($${index * 2 + 1}, $${index * 2 + 2}::numeric)`)
+       .join(", ")})
+     order by policy_id`,
+    defaultFinanceArtifactRetentionPolicySeedData.flatMap((policy) => [
+      policy.policyId,
+      policy.policyVersion
+    ])
+  );
+
+  const actualPolicies = new Map(
+    result.rows.map((row) => [
+      `${row.policy_id}:${row.policy_version}`,
+      {
+        artifactClass: row.artifact_class,
+        retainForSeconds: row.retain_for_seconds,
+        authorityRef: row.authority_ref
+      }
+    ])
+  );
+
+  for (const policy of defaultFinanceArtifactRetentionPolicySeedData) {
+    const actual = actualPolicies.get(`${policy.policyId}:${policy.policyVersion}`);
+    if (
+      !actual ||
+      actual.artifactClass !== policy.artifactClass ||
+      actual.retainForSeconds !== policy.retainForSeconds ||
+      actual.authorityRef !== policy.authorityRef
+    ) {
+      throw new Error(
+        `Finance artifact retention policy ${policy.policyId}@${policy.policyVersion} does not match the canonical seed`
+      );
+    }
   }
 }
 

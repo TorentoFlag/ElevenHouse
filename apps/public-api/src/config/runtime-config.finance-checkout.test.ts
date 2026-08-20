@@ -28,16 +28,13 @@ describe("public API finance checkout runtime config", () => {
     const config = createPublicApiRuntimeConfig({
       ...baseProductionConfig,
       PUBLIC_API_FINANCE_CHECKOUT_PREPARATION_ENABLED: "true",
-      PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS:
-        '[{"method":"bank_card","paymentMode":"redirect"}]',
+      PUBLIC_API_FINANCE_CHECKOUT_PAYMENT_METHODS: '[{"method":"bank_card","paymentMode":"h2h"}]',
       PUBLIC_API_FINANCE_ARTIFACT_S3_ENDPOINT: "https://finance-artifacts.example.com",
       PUBLIC_API_FINANCE_ARTIFACT_S3_REGION: "eu-central-1",
       PUBLIC_API_FINANCE_ARTIFACT_S3_BUCKET: "elevenhouse-finance-private",
       PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: "finance-access-key",
       PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: "finance-secret-key",
-      PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false",
-      PUBLIC_API_FINANCE_ARTIFACT_KMS_KEY_ARN:
-        "arn:aws:kms:eu-central-1:123456789012:key/00000000-0000-4000-8000-000000000000"
+      PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: "false"
     });
 
     expect(config.financeCheckout?.artifactStorage).toEqual({
@@ -47,8 +44,7 @@ describe("public API finance checkout runtime config", () => {
       bucket: "elevenhouse-finance-private",
       accessKeyId: "finance-access-key",
       secretAccessKey: "finance-secret-key",
-      forcePathStyle: false,
-      kmsKeyArn: "arn:aws:kms:eu-central-1:123456789012:key/00000000-0000-4000-8000-000000000000"
+      forcePathStyle: false
     });
   });
 });
