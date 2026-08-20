@@ -124,6 +124,43 @@ export class AdminReviewsController {
     return this.service.restoreReviewAfterDispute(requireAdminUserId(request), reviewId, caseId);
   }
 
+  @Post(":reviewId/moderation-cases/:caseId/hide")
+  @RequireCsrf()
+  @RequireIdempotency()
+  hideReviewByModerationFromCase(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("caseId") caseId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined
+  ): Promise<ReviewAdminDetail> {
+    return this.service.hideReviewByModeration(
+      requireAdminUserId(request),
+      reviewId,
+      caseId,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
+  @Post(":reviewId/hide")
+  @RequireCsrf()
+  @RequireIdempotency()
+  hideReviewByModeration(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined
+  ): Promise<ReviewAdminDetail> {
+    return this.service.hideReviewByModeration(
+      requireAdminUserId(request),
+      reviewId,
+      null,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
   @Get(":reviewId")
   getReviewDetail(@Param("reviewId") reviewId: string): Promise<ReviewAdminDetail> {
     return this.service.getReviewDetail(reviewId);

@@ -6,6 +6,7 @@ import {
   buildReviewPublicAuthor,
   createReviewCaseMessage,
   createReviewFirstPublishedFlowEvent,
+  hideReviewByModeration,
   openReviewDispute,
   planSubmitReviewVersion,
   rejectReviewReplyVersion,
@@ -26,8 +27,10 @@ const ids = {
   moderatorUserId: "10000000-0000-4000-8000-000000000007",
   caseId: "10000000-0000-4000-8000-000000000008",
   messageId: "10000000-0000-4000-8000-000000000009",
+  moderationHideCaseId: "10000000-0000-4000-8000-000000000010",
   replyVersionId: "10000000-0000-4000-8000-000000000011",
-  pendingReplyVersionId: "10000000-0000-4000-8000-000000000012"
+  pendingReplyVersionId: "10000000-0000-4000-8000-000000000012",
+  moderationHideMessageId: "10000000-0000-4000-8000-000000000013"
 } as const;
 
 const reviewableInstance = (
@@ -456,6 +459,65 @@ describe("Review lifecycle domain policy", () => {
         activePublicVersion: { id: ids.versionId }
       },
       flowEvent: null
+    });
+  });
+
+  it("hides public or disputed reviews by moderator decision with a closed audit case", () => {
+    const visibleResult = hideReviewByModeration({
+      now: "2026-08-22T11:00:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      review: approvedReview(),
+      nextCaseId: ids.moderationHideCaseId,
+      nextCaseMessageId: ids.moderationHideMessageId,
+      reasonCode: "legal_risk",
+      note: "Нужно снять публикацию по юридическому риску."
+    });
+
+    expect(visibleResult).toMatchObject({
+      kind: "hidden",
+      review: {
+        revision: 4,
+        visibilityStatus: "hidden_by_moderation",
+        disputeStatus: "none",
+        activePublicVersion: { id: ids.versionId }
+      },
+      moderationCase: {
+        caseId: ids.moderationHideCaseId,
+        reviewId: ids.reviewId,
+        status: "closed",
+        openedAt: "2026-08-22T11:00:00.000Z",
+        closedAt: "2026-08-22T11:00:00.000Z",
+        reasonCode: "legal_risk"
+      },
+      noteMessage: {
+        messageId: ids.moderationHideMessageId,
+        authorUserId: ids.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "moderators_only",
+        body: "Нужно снять публикацию по юридическому риску."
+      }
+    });
+
+    expect(
+      hideReviewByModeration({
+        now: "2026-08-22T12:00:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        review: approvedReview({
+          visibilityStatus: "temporarily_hidden_by_dispute",
+          disputeStatus: "open"
+        }),
+        nextCaseId: ids.moderationHideCaseId,
+        nextCaseMessageId: null,
+        reasonCode: "fraud_or_conflict",
+        note: null
+      })
+    ).toMatchObject({
+      kind: "hidden",
+      review: {
+        visibilityStatus: "hidden_by_moderation",
+        disputeStatus: "resolved_closed"
+      },
+      noteMessage: null
     });
   });
 

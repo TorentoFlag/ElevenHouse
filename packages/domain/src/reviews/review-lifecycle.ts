@@ -185,6 +185,18 @@ export type RestoreReviewAfterDisputeResult =
       readonly reason: "review_not_public" | "no_active_dispute";
     };
 
+export type HideReviewByModerationResult =
+  | {
+      readonly kind: "hidden";
+      readonly review: ReviewLifecycleState;
+      readonly moderationCase: ReviewModerationCaseLifecycleState;
+      readonly noteMessage: ReviewCaseMessageLifecycleState | null;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "review_not_public" | "already_hidden_by_moderation";
+    };
+
 export type ReviewModerationCaseLifecycleState = {
   readonly caseId: string;
   readonly reviewId: string;
@@ -451,7 +463,10 @@ export function rejectReviewReplyVersion(input: {
   if (input.replyVersion.moderationStatus !== "pending") {
     return { kind: "not_rejected", reason: "reply_already_decided" };
   }
-  if (!input.review.pendingReplyVersion || input.review.pendingReplyVersion.id !== input.replyVersion.id) {
+  if (
+    !input.review.pendingReplyVersion ||
+    input.review.pendingReplyVersion.id !== input.replyVersion.id
+  ) {
     return { kind: "not_rejected", reason: "not_review_reply_version" };
   }
 
@@ -483,7 +498,11 @@ export function openReviewDispute(input: {
   if (input.actorUserId !== input.review.astrologerUserId) {
     return { kind: "rejected", reason: "not_review_astrologer" };
   }
-  if (["open", "under_review", "waiting_client", "waiting_astrologer"].includes(input.review.disputeStatus)) {
+  if (
+    ["open", "under_review", "waiting_client", "waiting_astrologer"].includes(
+      input.review.disputeStatus
+    )
+  ) {
     return { kind: "rejected", reason: "active_dispute_exists" };
   }
   if (!input.review.activePublicVersion) {
@@ -515,7 +534,11 @@ export function restoreReviewAfterDispute(input: {
   readonly review: ReviewLifecycleState;
 }): RestoreReviewAfterDisputeResult {
   if (!input.review.activePublicVersion) return { kind: "rejected", reason: "review_not_public" };
-  if (!["open", "under_review", "waiting_client", "waiting_astrologer"].includes(input.review.disputeStatus)) {
+  if (
+    !["open", "under_review", "waiting_client", "waiting_astrologer"].includes(
+      input.review.disputeStatus
+    )
+  ) {
     return { kind: "rejected", reason: "no_active_dispute" };
   }
 
@@ -528,6 +551,59 @@ export function restoreReviewAfterDispute(input: {
       disputeStatus: "resolved_closed"
     },
     flowEvent: null
+  };
+}
+
+export function hideReviewByModeration(input: {
+  readonly now: string;
+  readonly moderatorUserId: string;
+  readonly review: ReviewLifecycleState;
+  readonly nextCaseId: string;
+  readonly nextCaseMessageId: string | null;
+  readonly reasonCode: ReviewModerationReasonCode;
+  readonly note: string | null;
+}): HideReviewByModerationResult {
+  if (!input.review.activePublicVersion) return { kind: "rejected", reason: "review_not_public" };
+  if (input.review.visibilityStatus === "hidden_by_moderation") {
+    return { kind: "rejected", reason: "already_hidden_by_moderation" };
+  }
+  if (
+    input.review.visibilityStatus !== "visible" &&
+    input.review.visibilityStatus !== "temporarily_hidden_by_dispute"
+  ) {
+    return { kind: "rejected", reason: "review_not_public" };
+  }
+
+  return {
+    kind: "hidden",
+    review: {
+      ...input.review,
+      revision: input.review.revision + 1,
+      visibilityStatus: "hidden_by_moderation",
+      disputeStatus: isActiveDisputeStatus(input.review.disputeStatus)
+        ? "resolved_closed"
+        : input.review.disputeStatus
+    },
+    moderationCase: {
+      caseId: input.nextCaseId,
+      reviewId: input.review.id,
+      status: "closed",
+      openedAt: input.now,
+      closedAt: input.now,
+      reasonCode: input.reasonCode
+    },
+    noteMessage:
+      input.note && input.nextCaseMessageId
+        ? {
+            messageId: input.nextCaseMessageId,
+            caseId: input.nextCaseId,
+            authorUserId: input.moderatorUserId,
+            authorRole: "moderator",
+            visibility: "moderators_only",
+            body: input.note,
+            createdAt: input.now
+          }
+        : null
   };
 }
 
@@ -583,10 +659,9 @@ export function buildReviewPublicAuthor(input: {
   };
 }
 
-export function createReviewFirstPublishedFlowEvent(input: Omit<
-  ReviewFirstPublicationFlowEvent,
-  "eventType"
->): ReviewFirstPublicationFlowEvent {
+export function createReviewFirstPublishedFlowEvent(
+  input: Omit<ReviewFirstPublicationFlowEvent, "eventType">
+): ReviewFirstPublicationFlowEvent {
   return reviewFirstPublicationFlowEventSchema.parse({
     eventType: "review_first_published",
     ...input
@@ -631,17 +706,21 @@ function isWithinReviewWindow(
 
 function nextReviewVersionNumber(review: ReviewLifecycleState | null): number {
   if (!review) return 1;
-  return Math.max(
-    review.activePublicVersion?.versionNumber ?? 0,
-    review.pendingVersion?.versionNumber ?? 0
-  ) + 1;
+  return (
+    Math.max(
+      review.activePublicVersion?.versionNumber ?? 0,
+      review.pendingVersion?.versionNumber ?? 0
+    ) + 1
+  );
 }
 
 function nextReplyVersionNumber(review: ReviewLifecycleState): number {
-  return Math.max(
-    review.activePublicReplyVersion?.versionNumber ?? 0,
-    review.pendingReplyVersion?.versionNumber ?? 0
-  ) + 1;
+  return (
+    Math.max(
+      review.activePublicReplyVersion?.versionNumber ?? 0,
+      review.pendingReplyVersion?.versionNumber ?? 0
+    ) + 1
+  );
 }
 
 function isCaseMessageVisibilityAllowed(
@@ -665,4 +744,8 @@ function normalizeNamePart(value: string): string {
 function buildInitials(firstName: string, lastName: string): string {
   if (lastName) return `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase();
   return firstName.slice(0, 2).toUpperCase();
+}
+
+function isActiveDisputeStatus(status: ReviewLifecycleState["disputeStatus"]): boolean {
+  return ["open", "under_review", "waiting_client", "waiting_astrologer"].includes(status);
 }

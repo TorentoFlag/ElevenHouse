@@ -580,6 +580,106 @@ describe.sequential("Drizzle review command store", () => {
       star5Count: 1
     });
   });
+
+  it("hides visible reviews by moderation decision with aggregate deltas and audit case", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+    const hideCaseId = randomUUID();
+    const hideMessageId = randomUUID();
+
+    await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Публичный отзыв для скрытия.",
+        publicIdentityMode: "named"
+      }
+    });
+    await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+
+    const hidden = await store.hideReviewByModeration({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      caseId: null,
+      nextCaseId: hideCaseId,
+      nextCaseMessageId: hideMessageId,
+      reasonCode: "legal_risk",
+      note: "Скрыто после модераторской проверки."
+    });
+
+    expect(hidden).toMatchObject({
+      kind: "hidden",
+      review: {
+        visibilityStatus: "hidden_by_moderation",
+        disputeStatus: "none"
+      },
+      moderationCase: {
+        caseId: hideCaseId,
+        status: "closed",
+        reasonCode: "legal_risk"
+      },
+      noteMessage: {
+        messageId: hideMessageId,
+        visibility: "moderators_only",
+        body: "Скрыто после модераторской проверки."
+      }
+    });
+
+    const [reviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(reviewRow).toMatchObject({
+      visibilityStatus: "hidden_by_moderation",
+      disputeStatus: "none"
+    });
+    const [caseRow] = await runtime.database
+      .select()
+      .from(reviewModerationCases)
+      .where(eq(reviewModerationCases.id, hideCaseId));
+    expect(caseRow).toMatchObject({
+      reviewId: fixture.reviewId,
+      status: "closed",
+      reasonCode: "legal_risk",
+      openedByUserId: fixture.moderatorUserId,
+      closedByUserId: fixture.moderatorUserId
+    });
+    const [messageRow] = await runtime.database
+      .select()
+      .from(reviewModerationCaseMessages)
+      .where(eq(reviewModerationCaseMessages.id, hideMessageId));
+    expect(messageRow).toMatchObject({
+      caseId: hideCaseId,
+      authorRole: "moderator",
+      visibility: "moderators_only",
+      body: "Скрыто после модераторской проверки."
+    });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 0,
+      approvedReviewCount: 1,
+      ratingSum: 0,
+      star4Count: 0,
+      star5Count: 0
+    });
+    await expectProductAggregate(runtime, fixture.astrologerUserId, fixture.productId, {
+      visibleReviewCount: 0,
+      approvedReviewCount: 1,
+      ratingSum: 0,
+      star4Count: 0,
+      star5Count: 0
+    });
+  });
 });
 
 async function seedReviewableFixture(runtime: PostgresRuntime) {

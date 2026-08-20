@@ -17,6 +17,7 @@ import type {
   CreateReviewCaseMessageResult,
   RejectReviewReplyVersionResult,
   RejectReviewVersionResult,
+  HideReviewByModerationResult,
   RestoreReviewAfterDisputeResult,
   ReviewReadStore
 } from "@elevenhouse/domain";
@@ -60,6 +61,16 @@ type AdminReviewCommandStore = {
     readonly reviewId: string;
     readonly caseId: string;
   }) => Promise<RestoreReviewAfterDisputeResult>;
+  readonly hideReviewByModeration: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly caseId: string | null;
+    readonly nextCaseId: string;
+    readonly nextCaseMessageId: string | null;
+    readonly reasonCode: string;
+    readonly note: string | null;
+  }) => Promise<HideReviewByModerationResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -200,6 +211,39 @@ export class AdminReviewsService {
     });
     if (result.kind === "rejected") {
       throw new BadRequestException("Review dispute cannot be restored");
+    }
+    return this.readRequiredReviewDetail(safeReviewId);
+  }
+
+  async hideReviewByModeration(
+    adminUserId: string,
+    reviewId: string,
+    caseId: string | null,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ReviewAdminDetail> {
+    const parsed = reviewModerationDecisionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review moderation decision");
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeCaseId = caseId ? requireUuid(caseId) : null;
+    const nextCaseId = deterministicUuid(
+      `${safeReviewId}:${safeAdminUserId}:${idempotencyKey}:hide-case`
+    );
+    const result = await this.commandStore.hideReviewByModeration({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      caseId: safeCaseId,
+      nextCaseId,
+      nextCaseMessageId: parsed.data.note
+        ? deterministicUuid(`${nextCaseId}:${safeAdminUserId}:${idempotencyKey}:hide-note`)
+        : null,
+      reasonCode: parsed.data.reasonCode,
+      note: parsed.data.note
+    });
+    if (result.kind === "rejected") {
+      throw new BadRequestException("Review cannot be hidden by moderation");
     }
     return this.readRequiredReviewDetail(safeReviewId);
   }

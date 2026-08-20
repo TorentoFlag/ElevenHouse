@@ -19,6 +19,7 @@ import {
   approveReviewReplyVersion,
   approveReviewVersion,
   createReviewCaseMessage,
+  hideReviewByModeration,
   openReviewDispute,
   planSubmitReviewVersion,
   planSubmitReviewReplyVersion,
@@ -28,6 +29,7 @@ import {
   type ApproveReviewReplyVersionResult,
   type ApproveReviewVersionResult,
   type CreateReviewCaseMessageResult,
+  type HideReviewByModerationResult,
   type OpenReviewDisputeResult,
   type ReviewCaseMessageLifecycleState,
   type ReviewLifecycleState,
@@ -40,7 +42,7 @@ import {
   type SubmitReviewReplyVersionResult,
   type SubmitReviewVersionResult
 } from "@elevenhouse/domain";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -118,6 +120,16 @@ export type DrizzleReviewCommandStore = {
     readonly reviewId: string;
     readonly caseId: string;
   }) => Promise<RestoreReviewAfterDisputeResult>;
+  readonly hideReviewByModeration: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly caseId: string | null;
+    readonly nextCaseId: string;
+    readonly nextCaseMessageId: string | null;
+    readonly reasonCode: ReviewModerationReasonCode;
+    readonly note: string | null;
+  }) => Promise<HideReviewByModerationResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -568,6 +580,88 @@ export function createDrizzleReviewCommandStore(
 
         return result;
       }),
+    hideReviewByModeration: (input) =>
+      database.transaction(async (transaction) => {
+        await lockReview(transaction, input.reviewId);
+        const reviewRow = await readReview(transaction, input.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
+        const result = hideReviewByModeration({
+          now: input.now,
+          moderatorUserId: input.moderatorUserId,
+          review: currentReview,
+          nextCaseId: input.nextCaseId,
+          nextCaseMessageId: input.nextCaseMessageId,
+          reasonCode: input.reasonCode,
+          note: input.note
+        });
+        if (result.kind === "rejected") return result;
+
+        const reviewableInstance = await readReviewableInstance(
+          transaction,
+          result.review.reviewableInstanceId
+        );
+        if (!reviewableInstance) return { kind: "rejected", reason: "review_not_public" };
+
+        await transaction
+          .update(reviews)
+          .set({
+            revision: result.review.revision,
+            visibilityStatus: result.review.visibilityStatus,
+            disputeStatus: result.review.disputeStatus,
+            updatedAt: new Date(input.now)
+          })
+          .where(eq(reviews.id, result.review.id));
+        if (input.caseId) {
+          await closeReviewModerationCase(transaction, {
+            caseId: input.caseId,
+            reviewId: input.reviewId,
+            closedAt: new Date(input.now),
+            closedByUserId: input.moderatorUserId
+          });
+        }
+        await transaction.insert(reviewModerationCases).values({
+          id: result.moderationCase.caseId,
+          reviewId: result.moderationCase.reviewId,
+          status: result.moderationCase.status,
+          reasonCode: result.moderationCase.reasonCode,
+          openedByUserId: input.moderatorUserId,
+          openedAt: new Date(result.moderationCase.openedAt),
+          closedAt: result.moderationCase.closedAt
+            ? new Date(result.moderationCase.closedAt)
+            : null,
+          closedByUserId: input.moderatorUserId
+        });
+        if (result.noteMessage) {
+          await transaction.insert(reviewModerationCaseMessages).values({
+            id: result.noteMessage.messageId,
+            caseId: result.noteMessage.caseId,
+            authorUserId: result.noteMessage.authorUserId,
+            authorRole: result.noteMessage.authorRole,
+            visibility: result.noteMessage.visibility,
+            body: result.noteMessage.body,
+            createdAt: new Date(result.noteMessage.createdAt)
+          });
+        }
+        await applyReviewApprovalAggregateDelta(transaction, {
+          astrologerUserId: result.review.astrologerUserId,
+          productId: reviewableInstance.productId,
+          previousVisibleRating:
+            currentReview.visibilityStatus === "visible"
+              ? (currentReview.activePublicVersion?.rating ?? null)
+              : null,
+          nextVisibleRating:
+            result.review.visibilityStatus === "visible"
+              ? (result.review.activePublicVersion?.rating ?? null)
+              : null,
+          approvedDelta: 0,
+          publishedAt: new Date(input.now),
+          updatedAt: new Date(input.now)
+        });
+
+        return result;
+      }),
     createReviewCaseMessage: async (input) => {
       const result = createReviewCaseMessage({
         messageId: input.messageId,
@@ -779,7 +873,12 @@ async function closeReviewModerationCase(
       and(
         eq(reviewModerationCases.id, input.caseId),
         eq(reviewModerationCases.reviewId, input.reviewId),
-        eq(reviewModerationCases.status, "open")
+        inArray(reviewModerationCases.status, [
+          "open",
+          "waiting_client",
+          "waiting_astrologer",
+          "consensus_reached"
+        ])
       )
     )
     .returning({ id: reviewModerationCases.id });

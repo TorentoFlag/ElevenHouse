@@ -3,6 +3,7 @@ import "reflect-metadata";
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { ReviewAdminDetail } from "@elevenhouse/contracts";
+import type { ReviewDisputeStatus, ReviewVisibilityStatus } from "@elevenhouse/contracts";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -30,6 +31,8 @@ describe("admin reviews HTTP API", () => {
   let receivedDecisionCommand: unknown;
   let decisionStatus: "pending" | "approved" | "rejected";
   let replyDecisionStatus: "pending" | "approved" | "rejected";
+  let reviewVisibilityStatus: ReviewVisibilityStatus;
+  let reviewDisputeStatus: ReviewDisputeStatus;
 
   beforeEach(async () => {
     receivedCaseRead = null;
@@ -37,6 +40,8 @@ describe("admin reviews HTTP API", () => {
     receivedDecisionCommand = null;
     decisionStatus = "pending";
     replyDecisionStatus = "pending";
+    reviewVisibilityStatus = "visible";
+    reviewDisputeStatus = "none";
     const builder = Test.createTestingModule({
       controllers: [AdminReviewsController],
       providers: [
@@ -47,7 +52,12 @@ describe("admin reviews HTTP API", () => {
           useValue: {
             async getAdminReviewDetail(input) {
               return input.reviewId === reviewId
-                ? adminReviewDetail(decisionStatus, replyDecisionStatus)
+                ? adminReviewDetail(
+                    decisionStatus,
+                    replyDecisionStatus,
+                    reviewVisibilityStatus,
+                    reviewDisputeStatus
+                  )
                 : null;
             },
             async getModerationCaseDetail(input) {
@@ -180,10 +190,32 @@ describe("admin reviews HTTP API", () => {
               readonly caseId: string;
             }) {
               receivedDecisionCommand = command;
+              reviewVisibilityStatus = "visible";
+              reviewDisputeStatus = "resolved_closed";
               return {
                 kind: "restored",
                 review: {},
                 flowEvent: null
+              };
+            },
+            async hideReviewByModeration(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly caseId: string | null;
+              readonly nextCaseId: string;
+              readonly nextCaseMessageId: string | null;
+              readonly reasonCode: string;
+              readonly note: string | null;
+            }) {
+              receivedDecisionCommand = command;
+              reviewVisibilityStatus = "hidden_by_moderation";
+              reviewDisputeStatus = command.caseId ? "resolved_closed" : "none";
+              return {
+                kind: "hidden",
+                review: {},
+                moderationCase: {},
+                noteMessage: command.nextCaseMessageId ? {} : null
               };
             }
           }
@@ -391,6 +423,9 @@ describe("admin reviews HTTP API", () => {
   });
 
   it("restores reviews after dispute resolution and returns refreshed admin detail", async () => {
+    reviewVisibilityStatus = "temporarily_hidden_by_dispute";
+    reviewDisputeStatus = "open";
+
     const response = await fetch(
       `${baseUrl}/admin/reviews/${reviewId}/moderation-cases/${caseId}/restore`,
       {
@@ -405,7 +440,7 @@ describe("admin reviews HTTP API", () => {
     await expect(response.json()).resolves.toMatchObject({
       reviewId,
       visibilityStatus: "visible",
-      disputeStatus: "none"
+      disputeStatus: "resolved_closed"
     });
     expect(receivedDecisionCommand).toMatchObject({
       moderatorUserId: adminUserId,
@@ -414,11 +449,50 @@ describe("admin reviews HTTP API", () => {
       caseId
     });
   });
+
+  it("hides reviews by moderator decision and returns refreshed admin detail", async () => {
+    reviewVisibilityStatus = "temporarily_hidden_by_dispute";
+    reviewDisputeStatus = "open";
+
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/moderation-cases/${caseId}/hide`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "reviews-moderation-hide-1"
+        },
+        body: JSON.stringify({
+          reasonCode: "legal_risk",
+          note: "Публикацию нужно снять после проверки."
+        })
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      visibilityStatus: "hidden_by_moderation",
+      disputeStatus: "resolved_closed"
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      caseId,
+      reasonCode: "legal_risk",
+      note: "Публикацию нужно снять после проверки."
+    });
+    expect(receivedDecisionCommand).toHaveProperty("nextCaseId", expect.any(String));
+    expect(receivedDecisionCommand).toHaveProperty("nextCaseMessageId", expect.any(String));
+  });
 });
 
 function adminReviewDetail(
   moderationStatus: "pending" | "approved" | "rejected" = "pending",
-  replyModerationStatus: "pending" | "approved" | "rejected" = "pending"
+  replyModerationStatus: "pending" | "approved" | "rejected" = "pending",
+  visibilityStatus: ReviewVisibilityStatus = "visible",
+  disputeStatus: ReviewDisputeStatus = "none"
 ): ReviewAdminDetail {
   return {
     reviewId,
@@ -429,8 +503,8 @@ function adminReviewDetail(
       avatarUrl: null
     },
     publicIdentityMode: "secret_user",
-    visibilityStatus: "visible",
-    disputeStatus: "none",
+    visibilityStatus,
+    disputeStatus,
     reviewableInstance: {
       id: reviewableInstanceId,
       kind: "booking",
