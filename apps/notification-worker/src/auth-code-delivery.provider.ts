@@ -1,4 +1,6 @@
-import type { AuthCodeHttpDeliveryOptions } from "./runtime-config";
+import nodemailer from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
+import type { AuthCodeHttpDeliveryOptions, AuthCodeSmtpDeliveryOptions } from "./runtime-config";
 
 export type AuthCodeDeliveryInput = {
   readonly challengeId: string;
@@ -32,13 +34,29 @@ type AuthCodeFetch = (
   }
 ) => Promise<Response>;
 
-export class EmailAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
+type SmtpAuthCodeTransport = {
+  readonly sendMail: (message: SmtpAuthCodeMessage) => Promise<SmtpAuthCodeSendResult>;
+};
+
+type SmtpAuthCodeMessage = {
+  readonly from: string;
+  readonly to: string;
+  readonly subject: string;
+  readonly text: string;
+  readonly html: string;
+};
+
+type SmtpAuthCodeSendResult = {
+  readonly messageId?: string;
+};
+
+export class SmtpEmailAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
   constructor(
-    private readonly options: AuthCodeHttpDeliveryOptions,
-    private readonly fetchFn: AuthCodeFetch = fetch
+    private readonly options: AuthCodeSmtpDeliveryOptions,
+    private readonly transport: SmtpAuthCodeTransport = createSmtpAuthCodeTransport(options)
   ) {}
 
-  deliverAuthCode(input: AuthCodeDeliveryInput): Promise<AuthCodeDeliveryResult> {
+  async deliverAuthCode(input: AuthCodeDeliveryInput): Promise<AuthCodeDeliveryResult> {
     if (input.channel !== "email") {
       return Promise.resolve({
         provider: "email",
@@ -48,12 +66,22 @@ export class EmailAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
       });
     }
 
-    return deliverHttpAuthCode({
-      provider: "email",
-      options: this.options,
-      input,
-      fetchFn: this.fetchFn
-    });
+    try {
+      const result = await this.transport.sendMail(createEmailAuthCodeMessage(this.options, input));
+
+      return {
+        provider: "email",
+        status: "sent",
+        ...optionalProviderMessageId(normalizeOptionalProviderMessageId(result.messageId))
+      };
+    } catch (error) {
+      return {
+        provider: "email",
+        status: "failed",
+        errorCode: "EMAIL_DELIVERY_SMTP_EXCEPTION",
+        errorMessage: normalizeDeliveryExceptionMessage(error)
+      };
+    }
   }
 }
 
@@ -78,6 +106,26 @@ export class SmsAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
       options: this.options,
       input,
       fetchFn: this.fetchFn
+    });
+  }
+}
+
+export class UnconfiguredSmsAuthCodeDeliveryProvider implements AuthCodeDeliveryProvider {
+  deliverAuthCode(input: AuthCodeDeliveryInput): Promise<AuthCodeDeliveryResult> {
+    if (input.channel !== "phone") {
+      return Promise.resolve({
+        provider: "sms",
+        status: "failed",
+        errorCode: "SMS_DELIVERY_CHANNEL_MISMATCH",
+        errorMessage: "SMS auth code delivery only supports phone challenges"
+      });
+    }
+
+    return Promise.resolve({
+      provider: "sms",
+      status: "failed",
+      errorCode: "SMS_DELIVERY_PROVIDER_NOT_CONFIGURED",
+      errorMessage: "SMS auth code delivery provider is not configured"
     });
   }
 }
@@ -119,6 +167,35 @@ export class DevConsoleAuthCodeDeliveryProvider implements AuthCodeDeliveryProvi
       providerMessageId: `dev-console-${input.deliveryId}`
     });
   }
+}
+
+function createSmtpAuthCodeTransport(options: AuthCodeSmtpDeliveryOptions): SmtpAuthCodeTransport {
+  const transport = nodemailer.createTransport({
+    host: options.host,
+    port: options.port,
+    secure: options.secure,
+    auth: {
+      user: options.user,
+      pass: options.password
+    }
+  });
+
+  return {
+    sendMail: (message) => transport.sendMail(message) as Promise<SMTPTransport.SentMessageInfo>
+  };
+}
+
+function createEmailAuthCodeMessage(
+  options: AuthCodeSmtpDeliveryOptions,
+  input: AuthCodeDeliveryInput
+): SmtpAuthCodeMessage {
+  return {
+    from: options.from,
+    to: input.identifier,
+    subject: "Your ElevenHouse sign-in code",
+    text: `Your ElevenHouse sign-in code is ${input.code}. It expires at ${input.expiresAt}.`,
+    html: `<p>Your ElevenHouse sign-in code is <strong>${input.code}</strong>.</p><p>It expires at ${input.expiresAt}.</p>`
+  };
 }
 
 async function deliverHttpAuthCode(input: {
@@ -172,6 +249,12 @@ async function deliverHttpAuthCode(input: {
       errorMessage: normalizeDeliveryExceptionMessage(error)
     };
   }
+}
+
+function normalizeOptionalProviderMessageId(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : undefined;
 }
 
 async function normalizeDeliveryResponseErrorMessage(response: Response): Promise<string> {

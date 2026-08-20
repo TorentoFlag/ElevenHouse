@@ -5,7 +5,7 @@ const notificationWorkerRuntimeConfigSchema = z
   .object({
     REDIS_URL: z.string().trim().min(1).default("redis://localhost:6379"),
     AUTH_CODE_DELIVERY_ENCRYPTION_KEY: z.string().trim().min(1),
-    NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE: z.enum(["http", "dev_console"]).default("http"),
+    NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE: z.enum(["smtp", "dev_console"]).default("smtp"),
     NOTIFICATION_WORKER_HEALTH_HOST: z.string().trim().min(1).default("0.0.0.0"),
     NOTIFICATION_WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(3013),
     NOTIFICATION_WORKER_OUTBOX_RELAY_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
@@ -135,44 +135,72 @@ const notificationWorkerRuntimeConfigSchema = z
       .min(1)
       .default("elevenhouse-secret"),
     ASTROLOGER_MEDIA_STORAGE_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("true"),
-    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
-    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_HOST: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PORT: z.coerce.number().int().positive().optional(),
+    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_SECURE: z.enum(["true", "false"]).optional(),
+    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_USER: z.string().trim().min(1).optional(),
+    NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PASSWORD: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL: z.string().trim().url().optional(),
     NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN: z.string().trim().min(1).optional(),
     NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM: z.string().trim().min(1).optional()
   })
   .superRefine((config, context) => {
-    if (config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "http") {
-      requireHttpDeliverySetting(
-        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL,
-        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL"],
+    if (config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "smtp") {
+      requireDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_HOST,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_HOST"],
         context
       );
-      requireHttpDeliverySetting(
-        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN,
-        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN"],
+      requireDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PORT,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PORT"],
         context
       );
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_SECURE,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_SECURE"],
+        context
+      );
+      requireDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_USER,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_USER"],
+        context
+      );
+      requireDeliverySetting(
+        config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PASSWORD,
+        ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PASSWORD"],
+        context
+      );
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM,
         ["NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM"],
         context
       );
-      requireHttpDeliverySetting(
+    }
+
+    if (
+      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL !== undefined ||
+      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN !== undefined ||
+      config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM !== undefined
+    ) {
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
         ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL"],
-        context
+        context,
+        "SMS HTTP auth code delivery settings are required when SMS delivery is configured"
       );
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
         ["NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN"],
-        context
+        context,
+        "SMS HTTP auth code delivery settings are required when SMS delivery is configured"
       );
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM,
         ["NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM"],
-        context
+        context,
+        "SMS HTTP auth code delivery settings are required when SMS delivery is configured"
       );
     }
 
@@ -180,7 +208,7 @@ const notificationWorkerRuntimeConfigSchema = z
       config.NOTIFICATION_WORKER_MESSAGING_DELIVERY_ENABLED === "true" ||
       config.NOTIFICATION_WORKER_MESSAGING_MEDIA_INGESTION_ENABLED === "true"
     ) {
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN,
         ["NOTIFICATION_WORKER_TELEGRAM_BOT_TOKEN"],
         context
@@ -188,7 +216,7 @@ const notificationWorkerRuntimeConfigSchema = z
     }
 
     if (config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_DELIVERY_ENABLED === "true") {
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY,
         ["NOTIFICATION_WORKER_INSTAGRAM_GRAPH_TOKEN_ENCRYPTION_KEY"],
         context
@@ -196,7 +224,7 @@ const notificationWorkerRuntimeConfigSchema = z
     }
 
     if (config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_DELIVERY_ENABLED === "true") {
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY,
         ["NOTIFICATION_WORKER_WHATSAPP_CLOUD_TOKEN_ENCRYPTION_KEY"],
         context
@@ -209,19 +237,19 @@ const notificationWorkerRuntimeConfigSchema = z
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH !== undefined ||
       config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY !== undefined;
     if (hasAnyMtprotoSetting) {
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID === undefined
           ? undefined
           : String(config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID),
         ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_ID"],
         context
       );
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH,
         ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_API_HASH"],
         context
       );
-      requireHttpDeliverySetting(
+      requireDeliverySetting(
         config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY,
         ["NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_ENCRYPTION_KEY"],
         context
@@ -235,10 +263,19 @@ export type AuthCodeHttpDeliveryOptions = {
   readonly from: string;
 };
 
+export type AuthCodeSmtpDeliveryOptions = {
+  readonly host: string;
+  readonly port: number;
+  readonly secure: boolean;
+  readonly user: string;
+  readonly password: string;
+  readonly from: string;
+};
+
 export type NotificationWorkerRuntimeConfig = {
   readonly redisUrl: string;
   readonly authCodeDeliveryEncryptionKey: Buffer;
-  readonly authCodeDeliveryMode: "http" | "dev_console";
+  readonly authCodeDeliveryMode: "smtp" | "dev_console";
   readonly healthHost: string;
   readonly healthPort: number;
   readonly outboxRelayIntervalMs: number;
@@ -263,7 +300,7 @@ export type NotificationWorkerRuntimeConfig = {
   readonly mediaStorage: MessagingMediaStorageOptions;
   readonly telegramBusinessDelivery: TelegramBusinessDeliveryOptions | null;
   readonly telegramMtproto: TelegramMtprotoOptions | null;
-  readonly authCodeEmailDelivery: AuthCodeHttpDeliveryOptions | null;
+  readonly authCodeEmailSmtpDelivery: AuthCodeSmtpDeliveryOptions | null;
   readonly authCodeSmsDelivery: AuthCodeHttpDeliveryOptions | null;
 };
 
@@ -377,22 +414,22 @@ export function createNotificationWorkerRuntimeConfig(
       sessionSyncIntervalMs: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_SESSION_SYNC_INTERVAL_MS,
       claimLimit: config.NOTIFICATION_WORKER_TELEGRAM_MTPROTO_CLAIM_LIMIT
     }),
-    authCodeEmailDelivery:
+    authCodeEmailSmtpDelivery:
       config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "dev_console"
         ? null
-        : toHttpDeliveryOptions({
-            endpointUrl: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_ENDPOINT_URL,
-            bearerToken: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_DELIVERY_BEARER_TOKEN,
+        : toSmtpDeliveryOptions({
+            host: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_HOST,
+            port: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PORT,
+            secure: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_SECURE,
+            user: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_USER,
+            password: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_SMTP_PASSWORD,
             from: config.NOTIFICATION_WORKER_AUTH_CODE_EMAIL_FROM
           }),
-    authCodeSmsDelivery:
-      config.NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE === "dev_console"
-        ? null
-        : toHttpDeliveryOptions({
-            endpointUrl: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
-            bearerToken: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
-            from: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM
-          })
+    authCodeSmsDelivery: toOptionalHttpDeliveryOptions({
+      endpointUrl: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_ENDPOINT_URL,
+      bearerToken: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_DELIVERY_BEARER_TOKEN,
+      from: config.NOTIFICATION_WORKER_AUTH_CODE_SMS_FROM
+    })
   };
 }
 
@@ -475,7 +512,9 @@ function toHttpDeliveryOptions(input: {
   readonly from: string | undefined;
 }): AuthCodeHttpDeliveryOptions {
   if (!input.endpointUrl || !input.bearerToken || !input.from) {
-    throw new Error("HTTP auth code delivery settings are required in http mode");
+    throw new Error(
+      "SMS HTTP auth code delivery settings are required when SMS delivery is configured"
+    );
   }
 
   return {
@@ -485,10 +524,52 @@ function toHttpDeliveryOptions(input: {
   };
 }
 
-function requireHttpDeliverySetting(
-  value: string | undefined,
+function toOptionalHttpDeliveryOptions(input: {
+  readonly endpointUrl: string | undefined;
+  readonly bearerToken: string | undefined;
+  readonly from: string | undefined;
+}): AuthCodeHttpDeliveryOptions | null {
+  if (!input.endpointUrl && !input.bearerToken && !input.from) {
+    return null;
+  }
+
+  return toHttpDeliveryOptions(input);
+}
+
+function toSmtpDeliveryOptions(input: {
+  readonly host: string | undefined;
+  readonly port: number | undefined;
+  readonly secure: "true" | "false" | undefined;
+  readonly user: string | undefined;
+  readonly password: string | undefined;
+  readonly from: string | undefined;
+}): AuthCodeSmtpDeliveryOptions {
+  if (
+    !input.host ||
+    input.port === undefined ||
+    input.secure === undefined ||
+    !input.user ||
+    !input.password ||
+    !input.from
+  ) {
+    throw new Error("SMTP auth code email delivery settings are required in smtp mode");
+  }
+
+  return {
+    host: input.host,
+    port: input.port,
+    secure: input.secure === "true",
+    user: input.user,
+    password: input.password,
+    from: input.from
+  };
+}
+
+function requireDeliverySetting(
+  value: string | number | undefined,
   path: readonly string[],
-  context: z.RefinementCtx
+  context: z.RefinementCtx,
+  message = "Invalid input: expected string, received undefined"
 ): void {
   if (value !== undefined) {
     return;
@@ -499,6 +580,6 @@ function requireHttpDeliverySetting(
     expected: "string",
     received: "undefined",
     path: [...path],
-    message: "Invalid input: expected string, received undefined"
+    message
   });
 }

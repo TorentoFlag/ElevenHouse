@@ -16,11 +16,13 @@
     "@elevenhouse/validation": "workspace:*",
     "big-integer": "^1.6.52",
     "bullmq": "^5.78.1",
+    "nodemailer": "9.0.5",
     "pg": "8.21.0",
     "teleproto": "^1.228.4"
   },
   "devDependencies": {
     "@types/node": "25.9.2",
+    "@types/nodemailer": "8.0.1",
     "tsx": "4.21.0",
     "typescript": "6.0.3"
   }

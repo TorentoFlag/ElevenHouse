@@ -62,8 +62,9 @@ heavy chart calculations directly in request controllers.
 - Notification templates/preferences/delivery logs are backend-owned.
 - External providers are adapters.
 - Use `notification-worker` for real delivery.
-- Auth-code delivery can use dev console mode locally, but real modes require
-  configured providers and bearer tokens.
+- Auth-code delivery can use dev console mode locally. Real email delivery uses
+  configured SMTP credentials; SMS delivery remains an explicit provider
+  adapter gap until an SMS provider is selected.
 
 ## Chart Rules
 

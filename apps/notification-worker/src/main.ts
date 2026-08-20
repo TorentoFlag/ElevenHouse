@@ -15,8 +15,9 @@ import { createDrizzleAuthCodeDeliveryProcessingStore } from "@elevenhouse/db/no
 import {
   ChannelAuthCodeDeliveryProvider,
   DevConsoleAuthCodeDeliveryProvider,
-  EmailAuthCodeDeliveryProvider,
   SmsAuthCodeDeliveryProvider,
+  SmtpEmailAuthCodeDeliveryProvider,
+  UnconfiguredSmsAuthCodeDeliveryProvider,
   type AuthCodeDeliveryProvider
 } from "./auth-code-delivery.provider";
 import {
@@ -231,13 +232,15 @@ function createDeliveryProvider(): AuthCodeDeliveryProvider {
     return new DevConsoleAuthCodeDeliveryProvider(logger);
   }
 
-  if (!config.authCodeEmailDelivery || !config.authCodeSmsDelivery) {
-    throw new Error("HTTP auth code delivery settings are required in http mode");
+  if (!config.authCodeEmailSmtpDelivery) {
+    throw new Error("SMTP auth code email delivery settings are required in smtp mode");
   }
 
   return new ChannelAuthCodeDeliveryProvider(
-    new EmailAuthCodeDeliveryProvider(config.authCodeEmailDelivery),
-    new SmsAuthCodeDeliveryProvider(config.authCodeSmsDelivery)
+    new SmtpEmailAuthCodeDeliveryProvider(config.authCodeEmailSmtpDelivery),
+    config.authCodeSmsDelivery
+      ? new SmsAuthCodeDeliveryProvider(config.authCodeSmsDelivery)
+      : new UnconfiguredSmsAuthCodeDeliveryProvider()
   );
 }
 

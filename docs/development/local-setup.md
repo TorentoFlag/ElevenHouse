@@ -122,8 +122,8 @@ For local passwordless auth development, set
 `NOTIFICATION_WORKER_AUTH_CODE_DELIVERY_MODE=dev_console`. In this mode the
 notification worker decrypts the auth code, writes it to the worker log, marks
 the delivery as sent, and does not require real email/SMS provider credentials.
-Use `http` mode only when real delivery endpoints and bearer tokens are
-configured.
+Use `smtp` mode only when real email SMTP credentials are configured. SMS
+delivery remains optional until an SMS provider is selected.
 
 ## Current Foundation Scope
 
