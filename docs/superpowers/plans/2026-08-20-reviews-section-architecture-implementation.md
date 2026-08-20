@@ -360,6 +360,13 @@ and API slices.
 - Covered moderator-to-client and moderator-to-astrologer separated visibility, plus rejection of a client-authored astrologer-only message before DB insert.
 - Remaining communication work: read projections per participant and admin API wiring.
 
+**Progress 2026-08-20:** AI reply draft persistence
+
+- Added a separate Drizzle store for review AI reply draft commands and completions.
+- Draft creation uses the domain AI policy, stores prompt id/version/input digest and starts as `pending`.
+- Success/failure updates only `review_ai_reply_drafts`; it does not create reply versions or mutate review publication state.
+- Remaining AI work: provider job wiring, prompt execution adapter and API permissions.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.
