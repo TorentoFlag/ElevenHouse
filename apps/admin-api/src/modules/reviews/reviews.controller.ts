@@ -52,6 +52,67 @@ export class AdminReviewsController {
     );
   }
 
+  @Post(":reviewId/versions/:versionId/approve")
+  @RequireCsrf()
+  @RequireIdempotency()
+  approveReviewVersion(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("versionId") versionId: string,
+    @Headers("idempotency-key") idempotencyKey: string | undefined
+  ): Promise<ReviewAdminDetail> {
+    return this.service.approveReviewVersion(
+      requireAdminUserId(request),
+      reviewId,
+      versionId,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
+  @Post(":reviewId/versions/:versionId/reject")
+  @RequireCsrf()
+  @RequireIdempotency()
+  rejectReviewVersion(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("versionId") versionId: string,
+    @Body() body: unknown
+  ): Promise<ReviewAdminDetail> {
+    return this.service.rejectReviewVersion(requireAdminUserId(request), reviewId, versionId, body);
+  }
+
+  @Post(":reviewId/reply-versions/:replyVersionId/approve")
+  @RequireCsrf()
+  @RequireIdempotency()
+  approveReviewReplyVersion(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("replyVersionId") replyVersionId: string
+  ): Promise<ReviewAdminDetail> {
+    return this.service.approveReviewReplyVersion(
+      requireAdminUserId(request),
+      reviewId,
+      replyVersionId
+    );
+  }
+
+  @Post(":reviewId/reply-versions/:replyVersionId/reject")
+  @RequireCsrf()
+  @RequireIdempotency()
+  rejectReviewReplyVersion(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string,
+    @Param("replyVersionId") replyVersionId: string,
+    @Body() body: unknown
+  ): Promise<ReviewAdminDetail> {
+    return this.service.rejectReviewReplyVersion(
+      requireAdminUserId(request),
+      reviewId,
+      replyVersionId,
+      body
+    );
+  }
+
   @Get(":reviewId")
   getReviewDetail(@Param("reviewId") reviewId: string): Promise<ReviewAdminDetail> {
     return this.service.getReviewDetail(reviewId);

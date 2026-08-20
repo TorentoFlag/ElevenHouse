@@ -10,6 +10,7 @@ import {
   type ReviewPublicItem,
   type ReviewPublicIdentityMode,
   type ReviewPublicListQuery,
+  type ReviewReplyVersion,
   type ReviewVersion,
   type ReviewableInstanceSummary
 } from "@elevenhouse/contracts";
@@ -81,7 +82,10 @@ async function listPublicReviews(
   if (cursor) {
     const cursorCondition = or(
       lt(reviews.firstPublishedAt, new Date(cursor.publishedAt)),
-      and(eq(reviews.firstPublishedAt, new Date(cursor.publishedAt)), lt(reviews.id, cursor.reviewId))
+      and(
+        eq(reviews.firstPublishedAt, new Date(cursor.publishedAt)),
+        lt(reviews.id, cursor.reviewId)
+      )
     );
     if (cursorCondition) conditions.push(cursorCondition);
   }
@@ -108,9 +112,13 @@ async function listPublicReviews(
   const last = pageRows.at(-1)?.review ?? null;
   return reviewPublicListResponseSchema.parse({
     items,
-    nextCursor: rows.length > query.limit && last?.firstPublishedAt
-      ? encodePublicCursor({ publishedAt: last.firstPublishedAt.toISOString(), reviewId: last.id })
-      : null
+    nextCursor:
+      rows.length > query.limit && last?.firstPublishedAt
+        ? encodePublicCursor({
+            publishedAt: last.firstPublishedAt.toISOString(),
+            reviewId: last.id
+          })
+        : null
   });
 }
 
@@ -136,10 +144,10 @@ async function getClientReviewDetail(
 
   const versions = await readReviewVersions(database, row.review.id);
   const activePublicVersion = row.review.activePublicVersionId
-    ? versions.find((version) => version.id === row.review.activePublicVersionId) ?? null
+    ? (versions.find((version) => version.id === row.review.activePublicVersionId) ?? null)
     : null;
   const pendingVersion = row.review.pendingVersionId
-    ? versions.find((version) => version.id === row.review.pendingVersionId) ?? null
+    ? (versions.find((version) => version.id === row.review.pendingVersionId) ?? null)
     : null;
 
   return clientReviewDetailSchema.parse({
@@ -173,6 +181,7 @@ async function getAdminReviewDetail(
   if (!row) return null;
 
   const versions = await readReviewVersions(database, row.review.id);
+  const replyVersions = await readReviewReplyVersions(database, row.review.id);
   const moderationCase = await readLatestModerationCase(database, row.review.id);
 
   return reviewAdminDetailSchema.parse({
@@ -183,6 +192,7 @@ async function getAdminReviewDetail(
     disputeStatus: row.review.disputeStatus,
     reviewableInstance: toReviewableInstanceSummary(row.reviewableInstance),
     versions: versions.map(toReviewVersion),
+    replyVersions: replyVersions.map(toReviewReplyVersion),
     moderationCase: moderationCase ? toModerationCaseSummary(moderationCase) : null,
     auditCursor: null
   });
@@ -242,6 +252,17 @@ async function readReviewVersions(
     .orderBy(reviewVersions.versionNumber);
 }
 
+async function readReviewReplyVersions(
+  database: ElevenHouseDatabase,
+  reviewId: string
+): Promise<readonly ReviewReplyVersionRow[]> {
+  return database
+    .select()
+    .from(reviewReplyVersions)
+    .where(eq(reviewReplyVersions.reviewId, reviewId))
+    .orderBy(reviewReplyVersions.versionNumber);
+}
+
 async function readLatestModerationCase(
   database: ElevenHouseDatabase,
   reviewId: string
@@ -280,7 +301,9 @@ function toPublicReviewItem(row: PublicReviewRow): ReviewPublicItem {
       ? {
           replyId: row.activeReplyVersion.id,
           text: row.activeReplyVersion.text,
-          publishedAt: row.activeReplyVersion.decidedAt?.toISOString() ?? row.activeReplyVersion.submittedAt.toISOString()
+          publishedAt:
+            row.activeReplyVersion.decidedAt?.toISOString() ??
+            row.activeReplyVersion.submittedAt.toISOString()
         }
       : null
   };
@@ -313,6 +336,18 @@ function toReviewVersion(row: ReviewVersionRow): ReviewVersion {
     publicIdentityMode: row.publicIdentityMode as ReviewVersion["publicIdentityMode"],
     moderationStatus: row.moderationStatus as ReviewVersion["moderationStatus"],
     moderationReasonCode: row.moderationReasonCode as ReviewVersion["moderationReasonCode"],
+    submittedAt: row.submittedAt.toISOString(),
+    decidedAt: row.decidedAt?.toISOString() ?? null
+  };
+}
+
+function toReviewReplyVersion(row: ReviewReplyVersionRow): ReviewReplyVersion {
+  return {
+    id: row.id,
+    versionNumber: row.versionNumber,
+    text: row.text,
+    moderationStatus: row.moderationStatus as ReviewReplyVersion["moderationStatus"],
+    moderationReasonCode: row.moderationReasonCode as ReviewReplyVersion["moderationReasonCode"],
     submittedAt: row.submittedAt.toISOString(),
     decidedAt: row.decidedAt?.toISOString() ?? null
   };
@@ -387,7 +422,9 @@ function parsePublicCursor(value: string): PublicReviewCursor | null {
   const [version, payload] = value.split(".");
   if (version !== publicCursorVersion || !payload) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<PublicReviewCursor>;
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as Partial<PublicReviewCursor>;
     if (typeof parsed.publishedAt !== "string" || typeof parsed.reviewId !== "string") return null;
     if (Number.isNaN(Date.parse(parsed.publishedAt))) return null;
     return { publishedAt: parsed.publishedAt, reviewId: parsed.reviewId };

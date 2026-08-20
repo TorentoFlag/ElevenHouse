@@ -19,16 +19,24 @@ const reviewId = "10000000-0000-4000-8000-000000000202";
 const caseId = "10000000-0000-4000-8000-000000000203";
 const clientUserId = "10000000-0000-4000-8000-000000000204";
 const reviewableInstanceId = "10000000-0000-4000-8000-000000000205";
+const reviewVersionId = "10000000-0000-4000-8000-000000000207";
+const replyVersionId = "10000000-0000-4000-8000-000000000208";
 
 describe("admin reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
+  let receivedDecisionCommand: unknown;
+  let decisionStatus: "pending" | "approved" | "rejected";
+  let replyDecisionStatus: "pending" | "approved" | "rejected";
 
   beforeEach(async () => {
     receivedCaseRead = null;
     receivedMessageCommand = null;
+    receivedDecisionCommand = null;
+    decisionStatus = "pending";
+    replyDecisionStatus = "pending";
     const builder = Test.createTestingModule({
       controllers: [AdminReviewsController],
       providers: [
@@ -38,7 +46,9 @@ describe("admin reviews HTTP API", () => {
           provide: ADMIN_REVIEWS_READ_STORE,
           useValue: {
             async getAdminReviewDetail(input) {
-              return input.reviewId === reviewId ? adminReviewDetail() : null;
+              return input.reviewId === reviewId
+                ? adminReviewDetail(decisionStatus, replyDecisionStatus)
+                : null;
             },
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
@@ -91,6 +101,76 @@ describe("admin reviews HTTP API", () => {
                   body: command.body,
                   createdAt: command.now
                 }
+              };
+            },
+            async approveReviewVersion(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly versionId: string;
+              readonly nextPublicationEventId: string;
+            }) {
+              receivedDecisionCommand = command;
+              decisionStatus = "approved";
+              return {
+                kind: "approved",
+                review: {},
+                version: {},
+                flowEvent: {
+                  eventType: "review_first_published",
+                  reviewId: command.reviewId,
+                  reviewableInstanceId,
+                  astrologerUserId: "10000000-0000-4000-8000-000000000209",
+                  clientUserId,
+                  firstApprovedVersionId: command.versionId,
+                  publishedAt: command.now
+                }
+              };
+            },
+            async rejectReviewVersion(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly versionId: string;
+              readonly reasonCode: string;
+              readonly note: string | null;
+            }) {
+              receivedDecisionCommand = command;
+              decisionStatus = "rejected";
+              return {
+                kind: "rejected",
+                review: {},
+                version: {}
+              };
+            },
+            async approveReviewReplyVersion(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly replyVersionId: string;
+            }) {
+              receivedDecisionCommand = command;
+              replyDecisionStatus = "approved";
+              return {
+                kind: "approved",
+                review: {},
+                replyVersion: {}
+              };
+            },
+            async rejectReviewReplyVersion(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+              readonly replyVersionId: string;
+              readonly reasonCode: string;
+              readonly note: string | null;
+            }) {
+              receivedDecisionCommand = command;
+              replyDecisionStatus = "rejected";
+              return {
+                kind: "rejected",
+                review: {},
+                replyVersion: {}
               };
             }
           }
@@ -150,9 +230,7 @@ describe("admin reviews HTTP API", () => {
   });
 
   it("returns 404 for unknown reviews", async () => {
-    const response = await fetch(
-      `${baseUrl}/admin/reviews/10000000-0000-4000-8000-000000000299`
-    );
+    const response = await fetch(`${baseUrl}/admin/reviews/10000000-0000-4000-8000-000000000299`);
 
     expect(response.status).toBe(404);
   });
@@ -187,9 +265,123 @@ describe("admin reviews HTTP API", () => {
     });
     expect(receivedMessageCommand).toHaveProperty("messageId", expect.any(String));
   });
+
+  it("approves review versions and returns refreshed admin detail", async () => {
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/versions/${reviewVersionId}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "idempotency-key": "reviews-version-approve-1"
+        }
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      versions: [{ id: reviewVersionId, moderationStatus: "approved" }]
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      versionId: reviewVersionId
+    });
+    expect(receivedDecisionCommand).toHaveProperty("nextPublicationEventId", expect.any(String));
+  });
+
+  it("rejects review versions with a reason and returns refreshed admin detail", async () => {
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/versions/${reviewVersionId}/reject`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "reviews-version-reject-1"
+        },
+        body: JSON.stringify({
+          reasonCode: "off_topic",
+          note: "Текст не относится к услуге."
+        })
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      versions: [{ id: reviewVersionId, moderationStatus: "rejected" }]
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      versionId: reviewVersionId,
+      reasonCode: "off_topic",
+      note: "Текст не относится к услуге."
+    });
+  });
+
+  it("approves review reply versions and returns refreshed admin detail", async () => {
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/reply-versions/${replyVersionId}/approve`,
+      {
+        method: "POST",
+        headers: {
+          "idempotency-key": "reviews-reply-approve-1"
+        }
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      replyVersions: [{ id: replyVersionId, moderationStatus: "approved" }]
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      replyVersionId
+    });
+  });
+
+  it("rejects review reply versions with a reason and returns refreshed admin detail", async () => {
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/reply-versions/${replyVersionId}/reject`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": "reviews-reply-reject-1"
+        },
+        body: JSON.stringify({
+          reasonCode: "abuse_or_hate",
+          note: null
+        })
+      }
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      replyVersions: [{ id: replyVersionId, moderationStatus: "rejected" }]
+    });
+    expect(receivedDecisionCommand).toMatchObject({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId,
+      replyVersionId,
+      reasonCode: "abuse_or_hate",
+      note: null
+    });
+  });
 });
 
-function adminReviewDetail(): ReviewAdminDetail {
+function adminReviewDetail(
+  moderationStatus: "pending" | "approved" | "rejected" = "pending",
+  replyModerationStatus: "pending" | "approved" | "rejected" = "pending"
+): ReviewAdminDetail {
   return {
     reviewId,
     client: {
@@ -218,10 +410,21 @@ function adminReviewDetail(): ReviewAdminDetail {
         rating: 5,
         text: "Очень полезно.",
         publicIdentityMode: "secret_user",
-        moderationStatus: "approved",
-        moderationReasonCode: null,
+        moderationStatus,
+        moderationReasonCode: moderationStatus === "rejected" ? "off_topic" : null,
         submittedAt: "2026-08-20T09:00:00.000Z",
-        decidedAt: "2026-08-20T10:00:00.000Z"
+        decidedAt: moderationStatus === "pending" ? null : "2026-08-20T11:00:00.000Z"
+      }
+    ],
+    replyVersions: [
+      {
+        id: replyVersionId,
+        versionNumber: 1,
+        text: "Спасибо за отзыв.",
+        moderationStatus: replyModerationStatus,
+        moderationReasonCode: replyModerationStatus === "rejected" ? "abuse_or_hate" : null,
+        submittedAt: "2026-08-20T09:30:00.000Z",
+        decidedAt: replyModerationStatus === "pending" ? null : "2026-08-20T11:00:00.000Z"
       }
     ],
     moderationCase: null,

@@ -271,6 +271,35 @@ export const reviewReplySubmissionSchema = z
   .strict();
 export type ReviewReplySubmission = z.infer<typeof reviewReplySubmissionSchema>;
 
+export const reviewReplyVersionSchema = z
+  .object({
+    id: uuidSchema,
+    versionNumber: z.number().int().min(1),
+    text: textWithoutControlCharsSchema,
+    moderationStatus: reviewModerationStatusSchema,
+    moderationReasonCode: reviewModerationReasonCodeSchema.nullable(),
+    submittedAt: instantSchema,
+    decidedAt: instantSchema.nullable()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.moderationStatus === "pending" && value.decidedAt !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["decidedAt"],
+        message: "Pending review reply versions cannot have a moderation decision timestamp"
+      });
+    }
+    if (value.moderationStatus !== "pending" && value.decidedAt === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["decidedAt"],
+        message: "Decided review reply versions require a moderation decision timestamp"
+      });
+    }
+  });
+export type ReviewReplyVersion = z.infer<typeof reviewReplyVersionSchema>;
+
 export const reviewPublicReplySchema = z
   .object({
     replyId: uuidSchema,
@@ -336,6 +365,7 @@ export const reviewAdminDetailSchema = z
     disputeStatus: reviewDisputeStatusSchema,
     reviewableInstance: reviewableInstanceSummarySchema,
     versions: z.array(reviewVersionSchema).max(100),
+    replyVersions: z.array(reviewReplyVersionSchema).max(100),
     moderationCase: reviewModerationCaseSummarySchema.nullable(),
     auditCursor: cursorSchema.nullable()
   })

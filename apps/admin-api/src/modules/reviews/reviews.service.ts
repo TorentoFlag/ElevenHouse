@@ -4,18 +4,55 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import {
   reviewAdminDetailSchema,
   reviewModerationCaseDetailSchema,
+  reviewModerationDecisionSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
   type ReviewAdminDetail,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage
 } from "@elevenhouse/contracts";
-import type { CreateReviewCaseMessageResult, ReviewReadStore } from "@elevenhouse/domain";
+import type {
+  ApproveReviewReplyVersionResult,
+  ApproveReviewVersionResult,
+  CreateReviewCaseMessageResult,
+  RejectReviewReplyVersionResult,
+  RejectReviewVersionResult,
+  ReviewReadStore
+} from "@elevenhouse/domain";
 
 import { SystemClock } from "../../common/system-clock.js";
 import { ADMIN_REVIEWS_COMMAND_STORE, ADMIN_REVIEWS_READ_STORE } from "./reviews.tokens";
 
 type AdminReviewCommandStore = {
+  readonly approveReviewVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly versionId: string;
+    readonly nextPublicationEventId: string;
+  }) => Promise<ApproveReviewVersionResult>;
+  readonly rejectReviewVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly versionId: string;
+    readonly reasonCode: string;
+    readonly note: string | null;
+  }) => Promise<RejectReviewVersionResult>;
+  readonly approveReviewReplyVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly replyVersionId: string;
+  }) => Promise<ApproveReviewReplyVersionResult>;
+  readonly rejectReviewReplyVersion: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+    readonly replyVersionId: string;
+    readonly reasonCode: string;
+    readonly note: string | null;
+  }) => Promise<RejectReviewReplyVersionResult>;
   readonly createReviewCaseMessage: (input: {
     readonly messageId: string;
     readonly caseId: string;
@@ -46,9 +83,98 @@ export class AdminReviewsService {
   ) {}
 
   async getReviewDetail(reviewId: string): Promise<ReviewAdminDetail> {
-    const detail = await this.readStore.getAdminReviewDetail({ reviewId: requireUuid(reviewId) });
-    if (!detail) throw new NotFoundException("Review was not found");
-    return reviewAdminDetailSchema.parse(detail);
+    return this.readRequiredReviewDetail(requireUuid(reviewId));
+  }
+
+  async approveReviewVersion(
+    adminUserId: string,
+    reviewId: string,
+    versionId: string,
+    idempotencyKey: string
+  ): Promise<ReviewAdminDetail> {
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeVersionId = requireUuid(versionId);
+    const result = await this.commandStore.approveReviewVersion({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      versionId: safeVersionId,
+      nextPublicationEventId: deterministicUuid(
+        `${safeReviewId}:${safeVersionId}:${safeAdminUserId}:${idempotencyKey}:publication`
+      )
+    });
+    if (result.kind === "rejected")
+      throw new BadRequestException("Review version cannot be approved");
+    return this.readRequiredReviewDetail(safeReviewId);
+  }
+
+  async rejectReviewVersion(
+    adminUserId: string,
+    reviewId: string,
+    versionId: string,
+    body: unknown
+  ): Promise<ReviewAdminDetail> {
+    const parsed = reviewModerationDecisionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review moderation decision");
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeVersionId = requireUuid(versionId);
+    const result = await this.commandStore.rejectReviewVersion({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      versionId: safeVersionId,
+      reasonCode: parsed.data.reasonCode,
+      note: parsed.data.note
+    });
+    if (result.kind === "not_rejected")
+      throw new BadRequestException("Review version cannot be rejected");
+    return this.readRequiredReviewDetail(safeReviewId);
+  }
+
+  async approveReviewReplyVersion(
+    adminUserId: string,
+    reviewId: string,
+    replyVersionId: string
+  ): Promise<ReviewAdminDetail> {
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeReplyVersionId = requireUuid(replyVersionId);
+    const result = await this.commandStore.approveReviewReplyVersion({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      replyVersionId: safeReplyVersionId
+    });
+    if (result.kind === "rejected")
+      throw new BadRequestException("Review reply version cannot be approved");
+    return this.readRequiredReviewDetail(safeReviewId);
+  }
+
+  async rejectReviewReplyVersion(
+    adminUserId: string,
+    reviewId: string,
+    replyVersionId: string,
+    body: unknown
+  ): Promise<ReviewAdminDetail> {
+    const parsed = reviewModerationDecisionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review reply moderation decision");
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const safeReplyVersionId = requireUuid(replyVersionId);
+    const result = await this.commandStore.rejectReviewReplyVersion({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId,
+      replyVersionId: safeReplyVersionId,
+      reasonCode: parsed.data.reasonCode,
+      note: parsed.data.note
+    });
+    if (result.kind === "not_rejected") {
+      throw new BadRequestException("Review reply version cannot be rejected");
+    }
+    return this.readRequiredReviewDetail(safeReviewId);
   }
 
   async getModerationCaseDetail(
@@ -94,6 +220,12 @@ export class AdminReviewsService {
       createdAt: result.message.createdAt
     });
   }
+
+  private async readRequiredReviewDetail(reviewId: string): Promise<ReviewAdminDetail> {
+    const detail = await this.readStore.getAdminReviewDetail({ reviewId });
+    if (!detail) throw new NotFoundException("Review was not found");
+    return reviewAdminDetailSchema.parse(detail);
+  }
 }
 
 function deterministicUuid(value: string): string {
@@ -105,11 +237,7 @@ function deterministicUuid(value: string): string {
 }
 
 function requireUuid(value: string): string {
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
-      value
-    )
-  ) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)) {
     throw new BadRequestException("Valid UUID is required");
   }
   return value;

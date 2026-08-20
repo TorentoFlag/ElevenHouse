@@ -238,6 +238,17 @@ describe("Reviews contracts", () => {
         windowPolicy: "active_period_plus_14_days"
       },
       versions: [],
+      replyVersions: [
+        {
+          id: "10000000-0000-4000-8000-000000000044",
+          versionNumber: 1,
+          text: "Спасибо за отзыв.",
+          moderationStatus: "pending",
+          moderationReasonCode: null,
+          submittedAt: "2026-08-20T10:30:00.000Z",
+          decidedAt: null
+        }
+      ],
       moderationCase: {
         caseId: "10000000-0000-4000-8000-000000000043",
         status: "open",
@@ -250,6 +261,7 @@ describe("Reviews contracts", () => {
 
     expect(parsed.client.displayName).toBe("Анна Петрова");
     expect(parsed.visibilityStatus).toBe("temporarily_hidden_by_dispute");
+    expect(parsed.replyVersions[0]?.moderationStatus).toBe("pending");
   });
 
   it("models moderation case communication visibility without leaking private threads", () => {
