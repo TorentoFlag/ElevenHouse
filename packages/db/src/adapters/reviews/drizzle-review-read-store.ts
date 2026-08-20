@@ -1,9 +1,11 @@
 import {
   clientReviewDetailSchema,
   reviewAdminDetailSchema,
+  reviewModerationCaseDetailSchema,
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
+  type ReviewModerationCaseMessage,
   type ReviewModerationCaseSummary,
   type ReviewPublicItem,
   type ReviewPublicIdentityMode,
@@ -12,11 +14,12 @@ import {
   type ReviewableInstanceSummary
 } from "@elevenhouse/contracts";
 import { buildReviewPublicAuthor, type ReviewReadStore } from "@elevenhouse/domain";
-import { and, desc, eq, isNotNull, lt, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lt, or, type SQL } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
   reviewModerationCases,
+  reviewModerationCaseMessages,
   reviewReplyVersions,
   reviewVersions,
   reviewableInstances,
@@ -29,6 +32,7 @@ type ReviewVersionRow = typeof reviewVersions.$inferSelect;
 type ReviewReplyVersionRow = typeof reviewReplyVersions.$inferSelect;
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
 type ReviewModerationCaseRow = typeof reviewModerationCases.$inferSelect;
+type ReviewModerationCaseMessageRow = typeof reviewModerationCaseMessages.$inferSelect;
 type UserProfileRow = typeof userProfiles.$inferSelect;
 
 type PublicReviewRow = {
@@ -50,7 +54,8 @@ export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): Rev
   return {
     listPublicReviews: (query) => listPublicReviews(database, query),
     getClientReviewDetail: (input) => getClientReviewDetail(database, input),
-    getAdminReviewDetail: (input) => getAdminReviewDetail(database, input)
+    getAdminReviewDetail: (input) => getAdminReviewDetail(database, input),
+    getModerationCaseDetail: (input) => getModerationCaseDetail(database, input)
   };
 }
 
@@ -183,6 +188,49 @@ async function getAdminReviewDetail(
   });
 }
 
+async function getModerationCaseDetail(
+  database: ElevenHouseDatabase,
+  input: Parameters<ReviewReadStore["getModerationCaseDetail"]>[0]
+): Promise<Awaited<ReturnType<ReviewReadStore["getModerationCaseDetail"]>>> {
+  const [row] = await database
+    .select({
+      moderationCase: reviewModerationCases,
+      review: reviews,
+      reviewableInstance: reviewableInstances
+    })
+    .from(reviewModerationCases)
+    .innerJoin(reviews, eq(reviews.id, reviewModerationCases.reviewId))
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .where(eq(reviewModerationCases.id, input.caseId))
+    .limit(1);
+  if (!row || !canActorReadCase(input, row.review)) return null;
+
+  const visibility = visibilityForActorRole(input.actorRole);
+  const conditions: SQL[] = [eq(reviewModerationCaseMessages.caseId, input.caseId)];
+  if (visibility !== "all") {
+    conditions.push(inArray(reviewModerationCaseMessages.visibility, visibility));
+  }
+
+  const messages = await database
+    .select()
+    .from(reviewModerationCaseMessages)
+    .where(and(...conditions))
+    .orderBy(asc(reviewModerationCaseMessages.createdAt), asc(reviewModerationCaseMessages.id));
+
+  return reviewModerationCaseDetailSchema.parse({
+    caseId: row.moderationCase.id,
+    reviewId: row.review.id,
+    status: row.moderationCase.status,
+    openedAt: row.moderationCase.openedAt.toISOString(),
+    closedAt: row.moderationCase.closedAt?.toISOString() ?? null,
+    serviceContext: {
+      title: row.reviewableInstance.titleSnapshot,
+      contextLabel: row.reviewableInstance.contextLabelSnapshot
+    },
+    messages: messages.map(toModerationCaseMessage)
+  });
+}
+
 async function readReviewVersions(
   database: ElevenHouseDatabase,
   reviewId: string
@@ -288,6 +336,33 @@ function toModerationCaseSummary(row: ReviewModerationCaseRow): ReviewModeration
     closedAt: row.closedAt?.toISOString() ?? null,
     reasonCode: row.reasonCode as ReviewModerationCaseSummary["reasonCode"]
   };
+}
+
+function toModerationCaseMessage(row: ReviewModerationCaseMessageRow): ReviewModerationCaseMessage {
+  return {
+    messageId: row.id,
+    authorRole: row.authorRole as ReviewModerationCaseMessage["authorRole"],
+    visibility: row.visibility as ReviewModerationCaseMessage["visibility"],
+    body: row.body,
+    createdAt: row.createdAt.toISOString()
+  };
+}
+
+function canActorReadCase(
+  input: Parameters<ReviewReadStore["getModerationCaseDetail"]>[0],
+  review: ReviewRow
+): boolean {
+  if (input.actorRole === "moderator") return true;
+  if (input.actorRole === "client") return review.clientUserId === input.actorUserId;
+  return review.astrologerUserId === input.actorUserId;
+}
+
+function visibilityForActorRole(
+  actorRole: Parameters<ReviewReadStore["getModerationCaseDetail"]>[0]["actorRole"]
+): "all" | readonly string[] {
+  if (actorRole === "moderator") return "all";
+  if (actorRole === "client") return ["all_case_participants", "client_and_moderators"];
+  return ["all_case_participants", "astrologer_and_moderators"];
 }
 
 function splitDisplayName(value: string | null): { firstName: string; lastName: string | null } {

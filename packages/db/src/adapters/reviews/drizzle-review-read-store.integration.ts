@@ -176,6 +176,125 @@ describe.sequential("Drizzle review read store", () => {
       auditCursor: null
     });
   });
+
+  it("filters moderation case messages by participant visibility", async () => {
+    const fixture = await seedReviewReadFixture(runtime);
+    const commands = createDrizzleReviewCommandStore(runtime.database);
+    const reads = createDrizzleReviewReadStore(runtime.database);
+    const caseId = randomUUID();
+
+    await commands.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 3,
+        text: "Нужны уточнения по оказанной услуге.",
+        publicIdentityMode: "named"
+      }
+    });
+    await commands.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await commands.openReviewDispute({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextCaseId: caseId,
+      reasonCode: "fraud_or_conflict"
+    });
+
+    await commands.createReviewCaseMessage({
+      messageId: fixture.allParticipantsMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "all_case_participants",
+      body: "Обсуждаем спор здесь.",
+      now: "2026-08-20T12:01:00.000Z"
+    });
+    await commands.createReviewCaseMessage({
+      messageId: fixture.clientOnlyMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "client_and_moderators",
+      body: "Клиенту: уточните детали оплаты.",
+      now: "2026-08-20T12:02:00.000Z"
+    });
+    await commands.createReviewCaseMessage({
+      messageId: fixture.astrologerOnlyMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "astrologer_and_moderators",
+      body: "Астрологу: пришлите контекст услуги.",
+      now: "2026-08-20T12:03:00.000Z"
+    });
+    await commands.createReviewCaseMessage({
+      messageId: fixture.moderatorsOnlyMessageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "moderators_only",
+      body: "Внутренняя заметка модерации.",
+      now: "2026-08-20T12:04:00.000Z"
+    });
+
+    const moderatorCase = await reads.getModerationCaseDetail({
+      caseId,
+      actorRole: "moderator",
+      actorUserId: fixture.moderatorUserId
+    });
+    expect(moderatorCase).toMatchObject({
+      caseId,
+      reviewId: fixture.reviewId,
+      serviceContext: {
+        title: "Солярная консультация",
+        contextLabel: "60 минут"
+      },
+      messages: [
+        expect.objectContaining({ messageId: fixture.allParticipantsMessageId }),
+        expect.objectContaining({ messageId: fixture.clientOnlyMessageId }),
+        expect.objectContaining({ messageId: fixture.astrologerOnlyMessageId }),
+        expect.objectContaining({ messageId: fixture.moderatorsOnlyMessageId })
+      ]
+    });
+
+    const clientCase = await reads.getModerationCaseDetail({
+      caseId,
+      actorRole: "client",
+      actorUserId: fixture.clientUserId
+    });
+    expect(clientCase?.messages.map((message) => message.messageId)).toEqual([
+      fixture.allParticipantsMessageId,
+      fixture.clientOnlyMessageId
+    ]);
+
+    const astrologerCase = await reads.getModerationCaseDetail({
+      caseId,
+      actorRole: "astrologer",
+      actorUserId: fixture.astrologerUserId
+    });
+    expect(astrologerCase?.messages.map((message) => message.messageId)).toEqual([
+      fixture.allParticipantsMessageId,
+      fixture.astrologerOnlyMessageId
+    ]);
+
+    await expect(
+      reads.getModerationCaseDetail({
+        caseId,
+        actorRole: "client",
+        actorUserId: randomUUID()
+      })
+    ).resolves.toBeNull();
+  });
 });
 
 async function seedReviewReadFixture(runtime: PostgresRuntime) {
@@ -258,6 +377,10 @@ async function seedReviewReadFixture(runtime: PostgresRuntime) {
     firstVersionId: randomUUID(),
     pendingEditVersionId: randomUUID(),
     replyVersionId: randomUUID(),
-    publicationEventId: randomUUID()
+    publicationEventId: randomUUID(),
+    allParticipantsMessageId: randomUUID(),
+    clientOnlyMessageId: randomUUID(),
+    astrologerOnlyMessageId: randomUUID(),
+    moderatorsOnlyMessageId: randomUUID()
   };
 }

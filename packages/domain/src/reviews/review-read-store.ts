@@ -1,9 +1,12 @@
 import type {
   ClientReviewDetail,
   ReviewAdminDetail,
+  ReviewModerationCaseDetail,
   ReviewPublicListQuery,
   ReviewPublicListResponse
 } from "@elevenhouse/contracts";
+
+export type ReviewModerationCaseActorRole = "moderator" | "client" | "astrologer";
 
 export type ReviewReadStore = {
   readonly listPublicReviews: (
@@ -16,4 +19,9 @@ export type ReviewReadStore = {
   readonly getAdminReviewDetail: (input: {
     readonly reviewId: string;
   }) => Promise<ReviewAdminDetail | null>;
+  readonly getModerationCaseDetail: (input: {
+    readonly caseId: string;
+    readonly actorUserId: string;
+    readonly actorRole: ReviewModerationCaseActorRole;
+  }) => Promise<ReviewModerationCaseDetail | null>;
 };
