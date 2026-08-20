@@ -405,6 +405,84 @@ const clientCrmRelativeHrefSchema = z
   .regex(/^\/(?!\/)/, "CRM activity links must be relative internal paths")
   .refine((value) => !value.includes("\\"), "CRM activity links cannot contain backslashes");
 
+const clientCrmPrivateTagSchema = z.string().trim().min(1).max(64);
+const clientCrmPrivateTagsSchema = z
+  .array(clientCrmPrivateTagSchema)
+  .max(12)
+  .superRefine((tags, context) => {
+    const seen = new Set<string>();
+    for (const [index, tag] of tags.entries()) {
+      const key = tag.toLocaleLowerCase("en-US");
+      if (seen.has(key)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: "CRM private tags must be unique"
+        });
+      }
+      seen.add(key);
+    }
+  });
+
+const clientCrmPrivateTagsRequestSchema = z
+  .array(z.string().trim().max(64))
+  .max(24)
+  .transform((tags) => {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const tag of tags) {
+      const value = tag.replace(/\s+/g, " ").trim();
+      if (value.length === 0) continue;
+      const key = value.toLocaleLowerCase("en-US");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push(value);
+    }
+    return normalized;
+  })
+  .pipe(clientCrmPrivateTagsSchema);
+
+const clientCrmPrivateNoteRequestSchema = z
+  .union([
+    z
+      .string()
+      .max(2000)
+      .transform((value) => {
+        const normalized = value.replace(/\s+/g, " ").trim();
+        return normalized.length === 0 ? null : normalized;
+      }),
+    z.null()
+  ])
+  .transform((value) => value ?? null);
+
+export const clientCrmPrivateProfileSchema = z
+  .object({
+    note: z.string().trim().max(2000).nullable(),
+    tags: clientCrmPrivateTagsSchema,
+    updatedAt: timestampSchema
+  })
+  .strict();
+export type ClientCrmPrivateProfile = z.infer<typeof clientCrmPrivateProfileSchema>;
+
+export const astrologerClientCrmPrivateProfileUpdateRequestSchema = z
+  .object({
+    note: clientCrmPrivateNoteRequestSchema,
+    tags: clientCrmPrivateTagsRequestSchema
+  })
+  .strict();
+export type AstrologerClientCrmPrivateProfileUpdateRequest = z.infer<
+  typeof astrologerClientCrmPrivateProfileUpdateRequestSchema
+>;
+
+export const astrologerClientCrmPrivateProfileUpdateResponseSchema = z
+  .object({
+    privateCrm: clientCrmPrivateProfileSchema
+  })
+  .strict();
+export type AstrologerClientCrmPrivateProfileUpdateResponse = z.infer<
+  typeof astrologerClientCrmPrivateProfileUpdateResponseSchema
+>;
+
 export const clientCrmRelationshipSchema = z
   .object({
     id: uuidSchema,
@@ -660,6 +738,7 @@ export const astrologerClientCrmListItemSchema = z
     displayName: z.string().trim().min(1).max(200).nullable(),
     relationship: clientCrmRelationshipSchema,
     lifecycle: clientCrmLifecycleSchema,
+    privateCrm: clientCrmPrivateProfileSchema,
     readiness: clientCrmReadinessSchema
   })
   .strict();
@@ -682,6 +761,7 @@ export const astrologerClientCrmDetailSchema = z
     birthData: clientBirthDataResponseSchema.nullable(),
     relatedBirthProfiles: z.array(clientRelatedBirthProfileResponseSchema).max(50),
     readiness: clientCrmReadinessSchema,
+    privateCrm: clientCrmPrivateProfileSchema,
     serviceWork: clientCrmServiceWorkSummarySchema.optional(),
     activity: clientCrmActivityPageResponseSchema
   })

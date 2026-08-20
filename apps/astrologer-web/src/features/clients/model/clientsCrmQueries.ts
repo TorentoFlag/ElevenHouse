@@ -1,20 +1,27 @@
 import type { AstrologerClientCrmListQuery } from "@elevenhouse/contracts";
 import { astrologerClientCrmListQuerySchema } from "@elevenhouse/contracts";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient
+} from "@tanstack/react-query";
 import {
   getAstrologerClientCrmDetail,
   getAstrologerClientCrmFirstActivityPage,
-  listAstrologerClientCrm
+  listAstrologerClientCrm,
+  updateAstrologerClientCrmPrivateProfile
 } from "../api/clientsCrmApi";
+import type {
+  AstrologerClientCrmDetailResponse,
+  AstrologerClientCrmPrivateProfileUpdateRequest
+} from "@elevenhouse/contracts";
 
 export const clientsCrmQueryKeys = {
   all: () => ["clients", "crm"] as const,
-  list: (query: Partial<AstrologerClientCrmListQuery> = {}) => [
-    "clients",
-    "crm",
-    "list",
-    astrologerClientCrmListQuerySchema.parse(query)
-  ] as const,
+  list: (query: Partial<AstrologerClientCrmListQuery> = {}) =>
+    ["clients", "crm", "list", astrologerClientCrmListQuerySchema.parse(query)] as const,
   detail: (clientUserId: string | undefined) => ["clients", "crm", "detail", clientUserId] as const,
   activity: (clientUserId: string | undefined) =>
     ["clients", "crm", "activity", clientUserId] as const
@@ -46,6 +53,24 @@ export function clientsCrmActivityQueryOptions(clientUserId: string | undefined)
   };
 }
 
+export function updateClientCrmPrivateProfileMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "setQueryData">,
+  clientUserId: string | undefined
+) {
+  return {
+    mutationFn: (input: AstrologerClientCrmPrivateProfileUpdateRequest) =>
+      updateAstrologerClientCrmPrivateProfile(clientUserId ?? "", input),
+    onSuccess: (response: Awaited<ReturnType<typeof updateAstrologerClientCrmPrivateProfile>>) => {
+      queryClient.setQueryData<AstrologerClientCrmDetailResponse>(
+        clientsCrmQueryKeys.detail(clientUserId),
+        (current) =>
+          current ? { client: { ...current.client, privateCrm: response.privateCrm } } : current
+      );
+      return queryClient.invalidateQueries({ queryKey: ["clients", "crm", "list"] });
+    }
+  };
+}
+
 export function useClientsCrmListQuery(query: Partial<AstrologerClientCrmListQuery> = {}) {
   return useQuery(clientsCrmListQueryOptions(query));
 }
@@ -56,4 +81,10 @@ export function useClientsCrmDetailQuery(clientUserId: string | undefined) {
 
 export function useClientsCrmActivityQuery(clientUserId: string | undefined) {
   return useQuery(clientsCrmActivityQueryOptions(clientUserId));
+}
+
+export function useUpdateClientCrmPrivateProfileMutation(clientUserId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation(updateClientCrmPrivateProfileMutationOptions(queryClient, clientUserId));
 }

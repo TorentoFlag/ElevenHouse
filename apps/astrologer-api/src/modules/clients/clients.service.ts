@@ -13,12 +13,14 @@ import {
   ClientRelatedBirthProfileNotFoundError,
   listAstrologerClients,
   listAstrologerClientCrmPage,
+  updateAstrologerClientCrmPrivateProfile,
   ClientBirthDataRevisionConflictError,
   writeClientBirthProfile,
   writeClientRelatedBirthProfile,
   type BookingClientServiceWorkSummaryReader,
   type SessionClientServiceWorkSummaryReader,
   type FinanceClientServiceWorkSummaryReader,
+  type ClientCrmPrivateProfileStore,
   type ClientCrmReadStore,
   type ClientRelatedBirthProfileStore,
   type ClientStore
@@ -29,6 +31,8 @@ import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
   astrologerClientCrmListResponseSchema,
+  astrologerClientCrmPrivateProfileUpdateRequestSchema,
+  astrologerClientCrmPrivateProfileUpdateResponseSchema,
   astrologerClientParamsSchema,
   astrologerClientResponseSchema,
   clientBirthDataUpsertRequestSchema,
@@ -44,6 +48,7 @@ import {
   type AstrologerClientListResponse,
   type AstrologerClientCrmDetailResponse,
   type AstrologerClientCrmListResponse,
+  type AstrologerClientCrmPrivateProfileUpdateResponse,
   type AstrologerClientResponse,
   type ClientCrmActivityPageResponse,
   type ClientBirthPlaceReferenceResponse,
@@ -74,7 +79,7 @@ export class ClientsService {
     @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
     private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider,
     @Inject(CLIENT_CRM_READ_STORE)
-    private readonly clientCrmReadStore: ClientCrmReadStore,
+    private readonly clientCrmReadStore: ClientCrmReadStore & ClientCrmPrivateProfileStore,
     @Inject(CLIENT_BOOKING_SERVICE_WORK_READER)
     private readonly bookingServiceWorkReader: BookingClientServiceWorkSummaryReader,
     @Inject(CLIENT_SESSION_SERVICE_WORK_READER)
@@ -157,6 +162,31 @@ export class ClientsService {
     }
     const detail = await this.readClientCrmDetail(clientUserId, request);
     return clientCrmActivityPageResponseSchema.parse(detail.activity);
+  }
+
+  async updateClientCrmPrivateProfile(
+    clientUserId: string,
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<AstrologerClientCrmPrivateProfileUpdateResponse> {
+    const params = parseContract(astrologerClientParamsSchema, { clientUserId });
+    const profile = parseContract(astrologerClientCrmPrivateProfileUpdateRequestSchema, body);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await updateAstrologerClientCrmPrivateProfile({
+      store: this.clientCrmReadStore,
+      astrologerUserId,
+      clientUserId: params.clientUserId,
+      profile,
+      now: this.clock.now().toISOString()
+    });
+
+    if (result.kind === "updated") {
+      return astrologerClientCrmPrivateProfileUpdateResponseSchema.parse({
+        privateCrm: result.profile
+      });
+    }
+
+    throwClientCrmReadFailure(result.kind);
   }
 
   async searchBirthPlaces(

@@ -471,6 +471,19 @@ export type ClientsCrmCopy = {
     readonly empty: string;
     readonly unavailable: string;
   };
+  readonly privateCrm: {
+    readonly title: string;
+    readonly privateHint: string;
+    readonly noteLabel: string;
+    readonly tagsLabel: string;
+    readonly emptyNote: string;
+    readonly emptyTags: string;
+    readonly editLabel: string;
+    readonly saveLabel: string;
+    readonly savingLabel: string;
+    readonly cancelLabel: string;
+    readonly saveError: string;
+  };
   readonly missingBirthData: string;
   readonly emptyRelatedProfiles: string;
   readonly emptyActivity: string;
@@ -777,6 +790,19 @@ export const astrologerCopyByLocale = {
           recentPayments: "Платежи",
           empty: "Работы, заказов и платежей пока нет",
           unavailable: "Не удалось загрузить работу с клиентом"
+        },
+        privateCrm: {
+          title: "CRM",
+          privateHint: "Приватно, видно только вам",
+          noteLabel: "Приватная заметка",
+          tagsLabel: "Теги",
+          emptyNote: "Заметки пока нет",
+          emptyTags: "Тегов пока нет",
+          editLabel: "Редактировать CRM",
+          saveLabel: "Сохранить CRM",
+          savingLabel: "Сохраняем CRM",
+          cancelLabel: "Отмена",
+          saveError: "Не удалось сохранить CRM"
         },
         missingBirthData: "Данных рождения пока нет",
         emptyRelatedProfiles: "Связанных профилей пока нет",
@@ -1395,6 +1421,19 @@ export const astrologerCopyByLocale = {
           recentPayments: "Payments",
           empty: "There is no client work, orders, or payments yet",
           unavailable: "Could not load client work"
+        },
+        privateCrm: {
+          title: "CRM",
+          privateHint: "Private, visible only to you",
+          noteLabel: "Private note",
+          tagsLabel: "Tags",
+          emptyNote: "No note yet",
+          emptyTags: "No tags yet",
+          editLabel: "Edit CRM",
+          saveLabel: "Save CRM",
+          savingLabel: "Saving CRM",
+          cancelLabel: "Cancel",
+          saveError: "Could not save CRM"
         },
         missingBirthData: "Birth data is not available yet",
         emptyRelatedProfiles: "There are no related profiles yet",

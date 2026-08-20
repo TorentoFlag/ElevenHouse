@@ -2,11 +2,15 @@ import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
   astrologerClientCrmListResponseSchema,
+  astrologerClientCrmPrivateProfileUpdateRequestSchema,
+  astrologerClientCrmPrivateProfileUpdateResponseSchema,
   astrologerClientParamsSchema,
   clientCrmActivityPageResponseSchema,
   type AstrologerClientCrmDetailResponse,
   type AstrologerClientCrmListQuery,
   type AstrologerClientCrmListResponse,
+  type AstrologerClientCrmPrivateProfileUpdateRequest,
+  type AstrologerClientCrmPrivateProfileUpdateResponse,
   type ClientCrmActivityPageResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -47,5 +51,21 @@ export async function getAstrologerClientCrmFirstActivityPage(
 
   return clientCrmActivityPageResponseSchema.parse(
     await application.http.get(`/clients/crm/${encodeURIComponent(params.clientUserId)}/activity`)
+  );
+}
+
+export async function updateAstrologerClientCrmPrivateProfile(
+  clientUserId: string,
+  input: AstrologerClientCrmPrivateProfileUpdateRequest
+): Promise<AstrologerClientCrmPrivateProfileUpdateResponse> {
+  const params = astrologerClientParamsSchema.parse({ clientUserId });
+  const body = astrologerClientCrmPrivateProfileUpdateRequestSchema.parse(input);
+
+  return astrologerClientCrmPrivateProfileUpdateResponseSchema.parse(
+    await application.http.put(
+      `/clients/crm/${encodeURIComponent(params.clientUserId)}/private-profile`,
+      body,
+      { csrf: true }
+    )
   );
 }

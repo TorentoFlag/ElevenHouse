@@ -12,7 +12,8 @@ import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
 import {
   useClientsCrmActivityQuery,
   useClientsCrmDetailQuery,
-  useClientsCrmListQuery
+  useClientsCrmListQuery,
+  useUpdateClientCrmPrivateProfileMutation
 } from "../../features/clients/model/clientsCrmQueries";
 import type { ClientCrmTabId } from "../../features/clients/ui/ClientCrmTabs";
 import { ClientsPageView } from "./ClientsPageView";
@@ -44,6 +45,7 @@ export function ClientsPage() {
   const selectedClientUserId = clientUserId ?? clients[0]?.clientUserId;
   const detailQuery = useClientsCrmDetailQuery(selectedClientUserId);
   const activityQuery = useClientsCrmActivityQuery(selectedClientUserId);
+  const privateProfileMutation = useUpdateClientCrmPrivateProfileMutation(selectedClientUserId);
   const isFiltered = search.trim().length > 0 || lifecycle !== undefined || source !== undefined;
 
   useDocumentTitle(dictionary.clients.documentTitle);
@@ -54,9 +56,7 @@ export function ClientsPage() {
     }
 
     setClients((current) =>
-      cursor
-        ? mergeClientPages(current, listQuery.data.items)
-        : listQuery.data.items
+      cursor ? mergeClientPages(current, listQuery.data.items) : listQuery.data.items
     );
   }, [cursor, listQuery.data]);
 
@@ -105,6 +105,8 @@ export function ClientsPage() {
       isDetailError={detailQuery.isError}
       isActivityLoading={activityQuery.isLoading}
       isActivityError={activityQuery.isError}
+      isPrivateCrmSaving={privateProfileMutation.isPending}
+      isPrivateCrmError={privateProfileMutation.isError}
       isFiltered={isFiltered}
       hasNextPage={Boolean(listQuery.data?.nextCursor)}
       onSearchChange={handleSearchChange}
@@ -121,6 +123,7 @@ export function ClientsPage() {
       onRetryList={() => void listQuery.refetch()}
       onRetryDetail={() => void detailQuery.refetch()}
       onRetryActivity={() => void activityQuery.refetch()}
+      onSavePrivateCrm={(input) => privateProfileMutation.mutateAsync(input)}
     />
   );
 }

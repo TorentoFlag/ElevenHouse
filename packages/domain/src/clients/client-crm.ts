@@ -42,6 +42,12 @@ export type ClientCrmReadiness = {
   readonly relatedProfiles: "ready" | "missing";
 };
 
+export type ClientCrmPrivateProfile = {
+  readonly note: string | null;
+  readonly tags: readonly string[];
+  readonly updatedAt: string;
+};
+
 export type ClientCrmServiceWorkSummary =
   | {
       readonly status: "available";
@@ -176,6 +182,7 @@ export type ClientCrmListItem = {
   readonly displayName: string | null;
   readonly relationship: ClientCrmRelationship;
   readonly lifecycle: ClientCrmLifecycle;
+  readonly privateCrm: ClientCrmPrivateProfile;
   readonly readiness: ClientCrmReadiness;
 };
 
@@ -208,6 +215,15 @@ export type ClientCrmDetailResult =
   | { readonly kind: "found"; readonly detail: ClientCrmDetail }
   | ClientCrmFailure;
 
+export type ClientCrmPrivateProfileUpdateInput = {
+  readonly note: string | null;
+  readonly tags: readonly string[];
+};
+
+export type ClientCrmPrivateProfileUpdateResult =
+  | { readonly kind: "updated"; readonly profile: ClientCrmPrivateProfile }
+  | ClientCrmFailure;
+
 export type ClientCrmListQuery = {
   readonly query: string;
   readonly cursor: string | null;
@@ -235,6 +251,15 @@ export type ClientCrmReadStore = {
     readonly astrologerUserId: string;
     readonly clientUserId: string;
   }) => Promise<ClientCrmDetailResult>;
+};
+
+export type ClientCrmPrivateProfileStore = {
+  readonly updateAstrologerClientCrmPrivateProfile: (input: {
+    readonly astrologerUserId: string;
+    readonly clientUserId: string;
+    readonly profile: ClientCrmPrivateProfileUpdateInput;
+    readonly now: string;
+  }) => Promise<ClientCrmPrivateProfileUpdateResult>;
 };
 
 export type ClientCrmServiceWorkSources = {
@@ -305,6 +330,28 @@ export async function getAstrologerClientCrmDetail(input: {
         })
       }
     };
+  } catch (error) {
+    if (error instanceof ClientCrmCommandValidationError) {
+      return { kind: "invalid_command" };
+    }
+    throw error;
+  }
+}
+
+export async function updateAstrologerClientCrmPrivateProfile(input: {
+  readonly store: ClientCrmPrivateProfileStore;
+  readonly astrologerUserId: string;
+  readonly clientUserId: string;
+  readonly profile: ClientCrmPrivateProfileUpdateInput;
+  readonly now: string;
+}): Promise<ClientCrmPrivateProfileUpdateResult> {
+  try {
+    return await input.store.updateAstrologerClientCrmPrivateProfile({
+      astrologerUserId: normalizeRequiredId(input.astrologerUserId),
+      clientUserId: normalizeRequiredId(input.clientUserId),
+      profile: normalizePrivateProfileUpdate(input.profile),
+      now: validateInstant(input.now, "CRM private profile timestamp is invalid")
+    });
   } catch (error) {
     if (error instanceof ClientCrmCommandValidationError) {
       return { kind: "invalid_command" };
@@ -485,6 +532,45 @@ function normalizeListQuery(input: ClientCrmListQueryInput | undefined): ClientC
     source: input?.source,
     sort: "last_linked_at_desc"
   };
+}
+
+function normalizePrivateProfileUpdate(
+  input: ClientCrmPrivateProfileUpdateInput
+): ClientCrmPrivateProfileUpdateInput {
+  return {
+    note: normalizeNullableText(input.note, 2000),
+    tags: normalizePrivateTags(input.tags)
+  };
+}
+
+function normalizeNullableText(value: string | null, maxLength: number): string | null {
+  if (value === null) return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length > maxLength) {
+    throw new ClientCrmCommandValidationError("CRM private note is invalid");
+  }
+  return normalized.length === 0 ? null : normalized;
+}
+
+function normalizePrivateTags(values: readonly string[]): readonly string[] {
+  if (!Array.isArray(values) || values.length > 24) {
+    throw new ClientCrmCommandValidationError("CRM private tags are invalid");
+  }
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const value of values) {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (normalized.length === 0) continue;
+    const tag = validateRequiredString(normalized, "CRM private tag is invalid", 64);
+    const key = tag.toLocaleLowerCase("en-US");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+  }
+  if (tags.length > 12) {
+    throw new ClientCrmCommandValidationError("CRM private tags are invalid");
+  }
+  return tags;
 }
 
 function sortClientCrmDetailActivity(detail: ClientCrmDetail): ClientCrmDetail {

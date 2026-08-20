@@ -5,4 +5,5 @@ export * from "./client-related-birth-profiles.schema";
 export * from "./client-astrologer-relationships.schema";
 export * from "./client-join-intents.schema";
 export * from "./client-lifecycle.schema";
+export * from "./client-crm-private-profiles.schema";
 export * from "./relations.schema";

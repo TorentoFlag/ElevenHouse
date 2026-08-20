@@ -7,6 +7,8 @@ import {
   clientAstrologerRelationships,
   clientBirthData,
   clientBirthDataHistory,
+  clientCrmPrivateProfiles,
+  clientCrmPrivateTags,
   clientLifecycleHistory,
   clientLifecycleStates,
   clientProfiles,
@@ -49,6 +51,10 @@ describe.sequential("Drizzle client CRM read store", () => {
         clientUserId: fixture.clientUserId,
         relationship: { id: fixture.relationshipId, status: "active" },
         lifecycle: { status: "in_service", mode: "automatic", revision: 2 },
+        privateCrm: {
+          note: "Prepare compatibility follow-up",
+          tags: ["Natal", "VIP"]
+        },
         readiness: { birthData: "ready", relatedProfiles: "ready" },
         relatedBirthProfiles: [{ id: fixture.relatedBirthProfileId }],
         activity: {
@@ -114,6 +120,11 @@ describe.sequential("Drizzle client CRM read store", () => {
     expect(full.page.items.map((item) => item.relationship.id)).not.toEqual(
       expect.arrayContaining([fixture.archivedRelationshipId, fixture.blockedRelationshipId])
     );
+    expect(
+      full.page.items.find((item) => item.relationship.id === fixture.relationshipId)
+    ).toMatchObject({
+      privateCrm: { tags: ["Natal", "VIP"] }
+    });
 
     const first = await store.listAstrologerClientCrmPage({
       astrologerUserId: fixture.astrologerUserId,
@@ -180,6 +191,64 @@ describe.sequential("Drizzle client CRM read store", () => {
       })
     ).resolves.toEqual({ kind: "conflict" });
   });
+
+  it("updates astrologer-private CRM profile only through an active owner relationship", async () => {
+    const fixture = await seedCrmFixture(runtime);
+    const store = createDrizzleClientCrmReadStore(runtime.database, { cursorSecret });
+
+    await expect(
+      store.updateAstrologerClientCrmPrivateProfile({
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.clientUserId,
+        profile: {
+          note: "Needs birth time confirmation",
+          tags: ["Follow-up", "Natal"]
+        },
+        now: "2026-08-20T13:00:00.000Z"
+      })
+    ).resolves.toEqual({
+      kind: "updated",
+      profile: {
+        note: "Needs birth time confirmation",
+        tags: ["Follow-up", "Natal"],
+        updatedAt: "2026-08-20T13:00:00.000Z"
+      }
+    });
+
+    await expect(
+      store.updateAstrologerClientCrmPrivateProfile({
+        astrologerUserId: fixture.unrelatedAstrologerUserId,
+        clientUserId: fixture.clientUserId,
+        profile: { note: null, tags: [] },
+        now: "2026-08-20T13:00:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "not_related" });
+
+    await expect(
+      store.updateAstrologerClientCrmPrivateProfile({
+        astrologerUserId: fixture.astrologerUserId,
+        clientUserId: fixture.archivedClientUserId,
+        profile: { note: null, tags: [] },
+        now: "2026-08-20T13:00:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "blocked_or_archived" });
+  });
+
+  it("enforces case-insensitive private tag uniqueness in storage", async () => {
+    const fixture = await seedCrmFixture(runtime);
+
+    await expect(
+      runtime.database.insert(clientCrmPrivateTags).values({
+        relationshipId: fixture.relationshipId,
+        tag: "natal"
+      })
+    ).rejects.toMatchObject({
+      cause: {
+        code: "23505",
+        constraint: "client_crm_private_tags_relationship_lower_tag_unique"
+      }
+    });
+  });
 });
 
 function emptyQuery(
@@ -237,15 +306,17 @@ async function seedCrmFixture(runtime: PostgresRuntime) {
   const blockedRelationshipId = randomUUID();
 
   await runtime.database.transaction(async (transaction) => {
-    await transaction.insert(users).values([
-      { id: astrologerUserId },
-      { id: unrelatedAstrologerUserId },
-      { id: clientUserId },
-      { id: archivedClientUserId },
-      { id: blockedClientUserId },
-      { id: newestClientUserId },
-      { id: sameTimestampClientUserId }
-    ]);
+    await transaction
+      .insert(users)
+      .values([
+        { id: astrologerUserId },
+        { id: unrelatedAstrologerUserId },
+        { id: clientUserId },
+        { id: archivedClientUserId },
+        { id: blockedClientUserId },
+        { id: newestClientUserId },
+        { id: sameTimestampClientUserId }
+      ]);
     await transaction.insert(clientProfiles).values([
       {
         userId: clientUserId,
@@ -319,6 +390,28 @@ async function seedCrmFixture(runtime: PostgresRuntime) {
       createdAt: now,
       updatedAt: activityAt
     });
+    await transaction.insert(clientCrmPrivateProfiles).values({
+      relationshipId,
+      astrologerUserId,
+      clientUserId,
+      note: "Prepare compatibility follow-up",
+      createdAt: now,
+      updatedAt: activityAt
+    });
+    await transaction.insert(clientCrmPrivateTags).values([
+      {
+        relationshipId,
+        tag: "Natal",
+        createdAt: now,
+        updatedAt: activityAt
+      },
+      {
+        relationshipId,
+        tag: "VIP",
+        createdAt: now,
+        updatedAt: activityAt
+      }
+    ]);
     await transaction.insert(clientLifecycleStates).values({
       relationshipId: newestRelationshipId,
       status: "new",

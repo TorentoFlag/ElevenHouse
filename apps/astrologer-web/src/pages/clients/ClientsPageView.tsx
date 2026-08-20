@@ -1,6 +1,8 @@
 import type {
   AstrologerClientCrmDetail,
   AstrologerClientCrmListItem,
+  AstrologerClientCrmPrivateProfileUpdateRequest,
+  AstrologerClientCrmPrivateProfileUpdateResponse,
   ClientCrmActivityItem,
   ClientLifecycleStatus,
   ClientRelationshipSource
@@ -32,6 +34,8 @@ export type ClientsPageViewProps = {
   readonly isDetailError: boolean;
   readonly isActivityLoading: boolean;
   readonly isActivityError: boolean;
+  readonly isPrivateCrmSaving: boolean;
+  readonly isPrivateCrmError: boolean;
   readonly isFiltered: boolean;
   readonly hasNextPage: boolean;
   readonly onSearchChange: (value: string) => void;
@@ -44,6 +48,9 @@ export type ClientsPageViewProps = {
   readonly onRetryList: () => void;
   readonly onRetryDetail: () => void;
   readonly onRetryActivity: () => void;
+  readonly onSavePrivateCrm: (
+    input: AstrologerClientCrmPrivateProfileUpdateRequest
+  ) => Promise<AstrologerClientCrmPrivateProfileUpdateResponse>;
 };
 
 export function ClientsPageView({
@@ -66,6 +73,8 @@ export function ClientsPageView({
   isDetailError,
   isActivityLoading,
   isActivityError,
+  isPrivateCrmSaving,
+  isPrivateCrmError,
   isFiltered,
   hasNextPage,
   onSearchChange,
@@ -77,7 +86,8 @@ export function ClientsPageView({
   onTabChange,
   onRetryList,
   onRetryDetail,
-  onRetryActivity
+  onRetryActivity,
+  onSavePrivateCrm
 }: ClientsPageViewProps) {
   return (
     <section
@@ -124,10 +134,13 @@ export function ClientsPageView({
           isDetailError={isDetailError}
           isActivityLoading={isActivityLoading}
           isActivityError={isActivityError}
+          isPrivateCrmSaving={isPrivateCrmSaving}
+          isPrivateCrmError={isPrivateCrmError}
           onTabChange={onTabChange}
           onBackToList={onBackToList}
           onRetryDetail={onRetryDetail}
           onRetryActivity={onRetryActivity}
+          onSavePrivateCrm={onSavePrivateCrm}
         />
       </div>
     </section>

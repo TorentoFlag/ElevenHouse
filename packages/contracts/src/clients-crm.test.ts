@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
+  astrologerClientCrmPrivateProfileUpdateRequestSchema,
   clientCrmActivityItemSchema,
   clientCrmActivityPageResponseSchema,
   clientCrmLifecycleSchema,
+  clientCrmPrivateProfileSchema,
   clientCrmRelationshipSchema,
   clientLifecycleStatusSchema
 } from "./clients";
@@ -83,6 +85,11 @@ function detailResponse(overrides: Record<string, unknown> = {}) {
       readiness: {
         birthData: "missing",
         relatedProfiles: "ready"
+      },
+      privateCrm: {
+        note: null,
+        tags: [],
+        updatedAt: occurredAt
       },
       activity: {
         items: [],
@@ -199,6 +206,65 @@ describe("Clients CRM contracts", () => {
           relatedBirthProfiles: Array.from({ length: 51 }, relatedBirthProfile)
         })
       ).success
+    ).toBe(false);
+  });
+
+  it("accepts bounded astrologer-private CRM profile without messaging surface", () => {
+    const parsed = astrologerClientCrmDetailResponseSchema.parse(
+      detailResponse({
+        privateCrm: {
+          note: "Prepare compatibility follow-up",
+          tags: ["Natal", "VIP"],
+          updatedAt: occurredAt
+        }
+      })
+    );
+
+    expect(parsed.client.privateCrm).toEqual({
+      note: "Prepare compatibility follow-up",
+      tags: ["Natal", "VIP"],
+      updatedAt: occurredAt
+    });
+    expect(JSON.stringify(parsed.client.privateCrm)).not.toMatch(/message|thread|composer/i);
+
+    expect(
+      clientCrmPrivateProfileSchema.safeParse({
+        note: "x".repeat(2001),
+        tags: [],
+        updatedAt: occurredAt
+      }).success
+    ).toBe(false);
+    expect(
+      clientCrmPrivateProfileSchema.safeParse({
+        note: null,
+        tags: Array.from({ length: 13 }, (_, index) => `tag-${index}`),
+        updatedAt: occurredAt
+      }).success
+    ).toBe(false);
+    expect(
+      clientCrmPrivateProfileSchema.safeParse({
+        note: null,
+        tags: ["Natal", "natal"],
+        updatedAt: occurredAt
+      }).success
+    ).toBe(false);
+  });
+
+  it("normalizes astrologer-private CRM updates", () => {
+    expect(
+      astrologerClientCrmPrivateProfileUpdateRequestSchema.parse({
+        note: "  Needs   birth time confirmation  ",
+        tags: [" Natal ", "natal", "", "Follow-up"]
+      })
+    ).toEqual({
+      note: "Needs birth time confirmation",
+      tags: ["Natal", "Follow-up"]
+    });
+    expect(
+      astrologerClientCrmPrivateProfileUpdateRequestSchema.safeParse({
+        note: null,
+        tags: ["x".repeat(65)]
+      }).success
     ).toBe(false);
   });
 

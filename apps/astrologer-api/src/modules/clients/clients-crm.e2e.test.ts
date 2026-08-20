@@ -1,10 +1,10 @@
 import "reflect-metadata";
 
-import type { INestApplication } from "@nestjs/common";
+import { ForbiddenException, type INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
-import type { ClientCrmReadStore } from "@elevenhouse/domain";
+import type { ClientCrmPrivateProfileStore, ClientCrmReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SystemClock } from "../clock/system-clock.service";
@@ -26,7 +26,7 @@ const blockedClientUserId = "10000000-0000-4000-8000-000000000006";
 describe("Clients CRM HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
-  let crmStore: ClientCrmReadStore;
+  let crmStore: ClientCrmReadStore & ClientCrmPrivateProfileStore;
   let bookingServiceWorkReader: {
     readonly listClientServiceWorkBookings: ReturnType<typeof vi.fn>;
   };
@@ -35,6 +35,9 @@ describe("Clients CRM HTTP API", () => {
   };
   let financeServiceWorkReader: {
     readonly listClientServiceWorkFinance: ReturnType<typeof vi.fn>;
+  };
+  let csrfTokenService: {
+    readonly assertValidRequest: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(async () => {
@@ -109,6 +112,9 @@ describe("Clients CRM HTTP API", () => {
         }
       })
     };
+    csrfTokenService = {
+      assertValidRequest: vi.fn()
+    };
     const service = new (ClientsService as new (...args: unknown[]) => ClientsService)(
       {} as never,
       { now: () => new Date("2026-08-20T10:00:00.000Z") } as SystemClock,
@@ -124,7 +130,7 @@ describe("Clients CRM HTTP API", () => {
         { provide: ClientsService, useValue: service },
         { provide: Reflector, useValue: new Reflector() },
         { provide: ConfigService, useValue: { getOrThrow: () => "astrologer_session" } },
-        { provide: AstrologerCsrfTokenService, useValue: { assertValidRequest: () => undefined } },
+        { provide: AstrologerCsrfTokenService, useValue: csrfTokenService },
         CsrfGuard
       ]
     });
@@ -219,6 +225,93 @@ describe("Clients CRM HTTP API", () => {
     );
   });
 
+  it("updates astrologer-private CRM profile through the session-owned relationship", async () => {
+    const response = await request(`/clients/crm/${clientUserId}/private-profile`, {
+      role: "astrologer",
+      method: "PUT",
+      body: {
+        note: "  Needs   birth time confirmation  ",
+        tags: [" Natal ", "natal", "Follow-up"]
+      }
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      privateCrm: {
+        note: "Needs birth time confirmation",
+        tags: ["Natal", "Follow-up"],
+        updatedAt: "2026-08-20T10:00:00.000Z"
+      }
+    });
+    expect(crmStore.updateAstrologerClientCrmPrivateProfile).toHaveBeenCalledWith({
+      astrologerUserId,
+      clientUserId,
+      profile: {
+        note: "Needs birth time confirmation",
+        tags: ["Natal", "Follow-up"]
+      },
+      now: "2026-08-20T10:00:00.000Z"
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/message|thread|composer/i);
+  });
+
+  it("requires session authority and CSRF for private CRM profile updates", async () => {
+    const unauthenticated = await request(`/clients/crm/${clientUserId}/private-profile`, {
+      role: "missing",
+      method: "PUT",
+      body: { note: null, tags: [] }
+    });
+    expect(unauthenticated.status).toBe(401);
+
+    csrfTokenService.assertValidRequest.mockImplementationOnce(() => {
+      throw new ForbiddenException("Invalid CSRF token");
+    });
+
+    const invalidCsrf = await request(`/clients/crm/${clientUserId}/private-profile`, {
+      role: "astrologer",
+      method: "PUT",
+      body: { note: null, tags: [] }
+    });
+    expect(invalidCsrf.status).toBe(403);
+    expect(crmStore.updateAstrologerClientCrmPrivateProfile).not.toHaveBeenCalledWith(
+      expect.objectContaining({ profile: { note: null, tags: [] } })
+    );
+  });
+
+  it("rejects invalid private CRM profile update payloads before persistence", async () => {
+    for (const body of [
+      { note: "x".repeat(2001), tags: [] },
+      { note: null, tags: ["x".repeat(65)] },
+      {
+        note: null,
+        tags: Array.from({ length: 13 }, (_, index) => `tag-${index + 1}`)
+      }
+    ]) {
+      const response = await request(`/clients/crm/${clientUserId}/private-profile`, {
+        role: "astrologer",
+        method: "PUT",
+        body
+      });
+      expect(response.status).toBe(400);
+    }
+    expect(crmStore.updateAstrologerClientCrmPrivateProfile).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: expect.objectContaining({ note: "x".repeat(2001) })
+      })
+    );
+  });
+
+  it("conceals private CRM profile updates for unrelated, archived and blocked clients", async () => {
+    for (const value of [unrelatedClientUserId, archivedClientUserId, blockedClientUserId]) {
+      const response = await request(`/clients/crm/${value}/private-profile`, {
+        role: "astrologer",
+        method: "PUT",
+        body: { note: null, tags: [] }
+      });
+      expect(response.status).toBe(404);
+    }
+  });
+
   it("keeps service-work source failures observable in the CRM detail response", async () => {
     bookingServiceWorkReader.listClientServiceWorkBookings.mockRejectedValueOnce(
       new Error("booking reader unavailable")
@@ -284,13 +377,31 @@ describe("Clients CRM HTTP API", () => {
     expect(response.body).toEqual({ candidates: [] });
   });
 
-  async function request(path: string, input: { readonly role: string }) {
-    const response = await fetch(`${baseUrl}${path}`, { headers: { "x-test-role": input.role } });
+  async function request(
+    path: string,
+    input: {
+      readonly role: string;
+      readonly method?: string;
+      readonly csrfCookie?: boolean;
+      readonly body?: unknown;
+    }
+  ) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: input.method ?? "GET",
+      headers: {
+        "content-type": "application/json",
+        ...(input.method && input.method !== "GET" && input.csrfCookie !== false
+          ? { cookie: "astrologer_session=test-session" }
+          : {}),
+        "x-test-role": input.role
+      },
+      body: input.body === undefined ? undefined : JSON.stringify(input.body)
+    });
     return { status: response.status, body: await response.json() };
   }
 });
 
-function createCrmReadStore(): ClientCrmReadStore {
+function createCrmReadStore(): ClientCrmReadStore & ClientCrmPrivateProfileStore {
   return {
     listAstrologerClientCrmPage: vi.fn().mockImplementation(({ query }) => {
       if (query.cursor === "tampered") return Promise.resolve({ kind: "invalid_command" });
@@ -310,6 +421,26 @@ function createCrmReadStore(): ClientCrmReadStore {
         if (requestedClientUserId === foreignAstrologerUserId)
           return Promise.resolve({ kind: "conflict" });
         return Promise.resolve({ kind: "found", detail: crmDetail() });
+      }),
+    updateAstrologerClientCrmPrivateProfile: vi
+      .fn()
+      .mockImplementation(({ clientUserId: requestedClientUserId, profile, now }) => {
+        if (requestedClientUserId === unrelatedClientUserId)
+          return Promise.resolve({ kind: "not_related" });
+        if (
+          requestedClientUserId === archivedClientUserId ||
+          requestedClientUserId === blockedClientUserId
+        ) {
+          return Promise.resolve({ kind: "blocked_or_archived" });
+        }
+        return Promise.resolve({
+          kind: "updated",
+          profile: {
+            note: profile.note,
+            tags: profile.tags,
+            updatedAt: now
+          }
+        });
       })
   };
 }
@@ -341,6 +472,11 @@ function crmDetail(overrides: Record<string, unknown> = {}) {
     birthData: null,
     relatedBirthProfiles: [],
     readiness: { birthData: "missing" as const, relatedProfiles: "ready" as const },
+    privateCrm: {
+      note: null,
+      tags: [],
+      updatedAt: "2026-08-20T10:00:00.000Z"
+    },
     activity: {
       items: [
         {

@@ -28,8 +28,21 @@ export class ClientsController {
     return this.clientsService.getClientCrmActivity(clientUserId, query, request);
   }
 
+  @Put("crm/:clientUserId/private-profile")
+  @RequireCsrf()
+  updateClientCrmPrivateProfile(
+    @Param("clientUserId") clientUserId: string,
+    @Body() body: unknown,
+    @Req() request: AstrologerSessionRequest
+  ) {
+    return this.clientsService.updateClientCrmPrivateProfile(clientUserId, body, request);
+  }
+
   @Get("crm/:clientUserId")
-  getClientCrm(@Param("clientUserId") clientUserId: string, @Req() request: AstrologerSessionRequest) {
+  getClientCrm(
+    @Param("clientUserId") clientUserId: string,
+    @Req() request: AstrologerSessionRequest
+  ) {
     return this.clientsService.getClientCrm(clientUserId, request);
   }
 

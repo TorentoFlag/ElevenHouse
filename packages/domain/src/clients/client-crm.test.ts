@@ -10,8 +10,10 @@ import {
   createClientCrmActivityItem,
   getAstrologerClientCrmDetail,
   listAstrologerClientCrmPage,
+  updateAstrologerClientCrmPrivateProfile,
   type ClientCrmDetail,
   type ClientCrmActivityItemInput,
+  type ClientCrmPrivateProfileStore,
   type ClientCrmReadStore
 } from "./client-crm";
 
@@ -40,6 +42,11 @@ function detail(overrides: Partial<ClientCrmDetail> = {}): ClientCrmDetail {
       birthData: "missing",
       relatedProfiles: "ready"
     },
+    privateCrm: {
+      note: null,
+      tags: [],
+      updatedAt: occurredAt
+    },
     activity: {
       items: [],
       nextCursor: null
@@ -55,6 +62,24 @@ function store(overrides: Partial<ClientCrmReadStore> = {}): ClientCrmReadStore 
     },
     async getAstrologerClientCrmDetail() {
       return { kind: "found", detail: detail() };
+    },
+    ...overrides
+  };
+}
+
+function privateProfileStore(
+  overrides: Partial<ClientCrmPrivateProfileStore> = {}
+): ClientCrmPrivateProfileStore {
+  return {
+    async updateAstrologerClientCrmPrivateProfile() {
+      return {
+        kind: "updated",
+        profile: {
+          note: "Needs birth time confirmation",
+          tags: ["Natal"],
+          updatedAt: occurredAt
+        }
+      };
     },
     ...overrides
   };
@@ -334,6 +359,72 @@ describe("Clients CRM domain read model", () => {
       astrologerUserId: " ",
       clientUserId: "client-1"
     });
+
+    expect(result).toEqual({ kind: "invalid_command" });
+    expect(called).toBe(false);
+  });
+
+  it("normalizes astrologer-private CRM profile updates before persistence", async () => {
+    let receivedInput: unknown;
+    const result = await updateAstrologerClientCrmPrivateProfile({
+      store: privateProfileStore({
+        async updateAstrologerClientCrmPrivateProfile(input) {
+          receivedInput = input;
+          return {
+            kind: "updated",
+            profile: {
+              note: input.profile.note,
+              tags: input.profile.tags,
+              updatedAt: input.now
+            }
+          };
+        }
+      }),
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      profile: {
+        note: "  Needs   birth time confirmation  ",
+        tags: [" Natal ", "natal", "", "Follow-up"]
+      },
+      now: "2026-08-20T10:00:00.000Z"
+    });
+
+    expect(result).toEqual({
+      kind: "updated",
+      profile: {
+        note: "Needs birth time confirmation",
+        tags: ["Natal", "Follow-up"],
+        updatedAt: "2026-08-20T10:00:00.000Z"
+      }
+    });
+    expect(receivedInput).toEqual({
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      profile: {
+        note: "Needs birth time confirmation",
+        tags: ["Natal", "Follow-up"]
+      },
+      now: "2026-08-20T10:00:00.000Z"
+    });
+  });
+
+  it("rejects invalid private CRM commands without querying the private store", async () => {
+    let called = false;
+    const result = await updateAstrologerClientCrmPrivateProfile({
+      store: privateProfileStore({
+        async updateAstrologerClientCrmPrivateProfile() {
+          called = true;
+          throw new Error("Should not be called");
+        }
+      }),
+      astrologerUserId: "astrologer-1",
+      clientUserId: "client-1",
+      profile: {
+        note: null,
+        tags: ["x".repeat(65)]
+      },
+      now: "2026-08-20T10:00:00.000Z"
+    } as unknown as Parameters<typeof updateAstrologerClientCrmPrivateProfile>[0]);
 
     expect(result).toEqual({ kind: "invalid_command" });
     expect(called).toBe(false);

@@ -15,7 +15,8 @@ import { astrologerCopyByLocale } from "../../common/i18n/astrologerCopy";
 import { ClientsPage } from "./ClientsPage";
 
 const http = vi.hoisted(() => ({
-  get: vi.fn()
+  get: vi.fn(),
+  put: vi.fn()
 }));
 
 vi.mock("../../Application", () => ({ application: { http } }));
@@ -25,6 +26,7 @@ afterEach(cleanup);
 describe("ClientsPage", () => {
   beforeEach(() => {
     http.get.mockReset();
+    http.put.mockReset();
   });
 
   it("renders list loading, empty, error and retry states without local CRM placeholders", async () => {
@@ -99,6 +101,11 @@ describe("ClientsPage", () => {
     expect(screen.getByText("Источник")).toBeVisible();
     expect(screen.getAllByText("20 авг. 2026 г.").length).toBeGreaterThan(0);
     expect(screen.getByText("Работа с клиентом")).toBeVisible();
+    expect(screen.getByText("CRM")).toBeVisible();
+    expect(screen.getAllByText("Активный").length).toBeGreaterThan(0);
+    expect(screen.getByText("Natal")).toBeVisible();
+    expect(screen.getByText("VIP")).toBeVisible();
+    expect(screen.getByText("Prepare compatibility follow-up")).toBeVisible();
     expect(
       screen.getByRole("link", { name: /Natal consultation.*21 авг. 2026 г./ })
     ).toHaveAttribute(
@@ -128,6 +135,49 @@ describe("ClientsPage", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Связанные профили" }));
     expect(screen.getByText("Byron")).toBeVisible();
     expect(screen.getByText("child")).toBeVisible();
+  });
+
+  it("edits astrologer-private CRM attributes without creating correspondence UI", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.put.mockResolvedValue({
+      privateCrm: {
+        note: "Needs birth time confirmation",
+        tags: ["Follow-up"],
+        updatedAt: "2026-08-20T11:00:00.000Z"
+      }
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Редактировать CRM" }));
+    fireEvent.change(screen.getByLabelText("Теги"), { target: { value: "Follow-up" } });
+    fireEvent.change(screen.getByLabelText("Приватная заметка"), {
+      target: { value: "Needs birth time confirmation" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить CRM" }));
+
+    await waitFor(() =>
+      expect(http.put).toHaveBeenCalledWith(
+        "/clients/crm/11111111-1111-4111-8111-111111111111/private-profile",
+        {
+          note: "Needs birth time confirmation",
+          tags: ["Follow-up"]
+        },
+        { csrf: true }
+      )
+    );
+    expect(await screen.findByText("Follow-up")).toBeVisible();
+    expect(screen.queryByPlaceholderText(/написать/i)).not.toBeInTheDocument();
+    expect(document.querySelector("[data-chat-bubble]")).not.toBeInTheDocument();
   });
 
   it("renders Activity as a safe timeline and never embeds correspondence UI", async () => {
@@ -280,6 +330,11 @@ const adaListItem = {
     revision: 2,
     lastActivityAt: "2026-08-20T10:00:00.000Z"
   },
+  privateCrm: {
+    note: "Prepare compatibility follow-up",
+    tags: ["Natal", "VIP"],
+    updatedAt: "2026-08-20T10:00:00.000Z"
+  },
   readiness: { birthData: "ready", relatedProfiles: "ready" }
 } as const satisfies AstrologerClientCrmListItem;
 
@@ -298,6 +353,11 @@ const graceListItem = {
     mode: "automatic",
     revision: 1,
     lastActivityAt: "2026-08-19T10:00:00.000Z"
+  },
+  privateCrm: {
+    note: null,
+    tags: [],
+    updatedAt: "2026-08-19T10:00:00.000Z"
   },
   readiness: { birthData: "missing", relatedProfiles: "ready" }
 } as const satisfies AstrologerClientCrmListItem;
@@ -358,6 +418,11 @@ const adaDetail = {
       updatedAt: "2026-08-19T10:00:00.000Z"
     }
   ],
+  privateCrm: {
+    note: "Prepare compatibility follow-up",
+    tags: ["Natal", "VIP"],
+    updatedAt: "2026-08-20T10:00:00.000Z"
+  },
   serviceWork: {
     status: "available",
     bookings: {

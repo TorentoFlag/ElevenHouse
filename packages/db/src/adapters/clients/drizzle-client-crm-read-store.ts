@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { and, desc, eq, ilike, isNull, lt, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, lt, or, type SQL } from "drizzle-orm";
 import {
   createClientCrmActivityItem,
   type ClientBirthData,
@@ -8,6 +8,7 @@ import {
   type ClientCrmDetail,
   type ClientCrmListItem,
   type ClientCrmListQuery,
+  type ClientCrmPrivateProfileStore,
   type ClientCrmReadStore,
   type ClientLifecycleMode,
   type ClientLifecycleStatus,
@@ -20,6 +21,8 @@ import {
   clientAstrologerRelationships,
   clientBirthData,
   clientBirthDataHistory,
+  clientCrmPrivateProfiles,
+  clientCrmPrivateTags,
   clientLifecycleHistory,
   clientLifecycleStates,
   clientProfiles,
@@ -34,6 +37,14 @@ type ClientCrmRow = {
   readonly lifecycle: typeof clientLifecycleStates.$inferSelect | null;
   readonly birthData: typeof clientBirthData.$inferSelect | null;
 };
+
+type ClientCrmPrivateProfileRows = ReadonlyMap<
+  string,
+  {
+    readonly profile: typeof clientCrmPrivateProfiles.$inferSelect | null;
+    readonly tags: readonly string[];
+  }
+>;
 
 type ClientCrmCursor = {
   readonly astrologerUserId: string;
@@ -55,12 +66,14 @@ type ClientCrmReadStoreOptions = {
 export function createDrizzleClientCrmReadStore(
   database: ClientCrmDatabase,
   options: ClientCrmReadStoreOptions
-): ClientCrmReadStore {
+): ClientCrmReadStore & ClientCrmPrivateProfileStore {
   assertCursorSecret(options.cursorSecret);
   return {
     listAstrologerClientCrmPage: (input) =>
       listAstrologerClientCrmPage(database, options.cursorSecret, input),
-    getAstrologerClientCrmDetail: (input) => getAstrologerClientCrmDetail(database, input)
+    getAstrologerClientCrmDetail: (input) => getAstrologerClientCrmDetail(database, input),
+    updateAstrologerClientCrmPrivateProfile: (input) =>
+      updateAstrologerClientCrmPrivateProfile(database, input)
   };
 }
 
@@ -78,7 +91,9 @@ async function listAstrologerClientCrmPage(
     eq(clientAstrologerRelationships.status, "active")
   ];
   if (input.query.query !== "") {
-    relationshipConditions.push(ilike(clientProfiles.displayNameSnapshot, `%${input.query.query}%`));
+    relationshipConditions.push(
+      ilike(clientProfiles.displayNameSnapshot, `%${input.query.query}%`)
+    );
   }
   if (input.query.source !== undefined) {
     relationshipConditions.push(eq(clientAstrologerRelationships.source, input.query.source));
@@ -111,16 +126,29 @@ async function listAstrologerClientCrmPage(
     })
     .from(clientAstrologerRelationships)
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
-    .leftJoin(clientLifecycleStates, eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id))
-    .leftJoin(clientBirthData, eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId))
+    .leftJoin(
+      clientLifecycleStates,
+      eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id)
+    )
+    .leftJoin(
+      clientBirthData,
+      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+    )
     .where(and(...conditions))
-    .orderBy(desc(clientAstrologerRelationships.lastLinkedAt), desc(clientAstrologerRelationships.id))
+    .orderBy(
+      desc(clientAstrologerRelationships.lastLinkedAt),
+      desc(clientAstrologerRelationships.id)
+    )
     .limit(input.query.limit + 1);
 
   if (rows.some(({ lifecycle }) => lifecycle === null)) return { kind: "conflict" };
 
   const pageRows = rows.slice(0, input.query.limit) as readonly ClientCrmRow[];
-  const items = pageRows.map(toClientCrmListItem);
+  const privateProfiles = await listClientCrmPrivateProfiles(
+    database,
+    pageRows.map((row) => row.relationship.id)
+  );
+  const items = pageRows.map((row) => toClientCrmListItem(row, privateProfiles));
   const last = pageRows.at(-1);
   return {
     kind: "found",
@@ -142,7 +170,10 @@ async function hasMissingLifecycleState(
     .select({ id: clientAstrologerRelationships.id })
     .from(clientAstrologerRelationships)
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
-    .leftJoin(clientLifecycleStates, eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id))
+    .leftJoin(
+      clientLifecycleStates,
+      eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id)
+    )
     .where(and(...relationshipConditions, isNull(clientLifecycleStates.relationshipId)))
     .limit(1);
 
@@ -175,33 +206,141 @@ async function getAstrologerClientCrmDetail(
     })
     .from(clientAstrologerRelationships)
     .leftJoin(clientProfiles, eq(clientProfiles.userId, clientAstrologerRelationships.clientUserId))
-    .leftJoin(clientLifecycleStates, eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id))
-    .leftJoin(clientBirthData, eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId))
+    .leftJoin(
+      clientLifecycleStates,
+      eq(clientLifecycleStates.relationshipId, clientAstrologerRelationships.id)
+    )
+    .leftJoin(
+      clientBirthData,
+      eq(clientBirthData.clientUserId, clientAstrologerRelationships.clientUserId)
+    )
     .where(eq(clientAstrologerRelationships.id, relationship.id))
     .limit(1);
   if (!row || row.lifecycle === null) return { kind: "conflict" };
 
-  const [relatedBirthProfiles, activity] = await Promise.all([
+  const [relatedBirthProfiles, activity, privateProfiles] = await Promise.all([
     database
       .select()
       .from(clientRelatedBirthProfiles)
       .where(eq(clientRelatedBirthProfiles.clientUserId, input.clientUserId))
       .orderBy(desc(clientRelatedBirthProfiles.updatedAt), desc(clientRelatedBirthProfiles.id))
       .limit(activityPageLimit),
-    listClientCrmActivity(
-      database,
-      row.relationship,
-      row.lifecycle.mode as ClientLifecycleMode
-    )
+    listClientCrmActivity(database, row.relationship, row.lifecycle.mode as ClientLifecycleMode),
+    listClientCrmPrivateProfiles(database, [row.relationship.id])
   ]);
 
   const detail: ClientCrmDetail = {
-    ...toClientCrmListItem(row),
+    ...toClientCrmListItem(row, privateProfiles),
     birthData: row.birthData ? toClientBirthData(row.birthData) : null,
     relatedBirthProfiles: relatedBirthProfiles.map(toClientRelatedBirthProfile),
     activity
   };
   return { kind: "found", detail };
+}
+
+async function updateAstrologerClientCrmPrivateProfile(
+  database: ClientCrmDatabase,
+  input: Parameters<ClientCrmPrivateProfileStore["updateAstrologerClientCrmPrivateProfile"]>[0]
+): Promise<
+  Awaited<ReturnType<ClientCrmPrivateProfileStore["updateAstrologerClientCrmPrivateProfile"]>>
+> {
+  return database.transaction(async (transaction) => {
+    const [relationship] = await transaction
+      .select()
+      .from(clientAstrologerRelationships)
+      .where(
+        and(
+          eq(clientAstrologerRelationships.astrologerUserId, input.astrologerUserId),
+          eq(clientAstrologerRelationships.clientUserId, input.clientUserId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (!relationship) return { kind: "not_related" };
+    if (relationship.status !== "active") return { kind: "blocked_or_archived" };
+
+    const now = new Date(input.now);
+    await transaction
+      .insert(clientCrmPrivateProfiles)
+      .values({
+        relationshipId: relationship.id,
+        astrologerUserId: relationship.astrologerUserId,
+        clientUserId: relationship.clientUserId,
+        note: input.profile.note,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: clientCrmPrivateProfiles.relationshipId,
+        set: {
+          note: input.profile.note,
+          updatedAt: now
+        }
+      });
+
+    await transaction
+      .delete(clientCrmPrivateTags)
+      .where(eq(clientCrmPrivateTags.relationshipId, relationship.id));
+    if (input.profile.tags.length > 0) {
+      await transaction.insert(clientCrmPrivateTags).values(
+        input.profile.tags.map((tag) => ({
+          relationshipId: relationship.id,
+          tag,
+          createdAt: now,
+          updatedAt: now
+        }))
+      );
+    }
+
+    return {
+      kind: "updated",
+      profile: {
+        note: input.profile.note,
+        tags: input.profile.tags,
+        updatedAt: toIsoString(now)
+      }
+    };
+  });
+}
+
+async function listClientCrmPrivateProfiles(
+  database: ClientCrmDatabase,
+  relationshipIds: readonly string[]
+): Promise<ClientCrmPrivateProfileRows> {
+  if (relationshipIds.length === 0) return new Map();
+  const [profiles, tags] = await Promise.all([
+    database
+      .select()
+      .from(clientCrmPrivateProfiles)
+      .where(inArray(clientCrmPrivateProfiles.relationshipId, [...relationshipIds])),
+    database
+      .select()
+      .from(clientCrmPrivateTags)
+      .where(inArray(clientCrmPrivateTags.relationshipId, [...relationshipIds]))
+      .orderBy(
+        clientCrmPrivateTags.relationshipId,
+        clientCrmPrivateTags.createdAt,
+        clientCrmPrivateTags.tag
+      )
+  ]);
+  const profileByRelationshipId = new Map(
+    profiles.map((profile) => [profile.relationshipId, profile])
+  );
+  const tagsByRelationshipId = new Map<string, string[]>();
+  for (const tag of tags) {
+    const existing = tagsByRelationshipId.get(tag.relationshipId) ?? [];
+    existing.push(tag.tag);
+    tagsByRelationshipId.set(tag.relationshipId, existing);
+  }
+  return new Map(
+    relationshipIds.map((relationshipId) => [
+      relationshipId,
+      {
+        profile: profileByRelationshipId.get(relationshipId) ?? null,
+        tags: tagsByRelationshipId.get(relationshipId) ?? []
+      }
+    ])
+  );
 }
 
 async function listClientCrmActivity(
@@ -272,8 +411,12 @@ async function listClientCrmActivity(
   return { items: items.slice(0, activityPageLimit), nextCursor: null };
 }
 
-function toClientCrmListItem(row: ClientCrmRow): ClientCrmListItem {
+function toClientCrmListItem(
+  row: ClientCrmRow,
+  privateProfiles: ClientCrmPrivateProfileRows
+): ClientCrmListItem {
   if (!row.lifecycle) throw new Error("CLIENT_CRM_LIFECYCLE_STATE_MISSING");
+  const privateProfile = privateProfiles.get(row.relationship.id);
   return {
     clientUserId: row.relationship.clientUserId,
     displayName: row.profile?.displayNameSnapshot ?? null,
@@ -289,6 +432,11 @@ function toClientCrmListItem(row: ClientCrmRow): ClientCrmListItem {
       mode: row.lifecycle.mode as ClientCrmListItem["lifecycle"]["mode"],
       revision: row.lifecycle.revision,
       lastActivityAt: toIsoString(row.lifecycle.lastActivityAt)
+    },
+    privateCrm: {
+      note: privateProfile?.profile?.note ?? null,
+      tags: privateProfile?.tags ?? [],
+      updatedAt: toIsoString(privateProfile?.profile?.updatedAt ?? row.relationship.updatedAt)
     },
     readiness: {
       birthData: row.birthData ? "ready" : "missing",

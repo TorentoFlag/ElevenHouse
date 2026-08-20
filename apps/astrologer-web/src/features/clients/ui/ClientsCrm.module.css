@@ -17,8 +17,8 @@
   --clients-text-1: #eceaf7;
   --clients-text-2: #a7a2c8;
   --clients-text-3: #6f6a93;
-  --clients-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset,
-    0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  --clients-shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.8);
 
   position: relative;
   z-index: 0;
@@ -373,7 +373,11 @@
 
 .card {
   padding: 16px 18px;
-  background: linear-gradient(180deg, var(--clients-surface-2), color-mix(in srgb, var(--clients-surface-2) 92%, black));
+  background: linear-gradient(
+    180deg,
+    var(--clients-surface-2),
+    color-mix(in srgb, var(--clients-surface-2) 92%, black)
+  );
   border: 1px solid var(--clients-line);
   border-radius: 14px;
   box-shadow: var(--clients-shadow-card);
@@ -570,6 +574,117 @@
   background: var(--clients-surface-3);
   border: 1px solid var(--clients-line-strong);
   border-radius: 14px;
+}
+
+.secondaryButton,
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 12px;
+  color: var(--clients-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--clients-surface-1);
+  border: 1px solid var(--clients-line-strong);
+  border-radius: 12px;
+}
+
+.secondaryButton:disabled,
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.iconButton {
+  color: var(--clients-accent-text);
+}
+
+.crmCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.privateHint {
+  margin-top: -4px;
+  color: var(--clients-text-3);
+  font-size: 12px;
+}
+
+.tagList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  color: var(--clients-accent-text);
+  font-size: 12px;
+  font-weight: 650;
+  background: var(--clients-accent-soft);
+  border: 1px solid var(--clients-accent-line);
+  border-radius: 999px;
+}
+
+.crmEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--clients-text-3);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 116px;
+  padding: 10px 12px;
+  resize: vertical;
+  color: var(--clients-text-1);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  background: var(--clients-bg-1);
+  border: 1px solid var(--clients-line-strong);
+  border-radius: 14px;
+  outline: none;
+}
+
+.textarea:focus,
+.iconButton:focus-visible,
+.secondaryButton:focus-visible {
+  border-color: var(--clients-accent-line);
+  box-shadow: 0 0 0 3px var(--clients-accent-soft);
+}
+
+.inlineError {
+  color: var(--clients-warning);
+  font-size: 12.5px;
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .activityTimeline {
