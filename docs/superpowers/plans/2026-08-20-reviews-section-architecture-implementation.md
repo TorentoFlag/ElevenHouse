@@ -342,6 +342,12 @@ and API slices.
 - Updated review hydration to load active/pending reply versions sequentially inside the transaction.
 - Remaining reply work: rejected reply persistence and edit-reply replacement tests.
 
+**Progress 2026-08-20:** Review reply rejection command path
+
+- Added moderator rejection persistence for pending reply versions.
+- Rejected replies clear `pending_reply_version_id`, never set `active_public_reply_version_id`, and keep the public review state unchanged.
+- Remaining reply work: edit-reply replacement tests and API/audit wiring.
+
 ### Slice 5: Public API
 
 **Purpose:** Client-owned review eligibility, submission/edit/status and public direct-link reviews.

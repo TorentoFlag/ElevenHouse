@@ -305,6 +305,71 @@ describe.sequential("Drizzle review command store", () => {
     expect(publicationCount?.value).toBe(0);
     await expectNoAstrologerAggregate(runtime, fixture.astrologerUserId);
   });
+
+  it("rejects pending reply versions without publishing the reply", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+
+    await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Полезная консультация.",
+        publicIdentityMode: "named"
+      }
+    });
+    await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await store.submitReviewReplyVersion({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextReplyVersionId: fixture.firstReplyVersionId,
+      text: "Переходите в личные сообщения."
+    });
+
+    const rejectedReply = await store.rejectReviewReplyVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T13:00:00.000Z",
+      reviewId: fixture.reviewId,
+      replyVersionId: fixture.firstReplyVersionId,
+      reasonCode: "personal_data_exposure",
+      note: "Ответ уводит в личный канал."
+    });
+
+    expect(rejectedReply).toMatchObject({
+      kind: "rejected",
+      review: {
+        activePublicReplyVersion: null,
+        pendingReplyVersion: null
+      },
+      replyVersion: {
+        id: fixture.firstReplyVersionId,
+        moderationStatus: "rejected",
+        moderationReasonCode: "personal_data_exposure",
+        moderationNote: "Ответ уводит в личный канал.",
+        decidedByUserId: fixture.moderatorUserId
+      }
+    });
+
+    const [reviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(reviewRow).toMatchObject({
+      activePublicReplyVersionId: null,
+      pendingReplyVersionId: null
+    });
+  });
 });
 
 async function seedReviewableFixture(runtime: PostgresRuntime) {
