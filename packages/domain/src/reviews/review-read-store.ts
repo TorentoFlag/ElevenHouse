@@ -2,6 +2,8 @@ import type {
   ClientReviewDetail,
   ClientReviewableInstanceListQuery,
   ClientReviewableInstanceListResponse,
+  ReviewAstrologerListQuery,
+  ReviewAstrologerListResponse,
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
   ReviewModerationQueueQuery,
@@ -17,6 +19,9 @@ export type ReviewReadStore = {
   readonly listClientReviewableInstances: (
     query: ClientReviewableInstanceListQuery
   ) => Promise<ClientReviewableInstanceListResponse>;
+  readonly listAstrologerReviews: (
+    query: ReviewAstrologerListQuery
+  ) => Promise<ReviewAstrologerListResponse>;
   readonly listModerationQueue: (
     query: ReviewModerationQueueQuery
   ) => Promise<ReviewModerationQueueResponse>;

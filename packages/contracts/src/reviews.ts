@@ -380,6 +380,39 @@ export const reviewModerationCaseSummarySchema = z
   .strict();
 export type ReviewModerationCaseSummary = z.infer<typeof reviewModerationCaseSummarySchema>;
 
+export const reviewAstrologerItemSchema = z
+  .object({
+    reviewId: uuidSchema,
+    visibilityStatus: reviewVisibilityStatusSchema,
+    disputeStatus: reviewDisputeStatusSchema,
+    reviewableInstance: reviewableInstanceSummarySchema,
+    author: reviewPublicAuthorSchema,
+    activePublicVersion: reviewVersionSchema,
+    activePublicReplyVersion: reviewReplyVersionSchema.nullable(),
+    pendingReplyVersion: reviewReplyVersionSchema.nullable(),
+    moderationCase: reviewModerationCaseSummarySchema.nullable()
+  })
+  .strict();
+export type ReviewAstrologerItem = z.infer<typeof reviewAstrologerItemSchema>;
+
+export const reviewAstrologerListQuerySchema = z
+  .object({
+    astrologerUserId: uuidSchema,
+    limit: z.number().int().min(1).max(50).optional().default(20),
+    cursor: cursorSchema.nullish().default(null)
+  })
+  .strict();
+export type ReviewAstrologerListQueryInput = z.input<typeof reviewAstrologerListQuerySchema>;
+export type ReviewAstrologerListQuery = z.infer<typeof reviewAstrologerListQuerySchema>;
+
+export const reviewAstrologerListResponseSchema = z
+  .object({
+    items: z.array(reviewAstrologerItemSchema).max(50),
+    nextCursor: cursorSchema.nullable()
+  })
+  .strict();
+export type ReviewAstrologerListResponse = z.infer<typeof reviewAstrologerListResponseSchema>;
+
 export const reviewAdminDetailSchema = z
   .object({
     reviewId: uuidSchema,

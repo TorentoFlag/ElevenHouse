@@ -6,11 +6,13 @@ import {
   Headers,
   Param,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards
 } from "@nestjs/common";
 import type {
+  ReviewAstrologerListResponse,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
   ReviewReplyVersion
@@ -27,6 +29,14 @@ import { AstrologerReviewsService } from "./reviews.service";
 @UseGuards(AstrologerSessionAuthGuard, PlatformTariffCapabilityGuard)
 export class AstrologerReviewsController {
   constructor(private readonly service: AstrologerReviewsService) {}
+
+  @Get()
+  listAstrologerReviews(
+    @Req() request: AstrologerSessionRequest,
+    @Query() query: unknown
+  ): Promise<ReviewAstrologerListResponse> {
+    return this.service.listAstrologerReviews(requireAstrologerUserId(request), query);
+  }
 
   @Post(":reviewId/reply-drafts/ai")
   @RequirePlatformTariffCapability({

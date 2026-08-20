@@ -26,6 +26,7 @@ const caseId = "10000000-0000-4000-8000-000000000303";
 describe("astrologer reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
+  let receivedReviewsRead: unknown;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedReplyCommand: unknown;
@@ -36,6 +37,7 @@ describe("astrologer reviews HTTP API", () => {
   let disputeOpened: boolean;
 
   beforeEach(async () => {
+    receivedReviewsRead = null;
     receivedCaseRead = null;
     receivedMessageCommand = null;
     receivedReplyCommand = null;
@@ -71,6 +73,49 @@ describe("astrologer reviews HTTP API", () => {
         {
           provide: ASTROLOGER_REVIEWS_READ_STORE,
           useValue: {
+            async listAstrologerReviews(input) {
+              receivedReviewsRead = input;
+              return {
+                items: [
+                  {
+                    reviewId,
+                    visibilityStatus: "visible",
+                    disputeStatus: "none",
+                    reviewableInstance: {
+                      id: "10000000-0000-4000-8000-000000000305",
+                      kind: "booking",
+                      status: "review_submitted",
+                      title: "Солярная консультация",
+                      contextLabel: "60 минут",
+                      receivedAt: "2026-08-19T10:00:00.000Z",
+                      reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+                      windowPolicy: "standard_14_days_after_receipt"
+                    },
+                    author: {
+                      publicIdentityMode: "secret_user",
+                      displayName: "Секретный пользователь",
+                      initials: null,
+                      avatarUrl: null
+                    },
+                    activePublicVersion: {
+                      id: "10000000-0000-4000-8000-000000000306",
+                      versionNumber: 1,
+                      rating: 5,
+                      text: "Помогло понять следующие шаги.",
+                      publicIdentityMode: "secret_user",
+                      moderationStatus: "approved",
+                      moderationReasonCode: null,
+                      submittedAt: "2026-08-20T10:00:00.000Z",
+                      decidedAt: "2026-08-20T11:00:00.000Z"
+                    },
+                    activePublicReplyVersion: null,
+                    pendingReplyVersion: null,
+                    moderationCase: null
+                  }
+                ],
+                nextCursor: null
+              };
+            },
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
               return input.caseId === caseId && disputeOpened
@@ -96,7 +141,7 @@ describe("astrologer reviews HTTP API", () => {
                   }
                 : null;
             }
-          } satisfies Pick<ReviewReadStore, "getModerationCaseDetail">
+          } satisfies Pick<ReviewReadStore, "listAstrologerReviews" | "getModerationCaseDetail">
         },
         {
           provide: ASTROLOGER_REVIEWS_COMMAND_STORE,
@@ -248,6 +293,27 @@ describe("astrologer reviews HTTP API", () => {
 
   afterEach(async () => {
     await app?.close();
+  });
+
+  it("lists reviews owned by the current astrologer without exposing anonymous client identity", async () => {
+    const response = await fetch(`${baseUrl}/reviews?limit=10`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [
+        {
+          reviewId,
+          author: { displayName: "Секретный пользователь" },
+          activePublicVersion: { rating: 5 }
+        }
+      ],
+      nextCursor: null
+    });
+    expect(receivedReviewsRead).toEqual({
+      astrologerUserId,
+      limit: 10,
+      cursor: null
+    });
   });
 
   it("creates astrologer AI reply drafts without submitting replies", async () => {

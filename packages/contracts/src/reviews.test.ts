@@ -8,6 +8,7 @@ import {
   reviewModerationCaseStatusUpdateSchema,
   reviewModerationQueueResponseSchema,
   reviewModerationReasonCodeSchema,
+  reviewAstrologerListResponseSchema,
   reviewPublicListResponseSchema,
   clientReviewableInstanceListResponseSchema,
   reviewPublicAuthorSchema,
@@ -259,6 +260,58 @@ describe("Reviews contracts", () => {
         clientUserId: "10000000-0000-4000-8000-000000000033"
       }).success
     ).toBe(false);
+  });
+
+  it("lets astrologers list owned reviews without anonymous client identity leakage", () => {
+    const parsed = reviewAstrologerListResponseSchema.parse({
+      items: [
+        {
+          reviewId: "10000000-0000-4000-8000-000000000034",
+          visibilityStatus: "temporarily_hidden_by_dispute",
+          disputeStatus: "open",
+          reviewableInstance: {
+            id: "10000000-0000-4000-8000-000000000035",
+            kind: "booking",
+            status: "review_submitted",
+            title: "Солярная консультация",
+            contextLabel: "60 минут",
+            receivedAt: "2026-08-19T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          },
+          author: {
+            publicIdentityMode: "secret_user",
+            displayName: "Секретный пользователь",
+            initials: null,
+            avatarUrl: null
+          },
+          activePublicVersion: {
+            id: "10000000-0000-4000-8000-000000000036",
+            versionNumber: 1,
+            rating: 5,
+            text: "Одобренный текст.",
+            publicIdentityMode: "secret_user",
+            moderationStatus: "approved",
+            moderationReasonCode: null,
+            submittedAt: "2026-08-20T10:00:00.000Z",
+            decidedAt: "2026-08-20T11:00:00.000Z"
+          },
+          activePublicReplyVersion: null,
+          pendingReplyVersion: null,
+          moderationCase: {
+            caseId: "10000000-0000-4000-8000-000000000037",
+            status: "open",
+            openedAt: "2026-08-20T12:00:00.000Z",
+            closedAt: null,
+            reasonCode: "fraud_or_conflict"
+          }
+        }
+      ],
+      nextCursor: null
+    });
+
+    expect(parsed.items[0]?.author.displayName).toBe("Секретный пользователь");
+    expect(JSON.stringify(parsed)).not.toContain("clientUserId");
   });
 
   it("lets admin projections include real client identity and full moderation context", () => {

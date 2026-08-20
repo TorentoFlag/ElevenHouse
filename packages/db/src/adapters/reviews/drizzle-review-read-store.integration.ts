@@ -160,6 +160,37 @@ describe.sequential("Drizzle review read store", () => {
     expect(JSON.stringify(publicPage)).not.toContain(fixture.clientUserId);
     expect(JSON.stringify(publicPage)).not.toContain("Анна Петрова");
 
+    const astrologerPage = await reads.listAstrologerReviews({
+      astrologerUserId: fixture.astrologerUserId,
+      limit: 20,
+      cursor: null
+    });
+    expect(astrologerPage).toMatchObject({
+      items: [
+        {
+          reviewId: fixture.reviewId,
+          visibilityStatus: "visible",
+          disputeStatus: "none",
+          author: {
+            publicIdentityMode: "secret_user",
+            displayName: "Секретный пользователь",
+            initials: null,
+            avatarUrl: null
+          },
+          activePublicVersion: {
+            id: fixture.firstVersionId,
+            rating: 5,
+            text: "Сервис помог спокойно разобрать ситуацию."
+          },
+          pendingReplyVersion: null,
+          moderationCase: null
+        }
+      ],
+      nextCursor: null
+    });
+    expect(JSON.stringify(astrologerPage)).not.toContain(fixture.clientUserId);
+    expect(JSON.stringify(astrologerPage)).not.toContain("Анна Петрова");
+
     const clientDetail = await reads.getClientReviewDetail({
       clientUserId: fixture.clientUserId,
       reviewableInstanceId: fixture.reviewableInstanceId

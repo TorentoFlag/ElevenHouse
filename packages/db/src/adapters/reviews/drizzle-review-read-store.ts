@@ -3,12 +3,16 @@ import {
   clientReviewableInstanceListResponseSchema,
   clientReviewDetailSchema,
   reviewAdminDetailSchema,
+  reviewAstrologerListQuerySchema,
+  reviewAstrologerListResponseSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationQueueQuerySchema,
   reviewModerationQueueResponseSchema,
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
+  type ReviewAstrologerItem,
+  type ReviewAstrologerListQuery,
   type ClientReviewableInstanceListQuery,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseSummary,
@@ -62,15 +66,21 @@ type ClientReviewableInstanceCursor = {
   readonly receivedAt: string;
   readonly reviewableInstanceId: string;
 };
+type AstrologerReviewCursor = {
+  readonly updatedAt: string;
+  readonly reviewId: string;
+};
 
 const publicCursorVersion = "reviews_public_v1";
 const moderationQueueCursorVersion = "reviews_moderation_queue_v1";
 const clientReviewableInstanceCursorVersion = "reviews_client_instances_v1";
+const astrologerReviewCursorVersion = "reviews_astrologer_v1";
 
 export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): ReviewReadStore {
   return {
     listPublicReviews: (query) => listPublicReviews(database, query),
     listClientReviewableInstances: (query) => listClientReviewableInstances(database, query),
+    listAstrologerReviews: (query) => listAstrologerReviews(database, query),
     listModerationQueue: (query) => listModerationQueue(database, query),
     getClientReviewDetail: (input) => getClientReviewDetail(database, input),
     getAdminReviewDetail: (input) => getAdminReviewDetail(database, input),
@@ -278,6 +288,57 @@ async function listClientReviewableInstances(
   });
 }
 
+async function listAstrologerReviews(
+  database: ElevenHouseDatabase,
+  input: ReviewAstrologerListQuery
+): Promise<Awaited<ReturnType<ReviewReadStore["listAstrologerReviews"]>>> {
+  const query = reviewAstrologerListQuerySchema.parse(input);
+  const cursor = query.cursor ? parseAstrologerReviewCursor(query.cursor) : null;
+  if (query.cursor && !cursor) return { items: [], nextCursor: null };
+
+  const conditions: SQL[] = [
+    eq(reviews.astrologerUserId, query.astrologerUserId),
+    isNotNull(reviews.activePublicVersionId)
+  ];
+  if (cursor) {
+    const updatedAt = new Date(cursor.updatedAt);
+    const cursorCondition = or(
+      lt(reviews.updatedAt, updatedAt),
+      and(eq(reviews.updatedAt, updatedAt), lt(reviews.id, cursor.reviewId))
+    );
+    if (cursorCondition) conditions.push(cursorCondition);
+  }
+
+  const rows = await database
+    .select({
+      review: reviews,
+      reviewableInstance: reviewableInstances,
+      activeVersion: reviewVersions,
+      clientProfile: userProfiles
+    })
+    .from(reviews)
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .innerJoin(reviewVersions, eq(reviewVersions.id, reviews.activePublicVersionId))
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviews.clientUserId))
+    .where(and(...conditions))
+    .orderBy(desc(reviews.updatedAt), desc(reviews.id))
+    .limit(query.limit + 1);
+
+  const pageRows = rows.slice(0, query.limit);
+  const items = await Promise.all(pageRows.map((row) => toAstrologerReviewItem(database, row)));
+  const last = pageRows.at(-1)?.review ?? null;
+  return reviewAstrologerListResponseSchema.parse({
+    items,
+    nextCursor:
+      rows.length > query.limit && last
+        ? encodeAstrologerReviewCursor({
+            updatedAt: last.updatedAt.toISOString(),
+            reviewId: last.id
+          })
+        : null
+  });
+}
+
 async function getClientReviewDetail(
   database: ElevenHouseDatabase,
   input: Parameters<ReviewReadStore["getClientReviewDetail"]>[0]
@@ -465,6 +526,46 @@ function toPublicReviewItem(row: PublicReviewRow): ReviewPublicItem {
             row.activeReplyVersion.submittedAt.toISOString()
         }
       : null
+  };
+}
+
+async function toAstrologerReviewItem(
+  database: ElevenHouseDatabase,
+  row: {
+    readonly review: ReviewRow;
+    readonly reviewableInstance: ReviewableInstanceRow;
+    readonly activeVersion: ReviewVersionRow;
+    readonly clientProfile: UserProfileRow | null;
+  }
+): Promise<ReviewAstrologerItem> {
+  const identity = splitDisplayName(row.clientProfile?.displayName ?? null);
+  const replyVersions = await readReviewReplyVersions(database, row.review.id);
+  const activePublicReplyVersion = row.review.activePublicReplyVersionId
+    ? (replyVersions.find((version) => version.id === row.review.activePublicReplyVersionId) ??
+      null)
+    : null;
+  const pendingReplyVersion = row.review.pendingReplyVersionId
+    ? (replyVersions.find((version) => version.id === row.review.pendingReplyVersionId) ?? null)
+    : null;
+  const moderationCase = await readLatestModerationCase(database, row.review.id);
+
+  return {
+    reviewId: row.review.id,
+    visibilityStatus: row.review.visibilityStatus as ReviewAstrologerItem["visibilityStatus"],
+    disputeStatus: row.review.disputeStatus as ReviewAstrologerItem["disputeStatus"],
+    reviewableInstance: toReviewableInstanceSummary(row.reviewableInstance),
+    author: buildReviewPublicAuthor({
+      publicIdentityMode: row.activeVersion.publicIdentityMode as ReviewPublicIdentityMode,
+      firstName: identity.firstName,
+      lastName: identity.lastName,
+      avatarUrl: null
+    }),
+    activePublicVersion: toReviewVersion(row.activeVersion),
+    activePublicReplyVersion: activePublicReplyVersion
+      ? toReviewReplyVersion(activePublicReplyVersion)
+      : null,
+    pendingReplyVersion: pendingReplyVersion ? toReviewReplyVersion(pendingReplyVersion) : null,
+    moderationCase: moderationCase ? toModerationCaseSummary(moderationCase) : null
   };
 }
 
@@ -659,6 +760,25 @@ function parseClientReviewableInstanceCursor(value: string): ClientReviewableIns
       receivedAt: parsed.receivedAt,
       reviewableInstanceId: parsed.reviewableInstanceId
     };
+  } catch {
+    return null;
+  }
+}
+
+function encodeAstrologerReviewCursor(cursor: AstrologerReviewCursor): string {
+  return `${astrologerReviewCursorVersion}.${Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")}`;
+}
+
+function parseAstrologerReviewCursor(value: string): AstrologerReviewCursor | null {
+  const [version, payload] = value.split(".");
+  if (version !== astrologerReviewCursorVersion || !payload) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as Partial<AstrologerReviewCursor>;
+    if (typeof parsed.updatedAt !== "string" || typeof parsed.reviewId !== "string") return null;
+    if (Number.isNaN(Date.parse(parsed.updatedAt))) return null;
+    return { updatedAt: parsed.updatedAt, reviewId: parsed.reviewId };
   } catch {
     return null;
   }

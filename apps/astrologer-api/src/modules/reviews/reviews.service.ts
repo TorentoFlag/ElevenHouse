@@ -5,12 +5,15 @@ import { reviewReplyDraftPromptV1, type ReviewReplyDraftPromptOutput } from "@el
 import {
   createReviewReplyAiDraftRequestSchema,
   createReviewReplyAiDraftResponseSchema,
+  reviewAstrologerListQuerySchema,
+  reviewAstrologerListResponseSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
   reviewModerationDecisionSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
+  type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewReplyVersion
@@ -81,7 +84,10 @@ type AstrologerReviewAiReplyDraftStore = {
 export class AstrologerReviewsService {
   constructor(
     @Inject(ASTROLOGER_REVIEWS_READ_STORE)
-    private readonly readStore: Pick<ReviewReadStore, "getModerationCaseDetail">,
+    private readonly readStore: Pick<
+      ReviewReadStore,
+      "listAstrologerReviews" | "getModerationCaseDetail"
+    >,
     @Inject(ASTROLOGER_REVIEWS_COMMAND_STORE)
     private readonly commandStore: AstrologerReviewCommandStore,
     @Inject(ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE)
@@ -89,6 +95,16 @@ export class AstrologerReviewsService {
     private readonly aiGeneration: AiGenerationService,
     private readonly clock: SystemClock
   ) {}
+
+  async listAstrologerReviews(
+    astrologerUserId: string,
+    query: unknown
+  ): Promise<ReviewAstrologerListResponse> {
+    const normalized = normalizeAstrologerReviewsQuery(astrologerUserId, query);
+    return reviewAstrologerListResponseSchema.parse(
+      await this.readStore.listAstrologerReviews(normalized)
+    );
+  }
 
   async createReplyAiDraft(
     astrologerUserId: string,
@@ -291,4 +307,17 @@ function requireUuid(value: string): string {
     throw new BadRequestException("Valid UUID is required");
   }
   return value;
+}
+
+function normalizeAstrologerReviewsQuery(astrologerUserId: string, query: unknown) {
+  const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
+  const limit = Array.isArray(input.limit) ? input.limit[0] : input.limit;
+  const cursor = Array.isArray(input.cursor) ? input.cursor[0] : input.cursor;
+  const parsed = reviewAstrologerListQuerySchema.safeParse({
+    astrologerUserId: requireUuid(astrologerUserId),
+    limit: typeof limit === "string" && limit.trim() !== "" ? Number(limit) : undefined,
+    cursor: typeof cursor === "string" && cursor.trim() !== "" ? cursor : null
+  });
+  if (!parsed.success) throw new BadRequestException("Invalid reviews query");
+  return parsed.data;
 }
