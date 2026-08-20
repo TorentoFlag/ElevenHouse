@@ -58,6 +58,7 @@ import {
 } from "../client-subscriptions/drizzle-client-subscription-allowance-uow";
 import { createDrizzleAstroDiaryCommandUnitOfWork } from "./drizzle-astro-diary-command-uow";
 import { createDrizzleAstroDiaryJournalReader } from "./drizzle-astro-diary-journal-reader";
+import { createDrizzleAstroDiaryMediaStore } from "./drizzle-astro-diary-media-store";
 
 type JournalFixture = Readonly<{
   fixture: ActiveClientSubscriptionFixture;
@@ -364,6 +365,93 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
         .from(astroDiaryDraftAttachments)
         .where(eq(astroDiaryDraftAttachments.draftId, draftId))
     ).resolves.toEqual([]);
+  });
+
+  it("persists pending AstroDiary media authority and completes it through real PostgreSQL", async () => {
+    const journal = await createJournalFixture(runtime);
+    const mediaStore = createDrizzleAstroDiaryMediaStore(runtime.database);
+    const mediaId = randomUUID();
+    const now = new Date().toISOString();
+
+    await mediaStore.createPendingUpload({
+      mediaId,
+      journalId: journal.journalId,
+      ownerUserId: journal.fixture.authority.clientUserId,
+      purpose: "astro_diary_attachment",
+      visibility: "private",
+      storageBucket: "astro-diary-private-integration",
+      storageKey: `astro-diary/${journal.journalId}/${mediaId}/note.pdf`,
+      originalFileName: "note.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 512,
+      now
+    });
+
+    await expect(
+      runtime.database
+        .select({
+          mediaId: astroDiaryMediaAuthorities.mediaId,
+          journalId: astroDiaryMediaAuthorities.journalId,
+          ownerUserId: astroDiaryMediaAuthorities.ownerUserId,
+          state: astroDiaryMediaAuthorities.state
+        })
+        .from(astroDiaryMediaAuthorities)
+        .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId))
+    ).resolves.toEqual([
+      {
+        mediaId,
+        journalId: journal.journalId,
+        ownerUserId: journal.fixture.authority.clientUserId,
+        state: "pending"
+      }
+    ]);
+
+    await expect(
+      mediaStore.findPendingUpload({
+        journalId: journal.journalId,
+        mediaId,
+        ownerUserId: journal.fixture.authority.clientUserId
+      })
+    ).resolves.toMatchObject({
+      asset: {
+        id: mediaId,
+        status: "uploading",
+        visibility: "private",
+        storageBucket: "astro-diary-private-integration"
+      },
+      media: {
+        id: mediaId,
+        journalId: journal.journalId,
+        status: "uploading"
+      }
+    });
+
+    await expect(
+      mediaStore.markReady({
+        mediaId,
+        checksumSha256: "b".repeat(64),
+        width: null,
+        height: null,
+        now: new Date().toISOString()
+      })
+    ).resolves.toMatchObject({
+      id: mediaId,
+      status: "ready",
+      checksumSha256: "b".repeat(64)
+    });
+    await expect(
+      runtime.database
+        .select({
+          status: mediaAssets.status,
+          authorityState: astroDiaryMediaAuthorities.state,
+          readyAt: astroDiaryMediaAuthorities.readyAt
+        })
+        .from(astroDiaryMediaAuthorities)
+        .innerJoin(mediaAssets, eq(mediaAssets.id, astroDiaryMediaAuthorities.mediaId))
+        .where(eq(astroDiaryMediaAuthorities.mediaId, mediaId))
+    ).resolves.toMatchObject([
+      { status: "ready", authorityState: "ready", readyAt: expect.any(Date) }
+    ]);
   });
 
   it("converges concurrent same-key client publications without duplicate cycle or allowance use", async () => {
@@ -831,9 +919,15 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
       secondClientDraftInput
     );
     const secondClientDraftId = appliedDraftId(secondClientDraft);
-    const openingB = openClientCycleInput(openedA, secondClientDraftId, `open-b-${randomUUID()}`, 6, {
-      allowanceExpectedVersion: 2
-    });
+    const openingB = openClientCycleInput(
+      openedA,
+      secondClientDraftId,
+      `open-b-${randomUUID()}`,
+      6,
+      {
+        allowanceExpectedVersion: 2
+      }
+    );
     const openedBResult = await executeOpenClientCycleCommand(unitOfWork, openingB);
     if (openedBResult.outcome !== "applied") throw new Error("Expected cycle B to open");
     const openedB: OpenCycleFixture = {
@@ -951,7 +1045,9 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
       runtime.database
         .select({ idempotencyKey: astroDiaryCommandReceipts.idempotencyKey })
         .from(astroDiaryCommandReceipts)
-        .where(inArray(astroDiaryCommandReceipts.idempotencyKey, [foreignDraftKey, foreignMediaKey]))
+        .where(
+          inArray(astroDiaryCommandReceipts.idempotencyKey, [foreignDraftKey, foreignMediaKey])
+        )
     ).resolves.toEqual([]);
   });
 
@@ -1151,53 +1247,60 @@ describe.sequential("Drizzle AstroDiary paid-core command UOW", () => {
     if (!clock) throw new Error("Integration database clock is missing");
     const now = clock.command_at.toISOString();
 
-    const [clientList, astrologerList, clientSummary, clientTimeline, astrologerTimeline, replyDraft, context] =
-      await Promise.all([
-        reader.listParticipantJournals({
-          participantUserId: opened.fixture.authority.clientUserId,
-          participantRole: "client",
-          limit: 100,
-          now
-        }),
-        reader.listParticipantJournals({
-          participantUserId: opened.fixture.authority.astrologerUserId,
-          participantRole: "astrologer",
-          limit: 100,
-          now
-        }),
-        reader.getParticipantJournalSummary({
-          participantUserId: opened.fixture.authority.clientUserId,
-          participantRole: "client",
-          journalId: opened.journalId,
-          now
-        }),
-        reader.getParticipantJournalTimeline({
-          participantUserId: opened.fixture.authority.clientUserId,
-          participantRole: "client",
-          journalId: opened.journalId,
-          afterCursor: 0,
-          limit: 50
-        }),
-        reader.getParticipantJournalTimeline({
-          participantUserId: opened.fixture.authority.astrologerUserId,
-          participantRole: "astrologer",
-          journalId: opened.journalId,
-          afterCursor: 0,
-          limit: 50
-        }),
-        reader.getParticipantAstrologerReplyDraft({
-          participantUserId: opened.fixture.authority.astrologerUserId,
-          participantRole: "astrologer",
-          journalId: opened.journalId,
-          now
-        }),
-        reader.getPaidCoreCommandContext({
-          participantUserId: opened.fixture.authority.astrologerUserId,
-          participantRole: "astrologer",
-          journalId: opened.journalId,
-          now
-        })
-      ]);
+    const [
+      clientList,
+      astrologerList,
+      clientSummary,
+      clientTimeline,
+      astrologerTimeline,
+      replyDraft,
+      context
+    ] = await Promise.all([
+      reader.listParticipantJournals({
+        participantUserId: opened.fixture.authority.clientUserId,
+        participantRole: "client",
+        limit: 100,
+        now
+      }),
+      reader.listParticipantJournals({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        limit: 100,
+        now
+      }),
+      reader.getParticipantJournalSummary({
+        participantUserId: opened.fixture.authority.clientUserId,
+        participantRole: "client",
+        journalId: opened.journalId,
+        now
+      }),
+      reader.getParticipantJournalTimeline({
+        participantUserId: opened.fixture.authority.clientUserId,
+        participantRole: "client",
+        journalId: opened.journalId,
+        afterCursor: 0,
+        limit: 50
+      }),
+      reader.getParticipantJournalTimeline({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        afterCursor: 0,
+        limit: 50
+      }),
+      reader.getParticipantAstrologerReplyDraft({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now
+      }),
+      reader.getPaidCoreCommandContext({
+        participantUserId: opened.fixture.authority.astrologerUserId,
+        participantRole: "astrologer",
+        journalId: opened.journalId,
+        now
+      })
+    ]);
 
     expect(clientList.journals.map(({ journal }) => journal.id)).toContain(opened.journalId);
     expect(astrologerList.journals.map(({ journal }) => journal.id)).toContain(opened.journalId);

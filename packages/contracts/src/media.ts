@@ -131,6 +131,22 @@ export const completeMediaUploadRequestSchema = z
   .strict();
 export type CompleteMediaUploadRequest = z.infer<typeof completeMediaUploadRequestSchema>;
 
+export const astroDiaryMediaUploadCompletionResponseSchema = z
+  .object({
+    mediaId: uuidSchema,
+    status: z.literal("ready"),
+    purpose: astroDiaryMediaUploadPurposeSchema,
+    mimeType: mediaMimeTypeSchema,
+    sizeBytes: z.number().int().positive(),
+    checksumSha256: checksumSha256Schema.nullable(),
+    width: z.number().int().positive().nullable(),
+    height: z.number().int().positive().nullable()
+  })
+  .strict();
+export type AstroDiaryMediaUploadCompletionResponse = z.infer<
+  typeof astroDiaryMediaUploadCompletionResponseSchema
+>;
+
 export const mediaVariantResponseSchema = z
   .object({
     variant: mediaVariantSchema,

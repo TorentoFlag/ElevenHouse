@@ -7,11 +7,11 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type {
   ObjectStoragePort,
-  PrivateObjectStoragePort,
   PresignedUploadInput,
+  PrivateObjectStoragePort,
   UploadedObjectMetadata
 } from "@elevenhouse/domain";
-import type { MediaPublicUrlResolver } from "./media-response.mapper";
+import type { MediaMimeType } from "@elevenhouse/domain";
 
 export type S3MediaObjectStorageConfig = {
   readonly endpoint: string;
@@ -26,14 +26,15 @@ export type S3MediaObjectStorageConfig = {
   readonly downloadTtlSeconds: number;
 };
 
-export class S3MediaObjectStorage
-  implements ObjectStoragePort, PrivateObjectStoragePort, MediaPublicUrlResolver
-{
-  private readonly client: S3Client;
+type S3Command = PutObjectCommand | HeadObjectCommand | GetObjectCommand;
+type S3Sender = Readonly<{ send(command: S3Command): Promise<unknown> }>;
+
+export class S3MediaObjectStorage implements ObjectStoragePort, PrivateObjectStoragePort {
+  private readonly client: S3Sender;
 
   constructor(
     private readonly config: S3MediaObjectStorageConfig,
-    client?: S3Client
+    client?: S3Sender
   ) {
     this.client =
       client ??
@@ -59,7 +60,7 @@ export class S3MediaObjectStorage
     return {
       bucket: this.config.bucket,
       method: "PUT" as const,
-      url: await getSignedUrl(this.client, command, {
+      url: await getSignedUrl(this.client as S3Client, command, {
         expiresIn: this.config.uploadTtlSeconds
       }),
       headers: {
@@ -80,18 +81,16 @@ export class S3MediaObjectStorage
           Key: input.storageKey
         })
       );
-
+      const metadata = readMetadata(result);
       return {
-        sizeBytes: result.ContentLength ?? 0,
-        mimeType: result.ContentType ?? "",
-        checksumSha256: result.Metadata?.["checksum-sha256"] ?? null,
-        width: readPositiveIntegerMetadata(result.Metadata?.width),
-        height: readPositiveIntegerMetadata(result.Metadata?.height)
+        sizeBytes: metadata.contentLength,
+        mimeType: metadata.contentType,
+        checksumSha256: metadata.userMetadata["checksum-sha256"] ?? null,
+        width: readPositiveIntegerMetadata(metadata.userMetadata.width),
+        height: readPositiveIntegerMetadata(metadata.userMetadata.height)
       };
     } catch (error) {
-      if (readHttpStatus(error) === 404) {
-        return null;
-      }
+      if (readHttpStatus(error) === 404) return null;
       throw error;
     }
   }
@@ -100,14 +99,14 @@ export class S3MediaObjectStorage
     readonly storageBucket: string;
     readonly storageKey: string;
     readonly fileName: string;
-    readonly mimeType?: string | undefined;
+    readonly mimeType?: MediaMimeType | undefined;
   }) {
     if (input.storageBucket !== this.config.privateBucket) {
       throw new Error("Private download requested from an unexpected storage bucket");
     }
     const expiresAt = new Date(Date.now() + this.config.downloadTtlSeconds * 1000).toISOString();
     const url = await getSignedUrl(
-      this.client,
+      this.client as S3Client,
       new GetObjectCommand({
         Bucket: input.storageBucket,
         Key: input.storageKey,
@@ -122,6 +121,31 @@ export class S3MediaObjectStorage
   getPublicUrl(input: { readonly storageKey: string }): string {
     return `${this.config.publicBaseUrl}/${encodeStorageKey(input.storageKey)}`;
   }
+}
+
+function readMetadata(value: unknown): {
+  readonly contentLength: number;
+  readonly contentType: string;
+  readonly userMetadata: Readonly<Record<string, string>>;
+} {
+  const result = value as {
+    readonly ContentLength?: unknown;
+    readonly ContentType?: unknown;
+    readonly Metadata?: unknown;
+  };
+  return {
+    contentLength: typeof result.ContentLength === "number" ? result.ContentLength : 0,
+    contentType: typeof result.ContentType === "string" ? result.ContentType : "",
+    userMetadata: isStringRecord(result.Metadata) ? result.Metadata : {}
+  };
+}
+
+function isStringRecord(value: unknown): value is Readonly<Record<string, string>> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
 }
 
 function isAudioMimeType(value: string | undefined): boolean {

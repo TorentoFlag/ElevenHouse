@@ -9,6 +9,7 @@ export * from "./astro-diary-erasure-commands";
 export * from "./astro-diary-events";
 export * from "./astro-diary-mood";
 export * from "./astro-diary-media-authorization";
+export * from "./astro-diary-media-upload";
 export * from "./astro-diary-obligations";
 export * from "./astro-diary-prompt-commands";
 export * from "./astro-diary-read-state";

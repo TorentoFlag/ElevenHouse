@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { createDrizzleMediaAssetStore } from "@elevenhouse/db/media";
+import {
+  S3MediaObjectStorage,
+  type S3MediaObjectStorageConfig
+} from "@elevenhouse/media-infrastructure";
 import { ClockModule } from "../clock/clock.module";
 import { DatabaseModule } from "../database/database.module";
 import { PostgresRuntimeService } from "../database/postgres-runtime.service";
@@ -10,7 +14,6 @@ import { PlatformEntitlementsModule } from "../platform-entitlements/platform-en
 import { SecurityModule } from "../security/security.module";
 import { MediaController } from "./media.controller";
 import { MediaService } from "./media.service";
-import { S3MediaObjectStorage, type S3MediaObjectStorageConfig } from "./s3-media-object-storage";
 import {
   MEDIA_ASSET_STORE,
   MEDIA_ID_GENERATOR,
@@ -20,7 +23,14 @@ import {
 } from "./media.tokens";
 
 @Module({
-  imports: [ConfigModule, ClockModule, DatabaseModule, IdentityModule, PlatformEntitlementsModule, SecurityModule],
+  imports: [
+    ConfigModule,
+    ClockModule,
+    DatabaseModule,
+    IdentityModule,
+    PlatformEntitlementsModule,
+    SecurityModule
+  ],
   controllers: [MediaController],
   providers: [
     MediaService,

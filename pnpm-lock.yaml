@@ -181,6 +181,9 @@ importers:
       '@elevenhouse/finance-infrastructure':
         specifier: workspace:*
         version: link:../../packages/finance-infrastructure
+      '@elevenhouse/media-infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/media-infrastructure
       '@elevenhouse/numerology-presentation':
         specifier: workspace:*
         version: link:../../packages/numerology-presentation
@@ -487,6 +490,9 @@ importers:
       '@elevenhouse/finance-infrastructure':
         specifier: workspace:*
         version: link:../../packages/finance-infrastructure
+      '@elevenhouse/media-infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/media-infrastructure
       '@elevenhouse/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -776,6 +782,25 @@ importers:
       react:
         specifier: 19.2.7
         version: 19.2.7
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/media-infrastructure:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1079.0
+        version: 3.1079.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.1079.0
+        version: 3.1079.0
+      '@elevenhouse/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.2
+        version: 25.9.2
       typescript:
         specifier: 6.0.3
         version: 6.0.3

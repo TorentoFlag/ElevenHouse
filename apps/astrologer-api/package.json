@@ -19,6 +19,7 @@
     "@elevenhouse/db": "workspace:*",
     "@elevenhouse/domain": "workspace:*",
     "@elevenhouse/finance-infrastructure": "workspace:*",
+    "@elevenhouse/media-infrastructure": "workspace:*",
     "@elevenhouse/numerology-presentation": "workspace:*",
     "@elevenhouse/observability": "workspace:*",
     "@elevenhouse/session-infrastructure": "workspace:*",

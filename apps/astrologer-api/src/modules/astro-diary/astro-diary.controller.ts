@@ -20,7 +20,9 @@ import type {
   AstroDiaryDraftMutationResponse,
   AstroDiaryJournalListResponse,
   AstroDiaryJournalSummaryResponse,
-  AstroDiaryTimelinePage
+  AstroDiaryTimelinePage,
+  AstroDiaryMediaUploadCompletionResponse,
+  MediaUploadIntentResponse
 } from "@elevenhouse/contracts";
 
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -63,6 +65,32 @@ export class AstroDiaryController {
     @Param("journalId") journalId: string
   ): Promise<AstroDiaryAstrologerReplyDraftResponse> {
     return this.service.getReplyDraft(requireAstrologerUserId(request), journalId);
+  }
+
+  @Post("journals/:journalId/media/upload-intents")
+  @RequireCsrf()
+  createMediaUploadIntent(
+    @Req() request: AstrologerSessionRequest,
+    @Param("journalId") journalId: string,
+    @Body() body: unknown
+  ): Promise<MediaUploadIntentResponse> {
+    return this.service.createMediaUploadIntent(requireAstrologerUserId(request), journalId, body);
+  }
+
+  @Post("journals/:journalId/media/:mediaId/complete")
+  @RequireCsrf()
+  completeMediaUpload(
+    @Req() request: AstrologerSessionRequest,
+    @Param("journalId") journalId: string,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown
+  ): Promise<AstroDiaryMediaUploadCompletionResponse> {
+    return this.service.completeMediaUpload(
+      requireAstrologerUserId(request),
+      journalId,
+      mediaId,
+      body
+    );
   }
 
   @Post("journals/:journalId/astrologer-reply/drafts")

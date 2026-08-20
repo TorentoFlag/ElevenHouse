@@ -7,7 +7,10 @@ import { Test } from "@nestjs/testing";
 import type {
   AstroDiaryCommandExecution,
   AstroDiaryCommandUnitOfWork,
-  AstroDiaryJournalReader
+  AstroDiaryJournalReader,
+  AstroDiaryMediaAuthorizationContext,
+  AstroDiaryMediaUploadStore,
+  ObjectStoragePort
 } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -42,9 +45,15 @@ describe("client AstroDiary HTTP API", () => {
   beforeEach(async () => {
     commandUnitOfWork = new ReplayCommandUnitOfWork();
     readerState = { ended: false };
-    const service = new ClientAstroDiaryService(createReader(readerState), commandUnitOfWork, {
-      now: () => new Date("2026-08-18T10:00:00.000Z")
-    });
+    const service = new ClientAstroDiaryService(
+      createReader(readerState),
+      commandUnitOfWork,
+      {
+        now: () => new Date("2026-08-18T10:00:00.000Z")
+      },
+      createMediaStore(),
+      createObjectStorage()
+    );
     const builder = Test.createTestingModule({
       controllers: [ClientAstroDiaryController],
       providers: [
@@ -138,6 +147,50 @@ describe("client AstroDiary HTTP API", () => {
     });
     expect(foreign.status).toBe(404);
     expect(foreign.body).toMatchObject({ code: "astro_diary_not_found" });
+  });
+
+  it("creates a client private media upload intent under the journal authority", async () => {
+    const response = await request(`/astro-diary/journals/${journalId}/media/upload-intents`, {
+      role: "client",
+      method: "POST",
+      body: {
+        purpose: "astro_diary_attachment",
+        fileName: "дневник.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024
+      }
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      status: "uploading",
+      upload: { method: "PUT", headers: { "content-type": "application/pdf" } }
+    });
+  });
+
+  it("completes a client private media upload without exposing a public URL", async () => {
+    const response = await request(
+      `/astro-diary/journals/${journalId}/media/${clientAttachmentId}/complete`,
+      {
+        role: "client",
+        method: "POST",
+        body: {
+          checksumSha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      }
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      mediaId: clientAttachmentId,
+      status: "ready",
+      purpose: "astro_diary_attachment",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+      checksumSha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      width: null,
+      height: null
+    });
   });
 
   it("returns the same allocated draft on network replay and conflicts on changed intent", async () => {
@@ -461,6 +514,111 @@ function createReader(state: { ended: boolean }): AstroDiaryJournalReader {
           }
         : null
   } as AstroDiaryJournalReader;
+}
+
+function createMediaStore(): AstroDiaryMediaUploadStore & {
+  getAuthorizationContext(input: {
+    readonly journalId: string;
+    readonly actorUserId: string;
+  }): Promise<AstroDiaryMediaAuthorizationContext | null>;
+} {
+  return {
+    getAuthorizationContext: async ({ journalId: requestedJournalId, actorUserId }) =>
+      requestedJournalId === journalId
+        ? {
+            actorUserId,
+            relationship: {
+              id: relationshipId,
+              clientUserId,
+              astrologerUserId,
+              state: "active"
+            },
+            journal: {
+              id: journalId,
+              relationshipId,
+              clientUserId,
+              astrologerUserId,
+              state: "active"
+            }
+          }
+        : null,
+    createPendingUpload: async () => undefined,
+    findPendingUpload: async ({ mediaId }) =>
+      mediaId === clientAttachmentId
+        ? {
+            asset: {
+              id: clientAttachmentId,
+              ownerUserId: clientUserId,
+              purpose: "astro_diary_attachment",
+              status: "uploading",
+              visibility: "private",
+              storageBucket: "private-diary",
+              storageKey: "astro-diary/client/file.pdf",
+              originalFileName: "file.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 1024,
+              checksumSha256: null,
+              width: null,
+              height: null,
+              altText: null,
+              failureReason: null,
+              variants: [],
+              createdAt: "2026-08-18T10:00:00.000Z",
+              updatedAt: "2026-08-18T10:00:00.000Z"
+            },
+            media: {
+              id: clientAttachmentId,
+              ownerUserId: clientUserId,
+              journalId,
+              purpose: "astro_diary_attachment",
+              visibility: "private",
+              status: "uploading",
+              boundItemId: null,
+              accessRevoked: false
+            }
+          }
+        : null,
+    markReady: async ({ checksumSha256, width, height, now }) => ({
+      id: clientAttachmentId,
+      ownerUserId: clientUserId,
+      purpose: "astro_diary_attachment",
+      status: "ready",
+      visibility: "private",
+      storageBucket: "private-diary",
+      storageKey: "astro-diary/client/file.pdf",
+      originalFileName: "file.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 1024,
+      checksumSha256,
+      width,
+      height,
+      altText: null,
+      failureReason: null,
+      variants: [],
+      createdAt: "2026-08-18T10:00:00.000Z",
+      updatedAt: now
+    }),
+    markFailed: async () => undefined
+  };
+}
+
+function createObjectStorage(): ObjectStoragePort {
+  return {
+    createPresignedUpload: async (input) => ({
+      bucket: "private-diary",
+      method: "PUT",
+      url: `https://storage.example/${input.storageKey}`,
+      headers: { "content-type": input.mimeType },
+      expiresAt: "2026-08-18T10:15:00.000Z"
+    }),
+    readUploadedObjectMetadata: async () => ({
+      sizeBytes: 1024,
+      mimeType: "application/pdf",
+      checksumSha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      width: null,
+      height: null
+    })
+  };
 }
 
 function emptyWriteSet() {

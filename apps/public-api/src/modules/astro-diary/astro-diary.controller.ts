@@ -20,7 +20,9 @@ import type {
   AstroDiaryDraftMutationResponse,
   AstroDiaryJournalListResponse,
   AstroDiaryJournalSummaryResponse,
-  AstroDiaryTimelinePage
+  AstroDiaryTimelinePage,
+  AstroDiaryMediaUploadCompletionResponse,
+  MediaUploadIntentResponse
 } from "@elevenhouse/contracts";
 
 import { PublicSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -63,6 +65,27 @@ export class ClientAstroDiaryController {
     @Param("journalId") journalId: string
   ): Promise<AstroDiaryClientEntryDraftResponse> {
     return this.service.getClientEntryDraft(requireClientUserId(request), journalId);
+  }
+
+  @Post("journals/:journalId/media/upload-intents")
+  @RequireCsrf()
+  createMediaUploadIntent(
+    @Req() request: PublicSessionRequest,
+    @Param("journalId") journalId: string,
+    @Body() body: unknown
+  ): Promise<MediaUploadIntentResponse> {
+    return this.service.createMediaUploadIntent(requireClientUserId(request), journalId, body);
+  }
+
+  @Post("journals/:journalId/media/:mediaId/complete")
+  @RequireCsrf()
+  completeMediaUpload(
+    @Req() request: PublicSessionRequest,
+    @Param("journalId") journalId: string,
+    @Param("mediaId") mediaId: string,
+    @Body() body: unknown
+  ): Promise<AstroDiaryMediaUploadCompletionResponse> {
+    return this.service.completeMediaUpload(requireClientUserId(request), journalId, mediaId, body);
   }
 
   @Post("journals/:journalId/client-entry/drafts")

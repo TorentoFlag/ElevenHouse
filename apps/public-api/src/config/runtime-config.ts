@@ -141,6 +141,25 @@ const publicApiRuntimeConfigSchema = z.object({
   PUBLIC_API_FINANCE_ARTIFACT_S3_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
   PUBLIC_API_FINANCE_ARTIFACT_S3_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
   PUBLIC_API_FINANCE_ARTIFACT_S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
+  PUBLIC_API_MEDIA_STORAGE_ENDPOINT: z.string().trim().url().default("http://localhost:9000"),
+  PUBLIC_API_MEDIA_STORAGE_REGION: z.string().trim().min(1).default("us-east-1"),
+  PUBLIC_API_MEDIA_PRIVATE_STORAGE_BUCKET: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse-local-private"),
+  PUBLIC_API_MEDIA_STORAGE_ACCESS_KEY_ID: z.string().trim().min(1).default("elevenhouse"),
+  PUBLIC_API_MEDIA_STORAGE_SECRET_ACCESS_KEY: z
+    .string()
+    .trim()
+    .min(1)
+    .default("elevenhouse-secret"),
+  PUBLIC_API_MEDIA_STORAGE_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  PUBLIC_API_MEDIA_UPLOAD_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  PUBLIC_API_MEDIA_DOWNLOAD_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(300),
   PUBLIC_API_FINANCE_PROVIDER_REQUEST_RETENTION_POLICY_ID: z
     .string()
     .trim()
@@ -252,6 +271,18 @@ export type PublicApiRuntimeConfig = {
         }>;
     requestArtifactRetention: Readonly<{ policyId: string; policyVersion: string }>;
   }> | null;
+  readonly mediaStorage: Readonly<{
+    endpoint: string;
+    region: string;
+    bucket: string;
+    privateBucket: string;
+    accessKeyId: string;
+    secretAccessKey: string;
+    forcePathStyle: boolean;
+    publicBaseUrl: string;
+    uploadTtlSeconds: number;
+    downloadTtlSeconds: number;
+  }>;
 };
 
 export function createPublicApiRuntimeConfig(
@@ -296,6 +327,7 @@ export function createPublicApiRuntimeConfig(
     );
   }
   const financeCheckout = resolveFinanceCheckout(config);
+  const mediaStorageEndpoint = stripTrailingSlashes(config.PUBLIC_API_MEDIA_STORAGE_ENDPOINT);
   if (
     config.PUBLIC_API_BIRTH_PLACE_SEARCH_ENABLED &&
     new URL(config.PUBLIC_API_GEOAPIFY_BASE_URL).protocol !== "https:"
@@ -401,7 +433,19 @@ export function createPublicApiRuntimeConfig(
         }
       }
     },
-    financeCheckout
+    financeCheckout,
+    mediaStorage: {
+      endpoint: mediaStorageEndpoint,
+      region: config.PUBLIC_API_MEDIA_STORAGE_REGION,
+      bucket: config.PUBLIC_API_MEDIA_PRIVATE_STORAGE_BUCKET,
+      privateBucket: config.PUBLIC_API_MEDIA_PRIVATE_STORAGE_BUCKET,
+      accessKeyId: config.PUBLIC_API_MEDIA_STORAGE_ACCESS_KEY_ID,
+      secretAccessKey: config.PUBLIC_API_MEDIA_STORAGE_SECRET_ACCESS_KEY,
+      forcePathStyle: config.PUBLIC_API_MEDIA_STORAGE_FORCE_PATH_STYLE,
+      publicBaseUrl: mediaStorageEndpoint,
+      uploadTtlSeconds: config.PUBLIC_API_MEDIA_UPLOAD_TTL_SECONDS,
+      downloadTtlSeconds: config.PUBLIC_API_MEDIA_DOWNLOAD_TTL_SECONDS
+    }
   };
 }
 
