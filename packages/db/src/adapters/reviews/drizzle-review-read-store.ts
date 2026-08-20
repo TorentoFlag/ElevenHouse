@@ -1,4 +1,6 @@
 import {
+  clientReviewableInstanceListQuerySchema,
+  clientReviewableInstanceListResponseSchema,
   clientReviewDetailSchema,
   reviewAdminDetailSchema,
   reviewModerationCaseDetailSchema,
@@ -7,6 +9,7 @@ import {
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
+  type ClientReviewableInstanceListQuery,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseSummary,
   type ReviewModerationQueueItem,
@@ -55,13 +58,19 @@ type ModerationQueueCursor = {
   readonly submittedAt: string;
   readonly queueItemId: string;
 };
+type ClientReviewableInstanceCursor = {
+  readonly receivedAt: string;
+  readonly reviewableInstanceId: string;
+};
 
 const publicCursorVersion = "reviews_public_v1";
 const moderationQueueCursorVersion = "reviews_moderation_queue_v1";
+const clientReviewableInstanceCursorVersion = "reviews_client_instances_v1";
 
 export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): ReviewReadStore {
   return {
     listPublicReviews: (query) => listPublicReviews(database, query),
+    listClientReviewableInstances: (query) => listClientReviewableInstances(database, query),
     listModerationQueue: (query) => listModerationQueue(database, query),
     getClientReviewDetail: (input) => getClientReviewDetail(database, input),
     getAdminReviewDetail: (input) => getAdminReviewDetail(database, input),
@@ -227,6 +236,48 @@ async function listPublicReviews(
   });
 }
 
+async function listClientReviewableInstances(
+  database: ElevenHouseDatabase,
+  input: ClientReviewableInstanceListQuery
+): Promise<Awaited<ReturnType<ReviewReadStore["listClientReviewableInstances"]>>> {
+  const query = clientReviewableInstanceListQuerySchema.parse(input);
+  const cursor = query.cursor ? parseClientReviewableInstanceCursor(query.cursor) : null;
+  if (query.cursor && !cursor) return { items: [], nextCursor: null };
+
+  const conditions: SQL[] = [eq(reviewableInstances.clientUserId, query.clientUserId)];
+  if (cursor) {
+    const receivedAt = new Date(cursor.receivedAt);
+    const cursorCondition = or(
+      lt(reviewableInstances.receivedAt, receivedAt),
+      and(
+        eq(reviewableInstances.receivedAt, receivedAt),
+        lt(reviewableInstances.id, cursor.reviewableInstanceId)
+      )
+    );
+    if (cursorCondition) conditions.push(cursorCondition);
+  }
+
+  const rows = await database
+    .select()
+    .from(reviewableInstances)
+    .where(and(...conditions))
+    .orderBy(desc(reviewableInstances.receivedAt), desc(reviewableInstances.id))
+    .limit(query.limit + 1);
+
+  const pageRows = rows.slice(0, query.limit);
+  const last = pageRows.at(-1) ?? null;
+  return clientReviewableInstanceListResponseSchema.parse({
+    items: pageRows.map(toReviewableInstanceSummary),
+    nextCursor:
+      rows.length > query.limit && last
+        ? encodeClientReviewableInstanceCursor({
+            receivedAt: last.receivedAt.toISOString(),
+            reviewableInstanceId: last.id
+          })
+        : null
+  });
+}
+
 async function getClientReviewDetail(
   database: ElevenHouseDatabase,
   input: Parameters<ReviewReadStore["getClientReviewDetail"]>[0]
@@ -237,7 +288,7 @@ async function getClientReviewDetail(
       reviewableInstance: reviewableInstances
     })
     .from(reviewableInstances)
-    .innerJoin(reviews, eq(reviews.reviewableInstanceId, reviewableInstances.id))
+    .leftJoin(reviews, eq(reviews.reviewableInstanceId, reviewableInstances.id))
     .where(
       and(
         eq(reviewableInstances.id, input.reviewableInstanceId),
@@ -247,20 +298,23 @@ async function getClientReviewDetail(
     .limit(1);
   if (!row) return null;
 
-  const versions = await readReviewVersions(database, row.review.id);
-  const activePublicVersion = row.review.activePublicVersionId
-    ? (versions.find((version) => version.id === row.review.activePublicVersionId) ?? null)
+  const versions = row.review ? await readReviewVersions(database, row.review.id) : [];
+  const activePublicVersion = row.review?.activePublicVersionId
+    ? (versions.find((version) => version.id === row.review?.activePublicVersionId) ?? null)
     : null;
-  const pendingVersion = row.review.pendingVersionId
-    ? (versions.find((version) => version.id === row.review.pendingVersionId) ?? null)
+  const pendingVersion = row.review?.pendingVersionId
+    ? (versions.find((version) => version.id === row.review?.pendingVersionId) ?? null)
     : null;
 
   return clientReviewDetailSchema.parse({
-    reviewId: row.review.id,
+    reviewId: row.review?.id ?? null,
     reviewableInstance: toReviewableInstanceSummary(row.reviewableInstance),
     activePublicVersion: activePublicVersion ? toReviewVersion(activePublicVersion) : null,
     pendingVersion: pendingVersion ? toReviewVersion(pendingVersion) : null,
-    canSubmitNewVersion: false,
+    canSubmitNewVersion:
+      row.review === null &&
+      row.reviewableInstance.status === "reviewable" &&
+      Date.now() < row.reviewableInstance.reviewWindowClosesAt.getTime(),
     canEditLatestVersion:
       activePublicVersion !== null &&
       pendingVersion === null &&
@@ -581,6 +635,30 @@ function parsePublicCursor(value: string): PublicReviewCursor | null {
     if (typeof parsed.publishedAt !== "string" || typeof parsed.reviewId !== "string") return null;
     if (Number.isNaN(Date.parse(parsed.publishedAt))) return null;
     return { publishedAt: parsed.publishedAt, reviewId: parsed.reviewId };
+  } catch {
+    return null;
+  }
+}
+
+function encodeClientReviewableInstanceCursor(cursor: ClientReviewableInstanceCursor): string {
+  return `${clientReviewableInstanceCursorVersion}.${Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")}`;
+}
+
+function parseClientReviewableInstanceCursor(value: string): ClientReviewableInstanceCursor | null {
+  const [version, payload] = value.split(".");
+  if (version !== clientReviewableInstanceCursorVersion || !payload) return null;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as Partial<ClientReviewableInstanceCursor>;
+    if (typeof parsed.receivedAt !== "string" || typeof parsed.reviewableInstanceId !== "string") {
+      return null;
+    }
+    if (Number.isNaN(Date.parse(parsed.receivedAt))) return null;
+    return {
+      receivedAt: parsed.receivedAt,
+      reviewableInstanceId: parsed.reviewableInstanceId
+    };
   } catch {
     return null;
   }

@@ -25,6 +25,7 @@ describe("public reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let receivedQuery: unknown;
+  let receivedClientInstancesQuery: unknown;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedSubmissionCommand: unknown;
@@ -32,6 +33,7 @@ describe("public reviews HTTP API", () => {
 
   beforeEach(async () => {
     receivedQuery = null;
+    receivedClientInstancesQuery = null;
     receivedCaseRead = null;
     receivedMessageCommand = null;
     receivedSubmissionCommand = null;
@@ -77,6 +79,24 @@ describe("public reviews HTTP API", () => {
                 ? clientReviewDetail()
                 : null;
             },
+            async listClientReviewableInstances(input) {
+              receivedClientInstancesQuery = input;
+              return {
+                items: [
+                  {
+                    id: reviewableInstanceId,
+                    kind: "booking",
+                    status: "reviewable",
+                    title: "Солярная консультация",
+                    contextLabel: "60 минут",
+                    receivedAt: "2026-08-19T10:00:00.000Z",
+                    reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+                    windowPolicy: "standard_14_days_after_receipt"
+                  }
+                ],
+                nextCursor: null
+              };
+            },
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
               return input.caseId === caseId
@@ -104,7 +124,10 @@ describe("public reviews HTTP API", () => {
             }
           } satisfies Pick<
             ReviewReadStore,
-            "listPublicReviews" | "getClientReviewDetail" | "getModerationCaseDetail"
+            | "listPublicReviews"
+            | "getClientReviewDetail"
+            | "listClientReviewableInstances"
+            | "getModerationCaseDetail"
           >
         },
         {
@@ -217,6 +240,21 @@ describe("public reviews HTTP API", () => {
       reviewableInstance: { id: reviewableInstanceId },
       pendingVersion: { moderationStatus: "pending" },
       canSubmitNewVersion: false
+    });
+  });
+
+  it("lists reviewable service instances for the current client", async () => {
+    const response = await fetch(`${baseUrl}/me/reviews/reviewable-instances?limit=10`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [{ id: reviewableInstanceId, status: "reviewable" }],
+      nextCursor: null
+    });
+    expect(receivedClientInstancesQuery).toEqual({
+      clientUserId,
+      limit: 10,
+      cursor: null
     });
   });
 

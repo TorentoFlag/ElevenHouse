@@ -9,6 +9,7 @@ import {
   reviewModerationQueueResponseSchema,
   reviewModerationReasonCodeSchema,
   reviewPublicListResponseSchema,
+  clientReviewableInstanceListResponseSchema,
   reviewPublicAuthorSchema,
   reviewAdminDetailSchema,
   clientReviewDetailSchema,
@@ -181,6 +182,49 @@ describe("Reviews contracts", () => {
         activePublicVersion: { ...parsed.pendingVersion, moderationStatus: "pending" }
       }).success
     ).toBe(false);
+  });
+
+  it("represents a reviewable client service before the first review is submitted", () => {
+    const parsed = clientReviewDetailSchema.parse({
+      reviewId: null,
+      reviewableInstance: {
+        id: "10000000-0000-4000-8000-000000000024",
+        kind: "astro_calendar_service_period",
+        status: "reviewable",
+        title: "Астрокалендарь",
+        contextLabel: "Август 2026",
+        receivedAt: "2026-08-01T00:00:00.000Z",
+        reviewWindowClosesAt: "2026-09-14T00:00:00.000Z",
+        windowPolicy: "active_period_plus_14_days"
+      },
+      activePublicVersion: null,
+      pendingVersion: null,
+      canSubmitNewVersion: true,
+      canEditLatestVersion: false
+    });
+
+    expect(parsed.reviewId).toBeNull();
+    expect(parsed.canSubmitNewVersion).toBe(true);
+  });
+
+  it("lists client-owned reviewable service instances without exposing other clients", () => {
+    expect(
+      clientReviewableInstanceListResponseSchema.parse({
+        items: [
+          {
+            id: "10000000-0000-4000-8000-000000000025",
+            kind: "async_delivery",
+            status: "reviewable",
+            title: "Письменный разбор",
+            contextLabel: "Материал выдан",
+            receivedAt: "2026-08-20T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-03T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          }
+        ],
+        nextCursor: null
+      }).items
+    ).toHaveLength(1);
   });
 
   it("keeps public review lists anonymous and free from admin-only identity fields", () => {

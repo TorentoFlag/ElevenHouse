@@ -30,6 +30,50 @@ describe.sequential("Drizzle review read store", () => {
     await integration?.close();
   }, 30_000);
 
+  it("lists client reviewable instances and reads detail before the first review exists", async () => {
+    const fixture = await seedReviewReadFixture(runtime);
+    const reads = createDrizzleReviewReadStore(runtime.database);
+
+    await expect(
+      reads.listClientReviewableInstances({
+        clientUserId: fixture.clientUserId,
+        limit: 20,
+        cursor: null
+      })
+    ).resolves.toEqual({
+      items: [
+        {
+          id: fixture.reviewableInstanceId,
+          kind: "booking",
+          status: "reviewable",
+          title: "Солярная консультация",
+          contextLabel: "60 минут",
+          receivedAt: "2026-08-19T10:00:00.000Z",
+          reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+          windowPolicy: "standard_14_days_after_receipt"
+        }
+      ],
+      nextCursor: null
+    });
+
+    await expect(
+      reads.getClientReviewDetail({
+        clientUserId: fixture.clientUserId,
+        reviewableInstanceId: fixture.reviewableInstanceId
+      })
+    ).resolves.toMatchObject({
+      reviewId: null,
+      reviewableInstance: {
+        id: fixture.reviewableInstanceId,
+        status: "reviewable"
+      },
+      activePublicVersion: null,
+      pendingVersion: null,
+      canSubmitNewVersion: true,
+      canEditLatestVersion: false
+    });
+  });
+
   it("projects public anonymity while admin and client reads keep the full review context", async () => {
     const fixture = await seedReviewReadFixture(runtime);
     const commands = createDrizzleReviewCommandStore(runtime.database);

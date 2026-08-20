@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import {
+  clientReviewableInstanceListQuerySchema,
+  clientReviewableInstanceListResponseSchema,
   clientReviewDetailSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageCreateSchema,
@@ -10,6 +12,7 @@ import {
   reviewPublicListResponseSchema,
   reviewVersionSubmissionSchema,
   type ClientReviewDetail,
+  type ClientReviewableInstanceListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewPublicListResponse
@@ -53,7 +56,10 @@ export class PublicReviewsService {
     @Inject(PUBLIC_REVIEWS_READ_STORE)
     private readonly readStore: Pick<
       ReviewReadStore,
-      "listPublicReviews" | "getClientReviewDetail" | "getModerationCaseDetail"
+      | "listPublicReviews"
+      | "listClientReviewableInstances"
+      | "getClientReviewDetail"
+      | "getModerationCaseDetail"
     >,
     @Inject(PUBLIC_REVIEWS_COMMAND_STORE)
     private readonly commandStore: PublicReviewCommandStore,
@@ -76,6 +82,16 @@ export class PublicReviewsService {
     return this.readRequiredClientReviewDetail(
       requireUuid(clientUserId),
       requireUuid(reviewableInstanceId)
+    );
+  }
+
+  async listClientReviewableInstances(
+    clientUserId: string,
+    query: unknown
+  ): Promise<ClientReviewableInstanceListResponse> {
+    const normalized = normalizeClientReviewableInstancesQuery(clientUserId, query);
+    return clientReviewableInstanceListResponseSchema.parse(
+      await this.readStore.listClientReviewableInstances(normalized)
     );
   }
 
@@ -182,6 +198,17 @@ function normalizePublicReviewsQuery(query: unknown) {
   const parsed = reviewPublicListQuerySchema.safeParse({
     astrologerUserId: optionalString(query.astrologerUserId),
     productId: optionalString(query.productId),
+    limit: optionalInteger(query.limit) ?? undefined,
+    cursor: optionalString(query.cursor) ?? null
+  });
+  if (!parsed.success) throw new BadRequestException("Invalid reviews query");
+  return parsed.data;
+}
+
+function normalizeClientReviewableInstancesQuery(clientUserId: string, query: unknown) {
+  if (!isRecord(query)) throw new BadRequestException("Invalid reviews query");
+  const parsed = clientReviewableInstanceListQuerySchema.safeParse({
+    clientUserId: requireUuid(clientUserId),
     limit: optionalInteger(query.limit) ?? undefined,
     cursor: optionalString(query.cursor) ?? null
   });

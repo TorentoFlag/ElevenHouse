@@ -235,7 +235,7 @@ export type ReviewVersion = z.infer<typeof reviewVersionSchema>;
 
 export const clientReviewDetailSchema = z
   .object({
-    reviewId: uuidSchema,
+    reviewId: uuidSchema.nullable(),
     reviewableInstance: reviewableInstanceSummarySchema,
     activePublicVersion: reviewVersionSchema.nullable(),
     pendingVersion: reviewVersionSchema.nullable(),
@@ -263,6 +263,30 @@ export const clientReviewDetailSchema = z
     }
   });
 export type ClientReviewDetail = z.infer<typeof clientReviewDetailSchema>;
+
+export const clientReviewableInstanceListQuerySchema = z
+  .object({
+    clientUserId: uuidSchema,
+    limit: z.number().int().min(1).max(50).optional().default(20),
+    cursor: cursorSchema.nullish().default(null)
+  })
+  .strict();
+export type ClientReviewableInstanceListQueryInput = z.input<
+  typeof clientReviewableInstanceListQuerySchema
+>;
+export type ClientReviewableInstanceListQuery = z.infer<
+  typeof clientReviewableInstanceListQuerySchema
+>;
+
+export const clientReviewableInstanceListResponseSchema = z
+  .object({
+    items: z.array(reviewableInstanceSummarySchema).max(50),
+    nextCursor: cursorSchema.nullable()
+  })
+  .strict();
+export type ClientReviewableInstanceListResponse = z.infer<
+  typeof clientReviewableInstanceListResponseSchema
+>;
 
 export const reviewReplySubmissionSchema = z
   .object({

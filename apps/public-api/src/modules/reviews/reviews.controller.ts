@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import type {
   ClientReviewDetail,
+  ClientReviewableInstanceListResponse,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
   ReviewPublicListResponse
@@ -38,6 +39,14 @@ export class PublicReviewsController {
 @UseGuards(PublicSessionAuthGuard)
 export class PublicMyReviewsController {
   constructor(@Inject(PublicReviewsService) private readonly service: PublicReviewsService) {}
+
+  @Get("reviewable-instances")
+  listClientReviewableInstances(
+    @Req() request: PublicSessionRequest,
+    @Query() query: unknown
+  ): Promise<ClientReviewableInstanceListResponse> {
+    return this.service.listClientReviewableInstances(requireCustomerUserId(request), query);
+  }
 
   @Get("reviewable-instances/:reviewableInstanceId")
   getClientReviewDetail(

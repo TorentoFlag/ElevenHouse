@@ -1,5 +1,7 @@
 import type {
   ClientReviewDetail,
+  ClientReviewableInstanceListQuery,
+  ClientReviewableInstanceListResponse,
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
   ReviewModerationQueueQuery,
@@ -12,6 +14,9 @@ export type ReviewModerationCaseActorRole = "moderator" | "client" | "astrologer
 
 export type ReviewReadStore = {
   readonly listPublicReviews: (query: ReviewPublicListQuery) => Promise<ReviewPublicListResponse>;
+  readonly listClientReviewableInstances: (
+    query: ClientReviewableInstanceListQuery
+  ) => Promise<ClientReviewableInstanceListResponse>;
   readonly listModerationQueue: (
     query: ReviewModerationQueueQuery
   ) => Promise<ReviewModerationQueueResponse>;
