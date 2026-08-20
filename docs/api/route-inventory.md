@@ -84,6 +84,10 @@ This is the current route inventory. API ownership, authorization and contract r
 | PUT | `/clients/:clientUserId/birth-data` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/birth-places` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/birth-places/geoapify/:providerPlaceId` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| GET | `/clients/crm` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| GET | `/clients/crm/:clientUserId` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| GET | `/clients/crm/:clientUserId/activity` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| PUT | `/clients/crm/:clientUserId/private-profile` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | POST | `/dictionary/ai-draft` | `apps/astrologer-api/src/modules/dictionary-ai/dictionary-ai.controller.ts` |
 | GET | `/dictionary/categories` | `apps/astrologer-api/src/modules/dictionary/dictionary.controller.ts` |
 | POST | `/dictionary/custom-entries` | `apps/astrologer-api/src/modules/dictionary/dictionary.controller.ts` |
