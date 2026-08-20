@@ -82,7 +82,7 @@ export function createDrizzleClientOrderHostedCheckoutCaptureReconciliationReade
            and operation.purpose = 'client_order'
            and operation.source_id = order_row.id::text
            and operation.status = 'succeeded'
-         order by checkout_authorization.authorized_at, checkout_authorization.order_id
+         order by checkout_authorization.committed_at, checkout_authorization.order_id
          limit ${pageLimit}
       `);
       const rows = result.rows as unknown as readonly PendingHostedCheckoutRow[];
