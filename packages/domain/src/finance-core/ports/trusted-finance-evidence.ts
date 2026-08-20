@@ -77,8 +77,9 @@ export type VerifiedWebhookIngressEvidence = Readonly<{
 
 type VerifiedWebhookSemanticEvidenceCommon = Readonly<{
   kind: "verified_webhook_semantic_evidence";
+  sourceDelivery: "webhook" | "provider_canonical_read";
   providerAccount: FinanceProviderAccountIdentity;
-  webhookId: string;
+  webhookId: string | null;
   semanticSourceId: string;
   purpose: "client_order" | "platform_invoice" | "platform_card_setup";
   canonicalFactDigest: FinanceDigest;

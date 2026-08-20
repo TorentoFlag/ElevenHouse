@@ -47,6 +47,10 @@ import {
   financeProviderAccountSeries,
   financeProviderAccounts
 } from "../../schema/finance/provider-accounts.schema";
+import {
+  financeProviderSemanticFacts,
+  financeWebhookSemanticCommitReceipts
+} from "../../schema/finance/webhook-inbox.schema";
 import { users } from "../../schema/identity/accounts.schema";
 import { platformTariffSubscriptions } from "../../schema/platform-billing/tariff-authority.schema";
 import { productAccessGrants } from "../../schema/products/product-access-grants.schema";
@@ -1217,6 +1221,42 @@ describe.sequential("AstroDiary activation database ownership regressions", () =
         )
     ).resolves.toHaveLength(1);
   });
+
+  it("applies a missed hosted-checkout capture through provider canonical read without webhook inbox evidence", async () => {
+    const fixture = await seedCanonicalSubscriptionCapture(runtime, artifacts, {
+      sourceDelivery: "provider_canonical_read"
+    });
+
+    const [semanticFact] = await runtime.database
+      .select()
+      .from(financeProviderSemanticFacts)
+      .where(
+        eq(financeProviderSemanticFacts.economicPaymentIntentId, fixture.economicPaymentIntentId)
+      );
+    expect(semanticFact).toMatchObject({
+      inboxItemId: null,
+      effectDisposition: "applied_once",
+      purpose: "client_order"
+    });
+    const [semanticReceipt] = await runtime.database
+      .select()
+      .from(financeWebhookSemanticCommitReceipts)
+      .where(eq(financeWebhookSemanticCommitReceipts.semanticFactId, semanticFact!.id));
+    expect(semanticReceipt).toMatchObject({
+      inboxItemId: null,
+      inboxVersion: null,
+      checkpointSequence: null,
+      processingStatus: null,
+      effectDisposition: "applied_once"
+    });
+
+    const dispatched = await createDrizzleClientSubscriptionCaptureDispatchUnitOfWork(
+      runtime.database
+    ).rehydrateAndDispatchClientOrderCapture({
+      captureApplicationReceiptId: fixture.captureApplicationReceiptId
+    });
+    expect(dispatched.outcome).toBe("dispatched");
+  });
 });
 
 async function activationArtifactSnapshot(
@@ -1605,7 +1645,10 @@ async function seedCheckoutRiskAuthority(
 
 async function seedCanonicalSubscriptionCapture(
   runtime: PostgresRuntime,
-  artifacts: FinanceArtifactRegistry
+  artifacts: FinanceArtifactRegistry,
+  options: Readonly<{ sourceDelivery: "webhook" | "provider_canonical_read" }> = {
+    sourceDelivery: "webhook"
+  }
 ) {
   const prerequisite = await seedPurchaseAuthority(runtime);
   await createProductionOrder(runtime, prerequisite);
@@ -1713,28 +1756,7 @@ async function seedCanonicalSubscriptionCapture(
     throw new Error("Canonical capture fixture payment session timestamp was not found");
   }
 
-  const webhookBytes = new TextEncoder().encode(JSON.stringify({ id: webhookId }));
   const canonicalBytes = new TextEncoder().encode(JSON.stringify({ id: providerPaymentId }));
-  const webhookArtifact = await artifacts.registerSealedArtifact({
-    artifact: {
-      artifactId: `webhook-artifact-${randomUUID()}`,
-      sha256Digest: digest(webhookBytes),
-      byteLength: webhookBytes.byteLength
-    },
-    artifactClass: "provider_webhook",
-    binding: { kind: "provider", providerAccount },
-    contentType: "application/json",
-    privateObject: {
-      privateObjectKey: `integration/webhook-${webhookId}`,
-      privateObjectVersion: "v1",
-      envelopeKeyVersion: "kms-v1",
-      sha256Digest: digest(webhookBytes),
-      byteLength: webhookBytes.byteLength,
-      contentType: "application/json"
-    },
-    retentionPolicyId: "astro-diary-task-2-webhook",
-    retentionPolicyVersion: "1"
-  });
   const canonicalArtifact = await artifacts.registerSealedArtifact({
     artifact: {
       artifactId: `canonical-artifact-${randomUUID()}`,
@@ -1755,37 +1777,7 @@ async function seedCanonicalSubscriptionCapture(
     retentionPolicyId: "astro-diary-task-2-canonical",
     retentionPolicyVersion: "1"
   });
-  const stored = await createDrizzleWebhookIngressStorageUnitOfWork({
-    database: runtime.database
-  }).storeBeforeAcknowledgement({
-    expectedTransportIdentityAbsent: true,
-    ingressEvidence: {
-      kind: "verified_webhook_ingress_evidence",
-      provider: "arc_pay",
-      providerAccount,
-      webhookId,
-      providerEventType: "payment.captured",
-      rawBodyDigest: digest(webhookBytes),
-      sealedPayloadRef: webhookArtifact.artifactId,
-      signatureScheme: "arc_pay_hmac_sha256_v1",
-      verifierContractVersion: "arc_pay_webhook_ingress_v1",
-      webhookSigningKeyVersionId: "key-v1",
-      signedTimestamp: "2026-02-05T07:29:58.000Z",
-      signatureEvidenceDigest: sha256("webhook-signature"),
-      verifiedAt: "2026-02-05T07:29:59.000Z",
-      receivedAt: "2026-02-05T07:30:00.000Z"
-    }
-  } as never);
   const workerId = `astro-diary-task-2-${randomUUID()}`;
-  const claim = await createDrizzleCapturedClientOrderWebhookClaimPort({
-    database: runtime.database,
-    workerId,
-    leaseDurationSeconds: 60,
-    retryPolicy: { maximumAttempts: 3, baseDelayMilliseconds: 100, maximumDelayMilliseconds: 500 }
-  }).claimNextCapturedClientOrderWebhook();
-  if (!claim || claim.inboxItemId !== stored.inboxItemId) {
-    throw new Error("Canonical capture fixture was not claimable");
-  }
   const canonicalUnitOfWork = createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork({
     database: runtime.database,
     workerId,
@@ -1794,29 +1786,18 @@ async function seedCanonicalSubscriptionCapture(
   let canonical;
   try {
     canonical = await canonicalUnitOfWork.applyCanonicalOnlineSaleCapture({
-      semanticFact: {
-        inboxItemId: claim.inboxItemId,
-        expectedInboxVersion: claim.inboxVersion,
-        expectedCheckpointSequence: claim.expectedCheckpointSequence,
-        processorVersion: 1,
-        semanticEvidence: {
-          kind: "verified_webhook_semantic_evidence",
-          providerAccount,
-          webhookId,
-          semanticSourceKind: "payment_transition",
-          semanticSourceId: createCapturedProviderPaymentSemanticSourceId(providerPaymentId),
-          economicPaymentIntentId: intentId,
-          economicPaymentSessionId: sessionId,
-          providerPaymentId,
-          amountMinor: "4900",
-          currency: "RUB",
-          purpose: "client_order",
-          canonicalFactDigest: sha256("canonical-capture-fact"),
-          artifact: canonicalArtifact,
-          observedAt
-        },
-        operationEnvelope: operationEnvelope()
-      },
+      semanticFact: await semanticFactCommand({
+        runtime,
+        artifacts,
+        workerId,
+        sourceDelivery: options.sourceDelivery,
+        webhookId,
+        providerPaymentId,
+        intentId,
+        sessionId,
+        canonicalArtifact,
+        observedAt
+      }),
       capture: {
         economicPaymentIntentId: intentId,
         expectedEconomicPaymentVersion: 2,
@@ -1907,11 +1888,115 @@ async function seedCanonicalSubscriptionCapture(
   });
   return {
     authority: prerequisite.authority,
+    economicPaymentIntentId: intentId,
     captureApplicationReceiptId: capture.rows[0].id,
     financeCaptureOutboxCount: financeCaptureOutbox.rows[0]?.count ?? 0,
     fulfillmentDecisionId: captureBinding.rows[0]?.fulfillment_decision_id ?? null,
     astrologerAccrual: astrologerAccrual.rows[0]
   };
+}
+
+async function semanticFactCommand(
+  input: Readonly<{
+    runtime: PostgresRuntime;
+    artifacts: FinanceArtifactRegistry;
+    workerId: string;
+    sourceDelivery: "webhook" | "provider_canonical_read";
+    webhookId: string;
+    providerPaymentId: string;
+    intentId: string;
+    sessionId: string;
+    canonicalArtifact: Readonly<{
+      artifactId: string;
+      sha256Digest: `sha256:${string}`;
+      byteLength: number;
+    }>;
+    observedAt: string;
+  }>
+) {
+  const semanticEvidence = {
+    kind: "verified_webhook_semantic_evidence",
+    sourceDelivery: input.sourceDelivery,
+    providerAccount,
+    webhookId: input.sourceDelivery === "webhook" ? input.webhookId : null,
+    semanticSourceKind: "payment_transition",
+    semanticSourceId: createCapturedProviderPaymentSemanticSourceId(input.providerPaymentId),
+    economicPaymentIntentId: input.intentId,
+    economicPaymentSessionId: input.sessionId,
+    providerPaymentId: input.providerPaymentId,
+    amountMinor: "4900",
+    currency: "RUB",
+    purpose: "client_order",
+    canonicalFactDigest: sha256("canonical-capture-fact"),
+    artifact: input.canonicalArtifact,
+    observedAt: input.observedAt
+  };
+  if (input.sourceDelivery === "provider_canonical_read") {
+    return {
+      processorVersion: 1,
+      semanticEvidence,
+      operationEnvelope: operationEnvelope()
+    } as never;
+  }
+  const webhookBytes = new TextEncoder().encode(JSON.stringify({ id: input.webhookId }));
+  const webhookArtifact = await input.artifacts.registerSealedArtifact({
+    artifact: {
+      artifactId: `webhook-artifact-${randomUUID()}`,
+      sha256Digest: digest(webhookBytes),
+      byteLength: webhookBytes.byteLength
+    },
+    artifactClass: "provider_webhook",
+    binding: { kind: "provider", providerAccount },
+    contentType: "application/json",
+    privateObject: {
+      privateObjectKey: `integration/webhook-${input.webhookId}`,
+      privateObjectVersion: "v1",
+      envelopeKeyVersion: "kms-v1",
+      sha256Digest: digest(webhookBytes),
+      byteLength: webhookBytes.byteLength,
+      contentType: "application/json"
+    },
+    retentionPolicyId: "astro-diary-task-2-webhook",
+    retentionPolicyVersion: "1"
+  });
+  const stored = await createDrizzleWebhookIngressStorageUnitOfWork({
+    database: input.runtime.database
+  }).storeBeforeAcknowledgement({
+    expectedTransportIdentityAbsent: true,
+    ingressEvidence: {
+      kind: "verified_webhook_ingress_evidence",
+      provider: "arc_pay",
+      providerAccount,
+      webhookId: input.webhookId,
+      providerEventType: "payment.captured",
+      rawBodyDigest: digest(webhookBytes),
+      sealedPayloadRef: webhookArtifact.artifactId,
+      signatureScheme: "arc_pay_hmac_sha256_v1",
+      verifierContractVersion: "arc_pay_webhook_ingress_v1",
+      webhookSigningKeyVersionId: "key-v1",
+      signedTimestamp: "2026-02-05T07:29:58.000Z",
+      signatureEvidenceDigest: sha256("webhook-signature"),
+      verifiedAt: "2026-02-05T07:29:59.000Z",
+      receivedAt: "2026-02-05T07:30:00.000Z"
+    }
+  } as never);
+  const claim = await createDrizzleCapturedClientOrderWebhookClaimPort({
+    database: input.runtime.database,
+    workerId: input.workerId,
+    leaseDurationSeconds: 60,
+    retryPolicy: { maximumAttempts: 3, baseDelayMilliseconds: 100, maximumDelayMilliseconds: 500 }
+  }).claimNextCapturedClientOrderWebhook();
+  if (!claim || claim.inboxItemId !== stored.inboxItemId) {
+    throw new Error("Canonical capture fixture was not claimable");
+  }
+  return {
+    inboxItemId: claim.inboxItemId,
+    expectedInboxVersion: claim.inboxVersion,
+    expectedCheckpointSequence: claim.expectedCheckpointSequence,
+    processorVersion: 1,
+    semanticEvidence,
+    operationEnvelope: operationEnvelope()
+  } as never;
 }
 
 function operationEnvelope() {

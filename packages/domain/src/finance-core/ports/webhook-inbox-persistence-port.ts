@@ -58,12 +58,19 @@ export type ApplyVerifiedWebhookSemanticFactCommand = Readonly<{
   operationEnvelope: ResolvedFinanceOperationEnvelope;
 }>;
 
+export type ApplyVerifiedProviderCanonicalSemanticFactCommand = Readonly<{
+  processorVersion: number;
+  semanticEvidence: VerifiedWebhookSemanticEvidence;
+  operationEnvelope: ResolvedFinanceOperationEnvelope;
+}>;
+
 export type WebhookSemanticCommitReceipt = Readonly<{
   kind: "webhook_semantic_commit_receipt";
+  sourceDelivery: "webhook" | "provider_canonical_read";
   receiptId: string;
-  inboxItemId: string;
-  inboxVersion: number;
-  committedCheckpointSequence: number;
+  inboxItemId: string | null;
+  inboxVersion: number | null;
+  committedCheckpointSequence: number | null;
   semanticFactId: string;
   semanticSourceKind: "payment_transition" | "refund" | "chargeback" | "settlement_entry";
   semanticSourceId: string;

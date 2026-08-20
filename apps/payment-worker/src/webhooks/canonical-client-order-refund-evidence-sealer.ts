@@ -83,6 +83,7 @@ export function createCanonicalClientOrderRefundEvidenceSealer(
       }
       return Object.freeze({
         kind: "verified_webhook_semantic_evidence",
+        sourceDelivery: "webhook",
         providerAccount: request.claim.providerAccount,
         webhookId: request.claim.webhookId,
         semanticSourceKind: "refund",
@@ -169,9 +170,7 @@ function identifier(value: unknown): value is string {
 function uuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value
-    )
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   );
 }
 

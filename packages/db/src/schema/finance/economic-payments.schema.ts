@@ -1261,7 +1261,7 @@ begin
       from finance_provider_semantic_facts authority
       join finance_webhook_semantic_commit_receipts receipt
         on receipt.semantic_fact_id = authority.id
-       and receipt.inbox_item_id = authority.inbox_item_id
+       and receipt.inbox_item_id is not distinct from authority.inbox_item_id
        and receipt.series_id = authority.series_id
        and receipt.provider_account_id = authority.provider_account_id
        and receipt.provider_identity_version = authority.provider_identity_version
@@ -1366,7 +1366,7 @@ begin
       from finance_provider_semantic_facts semantic
       join finance_webhook_semantic_commit_receipts receipt
         on receipt.semantic_fact_id = semantic.id
-       and receipt.inbox_item_id = semantic.inbox_item_id
+       and receipt.inbox_item_id is not distinct from semantic.inbox_item_id
        and receipt.series_id = semantic.series_id
        and receipt.provider_account_id = semantic.provider_account_id
        and receipt.provider_identity_version = semantic.provider_identity_version

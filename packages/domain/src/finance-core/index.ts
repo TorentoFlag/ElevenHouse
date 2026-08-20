@@ -136,6 +136,7 @@ export * from "./ports/platform-tariff-invoice-charge-terminal-reconciliation-re
 export * from "./ports/platform-tariff-invoice-canonical-capture-uow";
 export * from "./ports/client-order-canonical-capture-uow";
 export * from "./ports/client-order-canonical-webhook-capture-uow";
+export * from "./ports/client-order-hosted-checkout-capture-reconciliation-reader";
 export * from "./ports/client-order-capture-purpose-dispatch-uow";
 export * from "./ports/online-sale-capture-persistence-port";
 export * from "./ports/online-wallet-release-uow";

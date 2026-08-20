@@ -379,7 +379,7 @@ export const financeProviderSemanticFacts = pgTable(
   "finance_provider_semantic_facts",
   {
     id: varchar("id", { length: 160 }).primaryKey(),
-    inboxItemId: varchar("inbox_item_id", { length: 160 }).notNull(),
+    inboxItemId: varchar("inbox_item_id", { length: 160 }),
     seriesId: varchar("series_id", { length: 160 }).notNull(),
     providerAccountId: varchar("provider_account_id", { length: 160 }).notNull(),
     providerIdentityVersion: integer("provider_identity_version").notNull(),
@@ -551,10 +551,10 @@ export const financeWebhookSemanticCommitReceipts = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     semanticFactId: varchar("semantic_fact_id", { length: 160 }).notNull(),
-    inboxItemId: varchar("inbox_item_id", { length: 160 }).notNull(),
-    inboxVersion: financeRevisionString("inbox_version").notNull(),
-    checkpointSequence: financeRevisionString("checkpoint_sequence").notNull(),
-    processingStatus: text("processing_status").notNull(),
+    inboxItemId: varchar("inbox_item_id", { length: 160 }),
+    inboxVersion: financeRevisionString("inbox_version"),
+    checkpointSequence: financeRevisionString("checkpoint_sequence"),
+    processingStatus: text("processing_status"),
     seriesId: varchar("series_id", { length: 160 }).notNull(),
     providerAccountId: varchar("provider_account_id", { length: 160 }).notNull(),
     providerIdentityVersion: integer("provider_identity_version").notNull(),
@@ -657,9 +657,17 @@ export const financeWebhookSemanticCommitReceipts = pgTable(
     uniqueIndex("finance_webhook_semantic_commit_receipts_digest_unique").on(table.canonicalDigest),
     check(
       "finance_webhook_semantic_commit_receipts_shape_check",
-      sql`${table.inboxVersion} >= 2
-        and ${table.checkpointSequence} >= 1
-        and ${table.processingStatus} in ('completed', 'quarantined')
+      sql`(
+          (${table.inboxItemId} is not null
+            and ${table.inboxVersion} >= 2
+            and ${table.checkpointSequence} >= 1
+            and ${table.processingStatus} in ('completed', 'quarantined'))
+          or (${table.inboxItemId} is null
+            and ${table.inboxVersion} is null
+            and ${table.checkpointSequence} is null
+            and ${table.processingStatus} is null
+            and ${table.effectDisposition} = 'applied_once')
+        )
         and ${table.semanticSourceKind} in ${sql.raw(
           formatFinanceSqlValues(webhookSemanticSourceKindValues)
         )}
@@ -796,12 +804,18 @@ declare
 begin
   select * into strict semantic from finance_provider_semantic_facts
     where id = new.semantic_fact_id;
-  select * into strict inbox from finance_webhook_inbox
-    where id = semantic.inbox_item_id;
   new.inbox_item_id := semantic.inbox_item_id;
-  new.inbox_version := inbox.version;
-  new.checkpoint_sequence := inbox.last_checkpoint_sequence;
-  new.processing_status := inbox.processing_status;
+  if semantic.inbox_item_id is null then
+    new.inbox_version := null;
+    new.checkpoint_sequence := null;
+    new.processing_status := null;
+  else
+    select * into strict inbox from finance_webhook_inbox
+      where id = semantic.inbox_item_id;
+    new.inbox_version := inbox.version;
+    new.checkpoint_sequence := inbox.last_checkpoint_sequence;
+    new.processing_status := inbox.processing_status;
+  end if;
   new.series_id := semantic.series_id;
   new.provider_account_id := semantic.provider_account_id;
   new.provider_identity_version := semantic.provider_identity_version;
@@ -825,6 +839,7 @@ begin
   new.canonical_preimage := jsonb_build_object(
     'kind', 'webhook_semantic_commit_receipt',
     'schemaVersion', 1,
+    'sourceDelivery', case when new.inbox_item_id is null then 'provider_canonical_read' else 'webhook' end,
     'receiptId', new.id::text,
     'semanticFactId', new.semantic_fact_id,
     'inboxItemId', new.inbox_item_id,
@@ -1057,7 +1072,7 @@ begin
   if not exists (
     select 1 from finance_webhook_semantic_commit_receipts receipt
     where receipt.semantic_fact_id = new.id
-      and receipt.inbox_item_id = new.inbox_item_id
+      and receipt.inbox_item_id is not distinct from new.inbox_item_id
       and receipt.series_id = new.series_id
       and receipt.provider_account_id = new.provider_account_id
       and receipt.provider_identity_version = new.provider_identity_version
@@ -1094,16 +1109,30 @@ declare
   inbox finance_webhook_inbox%rowtype;
 begin
   select * into strict semantic from finance_provider_semantic_facts where id = new.semantic_fact_id;
-  select * into strict inbox from finance_webhook_inbox where id = new.inbox_item_id;
+  if new.inbox_item_id is not null then
+    select * into strict inbox from finance_webhook_inbox where id = new.inbox_item_id;
+  end if;
   if semantic.economic_payment_session_id is distinct from new.economic_payment_session_id
      or semantic.provider_payment_id is distinct from new.provider_payment_id
      or semantic.amount_minor is distinct from new.amount_minor
      or semantic.currency is distinct from new.currency
-     or inbox.processing_status <> new.processing_status
-     or inbox.version <> new.inbox_version
-     or inbox.last_checkpoint_sequence <> new.checkpoint_sequence
-     or (new.effect_disposition = 'applied_once' and new.processing_status <> 'completed')
-     or (new.effect_disposition = 'quarantined_no_effect' and new.processing_status <> 'quarantined') then
+     or (new.inbox_item_id is not null and (
+       inbox.processing_status <> new.processing_status
+       or inbox.version <> new.inbox_version
+       or inbox.last_checkpoint_sequence <> new.checkpoint_sequence
+     ))
+     or (new.inbox_item_id is null and (
+       semantic.inbox_item_id is not null
+       or new.inbox_version is not null
+       or new.checkpoint_sequence is not null
+       or new.processing_status is not null
+     ))
+     or (new.inbox_item_id is not null
+       and new.effect_disposition = 'applied_once'
+       and new.processing_status <> 'completed')
+     or (new.inbox_item_id is not null
+       and new.effect_disposition = 'quarantined_no_effect'
+       and new.processing_status <> 'quarantined') then
     raise exception 'webhook semantic commit receipt is cross-wired' using errcode = '23514';
   end if;
   return null;

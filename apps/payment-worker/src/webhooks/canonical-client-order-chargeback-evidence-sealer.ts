@@ -20,11 +20,13 @@ export class CanonicalClientOrderChargebackEvidenceSealerError extends Error {
 }
 
 /** Seals the correlation-bound ArcPay payment GET independently from the signed delivery webhook. */
-export function createCanonicalClientOrderChargebackEvidenceSealer(input: Readonly<{
-  privateObjectStorage: Pick<FinancePrivateObjectStoragePort, "writeImmutable">;
-  artifactRegistry: Pick<FinanceArtifactRegistry, "registerSealedArtifact">;
-  retention: Readonly<{ policyId: string; policyVersion: string }>;
-}>): CanonicalChargebackEvidenceSealer {
+export function createCanonicalClientOrderChargebackEvidenceSealer(
+  input: Readonly<{
+    privateObjectStorage: Pick<FinancePrivateObjectStoragePort, "writeImmutable">;
+    artifactRegistry: Pick<FinanceArtifactRegistry, "registerSealedArtifact">;
+    retention: Readonly<{ policyId: string; policyVersion: string }>;
+  }>
+): CanonicalChargebackEvidenceSealer {
   const retention = normalizeRetention(input.retention);
   return Object.freeze({
     async sealCanonicalChargeback(request) {
@@ -46,11 +48,16 @@ export function createCanonicalClientOrderChargebackEvidenceSealer(input: Readon
         privateObject.sha256Digest !== sha256Digest ||
         privateObject.byteLength !== request.rawCanonicalResponseBytes.byteLength ||
         privateObject.contentType !== "application/json"
-      ) fail("storage_integrity");
+      )
+        fail("storage_integrity");
       let artifact;
       try {
         artifact = await input.artifactRegistry.registerSealedArtifact({
-          artifact: { artifactId, sha256Digest, byteLength: request.rawCanonicalResponseBytes.byteLength },
+          artifact: {
+            artifactId,
+            sha256Digest,
+            byteLength: request.rawCanonicalResponseBytes.byteLength
+          },
           artifactClass: "provider_canonical_read",
           binding: { kind: "provider", providerAccount: request.claim.providerAccount },
           contentType: "application/json",
@@ -66,9 +73,11 @@ export function createCanonicalClientOrderChargebackEvidenceSealer(input: Readon
         artifact.artifactId !== artifactId ||
         artifact.sha256Digest !== sha256Digest ||
         artifact.byteLength !== request.rawCanonicalResponseBytes.byteLength
-      ) fail("registration");
+      )
+        fail("registration");
       return Object.freeze({
         kind: "verified_webhook_semantic_evidence",
+        sourceDelivery: "webhook",
         providerAccount: request.claim.providerAccount,
         webhookId: request.claim.webhookId,
         semanticSourceKind: "chargeback",
@@ -87,7 +96,9 @@ export function createCanonicalClientOrderChargebackEvidenceSealer(input: Readon
   } satisfies CanonicalChargebackEvidenceSealer);
 }
 
-function assertInput(request: Parameters<CanonicalChargebackEvidenceSealer["sealCanonicalChargeback"]>[0]): void {
+function assertInput(
+  request: Parameters<CanonicalChargebackEvidenceSealer["sealCanonicalChargeback"]>[0]
+): void {
   if (
     !identifier(request.economicPaymentIntentId) ||
     !uuid(request.claim.webhookId) ||
@@ -95,33 +106,50 @@ function assertInput(request: Parameters<CanonicalChargebackEvidenceSealer["seal
     !positiveMinor(request.disputedPrincipalMinor) ||
     !Number.isFinite(Date.parse(request.observedAt)) ||
     request.rawCanonicalResponseBytes.byteLength < 1
-  ) fail("invalid_input");
+  )
+    fail("invalid_input");
 }
 
-function factDigest(request: Parameters<CanonicalChargebackEvidenceSealer["sealCanonicalChargeback"]>[0]): FinanceDigest {
-  return digest(new TextEncoder().encode(JSON.stringify({
-    kind: "arc_pay_client_order_chargeback_provisional",
-    schemaVersion: 1,
-    providerAccount: request.claim.providerAccount,
-    webhookId: request.claim.webhookId,
-    economicPaymentIntentId: request.economicPaymentIntentId,
-    providerPaymentId: request.providerPaymentId,
-    disputedPrincipalMinor: String(request.disputedPrincipalMinor),
-    currency: "RUB"
-  })));
+function factDigest(
+  request: Parameters<CanonicalChargebackEvidenceSealer["sealCanonicalChargeback"]>[0]
+): FinanceDigest {
+  return digest(
+    new TextEncoder().encode(
+      JSON.stringify({
+        kind: "arc_pay_client_order_chargeback_provisional",
+        schemaVersion: 1,
+        providerAccount: request.claim.providerAccount,
+        webhookId: request.claim.webhookId,
+        economicPaymentIntentId: request.economicPaymentIntentId,
+        providerPaymentId: request.providerPaymentId,
+        disputedPrincipalMinor: String(request.disputedPrincipalMinor),
+        currency: "RUB"
+      })
+    )
+  );
 }
 
 function normalizeRetention(input: Readonly<{ policyId: string; policyVersion: string }>) {
-  if (!identifier(input.policyId) || !/^[1-9][0-9]*$/.test(input.policyVersion)) fail("invalid_input");
+  if (!identifier(input.policyId) || !/^[1-9][0-9]*$/.test(input.policyVersion))
+    fail("invalid_input");
   return Object.freeze({ policyId: input.policyId, policyVersion: input.policyVersion });
 }
 
 function identifier(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 160 && value.trim() === value && !hasAsciiControlCharacter(value);
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= 160 &&
+    value.trim() === value &&
+    !hasAsciiControlCharacter(value)
+  );
 }
 
 function uuid(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
 }
 
 function positiveMinor(value: unknown): value is number {

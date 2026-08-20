@@ -26,6 +26,10 @@ export type ArcPayCanonicalCapturedPayment = Readonly<{
   observedAt: string;
 }>;
 
+export type ArcPayCapturedPaymentList = Readonly<{
+  payments: readonly ArcPayCanonicalCapturedPayment[];
+}>;
+
 /** A correlated provider resource observation; it is not itself permission to move money. */
 export type ArcPayCanonicalPaymentOutcome = Readonly<{
   providerPaymentId: string;
@@ -150,6 +154,30 @@ export function createArcPayCanonicalPaymentReader(
     return observation;
   };
   return Object.freeze({
+    async listCapturedPayments(input) {
+      const pageSize = positivePageSize(input.pageSize);
+      const expectedExternalId = externalId(input.expectedExternalId);
+      const expectedAmountMinor = positiveMinor(input.expectedAmountMinor, "invalid_input");
+      if (input.expectedCurrency !== "RUB") fail("currency");
+      if (!config.apiSecret?.trim()) fail("not_configured");
+      const rawResponseBytes = await fetchJson({
+        apiBaseUrl,
+        apiSecret: config.apiSecret,
+        path: `/v1/payments?status=captured&page_size=${pageSize}`,
+        fetchImpl
+      });
+      const payments = parsePaymentList(parseJson(rawResponseBytes))
+        .map((payment) => parsePaymentOutcome(payment, uuid(payment.id)))
+        .filter(
+          (payment): payment is ArcPayCanonicalCapturedPayment =>
+            payment.externalId === expectedExternalId &&
+            payment.status === "captured" &&
+            payment.amountMinor === expectedAmountMinor &&
+            payment.capturedAmountMinor === expectedAmountMinor &&
+            payment.currency === "RUB"
+        );
+      return Object.freeze({ payments });
+    },
     async readCapturedPayment(input) {
       const observation = await readPaymentOutcome(input);
       if (observation.payment.status !== "captured" && observation.payment.status !== "settled") {
@@ -251,6 +279,14 @@ export function createArcPayCanonicalPaymentReader(
 }
 
 export type ArcPayCanonicalPaymentReader = Readonly<{
+  listCapturedPayments(
+    input: Readonly<{
+      pageSize: number;
+      expectedExternalId: string;
+      expectedAmountMinor: number;
+      expectedCurrency: "RUB";
+    }>
+  ): Promise<ArcPayCapturedPaymentList>;
   readCapturedPayment(
     input: Readonly<{
       providerPaymentId: string;
@@ -393,6 +429,16 @@ function parsePaymentOutcome(
     currency: "RUB",
     status,
     observedAt: payload.updated_at as string
+  });
+}
+
+function parsePaymentList(payload: Record<string, unknown>): readonly Record<string, unknown>[] {
+  if (!Array.isArray(payload.payments)) fail("response");
+  return payload.payments.map((payment) => {
+    if (typeof payment !== "object" || payment === null || Array.isArray(payment)) {
+      fail("response");
+    }
+    return payment as Record<string, unknown>;
   });
 }
 
@@ -609,6 +655,13 @@ function positiveMinor(value: unknown, reason: "amount" | "response" | "invalid_
 
 function nonNegativeMinor(value: unknown, reason: "amount" | "response" | "invalid_input"): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) fail(reason);
+  return value as number;
+}
+
+function positivePageSize(value: unknown): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1 || (value as number) > 100) {
+    fail("invalid_input");
+  }
   return value as number;
 }
 

@@ -46,6 +46,7 @@ import {
   OnlineSaleCapturePersistenceResolutionError
 } from "./drizzle-online-sale-capture-persistence-resolver";
 import {
+  applyVerifiedProviderCanonicalSemanticFactInTransaction,
   applyVerifiedWebhookSemanticFactInTransaction,
   WebhookInboxProcessingPersistenceError
 } from "./drizzle-webhook-inbox-processing-uow";
@@ -174,7 +175,12 @@ export function createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork(
 }
 
 const defaultTransactionOps: TransactionOps = Object.freeze({
-  applySemanticFact: applyVerifiedWebhookSemanticFactInTransaction,
+  applySemanticFact(transaction, workerId, command) {
+    if ("inboxItemId" in command) {
+      return applyVerifiedWebhookSemanticFactInTransaction(transaction, workerId, command);
+    }
+    return applyVerifiedProviderCanonicalSemanticFactInTransaction(transaction, command);
+  },
   applyCaptureFact: ensureCanonicalClientOrderCaptureFactInTransaction,
   commitOnlineSaleCapture: commitOnlineSaleCaptureInTransaction,
   applyEconomicEffects: applyOnlineSaleCaptureEconomicEffectsInTransaction
@@ -547,7 +553,8 @@ function assertCanonicalClientOrderSemanticReceipt(
     receipt.economicPaymentIntentId !== command.capture.economicPaymentIntentId ||
     receipt.economicPaymentSessionId === null ||
     receipt.providerPaymentId === null ||
-    receipt.semanticSourceId !== createCapturedProviderPaymentSemanticSourceId(receipt.providerPaymentId) ||
+    receipt.semanticSourceId !==
+      createCapturedProviderPaymentSemanticSourceId(receipt.providerPaymentId) ||
     receipt.amountMinor === null ||
     receipt.currency !== "RUB"
   ) {

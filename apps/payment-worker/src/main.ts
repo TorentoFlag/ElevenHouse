@@ -11,6 +11,7 @@ import {
   createDrizzleRefundedClientOrderWebhookClaimPort,
   createDrizzleChargebackClientOrderWebhookClaimPort,
   createDrizzleCapturedClientOrderWebhookCorrelationPort,
+  createDrizzleClientOrderHostedCheckoutCaptureReconciliationReader,
   createDrizzleClientCheckoutProviderTransportUnknownUnitOfWork,
   createDrizzleOrderStore,
   createDrizzlePaymentStore,
@@ -120,6 +121,10 @@ import {
   startProviderOperationDispatchInterval
 } from "./provider-operations/provider-operation-dispatch-processor";
 import {
+  createClientOrderHostedCheckoutCaptureReconciliationProcessor,
+  startClientOrderHostedCheckoutCaptureReconciliationInterval
+} from "./provider-operations/client-order-hosted-checkout-capture-reconciliation-processor";
+import {
   createSavedCardSetupTerminalReconciliationProcessor,
   startSavedCardSetupTerminalReconciliationInterval
 } from "./provider-operations/saved-card-setup-terminal-reconciliation-processor";
@@ -205,6 +210,20 @@ async function startPaymentWorker(): Promise<void> {
     const restrictedCredentialVault =
       createFinanceRestrictedProviderCredentialVault(privateStorage);
     const canonicalCaptureWorkerId = `${service}:${process.env.HOSTNAME ?? "local"}:${process.pid}`;
+    const canonicalPaymentReader = createArcPayCanonicalPaymentReader(config.arcPay);
+    const canonicalCaptureEvidenceSealer = createCanonicalClientOrderCaptureEvidenceSealer({
+      privateObjectStorage: privateStorage,
+      artifactRegistry,
+      retention: config.financeProviderDispatch.canonicalReadArtifactRetention
+    });
+    const canonicalCaptureCommitAdapter = createCanonicalClientOrderOnlineSaleCaptureCommitAdapter({
+      processorVersion: 1,
+      capture: createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork({
+        database: postgresRuntime.database,
+        workerId: canonicalCaptureWorkerId,
+        mutationResolver: createDrizzleOnlineSaleCapturePersistenceResolver()
+      })
+    });
     const canonicalClientOrderCapture = createCanonicalClientOrderCaptureProcessor({
       claims: createDrizzleCapturedClientOrderWebhookClaimPort({
         database: postgresRuntime.database,
@@ -220,23 +239,12 @@ async function startPaymentWorker(): Promise<void> {
         artifactRegistry,
         privateObjectStorage: privateStorage
       }),
-      canonicalPayments: createArcPayCanonicalPaymentReader(config.arcPay),
+      canonicalPayments: canonicalPaymentReader,
       correlations: createDrizzleCapturedClientOrderWebhookCorrelationPort(
         postgresRuntime.database
       ),
-      evidence: createCanonicalClientOrderCaptureEvidenceSealer({
-        privateObjectStorage: privateStorage,
-        artifactRegistry,
-        retention: config.financeProviderDispatch.canonicalReadArtifactRetention
-      }),
-      commit: createCanonicalClientOrderOnlineSaleCaptureCommitAdapter({
-        processorVersion: 1,
-        capture: createDrizzleOnlineSaleCaptureCanonicalWebhookUnitOfWork({
-          database: postgresRuntime.database,
-          workerId: canonicalCaptureWorkerId,
-          mutationResolver: createDrizzleOnlineSaleCapturePersistenceResolver()
-        })
-      })
+      evidence: canonicalCaptureEvidenceSealer,
+      commit: canonicalCaptureCommitAdapter
     });
     startCanonicalClientOrderCaptureInterval({
       processor: canonicalClientOrderCapture,
@@ -248,6 +256,27 @@ async function startPaymentWorker(): Promise<void> {
       },
       onError: (error) =>
         logger.error("canonical client-order capture tick failed", { error: serializeError(error) })
+    });
+    startClientOrderHostedCheckoutCaptureReconciliationInterval({
+      processor: createClientOrderHostedCheckoutCaptureReconciliationProcessor({
+        candidates: createDrizzleClientOrderHostedCheckoutCaptureReconciliationReader(
+          postgresRuntime.database
+        ),
+        canonicalPayments: canonicalPaymentReader,
+        evidence: canonicalCaptureEvidenceSealer,
+        commit: canonicalCaptureCommitAdapter,
+        batchSize: config.financeProviderDispatch.batchSize
+      }),
+      intervalMs: config.financeProviderDispatch.intervalMs,
+      onResult: (result) => {
+        if (result.committed > 0 || result.replayed > 0) {
+          logger.info("client-order hosted checkout reconciliation tick completed", result);
+        }
+      },
+      onError: (error) =>
+        logger.error("client-order hosted checkout reconciliation tick failed", {
+          error: serializeError(error)
+        })
     });
     startClientOrderCaptureDispatchInterval({
       processor: createClientOrderCaptureDispatchProcessor({

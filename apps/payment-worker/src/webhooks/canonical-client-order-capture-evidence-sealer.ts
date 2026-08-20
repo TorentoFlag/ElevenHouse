@@ -89,6 +89,7 @@ export function createCanonicalClientOrderCaptureEvidenceSealer(
       }
       return Object.freeze({
         kind: "verified_webhook_semantic_evidence",
+        sourceDelivery: "webhook",
         providerAccount: request.correlation.providerAccount,
         webhookId: request.claim.webhookId,
         semanticSourceKind: "payment_transition",
@@ -102,6 +103,77 @@ export function createCanonicalClientOrderCaptureEvidenceSealer(
         currency: "RUB",
         purpose: "client_order",
         canonicalFactDigest: capturedPaymentFactDigest(request),
+        artifact,
+        observedAt: request.canonicalPayment.observedAt
+      }) as VerifiedWebhookSemanticEvidence;
+    },
+    async sealCanonicalCaptureFromProviderRead(request) {
+      assertProviderReadInput(request);
+      const responseDigest = digest(request.rawCanonicalResponseBytes);
+      const artifactId = canonicalArtifactId(
+        request.canonicalPayment.providerPaymentId,
+        responseDigest
+      );
+      let privateObject;
+      try {
+        privateObject = await input.privateObjectStorage.writeImmutable({
+          artifactId,
+          contentType: "application/json",
+          bytes: request.rawCanonicalResponseBytes,
+          expectedSha256Digest: responseDigest
+        });
+      } catch {
+        fail("storage");
+      }
+      if (
+        privateObject.sha256Digest !== responseDigest ||
+        privateObject.byteLength !== request.rawCanonicalResponseBytes.byteLength ||
+        privateObject.contentType !== "application/json"
+      ) {
+        fail("storage_integrity");
+      }
+      let artifact;
+      try {
+        artifact = await input.artifactRegistry.registerSealedArtifact({
+          artifact: {
+            artifactId,
+            sha256Digest: responseDigest,
+            byteLength: request.rawCanonicalResponseBytes.byteLength
+          },
+          artifactClass: "provider_canonical_read",
+          binding: { kind: "provider", providerAccount: request.correlation.providerAccount },
+          contentType: "application/json",
+          privateObject,
+          retentionPolicyId: retention.policyId,
+          retentionPolicyVersion: retention.policyVersion
+        });
+      } catch {
+        fail("registration");
+      }
+      if (
+        "bankCashPoolId" in artifact ||
+        artifact.artifactId !== artifactId ||
+        artifact.sha256Digest !== responseDigest ||
+        artifact.byteLength !== request.rawCanonicalResponseBytes.byteLength
+      ) {
+        fail("registration");
+      }
+      return Object.freeze({
+        kind: "verified_webhook_semantic_evidence",
+        sourceDelivery: "provider_canonical_read",
+        providerAccount: request.correlation.providerAccount,
+        webhookId: null,
+        semanticSourceKind: "payment_transition",
+        semanticSourceId: createCapturedProviderPaymentSemanticSourceId(
+          request.canonicalPayment.providerPaymentId
+        ),
+        economicPaymentIntentId: request.correlation.economicPaymentIntentId,
+        economicPaymentSessionId: request.correlation.economicPaymentSessionId,
+        providerPaymentId: request.canonicalPayment.providerPaymentId,
+        amountMinor: String(request.canonicalPayment.amountMinor),
+        currency: "RUB",
+        purpose: "client_order",
+        canonicalFactDigest: capturedProviderReadPaymentFactDigest(request),
         artifact,
         observedAt: request.canonicalPayment.observedAt
       }) as VerifiedWebhookSemanticEvidence;
@@ -129,6 +201,46 @@ function assertInput(
 
 function capturedPaymentFactDigest(
   request: Parameters<CanonicalCaptureEvidenceSealer["sealCanonicalCapture"]>[0]
+): FinanceDigest {
+  return digest(
+    new TextEncoder().encode(
+      JSON.stringify({
+        kind: "arc_pay_client_order_captured_payment",
+        schemaVersion: 1,
+        providerAccount: {
+          seriesId: request.correlation.providerAccount.seriesId,
+          providerAccountId: request.correlation.providerAccount.providerAccountId,
+          identityVersion: request.correlation.providerAccount.identityVersion
+        },
+        providerPaymentId: request.canonicalPayment.providerPaymentId,
+        externalId: request.correlation.externalId,
+        amountMinor: String(request.canonicalPayment.amountMinor),
+        currency: "RUB"
+      })
+    )
+  );
+}
+
+function assertProviderReadInput(
+  request: Parameters<CanonicalCaptureEvidenceSealer["sealCanonicalCaptureFromProviderRead"]>[0]
+): void {
+  if (
+    request.canonicalPayment.providerPaymentId.length < 1 ||
+    request.canonicalPayment.externalId !== request.correlation.externalId ||
+    request.canonicalPayment.amountMinor < 1 ||
+    request.canonicalPayment.capturedAmountMinor !== request.canonicalPayment.amountMinor ||
+    request.canonicalPayment.currency !== "RUB" ||
+    (request.canonicalPayment.status !== "captured" &&
+      request.canonicalPayment.status !== "settled") ||
+    !Number.isFinite(Date.parse(request.canonicalPayment.observedAt)) ||
+    request.rawCanonicalResponseBytes.byteLength < 1
+  ) {
+    fail("invalid_input");
+  }
+}
+
+function capturedProviderReadPaymentFactDigest(
+  request: Parameters<CanonicalCaptureEvidenceSealer["sealCanonicalCaptureFromProviderRead"]>[0]
 ): FinanceDigest {
   return digest(
     new TextEncoder().encode(

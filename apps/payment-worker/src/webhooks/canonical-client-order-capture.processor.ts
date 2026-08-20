@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type {
   FinanceDigest,
   FinanceProviderAccountIdentity,
-  ResolvedFinanceOperationEnvelope,
+  CapturedClientOrderCorrelation,
   VerifiedWebhookSemanticEvidence,
   WebhookProcessingErrorClass
 } from "@elevenhouse/domain/finance-core";
@@ -50,18 +50,6 @@ export type ClaimedWebhookArtifactResolver = Readonly<{
   loadClaimedWebhookBytes(claim: ClaimedWebhookArtifactClaim): Promise<Uint8Array>;
 }>;
 
-export type CapturedClientOrderCorrelation = Readonly<{
-  /** The canonical ArcPay `external_id`, resolved by a DB lock to exactly one active checkout. */
-  externalId: string;
-  providerAccount: FinanceProviderAccountIdentity;
-  economicPaymentIntentId: string;
-  economicPaymentSessionId: string;
-  expectedEconomicPaymentVersion: number;
-  expectedAmountMinor: string;
-  expectedCurrency: "RUB";
-  operationEnvelope: ResolvedFinanceOperationEnvelope;
-}>;
-
 export type CapturedClientOrderWebhookClaimPort = Readonly<{
   claimNextCapturedClientOrderWebhook(): Promise<ClaimedCapturedClientOrderWebhook | null>;
   recordFailure(
@@ -94,6 +82,13 @@ export type CanonicalCaptureEvidenceSealer = Readonly<{
   sealCanonicalCapture(
     input: Readonly<{
       claim: ClaimedCapturedClientOrderWebhook;
+      correlation: CapturedClientOrderCorrelation;
+      canonicalPayment: ArcPayCanonicalCapturedPayment;
+      rawCanonicalResponseBytes: Uint8Array;
+    }>
+  ): Promise<VerifiedWebhookSemanticEvidence>;
+  sealCanonicalCaptureFromProviderRead(
+    input: Readonly<{
       correlation: CapturedClientOrderCorrelation;
       canonicalPayment: ArcPayCanonicalCapturedPayment;
       rawCanonicalResponseBytes: Uint8Array;
@@ -230,10 +225,7 @@ function parseClaimedCapturedWebhook(
     if (error instanceof ArcPayWebhookPayloadError) fail("claimed_webhook_invalid");
     throw error;
   }
-  if (
-    event.type !== "payment.captured" ||
-    event.providerWebhookId !== claim.webhookId
-  ) {
+  if (event.type !== "payment.captured" || event.providerWebhookId !== claim.webhookId) {
     fail("claimed_webhook_invalid");
   }
   return event;
@@ -296,8 +288,10 @@ function assertSemanticEvidence(
 ): void {
   if (
     evidence.semanticSourceKind !== "payment_transition" ||
-    evidence.semanticSourceId !== createCapturedProviderPaymentSemanticSourceId(payment.providerPaymentId) ||
+    evidence.semanticSourceId !==
+      createCapturedProviderPaymentSemanticSourceId(payment.providerPaymentId) ||
     evidence.purpose !== "client_order" ||
+    evidence.sourceDelivery !== "webhook" ||
     evidence.webhookId !== claim.webhookId ||
     !sameProviderAccount(evidence.providerAccount, claim.providerAccount) ||
     evidence.economicPaymentIntentId !== correlation.economicPaymentIntentId ||

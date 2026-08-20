@@ -1,13 +1,14 @@
 import type {
+  CapturedClientOrderCorrelation,
   OnlineSaleCaptureCanonicalCaptureUnitOfWork,
   VerifiedWebhookSemanticEvidence
 } from "@elevenhouse/domain/finance-core";
 
 import type {
   CanonicalClientOrderWebhookCommitPort,
-  ClaimedCapturedClientOrderWebhook,
-  CapturedClientOrderCorrelation
+  ClaimedCapturedClientOrderWebhook
 } from "./canonical-client-order-capture.processor";
+import type { ClientOrderHostedCheckoutCaptureReconciliationCommitPort } from "../provider-operations/client-order-hosted-checkout-capture-reconciliation-processor";
 
 /**
  * Worker composition for HPP captures. It preserves one lower-level composite UoW and exposes no
@@ -18,7 +19,8 @@ export function createCanonicalClientOrderOnlineSaleCaptureCommitAdapter(
     processorVersion: number;
     capture: OnlineSaleCaptureCanonicalCaptureUnitOfWork;
   }>
-): CanonicalClientOrderWebhookCommitPort {
+): CanonicalClientOrderWebhookCommitPort &
+  ClientOrderHostedCheckoutCaptureReconciliationCommitPort {
   const processorVersion = positiveInteger(input.processorVersion);
   return Object.freeze({
     async commitCapturedClientOrder({ claim, correlation, semanticEvidence }) {
@@ -31,8 +33,19 @@ export function createCanonicalClientOrderOnlineSaleCaptureCommitAdapter(
         })
       );
       return Object.freeze({ effect: committed.effect });
+    },
+    async commitCapturedClientOrderFromProviderRead({ correlation, semanticEvidence }) {
+      const committed = await input.capture.applyCanonicalOnlineSaleCapture(
+        commandForCapturedClientOrderProviderRead({
+          correlation,
+          semanticEvidence,
+          processorVersion
+        })
+      );
+      return Object.freeze({ effect: committed.effect });
     }
-  } satisfies CanonicalClientOrderWebhookCommitPort);
+  } satisfies CanonicalClientOrderWebhookCommitPort &
+    ClientOrderHostedCheckoutCaptureReconciliationCommitPort);
 }
 
 function commandForCapturedClientOrder(
@@ -48,6 +61,27 @@ function commandForCapturedClientOrder(
       inboxItemId: input.claim.inboxItemId,
       expectedInboxVersion: input.claim.inboxVersion,
       expectedCheckpointSequence: input.claim.expectedCheckpointSequence,
+      processorVersion: input.processorVersion,
+      semanticEvidence: input.semanticEvidence,
+      operationEnvelope: input.correlation.operationEnvelope
+    }),
+    capture: Object.freeze({
+      economicPaymentIntentId: input.correlation.economicPaymentIntentId,
+      expectedEconomicPaymentVersion: input.correlation.expectedEconomicPaymentVersion,
+      operationEnvelope: input.correlation.operationEnvelope
+    })
+  });
+}
+
+function commandForCapturedClientOrderProviderRead(
+  input: Readonly<{
+    correlation: CapturedClientOrderCorrelation;
+    semanticEvidence: VerifiedWebhookSemanticEvidence;
+    processorVersion: number;
+  }>
+): Parameters<OnlineSaleCaptureCanonicalCaptureUnitOfWork["applyCanonicalOnlineSaleCapture"]>[0] {
+  return Object.freeze({
+    semanticFact: Object.freeze({
       processorVersion: input.processorVersion,
       semanticEvidence: input.semanticEvidence,
       operationEnvelope: input.correlation.operationEnvelope

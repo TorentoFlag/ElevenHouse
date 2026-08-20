@@ -72,6 +72,7 @@ export * from "./drizzle-webhook-ingress-storage-uow";
 export * from "./drizzle-webhook-inbox-processing-uow";
 export * from "./drizzle-captured-client-order-webhook-claim-port";
 export * from "./drizzle-captured-client-order-webhook-correlation-port";
+export * from "./drizzle-client-order-hosted-checkout-capture-reconciliation-reader";
 export * from "./drizzle-merchant-payout-statement-ingestion-uow";
 export * from "./drizzle-provider-operation-intent-creation-uow";
 export * from "./drizzle-refund-approval-uow";

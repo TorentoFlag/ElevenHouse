@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import {
   createProviderAccountIdentityBinding,
+  type ApplyVerifiedProviderCanonicalSemanticFactCommand,
   type ApplyVerifiedWebhookSemanticFactCommand,
   type FinanceDigest,
   type FinanceProviderAccountIdentity,
@@ -47,6 +48,7 @@ const commandKeys = [
 ] as const;
 const semanticCommonKeys = [
   "kind",
+  "sourceDelivery",
   "providerAccount",
   "webhookId",
   "semanticSourceKind",
@@ -117,7 +119,8 @@ export type NormalizedVerifiedWebhookSemanticFactCommand = Readonly<{
   processorVersion: number;
   semanticEvidence: Readonly<{
     providerAccount: FinanceProviderAccountIdentity;
-    webhookId: string;
+    sourceDelivery: "webhook" | "provider_canonical_read";
+    webhookId: string | null;
     semanticSourceKind: "payment_transition" | "refund" | "chargeback" | "settlement_entry";
     semanticSourceId: string;
     economicPaymentIntentId: string;
@@ -132,6 +135,11 @@ export type NormalizedVerifiedWebhookSemanticFactCommand = Readonly<{
   }>;
   operationEnvelope: ResolvedFinanceOperationEnvelope;
 }>;
+
+export type NormalizedVerifiedProviderCanonicalSemanticFactCommand = Omit<
+  NormalizedVerifiedWebhookSemanticFactCommand,
+  "inboxItemId" | "expectedInboxVersion" | "expectedCheckpointSequence"
+>;
 
 /**
  * Applies one canonical semantic fact only after a separate worker has claimed the inbox item.
@@ -190,6 +198,20 @@ export async function applyVerifiedWebhookSemanticFactInTransaction<
     transaction,
     identifier(workerId),
     normalizeVerifiedWebhookSemanticFactCommand(input),
+    afterWriteBoundary
+  );
+}
+
+export async function applyVerifiedProviderCanonicalSemanticFactInTransaction<
+  TSchema extends Record<string, unknown>
+>(
+  transaction: FinanceTransaction<TSchema>,
+  input: ApplyVerifiedProviderCanonicalSemanticFactCommand,
+  afterWriteBoundary: WebhookInboxProcessingFailureInjector = noFailureInjection
+): Promise<WebhookSemanticCommitReceipt> {
+  return applyNormalizedProviderCanonicalSemanticFactInTransaction(
+    transaction,
+    normalizeVerifiedProviderCanonicalSemanticFactCommand(input),
     afterWriteBoundary
   );
 }
@@ -283,6 +305,95 @@ async function applyNormalizedWebhookSemanticFactInTransaction<
   return mapReceipt(receipt, "applied_once");
 }
 
+async function applyNormalizedProviderCanonicalSemanticFactInTransaction<
+  TSchema extends Record<string, unknown>
+>(
+  transaction: FinanceTransaction<TSchema>,
+  command: NormalizedVerifiedProviderCanonicalSemanticFactCommand,
+  afterWriteBoundary: WebhookInboxProcessingFailureInjector
+): Promise<WebhookSemanticCommitReceipt> {
+  if (
+    command.semanticEvidence.sourceDelivery !== "provider_canonical_read" ||
+    command.semanticEvidence.webhookId !== null
+  ) {
+    fail("invalid_command");
+  }
+  await lockEconomicFacts(transaction, command);
+  await validateCanonicalArtifact(transaction, command);
+  await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(
+    ${semanticAdvisoryKey(command.semanticEvidence)}, 0
+  ))`);
+
+  const existing = await findSemanticFact(transaction, command.semanticEvidence);
+  if (existing) {
+    assertExistingSemanticFact(existing, command.semanticEvidence);
+    const existingReceipt = await findSemanticReceipt(transaction, existing.id);
+    if (!existingReceipt) fail("semantic_receipt_missing");
+    return mapReceipt(existingReceipt, "semantic_replay");
+  }
+
+  const semanticFactId = semanticFactIdFor(command.semanticEvidence);
+  const [semanticFact] = await transaction
+    .insert(financeProviderSemanticFacts)
+    .values({
+      id: semanticFactId,
+      inboxItemId: null,
+      seriesId: command.semanticEvidence.providerAccount.seriesId,
+      providerAccountId: command.semanticEvidence.providerAccount.providerAccountId,
+      providerIdentityVersion: command.semanticEvidence.providerAccount.identityVersion,
+      economicPaymentIntentId: command.semanticEvidence.economicPaymentIntentId,
+      economicPaymentSessionId: command.semanticEvidence.economicPaymentSessionId,
+      semanticSourceKind: command.semanticEvidence.semanticSourceKind,
+      semanticSourceId: command.semanticEvidence.semanticSourceId,
+      providerPaymentId: command.semanticEvidence.providerPaymentId,
+      amountMinor:
+        command.semanticEvidence.amountMinor === null
+          ? null
+          : encodeFinanceNumeric38(command.semanticEvidence.amountMinor),
+      currency: command.semanticEvidence.currency,
+      purpose: command.semanticEvidence.purpose,
+      canonicalFactDigest: command.semanticEvidence.canonicalFactDigest,
+      evidenceArtifactId: command.semanticEvidence.artifact.artifactId,
+      evidenceArtifactDigest: command.semanticEvidence.artifact.sha256Digest,
+      effectDisposition: "applied_once",
+      observedAt: command.semanticEvidence.observedAt
+    })
+    .returning();
+  if (!semanticFact) fail("persistence_write_incomplete");
+  await afterWriteBoundary("semantic_fact");
+
+  const [receipt] = await transaction
+    .insert(financeWebhookSemanticCommitReceipts)
+    .values({
+      semanticFactId: semanticFact.id,
+      inboxItemId: null,
+      inboxVersion: null,
+      checkpointSequence: null,
+      processingStatus: null,
+      seriesId: semanticFact.seriesId,
+      providerAccountId: semanticFact.providerAccountId,
+      providerIdentityVersion: semanticFact.providerIdentityVersion,
+      economicPaymentIntentId: semanticFact.economicPaymentIntentId,
+      economicPaymentSessionId: semanticFact.economicPaymentSessionId,
+      semanticSourceKind: semanticFact.semanticSourceKind,
+      semanticSourceId: semanticFact.semanticSourceId,
+      providerPaymentId: semanticFact.providerPaymentId,
+      amountMinor: semanticFact.amountMinor,
+      currency: semanticFact.currency,
+      purpose: semanticFact.purpose,
+      canonicalFactDigest: semanticFact.canonicalFactDigest,
+      evidenceArtifactId: semanticFact.evidenceArtifactId,
+      evidenceArtifactDigest: semanticFact.evidenceArtifactDigest,
+      effectDisposition: semanticFact.effectDisposition,
+      observedAt: semanticFact.observedAt,
+      semanticFactCommittedAt: semanticFact.committedAt
+    })
+    .returning();
+  if (!receipt) fail("persistence_write_incomplete");
+  await afterWriteBoundary("semantic_commit_receipt");
+  return mapReceipt(receipt, "applied_once");
+}
+
 async function lockClaimedInbox<TSchema extends Record<string, unknown>>(
   transaction: FinanceTransaction<TSchema>,
   workerId: string,
@@ -320,7 +431,7 @@ async function lockClaimedInbox<TSchema extends Record<string, unknown>>(
 
 async function lockEconomicFacts<TSchema extends Record<string, unknown>>(
   transaction: FinanceTransaction<TSchema>,
-  command: NormalizedVerifiedWebhookSemanticFactCommand
+  command: Pick<NormalizedVerifiedWebhookSemanticFactCommand, "semanticEvidence">
 ): Promise<void> {
   const evidence = command.semanticEvidence;
   const [intent] = await transaction
@@ -362,7 +473,10 @@ async function lockEconomicFacts<TSchema extends Record<string, unknown>>(
 
 async function validateCanonicalArtifact<TSchema extends Record<string, unknown>>(
   transaction: FinanceTransaction<TSchema>,
-  command: NormalizedVerifiedWebhookSemanticFactCommand
+  command: Pick<
+    NormalizedVerifiedWebhookSemanticFactCommand,
+    "semanticEvidence" | "operationEnvelope"
+  >
 ): Promise<void> {
   const evidence = command.semanticEvidence;
   const [row] = await transaction
@@ -499,12 +613,15 @@ function mapReceipt(
   )
     fail("persistence_write_incomplete");
   const sourceKind = semanticSourceKind(row.semanticSourceKind);
+  const sourceDelivery = row.inboxItemId === null ? "provider_canonical_read" : "webhook";
   const receipt = Object.freeze({
     kind: "webhook_semantic_commit_receipt" as const,
+    sourceDelivery,
     receiptId: row.id,
     inboxItemId: row.inboxItemId,
-    inboxVersion: revision(row.inboxVersion, false),
-    committedCheckpointSequence: revision(row.checkpointSequence, false),
+    inboxVersion: row.inboxVersion === null ? null : revision(row.inboxVersion, false),
+    committedCheckpointSequence:
+      row.checkpointSequence === null ? null : revision(row.checkpointSequence, false),
     semanticFactId: row.semanticFactId,
     semanticSourceKind: sourceKind,
     semanticSourceId: row.semanticSourceId,
@@ -540,6 +657,9 @@ export function normalizeVerifiedWebhookSemanticFactCommand(
     const expectedCheckpointSequence = positiveInteger(command.expectedCheckpointSequence);
     const processorVersion = positiveInteger(command.processorVersion);
     const semanticEvidence = normalizeSemanticEvidence(command.semanticEvidence);
+    if (semanticEvidence.sourceDelivery !== "webhook" || semanticEvidence.webhookId === null) {
+      fail("invalid_command");
+    }
     const operationEnvelope = normalizeEnvelope(command.operationEnvelope);
     if (semanticEvidence.artifact.byteLength > operationEnvelope.maximumArtifactBytes)
       fail("invalid_command");
@@ -554,11 +674,33 @@ export function normalizeVerifiedWebhookSemanticFactCommand(
   });
 }
 
+export function normalizeVerifiedProviderCanonicalSemanticFactCommand(
+  command: ApplyVerifiedProviderCanonicalSemanticFactCommand
+): NormalizedVerifiedProviderCanonicalSemanticFactCommand {
+  return boundary(() => {
+    exactRecord(command, ["processorVersion", "semanticEvidence", "operationEnvelope"]);
+    const processorVersion = positiveInteger(command.processorVersion);
+    const semanticEvidence = normalizeSemanticEvidence(command.semanticEvidence);
+    if (
+      semanticEvidence.sourceDelivery !== "provider_canonical_read" ||
+      semanticEvidence.webhookId !== null
+    ) {
+      fail("invalid_command");
+    }
+    const operationEnvelope = normalizeEnvelope(command.operationEnvelope);
+    if (semanticEvidence.artifact.byteLength > operationEnvelope.maximumArtifactBytes) {
+      fail("invalid_command");
+    }
+    return Object.freeze({ processorVersion, semanticEvidence, operationEnvelope });
+  });
+}
+
 function normalizeSemanticEvidence(value: VerifiedWebhookSemanticEvidence) {
   exactRecord(value, semanticCommonKeys);
   if (value.kind !== "verified_webhook_semantic_evidence") fail("invalid_command");
   const raw = value as unknown as Readonly<{
     providerAccount: unknown;
+    sourceDelivery: unknown;
     webhookId: unknown;
     semanticSourceKind: unknown;
     semanticSourceId: unknown;
@@ -575,10 +717,12 @@ function normalizeSemanticEvidence(value: VerifiedWebhookSemanticEvidence) {
   exactRecord(raw.providerAccount, providerIdentityKeys);
   const providerAccount = createProviderAccountIdentityBinding(raw.providerAccount);
   const sourceKind = semanticSourceKind(raw.semanticSourceKind);
+  const sourceDelivery = sourceDeliveryKind(raw.sourceDelivery);
   const economicPaymentIntentId = identifier(raw.economicPaymentIntentId);
   const result = {
     providerAccount,
-    webhookId: identifier(raw.webhookId),
+    sourceDelivery,
+    webhookId: raw.webhookId === null ? null : identifier(raw.webhookId),
     semanticSourceKind: sourceKind,
     semanticSourceId: identifier(raw.semanticSourceId),
     economicPaymentIntentId,
@@ -594,6 +738,8 @@ function normalizeSemanticEvidence(value: VerifiedWebhookSemanticEvidence) {
   };
   const transition = sourceKind === "payment_transition";
   if (
+    (sourceDelivery === "webhook" && result.webhookId === null) ||
+    (sourceDelivery === "provider_canonical_read" && result.webhookId !== null) ||
     (transition &&
       (result.economicPaymentSessionId === null ||
         result.providerPaymentId === null ||
@@ -757,6 +903,11 @@ function semanticSourceKind(
   ) {
     fail("invalid_command");
   }
+  return value;
+}
+
+function sourceDeliveryKind(value: unknown): "webhook" | "provider_canonical_read" {
+  if (value !== "webhook" && value !== "provider_canonical_read") fail("invalid_command");
   return value;
 }
 

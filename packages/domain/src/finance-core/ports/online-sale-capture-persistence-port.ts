@@ -2,6 +2,7 @@ import type { OnlineSaleCapturePersistenceCommand } from "../online-sale-capture
 import type { OnlineSaleCaptureReceipt } from "../online-sale-capture-receipt";
 import type { ApplyCanonicalClientOrderCaptureCommand } from "./client-order-canonical-capture-uow";
 import type {
+  ApplyVerifiedProviderCanonicalSemanticFactCommand,
   ApplyVerifiedWebhookSemanticFactCommand,
   WebhookSemanticCommitReceipt
 } from "./webhook-inbox-persistence-port";
@@ -48,7 +49,9 @@ export type OnlineSaleCapturePersistenceResolver<Transaction> = Readonly<{
  * v1 sealed wallet journal command cannot cross the worker/domain boundary.
  */
 export type ApplyCanonicalOnlineSaleCaptureCommand = Readonly<{
-  semanticFact: ApplyVerifiedWebhookSemanticFactCommand;
+  semanticFact:
+    | ApplyVerifiedWebhookSemanticFactCommand
+    | ApplyVerifiedProviderCanonicalSemanticFactCommand;
   capture: OnlineSaleCaptureResolution["capture"];
 }>;
 

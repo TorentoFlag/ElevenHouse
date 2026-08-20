@@ -68,6 +68,7 @@ const commandKeys = [
 ] as const;
 const semanticReceiptKeys = [
   "kind",
+  "sourceDelivery",
   "receiptId",
   "inboxItemId",
   "inboxVersion",
@@ -420,14 +421,23 @@ function semanticRowsMatchReceipt(
 ): boolean {
   return (
     receipt.semanticFactId === fact.id &&
-    receipt.processingStatus === "completed" &&
+    (semantic.sourceDelivery === "webhook"
+      ? receipt.processingStatus === "completed" &&
+        receipt.inboxItemId === fact.inboxItemId &&
+        fact.inboxItemId === semantic.inboxItemId &&
+        revision(receipt.inboxVersion) === semantic.inboxVersion &&
+        revision(receipt.checkpointSequence) === semantic.committedCheckpointSequence
+      : receipt.processingStatus === null &&
+        receipt.inboxItemId === null &&
+        fact.inboxItemId === null &&
+        semantic.inboxItemId === null &&
+        receipt.inboxVersion === null &&
+        semantic.inboxVersion === null &&
+        receipt.checkpointSequence === null &&
+        semantic.committedCheckpointSequence === null) &&
     receipt.effectDisposition === "applied_once" &&
     receipt.semanticSourceKind === "payment_transition" &&
     fact.semanticSourceKind === "payment_transition" &&
-    receipt.inboxItemId === fact.inboxItemId &&
-    fact.inboxItemId === semantic.inboxItemId &&
-    revision(receipt.inboxVersion) === semantic.inboxVersion &&
-    revision(receipt.checkpointSequence) === semantic.committedCheckpointSequence &&
     fact.seriesId === semantic.providerAccount.seriesId &&
     fact.providerAccountId === semantic.providerAccount.providerAccountId &&
     fact.providerIdentityVersion === semantic.providerAccount.identityVersion &&
@@ -898,9 +908,16 @@ function normalizeSemanticCapture(value: unknown): VerifiedClientOrderCaptureSem
   if (
     receipt.kind !== "webhook_semantic_commit_receipt" ||
     !uuid(receipt.receiptId) ||
-    !identifier(receipt.inboxItemId, 160) ||
-    !positiveInteger(receipt.inboxVersion) ||
-    !positiveInteger(receipt.committedCheckpointSequence) ||
+    (receipt.sourceDelivery !== "webhook" &&
+      receipt.sourceDelivery !== "provider_canonical_read") ||
+    (receipt.sourceDelivery === "webhook" &&
+      (!identifier(receipt.inboxItemId, 160) ||
+        !positiveInteger(receipt.inboxVersion) ||
+        !positiveInteger(receipt.committedCheckpointSequence))) ||
+    (receipt.sourceDelivery === "provider_canonical_read" &&
+      (receipt.inboxItemId !== null ||
+        receipt.inboxVersion !== null ||
+        receipt.committedCheckpointSequence !== null)) ||
     !identifier(receipt.semanticFactId, 160) ||
     receipt.semanticSourceKind !== "payment_transition" ||
     !identifier(receipt.semanticSourceId, 160) ||
