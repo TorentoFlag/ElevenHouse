@@ -46,7 +46,9 @@ type AstrologerReviewCommandStore = {
     readonly now: string;
     readonly reviewId: string;
     readonly nextCaseId: string;
+    readonly nextMessageId: string | null;
     readonly reasonCode: string;
+    readonly note: string | null;
   }) => Promise<OpenReviewDisputeResult>;
   readonly submitReviewReplyVersion: (input: {
     readonly actorUserId: string;
@@ -235,7 +237,11 @@ export class AstrologerReviewsService {
       nextCaseId: deterministicUuid(
         `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case`
       ),
-      reasonCode: parsed.data.reasonCode
+      nextMessageId: parsed.data.note
+        ? deterministicUuid(`${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case-note`)
+        : null,
+      reasonCode: parsed.data.reasonCode,
+      note: parsed.data.note
     });
     if (result.kind === "rejected") {
       throw new BadRequestException("Review dispute cannot be opened");

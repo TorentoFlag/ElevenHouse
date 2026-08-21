@@ -527,6 +527,7 @@ describe.sequential("Drizzle review command store", () => {
     const fixture = await seedReviewableFixture(runtime);
     const store = createDrizzleReviewCommandStore(runtime.database);
     const caseId = randomUUID();
+    const noteMessageId = randomUUID();
 
     await store.submitReviewVersion({
       actorUserId: fixture.clientUserId,
@@ -560,7 +561,9 @@ describe.sequential("Drizzle review command store", () => {
       now: "2026-08-20T12:00:00.000Z",
       reviewId: fixture.reviewId,
       nextCaseId: caseId,
-      reasonCode: "fraud_or_conflict"
+      nextMessageId: noteMessageId,
+      reasonCode: "fraud_or_conflict",
+      note: "Нужна проверка контекста услуги."
     });
 
     expect(opened).toMatchObject({
@@ -595,6 +598,17 @@ describe.sequential("Drizzle review command store", () => {
       reasonCode: "fraud_or_conflict",
       openedByUserId: fixture.astrologerUserId,
       closedByUserId: null
+    });
+    const [noteMessage] = await runtime.database
+      .select()
+      .from(reviewModerationCaseMessages)
+      .where(eq(reviewModerationCaseMessages.id, noteMessageId));
+    expect(noteMessage).toMatchObject({
+      caseId,
+      authorUserId: fixture.astrologerUserId,
+      authorRole: "astrologer",
+      visibility: "astrologer_and_moderators",
+      body: "Нужна проверка контекста услуги."
     });
     await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
       visibleReviewCount: 0,
@@ -719,6 +733,7 @@ describe.sequential("Drizzle review command store", () => {
       .from(reviewModerationCaseMessages)
       .where(eq(reviewModerationCaseMessages.caseId, caseId));
     expect(messageRows.map((row) => [row.id, row.visibility, row.body])).toEqual([
+      [noteMessageId, "astrologer_and_moderators", "Нужна проверка контекста услуги."],
       [clientMessageId, "client_and_moderators", "Уточните, пожалуйста, что именно произошло."],
       [astrologerMessageId, "astrologer_and_moderators", "Пришлите контекст оказанной услуги."]
     ]);

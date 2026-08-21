@@ -155,7 +155,9 @@ describe("astrologer reviews HTTP API", () => {
               readonly now: string;
               readonly reviewId: string;
               readonly nextCaseId: string;
+              readonly nextMessageId: string | null;
               readonly reasonCode: string;
+              readonly note: string | null;
             }) {
               receivedDisputeCommand = command;
               disputeOpened = true;
@@ -437,9 +439,11 @@ describe("astrologer reviews HTTP API", () => {
       actorUserId: astrologerUserId,
       now: "2026-08-20T13:00:00.000Z",
       reviewId,
-      reasonCode: "fraud_or_conflict"
+      reasonCode: "fraud_or_conflict",
+      note: "Нужна проверка контекста услуги."
     });
     expect(receivedDisputeCommand).toHaveProperty("nextCaseId", expect.any(String));
+    expect(receivedDisputeCommand).toHaveProperty("nextMessageId", expect.any(String));
     expect(receivedCaseRead).toEqual({
       caseId,
       actorUserId: astrologerUserId,

@@ -117,7 +117,9 @@ export type DrizzleReviewCommandStore = {
     readonly now: string;
     readonly reviewId: string;
     readonly nextCaseId: string;
+    readonly nextMessageId?: string | null;
     readonly reasonCode: ReviewModerationReasonCode;
+    readonly note?: string | null;
   }) => Promise<OpenReviewDisputeResult>;
   readonly restoreReviewAfterDispute: (input: {
     readonly moderatorUserId: string;
@@ -567,6 +569,18 @@ export function createDrizzleReviewCommandStore(
           closedAt: null,
           closedByUserId: null
         });
+        const disputeNote = normalizeOptionalNote(input.note ?? null);
+        if (disputeNote && input.nextMessageId) {
+          await transaction.insert(reviewModerationCaseMessages).values({
+            id: input.nextMessageId,
+            caseId: result.moderationCase.caseId,
+            authorUserId: input.actorUserId,
+            authorRole: "astrologer",
+            visibility: "astrologer_and_moderators",
+            body: disputeNote,
+            createdAt: new Date(input.now)
+          });
+        }
         await applyReviewApprovalAggregateDelta(transaction, {
           astrologerUserId: result.review.astrologerUserId,
           productId: reviewableInstance.productId,
@@ -590,6 +604,7 @@ export function createDrizzleReviewCommandStore(
           metadata: {
             caseId: result.moderationCase.caseId,
             reasonCode: result.moderationCase.reasonCode,
+            notePresent: Boolean(disputeNote),
             reviewableInstanceId: result.review.reviewableInstanceId,
             previousVisibilityStatus: currentReview.visibilityStatus,
             nextVisibilityStatus: result.review.visibilityStatus
@@ -1380,6 +1395,11 @@ function parseReviewDisputeStatus(value: string): ReviewDisputeStatus {
 
 function parseReviewModerationStatus(value: string): ReviewModerationStatus {
   return reviewModerationStatusSchema.parse(value);
+}
+
+function normalizeOptionalNote(value: string | null): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized.length > 0 ? normalized : null;
 }
 
 function toIso(value: Date): string {
