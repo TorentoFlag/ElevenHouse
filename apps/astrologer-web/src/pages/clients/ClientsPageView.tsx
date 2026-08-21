@@ -3,8 +3,10 @@ import type {
   AstrologerClientCrmListItem,
   AstrologerClientCrmPrivateProfileUpdateRequest,
   AstrologerClientCrmPrivateProfileUpdateResponse,
+  ClientBirthDataUpsertRequest,
   ClientCrmActivityItem,
   ClientLifecycleStatus,
+  ClientRelatedBirthProfileUpsertRequest,
   ClientRelationshipSource
 } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
@@ -36,6 +38,10 @@ export type ClientsPageViewProps = {
   readonly isActivityError: boolean;
   readonly isPrivateCrmSaving: boolean;
   readonly isPrivateCrmError: boolean;
+  readonly isBirthDataSaving: boolean;
+  readonly isBirthDataError: boolean;
+  readonly isRelatedProfileSaving: boolean;
+  readonly isRelatedProfileError: boolean;
   readonly isFiltered: boolean;
   readonly hasNextPage: boolean;
   readonly onSearchChange: (value: string) => void;
@@ -51,6 +57,14 @@ export type ClientsPageViewProps = {
   readonly onSavePrivateCrm: (
     input: AstrologerClientCrmPrivateProfileUpdateRequest
   ) => Promise<AstrologerClientCrmPrivateProfileUpdateResponse>;
+  readonly onSaveBirthData: (input: ClientBirthDataUpsertRequest) => Promise<unknown>;
+  readonly onCreateRelatedProfile: (
+    input: ClientRelatedBirthProfileUpsertRequest
+  ) => Promise<unknown>;
+  readonly onSaveRelatedProfile: (
+    relatedProfileId: string,
+    input: ClientRelatedBirthProfileUpsertRequest
+  ) => Promise<unknown>;
 };
 
 export function ClientsPageView({
@@ -75,6 +89,10 @@ export function ClientsPageView({
   isActivityError,
   isPrivateCrmSaving,
   isPrivateCrmError,
+  isBirthDataSaving,
+  isBirthDataError,
+  isRelatedProfileSaving,
+  isRelatedProfileError,
   isFiltered,
   hasNextPage,
   onSearchChange,
@@ -87,7 +105,10 @@ export function ClientsPageView({
   onRetryList,
   onRetryDetail,
   onRetryActivity,
-  onSavePrivateCrm
+  onSavePrivateCrm,
+  onSaveBirthData,
+  onCreateRelatedProfile,
+  onSaveRelatedProfile
 }: ClientsPageViewProps) {
   return (
     <section
@@ -136,11 +157,18 @@ export function ClientsPageView({
           isActivityError={isActivityError}
           isPrivateCrmSaving={isPrivateCrmSaving}
           isPrivateCrmError={isPrivateCrmError}
+          isBirthDataSaving={isBirthDataSaving}
+          isBirthDataError={isBirthDataError}
+          isRelatedProfileSaving={isRelatedProfileSaving}
+          isRelatedProfileError={isRelatedProfileError}
           onTabChange={onTabChange}
           onBackToList={onBackToList}
           onRetryDetail={onRetryDetail}
           onRetryActivity={onRetryActivity}
           onSavePrivateCrm={onSavePrivateCrm}
+          onSaveBirthData={onSaveBirthData}
+          onCreateRelatedProfile={onCreateRelatedProfile}
+          onSaveRelatedProfile={onSaveRelatedProfile}
         />
       </div>
     </section>

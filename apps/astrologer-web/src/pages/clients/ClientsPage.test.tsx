@@ -16,6 +16,7 @@ import { ClientsPage } from "./ClientsPage";
 
 const http = vi.hoisted(() => ({
   get: vi.fn(),
+  post: vi.fn(),
   put: vi.fn()
 }));
 
@@ -26,6 +27,7 @@ afterEach(cleanup);
 describe("ClientsPage", () => {
   beforeEach(() => {
     http.get.mockReset();
+    http.post.mockReset();
     http.put.mockReset();
   });
 
@@ -178,6 +180,160 @@ describe("ClientsPage", () => {
     expect(await screen.findByText("Follow-up")).toBeVisible();
     expect(screen.queryByPlaceholderText(/написать/i)).not.toBeInTheDocument();
     expect(document.querySelector("[data-chat-bubble]")).not.toBeInTheDocument();
+  });
+
+  it("edits client birth data through the relationship-scoped CRM card", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.put.mockResolvedValue({
+      client: {
+        clientUserId,
+        displayName: adaDetail.displayName,
+        relationshipStatus: adaDetail.relationship.status,
+        firstLinkedAt: adaDetail.relationship.firstLinkedAt,
+        lastLinkedAt: adaDetail.relationship.lastLinkedAt,
+        birthData: {
+          ...adaDetail.birthData,
+          birthTime: "13:45",
+          birthTimePrecision: "approximate",
+          birthPlaceText: "Oxford, UK",
+          birthTimezone: "Europe/London",
+          revision: 3,
+          updatedAt: "2026-08-20T12:00:00.000Z"
+        },
+        relatedBirthProfiles: adaDetail.relatedBirthProfiles
+      }
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Данные рождения" }));
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать данные рождения" }));
+    fireEvent.change(screen.getByLabelText("Дата рождения"), { target: { value: "1815-12-10" } });
+    fireEvent.change(screen.getByLabelText("Время рождения"), { target: { value: "13:45" } });
+    fireEvent.change(screen.getByLabelText("Точность времени"), {
+      target: { value: "approximate" }
+    });
+    fireEvent.change(screen.getByLabelText("Место"), { target: { value: "Oxford, UK" } });
+    fireEvent.change(screen.getByLabelText("Часовой пояс"), {
+      target: { value: "Europe/London" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить данные рождения" }));
+
+    await waitFor(() =>
+      expect(http.put).toHaveBeenCalledWith(
+        "/clients/11111111-1111-4111-8111-111111111111/birth-data",
+        expect.objectContaining({
+          birthDate: "1815-12-10",
+          birthTime: "13:45",
+          birthTimePrecision: "approximate",
+          birthPlaceText: "Oxford, UK",
+          birthTimezone: "Europe/London",
+          expectedRevision: 2
+        }),
+        { csrf: true }
+      )
+    );
+    expect(await screen.findByText("13:45 · approximate")).toBeVisible();
+    expect(screen.getByText("Oxford, UK")).toBeVisible();
+    expect(screen.getByText("3")).toBeVisible();
+  });
+
+  it("creates and updates related birth profiles without leaving the CRM context", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.post.mockResolvedValue({
+      id: "44444444-4444-4444-8444-444444444444",
+      clientUserId,
+      displayName: "Annabella",
+      relationshipLabel: "partner",
+      birthDate: "1812-05-01",
+      birthTime: null,
+      birthTimePrecision: "unknown",
+      birthPlaceText: "London, UK",
+      birthCountryCode: null,
+      birthCity: null,
+      birthRegion: null,
+      birthTimezone: "Europe/London",
+      birthTimeDstOccurrence: null,
+      birthLatitude: null,
+      birthLongitude: null,
+      source: "manual",
+      revision: 1,
+      lastEditedByUserId: clientUserId,
+      lastEditedByRole: "astrologer",
+      createdAt: "2026-08-20T12:00:00.000Z",
+      updatedAt: "2026-08-20T12:00:00.000Z"
+    });
+    http.put.mockResolvedValue({
+      ...adaDetail.relatedBirthProfiles[0],
+      relationshipLabel: "son",
+      revision: 2,
+      updatedAt: "2026-08-20T12:30:00.000Z"
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Связанные профили" }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить профиль" }));
+    fireEvent.change(screen.getByLabelText("Имя"), { target: { value: "Annabella" } });
+    fireEvent.change(screen.getByLabelText("Связь"), { target: { value: "partner" } });
+    fireEvent.change(screen.getByLabelText("Дата рождения"), { target: { value: "1812-05-01" } });
+    fireEvent.change(screen.getByLabelText("Место"), { target: { value: "London, UK" } });
+    fireEvent.change(screen.getByLabelText("Часовой пояс"), {
+      target: { value: "Europe/London" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить профиль" }));
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        "/clients/11111111-1111-4111-8111-111111111111/related-birth-profiles",
+        expect.objectContaining({
+          displayName: "Annabella",
+          relationshipLabel: "partner",
+          birthDate: "1812-05-01",
+          birthTimePrecision: "unknown",
+          birthPlaceText: "London, UK",
+          birthTimezone: "Europe/London",
+          expectedRevision: null
+        }),
+        { csrf: true }
+      )
+    );
+    expect(await screen.findByText("Annabella")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать Byron" }));
+    fireEvent.change(screen.getByLabelText("Связь"), { target: { value: "son" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить профиль" }));
+
+    await waitFor(() =>
+      expect(http.put).toHaveBeenCalledWith(
+        "/clients/11111111-1111-4111-8111-111111111111/related-birth-profiles/33333333-3333-4333-8333-333333333333",
+        expect.objectContaining({
+          displayName: "Byron",
+          relationshipLabel: "son",
+          expectedRevision: 1
+        }),
+        { csrf: true }
+      )
+    );
+    expect(await screen.findByText("son")).toBeVisible();
   });
 
   it("renders Activity as a safe timeline and never embeds correspondence UI", async () => {

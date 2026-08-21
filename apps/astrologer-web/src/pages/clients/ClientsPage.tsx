@@ -13,7 +13,10 @@ import {
   useClientsCrmActivityQuery,
   useClientsCrmDetailQuery,
   useClientsCrmListQuery,
-  useUpdateClientCrmPrivateProfileMutation
+  useCreateClientRelatedBirthProfileMutation,
+  useUpdateClientBirthDataMutation,
+  useUpdateClientCrmPrivateProfileMutation,
+  useUpdateClientRelatedBirthProfileMutation
 } from "../../features/clients/model/clientsCrmQueries";
 import type { ClientCrmTabId } from "../../features/clients/ui/ClientCrmTabs";
 import { ClientsPageView } from "./ClientsPageView";
@@ -46,6 +49,11 @@ export function ClientsPage() {
   const detailQuery = useClientsCrmDetailQuery(selectedClientUserId);
   const activityQuery = useClientsCrmActivityQuery(selectedClientUserId);
   const privateProfileMutation = useUpdateClientCrmPrivateProfileMutation(selectedClientUserId);
+  const birthDataMutation = useUpdateClientBirthDataMutation(selectedClientUserId);
+  const createRelatedProfileMutation =
+    useCreateClientRelatedBirthProfileMutation(selectedClientUserId);
+  const updateRelatedProfileMutation =
+    useUpdateClientRelatedBirthProfileMutation(selectedClientUserId);
   const isFiltered = search.trim().length > 0 || lifecycle !== undefined || source !== undefined;
 
   useDocumentTitle(dictionary.clients.documentTitle);
@@ -107,6 +115,14 @@ export function ClientsPage() {
       isActivityError={activityQuery.isError}
       isPrivateCrmSaving={privateProfileMutation.isPending}
       isPrivateCrmError={privateProfileMutation.isError}
+      isBirthDataSaving={birthDataMutation.isPending}
+      isBirthDataError={birthDataMutation.isError}
+      isRelatedProfileSaving={
+        createRelatedProfileMutation.isPending || updateRelatedProfileMutation.isPending
+      }
+      isRelatedProfileError={
+        createRelatedProfileMutation.isError || updateRelatedProfileMutation.isError
+      }
       isFiltered={isFiltered}
       hasNextPage={Boolean(listQuery.data?.nextCursor)}
       onSearchChange={handleSearchChange}
@@ -124,6 +140,11 @@ export function ClientsPage() {
       onRetryDetail={() => void detailQuery.refetch()}
       onRetryActivity={() => void activityQuery.refetch()}
       onSavePrivateCrm={(input) => privateProfileMutation.mutateAsync(input)}
+      onSaveBirthData={(input) => birthDataMutation.mutateAsync(input)}
+      onCreateRelatedProfile={(input) => createRelatedProfileMutation.mutateAsync(input)}
+      onSaveRelatedProfile={(relatedProfileId, input) =>
+        updateRelatedProfileMutation.mutateAsync({ relatedProfileId, input })
+      }
     />
   );
 }

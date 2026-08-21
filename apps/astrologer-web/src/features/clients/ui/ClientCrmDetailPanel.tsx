@@ -2,13 +2,13 @@ import type {
   AstrologerClientCrmDetail,
   AstrologerClientCrmPrivateProfileUpdateResponse,
   AstrologerClientCrmPrivateProfileUpdateRequest,
+  ClientBirthDataUpsertRequest,
   ClientCrmActivityItem,
-  ClientBirthDataResponse,
   ClientCrmServiceWorkBookingItem,
   ClientCrmServiceWorkOrderItem,
   ClientCrmServiceWorkPaymentItem,
   ClientCrmServiceWorkSessionItem,
-  ClientRelatedBirthProfileResponse
+  ClientRelatedBirthProfileUpsertRequest
 } from "@elevenhouse/contracts";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { SupportedLocale } from "@elevenhouse/i18n";
@@ -24,7 +24,9 @@ import {
 } from "../model/clientsCrmPresentation";
 import { ClientCrmActivityTimeline } from "./ClientCrmActivityTimeline";
 import { ClientCrmAvatar } from "./ClientCrmAvatar";
+import { ClientCrmBirthDataPanel } from "./ClientCrmBirthDataPanel";
 import { ClientCrmPrivatePanel } from "./ClientCrmPrivatePanel";
+import { ClientCrmRelatedProfilesPanel } from "./ClientCrmRelatedProfilesPanel";
 import { ClientCrmTabs, type ClientCrmTabId } from "./ClientCrmTabs";
 import styles from "./ClientsCrm.module.css";
 
@@ -41,6 +43,10 @@ type ClientCrmDetailPanelProps = {
   readonly isActivityError: boolean;
   readonly isPrivateCrmSaving: boolean;
   readonly isPrivateCrmError: boolean;
+  readonly isBirthDataSaving: boolean;
+  readonly isBirthDataError: boolean;
+  readonly isRelatedProfileSaving: boolean;
+  readonly isRelatedProfileError: boolean;
   readonly onTabChange: (tab: ClientCrmTabId) => void;
   readonly onBackToList: () => void;
   readonly onRetryDetail: () => void;
@@ -48,6 +54,14 @@ type ClientCrmDetailPanelProps = {
   readonly onSavePrivateCrm: (
     input: AstrologerClientCrmPrivateProfileUpdateRequest
   ) => Promise<AstrologerClientCrmPrivateProfileUpdateResponse>;
+  readonly onSaveBirthData: (input: ClientBirthDataUpsertRequest) => Promise<unknown>;
+  readonly onCreateRelatedProfile: (
+    input: ClientRelatedBirthProfileUpsertRequest
+  ) => Promise<unknown>;
+  readonly onSaveRelatedProfile: (
+    relatedProfileId: string,
+    input: ClientRelatedBirthProfileUpsertRequest
+  ) => Promise<unknown>;
 };
 
 export function ClientCrmDetailPanel({
@@ -63,11 +77,18 @@ export function ClientCrmDetailPanel({
   isActivityError,
   isPrivateCrmSaving,
   isPrivateCrmError,
+  isBirthDataSaving,
+  isBirthDataError,
+  isRelatedProfileSaving,
+  isRelatedProfileError,
   onTabChange,
   onBackToList,
   onRetryDetail,
   onRetryActivity,
-  onSavePrivateCrm
+  onSavePrivateCrm,
+  onSaveBirthData,
+  onCreateRelatedProfile,
+  onSaveRelatedProfile
 }: ClientCrmDetailPanelProps) {
   const displayName = client
     ? formatClientCrmDisplayName(client.clientUserId, client.displayName, locale)
@@ -135,7 +156,10 @@ export function ClientCrmDetailPanel({
                   </span>
                 </div>
               </div>
-              <div className={styles.statStrip} aria-label={copy.facts.relationship}>
+              <div
+                className={styles.statStrip}
+                aria-label={`${copy.facts.relationship}: ${copy.facts.status}`}
+              >
                 <Stat
                   label={copy.facts.firstLinkedAt}
                   value={formatClientCrmDate(client.relationship.firstLinkedAt, locale)}
@@ -169,12 +193,23 @@ export function ClientCrmDetailPanel({
                 onSavePrivateCrm={onSavePrivateCrm}
               />
             ) : activeTab === "birthData" ? (
-              <BirthDataPanel birthData={client.birthData} copy={copy} locale={locale} />
+              <ClientCrmBirthDataPanel
+                birthData={client.birthData}
+                copy={copy}
+                locale={locale}
+                isSaving={isBirthDataSaving}
+                isError={isBirthDataError}
+                onSave={onSaveBirthData}
+              />
             ) : activeTab === "relatedProfiles" ? (
-              <RelatedProfilesPanel
+              <ClientCrmRelatedProfilesPanel
                 copy={copy}
                 profiles={client.relatedBirthProfiles}
                 locale={locale}
+                isSaving={isRelatedProfileSaving}
+                isError={isRelatedProfileError}
+                onCreate={onCreateRelatedProfile}
+                onSave={onSaveRelatedProfile}
               />
             ) : (
               <ClientCrmActivityTimeline
@@ -448,78 +483,6 @@ function getServiceWorkStartAt(
   item: ClientCrmServiceWorkBookingItem | ClientCrmServiceWorkSessionItem
 ): string {
   return "startAt" in item ? item.startAt : item.scheduledStartAt;
-}
-
-function BirthDataPanel({
-  birthData,
-  copy,
-  locale
-}: {
-  readonly birthData: ClientBirthDataResponse | null;
-  readonly copy: ClientsCrmCopy;
-  readonly locale: SupportedLocale;
-}) {
-  if (!birthData) {
-    return <div className={styles.emptyState}>{copy.missingBirthData}</div>;
-  }
-
-  return (
-    <section className={styles.card}>
-      <div className={styles.kicker}>{copy.tabs.birthData}</div>
-      <div className={styles.factList}>
-        <Fact label={copy.facts.birthData} value={birthData.birthDate ?? copy.missingBirthData} />
-        <Fact
-          label={copy.facts.birthTime}
-          value={
-            birthData.birthTime
-              ? `${birthData.birthTime} · ${birthData.birthTimePrecision}`
-              : birthData.birthTimePrecision
-          }
-        />
-        <Fact label={copy.facts.place} value={birthData.birthPlaceText ?? "—"} />
-        <Fact label={copy.facts.timezone} value={birthData.birthTimezone ?? "—"} />
-        <Fact label={copy.facts.revision} value={String(birthData.revision)} />
-        <Fact
-          label={copy.facts.updatedAt}
-          value={formatClientCrmDate(birthData.updatedAt, locale)}
-        />
-      </div>
-    </section>
-  );
-}
-
-function RelatedProfilesPanel({
-  copy,
-  profiles
-}: {
-  readonly copy: ClientsCrmCopy;
-  readonly profiles: readonly ClientRelatedBirthProfileResponse[];
-  readonly locale: SupportedLocale;
-}) {
-  if (profiles.length === 0) {
-    return <div className={styles.emptyState}>{copy.emptyRelatedProfiles}</div>;
-  }
-
-  return (
-    <div className={styles.overviewGrid}>
-      {profiles.map((profile) => (
-        <section className={styles.card} key={profile.id}>
-          <div className={styles.sectionHeader}>
-            <ClientCrmAvatar name={profile.displayName} size={38} />
-            <div>
-              <div className={styles.activityTitle}>{profile.displayName}</div>
-              <div className={styles.activityMeta}>{profile.relationshipLabel}</div>
-            </div>
-          </div>
-          <div className={styles.factList}>
-            <Fact label={copy.facts.birthData} value={profile.birthDate ?? copy.missingBirthData} />
-            <Fact label={copy.facts.place} value={profile.birthPlaceText ?? "—"} />
-            <Fact label={copy.facts.revision} value={String(profile.revision)} />
-          </div>
-        </section>
-      ))}
-    </div>
-  );
 }
 
 function Fact({ label, value }: { readonly label: string; readonly value: ReactNode }) {

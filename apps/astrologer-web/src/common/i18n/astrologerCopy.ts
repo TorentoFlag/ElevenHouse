@@ -484,6 +484,33 @@ export type ClientsCrmCopy = {
     readonly cancelLabel: string;
     readonly saveError: string;
   };
+  readonly birthEditor: {
+    readonly editLabel: string;
+    readonly saveLabel: string;
+    readonly savingLabel: string;
+    readonly cancelLabel: string;
+    readonly saveError: string;
+    readonly dateLabel: string;
+    readonly timeLabel: string;
+    readonly precisionLabel: string;
+    readonly placeLabel: string;
+    readonly timezoneLabel: string;
+  };
+  readonly relatedProfilesEditor: {
+    readonly addLabel: string;
+    readonly editLabel: (displayName: string) => string;
+    readonly saveLabel: string;
+    readonly savingLabel: string;
+    readonly cancelLabel: string;
+    readonly saveError: string;
+    readonly displayNameLabel: string;
+    readonly relationshipLabel: string;
+    readonly dateLabel: string;
+    readonly timeLabel: string;
+    readonly precisionLabel: string;
+    readonly placeLabel: string;
+    readonly timezoneLabel: string;
+  };
   readonly missingBirthData: string;
   readonly emptyRelatedProfiles: string;
   readonly emptyActivity: string;
@@ -805,6 +832,33 @@ export const astrologerCopyByLocale = {
           savingLabel: "Сохраняем CRM",
           cancelLabel: "Отмена",
           saveError: "Не удалось сохранить CRM"
+        },
+        birthEditor: {
+          editLabel: "Редактировать данные рождения",
+          saveLabel: "Сохранить данные рождения",
+          savingLabel: "Сохраняем данные рождения",
+          cancelLabel: "Отмена",
+          saveError: "Не удалось сохранить данные рождения",
+          dateLabel: "Дата рождения",
+          timeLabel: "Время рождения",
+          precisionLabel: "Точность времени",
+          placeLabel: "Место",
+          timezoneLabel: "Часовой пояс"
+        },
+        relatedProfilesEditor: {
+          addLabel: "Добавить профиль",
+          editLabel: (displayName) => `Редактировать ${displayName}`,
+          saveLabel: "Сохранить профиль",
+          savingLabel: "Сохраняем профиль",
+          cancelLabel: "Отмена",
+          saveError: "Не удалось сохранить профиль",
+          displayNameLabel: "Имя",
+          relationshipLabel: "Связь",
+          dateLabel: "Дата рождения",
+          timeLabel: "Время рождения",
+          precisionLabel: "Точность времени",
+          placeLabel: "Место",
+          timezoneLabel: "Часовой пояс"
         },
         missingBirthData: "Данных рождения пока нет",
         emptyRelatedProfiles: "Связанных профилей пока нет",
@@ -1437,6 +1491,33 @@ export const astrologerCopyByLocale = {
           savingLabel: "Saving CRM",
           cancelLabel: "Cancel",
           saveError: "Could not save CRM"
+        },
+        birthEditor: {
+          editLabel: "Edit birth data",
+          saveLabel: "Save birth data",
+          savingLabel: "Saving birth data",
+          cancelLabel: "Cancel",
+          saveError: "Could not save birth data",
+          dateLabel: "Birth date",
+          timeLabel: "Birth time",
+          precisionLabel: "Time precision",
+          placeLabel: "Place",
+          timezoneLabel: "Timezone"
+        },
+        relatedProfilesEditor: {
+          addLabel: "Add profile",
+          editLabel: (displayName) => `Edit ${displayName}`,
+          saveLabel: "Save profile",
+          savingLabel: "Saving profile",
+          cancelLabel: "Cancel",
+          saveError: "Could not save profile",
+          displayNameLabel: "Name",
+          relationshipLabel: "Relationship",
+          dateLabel: "Birth date",
+          timeLabel: "Birth time",
+          precisionLabel: "Time precision",
+          placeLabel: "Place",
+          timezoneLabel: "Timezone"
         },
         missingBirthData: "Birth data is not available yet",
         emptyRelatedProfiles: "There are no related profiles yet",

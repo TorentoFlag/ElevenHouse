@@ -34,7 +34,11 @@ export function ClientCrmTabs({ activeTab, copy, onTabChange }: ClientCrmTabsPro
   };
 
   return (
-    <div className={styles.tabs} role="tablist" aria-label={copy.facts.relationship}>
+    <div
+      className={styles.tabs}
+      role="tablist"
+      aria-label={`${copy.facts.relationship}: ${copy.tabs.overview}`}
+    >
       {tabIds.map((tab) => (
         <button
           aria-controls={`clients-crm-panel-${tab}`}

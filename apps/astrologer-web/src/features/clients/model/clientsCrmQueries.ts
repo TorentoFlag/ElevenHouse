@@ -1,4 +1,8 @@
-import type { AstrologerClientCrmListQuery } from "@elevenhouse/contracts";
+import type {
+  AstrologerClientCrmListQuery,
+  ClientBirthDataUpsertRequest,
+  ClientRelatedBirthProfileUpsertRequest
+} from "@elevenhouse/contracts";
 import { astrologerClientCrmListQuerySchema } from "@elevenhouse/contracts";
 import {
   keepPreviousData,
@@ -13,6 +17,11 @@ import {
   listAstrologerClientCrm,
   updateAstrologerClientCrmPrivateProfile
 } from "../api/clientsCrmApi";
+import {
+  createClientRelatedBirthProfile,
+  updateClientBirthData,
+  updateClientRelatedBirthProfile
+} from "../api/clientsApi";
 import type {
   AstrologerClientCrmDetailResponse,
   AstrologerClientCrmPrivateProfileUpdateRequest
@@ -71,6 +80,93 @@ export function updateClientCrmPrivateProfileMutationOptions(
   };
 }
 
+export function updateClientBirthDataMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "setQueryData">,
+  clientUserId: string | undefined
+) {
+  return {
+    mutationFn: (input: ClientBirthDataUpsertRequest) =>
+      updateClientBirthData(clientUserId ?? "", input),
+    onSuccess: (response: Awaited<ReturnType<typeof updateClientBirthData>>) => {
+      queryClient.setQueryData<AstrologerClientCrmDetailResponse>(
+        clientsCrmQueryKeys.detail(clientUserId),
+        (current) =>
+          current
+            ? {
+                client: {
+                  ...current.client,
+                  birthData: response.client.birthData,
+                  readiness: {
+                    ...current.client.readiness,
+                    birthData: response.client.birthData ? "ready" : "missing"
+                  }
+                }
+              }
+            : current
+      );
+      return queryClient.invalidateQueries({ queryKey: ["clients", "crm", "list"] });
+    }
+  };
+}
+
+export function createClientRelatedBirthProfileMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "setQueryData">,
+  clientUserId: string | undefined
+) {
+  return {
+    mutationFn: (input: ClientRelatedBirthProfileUpsertRequest) =>
+      createClientRelatedBirthProfile(clientUserId ?? "", input),
+    onSuccess: (profile: Awaited<ReturnType<typeof createClientRelatedBirthProfile>>) => {
+      queryClient.setQueryData<AstrologerClientCrmDetailResponse>(
+        clientsCrmQueryKeys.detail(clientUserId),
+        (current) =>
+          current
+            ? {
+                client: {
+                  ...current.client,
+                  relatedBirthProfiles: [...current.client.relatedBirthProfiles, profile],
+                  readiness: { ...current.client.readiness, relatedProfiles: "ready" }
+                }
+              }
+            : current
+      );
+      return queryClient.invalidateQueries({ queryKey: ["clients", "crm", "list"] });
+    }
+  };
+}
+
+export function updateClientRelatedBirthProfileMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "setQueryData">,
+  clientUserId: string | undefined
+) {
+  return {
+    mutationFn: ({
+      relatedProfileId,
+      input
+    }: {
+      readonly relatedProfileId: string;
+      readonly input: ClientRelatedBirthProfileUpsertRequest;
+    }) => updateClientRelatedBirthProfile(clientUserId ?? "", relatedProfileId, input),
+    onSuccess: (profile: Awaited<ReturnType<typeof updateClientRelatedBirthProfile>>) => {
+      queryClient.setQueryData<AstrologerClientCrmDetailResponse>(
+        clientsCrmQueryKeys.detail(clientUserId),
+        (current) =>
+          current
+            ? {
+                client: {
+                  ...current.client,
+                  relatedBirthProfiles: current.client.relatedBirthProfiles.map((item) =>
+                    item.id === profile.id ? profile : item
+                  )
+                }
+              }
+            : current
+      );
+      return queryClient.invalidateQueries({ queryKey: ["clients", "crm", "list"] });
+    }
+  };
+}
+
 export function useClientsCrmListQuery(query: Partial<AstrologerClientCrmListQuery> = {}) {
   return useQuery(clientsCrmListQueryOptions(query));
 }
@@ -87,4 +183,22 @@ export function useUpdateClientCrmPrivateProfileMutation(clientUserId: string | 
   const queryClient = useQueryClient();
 
   return useMutation(updateClientCrmPrivateProfileMutationOptions(queryClient, clientUserId));
+}
+
+export function useUpdateClientBirthDataMutation(clientUserId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation(updateClientBirthDataMutationOptions(queryClient, clientUserId));
+}
+
+export function useCreateClientRelatedBirthProfileMutation(clientUserId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation(createClientRelatedBirthProfileMutationOptions(queryClient, clientUserId));
+}
+
+export function useUpdateClientRelatedBirthProfileMutation(clientUserId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation(updateClientRelatedBirthProfileMutationOptions(queryClient, clientUserId));
 }
