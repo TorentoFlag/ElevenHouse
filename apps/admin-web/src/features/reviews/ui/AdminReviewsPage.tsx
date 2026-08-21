@@ -102,6 +102,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
   const summary = summarizeModerationQueue(queue);
   const pendingReview = selected ? pendingReviewVersion(selected) : null;
   const pendingReply = selected ? pendingReplyVersion(selected) : null;
+  const isCaseClosed = caseDetail?.status === "closed";
 
   const selectQueueItem = async (item: ReviewModerationQueueItem) => {
     setSubmitError(null);
@@ -375,28 +376,30 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                         <h3>{caseDetail.serviceContext.title}</h3>
                         <span>{caseDetail.serviceContext.contextLabel}</span>
                       </div>
-                      <div>
-                        <select
-                          aria-label="Статус спора"
-                          value={caseStatus}
-                          onChange={(event) =>
-                            setCaseStatus(event.target.value as EditableCaseStatus)
-                          }
-                        >
-                          {caseStatusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => void updateCaseStatus()}
-                        >
-                          Обновить статус
-                        </button>
-                      </div>
+                      {isCaseClosed ? null : (
+                        <div>
+                          <select
+                            aria-label="Статус спора"
+                            value={caseStatus}
+                            onChange={(event) =>
+                              setCaseStatus(event.target.value as EditableCaseStatus)
+                            }
+                          >
+                            {caseStatusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => void updateCaseStatus()}
+                          >
+                            Обновить статус
+                          </button>
+                        </div>
+                      )}
                     </header>
                     <div className="adminReviewsMessages">
                       {caseDetail.messages.map((message) => (
@@ -407,61 +410,69 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                         </article>
                       ))}
                     </div>
-                    <form className="adminReviewsMessageForm" onSubmit={sendCaseMessage}>
-                      <select
-                        aria-label="Кому видно сообщение"
-                        value={messageVisibility}
-                        onChange={(event) =>
-                          setMessageVisibility(
-                            event.target.value as ReviewModerationCaseMessageVisibility
-                          )
-                        }
-                      >
-                        {caseMessageVisibilityOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <textarea
-                        aria-label="Сообщение по спору"
-                        value={messageBody}
-                        placeholder="Сообщение участникам или внутренняя заметка"
-                        onChange={(event) => setMessageBody(event.target.value)}
-                      />
-                      <button type="submit" disabled={saving || !messageBody.trim()}>
-                        Отправить
-                      </button>
-                    </form>
-                    <div className="adminReviewsCaseActions">
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() =>
-                          void runDecision("Отзыв восстановлен после спора.", (key) =>
-                            api.restoreReviewAfterDispute(selected.reviewId, caseDetail.caseId, key)
-                          )
-                        }
-                      >
-                        Вернуть публикацию
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() =>
-                          void runDecision("Отзыв скрыт модерацией.", (key) =>
-                            api.hideReviewByModeration(
-                              selected.reviewId,
-                              caseDetail.caseId,
-                              normalizedDecision(reasonCode, decisionNote),
-                              key
-                            )
-                          )
-                        }
-                      >
-                        Скрыть модерацией
-                      </button>
-                    </div>
+                    {isCaseClosed ? null : (
+                      <>
+                        <form className="adminReviewsMessageForm" onSubmit={sendCaseMessage}>
+                          <select
+                            aria-label="Кому видно сообщение"
+                            value={messageVisibility}
+                            onChange={(event) =>
+                              setMessageVisibility(
+                                event.target.value as ReviewModerationCaseMessageVisibility
+                              )
+                            }
+                          >
+                            {caseMessageVisibilityOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <textarea
+                            aria-label="Сообщение по спору"
+                            value={messageBody}
+                            placeholder="Сообщение участникам или внутренняя заметка"
+                            onChange={(event) => setMessageBody(event.target.value)}
+                          />
+                          <button type="submit" disabled={saving || !messageBody.trim()}>
+                            Отправить
+                          </button>
+                        </form>
+                        <div className="adminReviewsCaseActions">
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() =>
+                              void runDecision("Отзыв восстановлен после спора.", (key) =>
+                                api.restoreReviewAfterDispute(
+                                  selected.reviewId,
+                                  caseDetail.caseId,
+                                  key
+                                )
+                              )
+                            }
+                          >
+                            Вернуть публикацию
+                          </button>
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() =>
+                              void runDecision("Отзыв скрыт модерацией.", (key) =>
+                                api.hideReviewByModeration(
+                                  selected.reviewId,
+                                  caseDetail.caseId,
+                                  normalizedDecision(reasonCode, decisionNote),
+                                  key
+                                )
+                              )
+                            }
+                          >
+                            Скрыть модерацией
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </section>
                 ) : (
                   <section className="adminReviewsCase adminReviewsCase--empty">

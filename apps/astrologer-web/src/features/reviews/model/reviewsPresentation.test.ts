@@ -5,13 +5,13 @@ import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 describe("reviewsPresentation", () => {
   it("computes aggregate rating only from visible published reviews", () => {
     expect(buildAstrologerReviewsSummary(reviews)).toMatchObject({
-      averageRating: "4.5",
-      publishedCount: 2,
-      totalCount: 3,
+      averageRating: "4.0",
+      publishedCount: 3,
+      totalCount: 4,
       distribution: [
         { rating: 5, count: 1 },
         { rating: 4, count: 1 },
-        { rating: 3, count: 0 },
+        { rating: 3, count: 1 },
         { rating: 2, count: 0 },
         { rating: 1, count: 0 }
       ]
@@ -21,7 +21,8 @@ describe("reviewsPresentation", () => {
   it("maps filters to production review states", () => {
     expect(filterAstrologerReviews(reviews, "published").map((review) => review.reviewId)).toEqual([
       "11111111-1111-4111-8111-111111111111",
-      "21111111-1111-4111-8111-111111111111"
+      "21111111-1111-4111-8111-111111111111",
+      "41111111-1111-4111-8111-111111111111"
     ]);
     expect(filterAstrologerReviews(reviews, "pending").map((review) => review.reviewId)).toEqual([
       "11111111-1111-4111-8111-111111111111",
@@ -91,6 +92,20 @@ const reviews: ReviewAstrologerItem[] = [
     visibilityStatus: "visible",
     disputeStatus: "none",
     activePublicVersion: { ...baseReview.activePublicVersion, rating: 4 }
+  },
+  {
+    ...baseReview,
+    reviewId: "41111111-1111-4111-8111-111111111111",
+    visibilityStatus: "visible",
+    disputeStatus: "resolved_closed",
+    activePublicVersion: { ...baseReview.activePublicVersion, rating: 3 },
+    moderationCase: {
+      caseId: "71111111-1111-4111-8111-111111111111",
+      status: "closed",
+      openedAt: "2026-08-20T12:00:00.000Z",
+      closedAt: "2026-08-21T12:00:00.000Z",
+      reasonCode: "fraud_or_conflict"
+    }
   },
   {
     ...baseReview,

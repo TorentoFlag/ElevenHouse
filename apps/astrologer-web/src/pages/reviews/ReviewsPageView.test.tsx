@@ -3,7 +3,8 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReviewsPageCopy } from "./ReviewsPage";
+import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
+import type { ReviewCaseState, ReviewsPageCopy } from "./ReviewsPage";
 import { ReviewsPageView } from "./ReviewsPageView";
 
 afterEach(cleanup);
@@ -36,6 +37,44 @@ describe("ReviewsPageView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить запрос" }));
     expect(onSendReviewRequest).toHaveBeenCalledTimes(1);
   });
+
+  it("shows restored visible reviews as published and locks closed case messaging", () => {
+    renderView({
+      reviews: [restoredReview],
+      caseStates: {
+        [caseId]: {
+          status: "ready",
+          detail: {
+            caseId,
+            reviewId,
+            status: "closed",
+            openedAt: "2026-08-20T12:00:00.000Z",
+            closedAt: "2026-08-21T12:00:00.000Z",
+            serviceContext: {
+              title: "Натальный разбор",
+              contextLabel: "Сессия завершена"
+            },
+            messages: [
+              {
+                messageId: "81111111-1111-4111-8111-111111111111",
+                authorRole: "moderator",
+                visibility: "all_case_participants",
+                body: "Спор закрыт после проверки.",
+                createdAt: "2026-08-21T12:00:00.000Z"
+              }
+            ]
+          }
+        }
+      }
+    });
+
+    expect(screen.getByText("Опубликован")).toBeInTheDocument();
+    expect(screen.getByText("Закрыт")).toBeInTheDocument();
+    expect(screen.getByText("Спор закрыт после проверки.")).toBeInTheDocument();
+    expect(screen.queryByText("Скрыт")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Сообщение по спору")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить" })).not.toBeInTheDocument();
+  });
 });
 
 function renderView(overrides: Partial<ReviewsPageViewPropsForTest> = {}) {
@@ -45,6 +84,8 @@ function renderView(overrides: Partial<ReviewsPageViewPropsForTest> = {}) {
 function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {}) {
   const props: ReviewsPageViewPropsForTest = {
     requestReviewOpen: false,
+    reviews: [],
+    caseStates: {},
     onOpenRequestReview: vi.fn(),
     onSendReviewRequest: vi.fn(),
     ...overrides
@@ -54,7 +95,7 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
     <ReviewsPageView
       copy={copy}
       locale="ru"
-      reviews={[]}
+      reviews={props.reviews}
       summary={{
         averageRating: "—",
         publishedCount: 0,
@@ -84,7 +125,7 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
       aiDraftStates={{}}
       disputeTargetId={null}
       disputeDrafts={{}}
-      caseStates={{}}
+      caseStates={props.caseStates}
       caseMessageDrafts={{}}
       isLoading={false}
       isError={false}
@@ -115,6 +156,8 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
 
 type ReviewsPageViewPropsForTest = {
   readonly requestReviewOpen: boolean;
+  readonly reviews: readonly ReviewAstrologerItem[];
+  readonly caseStates: Record<string, ReviewCaseState>;
   readonly onOpenRequestReview: () => void;
   readonly onSendReviewRequest: () => void;
 };
@@ -122,6 +165,8 @@ type ReviewsPageViewPropsForTest = {
 const reviewableInstanceId = "21111111-1111-4111-8111-111111111111";
 const clientUserId = "b1111111-1111-4111-8111-111111111111";
 const threadId = "91111111-1111-4111-8111-111111111111";
+const reviewId = "61111111-1111-4111-8111-111111111111";
+const caseId = "71111111-1111-4111-8111-111111111111";
 
 const copy = {
   documentTitle: "ElevenHouse | Отзывы",
@@ -234,6 +279,40 @@ const reviewRequestTarget = {
     avatarUrl: null
   }
 } as const;
+
+const restoredReview = {
+  reviewId,
+  visibilityStatus: "visible",
+  disputeStatus: "resolved_closed",
+  reviewableInstance: reviewRequestTarget.reviewableInstance,
+  author: {
+    publicIdentityMode: "secret_user",
+    displayName: "Секретный пользователь",
+    initials: null,
+    avatarUrl: null
+  },
+  activePublicVersion: {
+    id: "31111111-1111-4111-8111-111111111111",
+    versionNumber: 1,
+    rating: 5,
+    text: "Отзыв восстановлен после спора.",
+    publicIdentityMode: "secret_user",
+    moderationStatus: "approved",
+    moderationReasonCode: null,
+    submittedAt: "2026-08-20T10:00:00.000Z",
+    decidedAt: "2026-08-20T11:00:00.000Z"
+  },
+  activePublicReplyVersion: null,
+  pendingVersion: null,
+  pendingReplyVersion: null,
+  moderationCase: {
+    caseId,
+    status: "closed",
+    openedAt: "2026-08-20T12:00:00.000Z",
+    closedAt: "2026-08-21T12:00:00.000Z",
+    reasonCode: "fraud_or_conflict"
+  }
+} satisfies ReviewAstrologerItem;
 
 const messagingThread = {
   id: threadId,

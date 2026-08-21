@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
@@ -11,6 +11,10 @@ import type {
 } from "@elevenhouse/contracts";
 import { AdminReviewsPage } from "./AdminReviewsPage";
 import type { AdminReviewsApi } from "../api/adminReviewsApi";
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("AdminReviewsPage", () => {
   it("shows review context, labels case messages, and sends targeted moderator messages", async () => {
@@ -46,9 +50,45 @@ describe("AdminReviewsPage", () => {
       );
     });
   });
+
+  it("keeps closed dispute history visible without mutation controls", async () => {
+    const api = createApi({
+      review: {
+        visibilityStatus: "visible",
+        disputeStatus: "resolved_closed",
+        moderationCase: {
+          ...reviewDetail().moderationCase!,
+          status: "closed",
+          closedAt: "2026-08-21T09:00:00.000Z"
+        }
+      },
+      caseDetail: {
+        status: "closed",
+        closedAt: "2026-08-21T09:00:00.000Z"
+      }
+    });
+
+    render(<AdminReviewsPage api={api} />);
+
+    expect(await screen.findByText("Спор закрыт")).toBeInTheDocument();
+    expect(screen.getByText("Прошу уточнить спорный факт по консультации.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Статус спора" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Обновить статус" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Кому видно сообщение")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Сообщение по спору")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Вернуть публикацию" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Скрыть модерацией" })).not.toBeInTheDocument();
+  });
 });
 
-function createApi(): AdminReviewsApi {
+function createApi(options?: {
+  readonly review?: Partial<ReviewAdminDetail>;
+  readonly caseDetail?: Partial<ReviewModerationCaseDetail>;
+}): AdminReviewsApi {
+  const detail = { ...reviewDetail(), ...options?.review };
+  const moderationCaseDetail = { ...caseDetail(), ...options?.caseDetail };
+
   return {
     listModerationQueue: vi.fn(
       async (): Promise<ReviewModerationQueueResponse> => ({
@@ -62,11 +102,11 @@ function createApi(): AdminReviewsApi {
             caseId: null,
             caseStatus: null,
             submittedAt: "2026-08-20T10:00:00.000Z",
-            client: reviewDetail().client,
+            client: detail.client,
             publicIdentityMode: "named",
-            visibilityStatus: "temporarily_hidden_by_dispute",
-            disputeStatus: "waiting_client",
-            reviewableInstance: reviewDetail().reviewableInstance,
+            visibilityStatus: detail.visibilityStatus,
+            disputeStatus: detail.disputeStatus,
+            reviewableInstance: detail.reviewableInstance,
             rating: 5,
             text: "Очень помогло, но есть вопрос по длительности."
           }
@@ -74,14 +114,14 @@ function createApi(): AdminReviewsApi {
         nextCursor: null
       })
     ),
-    getReviewDetail: vi.fn(async () => reviewDetail()),
-    getModerationCaseDetail: vi.fn(async () => caseDetail()),
-    approveReviewVersion: vi.fn(async () => reviewDetail()),
-    rejectReviewVersion: vi.fn(async () => reviewDetail()),
-    approveReviewReplyVersion: vi.fn(async () => reviewDetail()),
-    rejectReviewReplyVersion: vi.fn(async () => reviewDetail()),
-    restoreReviewAfterDispute: vi.fn(async () => reviewDetail()),
-    hideReviewByModeration: vi.fn(async () => reviewDetail()),
+    getReviewDetail: vi.fn(async () => detail),
+    getModerationCaseDetail: vi.fn(async () => moderationCaseDetail),
+    approveReviewVersion: vi.fn(async () => detail),
+    rejectReviewVersion: vi.fn(async () => detail),
+    approveReviewReplyVersion: vi.fn(async () => detail),
+    rejectReviewReplyVersion: vi.fn(async () => detail),
+    restoreReviewAfterDispute: vi.fn(async () => detail),
+    hideReviewByModeration: vi.fn(async () => detail),
     createModerationCaseMessage: vi.fn(
       async (): Promise<ReviewModerationCaseMessage> => ({
         messageId: "10000000-0000-4000-8000-000000000305",
@@ -91,7 +131,7 @@ function createApi(): AdminReviewsApi {
         createdAt: "2026-08-21T09:30:00.000Z"
       })
     ),
-    updateModerationCaseStatus: vi.fn(async () => caseDetail())
+    updateModerationCaseStatus: vi.fn(async () => moderationCaseDetail)
   };
 }
 

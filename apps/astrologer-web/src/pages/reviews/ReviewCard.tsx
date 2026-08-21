@@ -313,32 +313,34 @@ function ReviewCaseThread({
               </li>
             ))}
           </ul>
-          <form
-            className={styles.replyForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit();
-            }}
-          >
-            <textarea
-              className={styles.replyInput}
-              value={draft}
-              rows={3}
-              maxLength={4000}
-              aria-label={caseThread.messageLabel}
-              placeholder={caseThread.placeholder}
-              onChange={(event) => onEdit(event.target.value)}
-            />
-            <div className={styles.replyActions}>
-              <button
-                type="submit"
-                className={styles.primaryButton}
-                disabled={commandPending || !draft.trim()}
-              >
-                {caseThread.submitLabel}
-              </button>
-            </div>
-          </form>
+          {caseState.detail.status === "closed" ? null : (
+            <form
+              className={styles.replyForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                onSubmit();
+              }}
+            >
+              <textarea
+                className={styles.replyInput}
+                value={draft}
+                rows={3}
+                maxLength={4000}
+                aria-label={caseThread.messageLabel}
+                placeholder={caseThread.placeholder}
+                onChange={(event) => onEdit(event.target.value)}
+              />
+              <div className={styles.replyActions}>
+                <button
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={commandPending || !draft.trim()}
+                >
+                  {caseThread.submitLabel}
+                </button>
+              </div>
+            </form>
+          )}
         </>
       ) : null}
     </section>
@@ -370,9 +372,18 @@ function ReviewAvatar({ review }: { readonly review: ReviewAstrologerItem }) {
 }
 
 function getReviewStatus(review: ReviewAstrologerItem): "published" | "pending" | "hidden" {
-  if (review.visibilityStatus !== "visible" || review.disputeStatus !== "none") return "hidden";
+  if (review.visibilityStatus !== "visible" || hasActiveDispute(review)) return "hidden";
   if (review.pendingVersion || review.pendingReplyVersion) return "pending";
   return "published";
+}
+
+function hasActiveDispute(review: ReviewAstrologerItem): boolean {
+  return [
+    "open",
+    "under_review",
+    "waiting_client",
+    "waiting_astrologer"
+  ].includes(review.disputeStatus);
 }
 
 function formatReviewDate(value: string, locale: SupportedLocale): string {

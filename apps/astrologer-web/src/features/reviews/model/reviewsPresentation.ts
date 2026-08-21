@@ -60,13 +60,22 @@ export function countAstrologerReviewFilters(
 }
 
 function isVisiblePublishedReview(review: ReviewAstrologerItem): boolean {
-  return review.visibilityStatus === "visible" && review.disputeStatus === "none";
+  return review.visibilityStatus === "visible" && !hasActiveDispute(review);
 }
 
 function isHiddenReview(review: ReviewAstrologerItem): boolean {
-  return review.visibilityStatus !== "visible" || review.disputeStatus !== "none";
+  return review.visibilityStatus !== "visible" || hasActiveDispute(review);
 }
 
 function hasPendingModeration(review: ReviewAstrologerItem): boolean {
   return Boolean(review.pendingVersion || review.pendingReplyVersion);
+}
+
+function hasActiveDispute(review: ReviewAstrologerItem): boolean {
+  return [
+    "open",
+    "under_review",
+    "waiting_client",
+    "waiting_astrologer"
+  ].includes(review.disputeStatus);
 }
