@@ -122,7 +122,7 @@ export class PublicReviewsService {
       }
     });
 
-    if (result.kind === "rejected" && result.reason !== "pending_version_exists") {
+    if (result.kind === "rejected") {
       throw new BadRequestException("Review version cannot be submitted");
     }
 

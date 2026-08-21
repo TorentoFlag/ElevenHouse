@@ -298,7 +298,7 @@ describe("public reviews HTTP API", () => {
     expect(receivedSubmissionCommand).toHaveProperty("nextVersionId", expect.any(String));
   });
 
-  it("replays pending client review submission detail for repeated idempotency keys", async () => {
+  it("rejects new client review submissions while another version is pending moderation", async () => {
     const commandStore = app.get(PUBLIC_REVIEWS_COMMAND_STORE) as {
       submitReviewVersion: (command: unknown) => Promise<unknown>;
     };
@@ -321,11 +321,7 @@ describe("public reviews HTTP API", () => {
       })
     });
 
-    expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toMatchObject({
-      reviewId,
-      pendingVersion: { moderationStatus: "pending" }
-    });
+    expect(response.status).toBe(400);
     expect(receivedSubmissionCommand).toMatchObject({
       actorUserId: clientUserId,
       reviewableInstanceId
