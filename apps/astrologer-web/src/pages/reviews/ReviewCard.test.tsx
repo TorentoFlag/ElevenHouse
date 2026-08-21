@@ -74,6 +74,34 @@ describe("ReviewCard", () => {
     expect(screen.getByText("4 / 5")).toBeVisible();
     expect(screen.getAllByText("На модерации")).toHaveLength(2);
   });
+
+  it("keeps the published astrologer reply visible while a reply edit is pending", () => {
+    render(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingReplyEdit}
+        replyDraft=""
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive={false}
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={vi.fn()}
+        onOpenDispute={vi.fn()}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Ваш ответ")).toBeVisible();
+    expect(screen.getByText("Спасибо за доверие, рад был помочь.")).toBeVisible();
+    expect(screen.getByText("Ответ на модерации")).toBeVisible();
+    expect(screen.getByText("Обновленная версия ответа ожидает модерацию.")).toBeVisible();
+  });
 });
 
 const caseId = "51111111-1111-4111-8111-111111111111";
@@ -133,6 +161,31 @@ const reviewWithPendingEdit = {
     moderationStatus: "pending",
     moderationReasonCode: null,
     submittedAt: "2026-08-21T09:00:00.000Z",
+    decidedAt: null
+  },
+  moderationCase: null
+} satisfies ReviewAstrologerItem;
+
+const reviewWithPendingReplyEdit = {
+  ...reviewWithCase,
+  visibilityStatus: "visible",
+  disputeStatus: "none",
+  activePublicReplyVersion: {
+    id: "61111111-1111-4111-8111-111111111111",
+    versionNumber: 1,
+    text: "Спасибо за доверие, рад был помочь.",
+    moderationStatus: "approved",
+    moderationReasonCode: null,
+    submittedAt: "2026-08-20T12:00:00.000Z",
+    decidedAt: "2026-08-20T13:00:00.000Z"
+  },
+  pendingReplyVersion: {
+    id: "91111111-1111-4111-8111-111111111111",
+    versionNumber: 2,
+    text: "Обновленная версия ответа ожидает модерацию.",
+    moderationStatus: "pending",
+    moderationReasonCode: null,
+    submittedAt: "2026-08-21T09:20:00.000Z",
     decidedAt: null
   },
   moderationCase: null

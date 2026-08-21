@@ -41,10 +41,7 @@ export function ReviewCard({
   readonly onSubmitCaseMessage: () => void;
 }) {
   const status = getReviewStatus(review);
-  const reply = review.activePublicReplyVersion ?? review.pendingReplyVersion;
-  const replyLabel = review.pendingReplyVersion
-    ? copy.reply.pendingReplyLabel
-    : copy.reply.ownReplyLabel;
+  const hasReply = Boolean(review.activePublicReplyVersion || review.pendingReplyVersion);
   const canOpenDispute = review.visibilityStatus === "visible" && review.disputeStatus === "none";
 
   return (
@@ -81,17 +78,29 @@ export function ReviewCard({
           <p>{review.pendingVersion.text}</p>
         </div>
       ) : null}
-      {reply ? (
+      {review.activePublicReplyVersion ? (
         <div className={styles.replyBox}>
           <div className={styles.replyAvatar} aria-hidden="true">
             EH
           </div>
           <div>
-            <h3>{replyLabel}</h3>
-            <p>{reply.text}</p>
+            <h3>{copy.reply.ownReplyLabel}</h3>
+            <p>{review.activePublicReplyVersion.text}</p>
           </div>
         </div>
-      ) : replyActive ? (
+      ) : null}
+      {review.pendingReplyVersion ? (
+        <div className={styles.pendingReplyBox}>
+          <div className={styles.replyAvatar} aria-hidden="true">
+            EH
+          </div>
+          <div>
+            <h3>{copy.reply.pendingReplyLabel}</h3>
+            <p>{review.pendingReplyVersion.text}</p>
+          </div>
+        </div>
+      ) : null}
+      {!hasReply && replyActive ? (
         <form
           className={styles.replyForm}
           onSubmit={(event) => {
@@ -126,7 +135,8 @@ export function ReviewCard({
             </button>
           </div>
         </form>
-      ) : (
+      ) : null}
+      {!hasReply && !replyActive ? (
         <div className={styles.actions}>
           <button
             type="button"
@@ -157,9 +167,6 @@ export function ReviewCard({
             </button>
           ) : null}
         </div>
-      )}
-      {status === "pending" && !replyActive ? (
-        <p className={styles.pendingNote}>{copy.reply.pendingReplyLabel}</p>
       ) : null}
       {review.moderationCase ? (
         <ReviewCaseThread
