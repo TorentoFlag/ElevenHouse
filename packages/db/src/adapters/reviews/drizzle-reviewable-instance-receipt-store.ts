@@ -111,6 +111,7 @@ export type UpsertReviewableInstanceFromReceiptResult =
         | "order_not_found"
         | "order_identity_mismatch"
         | "order_not_reviewable"
+        | "source_identity_conflict"
         | "invalid_received_at"
         | "active_period_end_required"
         | "active_period_end_before_receipt";
@@ -339,7 +340,12 @@ async function recordSourceReceiptInTransaction(
   input: ReviewSourceReceiptCommandInput
 ): Promise<RecordReviewSourceReceiptResult> {
   const existing = await readSourceReceiptBySource(transaction, input);
-  if (existing) return { kind: "existing", receipt: toSourceReceiptRecord(existing) };
+  if (existing) {
+    if (!sourceReceiptMatchesInput(existing, input)) {
+      return { kind: "rejected", reason: "source_identity_conflict" };
+    }
+    return { kind: "existing", receipt: toSourceReceiptRecord(existing) };
+  }
 
   const context = await validateReceiptContextInTransaction(transaction, {
     ...input,
@@ -560,7 +566,12 @@ async function upsertReceiptInTransaction(
   input: ReviewableInstanceReceiptCommandInput
 ): Promise<UpsertReviewableInstanceFromReceiptResult> {
   const existing = await readBySource(transaction, input);
-  if (existing) return { kind: "existing", instance: toRecord(existing) };
+  if (existing) {
+    if (!reviewableInstanceMatchesInput(existing, input)) {
+      return { kind: "rejected", reason: "source_identity_conflict" };
+    }
+    return { kind: "existing", instance: toRecord(existing) };
+  }
 
   const context = await validateReceiptContextInTransaction(transaction, input);
   if (context.kind === "rejected") return context;
@@ -757,4 +768,42 @@ function toSourceReceiptRecord(row: ReviewSourceReceiptRow): ReviewSourceReceipt
     activePeriodEndsAt: row.activePeriodEndsAt?.toISOString() ?? null,
     status: row.status as "received" | "revoked"
   };
+}
+
+function reviewableInstanceMatchesInput(
+  row: ReviewableInstanceRow,
+  input: ReviewableInstanceReceiptCommandInput
+): boolean {
+  return (
+    row.productId === input.productId &&
+    row.orderId === input.orderId &&
+    row.bookingId === input.bookingId &&
+    row.titleSnapshot === input.titleSnapshot &&
+    row.contextLabelSnapshot === input.contextLabelSnapshot &&
+    row.windowPolicy === input.windowPolicy &&
+    row.receivedAt.toISOString() === toIsoOrNull(input.receivedAt)
+  );
+}
+
+function sourceReceiptMatchesInput(
+  row: ReviewSourceReceiptRow,
+  input: ReviewSourceReceiptCommandInput
+): boolean {
+  return (
+    row.productId === input.productId &&
+    row.orderId === input.orderId &&
+    row.titleSnapshot === input.titleSnapshot &&
+    row.contextLabelSnapshot === input.contextLabelSnapshot &&
+    row.windowPolicy === input.windowPolicy &&
+    row.status === "received" &&
+    row.receivedAt.toISOString() === toIsoOrNull(input.receivedAt) &&
+    (row.activePeriodEndsAt?.toISOString() ?? null) ===
+      (input.activePeriodEndsAt ? toIsoOrNull(input.activePeriodEndsAt) : null)
+  );
+}
+
+function toIsoOrNull(value: string): string | null {
+  const date = new Date(value);
+  const timestamp = date.getTime();
+  return Number.isFinite(timestamp) ? date.toISOString() : null;
 }

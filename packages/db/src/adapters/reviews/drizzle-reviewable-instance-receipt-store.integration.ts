@@ -301,6 +301,88 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     ).resolves.toEqual({ scanned: 0, created: 0, existing: 0, rejected: 0 });
   });
 
+  it("rejects changed source receipt context for the same source identity", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+    const sourceResourceKey = `async_delivery:${randomUUID()}`;
+
+    await expect(
+      store.recordSourceReceipt({
+        id: randomUUID(),
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        kind: "async_delivery",
+        sourceResourceKey,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        titleSnapshot: "Письменный разбор",
+        contextLabelSnapshot: "Материал выдан клиенту",
+        receivedAt: "2026-08-20T10:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt",
+        now: "2026-08-20T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    await expect(
+      store.recordSourceReceipt({
+        id: randomUUID(),
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        kind: "async_delivery",
+        sourceResourceKey,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        titleSnapshot: "Другой материал",
+        contextLabelSnapshot: "Материал выдан клиенту",
+        receivedAt: "2026-08-20T10:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt",
+        now: "2026-08-20T10:02:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "rejected", reason: "source_identity_conflict" });
+  });
+
+  it("rejects changed reviewable instance context for the same source identity", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+    const sourceResourceKey = `instant_delivery:${randomUUID()}`;
+
+    await expect(
+      store.upsertFromReceipt({
+        nextReviewableInstanceId: randomUUID(),
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        kind: "instant_delivery",
+        sourceResourceKey,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        bookingId: null,
+        titleSnapshot: "Моментальный материал",
+        contextLabelSnapshot: "Материал выдан клиенту",
+        receivedAt: "2026-08-20T10:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt",
+        now: "2026-08-20T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({ kind: "created" });
+
+    await expect(
+      store.upsertFromReceipt({
+        nextReviewableInstanceId: randomUUID(),
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        kind: "instant_delivery",
+        sourceResourceKey,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        bookingId: null,
+        titleSnapshot: "Моментальный материал",
+        contextLabelSnapshot: "Другой контекст",
+        receivedAt: "2026-08-20T10:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt",
+        now: "2026-08-20T10:02:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "rejected", reason: "source_identity_conflict" });
+  });
+
   it("allows several received products within the same client relationship", async () => {
     const fixture = await seedPaidOrderFixture(runtime);
     const secondOrderInput = {
