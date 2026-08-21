@@ -93,6 +93,7 @@ describe("ClientReviewsPage", () => {
     renderPage();
 
     expect(await screen.findByText("Уточните контекст консультации.")).toBeVisible();
+    expect(screen.getByText("Статус: Ждём клиента")).toBeVisible();
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение по спору" }), {
       target: { value: "Речь про прогноз на вторую неделю." }
     });

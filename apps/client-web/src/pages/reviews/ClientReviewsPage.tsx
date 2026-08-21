@@ -465,7 +465,7 @@ function CaseThread({
 
   return (
     <div className={styles.caseThread}>
-      <p className={styles.meta}>Статус: {caseDetail.status}</p>
+      <p className={styles.meta}>Статус: {describeCaseStatus(caseDetail.status)}</p>
       <ul className={styles.messageList}>
         {caseDetail.messages.map((caseMessage) => (
           <li key={caseMessage.messageId}>
@@ -509,6 +509,14 @@ function describeCaseAuthor(role: ReviewModerationCaseDetail["messages"][number]
   if (role === "astrologer") return "Астролог";
   if (role === "moderator") return "Модератор";
   return "Система";
+}
+
+function describeCaseStatus(status: ReviewModerationCaseDetail["status"]) {
+  if (status === "open") return "Открыт";
+  if (status === "closed") return "Закрыт";
+  if (status === "waiting_client") return "Ждём клиента";
+  if (status === "waiting_astrologer") return "Ждём астролога";
+  return "Консенсус найден";
 }
 
 function ReviewVersionCard({
