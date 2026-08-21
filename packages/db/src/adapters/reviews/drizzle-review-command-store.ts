@@ -787,14 +787,19 @@ export function createDrizzleReviewCommandStore(
         const reviewRow = await readReview(transaction, moderationCaseRow.reviewId);
         if (!reviewRow) return { kind: "rejected", reason: "not_review_case" };
 
+        const currentReview = await hydrateReviewState(transaction, reviewRow);
         const result = updateReviewModerationCaseStatus({
           now: input.now,
           moderatorUserId: input.moderatorUserId,
           targetStatus: input.status,
-          review: await hydrateReviewState(transaction, reviewRow),
+          review: currentReview,
           moderationCase: mapReviewModerationCase(moderationCaseRow)
         });
         if (result.kind === "rejected") return result;
+        const changed =
+          result.review.revision !== currentReview.revision ||
+          result.moderationCase.status !== moderationCaseRow.status;
+        if (!changed) return result;
 
         await transaction
           .update(reviews)

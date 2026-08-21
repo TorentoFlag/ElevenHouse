@@ -633,6 +633,35 @@ describe("Review lifecycle domain policy", () => {
       }
     });
 
+    const replay = updateReviewModerationCaseStatus({
+      now: "2026-08-22T12:35:00.000Z",
+      moderatorUserId: ids.moderatorUserId,
+      targetStatus: "waiting_client",
+      review: result.kind === "updated" ? result.review : approvedReview(),
+      moderationCase:
+        result.kind === "updated"
+          ? result.moderationCase
+          : {
+              caseId: ids.caseId,
+              reviewId: ids.reviewId,
+              status: "waiting_client",
+              openedAt: "2026-08-20T10:00:00.000Z",
+              closedAt: null,
+              reasonCode: "other"
+            }
+    });
+    expect(replay).toMatchObject({
+      kind: "updated",
+      review: {
+        revision: result.kind === "updated" ? result.review.revision : 0,
+        disputeStatus: "waiting_client"
+      },
+      moderationCase: {
+        status: "waiting_client",
+        closedAt: null
+      }
+    });
+
     expect(
       updateReviewModerationCaseStatus({
         now: "2026-08-22T12:30:00.000Z",

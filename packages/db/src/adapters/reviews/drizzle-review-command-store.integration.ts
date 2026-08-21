@@ -712,6 +712,45 @@ describe.sequential("Drizzle review command store", () => {
       visibilityStatus: "temporarily_hidden_by_dispute",
       disputeStatus: "waiting_astrologer"
     });
+    const [statusAuditBeforeReplayRow] = await runtime.database
+      .select({ statusAuditCount: count() })
+      .from(auditLogEntries)
+      .where(
+        sql`${auditLogEntries.targetId} = ${fixture.reviewId} and ${auditLogEntries.action} = 'review.moderation_case.status_updated'`
+      );
+    const statusAuditCountBeforeReplay = statusAuditBeforeReplayRow?.statusAuditCount ?? 0;
+
+    await expect(
+      store.updateReviewModerationCaseStatus({
+        moderatorUserId: fixture.moderatorUserId,
+        now: "2026-08-20T12:06:00.000Z",
+        caseId,
+        status: "waiting_astrologer"
+      })
+    ).resolves.toMatchObject({
+      kind: "updated",
+      review: {
+        revision: waitingReviewRow?.revision,
+        disputeStatus: "waiting_astrologer"
+      },
+      moderationCase: {
+        caseId,
+        status: "waiting_astrologer"
+      }
+    });
+    const [waitingReviewRowAfterReplay] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(waitingReviewRowAfterReplay?.revision).toBe(waitingReviewRow?.revision);
+    const [statusAuditAfterReplayRow] = await runtime.database
+      .select({ statusAuditCount: count() })
+      .from(auditLogEntries)
+      .where(
+        sql`${auditLogEntries.targetId} = ${fixture.reviewId} and ${auditLogEntries.action} = 'review.moderation_case.status_updated'`
+      );
+    const statusAuditCountAfterReplay = statusAuditAfterReplayRow?.statusAuditCount ?? 0;
+    expect(statusAuditCountAfterReplay).toBe(statusAuditCountBeforeReplay);
 
     const clientMessageId = randomUUID();
     const astrologerMessageId = randomUUID();

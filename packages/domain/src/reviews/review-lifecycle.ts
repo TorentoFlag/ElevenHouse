@@ -685,13 +685,27 @@ export function updateReviewModerationCaseStatus(input: {
   ) {
     return { kind: "rejected", reason: "review_not_in_dispute" };
   }
+  const nextDisputeStatus = mapCaseStatusToDisputeStatus(input.targetStatus);
+  if (
+    input.moderationCase.status === input.targetStatus &&
+    input.review.disputeStatus === nextDisputeStatus
+  ) {
+    return {
+      kind: "updated",
+      review: input.review,
+      moderationCase: {
+        ...input.moderationCase,
+        closedAt: null
+      }
+    };
+  }
 
   return {
     kind: "updated",
     review: {
       ...input.review,
       revision: input.review.revision + 1,
-      disputeStatus: mapCaseStatusToDisputeStatus(input.targetStatus),
+      disputeStatus: nextDisputeStatus,
       visibilityStatus: "temporarily_hidden_by_dispute"
     },
     moderationCase: {
