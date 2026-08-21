@@ -1,7 +1,9 @@
 import type {
   ReviewAdminDetail,
   ReviewDisputeStatus,
+  ReviewModerationCaseMessageAuthorRole,
   ReviewModerationCaseMessageVisibility,
+  ReviewModerationStatus,
   ReviewModerationCaseStatus,
   ReviewModerationQueueItem,
   ReviewVisibilityStatus
@@ -11,6 +13,7 @@ export type AdminReviewsSummary = {
   readonly total: number;
   readonly reviewVersions: number;
   readonly replyVersions: number;
+  readonly moderationCases: number;
   readonly disputed: number;
 };
 
@@ -55,6 +58,7 @@ export function summarizeModerationQueue(
     total: items.length,
     reviewVersions: items.filter((item) => item.kind === "review_version").length,
     replyVersions: items.filter((item) => item.kind === "reply_version").length,
+    moderationCases: items.filter((item) => item.kind === "moderation_case").length,
     disputed: items.filter((item) => item.disputeStatus !== "none").length
   };
 }
@@ -68,7 +72,53 @@ export function pendingReplyVersion(detail: ReviewAdminDetail) {
 }
 
 export function queueItemLabel(item: ReviewModerationQueueItem): string {
-  return item.kind === "review_version" ? "Отзыв клиента" : "Ответ астролога";
+  switch (item.kind) {
+    case "review_version":
+      return "Отзыв клиента";
+    case "reply_version":
+      return "Ответ астролога";
+    case "moderation_case":
+      return "Спор по отзыву";
+  }
+}
+
+export function moderationStatusLabel(status: ReviewModerationStatus): string {
+  switch (status) {
+    case "pending":
+      return "На модерации";
+    case "approved":
+      return "Одобрено";
+    case "rejected":
+      return "Отклонено";
+  }
+}
+
+export function caseMessageAuthorLabel(role: ReviewModerationCaseMessageAuthorRole): string {
+  switch (role) {
+    case "moderator":
+      return "Модератор";
+    case "client":
+      return "Клиент";
+    case "astrologer":
+      return "Астролог";
+    case "system":
+      return "Система";
+  }
+}
+
+export function caseMessageVisibilityLabel(
+  visibility: ReviewModerationCaseMessageVisibility
+): string {
+  switch (visibility) {
+    case "all_case_participants":
+      return "Клиент и астролог";
+    case "client_and_moderators":
+      return "Только клиент";
+    case "astrologer_and_moderators":
+      return "Только астролог";
+    case "moderators_only":
+      return "Только модераторы";
+  }
 }
 
 export function visibilityLabel(status: ReviewVisibilityStatus): string {

@@ -236,7 +236,7 @@ export type CreateReviewCaseMessageResult =
     }
   | {
       readonly kind: "rejected";
-      readonly reason: "visibility_not_allowed_for_author";
+      readonly reason: "visibility_not_allowed_for_author" | "case_closed" | "not_review_case";
     };
 
 export function planSubmitReviewVersion(input: {
@@ -661,12 +661,21 @@ export function updateReviewModerationCaseStatus(input: {
 export function createReviewCaseMessage(input: {
   readonly messageId: string;
   readonly caseId: string;
+  readonly moderationCase?: ReviewModerationCaseLifecycleState;
   readonly authorUserId: string | null;
   readonly authorRole: ReviewModerationCaseMessageAuthorRole;
   readonly visibility: ReviewModerationCaseMessageVisibility;
   readonly body: string;
   readonly createdAt: string;
 }): CreateReviewCaseMessageResult {
+  if (input.moderationCase) {
+    if (input.moderationCase.caseId !== input.caseId) {
+      return { kind: "rejected", reason: "not_review_case" };
+    }
+    if (input.moderationCase.status === "closed") {
+      return { kind: "rejected", reason: "case_closed" };
+    }
+  }
   if (!isCaseMessageVisibilityAllowed(input.authorRole, input.visibility)) {
     return { kind: "rejected", reason: "visibility_not_allowed_for_author" };
   }

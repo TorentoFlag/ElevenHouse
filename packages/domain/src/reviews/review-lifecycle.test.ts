@@ -599,6 +599,26 @@ describe("Review lifecycle domain policy", () => {
         visibility: "moderators_only"
       })
     ).toMatchObject({ kind: "rejected", reason: "visibility_not_allowed_for_author" });
+
+    expect(
+      createReviewCaseMessage({
+        authorRole: "moderator",
+        authorUserId: ids.moderatorUserId,
+        body: "Позднее уточнение.",
+        caseId: ids.caseId,
+        createdAt: "2026-08-22T10:00:00.000Z",
+        messageId: ids.messageId,
+        visibility: "all_case_participants",
+        moderationCase: {
+          caseId: ids.caseId,
+          reviewId: ids.reviewId,
+          status: "closed",
+          openedAt: "2026-08-20T10:00:00.000Z",
+          closedAt: "2026-08-21T10:00:00.000Z",
+          reasonCode: "other"
+        }
+      })
+    ).toMatchObject({ kind: "rejected", reason: "case_closed" });
   });
 
   it("projects secret public authors and validates the first published Flow payload", () => {

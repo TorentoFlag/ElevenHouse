@@ -120,6 +120,23 @@ async function listModerationQueue(
       )
     );
   }
+  const moderationCaseConditions: SQL[] = [
+    inArray(reviewModerationCases.status, [
+      "open",
+      "waiting_client",
+      "waiting_astrologer",
+      "consensus_reached"
+    ])
+  ];
+  if (cursor) {
+    moderationCaseConditions.push(
+      moderationQueueCursorCondition(
+        reviewModerationCases.openedAt,
+        sql<string>`'moderation_case:' || ${reviewModerationCases.id}`,
+        cursor
+      )
+    );
+  }
 
   const pendingReviewVersions = await database
     .select({
@@ -151,6 +168,21 @@ async function listModerationQueue(
     .orderBy(desc(reviewReplyVersions.submittedAt), desc(reviewReplyVersions.id))
     .limit(query.limit + 1);
 
+  const openModerationCases = await database
+    .select({
+      review: reviews,
+      reviewableInstance: reviewableInstances,
+      moderationCase: reviewModerationCases,
+      clientProfile: userProfiles
+    })
+    .from(reviewModerationCases)
+    .innerJoin(reviews, eq(reviews.id, reviewModerationCases.reviewId))
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviews.clientUserId))
+    .where(and(...moderationCaseConditions))
+    .orderBy(desc(reviewModerationCases.openedAt), desc(reviewModerationCases.id))
+    .limit(query.limit + 1);
+
   const merged = [
     ...pendingReviewVersions.map((row) =>
       toReviewVersionModerationQueueItem(
@@ -165,6 +197,14 @@ async function listModerationQueue(
         row.review,
         row.reviewableInstance,
         row.replyVersion,
+        row.clientProfile
+      )
+    ),
+    ...openModerationCases.map((row) =>
+      toModerationCaseQueueItem(
+        row.review,
+        row.reviewableInstance,
+        row.moderationCase,
         row.clientProfile
       )
     )
@@ -639,6 +679,8 @@ function toReviewVersionModerationQueueItem(
     reviewId: review.id,
     reviewVersionId: version.id,
     replyVersionId: null,
+    caseId: null,
+    caseStatus: null,
     submittedAt: version.submittedAt.toISOString(),
     client: toAdminAuthor(review.clientUserId, clientProfile),
     publicIdentityMode:
@@ -663,6 +705,8 @@ function toReplyVersionModerationQueueItem(
     reviewId: review.id,
     reviewVersionId: null,
     replyVersionId: replyVersion.id,
+    caseId: null,
+    caseStatus: null,
     submittedAt: replyVersion.submittedAt.toISOString(),
     client: toAdminAuthor(review.clientUserId, clientProfile),
     publicIdentityMode:
@@ -672,6 +716,32 @@ function toReplyVersionModerationQueueItem(
     reviewableInstance: toReviewableInstanceSummary(reviewableInstance),
     rating: null,
     text: replyVersion.text
+  };
+}
+
+function toModerationCaseQueueItem(
+  review: ReviewRow,
+  reviewableInstance: ReviewableInstanceRow,
+  moderationCase: ReviewModerationCaseRow,
+  clientProfile: UserProfileRow | null
+): ReviewModerationQueueItem {
+  return {
+    queueItemId: `moderation_case:${moderationCase.id}`,
+    kind: "moderation_case",
+    reviewId: review.id,
+    reviewVersionId: null,
+    replyVersionId: null,
+    caseId: moderationCase.id,
+    caseStatus: moderationCase.status as ReviewModerationQueueItem["caseStatus"],
+    submittedAt: moderationCase.openedAt.toISOString(),
+    client: toAdminAuthor(review.clientUserId, clientProfile),
+    publicIdentityMode:
+      review.publicIdentityMode as ReviewModerationQueueItem["publicIdentityMode"],
+    visibilityStatus: review.visibilityStatus as ReviewModerationQueueItem["visibilityStatus"],
+    disputeStatus: review.disputeStatus as ReviewModerationQueueItem["disputeStatus"],
+    reviewableInstance: toReviewableInstanceSummary(reviewableInstance),
+    rating: null,
+    text: `Спор открыт: ${moderationReasonLabel(moderationCase.reasonCode)}`
   };
 }
 
@@ -798,12 +868,40 @@ function compareModerationQueueItems(
 }
 
 function moderationQueueCursorCondition(
-  submittedAtColumn: typeof reviewVersions.submittedAt | typeof reviewReplyVersions.submittedAt,
+  submittedAtColumn:
+    | typeof reviewVersions.submittedAt
+    | typeof reviewReplyVersions.submittedAt
+    | typeof reviewModerationCases.openedAt,
   queueItemIdExpression: SQL<string>,
   cursor: ModerationQueueCursor
 ): SQL {
   const submittedAt = new Date(cursor.submittedAt);
   return sql`(${submittedAtColumn} < ${submittedAt} or (${submittedAtColumn} = ${submittedAt} and ${queueItemIdExpression} < ${cursor.queueItemId}))`;
+}
+
+function moderationReasonLabel(reasonCode: string): string {
+  switch (reasonCode) {
+    case "spam":
+      return "Спам";
+    case "abuse_or_hate":
+      return "Оскорбления или hate";
+    case "personal_data_exposure":
+      return "Персональные данные";
+    case "off_topic":
+      return "Не относится к услуге";
+    case "not_service_related":
+      return "Нет связи с оказанной услугой";
+    case "fraud_or_conflict":
+      return "Подозрение на конфликт/фрод";
+    case "duplicate":
+      return "Дубликат";
+    case "legal_risk":
+      return "Юридический риск";
+    case "other":
+      return "Другое";
+    default:
+      return "Другое";
+  }
 }
 
 function encodeModerationQueueCursor(cursor: ModerationQueueCursor): string {

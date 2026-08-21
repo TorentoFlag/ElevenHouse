@@ -99,6 +99,8 @@ describe("admin reviews HTTP API", () => {
                     reviewId,
                     reviewVersionId,
                     replyVersionId: null,
+                    caseId: null,
+                    caseStatus: null,
                     submittedAt: "2026-08-20T09:00:00.000Z",
                     client: {
                       clientUserId,

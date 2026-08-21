@@ -642,6 +642,24 @@ describe.sequential("Drizzle review command store", () => {
       closedByUserId: fixture.moderatorUserId
     });
     expect(closedCaseRow?.closedAt).toEqual(new Date("2026-08-20T13:00:00.000Z"));
+    await expect(
+      store.createReviewCaseMessage({
+        messageId: randomUUID(),
+        caseId,
+        authorUserId: fixture.moderatorUserId,
+        authorRole: "moderator",
+        visibility: "all_case_participants",
+        body: "Позднее уточнение в закрытый спор.",
+        now: "2026-08-20T13:10:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "rejected", reason: "case_closed" });
+    const messagesAfterClose = await runtime.database
+      .select()
+      .from(reviewModerationCaseMessages)
+      .where(eq(reviewModerationCaseMessages.caseId, caseId));
+    expect(messagesAfterClose.map((row) => row.body)).not.toContain(
+      "Позднее уточнение в закрытый спор."
+    );
     await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
       visibleReviewCount: 1,
       approvedReviewCount: 1,

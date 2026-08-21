@@ -13,8 +13,11 @@ import {
 } from "../api/adminReviewsApi";
 import {
   caseMessageVisibilityOptions,
+  caseMessageAuthorLabel,
+  caseMessageVisibilityLabel,
   caseStatusOptions,
   disputeLabel,
+  moderationStatusLabel,
   pendingReplyVersion,
   pendingReviewVersion,
   queueItemLabel,
@@ -198,7 +201,8 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
         <Metric label="Всего в очереди" value={summary.total} />
         <Metric label="Отзывы" value={summary.reviewVersions} />
         <Metric label="Ответы" value={summary.replyVersions} />
-        <Metric label="Со спором" value={summary.disputed} />
+        <Metric label="Споры" value={summary.moderationCases} />
+        <Metric label="Со статусом спора" value={summary.disputed} />
       </section>
 
       {notice ? <div className="adminReviewsNotice">{notice}</div> : null}
@@ -270,7 +274,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                           <strong>
                             v{version.versionNumber} · {version.rating}/5
                           </strong>
-                          <span>{version.moderationStatus}</span>
+                          <span>{moderationStatusLabel(version.moderationStatus)}</span>
                         </header>
                         <p>{version.text}</p>
                       </article>
@@ -310,7 +314,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                       <article key={version.id} className="adminReviewsVersion">
                         <header>
                           <strong>v{version.versionNumber}</strong>
-                          <span>{version.moderationStatus}</span>
+                          <span>{moderationStatusLabel(version.moderationStatus)}</span>
                         </header>
                         <p>{version.text}</p>
                       </article>
@@ -350,9 +354,11 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                       <div>
                         <p>Спор</p>
                         <h3>{caseDetail.serviceContext.title}</h3>
+                        <span>{caseDetail.serviceContext.contextLabel}</span>
                       </div>
                       <div>
                         <select
+                          aria-label="Статус спора"
                           value={caseStatus}
                           onChange={(event) =>
                             setCaseStatus(event.target.value as EditableCaseStatus)
@@ -376,14 +382,15 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                     <div className="adminReviewsMessages">
                       {caseDetail.messages.map((message) => (
                         <article key={message.messageId}>
-                          <strong>{message.authorRole}</strong>
-                          <span>{message.visibility}</span>
+                          <strong>{caseMessageAuthorLabel(message.authorRole)}</strong>
+                          <span>{caseMessageVisibilityLabel(message.visibility)}</span>
                           <p>{message.body}</p>
                         </article>
                       ))}
                     </div>
                     <form className="adminReviewsMessageForm" onSubmit={sendCaseMessage}>
                       <select
+                        aria-label="Кому видно сообщение"
                         value={messageVisibility}
                         onChange={(event) =>
                           setMessageVisibility(
@@ -398,6 +405,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                         ))}
                       </select>
                       <textarea
+                        aria-label="Сообщение по спору"
                         value={messageBody}
                         placeholder="Сообщение участникам или внутренняя заметка"
                         onChange={(event) => setMessageBody(event.target.value)}

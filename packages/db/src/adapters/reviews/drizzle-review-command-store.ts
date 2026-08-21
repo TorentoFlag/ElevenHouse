@@ -708,9 +708,12 @@ export function createDrizzleReviewCommandStore(
         return result;
       }),
     createReviewCaseMessage: async (input) => {
+      const moderationCaseRow = await readReviewModerationCase(database, input.caseId);
+      if (!moderationCaseRow) return { kind: "rejected", reason: "not_review_case" };
       const result = createReviewCaseMessage({
         messageId: input.messageId,
         caseId: input.caseId,
+        moderationCase: mapReviewModerationCase(moderationCaseRow),
         authorUserId: input.authorUserId,
         authorRole: input.authorRole,
         visibility: input.visibility,
@@ -783,10 +786,10 @@ async function readReview(
 }
 
 async function readReviewModerationCase(
-  transaction: ReviewCommandTransaction,
+  database: ReviewCommandTransaction | ElevenHouseDatabase,
   caseId: string
 ): Promise<ReviewModerationCaseRow | null> {
-  const [row] = await transaction
+  const [row] = await database
     .select()
     .from(reviewModerationCases)
     .where(eq(reviewModerationCases.id, caseId));

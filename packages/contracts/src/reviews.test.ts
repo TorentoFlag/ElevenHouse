@@ -135,6 +135,92 @@ describe("Reviews contracts", () => {
     ).toBe(false);
   });
 
+  it("includes open moderation cases in the admin moderation queue contract", () => {
+    const parsed = reviewModerationQueueResponseSchema.parse({
+      items: [
+        {
+          queueItemId: "moderation_case:10000000-0000-4000-8000-000000000030",
+          kind: "moderation_case",
+          reviewId: "10000000-0000-4000-8000-000000000031",
+          reviewVersionId: null,
+          replyVersionId: null,
+          caseId: "10000000-0000-4000-8000-000000000030",
+          caseStatus: "waiting_client",
+          submittedAt: "2026-08-20T12:00:00.000Z",
+          client: {
+            clientUserId: "10000000-0000-4000-8000-000000000032",
+            displayName: "Анна Петрова",
+            initials: "АП",
+            avatarUrl: null
+          },
+          publicIdentityMode: "named",
+          visibilityStatus: "temporarily_hidden_by_dispute",
+          disputeStatus: "waiting_client",
+          reviewableInstance: {
+            id: "10000000-0000-4000-8000-000000000033",
+            kind: "booking",
+            status: "review_submitted",
+            title: "Солярная консультация",
+            contextLabel: "60 минут",
+            receivedAt: "2026-08-19T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          },
+          rating: null,
+          text: "Спор открыт: требуется уточнение клиента."
+        }
+      ],
+      nextCursor: null
+    });
+
+    expect(parsed.items[0]).toMatchObject({
+      kind: "moderation_case",
+      caseStatus: "waiting_client",
+      text: "Спор открыт: требуется уточнение клиента."
+    });
+  });
+
+  it("rejects moderation queue items with mismatched targets", () => {
+    const result = reviewModerationQueueResponseSchema.safeParse({
+      items: [
+        {
+          queueItemId: "moderation_case:10000000-0000-4000-8000-000000000040",
+          kind: "moderation_case",
+          reviewId: "10000000-0000-4000-8000-000000000041",
+          reviewVersionId: "10000000-0000-4000-8000-000000000042",
+          replyVersionId: null,
+          caseId: "10000000-0000-4000-8000-000000000040",
+          caseStatus: "open",
+          submittedAt: "2026-08-20T12:00:00.000Z",
+          client: {
+            clientUserId: "10000000-0000-4000-8000-000000000043",
+            displayName: "Анна Петрова",
+            initials: "АП",
+            avatarUrl: null
+          },
+          publicIdentityMode: "named",
+          visibilityStatus: "temporarily_hidden_by_dispute",
+          disputeStatus: "open",
+          reviewableInstance: {
+            id: "10000000-0000-4000-8000-000000000044",
+            kind: "booking",
+            status: "review_submitted",
+            title: "Солярная консультация",
+            contextLabel: "60 минут",
+            receivedAt: "2026-08-19T10:00:00.000Z",
+            reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+            windowPolicy: "standard_14_days_after_receipt"
+          },
+          rating: null,
+          text: "Спор открыт."
+        }
+      ],
+      nextCursor: null
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("separates client pending edits from the currently displayed approved version", () => {
     const parsed = clientReviewDetailSchema.parse({
       reviewId: "10000000-0000-4000-8000-000000000020",
@@ -374,6 +460,8 @@ describe("Reviews contracts", () => {
           reviewId: "10000000-0000-4000-8000-000000000060",
           reviewVersionId: "10000000-0000-4000-8000-000000000061",
           replyVersionId: null,
+          caseId: null,
+          caseStatus: null,
           submittedAt: "2026-08-20T10:00:00.000Z",
           client: {
             clientUserId: "10000000-0000-4000-8000-000000000062",
@@ -403,6 +491,8 @@ describe("Reviews contracts", () => {
           reviewId: "10000000-0000-4000-8000-000000000060",
           reviewVersionId: null,
           replyVersionId: "10000000-0000-4000-8000-000000000064",
+          caseId: null,
+          caseStatus: null,
           submittedAt: "2026-08-20T11:00:00.000Z",
           client: {
             clientUserId: "10000000-0000-4000-8000-000000000062",

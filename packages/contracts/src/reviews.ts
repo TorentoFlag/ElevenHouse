@@ -443,7 +443,11 @@ export const reviewAdminDetailSchema = z
   .strict();
 export type ReviewAdminDetail = z.infer<typeof reviewAdminDetailSchema>;
 
-export const reviewModerationQueueItemKindValues = ["review_version", "reply_version"] as const;
+export const reviewModerationQueueItemKindValues = [
+  "review_version",
+  "reply_version",
+  "moderation_case"
+] as const;
 export const reviewModerationQueueItemKindSchema = z.enum(reviewModerationQueueItemKindValues);
 export type ReviewModerationQueueItemKind = z.infer<typeof reviewModerationQueueItemKindSchema>;
 
@@ -454,6 +458,8 @@ export const reviewModerationQueueItemSchema = z
     reviewId: uuidSchema,
     reviewVersionId: uuidSchema.nullable(),
     replyVersionId: uuidSchema.nullable(),
+    caseId: uuidSchema.nullable(),
+    caseStatus: reviewModerationCaseStatusSchema.nullable(),
     submittedAt: instantSchema,
     client: reviewAdminAuthorSchema,
     publicIdentityMode: reviewPublicIdentityModeSchema,
@@ -491,6 +497,44 @@ export const reviewModerationQueueItemSchema = z
         code: z.ZodIssueCode.custom,
         path: ["reviewVersionId"],
         message: "Reply-version queue items cannot target reviewVersionId"
+      });
+    }
+    if (value.kind === "moderation_case" && value.caseId === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["caseId"],
+        message: "Moderation-case queue items require caseId"
+      });
+    }
+    if (value.kind === "moderation_case" && value.caseStatus === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["caseStatus"],
+        message: "Moderation-case queue items require caseStatus"
+      });
+    }
+    if (value.kind !== "moderation_case" && value.caseId !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["caseId"],
+        message: "Review-version and reply-version queue items cannot target caseId"
+      });
+    }
+    if (value.kind !== "moderation_case" && value.caseStatus !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["caseStatus"],
+        message: "Review-version and reply-version queue items cannot include caseStatus"
+      });
+    }
+    if (
+      value.kind === "moderation_case" &&
+      (value.reviewVersionId !== null || value.replyVersionId !== null)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["kind"],
+        message: "Moderation-case queue items cannot target review or reply versions"
       });
     }
   });

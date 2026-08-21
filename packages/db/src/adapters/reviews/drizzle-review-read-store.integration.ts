@@ -425,10 +425,10 @@ describe.sequential("Drizzle review read store", () => {
         reviewVersionId: null,
         replyVersionId: fixture.replyVersionId,
         submittedAt: "2026-08-22T13:00:00.000Z",
-        client: {
+        client: expect.objectContaining({
           clientUserId: fixture.clientUserId,
           displayName: "Анна Петрова"
-        },
+        }),
         publicIdentityMode: "secret_user",
         rating: null,
         text: "Ответ астролога ждет проверки."
@@ -439,10 +439,10 @@ describe.sequential("Drizzle review read store", () => {
         reviewVersionId: fixture.pendingEditVersionId,
         replyVersionId: null,
         submittedAt: "2026-08-22T12:00:00.000Z",
-        client: {
+        client: expect.objectContaining({
           clientUserId: fixture.clientUserId,
           displayName: "Анна Петрова"
-        },
+        }),
         publicIdentityMode: "named",
         rating: 4,
         text: "Редакция отзыва ждет проверки."
@@ -452,6 +452,64 @@ describe.sequential("Drizzle review read store", () => {
       "Солярная консультация",
       "Солярная консультация"
     ]);
+  });
+
+  it("lists open moderation cases even when no version is pending", async () => {
+    const fixture = await seedReviewReadFixture(runtime);
+    const commands = createDrizzleReviewCommandStore(runtime.database);
+    const reads = createDrizzleReviewReadStore(runtime.database);
+    const caseId = randomUUID();
+
+    await commands.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Первый отзыв.",
+        publicIdentityMode: "named"
+      }
+    });
+    await commands.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await commands.openReviewDispute({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-22T14:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextCaseId: caseId,
+      reasonCode: "fraud_or_conflict"
+    });
+
+    const queue = await reads.listModerationQueue({ limit: 10, cursor: null });
+
+    expect(queue.items).toContainEqual(
+      expect.objectContaining({
+        queueItemId: `moderation_case:${caseId}`,
+        kind: "moderation_case",
+        reviewId: fixture.reviewId,
+        reviewVersionId: null,
+        replyVersionId: null,
+        caseId,
+        caseStatus: "open",
+        submittedAt: "2026-08-22T14:00:00.000Z",
+        client: expect.objectContaining({
+          clientUserId: fixture.clientUserId,
+          displayName: "Анна Петрова"
+        }),
+        publicIdentityMode: "named",
+        visibilityStatus: "temporarily_hidden_by_dispute",
+        disputeStatus: "open",
+        rating: null,
+        text: "Спор открыт: Подозрение на конфликт/фрод"
+      })
+    );
   });
 });
 
