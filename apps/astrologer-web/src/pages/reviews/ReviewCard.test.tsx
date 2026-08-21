@@ -391,7 +391,16 @@ const copy = {
   title: "Отзывы",
   filterAriaLabel: "Фильтр отзывов",
   requestReviewLabel: "Запросить отзыв",
-  requestReviewUnavailableLabel: "Недоступно",
+  requestReview: {
+    title: "Запросить отзыв",
+    description:
+      "Подготовьте текст запроса и отправьте клиенту в вашем рабочем канале. ElevenHouse не помечает такой запрос как отправленный, пока production messaging flow не подключен.",
+    messageLabel: "Текст запроса",
+    defaultMessage: "Пожалуйста, оставьте отзыв в ElevenHouse.",
+    copyLabel: "Скопировать текст",
+    copiedLabel: "Текст скопирован.",
+    closeLabel: "Закрыть"
+  },
   loadingLabel: "Загружаем отзывы",
   emptyLabel: "Отзывов пока нет",
   errorLabel: "Не удалось загрузить отзывы",

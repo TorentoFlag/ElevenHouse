@@ -31,6 +31,8 @@ export function ReviewsPage() {
   const { locale } = useI18n();
   const copy = reviewsCopyByLocale[locale];
   const [filter, setFilter] = useState<AstrologerReviewFilter>("all");
+  const [requestReviewOpen, setRequestReviewOpen] = useState(false);
+  const [requestReviewCopied, setRequestReviewCopied] = useState(false);
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [aiDraftStates, setAiDraftStates] = useState<Record<string, AiDraftState>>({});
@@ -132,6 +134,12 @@ export function ReviewsPage() {
     setCaseMessageDrafts((current) => ({ ...current, [caseId]: "" }));
   }
 
+  async function handleCopyReviewRequest() {
+    if (typeof navigator === "undefined" || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(copy.requestReview.defaultMessage);
+    setRequestReviewCopied(true);
+  }
+
   return (
     <ReviewsPageView
       copy={copy}
@@ -140,6 +148,8 @@ export function ReviewsPage() {
       summary={buildAstrologerReviewsSummary(reviews)}
       counts={countAstrologerReviewFilters(reviews)}
       selectedFilter={filter}
+      requestReviewOpen={requestReviewOpen}
+      requestReviewCopied={requestReviewCopied}
       replyTargetId={replyTargetId}
       replyDrafts={replyDrafts}
       aiDraftStates={aiDraftStates}
@@ -158,6 +168,14 @@ export function ReviewsPage() {
       commandError={commandError ? copy.commandError : null}
       onFilterChange={setFilter}
       onRefresh={() => void reviewsQuery.refetch()}
+      onOpenRequestReview={() => {
+        setRequestReviewCopied(false);
+        setRequestReviewOpen(true);
+      }}
+      onCloseRequestReview={() => setRequestReviewOpen(false)}
+      onCopyRequestReview={() => {
+        void handleCopyReviewRequest();
+      }}
       onEditReply={(reviewId, value) =>
         setReplyDrafts((current) => ({ ...current, [reviewId]: value }))
       }
@@ -257,7 +275,15 @@ export type ReviewsPageCopy = {
   readonly title: string;
   readonly filterAriaLabel: string;
   readonly requestReviewLabel: string;
-  readonly requestReviewUnavailableLabel: string;
+  readonly requestReview: {
+    readonly title: string;
+    readonly description: string;
+    readonly messageLabel: string;
+    readonly defaultMessage: string;
+    readonly copyLabel: string;
+    readonly copiedLabel: string;
+    readonly closeLabel: string;
+  };
   readonly loadingLabel: string;
   readonly emptyLabel: string;
   readonly errorLabel: string;
@@ -305,7 +331,17 @@ const reviewsCopyByLocale = {
     title: "Отзывы",
     filterAriaLabel: "Фильтр отзывов",
     requestReviewLabel: "Запросить отзыв",
-    requestReviewUnavailableLabel: "Запрос отзывов появится после production messaging flow",
+    requestReview: {
+      title: "Запросить отзыв",
+      description:
+        "Подготовьте текст запроса и отправьте клиенту в вашем рабочем канале. ElevenHouse не помечает такой запрос как отправленный, пока production messaging flow не подключен.",
+      messageLabel: "Текст запроса",
+      defaultMessage:
+        "Здравствуйте! Буду благодарна за отзыв в ElevenHouse. Если услуга уже получена, откройте кабинет и оставьте отзыв в разделе “Отзывы”.",
+      copyLabel: "Скопировать текст",
+      copiedLabel: "Текст скопирован.",
+      closeLabel: "Закрыть"
+    },
     loadingLabel: "Загружаем отзывы",
     emptyLabel: "Отзывов пока нет",
     errorLabel: "Не удалось загрузить отзывы",
@@ -381,8 +417,17 @@ const reviewsCopyByLocale = {
     title: "Reviews",
     filterAriaLabel: "Review filter",
     requestReviewLabel: "Request review",
-    requestReviewUnavailableLabel:
-      "Review requests will appear after the production messaging flow",
+    requestReview: {
+      title: "Request review",
+      description:
+        "Prepare the request text and send it to the client in your working channel. ElevenHouse does not mark this request as sent until the production messaging flow is connected.",
+      messageLabel: "Request text",
+      defaultMessage:
+        "Hello! I would appreciate your review in ElevenHouse. If the service has already been received, open your cabinet and leave a review in the Reviews section.",
+      copyLabel: "Copy text",
+      copiedLabel: "Text copied.",
+      closeLabel: "Close"
+    },
     loadingLabel: "Loading reviews",
     emptyLabel: "No reviews yet",
     errorLabel: "Could not load reviews",

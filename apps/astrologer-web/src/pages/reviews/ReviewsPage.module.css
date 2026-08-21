@@ -127,6 +127,48 @@
   padding: 20px 24px 40px;
 }
 
+.modalBackdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(7 6 15 / 0.72);
+}
+
+.requestDialog {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--reviews-line-strong);
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--reviews-surface);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.46);
+}
+
+.requestDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.requestDialogHeader h2 {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.requestDialogHeader p {
+  margin: 6px 0 0;
+  color: var(--reviews-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 .grid {
   display: grid;
   width: min(100%, 1120px);

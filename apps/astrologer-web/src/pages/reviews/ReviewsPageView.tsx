@@ -18,6 +18,8 @@ export type ReviewsPageViewProps = {
   readonly summary: AstrologerReviewsSummary;
   readonly counts: Record<AstrologerReviewFilter, number>;
   readonly selectedFilter: AstrologerReviewFilter;
+  readonly requestReviewOpen: boolean;
+  readonly requestReviewCopied: boolean;
   readonly replyTargetId: string | null;
   readonly replyDrafts: Record<string, string>;
   readonly aiDraftStates: Record<string, AiDraftState>;
@@ -31,6 +33,9 @@ export type ReviewsPageViewProps = {
   readonly commandError: string | null;
   readonly onFilterChange: (filter: AstrologerReviewFilter) => void;
   readonly onRefresh: () => void;
+  readonly onOpenRequestReview: () => void;
+  readonly onCloseRequestReview: () => void;
+  readonly onCopyRequestReview: () => void;
   readonly onStartReply: (review: ReviewAstrologerItem) => void;
   readonly onCancelReply: () => void;
   readonly onStartDispute: (review: ReviewAstrologerItem) => void;
@@ -53,6 +58,8 @@ export function ReviewsPageView({
   summary,
   counts,
   selectedFilter,
+  requestReviewOpen,
+  requestReviewCopied,
   replyTargetId,
   replyDrafts,
   aiDraftStates,
@@ -66,6 +73,9 @@ export function ReviewsPageView({
   commandError,
   onFilterChange,
   onRefresh,
+  onOpenRequestReview,
+  onCloseRequestReview,
+  onCopyRequestReview,
   onStartReply,
   onCancelReply,
   onStartDispute,
@@ -106,13 +116,21 @@ export function ReviewsPageView({
         <button
           type="button"
           className={styles.secondaryButton}
-          disabled
-          title={copy.requestReviewUnavailableLabel}
+          onClick={onOpenRequestReview}
         >
           <Icon iconName="chat" size={15} aria-hidden="true" />
           {copy.requestReviewLabel}
         </button>
       </header>
+
+      {requestReviewOpen ? (
+        <ReviewRequestDialog
+          copy={copy}
+          copied={requestReviewCopied}
+          onClose={onCloseRequestReview}
+          onCopy={onCopyRequestReview}
+        />
+      ) : null}
 
       <div className={styles.content}>
         {commandError ? <div className={styles.errorBanner}>{commandError}</div> : null}
@@ -175,5 +193,49 @@ export function ReviewsPageView({
         ) : null}
       </div>
     </section>
+  );
+}
+
+function ReviewRequestDialog({
+  copy,
+  copied,
+  onClose,
+  onCopy
+}: {
+  readonly copy: ReviewsPageCopy;
+  readonly copied: boolean;
+  readonly onClose: () => void;
+  readonly onCopy: () => void;
+}) {
+  return (
+    <div className={styles.modalBackdrop} role="presentation">
+      <section className={styles.requestDialog} role="dialog" aria-modal="true">
+        <header className={styles.requestDialogHeader}>
+          <div>
+            <h2>{copy.requestReview.title}</h2>
+            <p>{copy.requestReview.description}</p>
+          </div>
+          <button type="button" className={styles.quietButton} onClick={onClose}>
+            {copy.requestReview.closeLabel}
+          </button>
+        </header>
+        <label className={styles.formField}>
+          <span>{copy.requestReview.messageLabel}</span>
+          <textarea
+            className={styles.replyInput}
+            readOnly
+            rows={5}
+            value={copy.requestReview.defaultMessage}
+          />
+        </label>
+        <div className={styles.replyActions}>
+          <button type="button" className={styles.primaryButton} onClick={onCopy}>
+            <Icon iconName="doc" size={15} aria-hidden="true" />
+            {copy.requestReview.copyLabel}
+          </button>
+          {copied ? <p className={styles.pendingNote}>{copy.requestReview.copiedLabel}</p> : null}
+        </div>
+      </section>
+    </div>
   );
 }
