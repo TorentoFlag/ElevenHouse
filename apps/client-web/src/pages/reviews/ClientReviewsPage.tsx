@@ -1,6 +1,7 @@
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type {
   ClientReviewDetail,
+  ReviewModerationCaseDetail,
   ReviewPublicIdentityMode,
   ReviewableInstanceSummary
 } from "@elevenhouse/contracts";
@@ -9,7 +10,9 @@ import { Link } from "react-router";
 import { useI18n } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
+  createClientReviewCaseMessage,
   getClientReviewDetail,
+  getClientReviewModerationCaseDetail,
   listClientReviewableInstances,
   submitClientReviewVersion
 } from "../../features/reviews/api/clientReviewsApi";
@@ -42,6 +45,10 @@ export function ClientReviewsPage() {
   const [listStatus, setListStatus] = useState<LoadStatus>("loading");
   const [detailStatus, setDetailStatus] = useState<LoadStatus>("loading");
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
+  const [caseDetail, setCaseDetail] = useState<ReviewModerationCaseDetail | null>(null);
+  const [caseStatus, setCaseStatus] = useState<LoadStatus>("ready");
+  const [caseMessage, setCaseMessage] = useState("");
+  const [caseMessageStatus, setCaseMessageStatus] = useState<SubmitStatus>("idle");
   const [form, setForm] = useState<ReviewFormState>(createClientReviewFormSeed(null));
 
   useDocumentTitle("Отзывы");
@@ -92,6 +99,35 @@ export function ClientReviewsPage() {
 
   useEffect(() => loadDetail(selectedId), [loadDetail, selectedId]);
 
+  const loadCaseDetail = useCallback((caseId: string | null) => {
+    if (!caseId) {
+      setCaseDetail(null);
+      setCaseStatus("ready");
+      return () => undefined;
+    }
+    let cancelled = false;
+    setCaseStatus("loading");
+    void getClientReviewModerationCaseDetail(caseId)
+      .then((nextCase) => {
+        if (cancelled) return;
+        setCaseDetail(nextCase);
+        setCaseMessage("");
+        setCaseMessageStatus("idle");
+        setCaseStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setCaseStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(
+    () => loadCaseDetail(detail?.moderationCase?.caseId ?? null),
+    [detail?.moderationCase?.caseId, loadCaseDetail]
+  );
+
   const actionLabel = describeClientReviewAction(detail);
   const canSubmit = canOpenClientReviewForm(detail) && form.text.trim().length > 0;
   const idempotencyKey = useMemo(
@@ -118,6 +154,30 @@ export function ClientReviewsPage() {
       setSubmitStatus("saved");
     } catch {
       setSubmitStatus("error");
+    }
+  }
+
+  async function handleCaseMessageSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!caseDetail || caseMessage.trim().length === 0) return;
+    setCaseMessageStatus("saving");
+    try {
+      const message = await createClientReviewCaseMessage(
+        caseDetail.caseId,
+        {
+          body: caseMessage.trim(),
+          visibility: "all_case_participants"
+        },
+        `client-review-case-${caseDetail.caseId}-${Date.now().toString(36)}`
+      );
+      setCaseDetail({
+        ...caseDetail,
+        messages: [...caseDetail.messages, message]
+      });
+      setCaseMessage("");
+      setCaseMessageStatus("saved");
+    } catch {
+      setCaseMessageStatus("error");
     }
   }
 
@@ -191,7 +251,14 @@ export function ClientReviewsPage() {
               detail={detail}
               form={form}
               locale={locale}
+              caseDetail={caseDetail}
+              caseStatus={caseStatus}
+              caseMessage={caseMessage}
+              caseMessageStatus={caseMessageStatus}
               submitStatus={submitStatus}
+              onCaseMessageChange={setCaseMessage}
+              onCaseMessageSubmit={handleCaseMessageSubmit}
+              onRetryCase={() => loadCaseDetail(detail.moderationCase?.caseId ?? null)}
               onFormChange={setForm}
               onSubmit={handleSubmit}
             />
@@ -208,7 +275,14 @@ function ReviewDetail({
   detail,
   form,
   locale,
+  caseDetail,
+  caseStatus,
+  caseMessage,
+  caseMessageStatus,
   submitStatus,
+  onCaseMessageChange,
+  onCaseMessageSubmit,
+  onRetryCase,
   onFormChange,
   onSubmit
 }: {
@@ -217,7 +291,14 @@ function ReviewDetail({
   readonly detail: ClientReviewDetail;
   readonly form: ReviewFormState;
   readonly locale: string;
+  readonly caseDetail: ReviewModerationCaseDetail | null;
+  readonly caseStatus: LoadStatus;
+  readonly caseMessage: string;
+  readonly caseMessageStatus: SubmitStatus;
   readonly submitStatus: SubmitStatus;
+  readonly onCaseMessageChange: (value: string) => void;
+  readonly onCaseMessageSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onRetryCase: () => void;
   readonly onFormChange: (form: ReviewFormState) => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -333,14 +414,101 @@ function ReviewDetail({
 
         <section className={styles.card}>
           <h3>Споры и уточнения</h3>
-          <p className={styles.hint}>
-            Если модератор откроет спор или запросит уточнение, переписка появится здесь. Отзыв
-            скрывается сразу после открытия спора.
-          </p>
+          {detail.moderationCase ? (
+            <CaseThread
+              caseDetail={caseDetail}
+              caseStatus={caseStatus}
+              message={caseMessage}
+              messageStatus={caseMessageStatus}
+              onMessageChange={onCaseMessageChange}
+              onRetry={onRetryCase}
+              onSubmit={onCaseMessageSubmit}
+            />
+          ) : (
+            <p className={styles.hint}>
+              Если модератор откроет спор или запросит уточнение, переписка появится здесь. Отзыв
+              скрывается сразу после открытия спора.
+            </p>
+          )}
         </section>
       </div>
     </>
   );
+}
+
+function CaseThread({
+  caseDetail,
+  caseStatus,
+  message,
+  messageStatus,
+  onMessageChange,
+  onRetry,
+  onSubmit
+}: {
+  readonly caseDetail: ReviewModerationCaseDetail | null;
+  readonly caseStatus: LoadStatus;
+  readonly message: string;
+  readonly messageStatus: SubmitStatus;
+  readonly onMessageChange: (value: string) => void;
+  readonly onRetry: () => void;
+  readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (caseStatus === "loading") return <p className={styles.empty}>Загружаем переписку.</p>;
+  if (caseStatus === "error") {
+    return (
+      <button className={styles.secondaryButton} type="button" onClick={onRetry}>
+        <Icon iconName="refresh" size={15} /> Повторить
+      </button>
+    );
+  }
+  if (!caseDetail) return <p className={styles.empty}>Переписка пока недоступна.</p>;
+
+  return (
+    <div className={styles.caseThread}>
+      <p className={styles.meta}>Статус: {caseDetail.status}</p>
+      <ul className={styles.messageList}>
+        {caseDetail.messages.map((caseMessage) => (
+          <li key={caseMessage.messageId}>
+            <strong>{describeCaseAuthor(caseMessage.authorRole)}</strong>
+            <p>{caseMessage.body}</p>
+          </li>
+        ))}
+      </ul>
+      <form className={styles.form} onSubmit={onSubmit}>
+        <label>
+          <span className={styles.eyebrow}>Ответ</span>
+          <textarea
+            className={styles.textareaSmall}
+            value={message}
+            aria-label="Сообщение по спору"
+            onChange={(event) => onMessageChange(event.target.value)}
+          />
+        </label>
+        <div className={styles.formActions}>
+          <button
+            className={styles.secondaryButton}
+            type="submit"
+            disabled={message.trim().length === 0 || messageStatus === "saving"}
+          >
+            <Icon iconName="chat" size={16} /> Отправить
+          </button>
+          {messageStatus === "saved" ? (
+            <p className={styles.notice}>Сообщение отправлено.</p>
+          ) : null}
+          {messageStatus === "error" ? (
+            <p className={styles.notice}>Не удалось отправить сообщение.</p>
+          ) : null}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function describeCaseAuthor(role: ReviewModerationCaseDetail["messages"][number]["authorRole"]) {
+  if (role === "client") return "Вы";
+  if (role === "astrologer") return "Астролог";
+  if (role === "moderator") return "Модератор";
+  return "Система";
 }
 
 function ReviewVersionCard({

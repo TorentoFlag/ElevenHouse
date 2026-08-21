@@ -170,6 +170,7 @@ describe("Reviews contracts", () => {
         submittedAt: "2026-08-19T11:00:00.000Z",
         decidedAt: null
       },
+      moderationCase: null,
       canSubmitNewVersion: false,
       canEditLatestVersion: true
     });
@@ -200,6 +201,7 @@ describe("Reviews contracts", () => {
       },
       activePublicVersion: null,
       pendingVersion: null,
+      moderationCase: null,
       canSubmitNewVersion: true,
       canEditLatestVersion: false
     });

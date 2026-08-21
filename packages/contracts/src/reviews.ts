@@ -233,12 +233,26 @@ export const reviewVersionSchema = z
   });
 export type ReviewVersion = z.infer<typeof reviewVersionSchema>;
 
+export const clientReviewModerationCaseSummarySchema = z
+  .object({
+    caseId: uuidSchema,
+    status: reviewModerationCaseStatusSchema,
+    openedAt: instantSchema,
+    closedAt: instantSchema.nullable(),
+    reasonCode: reviewModerationReasonCodeSchema
+  })
+  .strict();
+export type ClientReviewModerationCaseSummary = z.infer<
+  typeof clientReviewModerationCaseSummarySchema
+>;
+
 export const clientReviewDetailSchema = z
   .object({
     reviewId: uuidSchema.nullable(),
     reviewableInstance: reviewableInstanceSummarySchema,
     activePublicVersion: reviewVersionSchema.nullable(),
     pendingVersion: reviewVersionSchema.nullable(),
+    moderationCase: clientReviewModerationCaseSummarySchema.nullable(),
     canSubmitNewVersion: z.boolean(),
     canEditLatestVersion: z.boolean()
   })

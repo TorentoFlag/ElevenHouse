@@ -366,12 +366,16 @@ async function getClientReviewDetail(
   const pendingVersion = row.review?.pendingVersionId
     ? (versions.find((version) => version.id === row.review?.pendingVersionId) ?? null)
     : null;
+  const moderationCase = row.review
+    ? await readLatestModerationCase(database, row.review.id)
+    : null;
 
   return clientReviewDetailSchema.parse({
     reviewId: row.review?.id ?? null,
     reviewableInstance: toReviewableInstanceSummary(row.reviewableInstance),
     activePublicVersion: activePublicVersion ? toReviewVersion(activePublicVersion) : null,
     pendingVersion: pendingVersion ? toReviewVersion(pendingVersion) : null,
+    moderationCase: moderationCase ? toModerationCaseSummary(moderationCase) : null,
     canSubmitNewVersion:
       row.review === null &&
       row.reviewableInstance.status === "reviewable" &&

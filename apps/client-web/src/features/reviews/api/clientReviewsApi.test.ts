@@ -2,6 +2,7 @@ import type { ClientReviewDetail } from "@elevenhouse/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getClientReviewDetail,
+  getClientReviewModerationCaseDetail,
   listClientReviewableInstances,
   submitClientReviewVersion
 } from "./clientReviewsApi";
@@ -58,9 +59,17 @@ describe("clientReviewsApi", () => {
       { csrf: true, idempotencyKey: "client-review-submit-1" }
     );
   });
+
+  it("reads moderation case detail for the current client", async () => {
+    http.get.mockResolvedValueOnce(caseDetail);
+
+    await expect(getClientReviewModerationCaseDetail(caseId)).resolves.toEqual(caseDetail);
+    expect(http.get).toHaveBeenCalledWith(`/me/reviews/moderation-cases/${caseId}`);
+  });
 });
 
 const reviewableInstanceId = "10000000-0000-4000-8000-000000000103";
+const caseId = "10000000-0000-4000-8000-000000000108";
 const pendingVersion = {
   id: "10000000-0000-4000-8000-000000000104",
   versionNumber: 1,
@@ -87,6 +96,28 @@ const reviewDetail = {
   },
   activePublicVersion: null,
   pendingVersion: null,
+  moderationCase: null,
   canSubmitNewVersion: true,
   canEditLatestVersion: false
 } satisfies ClientReviewDetail;
+
+const caseDetail = {
+  caseId,
+  reviewId: "10000000-0000-4000-8000-000000000102",
+  status: "waiting_client",
+  openedAt: "2026-08-21T09:00:00.000Z",
+  closedAt: null,
+  serviceContext: {
+    title: "Прогностика на месяц",
+    contextLabel: "Консультация завершена"
+  },
+  messages: [
+    {
+      messageId: "10000000-0000-4000-8000-000000000109",
+      authorRole: "moderator",
+      visibility: "all_case_participants",
+      body: "Уточните контекст консультации.",
+      createdAt: "2026-08-21T09:05:00.000Z"
+    }
+  ]
+};

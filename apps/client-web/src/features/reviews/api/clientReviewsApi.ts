@@ -2,12 +2,14 @@ import {
   clientReviewableInstanceListResponseSchema,
   clientReviewDetailSchema,
   reviewModerationCaseMessageCreateSchema,
+  reviewModerationCaseDetailSchema,
   reviewModerationCaseMessageSchema,
   reviewVersionSubmissionSchema,
   type ClientReviewableInstanceListResponse,
   type ClientReviewDetail,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseMessageCreate,
+  type ReviewModerationCaseDetail,
   type ReviewVersionSubmission
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
@@ -59,5 +61,13 @@ export async function createClientReviewCaseMessage(
       csrf: true,
       idempotencyKey
     })
+  );
+}
+
+export async function getClientReviewModerationCaseDetail(
+  caseId: string
+): Promise<ReviewModerationCaseDetail> {
+  return reviewModerationCaseDetailSchema.parse(
+    await application.http.get(`/me/reviews/moderation-cases/${caseId}`)
   );
 }

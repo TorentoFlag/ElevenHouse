@@ -43,6 +43,7 @@ const newDetail = {
   reviewableInstance: instance,
   activePublicVersion: null,
   pendingVersion: null,
+  moderationCase: null,
   canSubmitNewVersion: true,
   canEditLatestVersion: false
 } satisfies ClientReviewDetail;

@@ -220,6 +220,20 @@
   line-height: var(--eh-line-height-150);
 }
 
+.textareaSmall {
+  min-height: 92px;
+  resize: vertical;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--eh-space-10);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  background: var(--eh-color-night-900);
+  color: var(--eh-color-white);
+  font: inherit;
+  line-height: var(--eh-line-height-150);
+}
+
 .checkboxRow {
   display: flex;
   align-items: center;
@@ -265,6 +279,40 @@
   color: var(--eh-color-gold);
   font-size: var(--eh-font-size-13);
   font-weight: var(--eh-font-weight-semibold);
+}
+
+.caseThread {
+  display: grid;
+  gap: var(--eh-space-12);
+}
+
+.messageList {
+  display: grid;
+  gap: var(--eh-space-9);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.messageList li {
+  display: grid;
+  gap: var(--eh-space-5);
+  padding: var(--eh-space-10);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  background: rgb(255 255 255 / 0.04);
+}
+
+.messageList strong {
+  color: var(--eh-color-gold);
+  font-size: var(--eh-font-size-12);
+}
+
+.messageList p {
+  margin: 0;
+  color: var(--eh-color-moon-120);
+  font-size: var(--eh-font-size-14);
+  line-height: var(--eh-line-height-150);
 }
 
 @media (max-width: 860px) {
