@@ -24,6 +24,7 @@ import {
   createDrizzleAiUsageRecorder,
   createDrizzleAiUsageStore,
   createDrizzleReviewableInstanceReceiptStore,
+  createDrizzleReviewPublicationFlowOutboxStore,
   createDrizzleSessionLifecycleStore
 } from "@elevenhouse/db";
 import {
@@ -99,6 +100,9 @@ const postgres = createPostgresRuntime();
 const outboxStore = createDrizzleOutboxRelayStore(postgres.database);
 const sessionLifecycleStore = createDrizzleSessionLifecycleStore(postgres.database);
 const reviewableInstanceReceiptStore = createDrizzleReviewableInstanceReceiptStore(
+  postgres.database
+);
+const reviewPublicationFlowOutboxStore = createDrizzleReviewPublicationFlowOutboxStore(
   postgres.database
 );
 const calculationStore = createDrizzleCalculationStore(postgres.database);
@@ -307,8 +311,13 @@ const sessionRuntime = createSessionRuntime({
   project: async () => {
     if (!config.sessions.enabled) return;
     const now = new Date();
-    const [, bookingReviewSources, astroDiaryReviewSources, genericReviewSources] =
-      await Promise.all([
+    const [
+      ,
+      bookingReviewSources,
+      astroDiaryReviewSources,
+      genericReviewSources,
+      reviewPublicationFlowEnrollments
+    ] = await Promise.all([
         processSessionBookingLifecycleEvents({
           store: sessionLifecycleStore,
           now,
@@ -325,6 +334,10 @@ const sessionRuntime = createSessionRuntime({
         reviewableInstanceReceiptStore.upsertPendingSourceReceipts({
           limit: config.sessions.projectionBatchSize,
           now: now.toISOString()
+        }),
+        reviewPublicationFlowOutboxStore.publishPendingFirstPublicationEnrollments({
+          limit: config.sessions.projectionBatchSize,
+          now: now.toISOString()
         })
       ]);
     if (bookingReviewSources.scanned > 0 || bookingReviewSources.rejected > 0) {
@@ -335,6 +348,13 @@ const sessionRuntime = createSessionRuntime({
     }
     if (genericReviewSources.scanned > 0 || genericReviewSources.rejected > 0) {
       logger.info("review generic source receipts projected", genericReviewSources);
+    }
+    if (
+      reviewPublicationFlowEnrollments.scanned > 0 ||
+      reviewPublicationFlowEnrollments.created > 0 ||
+      reviewPublicationFlowEnrollments.rejected > 0
+    ) {
+      logger.info("review first publication flow enrollments projected", reviewPublicationFlowEnrollments);
     }
   },
   maintain: () =>

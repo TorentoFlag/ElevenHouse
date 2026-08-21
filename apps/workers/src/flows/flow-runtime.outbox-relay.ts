@@ -6,6 +6,7 @@ import {
   FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT,
   FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT,
   FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT,
+  FLOW_REVIEW_FIRST_PUBLISHED_ENROLLMENT_REQUESTED_EVENT,
   messagingMessageDeliveryTerminalEventType,
   messagingMessageDeliveryTerminalPayloadSchema,
   FlowExecutionIntegrityError,
@@ -23,6 +24,7 @@ import {
   flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema,
   flowFirstInboundMessageEnrollmentRequestedPayloadV1Schema,
   flowProductPurchasedEnrollmentRequestedPayloadV1Schema,
+  flowReviewFirstPublishedEnrollmentRequestedPayloadV1Schema,
   type ClaimedFlowRuntimeDispatchOutboxEvent,
   type ChartCalculationTerminalPayload,
   type ClientBirthProfileUpdatedEvent,
@@ -117,7 +119,8 @@ export async function relayPendingFlowRuntimeDispatchEvents(
     if (
       event.eventType === FLOW_PRODUCT_PURCHASED_ENROLLMENT_REQUESTED_EVENT ||
       event.eventType === FLOW_FIRST_INBOUND_MESSAGE_ENROLLMENT_REQUESTED_EVENT ||
-      event.eventType === FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT
+      event.eventType === FLOW_CLIENT_LIFECYCLE_CHANGED_ENROLLMENT_REQUESTED_EVENT ||
+      event.eventType === FLOW_REVIEW_FIRST_PUBLISHED_ENROLLMENT_REQUESTED_EVENT
     ) {
       await relayClientEventEnrollment(input, event);
       continue;
@@ -149,7 +152,7 @@ async function relayClientEventEnrollment(
     await quarantine(input, event, "FLOW_CLIENT_EVENT_ENROLLMENT_PAYLOAD_INVALID");
     return;
   }
-  if (parsedPayload.subjectId !== event.aggregateId) {
+  if (clientEventAggregateId(parsedPayload) !== event.aggregateId) {
     await quarantine(input, event, "FLOW_CLIENT_EVENT_ENROLLMENT_AGGREGATE_MISMATCH");
     return;
   }
@@ -196,7 +199,16 @@ function parseClientEventEnrollmentPayload(
     const parsed = flowClientLifecycleChangedEnrollmentRequestedPayloadV1Schema.safeParse(event.payload);
     return parsed.success ? parsed.data : null;
   }
+  if (event.eventType === FLOW_REVIEW_FIRST_PUBLISHED_ENROLLMENT_REQUESTED_EVENT) {
+    const parsed = flowReviewFirstPublishedEnrollmentRequestedPayloadV1Schema.safeParse(event.payload);
+    return parsed.success ? parsed.data : null;
+  }
   return null;
+}
+
+function clientEventAggregateId(payload: FlowClientEventEnrollmentRequestedPayloadV1): string {
+  if (payload.eventKind === "review_first_published") return payload.payload.reviewId;
+  return payload.subjectId;
 }
 
 async function relayMessagingTerminalSignal(
