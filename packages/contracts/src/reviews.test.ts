@@ -385,6 +385,7 @@ describe("Reviews contracts", () => {
             decidedAt: "2026-08-20T11:00:00.000Z"
           },
           activePublicReplyVersion: null,
+          pendingVersion: null,
           pendingReplyVersion: null,
           moderationCase: {
             caseId: "10000000-0000-4000-8000-000000000037",

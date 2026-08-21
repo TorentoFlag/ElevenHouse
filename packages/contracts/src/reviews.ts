@@ -402,6 +402,7 @@ export const reviewAstrologerItemSchema = z
     reviewableInstance: reviewableInstanceSummarySchema,
     author: reviewPublicAuthorSchema,
     activePublicVersion: reviewVersionSchema,
+    pendingVersion: reviewVersionSchema.nullable(),
     activePublicReplyVersion: reviewReplyVersionSchema.nullable(),
     pendingReplyVersion: reviewReplyVersionSchema.nullable(),
     moderationCase: reviewModerationCaseSummarySchema.nullable()

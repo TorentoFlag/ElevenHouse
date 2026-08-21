@@ -611,6 +611,10 @@ async function toAstrologerReviewItem(
   }
 ): Promise<ReviewAstrologerItem> {
   const identity = splitDisplayName(row.clientProfile?.displayName ?? null);
+  const reviewVersions = await readReviewVersions(database, row.review.id);
+  const pendingVersion = row.review.pendingVersionId
+    ? (reviewVersions.find((version) => version.id === row.review.pendingVersionId) ?? null)
+    : null;
   const replyVersions = await readReviewReplyVersions(database, row.review.id);
   const activePublicReplyVersion = row.review.activePublicReplyVersionId
     ? (replyVersions.find((version) => version.id === row.review.activePublicReplyVersionId) ??
@@ -633,6 +637,7 @@ async function toAstrologerReviewItem(
       avatarUrl: null
     }),
     activePublicVersion: toReviewVersion(row.activeVersion),
+    pendingVersion: pendingVersion ? toReviewVersion(pendingVersion) : null,
     activePublicReplyVersion: activePublicReplyVersion
       ? toReviewReplyVersion(activePublicReplyVersion)
       : null,

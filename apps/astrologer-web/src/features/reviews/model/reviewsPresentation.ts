@@ -40,7 +40,7 @@ export function filterAstrologerReviews(
     case "published":
       return reviews.filter(isVisiblePublishedReview);
     case "pending":
-      return reviews.filter((review) => Boolean(review.pendingReplyVersion));
+      return reviews.filter(hasPendingModeration);
     case "hidden":
       return reviews.filter(isHiddenReview);
     case "all":
@@ -54,7 +54,7 @@ export function countAstrologerReviewFilters(
   return {
     all: reviews.length,
     published: reviews.filter(isVisiblePublishedReview).length,
-    pending: reviews.filter((review) => Boolean(review.pendingReplyVersion)).length,
+    pending: reviews.filter(hasPendingModeration).length,
     hidden: reviews.filter(isHiddenReview).length
   };
 }
@@ -65,4 +65,8 @@ function isVisiblePublishedReview(review: ReviewAstrologerItem): boolean {
 
 function isHiddenReview(review: ReviewAstrologerItem): boolean {
   return review.visibilityStatus !== "visible" || review.disputeStatus !== "none";
+}
+
+function hasPendingModeration(review: ReviewAstrologerItem): boolean {
+  return Boolean(review.pendingVersion || review.pendingReplyVersion);
 }

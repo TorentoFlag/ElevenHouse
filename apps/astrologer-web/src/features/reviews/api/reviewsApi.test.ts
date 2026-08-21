@@ -186,6 +186,7 @@ const reviewListResponse = {
         decidedAt: "2026-08-20T11:00:00.000Z"
       },
       activePublicReplyVersion: null,
+      pendingVersion: null,
       pendingReplyVersion: null,
       moderationCase: null
     }

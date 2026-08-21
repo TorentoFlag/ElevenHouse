@@ -211,6 +211,12 @@ describe.sequential("Drizzle review read store", () => {
             rating: 5,
             text: "Сервис помог спокойно разобрать ситуацию."
           },
+          pendingVersion: {
+            id: fixture.pendingEditVersionId,
+            rating: 4,
+            text: "Новый текст еще должен пройти модерацию.",
+            moderationStatus: "pending"
+          },
           pendingReplyVersion: null,
           moderationCase: null
         }

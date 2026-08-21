@@ -74,6 +74,13 @@ export function ReviewCard({
         </span>
       </div>
       <p className={styles.reviewText}>{review.activePublicVersion.text}</p>
+      {review.pendingVersion ? (
+        <div className={styles.pendingVersionBox}>
+          <h3>{copy.status.pending}</h3>
+          <p className={styles.pendingVersionRating}>{review.pendingVersion.rating} / 5</p>
+          <p>{review.pendingVersion.text}</p>
+        </div>
+      ) : null}
       {reply ? (
         <div className={styles.replyBox}>
           <div className={styles.replyAvatar} aria-hidden="true">
@@ -253,7 +260,7 @@ function ReviewAvatar({ review }: { readonly review: ReviewAstrologerItem }) {
 
 function getReviewStatus(review: ReviewAstrologerItem): "published" | "pending" | "hidden" {
   if (review.visibilityStatus !== "visible" || review.disputeStatus !== "none") return "hidden";
-  if (review.pendingReplyVersion) return "pending";
+  if (review.pendingVersion || review.pendingReplyVersion) return "pending";
   return "published";
 }
 

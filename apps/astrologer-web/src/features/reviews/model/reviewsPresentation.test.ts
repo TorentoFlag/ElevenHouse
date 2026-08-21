@@ -24,6 +24,7 @@ describe("reviewsPresentation", () => {
       "21111111-1111-4111-8111-111111111111"
     ]);
     expect(filterAstrologerReviews(reviews, "pending").map((review) => review.reviewId)).toEqual([
+      "11111111-1111-4111-8111-111111111111",
       "31111111-1111-4111-8111-111111111111"
     ]);
     expect(filterAstrologerReviews(reviews, "hidden").map((review) => review.reviewId)).toEqual([
@@ -61,6 +62,7 @@ const baseReview = {
     decidedAt: "2026-08-20T11:00:00.000Z"
   },
   activePublicReplyVersion: null,
+  pendingVersion: null,
   pendingReplyVersion: null,
   moderationCase: null
 } satisfies Omit<ReviewAstrologerItem, "reviewId" | "visibilityStatus" | "disputeStatus">;
@@ -70,7 +72,18 @@ const reviews: ReviewAstrologerItem[] = [
     ...baseReview,
     reviewId: "11111111-1111-4111-8111-111111111111",
     visibilityStatus: "visible",
-    disputeStatus: "none"
+    disputeStatus: "none",
+    pendingVersion: {
+      id: "51111111-1111-4111-8111-111111111111",
+      versionNumber: 2,
+      rating: 4,
+      text: "Новая версия ожидает модерацию.",
+      publicIdentityMode: "named",
+      moderationStatus: "pending",
+      moderationReasonCode: null,
+      submittedAt: "2026-08-21T09:00:00.000Z",
+      decidedAt: null
+    }
   },
   {
     ...baseReview,

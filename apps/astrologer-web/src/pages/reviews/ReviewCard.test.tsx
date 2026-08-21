@@ -2,10 +2,12 @@
 
 import "@testing-library/jest-dom/vitest";
 import type { ReviewAstrologerItem, ReviewModerationCaseDetail } from "@elevenhouse/contracts";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReviewCaseState, ReviewsPageCopy } from "./ReviewsPage";
 import { ReviewCard } from "./ReviewCard";
+
+afterEach(cleanup);
 
 describe("ReviewCard", () => {
   it("renders moderation case thread and submits an astrologer message draft", () => {
@@ -44,6 +46,34 @@ describe("ReviewCard", () => {
     expect(onEditCaseMessage).toHaveBeenCalledWith("Отвечаю модератору.");
     expect(onSubmitCaseMessage).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the published review text visible while a client edit is pending", () => {
+    render(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingEdit}
+        replyDraft=""
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive={false}
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={vi.fn()}
+        onOpenDispute={vi.fn()}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Очень бережная консультация.")).toBeVisible();
+    expect(screen.getByText("Новая версия отзыва ожидает модерацию.")).toBeVisible();
+    expect(screen.getByText("4 / 5")).toBeVisible();
+    expect(screen.getAllByText("На модерации")).toHaveLength(2);
+  });
 });
 
 const caseId = "51111111-1111-4111-8111-111111111111";
@@ -79,6 +109,7 @@ const reviewWithCase = {
     decidedAt: "2026-08-20T11:00:00.000Z"
   },
   activePublicReplyVersion: null,
+  pendingVersion: null,
   pendingReplyVersion: null,
   moderationCase: {
     caseId,
@@ -87,6 +118,24 @@ const reviewWithCase = {
     closedAt: null,
     reasonCode: "other"
   }
+} satisfies ReviewAstrologerItem;
+
+const reviewWithPendingEdit = {
+  ...reviewWithCase,
+  visibilityStatus: "visible",
+  disputeStatus: "none",
+  pendingVersion: {
+    id: "61111111-1111-4111-8111-111111111111",
+    versionNumber: 2,
+    rating: 4,
+    text: "Новая версия отзыва ожидает модерацию.",
+    publicIdentityMode: "named",
+    moderationStatus: "pending",
+    moderationReasonCode: null,
+    submittedAt: "2026-08-21T09:00:00.000Z",
+    decidedAt: null
+  },
+  moderationCase: null
 } satisfies ReviewAstrologerItem;
 
 const caseDetail = {

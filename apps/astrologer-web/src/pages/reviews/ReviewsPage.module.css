@@ -340,11 +340,38 @@
   font-weight: 800;
 }
 
+.pendingVersionBox {
+  border: 1px solid rgb(245 185 93 / 0.34);
+  border-left: 3px solid #f5b95d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgb(56 39 28 / 0.5);
+}
+
+.pendingVersionBox h3,
+.pendingVersionBox p {
+  margin: 0;
+}
+
+.pendingVersionBox h3 {
+  color: #ffd69b;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
 .replyBox p,
-.pendingNote {
+.pendingNote,
+.pendingVersionBox p {
   color: var(--eh-color-moon-300);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.pendingVersionBox .pendingVersionRating {
+  margin-top: 4px;
+  color: #ffd69b;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .replyForm {
