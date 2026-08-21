@@ -49,6 +49,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
+  auditLogEntries,
   reviewModerationCases,
   reviewModerationCaseMessages,
   reviewPublicationEvents,
@@ -308,6 +309,19 @@ export function createDrizzleReviewCommandStore(
             createdAt: new Date(input.now)
           });
         }
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.version.approved",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            versionId: result.version.id,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            previousVisibilityStatus: currentReview.visibilityStatus,
+            nextVisibilityStatus: result.review.visibilityStatus,
+            firstPublished: Boolean(result.flowEvent)
+          }
+        });
 
         return result;
       }),
@@ -348,6 +362,18 @@ export function createDrizzleReviewCommandStore(
             updatedAt: new Date(input.now)
           })
           .where(eq(reviews.id, result.review.id));
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.version.rejected",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            versionId: result.version.id,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            reasonCode: result.version.moderationReasonCode,
+            notePresent: Boolean(result.version.moderationNote)
+          }
+        });
 
         return result;
       }),
@@ -430,6 +456,16 @@ export function createDrizzleReviewCommandStore(
             updatedAt: new Date(input.now)
           })
           .where(eq(reviews.id, result.review.id));
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.reply_version.approved",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            replyVersionId: result.replyVersion.id,
+            reviewableInstanceId: result.review.reviewableInstanceId
+          }
+        });
 
         return result;
       }),
@@ -475,6 +511,18 @@ export function createDrizzleReviewCommandStore(
             updatedAt: new Date(input.now)
           })
           .where(eq(reviews.id, result.review.id));
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.reply_version.rejected",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            replyVersionId: result.replyVersion.id,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            reasonCode: result.replyVersion.moderationReasonCode,
+            notePresent: Boolean(result.replyVersion.moderationNote)
+          }
+        });
 
         return result;
       }),
@@ -534,6 +582,19 @@ export function createDrizzleReviewCommandStore(
           publishedAt: new Date(input.now),
           updatedAt: new Date(input.now)
         });
+        await appendReviewAudit(transaction, {
+          actorUserId: input.actorUserId,
+          action: "review.dispute.opened",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            caseId: result.moderationCase.caseId,
+            reasonCode: result.moderationCase.reasonCode,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            previousVisibilityStatus: currentReview.visibilityStatus,
+            nextVisibilityStatus: result.review.visibilityStatus
+          }
+        });
 
         return result;
       }),
@@ -586,6 +647,18 @@ export function createDrizzleReviewCommandStore(
           approvedDelta: 0,
           publishedAt: new Date(input.now),
           updatedAt: new Date(input.now)
+        });
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.dispute.restored",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            caseId: input.caseId,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            previousVisibilityStatus: currentReview.visibilityStatus,
+            nextVisibilityStatus: result.review.visibilityStatus
+          }
         });
 
         return result;
@@ -669,6 +742,21 @@ export function createDrizzleReviewCommandStore(
           publishedAt: new Date(input.now),
           updatedAt: new Date(input.now)
         });
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.moderation_hidden",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            caseId: result.moderationCase.caseId,
+            previousCaseId: input.caseId,
+            reviewableInstanceId: result.review.reviewableInstanceId,
+            reasonCode: result.moderationCase.reasonCode,
+            noteMessageId: result.noteMessage?.messageId ?? null,
+            previousVisibilityStatus: currentReview.visibilityStatus,
+            nextVisibilityStatus: result.review.visibilityStatus
+          }
+        });
 
         return result;
       }),
@@ -704,51 +792,99 @@ export function createDrizzleReviewCommandStore(
             status: result.moderationCase.status
           })
           .where(eq(reviewModerationCases.id, result.moderationCase.caseId));
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.moderation_case.status_updated",
+          reviewId: result.review.id,
+          occurredAt: input.now,
+          metadata: {
+            caseId: result.moderationCase.caseId,
+            previousStatus: moderationCaseRow.status,
+            status: result.moderationCase.status,
+            previousDisputeStatus: reviewRow.disputeStatus,
+            nextDisputeStatus: result.review.disputeStatus
+          }
+        });
 
         return result;
       }),
-    createReviewCaseMessage: async (input) => {
-      const moderationCaseRow = await readReviewModerationCase(database, input.caseId);
-      if (!moderationCaseRow) return { kind: "rejected", reason: "not_review_case" };
-      const result = createReviewCaseMessage({
-        messageId: input.messageId,
-        caseId: input.caseId,
-        moderationCase: mapReviewModerationCase(moderationCaseRow),
-        authorUserId: input.authorUserId,
-        authorRole: input.authorRole,
-        visibility: input.visibility,
-        body: input.body,
-        createdAt: input.now
-      });
-      if (result.kind === "rejected") return result;
+    createReviewCaseMessage: (input) =>
+      database.transaction(async (transaction) => {
+        const moderationCaseRow = await readReviewModerationCase(transaction, input.caseId);
+        if (!moderationCaseRow) return { kind: "rejected", reason: "not_review_case" };
+        const result = createReviewCaseMessage({
+          messageId: input.messageId,
+          caseId: input.caseId,
+          moderationCase: mapReviewModerationCase(moderationCaseRow),
+          authorUserId: input.authorUserId,
+          authorRole: input.authorRole,
+          visibility: input.visibility,
+          body: input.body,
+          createdAt: input.now
+        });
+        if (result.kind === "rejected") return result;
 
-      const [insertedMessage] = await database
-        .insert(reviewModerationCaseMessages)
-        .values({
-          id: result.message.messageId,
-          caseId: result.message.caseId,
-          authorUserId: result.message.authorUserId,
-          authorRole: result.message.authorRole,
-          visibility: result.message.visibility,
-          body: result.message.body,
-          createdAt: new Date(result.message.createdAt)
-        })
-        .onConflictDoNothing({ target: reviewModerationCaseMessages.id })
-        .returning();
+        const [insertedMessage] = await transaction
+          .insert(reviewModerationCaseMessages)
+          .values({
+            id: result.message.messageId,
+            caseId: result.message.caseId,
+            authorUserId: result.message.authorUserId,
+            authorRole: result.message.authorRole,
+            visibility: result.message.visibility,
+            body: result.message.body,
+            createdAt: new Date(result.message.createdAt)
+          })
+          .onConflictDoNothing({ target: reviewModerationCaseMessages.id })
+          .returning();
 
-      if (insertedMessage) return result;
+        if (insertedMessage) {
+          await appendReviewAudit(transaction, {
+            actorUserId: result.message.authorUserId,
+            action: "review.moderation_case.message_created",
+            reviewId: moderationCaseRow.reviewId,
+            occurredAt: input.now,
+            metadata: {
+              caseId: result.message.caseId,
+              messageId: result.message.messageId,
+              authorRole: result.message.authorRole,
+              visibility: result.message.visibility
+            }
+          });
+          return result;
+        }
 
-      const existingMessage = await readReviewCaseMessage(database, result.message.messageId);
-      if (existingMessage) {
-        return {
-          kind: "created",
-          message: mapReviewCaseMessage(existingMessage)
-        };
-      }
+        const existingMessage = await readReviewCaseMessage(transaction, result.message.messageId);
+        if (existingMessage) {
+          return {
+            kind: "created",
+            message: mapReviewCaseMessage(existingMessage)
+          };
+        }
 
-      return result;
-    }
+        return result;
+      })
   };
+}
+
+async function appendReviewAudit(
+  transaction: ReviewCommandTransaction,
+  input: {
+    readonly actorUserId: string | null;
+    readonly action: string;
+    readonly reviewId: string;
+    readonly occurredAt: string;
+    readonly metadata: Record<string, unknown>;
+  }
+): Promise<void> {
+  await transaction.insert(auditLogEntries).values({
+    actorUserId: input.actorUserId,
+    action: input.action,
+    targetType: "review",
+    targetId: input.reviewId,
+    occurredAt: new Date(input.occurredAt),
+    metadata: input.metadata
+  });
 }
 
 async function lockReview(transaction: ReviewCommandTransaction, reviewId: string): Promise<void> {

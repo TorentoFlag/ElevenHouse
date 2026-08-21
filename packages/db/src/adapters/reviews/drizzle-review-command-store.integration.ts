@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { PostgresRuntime } from "../../runtime";
 import {
+  auditLogEntries,
   clientAstrologerRelationships,
   reviewModerationCases,
   reviewModerationCaseMessages,
@@ -267,6 +268,118 @@ describe.sequential("Drizzle review command store", () => {
       expect.arrayContaining([
         [fixture.firstVersionId, "approved"],
         [fixture.editVersionId, "approved"]
+      ])
+    );
+  });
+
+  it("writes audit entries for review moderation decisions and case communication", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+    const caseId = randomUUID();
+    const messageId = randomUUID();
+
+    await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Очень полезная консультация.",
+        publicIdentityMode: "named"
+      }
+    });
+    await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await store.openReviewDispute({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextCaseId: caseId,
+      reasonCode: "fraud_or_conflict"
+    });
+    await store.updateReviewModerationCaseStatus({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T12:05:00.000Z",
+      caseId,
+      status: "waiting_client"
+    });
+    await store.createReviewCaseMessage({
+      messageId,
+      caseId,
+      authorUserId: fixture.moderatorUserId,
+      authorRole: "moderator",
+      visibility: "client_and_moderators",
+      body: "Уточните, пожалуйста, что именно произошло.",
+      now: "2026-08-20T12:10:00.000Z"
+    });
+
+    const auditRows = await runtime.database
+      .select()
+      .from(auditLogEntries)
+      .where(eq(auditLogEntries.targetId, fixture.reviewId));
+    expect(
+      auditRows.map((row) => ({
+        actorUserId: row.actorUserId,
+        action: row.action,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        occurredAt: row.occurredAt.toISOString(),
+        metadata: row.metadata
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          actorUserId: fixture.moderatorUserId,
+          action: "review.version.approved",
+          targetType: "review",
+          targetId: fixture.reviewId,
+          occurredAt: "2026-08-20T11:00:00.000Z",
+          metadata: expect.objectContaining({
+            versionId: fixture.firstVersionId,
+            reviewableInstanceId: fixture.reviewableInstanceId
+          })
+        },
+        {
+          actorUserId: fixture.astrologerUserId,
+          action: "review.dispute.opened",
+          targetType: "review",
+          targetId: fixture.reviewId,
+          occurredAt: "2026-08-20T12:00:00.000Z",
+          metadata: expect.objectContaining({
+            caseId,
+            reasonCode: "fraud_or_conflict"
+          })
+        },
+        {
+          actorUserId: fixture.moderatorUserId,
+          action: "review.moderation_case.status_updated",
+          targetType: "review",
+          targetId: fixture.reviewId,
+          occurredAt: "2026-08-20T12:05:00.000Z",
+          metadata: expect.objectContaining({
+            caseId,
+            status: "waiting_client"
+          })
+        },
+        {
+          actorUserId: fixture.moderatorUserId,
+          action: "review.moderation_case.message_created",
+          targetType: "review",
+          targetId: fixture.reviewId,
+          occurredAt: "2026-08-20T12:10:00.000Z",
+          metadata: expect.objectContaining({
+            caseId,
+            messageId,
+            visibility: "client_and_moderators"
+          })
+        }
       ])
     );
   });
