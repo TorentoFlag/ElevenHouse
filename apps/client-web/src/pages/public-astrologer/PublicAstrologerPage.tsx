@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import { createClientJoinIntent } from "../../features/client-join/api/clientJoinApi";
 import { writePendingClientJoinIntent } from "../../features/client-join/model/clientJoinStorage";
+import { listPublicReviews } from "../../features/reviews/api/publicReviewsApi";
 import {
   PublicAstrologerPageView,
   type PublicAstrologerJoinState
@@ -23,10 +24,29 @@ export function PublicAstrologerPage() {
 
     setState({ status: "loading" });
     createClientJoinIntent({ publicHandle: handle })
-      .then((intent) => {
+      .then(async (intent) => {
         if (cancelled) return;
         writePendingClientJoinIntent(intent);
-        setState({ status: "ready", intent });
+        setState({ status: "ready", intent, reviews: { status: "loading" } });
+
+        try {
+          const reviews = await listPublicReviews({
+            astrologerUserId: intent.astrologer.userId,
+            limit: 6,
+            cursor: null
+          });
+          if (!cancelled) {
+            setState({
+              status: "ready",
+              intent,
+              reviews: { status: "ready", items: reviews.items }
+            });
+          }
+        } catch {
+          if (!cancelled) {
+            setState({ status: "ready", intent, reviews: { status: "error" } });
+          }
+        }
       })
       .catch(() => {
         if (!cancelled) {

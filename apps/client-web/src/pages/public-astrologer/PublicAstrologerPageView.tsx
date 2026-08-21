@@ -1,9 +1,18 @@
-import type { CreateClientJoinIntentResponse } from "@elevenhouse/contracts";
+import type { CreateClientJoinIntentResponse, ReviewPublicItem } from "@elevenhouse/contracts";
 import styles from "./PublicAstrologerPage.module.css";
+
+export type PublicAstrologerReviewsState =
+  | { readonly status: "loading" }
+  | { readonly status: "ready"; readonly items: readonly ReviewPublicItem[] }
+  | { readonly status: "error" };
 
 export type PublicAstrologerJoinState =
   | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly intent: CreateClientJoinIntentResponse }
+  | {
+      readonly status: "ready";
+      readonly intent: CreateClientJoinIntentResponse;
+      readonly reviews: PublicAstrologerReviewsState;
+    }
   | { readonly status: "error" };
 
 export function PublicAstrologerPageView({
@@ -65,7 +74,54 @@ export function PublicAstrologerPageView({
           </p>
         </aside>
       </div>
+
+      <section className={styles.reviewsSection} aria-labelledby="public-astrologer-reviews-title">
+        <div className={styles.reviewsHeader}>
+          <p className={styles.handle}>Отзывы клиентов</p>
+          <h2 id="public-astrologer-reviews-title">Опубликованные отзывы</h2>
+        </div>
+        <PublicReviewsList state={state.reviews} />
+      </section>
     </main>
+  );
+}
+
+function PublicReviewsList({ state }: { readonly state: PublicAstrologerReviewsState }) {
+  if (state.status === "loading") {
+    return <p className={styles.reviewsState}>Загружаем отзывы.</p>;
+  }
+
+  if (state.status === "error") {
+    return <p className={styles.reviewsState}>Отзывы временно недоступны.</p>;
+  }
+
+  if (state.items.length === 0) {
+    return <p className={styles.reviewsState}>Пока нет опубликованных отзывов.</p>;
+  }
+
+  return (
+    <div className={styles.reviewsList}>
+      {state.items.map((item) => (
+        <article className={styles.reviewCard} key={item.reviewId}>
+          <header className={styles.reviewCardHeader}>
+            <div>
+              <strong>{item.author.displayName}</strong>
+              <p>{item.contextLabel}</p>
+            </div>
+            <span aria-label={`Оценка ${item.rating} из 5`}>{item.rating} / 5</span>
+          </header>
+          <h3>{item.title}</h3>
+          <p className={styles.reviewText}>{item.text}</p>
+          <time dateTime={item.publishedAt}>{formatPublishedDate(item.publishedAt)}</time>
+          {item.astrologerReply ? (
+            <aside className={styles.reply} aria-label="Ответ астролога">
+              <strong>Ответ астролога</strong>
+              <p>{item.astrologerReply.text}</p>
+            </aside>
+          ) : null}
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -77,4 +133,13 @@ function getInitials(value: string): string {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+}
+
+function formatPublishedDate(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(value));
 }
