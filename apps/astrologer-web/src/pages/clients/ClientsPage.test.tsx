@@ -247,6 +247,60 @@ describe("ClientsPage", () => {
     expect(screen.getByText("3")).toBeVisible();
   });
 
+  it("submits native birth date and time input values from the CRM editor", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.put.mockResolvedValue({
+      client: {
+        clientUserId,
+        displayName: adaDetail.displayName,
+        relationshipStatus: adaDetail.relationship.status,
+        firstLinkedAt: adaDetail.relationship.firstLinkedAt,
+        lastLinkedAt: adaDetail.relationship.lastLinkedAt,
+        birthData: {
+          ...adaDetail.birthData,
+          birthDate: "1816-01-01",
+          birthTime: "14:15",
+          revision: 3,
+          updatedAt: "2026-08-20T12:00:00.000Z"
+        },
+        relatedBirthProfiles: adaDetail.relatedBirthProfiles
+      }
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Данные рождения" }));
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать данные рождения" }));
+    fireEvent.input(screen.getByLabelText("Дата рождения"), {
+      target: { value: "1816-01-01" }
+    });
+    fireEvent.input(screen.getByLabelText("Время рождения"), {
+      target: { value: "14:15" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить данные рождения" }));
+
+    await waitFor(() =>
+      expect(http.put).toHaveBeenCalledWith(
+        "/clients/11111111-1111-4111-8111-111111111111/birth-data",
+        expect.objectContaining({
+          birthDate: "1816-01-01",
+          birthTime: "14:15",
+          expectedRevision: 2
+        }),
+        { csrf: true }
+      )
+    );
+  });
+
   it("creates and updates related birth profiles without leaving the CRM context", async () => {
     http.get.mockImplementation(async (path: string) => {
       if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
