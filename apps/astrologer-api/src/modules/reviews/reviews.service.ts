@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException
@@ -17,11 +18,14 @@ import {
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
   reviewModerationDecisionSchema,
+  reviewRequestCreateSchema,
+  reviewRequestDeliveryResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
+  type ReviewRequestDeliveryResponse,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
 import type {
@@ -31,12 +35,20 @@ import type {
   ReviewReadStore,
   SubmitReviewReplyVersionResult
 } from "@elevenhouse/domain";
+import {
+  createOutboundMessage,
+  MessagingIdempotencyConflictError,
+  MessagingThreadNotFoundError,
+  MessagingValidationError,
+  type MessagingStore
+} from "@elevenhouse/domain";
 
 import { AiGenerationService } from "../ai/ai-generation.service";
 import { SystemClock } from "../clock/system-clock.service";
 import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_MESSAGING_STORE,
   ASTROLOGER_REVIEWS_READ_STORE
 } from "./reviews.tokens";
 
@@ -94,12 +106,14 @@ export class AstrologerReviewsService {
     @Inject(ASTROLOGER_REVIEWS_READ_STORE)
     private readonly readStore: Pick<
       ReviewReadStore,
-      "listAstrologerReviews" | "getModerationCaseDetail"
+      "listAstrologerReviews" | "getModerationCaseDetail" | "getClientReviewDetail"
     >,
     @Inject(ASTROLOGER_REVIEWS_COMMAND_STORE)
     private readonly commandStore: AstrologerReviewCommandStore,
     @Inject(ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE)
     private readonly aiReplyDraftStore: AstrologerReviewAiReplyDraftStore,
+    @Inject(ASTROLOGER_REVIEWS_MESSAGING_STORE)
+    private readonly messagingStore: MessagingStore,
     private readonly aiGeneration: AiGenerationService,
     private readonly clock: SystemClock
   ) {}
@@ -112,6 +126,65 @@ export class AstrologerReviewsService {
     return reviewAstrologerListResponseSchema.parse(
       await this.readStore.listAstrologerReviews(normalized)
     );
+  }
+
+  async requestReview(
+    astrologerUserId: string,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ReviewRequestDeliveryResponse> {
+    const parsed = reviewRequestCreateSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid review request payload");
+
+    const safeAstrologerUserId = requireUuid(astrologerUserId);
+    const thread = await this.messagingStore.findThreadForAstrologer({
+      astrologerUserId: safeAstrologerUserId,
+      threadId: parsed.data.threadId
+    });
+    if (!thread) throw new NotFoundException("Messaging thread was not found");
+    if (!thread.clientUserId) {
+      throw new BadRequestException("Review request requires a linked client thread");
+    }
+
+    const reviewTarget = await this.readStore.getClientReviewDetail({
+      clientUserId: thread.clientUserId,
+      reviewableInstanceId: parsed.data.reviewableInstanceId
+    });
+    if (!reviewTarget) throw new NotFoundException("Reviewable service was not found");
+    if (!reviewTarget.canSubmitNewVersion) {
+      throw new BadRequestException("Review request target is not currently reviewable");
+    }
+
+    try {
+      const result = await createOutboundMessage({
+        store: this.messagingStore,
+        astrologerUserId: safeAstrologerUserId,
+        threadId: parsed.data.threadId,
+        channelConnectionId: parsed.data.channelConnectionId,
+        text: parsed.data.text,
+        idempotencyKey,
+        now: this.clock.now()
+      });
+
+      return reviewRequestDeliveryResponseSchema.parse({
+        messageId: result.message.id,
+        threadId: result.message.threadId,
+        status: result.message.status,
+        createdAt: result.message.createdAt,
+        replayed: result.replayed
+      });
+    } catch (error) {
+      if (error instanceof MessagingThreadNotFoundError) {
+        throw new NotFoundException("Messaging thread was not found");
+      }
+      if (error instanceof MessagingIdempotencyConflictError) {
+        throw new ConflictException("Review request idempotency key conflicts with another message");
+      }
+      if (error instanceof MessagingValidationError) {
+        throw new BadRequestException("Invalid review request messaging target");
+      }
+      throw error;
+    }
   }
 
   async createReplyAiDraft(

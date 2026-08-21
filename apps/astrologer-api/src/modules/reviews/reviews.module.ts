@@ -4,6 +4,7 @@ import {
   createDrizzleReviewCommandStore,
   createDrizzleReviewReadStore
 } from "@elevenhouse/db/reviews";
+import { createDrizzleMessagingStore } from "@elevenhouse/db/messaging";
 
 import { AiModule } from "../ai/ai.module";
 import { ClockModule } from "../clock/clock.module";
@@ -17,6 +18,7 @@ import { AstrologerReviewsService } from "./reviews.service";
 import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_MESSAGING_STORE,
   ASTROLOGER_REVIEWS_READ_STORE
 } from "./reviews.tokens";
 
@@ -48,6 +50,11 @@ import {
       provide: ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
       useFactory: (runtime: PostgresRuntimeService) =>
         createDrizzleReviewAiReplyDraftStore(runtime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: ASTROLOGER_REVIEWS_MESSAGING_STORE,
+      useFactory: (runtime: PostgresRuntimeService) => createDrizzleMessagingStore(runtime.database),
       inject: [PostgresRuntimeService]
     }
   ]

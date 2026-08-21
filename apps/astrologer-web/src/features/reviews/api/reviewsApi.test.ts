@@ -5,6 +5,7 @@ import {
   getAstrologerReviewModerationCaseDetail,
   listAstrologerReviews,
   openReviewDispute,
+  requestReview,
   submitReviewReplyVersion
 } from "./reviewsApi";
 
@@ -65,6 +66,30 @@ describe("reviewsApi", () => {
       `/reviews/${reviewId}/reply-drafts/ai`,
       { locale: "ru" },
       { csrf: true, headers: { "idempotency-key": "reviews:ai:test" } }
+    );
+  });
+
+  it("requests reviews through the review request contract", async () => {
+    post.mockResolvedValueOnce(reviewRequestDelivery);
+
+    await expect(
+      requestReview({
+        idempotencyKey: "reviews:request:test",
+        body: {
+          reviewableInstanceId,
+          threadId,
+          text: "Буду благодарна, если оставите отзыв о консультации."
+        }
+      })
+    ).resolves.toEqual(reviewRequestDelivery);
+    expect(post).toHaveBeenCalledWith(
+      "/reviews/request-review",
+      {
+        reviewableInstanceId,
+        threadId,
+        text: "Буду благодарна, если оставите отзыв о консультации."
+      },
+      { csrf: true, headers: { "idempotency-key": "reviews:request:test" } }
     );
   });
 
@@ -142,6 +167,7 @@ const reviewableInstanceId = "21111111-1111-4111-8111-111111111111";
 const draftId = "31111111-1111-4111-8111-111111111111";
 const attemptId = "41111111-1111-4111-8111-111111111111";
 const caseId = "51111111-1111-4111-8111-111111111111";
+const threadId = "91111111-1111-4111-8111-111111111111";
 const replyVersion = {
   id: "61111111-1111-4111-8111-111111111111",
   versionNumber: 1,
@@ -213,4 +239,12 @@ const caseMessage = {
   visibility: "astrologer_and_moderators",
   body: "Готов обсудить детали консультации.",
   createdAt: "2026-08-21T09:05:00.000Z"
+} as const;
+
+const reviewRequestDelivery = {
+  messageId: "a1111111-1111-4111-8111-111111111111",
+  threadId,
+  status: "queued",
+  createdAt: "2026-08-21T09:06:00.000Z",
+  replayed: false
 } as const;

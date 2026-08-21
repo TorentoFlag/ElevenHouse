@@ -15,6 +15,7 @@ import type {
   ReviewAstrologerListResponse,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
+  ReviewRequestDeliveryResponse,
   ReviewReplyVersion
 } from "@elevenhouse/contracts";
 
@@ -55,6 +56,21 @@ export class AstrologerReviewsController {
     return this.service.createReplyAiDraft(
       requireAstrologerUserId(request),
       reviewId,
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
+  @Post("request-review")
+  @RequireIdempotency({ scope: "reviews.request-review.astrologer.send" })
+  @RequireCsrf()
+  requestReview(
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ): Promise<ReviewRequestDeliveryResponse> {
+    return this.service.requestReview(
+      requireAstrologerUserId(request),
       body,
       requireIdempotencyKey(idempotencyKey)
     );

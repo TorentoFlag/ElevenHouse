@@ -16,12 +16,17 @@ import { AstrologerReviewsService } from "./reviews.service";
 import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
+  ASTROLOGER_REVIEWS_MESSAGING_STORE,
   ASTROLOGER_REVIEWS_READ_STORE
 } from "./reviews.tokens";
 
 const astrologerUserId = "10000000-0000-4000-8000-000000000301";
 const reviewId = "10000000-0000-4000-8000-000000000302";
 const caseId = "10000000-0000-4000-8000-000000000303";
+const reviewableInstanceId = "10000000-0000-4000-8000-000000000305";
+const clientUserId = "10000000-0000-4000-8000-000000000307";
+const threadId = "10000000-0000-4000-8000-000000000308";
+const channelConnectionId = "10000000-0000-4000-8000-000000000309";
 
 describe("astrologer reviews HTTP API", () => {
   let app: INestApplication;
@@ -35,8 +40,13 @@ describe("astrologer reviews HTTP API", () => {
   let receivedAiGeneration: unknown;
   let receivedAiDraftSucceeded: unknown;
   let receivedAiDraftFailed: unknown;
+  let receivedReviewDetailRead: unknown;
+  let receivedThreadLookup: unknown;
+  let receivedOutboundMessage: unknown;
   let aiGenerationOutput: unknown;
   let disputeOpened: boolean;
+  let threadClientUserId: string | null;
+  let canSubmitNewVersion: boolean;
 
   beforeEach(async () => {
     receivedReviewsRead = null;
@@ -48,8 +58,13 @@ describe("astrologer reviews HTTP API", () => {
     receivedAiGeneration = null;
     receivedAiDraftSucceeded = null;
     receivedAiDraftFailed = null;
+    receivedReviewDetailRead = null;
+    receivedThreadLookup = null;
+    receivedOutboundMessage = null;
     aiGenerationOutput = { draftText: "Спасибо за отзыв. Рад, что консультация помогла." };
     disputeOpened = true;
+    threadClientUserId = clientUserId;
+    canSubmitNewVersion = true;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
       providers: [
@@ -121,6 +136,33 @@ describe("astrologer reviews HTTP API", () => {
                 nextCursor: null
               };
             },
+            async getClientReviewDetail(input) {
+              receivedReviewDetailRead = input;
+              if (
+                input.clientUserId !== clientUserId ||
+                input.reviewableInstanceId !== reviewableInstanceId
+              ) {
+                return null;
+              }
+              return {
+                reviewId: null,
+                reviewableInstance: {
+                  id: reviewableInstanceId,
+                  kind: "booking",
+                  status: "reviewable",
+                  title: "Солярная консультация",
+                  contextLabel: "60 минут",
+                  receivedAt: "2026-08-19T10:00:00.000Z",
+                  reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+                  windowPolicy: "standard_14_days_after_receipt"
+                },
+                activePublicVersion: null,
+                pendingVersion: null,
+                moderationCase: null,
+                canSubmitNewVersion,
+                canEditLatestVersion: false
+              };
+            },
             async getModerationCaseDetail(input) {
               receivedCaseRead = input;
               return input.caseId === caseId && disputeOpened
@@ -146,7 +188,10 @@ describe("astrologer reviews HTTP API", () => {
                   }
                 : null;
             }
-          } satisfies Pick<ReviewReadStore, "listAstrologerReviews" | "getModerationCaseDetail">
+          } satisfies Pick<
+            ReviewReadStore,
+            "listAstrologerReviews" | "getModerationCaseDetail" | "getClientReviewDetail"
+          >
         },
         {
           provide: ASTROLOGER_REVIEWS_COMMAND_STORE,
@@ -274,6 +319,52 @@ describe("astrologer reviews HTTP API", () => {
               return { kind: "updated" };
             }
           }
+        },
+        {
+          provide: ASTROLOGER_REVIEWS_MESSAGING_STORE,
+          useValue: {
+            async findThreadForAstrologer(input: unknown) {
+              receivedThreadLookup = input;
+              return {
+                id: threadId,
+                astrologerUserId,
+                clientUserId: threadClientUserId,
+                channelConnectionId,
+                externalIdentityId: "10000000-0000-4000-8000-000000000310",
+                status: "open",
+                lastMessageAt: null,
+                unreadAstrologerCount: 0,
+                createdAt: "2026-08-19T10:00:00.000Z",
+                updatedAt: "2026-08-19T10:00:00.000Z"
+              };
+            },
+            async findOutboundMessageByIdempotencyKey() {
+              return null;
+            },
+            async createOutboundMessage(input: {
+              readonly messageId: string;
+              readonly threadId: string;
+              readonly channelConnectionId: string;
+              readonly text: string;
+              readonly idempotencyKey: string;
+              readonly now: string;
+            }) {
+              receivedOutboundMessage = input;
+              return {
+                id: input.messageId,
+                threadId: input.threadId,
+                channelConnectionId: input.channelConnectionId,
+                externalIdentityId: null,
+                direction: "outbound",
+                text: input.text,
+                status: "queued",
+                providerMessageId: null,
+                idempotencyKey: input.idempotencyKey,
+                createdAt: input.now,
+                updatedAt: input.now
+              };
+            }
+          }
         }
       ]
     });
@@ -365,6 +456,78 @@ describe("astrologer reviews HTTP API", () => {
       draftText: "Спасибо за отзыв. Рад, что консультация помогла."
     });
     expect(receivedAiDraftFailed).toBeNull();
+  });
+
+  it("sends review requests through the linked client messaging thread", async () => {
+    const response = await fetch(`${baseUrl}/reviews/request-review`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-request-review-1"
+      },
+      body: JSON.stringify({
+        reviewableInstanceId,
+        threadId,
+        text: "Буду благодарна, если оставите отзыв о консультации."
+      })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      threadId,
+      status: "queued",
+      replayed: false
+    });
+    expect(receivedThreadLookup).toEqual({ astrologerUserId, threadId });
+    expect(receivedReviewDetailRead).toEqual({ clientUserId, reviewableInstanceId });
+    expect(receivedOutboundMessage).toMatchObject({
+      threadId,
+      channelConnectionId,
+      text: "Буду благодарна, если оставите отзыв о консультации.",
+      idempotencyKey: "reviews-request-review-1",
+      now: "2026-08-20T13:00:00.000Z"
+    });
+  });
+
+  it("rejects review requests for unlinked messaging threads", async () => {
+    threadClientUserId = null;
+
+    const response = await fetch(`${baseUrl}/reviews/request-review`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-request-review-unlinked"
+      },
+      body: JSON.stringify({
+        reviewableInstanceId,
+        threadId,
+        text: "Буду благодарна, если оставите отзыв о консультации."
+      })
+    });
+
+    expect(response.status).toBe(400);
+    expect(receivedReviewDetailRead).toBeNull();
+    expect(receivedOutboundMessage).toBeNull();
+  });
+
+  it("rejects review requests when the service is no longer reviewable", async () => {
+    canSubmitNewVersion = false;
+
+    const response = await fetch(`${baseUrl}/reviews/request-review`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-request-review-closed"
+      },
+      body: JSON.stringify({
+        reviewableInstanceId,
+        threadId,
+        text: "Буду благодарна, если оставите отзыв о консультации."
+      })
+    });
+
+    expect(response.status).toBe(400);
+    expect(receivedOutboundMessage).toBeNull();
   });
 
   it("marks AI reply drafts failed when provider output is malformed", async () => {

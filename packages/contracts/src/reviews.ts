@@ -309,6 +309,29 @@ export const reviewReplySubmissionSchema = z
   .strict();
 export type ReviewReplySubmission = z.infer<typeof reviewReplySubmissionSchema>;
 
+export const reviewRequestCreateSchema = z
+  .object({
+    reviewableInstanceId: uuidSchema,
+    threadId: uuidSchema,
+    channelConnectionId: uuidSchema.optional(),
+    text: textWithoutControlCharsSchema
+  })
+  .strict();
+export type ReviewRequestCreate = z.infer<typeof reviewRequestCreateSchema>;
+
+export const reviewRequestDeliveryResponseSchema = z
+  .object({
+    messageId: uuidSchema,
+    threadId: uuidSchema,
+    status: z.enum(["queued", "sending", "sent", "delivered", "read", "failed", "unknown"]),
+    createdAt: instantSchema,
+    replayed: z.boolean()
+  })
+  .strict();
+export type ReviewRequestDeliveryResponse = z.infer<
+  typeof reviewRequestDeliveryResponseSchema
+>;
+
 export const reviewReplyVersionSchema = z
   .object({
     id: uuidSchema,

@@ -7,6 +7,8 @@ import {
   reviewModerationDecisionSchema,
   reviewModerationCaseMessageCreateSchema,
   reviewModerationCaseMessageSchema,
+  reviewRequestCreateSchema,
+  reviewRequestDeliveryResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type CreateReviewReplyAiDraftRequest,
@@ -16,6 +18,8 @@ import {
   type ReviewModerationDecision,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseMessageCreate,
+  type ReviewRequestCreate,
+  type ReviewRequestDeliveryResponse,
   type ReviewReplySubmission,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
@@ -56,6 +60,25 @@ export async function createReviewReplyAiDraft(
   return createReviewReplyAiDraftResponseSchema.parse(
     await application.http.post(
       `/reviews/${encodeURIComponent(input.reviewId)}/reply-drafts/ai`,
+      body,
+      commandRequestOptions(input.idempotencyKey)
+    )
+  );
+}
+
+export type RequestReviewInput = Readonly<{
+  idempotencyKey: string;
+  body: ReviewRequestCreate;
+}>;
+
+export async function requestReview(
+  input: RequestReviewInput
+): Promise<ReviewRequestDeliveryResponse> {
+  const body = reviewRequestCreateSchema.parse(input.body);
+
+  return reviewRequestDeliveryResponseSchema.parse(
+    await application.http.post(
+      "/reviews/request-review",
       body,
       commandRequestOptions(input.idempotencyKey)
     )
