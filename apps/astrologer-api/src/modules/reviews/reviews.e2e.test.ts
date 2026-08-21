@@ -33,7 +33,9 @@ describe("astrologer reviews HTTP API", () => {
   let receivedDisputeCommand: unknown;
   let receivedAiDraftCommand: unknown;
   let receivedAiGeneration: unknown;
-  let receivedAiDraftCompletion: unknown;
+  let receivedAiDraftSucceeded: unknown;
+  let receivedAiDraftFailed: unknown;
+  let aiGenerationOutput: unknown;
   let disputeOpened: boolean;
 
   beforeEach(async () => {
@@ -44,7 +46,9 @@ describe("astrologer reviews HTTP API", () => {
     receivedDisputeCommand = null;
     receivedAiDraftCommand = null;
     receivedAiGeneration = null;
-    receivedAiDraftCompletion = null;
+    receivedAiDraftSucceeded = null;
+    receivedAiDraftFailed = null;
+    aiGenerationOutput = { draftText: "Спасибо за отзыв. Рад, что консультация помогла." };
     disputeOpened = true;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
@@ -57,7 +61,7 @@ describe("astrologer reviews HTTP API", () => {
             async generate(input: unknown) {
               receivedAiGeneration = input;
               return {
-                output: { draftText: "Спасибо за отзыв. Рад, что консультация помогла." },
+                output: aiGenerationOutput,
                 provider: "openai",
                 model: "gpt-5.5",
                 finishReason: "completed",
@@ -259,11 +263,11 @@ describe("astrologer reviews HTTP API", () => {
               };
             },
             async markReplyDraftSucceeded(input: unknown) {
-              receivedAiDraftCompletion = input;
+              receivedAiDraftSucceeded = input;
               return { kind: "updated" };
             },
             async markReplyDraftFailed(input: unknown) {
-              receivedAiDraftCompletion = input;
+              receivedAiDraftFailed = input;
               return { kind: "updated" };
             }
           }
@@ -362,8 +366,28 @@ describe("astrologer reviews HTTP API", () => {
         sourceChecksum: "sha256:test"
       }
     });
-    expect(receivedAiDraftCompletion).toMatchObject({
+    expect(receivedAiDraftSucceeded).toMatchObject({
       draftText: "Спасибо за отзыв. Рад, что консультация помогла."
+    });
+    expect(receivedAiDraftFailed).toBeNull();
+  });
+
+  it("marks AI reply drafts failed when provider output is malformed", async () => {
+    aiGenerationOutput = { text: "не тот контракт" };
+
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/reply-drafts/ai`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-ai-reply-draft-malformed"
+      },
+      body: JSON.stringify({ locale: "ru" })
+    });
+
+    expect(response.status).toBe(502);
+    expect(receivedAiDraftSucceeded).toBeNull();
+    expect(receivedAiDraftFailed).toMatchObject({
+      safeErrorCode: "AI_PROVIDER_RESPONSE_INVALID"
     });
   });
 

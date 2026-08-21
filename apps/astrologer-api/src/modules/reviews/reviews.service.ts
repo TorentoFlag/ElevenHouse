@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { reviewReplyDraftPromptV1, type ReviewReplyDraftPromptOutput } from "@elevenhouse/ai";
+import {
+  BadGatewayException,
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
+import { reviewReplyDraftPromptV1 } from "@elevenhouse/ai";
 import {
   createReviewReplyAiDraftRequestSchema,
   createReviewReplyAiDraftResponseSchema,
@@ -155,17 +161,25 @@ export class AstrologerReviewsService {
       throw error;
     }
 
-    const output = generated.output as ReviewReplyDraftPromptOutput;
+    const output = reviewReplyDraftPromptV1.outputSchema.safeParse(generated.output);
+    if (!output.success) {
+      await this.aiReplyDraftStore.markReplyDraftFailed({
+        attemptId,
+        now: this.clock.now().toISOString(),
+        safeErrorCode: "AI_PROVIDER_RESPONSE_INVALID"
+      });
+      throw new BadGatewayException("Review reply AI draft provider response is invalid");
+    }
     await this.aiReplyDraftStore.markReplyDraftSucceeded({
       attemptId,
       now: this.clock.now().toISOString(),
-      draftText: output.draftText
+      draftText: output.data.draftText
     });
 
     return createReviewReplyAiDraftResponseSchema.parse({
       draftId,
       attemptId,
-      draftText: output.draftText,
+      draftText: output.data.draftText,
       provider: generated.provider,
       model: generated.model,
       promptId: reviewReplyDraftPromptV1.id,
