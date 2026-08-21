@@ -1,7 +1,7 @@
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
-import type { ReviewCaseState } from "./ReviewsPage";
+import type { DisputeDraft, ReviewCaseState } from "./ReviewsPage";
 import type {
   AstrologerReviewFilter,
   AstrologerReviewsSummary
@@ -20,6 +20,8 @@ export type ReviewsPageViewProps = {
   readonly selectedFilter: AstrologerReviewFilter;
   readonly replyTargetId: string | null;
   readonly replyDrafts: Record<string, string>;
+  readonly disputeTargetId: string | null;
+  readonly disputeDrafts: Record<string, DisputeDraft>;
   readonly caseStates: Record<string, ReviewCaseState>;
   readonly caseMessageDrafts: Record<string, string>;
   readonly isLoading: boolean;
@@ -30,11 +32,14 @@ export type ReviewsPageViewProps = {
   readonly onRefresh: () => void;
   readonly onStartReply: (review: ReviewAstrologerItem) => void;
   readonly onCancelReply: () => void;
+  readonly onStartDispute: (review: ReviewAstrologerItem) => void;
+  readonly onCancelDispute: () => void;
   readonly onEditReply: (reviewId: string, value: string) => void;
+  readonly onEditDispute: (reviewId: string, draft: DisputeDraft) => void;
   readonly onEditCaseMessage: (caseId: string, value: string) => void;
   readonly onSubmitReply: (review: ReviewAstrologerItem) => void;
   readonly onCreateAiDraft: (review: ReviewAstrologerItem) => void;
-  readonly onOpenDispute: (review: ReviewAstrologerItem) => void;
+  readonly onSubmitDispute: (review: ReviewAstrologerItem) => void;
   readonly onSubmitCaseMessage: (review: ReviewAstrologerItem) => void;
 };
 
@@ -49,6 +54,8 @@ export function ReviewsPageView({
   selectedFilter,
   replyTargetId,
   replyDrafts,
+  disputeTargetId,
+  disputeDrafts,
   caseStates,
   caseMessageDrafts,
   isLoading,
@@ -59,11 +66,14 @@ export function ReviewsPageView({
   onRefresh,
   onStartReply,
   onCancelReply,
+  onStartDispute,
+  onCancelDispute,
   onEditReply,
+  onEditDispute,
   onEditCaseMessage,
   onSubmitReply,
   onCreateAiDraft,
-  onOpenDispute,
+  onSubmitDispute,
   onSubmitCaseMessage
 }: ReviewsPageViewProps) {
   return (
@@ -128,6 +138,7 @@ export function ReviewsPageView({
                   locale={locale}
                   review={review}
                   replyDraft={replyDrafts[review.reviewId] ?? ""}
+                  disputeDraft={disputeDrafts[review.reviewId] ?? null}
                   caseState={
                     review.moderationCase ? caseStates[review.moderationCase.caseId] : undefined
                   }
@@ -137,10 +148,14 @@ export function ReviewsPageView({
                       : ""
                   }
                   replyActive={replyTargetId === review.reviewId}
+                  disputeActive={disputeTargetId === review.reviewId}
                   commandPending={isCommandPending}
                   onStartReply={() => onStartReply(review)}
                   onCancelReply={onCancelReply}
                   onEditReply={(value) => onEditReply(review.reviewId, value)}
+                  onStartDispute={() => onStartDispute(review)}
+                  onCancelDispute={onCancelDispute}
+                  onEditDispute={(draft) => onEditDispute(review.reviewId, draft)}
                   onEditCaseMessage={(value) => {
                     if (review.moderationCase) {
                       onEditCaseMessage(review.moderationCase.caseId, value);
@@ -148,7 +163,7 @@ export function ReviewsPageView({
                   }}
                   onSubmitReply={() => onSubmitReply(review)}
                   onCreateAiDraft={() => onCreateAiDraft(review)}
-                  onOpenDispute={() => onOpenDispute(review)}
+                  onSubmitDispute={() => onSubmitDispute(review)}
                   onSubmitCaseMessage={() => onSubmitCaseMessage(review)}
                 />
               ))}

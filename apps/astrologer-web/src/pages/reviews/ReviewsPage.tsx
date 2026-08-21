@@ -1,6 +1,10 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import type { ReviewAstrologerItem, ReviewModerationCaseDetail } from "@elevenhouse/contracts";
+import type {
+  ReviewAstrologerItem,
+  ReviewModerationCaseDetail,
+  ReviewModerationReasonCode
+} from "@elevenhouse/contracts";
 import { useI18n, type SupportedLocale } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
@@ -29,6 +33,8 @@ export function ReviewsPage() {
   const [filter, setFilter] = useState<AstrologerReviewFilter>("all");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [disputeTargetId, setDisputeTargetId] = useState<string | null>(null);
+  const [disputeDrafts, setDisputeDrafts] = useState<Record<string, DisputeDraft>>({});
   const [caseMessageDrafts, setCaseMessageDrafts] = useState<Record<string, string>>({});
   const reviewsQuery = useQuery(
     astrologerReviewsListQueryOptions({ limit: pageSize, cursor: null })
@@ -82,10 +88,18 @@ export function ReviewsPage() {
   }
 
   async function handleOpenDispute(review: ReviewAstrologerItem) {
+    const draft = disputeDrafts[review.reviewId] ?? createEmptyDisputeDraft();
+    const note = draft.note.trim();
     await disputeMutation.mutateAsync({
       reviewId: review.reviewId,
       idempotencyKey: createCommandKey("reviews:dispute"),
-      body: { reasonCode: "other", note: copy.disputeDefaultNote }
+      body: { reasonCode: draft.reasonCode, note: note ? note : null }
+    });
+    setDisputeTargetId(null);
+    setDisputeDrafts((current) => {
+      const next = { ...current };
+      delete next[review.reviewId];
+      return next;
     });
   }
 
@@ -116,6 +130,8 @@ export function ReviewsPage() {
       selectedFilter={filter}
       replyTargetId={replyTargetId}
       replyDrafts={replyDrafts}
+      disputeTargetId={disputeTargetId}
+      disputeDrafts={disputeDrafts}
       caseStates={caseStates}
       caseMessageDrafts={caseMessageDrafts}
       isLoading={reviewsQuery.isLoading}
@@ -143,13 +159,24 @@ export function ReviewsPage() {
         }));
       }}
       onCancelReply={() => setReplyTargetId(null)}
+      onStartDispute={(review) => {
+        setDisputeTargetId(review.reviewId);
+        setDisputeDrafts((current) => ({
+          ...current,
+          [review.reviewId]: current[review.reviewId] ?? createEmptyDisputeDraft()
+        }));
+      }}
+      onCancelDispute={() => setDisputeTargetId(null)}
+      onEditDispute={(reviewId, draft) =>
+        setDisputeDrafts((current) => ({ ...current, [reviewId]: draft }))
+      }
       onSubmitReply={(review) => {
         void handleSubmitReply(review);
       }}
       onCreateAiDraft={(review) => {
         void handleCreateAiDraft(review);
       }}
-      onOpenDispute={(review) => {
+      onSubmitDispute={(review) => {
         void handleOpenDispute(review);
       }}
       onSubmitCaseMessage={(review) => {
@@ -190,6 +217,15 @@ export type ReviewCaseState = {
   readonly detail: ReviewModerationCaseDetail | null;
 };
 
+export type DisputeDraft = {
+  readonly reasonCode: ReviewModerationReasonCode;
+  readonly note: string;
+};
+
+function createEmptyDisputeDraft(): DisputeDraft {
+  return { reasonCode: "fraud_or_conflict", note: "" };
+}
+
 function createCommandKey(scope: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${scope}:${crypto.randomUUID()}`;
@@ -219,6 +255,15 @@ export type ReviewsPageCopy = {
     readonly startLabel: string;
     readonly aiLabel: string;
   };
+  readonly dispute: {
+    readonly label: string;
+    readonly reasonLabel: string;
+    readonly noteLabel: string;
+    readonly placeholder: string;
+    readonly submitLabel: string;
+    readonly cancelLabel: string;
+    readonly reasons: Record<ReviewModerationReasonCode, string>;
+  };
   readonly caseThread: {
     readonly title: string;
     readonly loadingLabel: string;
@@ -229,8 +274,6 @@ export type ReviewsPageCopy = {
     readonly status: Record<ReviewModerationCaseDetail["status"], string>;
     readonly author: Record<ReviewModerationCaseDetail["messages"][number]["authorRole"], string>;
   };
-  readonly disputeLabel: string;
-  readonly disputeDefaultNote: string;
   readonly commandError: string;
 };
 
@@ -266,6 +309,25 @@ const reviewsCopyByLocale = {
       startLabel: "Ответить",
       aiLabel: "AI-ответ"
     },
+    dispute: {
+      label: "Оспорить",
+      reasonLabel: "Причина спора",
+      noteLabel: "Комментарий для модератора",
+      placeholder: "Коротко опишите, что именно нужно проверить.",
+      submitLabel: "Открыть спор",
+      cancelLabel: "Отмена",
+      reasons: {
+        spam: "Спам",
+        abuse_or_hate: "Оскорбления или ненависть",
+        personal_data_exposure: "Персональные данные",
+        off_topic: "Не по теме",
+        not_service_related: "Не относится к услуге",
+        fraud_or_conflict: "Недостоверный отзыв или конфликт",
+        duplicate: "Дубликат",
+        legal_risk: "Юридический риск",
+        other: "Другое"
+      }
+    },
     caseThread: {
       title: "Спор и уточнения",
       loadingLabel: "Загружаем переписку",
@@ -287,8 +349,6 @@ const reviewsCopyByLocale = {
         system: "Система"
       }
     },
-    disputeLabel: "Оспорить",
-    disputeDefaultNote: "Астролог открыл спор из раздела отзывов.",
     commandError: "Команду не удалось выполнить. Обновите список и попробуйте снова."
   },
   en: {
@@ -323,6 +383,25 @@ const reviewsCopyByLocale = {
       startLabel: "Reply",
       aiLabel: "AI reply"
     },
+    dispute: {
+      label: "Dispute",
+      reasonLabel: "Dispute reason",
+      noteLabel: "Moderator note",
+      placeholder: "Briefly describe what the moderator should verify.",
+      submitLabel: "Open dispute",
+      cancelLabel: "Cancel",
+      reasons: {
+        spam: "Spam",
+        abuse_or_hate: "Abuse or hate",
+        personal_data_exposure: "Personal data exposure",
+        off_topic: "Off topic",
+        not_service_related: "Not service related",
+        fraud_or_conflict: "Fraud or conflict",
+        duplicate: "Duplicate",
+        legal_risk: "Legal risk",
+        other: "Other"
+      }
+    },
     caseThread: {
       title: "Dispute and clarifications",
       loadingLabel: "Loading thread",
@@ -344,8 +423,6 @@ const reviewsCopyByLocale = {
         system: "System"
       }
     },
-    disputeLabel: "Dispute",
-    disputeDefaultNote: "Astrologer opened a dispute from the reviews workspace.",
     commandError: "The command failed. Refresh the list and try again."
   }
 } satisfies Record<SupportedLocale, ReviewsPageCopy>;

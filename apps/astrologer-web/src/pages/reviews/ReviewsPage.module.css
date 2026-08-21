@@ -395,6 +395,23 @@
   gap: 10px;
 }
 
+.disputeForm {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgb(245 185 93 / 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgb(56 39 28 / 0.42);
+}
+
+.formField {
+  display: grid;
+  gap: 6px;
+  color: var(--eh-color-moon-300);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .replyInput {
   box-sizing: border-box;
   width: 100%;
@@ -409,7 +426,20 @@
   line-height: 1.45;
 }
 
+.selectInput {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--reviews-line-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgb(7 6 15 / 0.82);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: 13px;
+}
+
 .replyInput:focus-visible,
+.selectInput:focus-visible,
 .filterChip:focus-visible,
 .secondaryButton:focus-visible,
 .quietButton:focus-visible,

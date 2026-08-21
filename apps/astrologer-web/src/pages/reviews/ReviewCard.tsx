@@ -1,6 +1,7 @@
-import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
+import type { ReviewAstrologerItem, ReviewModerationReasonCode } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import type { DisputeDraft } from "./ReviewsPage";
 import type { ReviewCaseState } from "./ReviewsPage";
 import type { ReviewsPageCopy } from "./ReviewsPage";
 import styles from "./ReviewsPage.module.css";
@@ -10,34 +11,44 @@ export function ReviewCard({
   locale,
   review,
   replyDraft,
+  disputeDraft,
   caseState,
   caseMessageDraft,
   replyActive,
+  disputeActive,
   commandPending,
   onStartReply,
   onCancelReply,
   onEditReply,
+  onStartDispute,
+  onCancelDispute,
+  onEditDispute,
   onEditCaseMessage,
   onSubmitReply,
   onCreateAiDraft,
-  onOpenDispute,
+  onSubmitDispute,
   onSubmitCaseMessage
 }: {
   readonly copy: ReviewsPageCopy;
   readonly locale: SupportedLocale;
   readonly review: ReviewAstrologerItem;
   readonly replyDraft: string;
+  readonly disputeDraft: DisputeDraft | null;
   readonly caseState: ReviewCaseState | undefined;
   readonly caseMessageDraft: string;
   readonly replyActive: boolean;
+  readonly disputeActive: boolean;
   readonly commandPending: boolean;
   readonly onStartReply: () => void;
   readonly onCancelReply: () => void;
   readonly onEditReply: (value: string) => void;
+  readonly onStartDispute: () => void;
+  readonly onCancelDispute: () => void;
+  readonly onEditDispute: (value: DisputeDraft) => void;
   readonly onEditCaseMessage: (value: string) => void;
   readonly onSubmitReply: () => void;
   readonly onCreateAiDraft: () => void;
-  readonly onOpenDispute: () => void;
+  readonly onSubmitDispute: () => void;
   readonly onSubmitCaseMessage: () => void;
 }) {
   const status = getReviewStatus(review);
@@ -156,16 +167,75 @@ export function ReviewCard({
             <Icon iconName="sparkle" size={14} aria-hidden="true" />
             {copy.reply.aiLabel}
           </button>
-          {canOpenDispute ? (
+        </div>
+      ) : null}
+      {canOpenDispute && disputeActive && disputeDraft ? (
+        <form
+          className={styles.disputeForm}
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmitDispute();
+          }}
+        >
+          <label className={styles.formField}>
+            <span>{copy.dispute.reasonLabel}</span>
+            <select
+              className={styles.selectInput}
+              value={disputeDraft.reasonCode}
+              onChange={(event) =>
+                onEditDispute({
+                  ...disputeDraft,
+                  reasonCode: event.target.value as ReviewModerationReasonCode
+                })
+              }
+            >
+              {disputeReasonOrder.map((reasonCode) => (
+                <option key={reasonCode} value={reasonCode}>
+                  {copy.dispute.reasons[reasonCode]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.formField}>
+            <span>{copy.dispute.noteLabel}</span>
+            <textarea
+              className={styles.replyInput}
+              value={disputeDraft.note}
+              rows={3}
+              maxLength={2000}
+              placeholder={copy.dispute.placeholder}
+              onChange={(event) => onEditDispute({ ...disputeDraft, note: event.target.value })}
+            />
+          </label>
+          <div className={styles.replyActions}>
             <button
               type="button"
               className={styles.quietButton}
               disabled={commandPending}
-              onClick={onOpenDispute}
+              onClick={onCancelDispute}
             >
-              {copy.disputeLabel}
+              {copy.dispute.cancelLabel}
             </button>
-          ) : null}
+            <button
+              type="submit"
+              className={styles.primaryButton}
+              disabled={commandPending || !disputeDraft.note.trim()}
+            >
+              {copy.dispute.submitLabel}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {canOpenDispute && !disputeActive ? (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.quietButton}
+            disabled={commandPending}
+            onClick={onStartDispute}
+          >
+            {copy.dispute.label}
+          </button>
         </div>
       ) : null}
       {review.moderationCase ? (
@@ -252,6 +322,18 @@ function ReviewCaseThread({
     </section>
   );
 }
+
+const disputeReasonOrder: readonly ReviewModerationReasonCode[] = [
+  "fraud_or_conflict",
+  "not_service_related",
+  "personal_data_exposure",
+  "abuse_or_hate",
+  "spam",
+  "duplicate",
+  "legal_risk",
+  "off_topic",
+  "other"
+];
 
 function ReviewAvatar({ review }: { readonly review: ReviewAstrologerItem }) {
   if (review.author.publicIdentityMode === "named" && review.author.avatarUrl) {

@@ -20,17 +20,22 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithCase}
         replyDraft=""
+        disputeDraft={null}
         caseState={caseState}
         caseMessageDraft="Готов обсудить детали консультации."
         replyActive={false}
+        disputeActive={false}
         commandPending={false}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
         onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
         onEditCaseMessage={onEditCaseMessage}
         onSubmitReply={vi.fn()}
         onCreateAiDraft={vi.fn()}
-        onOpenDispute={vi.fn()}
+        onSubmitDispute={vi.fn()}
         onSubmitCaseMessage={onSubmitCaseMessage}
       />
     );
@@ -54,17 +59,22 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithPendingEdit}
         replyDraft=""
+        disputeDraft={null}
         caseState={undefined}
         caseMessageDraft=""
         replyActive={false}
+        disputeActive={false}
         commandPending={false}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
         onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
         onEditCaseMessage={vi.fn()}
         onSubmitReply={vi.fn()}
         onCreateAiDraft={vi.fn()}
-        onOpenDispute={vi.fn()}
+        onSubmitDispute={vi.fn()}
         onSubmitCaseMessage={vi.fn()}
       />
     );
@@ -82,17 +92,22 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithPendingReplyEdit}
         replyDraft=""
+        disputeDraft={null}
         caseState={undefined}
         caseMessageDraft=""
         replyActive={false}
+        disputeActive={false}
         commandPending={false}
         onStartReply={vi.fn()}
         onCancelReply={vi.fn()}
         onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
         onEditCaseMessage={vi.fn()}
         onSubmitReply={vi.fn()}
         onCreateAiDraft={vi.fn()}
-        onOpenDispute={vi.fn()}
+        onSubmitDispute={vi.fn()}
         onSubmitCaseMessage={vi.fn()}
       />
     );
@@ -101,6 +116,60 @@ describe("ReviewCard", () => {
     expect(screen.getByText("Спасибо за доверие, рад был помочь.")).toBeVisible();
     expect(screen.getByText("Ответ на модерации")).toBeVisible();
     expect(screen.getByText("Обновленная версия ответа ожидает модерацию.")).toBeVisible();
+  });
+
+  it("collects an explicit dispute reason and note before submitting", () => {
+    const onStartDispute = vi.fn();
+    const onEditDispute = vi.fn();
+    const onSubmitDispute = vi.fn();
+
+    render(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingEdit}
+        replyDraft=""
+        disputeDraft={{
+          reasonCode: "fraud_or_conflict",
+          note: "Отзыв не соответствует фактической услуге."
+        }}
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive={false}
+        disputeActive
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onStartDispute={onStartDispute}
+        onCancelDispute={vi.fn()}
+        onEditDispute={onEditDispute}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={vi.fn()}
+        onSubmitDispute={onSubmitDispute}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Причина спора"), {
+      target: { value: "not_service_related" }
+    });
+    fireEvent.change(screen.getByLabelText("Комментарий для модератора"), {
+      target: { value: "Клиент описывает услугу, которую я не проводил." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Открыть спор" }));
+
+    expect(onStartDispute).not.toHaveBeenCalled();
+    expect(onEditDispute).toHaveBeenCalledWith({
+      reasonCode: "not_service_related",
+      note: "Отзыв не соответствует фактической услуге."
+    });
+    expect(onEditDispute).toHaveBeenCalledWith({
+      reasonCode: "fraud_or_conflict",
+      note: "Клиент описывает услугу, которую я не проводил."
+    });
+    expect(onSubmitDispute).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -248,6 +317,25 @@ const copy = {
     startLabel: "Ответить",
     aiLabel: "AI-ответ"
   },
+  dispute: {
+    label: "Оспорить",
+    reasonLabel: "Причина спора",
+    noteLabel: "Комментарий для модератора",
+    placeholder: "Коротко опишите, что именно нужно проверить.",
+    submitLabel: "Открыть спор",
+    cancelLabel: "Отмена",
+    reasons: {
+      spam: "Спам",
+      abuse_or_hate: "Оскорбления или ненависть",
+      personal_data_exposure: "Персональные данные",
+      off_topic: "Не по теме",
+      not_service_related: "Не относится к услуге",
+      fraud_or_conflict: "Недостоверный отзыв или конфликт",
+      duplicate: "Дубликат",
+      legal_risk: "Юридический риск",
+      other: "Другое"
+    }
+  },
   caseThread: {
     title: "Спор и уточнения",
     loadingLabel: "Загружаем переписку",
@@ -269,7 +357,5 @@ const copy = {
       system: "Система"
     }
   },
-  disputeLabel: "Оспорить",
-  disputeDefaultNote: "Астролог открыл спор из раздела отзывов.",
   commandError: "Команду не удалось выполнить."
 } satisfies ReviewsPageCopy;
