@@ -452,8 +452,20 @@
 .replyActions,
 .actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.aiStatus {
+  color: var(--reviews-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.aiStatus[data-status="error"] {
+  color: #ffb4a8;
 }
 
 .primaryButton {

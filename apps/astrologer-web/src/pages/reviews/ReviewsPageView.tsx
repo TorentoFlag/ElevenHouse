@@ -1,7 +1,7 @@
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
-import type { DisputeDraft, ReviewCaseState } from "./ReviewsPage";
+import type { AiDraftState, DisputeDraft, ReviewCaseState } from "./ReviewsPage";
 import type {
   AstrologerReviewFilter,
   AstrologerReviewsSummary
@@ -20,6 +20,7 @@ export type ReviewsPageViewProps = {
   readonly selectedFilter: AstrologerReviewFilter;
   readonly replyTargetId: string | null;
   readonly replyDrafts: Record<string, string>;
+  readonly aiDraftStates: Record<string, AiDraftState>;
   readonly disputeTargetId: string | null;
   readonly disputeDrafts: Record<string, DisputeDraft>;
   readonly caseStates: Record<string, ReviewCaseState>;
@@ -54,6 +55,7 @@ export function ReviewsPageView({
   selectedFilter,
   replyTargetId,
   replyDrafts,
+  aiDraftStates,
   disputeTargetId,
   disputeDrafts,
   caseStates,
@@ -138,6 +140,7 @@ export function ReviewsPageView({
                   locale={locale}
                   review={review}
                   replyDraft={replyDrafts[review.reviewId] ?? ""}
+                  aiDraftState={aiDraftStates[review.reviewId] ?? { status: "idle" }}
                   disputeDraft={disputeDrafts[review.reviewId] ?? null}
                   caseState={
                     review.moderationCase ? caseStates[review.moderationCase.caseId] : undefined

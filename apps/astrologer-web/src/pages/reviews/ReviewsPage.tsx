@@ -33,6 +33,7 @@ export function ReviewsPage() {
   const [filter, setFilter] = useState<AstrologerReviewFilter>("all");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [aiDraftStates, setAiDraftStates] = useState<Record<string, AiDraftState>>({});
   const [disputeTargetId, setDisputeTargetId] = useState<string | null>(null);
   const [disputeDrafts, setDisputeDrafts] = useState<Record<string, DisputeDraft>>({});
   const [caseMessageDrafts, setCaseMessageDrafts] = useState<Record<string, string>>({});
@@ -61,13 +62,19 @@ export function ReviewsPage() {
   useDocumentTitle(copy.documentTitle);
 
   async function handleCreateAiDraft(review: ReviewAstrologerItem) {
-    const result = await aiDraftMutation.mutateAsync({
-      reviewId: review.reviewId,
-      idempotencyKey: createCommandKey("reviews:reply-ai"),
-      body: { locale }
-    });
-    setReplyTargetId(review.reviewId);
-    setReplyDrafts((current) => ({ ...current, [review.reviewId]: result.draftText }));
+    setAiDraftStates((current) => ({ ...current, [review.reviewId]: { status: "loading" } }));
+    try {
+      const result = await aiDraftMutation.mutateAsync({
+        reviewId: review.reviewId,
+        idempotencyKey: createCommandKey("reviews:reply-ai"),
+        body: { locale }
+      });
+      setReplyTargetId(review.reviewId);
+      setReplyDrafts((current) => ({ ...current, [review.reviewId]: result.draftText }));
+      setAiDraftStates((current) => ({ ...current, [review.reviewId]: { status: "ready" } }));
+    } catch {
+      setAiDraftStates((current) => ({ ...current, [review.reviewId]: { status: "error" } }));
+    }
   }
 
   async function handleSubmitReply(review: ReviewAstrologerItem) {
@@ -81,6 +88,11 @@ export function ReviewsPage() {
     });
     setReplyTargetId(null);
     setReplyDrafts((current) => {
+      const next = { ...current };
+      delete next[review.reviewId];
+      return next;
+    });
+    setAiDraftStates((current) => {
       const next = { ...current };
       delete next[review.reviewId];
       return next;
@@ -130,6 +142,7 @@ export function ReviewsPage() {
       selectedFilter={filter}
       replyTargetId={replyTargetId}
       replyDrafts={replyDrafts}
+      aiDraftStates={aiDraftStates}
       disputeTargetId={disputeTargetId}
       disputeDrafts={disputeDrafts}
       caseStates={caseStates}
@@ -217,6 +230,12 @@ export type ReviewCaseState = {
   readonly detail: ReviewModerationCaseDetail | null;
 };
 
+export type AiDraftState =
+  | { readonly status: "idle" }
+  | { readonly status: "loading" }
+  | { readonly status: "ready" }
+  | { readonly status: "error" };
+
 export type DisputeDraft = {
   readonly reasonCode: ReviewModerationReasonCode;
   readonly note: string;
@@ -254,6 +273,9 @@ export type ReviewsPageCopy = {
     readonly cancelLabel: string;
     readonly startLabel: string;
     readonly aiLabel: string;
+    readonly aiLoadingLabel: string;
+    readonly aiReadyLabel: string;
+    readonly aiErrorLabel: string;
   };
   readonly dispute: {
     readonly label: string;
@@ -307,7 +329,10 @@ const reviewsCopyByLocale = {
       submitLabel: "Ответить",
       cancelLabel: "Отмена",
       startLabel: "Ответить",
-      aiLabel: "AI-ответ"
+      aiLabel: "AI-ответ",
+      aiLoadingLabel: "Готовим черновик...",
+      aiReadyLabel: "AI-черновик добавлен. Проверьте текст перед отправкой.",
+      aiErrorLabel: "AI-черновик не удалось создать. Попробуйте ещё раз."
     },
     dispute: {
       label: "Оспорить",
@@ -381,7 +406,10 @@ const reviewsCopyByLocale = {
       submitLabel: "Reply",
       cancelLabel: "Cancel",
       startLabel: "Reply",
-      aiLabel: "AI reply"
+      aiLabel: "AI reply",
+      aiLoadingLabel: "Drafting...",
+      aiReadyLabel: "AI draft added. Review it before submitting.",
+      aiErrorLabel: "Could not create the AI draft. Try again."
     },
     dispute: {
       label: "Dispute",

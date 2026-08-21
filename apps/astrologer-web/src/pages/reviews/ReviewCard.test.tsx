@@ -20,6 +20,7 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithCase}
         replyDraft=""
+        aiDraftState={{ status: "idle" }}
         disputeDraft={null}
         caseState={caseState}
         caseMessageDraft="Готов обсудить детали консультации."
@@ -59,6 +60,7 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithPendingEdit}
         replyDraft=""
+        aiDraftState={{ status: "idle" }}
         disputeDraft={null}
         caseState={undefined}
         caseMessageDraft=""
@@ -92,6 +94,7 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithPendingReplyEdit}
         replyDraft=""
+        aiDraftState={{ status: "idle" }}
         disputeDraft={null}
         caseState={undefined}
         caseMessageDraft=""
@@ -129,6 +132,7 @@ describe("ReviewCard", () => {
         locale="ru"
         review={reviewWithPendingEdit}
         replyDraft=""
+        aiDraftState={{ status: "idle" }}
         disputeDraft={{
           reasonCode: "fraud_or_conflict",
           note: "Отзыв не соответствует фактической услуге."
@@ -170,6 +174,102 @@ describe("ReviewCard", () => {
       note: "Клиент описывает услугу, которую я не проводил."
     });
     expect(onSubmitDispute).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows safe AI draft loading and error states for one reply action", () => {
+    const onCreateAiDraft = vi.fn();
+
+    const { rerender } = render(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingEdit}
+        replyDraft=""
+        aiDraftState={{ status: "loading" }}
+        disputeDraft={null}
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive={false}
+        disputeActive={false}
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={onCreateAiDraft}
+        onSubmitDispute={vi.fn()}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /Готовим черновик/ })).toBeDisabled();
+    expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Готовим черновик...");
+
+    rerender(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingEdit}
+        replyDraft=""
+        aiDraftState={{ status: "error" }}
+        disputeDraft={null}
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive={false}
+        disputeActive={false}
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={onCreateAiDraft}
+        onSubmitDispute={vi.fn()}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("AI-черновик не удалось создать. Попробуйте ещё раз.")).toBeVisible();
+    expect(screen.queryByText("openai")).not.toBeInTheDocument();
+  });
+
+  it("marks generated AI drafts as text that must be reviewed before submission", () => {
+    render(
+      <ReviewCard
+        copy={copy}
+        locale="ru"
+        review={reviewWithPendingEdit}
+        replyDraft="Спасибо за отзыв."
+        aiDraftState={{ status: "ready" }}
+        disputeDraft={null}
+        caseState={undefined}
+        caseMessageDraft=""
+        replyActive
+        disputeActive={false}
+        commandPending={false}
+        onStartReply={vi.fn()}
+        onCancelReply={vi.fn()}
+        onEditReply={vi.fn()}
+        onStartDispute={vi.fn()}
+        onCancelDispute={vi.fn()}
+        onEditDispute={vi.fn()}
+        onEditCaseMessage={vi.fn()}
+        onSubmitReply={vi.fn()}
+        onCreateAiDraft={vi.fn()}
+        onSubmitDispute={vi.fn()}
+        onSubmitCaseMessage={vi.fn()}
+      />
+    );
+
+    expect(screen.getByDisplayValue("Спасибо за отзыв.")).toBeVisible();
+    expect(screen.getByText("AI-черновик добавлен. Проверьте текст перед отправкой.")).toBeVisible();
   });
 });
 
@@ -315,7 +415,10 @@ const copy = {
     submitLabel: "Ответить",
     cancelLabel: "Отмена",
     startLabel: "Ответить",
-    aiLabel: "AI-ответ"
+    aiLabel: "AI-ответ",
+    aiLoadingLabel: "Готовим черновик...",
+    aiReadyLabel: "AI-черновик добавлен. Проверьте текст перед отправкой.",
+    aiErrorLabel: "AI-черновик не удалось создать. Попробуйте ещё раз."
   },
   dispute: {
     label: "Оспорить",

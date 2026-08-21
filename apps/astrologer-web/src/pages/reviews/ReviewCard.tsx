@@ -1,6 +1,7 @@
 import type { ReviewAstrologerItem, ReviewModerationReasonCode } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import type { AiDraftState } from "./ReviewsPage";
 import type { DisputeDraft } from "./ReviewsPage";
 import type { ReviewCaseState } from "./ReviewsPage";
 import type { ReviewsPageCopy } from "./ReviewsPage";
@@ -11,6 +12,7 @@ export function ReviewCard({
   locale,
   review,
   replyDraft,
+  aiDraftState,
   disputeDraft,
   caseState,
   caseMessageDraft,
@@ -33,6 +35,7 @@ export function ReviewCard({
   readonly locale: SupportedLocale;
   readonly review: ReviewAstrologerItem;
   readonly replyDraft: string;
+  readonly aiDraftState: AiDraftState;
   readonly disputeDraft: DisputeDraft | null;
   readonly caseState: ReviewCaseState | undefined;
   readonly caseMessageDraft: string;
@@ -128,6 +131,14 @@ export function ReviewCard({
             placeholder={copy.reply.placeholder}
             onChange={(event) => onEditReply(event.target.value)}
           />
+          {aiDraftState.status === "ready" ? (
+            <p className={styles.pendingNote}>{copy.reply.aiReadyLabel}</p>
+          ) : null}
+          {aiDraftState.status === "error" ? (
+            <p className={styles.aiStatus} data-status="error" role="status">
+              {copy.reply.aiErrorLabel}
+            </p>
+          ) : null}
           <div className={styles.replyActions}>
             <button
               type="button"
@@ -161,12 +172,23 @@ export function ReviewCard({
           <button
             type="button"
             className={styles.aiButton}
-            disabled={commandPending}
+            disabled={commandPending || aiDraftState.status === "loading"}
+            aria-busy={aiDraftState.status === "loading" ? "true" : undefined}
             onClick={onCreateAiDraft}
           >
             <Icon iconName="sparkle" size={14} aria-hidden="true" />
-            {copy.reply.aiLabel}
+            {aiDraftState.status === "loading" ? copy.reply.aiLoadingLabel : copy.reply.aiLabel}
           </button>
+          {aiDraftState.status === "loading" ? (
+            <span className={styles.aiStatus} role="status">
+              {copy.reply.aiLoadingLabel}
+            </span>
+          ) : null}
+          {aiDraftState.status === "error" ? (
+            <span className={styles.aiStatus} data-status="error" role="status">
+              {copy.reply.aiErrorLabel}
+            </span>
+          ) : null}
         </div>
       ) : null}
       {canOpenDispute && disputeActive && disputeDraft ? (
