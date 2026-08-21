@@ -31,6 +31,7 @@ import {
   platformTariffSubscriptions,
   platformTariffVersionCapabilities
 } from "../../schema/platform-billing";
+import { reviewPublicationEvents, reviewableInstances } from "../../schema/reviews";
 import { parseFlowDatabaseEpochMilliseconds } from "./flow-database-clock";
 
 type FlowClientEventEnrollmentTransaction = Parameters<
@@ -431,6 +432,38 @@ async function resolveClientSubject(
       history.beforeStatus !== request.payload.fromStatus ||
       history.afterStatus !== request.payload.toStatus ||
       history.occurredAt.toISOString() !== request.occurredAt
+    ) {
+      throw invalidPayload();
+    }
+  }
+
+  if (request.eventKind === "review_first_published") {
+    const publicationRows = await transaction
+      .select({
+        reviewId: reviewPublicationEvents.reviewId,
+        astrologerUserId: reviewPublicationEvents.astrologerUserId,
+        clientUserId: reviewPublicationEvents.clientUserId,
+        firstApprovedVersionId: reviewPublicationEvents.firstApprovedVersionId,
+        publishedAt: reviewPublicationEvents.publishedAt,
+        relationshipId: reviewableInstances.relationshipId
+      })
+      .from(reviewPublicationEvents)
+      .innerJoin(
+        reviewableInstances,
+        eq(reviewableInstances.id, reviewPublicationEvents.reviewableInstanceId)
+      )
+      .where(eq(reviewPublicationEvents.reviewId, request.payload.reviewId))
+      .limit(2)
+      .for("share", { of: reviewPublicationEvents });
+    if (publicationRows.length !== 1) throw invalidPayload();
+    const publication = publicationRows[0]!;
+    if (
+      publication.clientUserId !== request.subjectId ||
+      publication.clientUserId !== rows[0]!.clientUserId ||
+      publication.astrologerUserId !== rows[0]!.ownerUserId ||
+      publication.relationshipId !== relationshipId ||
+      publication.firstApprovedVersionId !== request.payload.firstApprovedVersionId ||
+      publication.publishedAt.toISOString() !== request.occurredAt
     ) {
       throw invalidPayload();
     }
