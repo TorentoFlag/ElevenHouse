@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { PostgresRuntime } from "../../runtime";
@@ -70,6 +71,33 @@ describe.sequential("Drizzle review read store", () => {
       activePublicVersion: null,
       pendingVersion: null,
       canSubmitNewVersion: true,
+      canEditLatestVersion: false
+    });
+  });
+
+  it("projects expired review windows as closed even before maintenance updates status", async () => {
+    const fixture = await seedReviewReadFixture(runtime);
+    const reads = createDrizzleReviewReadStore(runtime.database);
+
+    await runtime.database
+      .update(reviewableInstances)
+      .set({
+        receivedAt: new Date("2026-08-01T10:00:00.000Z"),
+        reviewWindowClosesAt: new Date("2026-08-15T10:00:00.000Z")
+      })
+      .where(eq(reviewableInstances.id, fixture.reviewableInstanceId));
+
+    await expect(
+      reads.getClientReviewDetail({
+        clientUserId: fixture.clientUserId,
+        reviewableInstanceId: fixture.reviewableInstanceId
+      })
+    ).resolves.toMatchObject({
+      reviewableInstance: {
+        id: fixture.reviewableInstanceId,
+        status: "window_closed"
+      },
+      canSubmitNewVersion: false,
       canEditLatestVersion: false
     });
   });

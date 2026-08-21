@@ -649,13 +649,22 @@ function toReviewableInstanceSummary(row: ReviewableInstanceRow): ReviewableInst
   return {
     id: row.id,
     kind: row.kind as ReviewableInstanceSummary["kind"],
-    status: row.status as ReviewableInstanceSummary["status"],
+    status: resolveReviewableInstanceSummaryStatus(row),
     title: row.titleSnapshot,
     contextLabel: row.contextLabelSnapshot,
     receivedAt: row.receivedAt.toISOString(),
     reviewWindowClosesAt: row.reviewWindowClosesAt.toISOString(),
     windowPolicy: row.windowPolicy as ReviewableInstanceSummary["windowPolicy"]
   };
+}
+
+function resolveReviewableInstanceSummaryStatus(
+  row: ReviewableInstanceRow
+): ReviewableInstanceSummary["status"] {
+  if (row.status === "reviewable" && Date.now() >= row.reviewWindowClosesAt.getTime()) {
+    return "window_closed";
+  }
+  return row.status as ReviewableInstanceSummary["status"];
 }
 
 function toReviewVersion(row: ReviewVersionRow): ReviewVersion {
