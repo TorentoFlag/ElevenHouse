@@ -99,7 +99,7 @@ export function ReviewsPage() {
       caseId,
       idempotencyKey: createCommandKey("reviews:case-message"),
       body: {
-        visibility: "all_case_participants",
+        visibility: "astrologer_and_moderators",
         body
       }
     });

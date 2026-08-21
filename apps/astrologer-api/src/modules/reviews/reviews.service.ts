@@ -60,7 +60,7 @@ type AstrologerReviewCommandStore = {
     readonly caseId: string;
     readonly authorUserId: string | null;
     readonly authorRole: "astrologer";
-    readonly visibility: "all_case_participants" | "astrologer_and_moderators";
+    readonly visibility: "astrologer_and_moderators";
     readonly body: string;
     readonly now: string;
   }) => Promise<CreateReviewCaseMessageResult>;
@@ -271,10 +271,7 @@ export class AstrologerReviewsService {
   ): Promise<ReviewModerationCaseMessage> {
     const parsed = reviewModerationCaseMessageCreateSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid review case message");
-    if (
-      parsed.data.visibility !== "all_case_participants" &&
-      parsed.data.visibility !== "astrologer_and_moderators"
-    ) {
+    if (parsed.data.visibility !== "astrologer_and_moderators") {
       throw new BadRequestException("Invalid review case message visibility");
     }
 

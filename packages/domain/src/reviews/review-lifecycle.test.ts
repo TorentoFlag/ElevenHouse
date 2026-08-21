@@ -602,6 +602,18 @@ describe("Review lifecycle domain policy", () => {
 
     expect(
       createReviewCaseMessage({
+        authorRole: "client",
+        authorUserId: ids.clientUserId,
+        body: "Клиент не может писать в общий thread с астрологом.",
+        caseId: ids.caseId,
+        createdAt: "2026-08-20T10:00:00.000Z",
+        messageId: ids.messageId,
+        visibility: "all_case_participants"
+      })
+    ).toMatchObject({ kind: "rejected", reason: "visibility_not_allowed_for_author" });
+
+    expect(
+      createReviewCaseMessage({
         authorRole: "moderator",
         authorUserId: ids.moderatorUserId,
         body: "Позднее уточнение.",

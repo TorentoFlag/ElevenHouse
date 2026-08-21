@@ -121,7 +121,7 @@ describe("reviewsApi", () => {
         caseId,
         idempotencyKey: "reviews:case-message:test",
         body: {
-          visibility: "all_case_participants",
+          visibility: "astrologer_and_moderators",
           body: "Готов обсудить детали консультации."
         }
       })
@@ -129,7 +129,7 @@ describe("reviewsApi", () => {
     expect(post).toHaveBeenCalledWith(
       `/reviews/moderation-cases/${caseId}/messages`,
       {
-        visibility: "all_case_participants",
+        visibility: "astrologer_and_moderators",
         body: "Готов обсудить детали консультации."
       },
       { csrf: true, headers: { "idempotency-key": "reviews:case-message:test" } }
@@ -209,7 +209,7 @@ const moderationCase = {
 const caseMessage = {
   messageId: "81111111-1111-4111-8111-111111111111",
   authorRole: "astrologer",
-  visibility: "all_case_participants",
+  visibility: "astrologer_and_moderators",
   body: "Готов обсудить детали консультации.",
   createdAt: "2026-08-21T09:05:00.000Z"
 } as const;

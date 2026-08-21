@@ -471,7 +471,7 @@ describe("astrologer reviews HTTP API", () => {
         "idempotency-key": "reviews-case-message-astrologer-1"
       },
       body: JSON.stringify({
-        visibility: "all_case_participants",
+        visibility: "astrologer_and_moderators",
         body: "Готов обсудить и приложить детали консультации."
       })
     });
@@ -479,7 +479,7 @@ describe("astrologer reviews HTTP API", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       authorRole: "astrologer",
-      visibility: "all_case_participants",
+      visibility: "astrologer_and_moderators",
       body: "Готов обсудить и приложить детали консультации.",
       createdAt: "2026-08-20T13:00:00.000Z"
     });
@@ -487,11 +487,28 @@ describe("astrologer reviews HTTP API", () => {
       caseId,
       authorUserId: astrologerUserId,
       authorRole: "astrologer",
-      visibility: "all_case_participants",
+      visibility: "astrologer_and_moderators",
       body: "Готов обсудить и приложить детали консультации.",
       now: "2026-08-20T13:00:00.000Z"
     });
     expect(receivedMessageCommand).toHaveProperty("messageId", expect.any(String));
+  });
+
+  it("rejects astrologer messages that target all case participants", async () => {
+    const response = await fetch(`${baseUrl}/reviews/moderation-cases/${caseId}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-case-message-astrologer-broadcast"
+      },
+      body: JSON.stringify({
+        visibility: "all_case_participants",
+        body: "Нельзя отправить и модератору, и клиенту одновременно."
+      })
+    });
+
+    expect(response.status).toBe(400);
+    expect(receivedMessageCommand).toBeNull();
   });
 
   it("rejects astrologer messages that target client-only visibility", async () => {

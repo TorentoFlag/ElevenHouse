@@ -484,11 +484,12 @@ async function getModerationCaseDetail(
     .limit(1);
   if (!row || !canActorReadCase(input, row.review)) return null;
 
-  const visibility = visibilityForActorRole(input.actorRole);
-  const conditions: SQL[] = [eq(reviewModerationCaseMessages.caseId, input.caseId)];
-  if (visibility !== "all") {
-    conditions.push(inArray(reviewModerationCaseMessages.visibility, visibility));
-  }
+  const visibility = visibilityConditionForActorRole(input.actorRole);
+  const conditions: SQL[] = [
+    eq(reviewModerationCaseMessages.caseId, input.caseId),
+    validCaseMessageVisibilityCondition()
+  ];
+  if (visibility) conditions.push(visibility);
 
   const messages = await database
     .select()
@@ -810,12 +811,37 @@ function canActorReadCase(
   return review.astrologerUserId === input.actorUserId;
 }
 
-function visibilityForActorRole(
+function visibilityConditionForActorRole(
   actorRole: Parameters<ReviewReadStore["getModerationCaseDetail"]>[0]["actorRole"]
-): "all" | readonly string[] {
-  if (actorRole === "moderator") return "all";
-  if (actorRole === "client") return ["all_case_participants", "client_and_moderators"];
-  return ["all_case_participants", "astrologer_and_moderators"];
+): SQL | null {
+  if (actorRole === "moderator") return null;
+  const ownThreadVisibility =
+    actorRole === "client" ? "client_and_moderators" : "astrologer_and_moderators";
+  return (
+    or(
+      eq(reviewModerationCaseMessages.visibility, ownThreadVisibility),
+      and(
+        eq(reviewModerationCaseMessages.visibility, "all_case_participants"),
+        inArray(reviewModerationCaseMessages.authorRole, ["moderator", "system"])
+      )
+    ) ?? null
+  );
+}
+
+function validCaseMessageVisibilityCondition(): SQL {
+  return (
+    or(
+      inArray(reviewModerationCaseMessages.visibility, [
+        "client_and_moderators",
+        "astrologer_and_moderators",
+        "moderators_only"
+      ]),
+      and(
+        eq(reviewModerationCaseMessages.visibility, "all_case_participants"),
+        inArray(reviewModerationCaseMessages.authorRole, ["moderator", "system"])
+      )
+    ) ?? sql`false`
+  );
 }
 
 function splitDisplayName(value: string | null): { firstName: string; lastName: string | null } {

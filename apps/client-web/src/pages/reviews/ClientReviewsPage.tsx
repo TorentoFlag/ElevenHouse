@@ -166,7 +166,7 @@ export function ClientReviewsPage() {
         caseDetail.caseId,
         {
           body: caseMessage.trim(),
-          visibility: "all_case_participants"
+          visibility: "client_and_moderators"
         },
         `client-review-case-${caseDetail.caseId}-${Date.now().toString(36)}`
       );

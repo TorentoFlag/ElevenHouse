@@ -569,7 +569,7 @@ describe("Reviews contracts", () => {
         {
           messageId: "10000000-0000-4000-8000-000000000053",
           authorRole: "client",
-          visibility: "all_case_participants",
+          visibility: "client_and_moderators",
           body: "Готова обсудить решение.",
           createdAt: "2026-08-20T10:10:00.000Z"
         }
@@ -578,7 +578,7 @@ describe("Reviews contracts", () => {
 
     expect(caseDetail.messages.map((message) => message.visibility)).toEqual([
       "client_and_moderators",
-      "all_case_participants"
+      "client_and_moderators"
     ]);
 
     expect(
@@ -590,6 +590,24 @@ describe("Reviews contracts", () => {
     expect(
       reviewModerationCaseMessageSchema.safeParse({
         messageId: "10000000-0000-4000-8000-000000000054",
+        authorRole: "client",
+        visibility: "all_case_participants",
+        body: "broadcast",
+        createdAt: "2026-08-20T10:20:00.000Z"
+      }).success
+    ).toBe(false);
+    expect(
+      reviewModerationCaseMessageSchema.safeParse({
+        messageId: "10000000-0000-4000-8000-000000000055",
+        authorRole: "astrologer",
+        visibility: "all_case_participants",
+        body: "broadcast",
+        createdAt: "2026-08-20T10:20:00.000Z"
+      }).success
+    ).toBe(false);
+    expect(
+      reviewModerationCaseMessageSchema.safeParse({
+        messageId: "10000000-0000-4000-8000-000000000056",
         authorRole: "client",
         visibility: "moderators_only",
         body: "hidden",

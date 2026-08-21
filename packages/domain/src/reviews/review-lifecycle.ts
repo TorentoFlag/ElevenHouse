@@ -789,10 +789,10 @@ function isCaseMessageVisibilityAllowed(
 ): boolean {
   if (authorRole === "moderator") return true;
   if (authorRole === "client") {
-    return visibility === "all_case_participants" || visibility === "client_and_moderators";
+    return visibility === "client_and_moderators";
   }
   if (authorRole === "astrologer") {
-    return visibility === "all_case_participants" || visibility === "astrologer_and_moderators";
+    return visibility === "astrologer_and_moderators";
   }
   return visibility === "all_case_participants" || visibility === "moderators_only";
 }

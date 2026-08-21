@@ -104,14 +104,14 @@ describe("ClientReviewsPage", () => {
         `/me/reviews/moderation-cases/${caseId}/messages`,
         expect.objectContaining({
           body: "Речь про прогноз на вторую неделю.",
-          visibility: "all_case_participants"
+          visibility: "client_and_moderators"
         }),
         expect.objectContaining({ csrf: true, idempotencyKey: expect.any(String) })
       )
     );
     expect(postedBody).toEqual({
       body: "Речь про прогноз на вторую неделю.",
-      visibility: "all_case_participants"
+      visibility: "client_and_moderators"
     });
     expect(await screen.findByText("Сообщение отправлено.")).toBeVisible();
     expect(screen.getByText("Речь про прогноз на вторую неделю.")).toBeVisible();
@@ -196,7 +196,7 @@ const caseReviewDetail = {
 const clientCaseMessage = {
   messageId: "10000000-0000-4000-8000-000000000110",
   authorRole: "client",
-  visibility: "all_case_participants",
+  visibility: "client_and_moderators",
   body: "Речь про прогноз на вторую неделю.",
   createdAt: "2026-08-21T09:20:00.000Z"
 } satisfies ReviewModerationCaseDetail["messages"][number];

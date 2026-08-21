@@ -613,11 +613,25 @@ export const reviewModerationCaseMessageSchema = z
         message: "Client-authored case messages cannot target astrologer-only visibility"
       });
     }
+    if (value.authorRole === "client" && value.visibility === "all_case_participants") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visibility"],
+        message: "Client-authored case messages must stay in the client-moderator thread"
+      });
+    }
     if (value.authorRole === "astrologer" && value.visibility === "client_and_moderators") {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["visibility"],
         message: "Astrologer-authored case messages cannot target client-only visibility"
+      });
+    }
+    if (value.authorRole === "astrologer" && value.visibility === "all_case_participants") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["visibility"],
+        message: "Astrologer-authored case messages must stay in the astrologer-moderator thread"
       });
     }
     if (value.authorRole !== "moderator" && value.visibility === "moderators_only") {

@@ -7,6 +7,7 @@ import type { PostgresRuntime } from "../../runtime";
 import {
   clientAstrologerRelationships,
   products,
+  reviewModerationCaseMessages,
   reviewableInstances,
   userProfiles,
   users
@@ -358,6 +359,16 @@ describe.sequential("Drizzle review read store", () => {
       body: "Внутренняя заметка модерации.",
       now: "2026-08-20T12:04:00.000Z"
     });
+    const legacyClientBroadcastMessageId = randomUUID();
+    await runtime.database.insert(reviewModerationCaseMessages).values({
+      id: legacyClientBroadcastMessageId,
+      caseId,
+      authorUserId: fixture.clientUserId,
+      authorRole: "client",
+      visibility: "all_case_participants",
+      body: "Legacy client broadcast must not reach astrologer.",
+      createdAt: new Date("2026-08-20T12:05:00.000Z")
+    });
 
     const moderatorCase = await reads.getModerationCaseDetail({
       caseId,
@@ -378,6 +389,7 @@ describe.sequential("Drizzle review read store", () => {
         expect.objectContaining({ messageId: fixture.moderatorsOnlyMessageId })
       ]
     });
+    expect(JSON.stringify(moderatorCase)).not.toContain(legacyClientBroadcastMessageId);
 
     const clientCase = await reads.getModerationCaseDetail({
       caseId,
@@ -398,6 +410,7 @@ describe.sequential("Drizzle review read store", () => {
       fixture.allParticipantsMessageId,
       fixture.astrologerOnlyMessageId
     ]);
+    expect(JSON.stringify(astrologerCase)).not.toContain("Legacy client broadcast");
 
     await expect(
       reads.getModerationCaseDetail({

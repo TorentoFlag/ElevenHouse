@@ -352,7 +352,7 @@ describe("public reviews HTTP API", () => {
         "idempotency-key": "reviews-case-message-client-1"
       },
       body: JSON.stringify({
-        visibility: "all_case_participants",
+        visibility: "client_and_moderators",
         body: "Я получил услугу 19 августа, спор готов обсудить."
       })
     });
@@ -360,7 +360,7 @@ describe("public reviews HTTP API", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       authorRole: "client",
-      visibility: "all_case_participants",
+      visibility: "client_and_moderators",
       body: "Я получил услугу 19 августа, спор готов обсудить.",
       createdAt: "2026-08-20T12:00:00.000Z"
     });
@@ -368,11 +368,28 @@ describe("public reviews HTTP API", () => {
       caseId,
       authorUserId: clientUserId,
       authorRole: "client",
-      visibility: "all_case_participants",
+      visibility: "client_and_moderators",
       body: "Я получил услугу 19 августа, спор готов обсудить.",
       now: "2026-08-20T12:00:00.000Z"
     });
     expect(receivedMessageCommand).toHaveProperty("messageId", expect.any(String));
+  });
+
+  it("rejects client messages that target all case participants", async () => {
+    const response = await fetch(`${baseUrl}/me/reviews/moderation-cases/${caseId}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-case-message-client-broadcast"
+      },
+      body: JSON.stringify({
+        visibility: "all_case_participants",
+        body: "Нельзя отправить и модератору, и астрологу одновременно."
+      })
+    });
+
+    expect(response.status).toBe(400);
+    expect(receivedMessageCommand).toBeNull();
   });
 
   it("rejects client messages that target astrologer-only visibility", async () => {

@@ -44,7 +44,7 @@ type PublicReviewCommandStore = {
     readonly caseId: string;
     readonly authorUserId: string | null;
     readonly authorRole: "client";
-    readonly visibility: "all_case_participants" | "client_and_moderators";
+    readonly visibility: "client_and_moderators";
     readonly body: string;
     readonly now: string;
   }) => Promise<CreateReviewCaseMessageResult>;
@@ -150,10 +150,7 @@ export class PublicReviewsService {
   ): Promise<ReviewModerationCaseMessage> {
     const parsed = reviewModerationCaseMessageCreateSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid review case message");
-    if (
-      parsed.data.visibility !== "all_case_participants" &&
-      parsed.data.visibility !== "client_and_moderators"
-    ) {
+    if (parsed.data.visibility !== "client_and_moderators") {
       throw new BadRequestException("Invalid review case message visibility");
     }
 
