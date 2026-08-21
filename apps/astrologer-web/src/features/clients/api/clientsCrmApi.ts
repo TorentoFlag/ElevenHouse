@@ -2,6 +2,8 @@ import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
   astrologerClientCrmListResponseSchema,
+  astrologerClientCrmManualClientCreateRequestSchema,
+  astrologerClientCrmManualClientCreateResponseSchema,
   astrologerClientCrmPrivateProfileUpdateRequestSchema,
   astrologerClientCrmPrivateProfileUpdateResponseSchema,
   astrologerClientParamsSchema,
@@ -9,6 +11,8 @@ import {
   type AstrologerClientCrmDetailResponse,
   type AstrologerClientCrmListQuery,
   type AstrologerClientCrmListResponse,
+  type AstrologerClientCrmManualClientCreateRequest,
+  type AstrologerClientCrmManualClientCreateResponse,
   type AstrologerClientCrmPrivateProfileUpdateRequest,
   type AstrologerClientCrmPrivateProfileUpdateResponse,
   type ClientCrmActivityPageResponse
@@ -41,6 +45,16 @@ export async function getAstrologerClientCrmDetail(
 
   return astrologerClientCrmDetailResponseSchema.parse(
     await application.http.get(`/clients/crm/${encodeURIComponent(params.clientUserId)}`)
+  );
+}
+
+export async function createManualClientCrmClient(
+  input: AstrologerClientCrmManualClientCreateRequest
+): Promise<AstrologerClientCrmManualClientCreateResponse> {
+  const body = astrologerClientCrmManualClientCreateRequestSchema.parse(input);
+
+  return astrologerClientCrmManualClientCreateResponseSchema.parse(
+    await application.http.post("/clients/crm", body, { csrf: true })
   );
 }
 

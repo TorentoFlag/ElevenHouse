@@ -1,5 +1,6 @@
 import type {
   AstrologerClientCrmListItem,
+  AstrologerClientCrmManualClientCreateRequest,
   ClientLifecycleStatus,
   ClientRelationshipSource
 } from "@elevenhouse/contracts";
@@ -14,6 +15,7 @@ import {
   formatClientCrmSource
 } from "../model/clientsCrmPresentation";
 import { ClientCrmAvatar } from "./ClientCrmAvatar";
+import { ClientCrmManualCreatePanel } from "./ClientCrmManualCreatePanel";
 import styles from "./ClientsCrm.module.css";
 
 type ClientCrmListPanelProps = {
@@ -24,18 +26,27 @@ type ClientCrmListPanelProps = {
   readonly search: string;
   readonly lifecycle: ClientLifecycleStatus | undefined;
   readonly source: ClientRelationshipSource | undefined;
+  readonly viewMode: ClientCrmListViewMode;
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly isFiltered: boolean;
   readonly hasNextPage: boolean;
   readonly isFetching: boolean;
+  readonly isManualClientCreating: boolean;
+  readonly isManualClientCreateError: boolean;
   readonly onSearchChange: (value: string) => void;
   readonly onLifecycleChange: (value: ClientLifecycleStatus | undefined) => void;
   readonly onSourceChange: (value: ClientRelationshipSource | undefined) => void;
+  readonly onViewModeChange: (value: ClientCrmListViewMode) => void;
   readonly onSelectClient: (clientUserId: string) => void;
   readonly onLoadMore: () => void;
   readonly onRetry: () => void;
+  readonly onCreateManualClient: (
+    input: AstrologerClientCrmManualClientCreateRequest
+  ) => Promise<unknown>;
 };
+
+export type ClientCrmListViewMode = "list" | "pipeline";
 
 const lifecycleOptions = ["new", "active", "waiting_for_client", "in_service", "inactive"] as const;
 const sourceOptions = ["direct_link", "booking", "order", "lead_magnet", "manual"] as const;
@@ -48,21 +59,47 @@ export function ClientCrmListPanel({
   search,
   lifecycle,
   source,
+  viewMode,
   isLoading,
   isError,
   isFiltered,
   hasNextPage,
   isFetching,
+  isManualClientCreating,
+  isManualClientCreateError,
   onSearchChange,
   onLifecycleChange,
   onSourceChange,
+  onViewModeChange,
   onSelectClient,
   onLoadMore,
-  onRetry
+  onRetry,
+  onCreateManualClient
 }: ClientCrmListPanelProps) {
   return (
     <aside className={styles.listPanel} aria-labelledby="clients-page-title">
       <div className={styles.listControls}>
+        <div className={styles.viewModeSwitch} aria-label={copy.pipelineViewLabel}>
+          <button
+            aria-pressed={viewMode === "list"}
+            className={styles.viewModeButton}
+            data-active={viewMode === "list"}
+            onClick={() => onViewModeChange("list")}
+            type="button"
+          >
+            {copy.listViewLabel}
+          </button>
+          <button
+            aria-pressed={viewMode === "pipeline"}
+            className={styles.viewModeButton}
+            data-active={viewMode === "pipeline"}
+            onClick={() => onViewModeChange("pipeline")}
+            type="button"
+          >
+            {copy.pipelineViewLabel}
+          </button>
+        </div>
+
         <label className={styles.searchWrap}>
           <span className={styles.searchIcon} aria-hidden="true">
             <Icon iconName="search" size={16} />
@@ -124,6 +161,13 @@ export function ClientCrmListPanel({
             ))}
           </select>
         </label>
+
+        <ClientCrmManualCreatePanel
+          copy={copy.manualCreate}
+          isSaving={isManualClientCreating}
+          isError={isManualClientCreateError}
+          onCreate={onCreateManualClient}
+        />
       </div>
 
       <div className={styles.listScroller}>
@@ -154,17 +198,27 @@ export function ClientCrmListPanel({
           </div>
         ) : (
           <>
-            <ul className={styles.clientList}>
-              {items.map((item) => (
-                <ClientCrmListRow
-                  item={item}
-                  key={item.clientUserId}
-                  locale={locale}
-                  selected={item.clientUserId === selectedClientUserId}
-                  onSelect={onSelectClient}
-                />
-              ))}
-            </ul>
+            {viewMode === "pipeline" ? (
+              <ClientCrmPipelineBoard
+                copy={copy}
+                items={items}
+                locale={locale}
+                selectedClientUserId={selectedClientUserId}
+                onSelect={onSelectClient}
+              />
+            ) : (
+              <ul className={styles.clientList}>
+                {items.map((item) => (
+                  <ClientCrmListRow
+                    item={item}
+                    key={item.clientUserId}
+                    locale={locale}
+                    selected={item.clientUserId === selectedClientUserId}
+                    onSelect={onSelectClient}
+                  />
+                ))}
+              </ul>
+            )}
             {hasNextPage ? (
               <button
                 className={styles.button}
@@ -179,6 +233,88 @@ export function ClientCrmListPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+type ClientCrmPipelineBoardProps = {
+  readonly copy: ClientsCrmCopy;
+  readonly items: readonly AstrologerClientCrmListItem[];
+  readonly locale: SupportedLocale;
+  readonly selectedClientUserId: string | undefined;
+  readonly onSelect: (clientUserId: string) => void;
+};
+
+function ClientCrmPipelineBoard({
+  copy,
+  items,
+  locale,
+  selectedClientUserId,
+  onSelect
+}: ClientCrmPipelineBoardProps) {
+  return (
+    <div className={styles.pipelineBoard}>
+      {lifecycleOptions.map((status) => {
+        const columnItems = items.filter((item) => item.lifecycle.status === status);
+        const lifecycle = formatClientCrmLifecycle(status, locale);
+
+        return (
+          <section className={styles.pipelineColumn} key={status} aria-label={lifecycle.label}>
+            <header className={styles.pipelineColumnHeader}>
+              <span className={styles.badge} data-tone={lifecycle.tone}>
+                {lifecycle.label}
+              </span>
+              <span className={styles.pipelineCount}>{columnItems.length}</span>
+            </header>
+            <div className={styles.pipelineColumnBody}>
+              {columnItems.length === 0 ? (
+                <p className={styles.pipelineEmpty}>{copy.emptyTitle}</p>
+              ) : (
+                columnItems.map((item) => (
+                  <ClientCrmPipelineCard
+                    item={item}
+                    key={item.clientUserId}
+                    locale={locale}
+                    selected={item.clientUserId === selectedClientUserId}
+                    onSelect={onSelect}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+type ClientCrmPipelineCardProps = {
+  readonly item: AstrologerClientCrmListItem;
+  readonly locale: SupportedLocale;
+  readonly selected: boolean;
+  readonly onSelect: (clientUserId: string) => void;
+};
+
+function ClientCrmPipelineCard({ item, locale, selected, onSelect }: ClientCrmPipelineCardProps) {
+  const name = formatClientCrmDisplayName(item.clientUserId, item.displayName, locale);
+  const birthDataReadiness = formatClientCrmReadiness("birthData", item.readiness.birthData, locale);
+
+  return (
+    <button
+      aria-current={selected ? "true" : undefined}
+      className={styles.pipelineCard}
+      onClick={() => onSelect(item.clientUserId)}
+      type="button"
+    >
+      <span className={styles.pipelineCardTop}>
+        <ClientCrmAvatar name={name} />
+        <span className={styles.rowName}>{name}</span>
+      </span>
+      <span className={styles.rowMeta}>
+        <span>{formatClientCrmSource(item.relationship.source, locale).label}</span>
+        <span aria-hidden="true">·</span>
+        <span>{birthDataReadiness.label}</span>
+      </span>
+    </button>
   );
 }
 

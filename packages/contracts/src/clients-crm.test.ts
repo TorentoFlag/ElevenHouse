@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
+  astrologerClientCrmManualClientCreateRequestSchema,
+  astrologerClientCrmManualClientCreateResponseSchema,
   astrologerClientCrmPrivateProfileUpdateRequestSchema,
   clientCrmActivityItemSchema,
   clientCrmActivityPageResponseSchema,
@@ -124,6 +126,53 @@ describe("Clients CRM contracts", () => {
     expect(astrologerClientCrmListQuerySchema.safeParse({ cursor: "x".repeat(513) }).success).toBe(
       false
     );
+  });
+
+  it("normalizes manual CRM client creation without accepting messaging fields", () => {
+    expect(
+      astrologerClientCrmManualClientCreateRequestSchema.parse({
+        displayName: "  Мария   Орлова  ",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow"
+      })
+    ).toEqual({
+      displayName: "Мария Орлова",
+      preferredLocale: "ru",
+      timezone: "Europe/Moscow"
+    });
+    expect(
+      astrologerClientCrmManualClientCreateRequestSchema.parse({
+        displayName: "Ada Lovelace"
+      })
+    ).toEqual({
+      displayName: "Ada Lovelace",
+      preferredLocale: null,
+      timezone: null
+    });
+    expect(
+      astrologerClientCrmManualClientCreateRequestSchema.safeParse({
+        displayName: "A"
+      }).success
+    ).toBe(false);
+    expect(
+      astrologerClientCrmManualClientCreateRequestSchema.safeParse({
+        displayName: "Ada Lovelace",
+        messageBody: "hello"
+      }).success
+    ).toBe(false);
+    expect(
+      astrologerClientCrmManualClientCreateResponseSchema.parse(
+        detailResponse({
+          relationship: {
+            id: relationshipId,
+            status: "active",
+            source: "manual",
+            firstLinkedAt: occurredAt,
+            lastLinkedAt: occurredAt
+          }
+        })
+      ).client.relationship.source
+    ).toBe("manual");
   });
 
   it("reuses lifecycle values without accepting lifecycle labels as relationship statuses", () => {

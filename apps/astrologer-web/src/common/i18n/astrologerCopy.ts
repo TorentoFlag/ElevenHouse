@@ -430,8 +430,24 @@ export type ClientsCrmCopy = {
   readonly searchLabel: string;
   readonly searchPlaceholder: string;
   readonly allLabel: string;
+  readonly listViewLabel: string;
+  readonly pipelineViewLabel: string;
   readonly lifecycleFilterLabel: string;
   readonly sourceFilterLabel: string;
+  readonly manualCreate: {
+    readonly openLabel: string;
+    readonly title: string;
+    readonly displayNameLabel: string;
+    readonly localeLabel: string;
+    readonly timezoneLabel: string;
+    readonly localeRuLabel: string;
+    readonly localeEnLabel: string;
+    readonly optionalLabel: string;
+    readonly cancelLabel: string;
+    readonly submitLabel: string;
+    readonly submittingLabel: string;
+    readonly errorLabel: string;
+  };
   readonly loadMoreLabel: string;
   readonly loadingMoreLabel: string;
   readonly backToListLabel: string;
@@ -779,8 +795,24 @@ export const astrologerCopyByLocale = {
         searchLabel: "Поиск клиентов",
         searchPlaceholder: "Поиск по имени клиента…",
         allLabel: "Все",
+        listViewLabel: "Список",
+        pipelineViewLabel: "Воронка",
         lifecycleFilterLabel: "Фильтр по статусу клиента",
         sourceFilterLabel: "Источник связи",
+        manualCreate: {
+          openLabel: "Добавить",
+          title: "Добавить клиента",
+          displayNameLabel: "Имя клиента",
+          localeLabel: "Язык",
+          timezoneLabel: "Часовой пояс",
+          localeRuLabel: "Русский",
+          localeEnLabel: "English",
+          optionalLabel: "Не указано",
+          cancelLabel: "Отмена",
+          submitLabel: "Создать клиента",
+          submittingLabel: "Создаем клиента",
+          errorLabel: "Не удалось создать клиента"
+        },
         loadMoreLabel: "Загрузить еще",
         loadingMoreLabel: "Загружаем еще…",
         backToListLabel: "Назад к списку клиентов",
@@ -1437,8 +1469,24 @@ export const astrologerCopyByLocale = {
         searchLabel: "Search clients",
         searchPlaceholder: "Search by client name…",
         allLabel: "All",
+        listViewLabel: "List",
+        pipelineViewLabel: "Pipeline",
         lifecycleFilterLabel: "Client lifecycle filter",
         sourceFilterLabel: "Relationship source",
+        manualCreate: {
+          openLabel: "Add",
+          title: "Add client",
+          displayNameLabel: "Client name",
+          localeLabel: "Language",
+          timezoneLabel: "Timezone",
+          localeRuLabel: "Russian",
+          localeEnLabel: "English",
+          optionalLabel: "Not set",
+          cancelLabel: "Cancel",
+          submitLabel: "Create client",
+          submittingLabel: "Creating client",
+          errorLabel: "Could not create client"
+        },
         loadMoreLabel: "Load more",
         loadingMoreLabel: "Loading more…",
         backToListLabel: "Back to client list",

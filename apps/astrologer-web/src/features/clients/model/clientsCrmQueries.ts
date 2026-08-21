@@ -1,5 +1,6 @@
 import type {
   AstrologerClientCrmListQuery,
+  AstrologerClientCrmManualClientCreateRequest,
   ClientBirthDataUpsertRequest,
   ClientRelatedBirthProfileUpsertRequest
 } from "@elevenhouse/contracts";
@@ -12,6 +13,7 @@ import {
   type QueryClient
 } from "@tanstack/react-query";
 import {
+  createManualClientCrmClient,
   getAstrologerClientCrmDetail,
   getAstrologerClientCrmFirstActivityPage,
   listAstrologerClientCrm,
@@ -167,6 +169,22 @@ export function updateClientRelatedBirthProfileMutationOptions(
   };
 }
 
+export function createManualClientCrmClientMutationOptions(
+  queryClient: Pick<QueryClient, "invalidateQueries" | "setQueryData">
+) {
+  return {
+    mutationFn: (input: AstrologerClientCrmManualClientCreateRequest) =>
+      createManualClientCrmClient(input),
+    onSuccess: (response: Awaited<ReturnType<typeof createManualClientCrmClient>>) => {
+      queryClient.setQueryData<AstrologerClientCrmDetailResponse>(
+        clientsCrmQueryKeys.detail(response.client.clientUserId),
+        response
+      );
+      return queryClient.invalidateQueries({ queryKey: ["clients", "crm", "list"] });
+    }
+  };
+}
+
 export function useClientsCrmListQuery(query: Partial<AstrologerClientCrmListQuery> = {}) {
   return useQuery(clientsCrmListQueryOptions(query));
 }
@@ -201,4 +219,10 @@ export function useUpdateClientRelatedBirthProfileMutation(clientUserId: string 
   const queryClient = useQueryClient();
 
   return useMutation(updateClientRelatedBirthProfileMutationOptions(queryClient, clientUserId));
+}
+
+export function useCreateManualClientCrmClientMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation(createManualClientCrmClientMutationOptions(queryClient));
 }

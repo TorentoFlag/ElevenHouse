@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const http = vi.hoisted(() => ({
   get: vi.fn(),
+  post: vi.fn(),
   put: vi.fn()
 }));
 
 vi.mock("../../../Application", () => ({ application: { http } }));
 
 import {
+  createManualClientCrmClient,
   getAstrologerClientCrmDetail,
   getAstrologerClientCrmFirstActivityPage,
   listAstrologerClientCrm,
@@ -19,6 +21,7 @@ const clientUserId = "11111111-1111-4111-8111-111111111111";
 describe("clientsCrmApi", () => {
   beforeEach(() => {
     http.get.mockReset();
+    http.post.mockReset();
     http.put.mockReset();
   });
 
@@ -72,6 +75,32 @@ describe("clientsCrmApi", () => {
       {
         note: "Needs birth time confirmation",
         tags: ["Natal", "Follow-up"]
+      },
+      { csrf: true }
+    );
+  });
+
+  it("creates a manual CRM client through the authenticated HTTP client", async () => {
+    http.post.mockResolvedValue({
+      client: {
+        ...crmClient,
+        displayName: "Мария Орлова",
+        relationship: { ...crmClient.relationship, source: "manual" }
+      }
+    });
+
+    await createManualClientCrmClient({
+      displayName: "  Мария   Орлова  ",
+      preferredLocale: "ru",
+      timezone: "Europe/Moscow"
+    });
+
+    expect(http.post).toHaveBeenCalledWith(
+      "/clients/crm",
+      {
+        displayName: "Мария Орлова",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow"
       },
       { csrf: true }
     );

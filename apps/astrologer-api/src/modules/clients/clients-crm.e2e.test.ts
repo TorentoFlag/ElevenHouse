@@ -4,7 +4,11 @@ import { ForbiddenException, type INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
-import type { ClientCrmPrivateProfileStore, ClientCrmReadStore } from "@elevenhouse/domain";
+import type {
+  ClientCrmManualClientStore,
+  ClientCrmPrivateProfileStore,
+  ClientCrmReadStore
+} from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SystemClock } from "../clock/system-clock.service";
@@ -26,7 +30,7 @@ const blockedClientUserId = "10000000-0000-4000-8000-000000000006";
 describe("Clients CRM HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
-  let crmStore: ClientCrmReadStore & ClientCrmPrivateProfileStore;
+  let crmStore: ClientCrmReadStore & ClientCrmPrivateProfileStore & ClientCrmManualClientStore;
   let bookingServiceWorkReader: {
     readonly listClientServiceWorkBookings: ReturnType<typeof vi.fn>;
   };
@@ -278,6 +282,80 @@ describe("Clients CRM HTTP API", () => {
     );
   });
 
+  it("creates a manual CRM client through the session-owned astrologer account", async () => {
+    const response = await request("/clients/crm", {
+      role: "astrologer",
+      method: "POST",
+      body: {
+        displayName: "  Мария   Орлова  ",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow"
+      }
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      client: crmDetail({
+        clientUserId: "10000000-0000-4000-8000-000000000030",
+        displayName: "Мария Орлова",
+        relationship: {
+          id: "10000000-0000-4000-8000-000000000031",
+          status: "active",
+          source: "manual",
+          firstLinkedAt: "2026-08-20T10:00:00.000Z",
+          lastLinkedAt: "2026-08-20T10:00:00.000Z"
+        },
+        lifecycle: {
+          status: "new",
+          mode: "automatic",
+          revision: 1,
+          lastActivityAt: "2026-08-20T10:00:00.000Z"
+        },
+        activity: {
+          items: [
+            {
+              id: "clients:relationship:10000000-0000-4000-8000-000000000031",
+              kind: "relationship_created",
+              occurredAt: "2026-08-20T10:00:00.000Z",
+              metadata: { source: "manual" }
+            }
+          ],
+          nextCursor: null
+        }
+      })
+    });
+    expect(crmStore.createManualClientCrmClient).toHaveBeenCalledWith({
+      astrologerUserId,
+      client: {
+        displayName: "Мария Орлова",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow"
+      },
+      now: "2026-08-20T10:00:00.000Z"
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/message|thread|composer/i);
+  });
+
+  it("requires session authority and CSRF for manual CRM client creation", async () => {
+    const unauthenticated = await request("/clients/crm", {
+      role: "missing",
+      method: "POST",
+      body: { displayName: "Мария Орлова" }
+    });
+    expect(unauthenticated.status).toBe(401);
+
+    csrfTokenService.assertValidRequest.mockImplementationOnce(() => {
+      throw new ForbiddenException("Invalid CSRF token");
+    });
+    const invalidCsrf = await request("/clients/crm", {
+      role: "astrologer",
+      method: "POST",
+      body: { displayName: "Мария Орлова" }
+    });
+    expect(invalidCsrf.status).toBe(403);
+    expect(crmStore.createManualClientCrmClient).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid private CRM profile update payloads before persistence", async () => {
     for (const body of [
       { note: "x".repeat(2001), tags: [] },
@@ -401,7 +479,9 @@ describe("Clients CRM HTTP API", () => {
   }
 });
 
-function createCrmReadStore(): ClientCrmReadStore & ClientCrmPrivateProfileStore {
+function createCrmReadStore(): ClientCrmReadStore &
+  ClientCrmPrivateProfileStore &
+  ClientCrmManualClientStore {
   return {
     listAstrologerClientCrmPage: vi.fn().mockImplementation(({ query }) => {
       if (query.cursor === "tampered") return Promise.resolve({ kind: "invalid_command" });
@@ -441,7 +521,34 @@ function createCrmReadStore(): ClientCrmReadStore & ClientCrmPrivateProfileStore
             updatedAt: now
           }
         });
+      }),
+    createManualClientCrmClient: vi.fn().mockImplementation(({ client }) =>
+      Promise.resolve({
+        kind: "found",
+        detail: crmDetail({
+          clientUserId: "10000000-0000-4000-8000-000000000030",
+          displayName: client.displayName,
+          relationship: {
+            id: "10000000-0000-4000-8000-000000000031",
+            status: "active",
+            source: "manual",
+            firstLinkedAt: "2026-08-20T10:00:00.000Z",
+            lastLinkedAt: "2026-08-20T10:00:00.000Z"
+          },
+          activity: {
+            items: [
+              {
+                id: "clients:relationship:10000000-0000-4000-8000-000000000031",
+                kind: "relationship_created",
+                occurredAt: "2026-08-20T10:00:00.000Z",
+                metadata: { source: "manual" }
+              }
+            ],
+            nextCursor: null
+          }
+        })
       })
+    )
   };
 }
 

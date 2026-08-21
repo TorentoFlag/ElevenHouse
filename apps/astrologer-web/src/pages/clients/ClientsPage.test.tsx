@@ -40,7 +40,7 @@ describe("ClientsPage", () => {
     expect(screen.getByRole("status", { name: "Загрузка клиентов" })).toBeVisible();
     pendingList.resolve({ items: [], nextCursor: null });
     expect(await screen.findByText("Клиентов пока нет")).toBeVisible();
-    expect(screen.queryByRole("button", { name: /добавить/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить" })).toBeVisible();
 
     cleanup();
     http.get.mockReset();
@@ -82,6 +82,95 @@ describe("ClientsPage", () => {
           typeof path === "string" && path.includes("query=Ada") && path.includes("cursor=")
       )
     ).toBe(false);
+  });
+
+  it("switches between list and pipeline presentation without changing CRM data source", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path.startsWith("/clients/crm?")) {
+        return { items: [adaListItem, graceListItem], nextCursor: null };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderClientsPage();
+
+    expect(await screen.findByRole("button", { name: /Ada Lovelace/ })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Воронка" }));
+
+    expect(screen.getByRole("button", { name: "Воронка" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getAllByText("Новый").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Активный").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /Grace Hopper/ })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    expect(screen.getByRole("button", { name: "Список" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: /Ada Lovelace/ })).toBeVisible();
+  });
+
+  it("creates a manual CRM client and opens the server-owned detail projection", async () => {
+    const newClientUserId = "33333333-3333-4333-8333-333333333333";
+    const newClient = {
+      ...adaDetail,
+      clientUserId: newClientUserId,
+      displayName: "Мария Орлова",
+      relationship: {
+        ...adaDetail.relationship,
+        id: "33333333-3333-4333-8333-333333333334",
+        source: "manual"
+      },
+      lifecycle: { ...adaDetail.lifecycle, status: "new", revision: 1 },
+      privateCrm: { note: null, tags: [], updatedAt: "2026-08-20T12:00:00.000Z" },
+      birthData: null,
+      relatedBirthProfiles: []
+    } as const satisfies AstrologerClientCrmDetail;
+
+    http.get.mockImplementation(async (path: string) => {
+      if (path === `/clients/crm/${newClientUserId}`) return { client: newClient };
+      if (path === `/clients/crm/${newClientUserId}/activity`) {
+        return { items: [], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.post.mockResolvedValue({ client: newClient });
+
+    renderClientsPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Добавить" }));
+    fireEvent.change(screen.getByLabelText("Имя клиента"), {
+      target: { value: "  Мария   Орлова  " }
+    });
+    fireEvent.change(screen.getByLabelText("Язык"), { target: { value: "ru" } });
+    fireEvent.change(screen.getByLabelText("Часовой пояс"), {
+      target: { value: "Europe/Moscow" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Создать клиента" }));
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        "/clients/crm",
+        {
+          displayName: "Мария Орлова",
+          preferredLocale: "ru",
+          timezone: "Europe/Moscow"
+        },
+        { csrf: true }
+      )
+    );
+    expect(await screen.findByRole("heading", { name: "Мария Орлова" })).toBeVisible();
+    expect(screen.queryByText("Переписка")).not.toBeInTheDocument();
   });
 
   it("opens a relationship-scoped detail route with overview, birth data and related profiles", async () => {

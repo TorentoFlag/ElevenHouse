@@ -19,6 +19,12 @@ export class ClientsController {
     return this.clientsService.listClientCrm(query, request);
   }
 
+  @Post("crm")
+  @RequireCsrf()
+  createManualClientCrm(@Body() body: unknown, @Req() request: AstrologerSessionRequest) {
+    return this.clientsService.createManualClientCrm(body, request);
+  }
+
   @Get("crm/:clientUserId/activity")
   getClientCrmActivity(
     @Param("clientUserId") clientUserId: string,

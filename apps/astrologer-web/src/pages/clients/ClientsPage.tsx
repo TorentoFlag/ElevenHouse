@@ -13,12 +13,14 @@ import {
   useClientsCrmActivityQuery,
   useClientsCrmDetailQuery,
   useClientsCrmListQuery,
+  useCreateManualClientCrmClientMutation,
   useCreateClientRelatedBirthProfileMutation,
   useUpdateClientBirthDataMutation,
   useUpdateClientCrmPrivateProfileMutation,
   useUpdateClientRelatedBirthProfileMutation
 } from "../../features/clients/model/clientsCrmQueries";
 import type { ClientCrmTabId } from "../../features/clients/ui/ClientCrmTabs";
+import type { ClientCrmListViewMode } from "../../features/clients/ui/ClientCrmListPanel";
 import { ClientsPageView } from "./ClientsPageView";
 
 const clientsCrmPageSize = 20;
@@ -30,6 +32,7 @@ export function ClientsPage() {
   const [search, setSearch] = useState("");
   const [lifecycle, setLifecycle] = useState<ClientLifecycleStatus | undefined>(undefined);
   const [source, setSource] = useState<ClientRelationshipSource | undefined>(undefined);
+  const [listViewMode, setListViewMode] = useState<ClientCrmListViewMode>("list");
   const [cursor, setCursor] = useState<string | null>(null);
   const [clients, setClients] = useState<readonly AstrologerClientCrmListItem[]>([]);
   const [activeTab, setActiveTab] = useState<ClientCrmTabId>("overview");
@@ -48,6 +51,7 @@ export function ClientsPage() {
   const selectedClientUserId = clientUserId ?? clients[0]?.clientUserId;
   const detailQuery = useClientsCrmDetailQuery(selectedClientUserId);
   const activityQuery = useClientsCrmActivityQuery(selectedClientUserId);
+  const createManualClientMutation = useCreateManualClientCrmClientMutation();
   const privateProfileMutation = useUpdateClientCrmPrivateProfileMutation(selectedClientUserId);
   const birthDataMutation = useUpdateClientBirthDataMutation(selectedClientUserId);
   const createRelatedProfileMutation =
@@ -105,6 +109,7 @@ export function ClientsPage() {
       search={search}
       lifecycle={lifecycle}
       source={source}
+      listViewMode={listViewMode}
       activeTab={activeTab}
       isListLoading={listQuery.isLoading}
       isListError={listQuery.isError}
@@ -123,11 +128,14 @@ export function ClientsPage() {
       isRelatedProfileError={
         createRelatedProfileMutation.isError || updateRelatedProfileMutation.isError
       }
+      isManualClientCreating={createManualClientMutation.isPending}
+      isManualClientCreateError={createManualClientMutation.isError}
       isFiltered={isFiltered}
       hasNextPage={Boolean(listQuery.data?.nextCursor)}
       onSearchChange={handleSearchChange}
       onLifecycleChange={handleLifecycleChange}
       onSourceChange={handleSourceChange}
+      onListViewModeChange={setListViewMode}
       onSelectClient={(nextClientUserId) => navigate(`/clients/${nextClientUserId}`)}
       onLoadMore={() => {
         if (listQuery.data?.nextCursor) {
@@ -139,6 +147,11 @@ export function ClientsPage() {
       onRetryList={() => void listQuery.refetch()}
       onRetryDetail={() => void detailQuery.refetch()}
       onRetryActivity={() => void activityQuery.refetch()}
+      onCreateManualClient={async (input) => {
+        const response = await createManualClientMutation.mutateAsync(input);
+        resetListPagination();
+        navigate(`/clients/${response.client.clientUserId}`);
+      }}
       onSavePrivateCrm={(input) => privateProfileMutation.mutateAsync(input)}
       onSaveBirthData={(input) => birthDataMutation.mutateAsync(input)}
       onCreateRelatedProfile={(input) => createRelatedProfileMutation.mutateAsync(input)}

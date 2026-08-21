@@ -776,3 +776,28 @@ export const astrologerClientCrmDetailResponseSchema = z
 export type AstrologerClientCrmDetailResponse = z.infer<
   typeof astrologerClientCrmDetailResponseSchema
 >;
+
+export const astrologerClientCrmManualClientCreateRequestSchema = z
+  .object({
+    displayName: z
+      .string()
+      .trim()
+      .min(2)
+      .max(200)
+      .transform((value) => value.replace(/\s+/g, " ")),
+    preferredLocale: z.enum(["ru", "en"]).nullable().optional().default(null),
+    timezone: ianaTimeZoneSchema.nullable().optional().default(null)
+  })
+  .strict();
+export type AstrologerClientCrmManualClientCreateRequest = z.infer<
+  typeof astrologerClientCrmManualClientCreateRequestSchema
+>;
+
+export const astrologerClientCrmManualClientCreateResponseSchema = z
+  .object({
+    client: astrologerClientCrmDetailSchema
+  })
+  .strict();
+export type AstrologerClientCrmManualClientCreateResponse = z.infer<
+  typeof astrologerClientCrmManualClientCreateResponseSchema
+>;

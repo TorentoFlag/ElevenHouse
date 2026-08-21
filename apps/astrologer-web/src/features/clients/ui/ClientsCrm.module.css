@@ -88,6 +88,35 @@
   padding: 14px 16px 10px;
 }
 
+.viewModeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: 12px;
+  background: var(--clients-bg-1);
+  border: 1px solid var(--clients-line);
+  border-radius: 13px;
+}
+
+.viewModeButton {
+  min-height: 32px;
+  color: var(--clients-text-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.viewModeButton[data-active="true"] {
+  color: var(--clients-text-1);
+  background: var(--clients-surface-3);
+  border-color: var(--clients-line-strong);
+}
+
 .searchWrap {
   position: relative;
   margin-bottom: 12px;
@@ -127,7 +156,9 @@
 .select:focus,
 .tab:focus-visible,
 .chip:focus-visible,
+.viewModeButton:focus-visible,
 .clientRow:focus-visible,
+.pipelineCard:focus-visible,
 .button:focus-visible,
 .backButton:focus-visible {
   border-color: var(--clients-accent-line);
@@ -145,6 +176,72 @@
   flex: 1 0 100%;
   font-size: 11.5px;
   color: var(--clients-text-3);
+}
+
+.addClientButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  margin-top: 2px;
+  color: var(--clients-text-1);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  background: var(--clients-surface-3);
+  border: 1px solid var(--clients-line-strong);
+  border-radius: 13px;
+}
+
+.manualCreatePanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 2px;
+  background: var(--clients-surface-1);
+  border: 1px solid var(--clients-line);
+  border-radius: 13px;
+}
+
+.manualCreateHeader,
+.manualCreateActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.manualCreateHeader {
+  color: var(--clients-text-1);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.manualCreateActions {
+  justify-content: flex-end;
+}
+
+.fieldLabel {
+  display: grid;
+  gap: 6px;
+  color: var(--clients-text-3);
+  font-size: 11.5px;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--clients-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--clients-line);
+  border-radius: 9px;
 }
 
 .chip {
@@ -169,6 +266,34 @@
   border-color: var(--clients-accent-line);
 }
 
+.buttonPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 13px;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  background: var(--clients-accent);
+  border: 1px solid var(--clients-accent-line);
+  border-radius: 11px;
+}
+
+.buttonPrimary:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.formError {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 12px;
+}
+
 .listScroller {
   flex: 1;
   min-height: 0;
@@ -181,6 +306,70 @@
   padding: 0;
   margin: 0;
   list-style: none;
+}
+
+.pipelineBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pipelineColumn {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(17, 15, 38, 0.78);
+  border: 1px solid var(--clients-line);
+  border-radius: 13px;
+}
+
+.pipelineColumnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pipelineCount {
+  color: var(--clients-text-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.pipelineColumnBody {
+  display: grid;
+  gap: 7px;
+}
+
+.pipelineEmpty {
+  margin: 0;
+  color: var(--clients-text-3);
+  font-size: 12px;
+}
+
+.pipelineCard {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  padding: 10px;
+  color: var(--clients-text-1);
+  text-align: left;
+  cursor: pointer;
+  background: var(--clients-bg-1);
+  border: 1px solid var(--clients-line);
+  border-radius: 11px;
+}
+
+.pipelineCard[aria-current="true"] {
+  background: var(--clients-accent-soft);
+  border-color: var(--clients-accent-line);
+}
+
+.pipelineCardTop {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
 }
 
 .clientRow {

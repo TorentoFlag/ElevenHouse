@@ -7,6 +7,7 @@ import {
   type ClientCrmActivityItem,
   type ClientCrmDetail,
   type ClientCrmListItem,
+  type ClientCrmManualClientStore,
   type ClientCrmListQuery,
   type ClientCrmPrivateProfileStore,
   type ClientCrmReadStore,
@@ -27,8 +28,12 @@ import {
   clientLifecycleStates,
   clientProfiles,
   clientRelatedBirthProfileHistory,
-  clientRelatedBirthProfiles
+  clientRelatedBirthProfiles,
+  userProfiles,
+  userRoleAssignments,
+  users
 } from "../../schema";
+import { createDrizzleClientLifecycleStore } from "./drizzle-client-lifecycle-store";
 
 type ClientCrmDatabase = ElevenHouseDatabase;
 type ClientCrmRow = {
@@ -66,14 +71,15 @@ type ClientCrmReadStoreOptions = {
 export function createDrizzleClientCrmReadStore(
   database: ClientCrmDatabase,
   options: ClientCrmReadStoreOptions
-): ClientCrmReadStore & ClientCrmPrivateProfileStore {
+): ClientCrmReadStore & ClientCrmPrivateProfileStore & ClientCrmManualClientStore {
   assertCursorSecret(options.cursorSecret);
   return {
     listAstrologerClientCrmPage: (input) =>
       listAstrologerClientCrmPage(database, options.cursorSecret, input),
     getAstrologerClientCrmDetail: (input) => getAstrologerClientCrmDetail(database, input),
     updateAstrologerClientCrmPrivateProfile: (input) =>
-      updateAstrologerClientCrmPrivateProfile(database, input)
+      updateAstrologerClientCrmPrivateProfile(database, input),
+    createManualClientCrmClient: (input) => createManualClientCrmClient(database, input)
   };
 }
 
@@ -300,6 +306,78 @@ async function updateAstrologerClientCrmPrivateProfile(
         updatedAt: toIsoString(now)
       }
     };
+  });
+}
+
+async function createManualClientCrmClient(
+  database: ClientCrmDatabase,
+  input: Parameters<ClientCrmManualClientStore["createManualClientCrmClient"]>[0]
+): Promise<Awaited<ReturnType<ClientCrmManualClientStore["createManualClientCrmClient"]>>> {
+  const timestamp = new Date(input.now);
+  const clientUserId = await database.transaction(async (transaction) => {
+    const [clientUser] = await transaction
+      .insert(users)
+      .values({
+        status: "active",
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: users.id });
+    if (!clientUser) throw new Error("CLIENT_MANUAL_USER_NOT_PERSISTED");
+
+    await transaction.insert(userRoleAssignments).values({
+      userId: clientUser.id,
+      role: "client",
+      assignedByUserId: input.astrologerUserId,
+      assignedAt: timestamp
+    });
+
+    await transaction.insert(userProfiles).values({
+      userId: clientUser.id,
+      displayName: input.client.displayName,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    await transaction.insert(clientProfiles).values({
+      userId: clientUser.id,
+      displayNameSnapshot: input.client.displayName,
+      preferredLocale: input.client.preferredLocale,
+      timezone: input.client.timezone,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+
+    const [relationship] = await transaction
+      .insert(clientAstrologerRelationships)
+      .values({
+        clientUserId: clientUser.id,
+        astrologerUserId: input.astrologerUserId,
+        source: "manual",
+        status: "active",
+        firstLinkedAt: timestamp,
+        lastLinkedAt: timestamp,
+        archivedAt: null,
+        blockedAt: null,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning({ id: clientAstrologerRelationships.id });
+    if (!relationship) throw new Error("CLIENT_MANUAL_RELATIONSHIP_NOT_PERSISTED");
+
+    await createDrizzleClientLifecycleStore(transaction).applyTransition({
+      relationshipId: relationship.id,
+      sourceEventId: `relationship:${relationship.id}:created`,
+      cause: { kind: "relationship_created", occurredAt: input.now },
+      actorUserId: input.astrologerUserId
+    });
+
+    return clientUser.id;
+  });
+
+  return getAstrologerClientCrmDetail(database, {
+    astrologerUserId: input.astrologerUserId,
+    clientUserId
   });
 }
 

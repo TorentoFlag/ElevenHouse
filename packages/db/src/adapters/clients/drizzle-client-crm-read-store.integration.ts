@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { PostgresRuntime } from "../../runtime";
@@ -14,6 +15,8 @@ import {
   clientProfiles,
   clientRelatedBirthProfileHistory,
   clientRelatedBirthProfiles,
+  userProfiles,
+  userRoleAssignments,
   users
 } from "../../schema";
 import {
@@ -232,6 +235,93 @@ describe.sequential("Drizzle client CRM read store", () => {
         now: "2026-08-20T13:00:00.000Z"
       })
     ).resolves.toEqual({ kind: "blocked_or_archived" });
+  });
+
+  it("creates a manual CRM client with account, relationship and lifecycle projection", async () => {
+    const fixture = await seedCrmFixture(runtime);
+    const store = createDrizzleClientCrmReadStore(runtime.database, { cursorSecret });
+
+    const result = await store.createManualClientCrmClient({
+      astrologerUserId: fixture.astrologerUserId,
+      client: {
+        displayName: "Мария Орлова",
+        preferredLocale: "ru",
+        timezone: "Europe/Moscow"
+      },
+      now: "2026-08-20T13:30:00.000Z"
+    });
+
+    expect(result).toMatchObject({
+      kind: "found",
+      detail: {
+        displayName: "Мария Орлова",
+        relationship: {
+          source: "manual",
+          status: "active",
+          firstLinkedAt: "2026-08-20T13:30:00.000Z",
+          lastLinkedAt: "2026-08-20T13:30:00.000Z"
+        },
+        lifecycle: {
+          status: "new",
+          mode: "automatic",
+          revision: 1,
+          lastActivityAt: "2026-08-20T13:30:00.000Z"
+        },
+        readiness: { birthData: "missing", relatedProfiles: "ready" },
+        birthData: null,
+        relatedBirthProfiles: [],
+        privateCrm: {
+          note: null,
+          tags: [],
+          updatedAt: "2026-08-20T13:30:00.000Z"
+        },
+        activity: {
+          items: [
+            {
+              kind: "relationship_created",
+              occurredAt: "2026-08-20T13:30:00.000Z",
+              metadata: { source: "manual" }
+            },
+            {
+              kind: "lifecycle_changed",
+              occurredAt: "2026-08-20T13:30:00.000Z",
+              metadata: {
+                previousStatus: null,
+                status: "new",
+                mode: "automatic"
+              }
+            }
+          ]
+        }
+      }
+    });
+    if (result.kind !== "found") throw new Error("Expected manual CRM client");
+
+    await expect(
+      runtime.database
+        .select({ role: userRoleAssignments.role })
+        .from(userRoleAssignments)
+        .where(eq(userRoleAssignments.userId, result.detail.clientUserId))
+    ).resolves.toEqual([{ role: "client" }]);
+    await expect(
+      runtime.database
+        .select({
+          displayName: userProfiles.displayName,
+          snapshot: clientProfiles.displayNameSnapshot,
+          locale: clientProfiles.preferredLocale,
+          timezone: clientProfiles.timezone
+        })
+        .from(userProfiles)
+        .innerJoin(clientProfiles, eq(clientProfiles.userId, userProfiles.userId))
+        .where(eq(userProfiles.userId, result.detail.clientUserId))
+    ).resolves.toEqual([
+      {
+        displayName: "Мария Орлова",
+        snapshot: "Мария Орлова",
+        locale: "ru",
+        timezone: "Europe/Moscow"
+      }
+    ]);
   });
 
   it("enforces case-insensitive private tag uniqueness in storage", async () => {

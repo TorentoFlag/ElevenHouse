@@ -1,6 +1,7 @@
 import type {
   AstrologerClientCrmDetail,
   AstrologerClientCrmListItem,
+  AstrologerClientCrmManualClientCreateRequest,
   AstrologerClientCrmPrivateProfileUpdateRequest,
   AstrologerClientCrmPrivateProfileUpdateResponse,
   ClientBirthDataUpsertRequest,
@@ -12,7 +13,10 @@ import type {
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import type { ClientsCrmCopy } from "../../common/i18n/astrologerCopy";
 import { ClientCrmDetailPanel } from "../../features/clients/ui/ClientCrmDetailPanel";
-import { ClientCrmListPanel } from "../../features/clients/ui/ClientCrmListPanel";
+import {
+  ClientCrmListPanel,
+  type ClientCrmListViewMode
+} from "../../features/clients/ui/ClientCrmListPanel";
 import type { ClientCrmTabId } from "../../features/clients/ui/ClientCrmTabs";
 import styles from "../../features/clients/ui/ClientsCrm.module.css";
 
@@ -28,6 +32,7 @@ export type ClientsPageViewProps = {
   readonly search: string;
   readonly lifecycle: ClientLifecycleStatus | undefined;
   readonly source: ClientRelationshipSource | undefined;
+  readonly listViewMode: ClientCrmListViewMode;
   readonly activeTab: ClientCrmTabId;
   readonly isListLoading: boolean;
   readonly isListError: boolean;
@@ -42,11 +47,14 @@ export type ClientsPageViewProps = {
   readonly isBirthDataError: boolean;
   readonly isRelatedProfileSaving: boolean;
   readonly isRelatedProfileError: boolean;
+  readonly isManualClientCreating: boolean;
+  readonly isManualClientCreateError: boolean;
   readonly isFiltered: boolean;
   readonly hasNextPage: boolean;
   readonly onSearchChange: (value: string) => void;
   readonly onLifecycleChange: (value: ClientLifecycleStatus | undefined) => void;
   readonly onSourceChange: (value: ClientRelationshipSource | undefined) => void;
+  readonly onListViewModeChange: (value: ClientCrmListViewMode) => void;
   readonly onSelectClient: (clientUserId: string) => void;
   readonly onLoadMore: () => void;
   readonly onBackToList: () => void;
@@ -54,6 +62,9 @@ export type ClientsPageViewProps = {
   readonly onRetryList: () => void;
   readonly onRetryDetail: () => void;
   readonly onRetryActivity: () => void;
+  readonly onCreateManualClient: (
+    input: AstrologerClientCrmManualClientCreateRequest
+  ) => Promise<unknown>;
   readonly onSavePrivateCrm: (
     input: AstrologerClientCrmPrivateProfileUpdateRequest
   ) => Promise<AstrologerClientCrmPrivateProfileUpdateResponse>;
@@ -79,6 +90,7 @@ export function ClientsPageView({
   search,
   lifecycle,
   source,
+  listViewMode,
   activeTab,
   isListLoading,
   isListError,
@@ -93,11 +105,14 @@ export function ClientsPageView({
   isBirthDataError,
   isRelatedProfileSaving,
   isRelatedProfileError,
+  isManualClientCreating,
+  isManualClientCreateError,
   isFiltered,
   hasNextPage,
   onSearchChange,
   onLifecycleChange,
   onSourceChange,
+  onListViewModeChange,
   onSelectClient,
   onLoadMore,
   onBackToList,
@@ -105,6 +120,7 @@ export function ClientsPageView({
   onRetryList,
   onRetryDetail,
   onRetryActivity,
+  onCreateManualClient,
   onSavePrivateCrm,
   onSaveBirthData,
   onCreateRelatedProfile,
@@ -132,17 +148,22 @@ export function ClientsPageView({
           search={search}
           lifecycle={lifecycle}
           source={source}
+          viewMode={listViewMode}
           isLoading={isListLoading}
           isError={isListError}
           isFiltered={isFiltered}
           hasNextPage={hasNextPage}
           isFetching={isListFetching}
+          isManualClientCreating={isManualClientCreating}
+          isManualClientCreateError={isManualClientCreateError}
           onSearchChange={onSearchChange}
           onLifecycleChange={onLifecycleChange}
           onSourceChange={onSourceChange}
+          onViewModeChange={onListViewModeChange}
           onSelectClient={onSelectClient}
           onLoadMore={onLoadMore}
           onRetry={onRetryList}
+          onCreateManualClient={onCreateManualClient}
         />
         <ClientCrmDetailPanel
           copy={copy}

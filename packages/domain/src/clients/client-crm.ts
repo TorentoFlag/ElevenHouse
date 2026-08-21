@@ -220,6 +220,12 @@ export type ClientCrmPrivateProfileUpdateInput = {
   readonly tags: readonly string[];
 };
 
+export type ClientCrmManualClientCreateInput = {
+  readonly displayName: string;
+  readonly preferredLocale: "ru" | "en" | null;
+  readonly timezone: string | null;
+};
+
 export type ClientCrmPrivateProfileUpdateResult =
   | { readonly kind: "updated"; readonly profile: ClientCrmPrivateProfile }
   | ClientCrmFailure;
@@ -260,6 +266,14 @@ export type ClientCrmPrivateProfileStore = {
     readonly profile: ClientCrmPrivateProfileUpdateInput;
     readonly now: string;
   }) => Promise<ClientCrmPrivateProfileUpdateResult>;
+};
+
+export type ClientCrmManualClientStore = {
+  readonly createManualClientCrmClient: (input: {
+    readonly astrologerUserId: string;
+    readonly client: ClientCrmManualClientCreateInput;
+    readonly now: string;
+  }) => Promise<ClientCrmDetailResult>;
 };
 
 export type ClientCrmServiceWorkSources = {
@@ -351,6 +365,26 @@ export async function updateAstrologerClientCrmPrivateProfile(input: {
       clientUserId: normalizeRequiredId(input.clientUserId),
       profile: normalizePrivateProfileUpdate(input.profile),
       now: validateInstant(input.now, "CRM private profile timestamp is invalid")
+    });
+  } catch (error) {
+    if (error instanceof ClientCrmCommandValidationError) {
+      return { kind: "invalid_command" };
+    }
+    throw error;
+  }
+}
+
+export async function createManualClientCrmClient(input: {
+  readonly store: ClientCrmManualClientStore;
+  readonly astrologerUserId: string;
+  readonly client: ClientCrmManualClientCreateInput;
+  readonly now: string;
+}): Promise<ClientCrmDetailResult> {
+  try {
+    return await input.store.createManualClientCrmClient({
+      astrologerUserId: normalizeRequiredId(input.astrologerUserId),
+      client: normalizeManualClientCreateInput(input.client),
+      now: validateInstant(input.now, "CRM manual client creation timestamp is invalid")
     });
   } catch (error) {
     if (error instanceof ClientCrmCommandValidationError) {
@@ -540,6 +574,34 @@ function normalizePrivateProfileUpdate(
   return {
     note: normalizeNullableText(input.note, 2000),
     tags: normalizePrivateTags(input.tags)
+  };
+}
+
+function normalizeManualClientCreateInput(
+  input: ClientCrmManualClientCreateInput
+): ClientCrmManualClientCreateInput {
+  const displayName = validateRequiredString(
+    input.displayName.replace(/\s+/g, " ").trim(),
+    "CRM manual client display name is required",
+    200
+  );
+  if (displayName.length < 2) {
+    throw new ClientCrmCommandValidationError("CRM manual client display name is invalid");
+  }
+  if (
+    input.preferredLocale !== null &&
+    input.preferredLocale !== "ru" &&
+    input.preferredLocale !== "en"
+  ) {
+    throw new ClientCrmCommandValidationError("CRM manual client locale is invalid");
+  }
+  if (input.timezone !== null) {
+    validateRequiredString(input.timezone, "CRM manual client timezone is invalid", 100);
+  }
+  return {
+    displayName,
+    preferredLocale: input.preferredLocale,
+    timezone: input.timezone
   };
 }
 

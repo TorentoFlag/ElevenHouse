@@ -9,6 +9,7 @@ import {
 import {
   getAstrologerClient,
   getAstrologerClientCrmDetail,
+  createManualClientCrmClient,
   ClientBirthDataRelationshipDeniedError,
   ClientRelatedBirthProfileNotFoundError,
   listAstrologerClients,
@@ -21,6 +22,7 @@ import {
   type SessionClientServiceWorkSummaryReader,
   type FinanceClientServiceWorkSummaryReader,
   type ClientCrmPrivateProfileStore,
+  type ClientCrmManualClientStore,
   type ClientCrmReadStore,
   type ClientRelatedBirthProfileStore,
   type ClientStore
@@ -31,6 +33,8 @@ import {
   astrologerClientCrmDetailResponseSchema,
   astrologerClientCrmListQuerySchema,
   astrologerClientCrmListResponseSchema,
+  astrologerClientCrmManualClientCreateRequestSchema,
+  astrologerClientCrmManualClientCreateResponseSchema,
   astrologerClientCrmPrivateProfileUpdateRequestSchema,
   astrologerClientCrmPrivateProfileUpdateResponseSchema,
   astrologerClientParamsSchema,
@@ -48,6 +52,7 @@ import {
   type AstrologerClientListResponse,
   type AstrologerClientCrmDetailResponse,
   type AstrologerClientCrmListResponse,
+  type AstrologerClientCrmManualClientCreateResponse,
   type AstrologerClientCrmPrivateProfileUpdateResponse,
   type AstrologerClientResponse,
   type ClientCrmActivityPageResponse,
@@ -79,7 +84,9 @@ export class ClientsService {
     @Inject(BIRTH_PLACE_SEARCH_PROVIDER)
     private readonly birthPlaceSearchProvider: ClientBirthPlaceSearchProvider,
     @Inject(CLIENT_CRM_READ_STORE)
-    private readonly clientCrmReadStore: ClientCrmReadStore & ClientCrmPrivateProfileStore,
+    private readonly clientCrmReadStore: ClientCrmReadStore &
+      ClientCrmPrivateProfileStore &
+      ClientCrmManualClientStore,
     @Inject(CLIENT_BOOKING_SERVICE_WORK_READER)
     private readonly bookingServiceWorkReader: BookingClientServiceWorkSummaryReader,
     @Inject(CLIENT_SESSION_SERVICE_WORK_READER)
@@ -149,6 +156,28 @@ export class ClientsService {
   ): Promise<AstrologerClientCrmDetailResponse> {
     const detail = await this.readClientCrmDetail(clientUserId, request);
     return astrologerClientCrmDetailResponseSchema.parse({ client: detail });
+  }
+
+  async createManualClientCrm(
+    body: unknown,
+    request: Pick<AstrologerSessionRequest, "currentAstrologerAccount">
+  ): Promise<AstrologerClientCrmManualClientCreateResponse> {
+    const client = parseContract(astrologerClientCrmManualClientCreateRequestSchema, body);
+    const astrologerUserId = requireAstrologerUserId(request);
+    const result = await createManualClientCrmClient({
+      store: this.clientCrmReadStore,
+      astrologerUserId,
+      client,
+      now: this.clock.now().toISOString()
+    });
+
+    if (result.kind === "found") {
+      return astrologerClientCrmManualClientCreateResponseSchema.parse({
+        client: result.detail
+      });
+    }
+
+    throwClientCrmReadFailure(result.kind);
   }
 
   async getClientCrmActivity(
