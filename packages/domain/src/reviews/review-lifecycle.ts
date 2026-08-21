@@ -99,6 +99,12 @@ export type ApproveReviewVersionResult =
       readonly flowEvent: ReviewFirstPublicationFlowEvent | null;
     }
   | {
+      readonly kind: "already_approved";
+      readonly review: ReviewLifecycleState;
+      readonly version: ReviewVersionLifecycleState;
+      readonly flowEvent: null;
+    }
+  | {
       readonly kind: "rejected";
       readonly reason: "version_already_decided" | "not_review_version";
     };
@@ -108,6 +114,11 @@ export type RejectReviewVersionResult =
       readonly kind: "rejected";
       readonly review: ReviewLifecycleState;
       readonly version: ReviewRejectedVersionLifecycleState;
+    }
+  | {
+      readonly kind: "already_rejected";
+      readonly review: ReviewLifecycleState;
+      readonly version: ReviewVersionLifecycleState;
     }
   | {
       readonly kind: "not_rejected";
@@ -148,6 +159,11 @@ export type ApproveReviewReplyVersionResult =
       readonly replyVersion: ReviewReplyVersionLifecycleState;
     }
   | {
+      readonly kind: "already_approved";
+      readonly review: ReviewLifecycleState;
+      readonly replyVersion: ReviewReplyVersionLifecycleState;
+    }
+  | {
       readonly kind: "rejected";
       readonly reason: "reply_already_decided" | "not_review_reply_version";
     };
@@ -157,6 +173,11 @@ export type RejectReviewReplyVersionResult =
       readonly kind: "rejected";
       readonly review: ReviewLifecycleState;
       readonly replyVersion: ReviewRejectedReplyVersionLifecycleState;
+    }
+  | {
+      readonly kind: "already_rejected";
+      readonly review: ReviewLifecycleState;
+      readonly replyVersion: ReviewReplyVersionLifecycleState;
     }
   | {
       readonly kind: "not_rejected";
@@ -303,6 +324,17 @@ export function approveReviewVersion(input: {
   readonly review: ReviewLifecycleState;
   readonly version: ReviewVersionLifecycleState;
 }): ApproveReviewVersionResult {
+  if (input.version.moderationStatus === "approved") {
+    if (input.review.activePublicVersion?.id !== input.version.id) {
+      return { kind: "rejected", reason: "not_review_version" };
+    }
+    return {
+      kind: "already_approved",
+      review: input.review,
+      version: input.version,
+      flowEvent: null
+    };
+  }
   if (input.version.moderationStatus !== "pending") {
     return { kind: "rejected", reason: "version_already_decided" };
   }
@@ -362,6 +394,9 @@ export function rejectReviewVersion(input: {
   readonly review: ReviewLifecycleState;
   readonly version: ReviewVersionLifecycleState;
 }): RejectReviewVersionResult {
+  if (input.version.moderationStatus === "rejected") {
+    return { kind: "already_rejected", review: input.review, version: input.version };
+  }
   if (input.version.moderationStatus !== "pending") {
     return { kind: "not_rejected", reason: "version_already_decided" };
   }
@@ -428,6 +463,12 @@ export function approveReviewReplyVersion(input: {
   readonly review: ReviewLifecycleState;
   readonly replyVersion: ReviewReplyVersionLifecycleState;
 }): ApproveReviewReplyVersionResult {
+  if (input.replyVersion.moderationStatus === "approved") {
+    if (input.review.activePublicReplyVersion?.id !== input.replyVersion.id) {
+      return { kind: "rejected", reason: "not_review_reply_version" };
+    }
+    return { kind: "already_approved", review: input.review, replyVersion: input.replyVersion };
+  }
   if (input.replyVersion.moderationStatus !== "pending") {
     return { kind: "rejected", reason: "reply_already_decided" };
   }
@@ -473,6 +514,9 @@ export function rejectReviewReplyVersion(input: {
   readonly review: ReviewLifecycleState;
   readonly replyVersion: ReviewReplyVersionLifecycleState;
 }): RejectReviewReplyVersionResult {
+  if (input.replyVersion.moderationStatus === "rejected") {
+    return { kind: "already_rejected", review: input.review, replyVersion: input.replyVersion };
+  }
   if (input.replyVersion.moderationStatus !== "pending") {
     return { kind: "not_rejected", reason: "reply_already_decided" };
   }

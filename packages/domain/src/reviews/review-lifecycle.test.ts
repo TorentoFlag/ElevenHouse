@@ -313,6 +313,85 @@ describe("Review lifecycle domain policy", () => {
     });
   });
 
+  it("treats replayed moderation decisions as no-op results without advancing review state", () => {
+    expect(
+      approveReviewVersion({
+        now: "2026-08-22T10:00:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        review: approvedReview(),
+        version: approvedReview().activePublicVersion!
+      })
+    ).toMatchObject({
+      kind: "already_approved",
+      review: { revision: 3, activePublicVersion: { id: ids.versionId } },
+      version: { id: ids.versionId },
+      flowEvent: null
+    });
+
+    expect(
+      rejectReviewVersion({
+        now: "2026-08-22T10:00:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        reasonCode: "off_topic",
+        note: "Replay.",
+        review: approvedReview(),
+        version: {
+          id: ids.pendingVersionId,
+          versionNumber: 2,
+          rating: 3,
+          text: "Already rejected.",
+          publicIdentityMode: "named",
+          moderationStatus: "rejected",
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          decidedAt: "2026-08-21T10:00:00.000Z"
+        }
+      })
+    ).toMatchObject({ kind: "already_rejected", review: { revision: 3 } });
+
+    expect(
+      approveReviewReplyVersion({
+        now: "2026-08-22T10:00:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        review: approvedReview({
+          activePublicReplyVersion: {
+            id: ids.replyVersionId,
+            versionNumber: 1,
+            text: "Спасибо за отзыв.",
+            moderationStatus: "approved",
+            submittedAt: "2026-08-20T10:00:00.000Z",
+            decidedAt: "2026-08-20T11:00:00.000Z"
+          }
+        }),
+        replyVersion: {
+          id: ids.replyVersionId,
+          versionNumber: 1,
+          text: "Спасибо за отзыв.",
+          moderationStatus: "approved",
+          submittedAt: "2026-08-20T10:00:00.000Z",
+          decidedAt: "2026-08-20T11:00:00.000Z"
+        }
+      })
+    ).toMatchObject({ kind: "already_approved", review: { revision: 3 } });
+
+    expect(
+      rejectReviewReplyVersion({
+        now: "2026-08-22T10:00:00.000Z",
+        moderatorUserId: ids.moderatorUserId,
+        reasonCode: "abuse_or_hate",
+        note: "Replay.",
+        review: approvedReview(),
+        replyVersion: {
+          id: ids.pendingReplyVersionId,
+          versionNumber: 2,
+          text: "Already rejected.",
+          moderationStatus: "rejected",
+          submittedAt: "2026-08-21T09:00:00.000Z",
+          decidedAt: "2026-08-21T10:00:00.000Z"
+        }
+      })
+    ).toMatchObject({ kind: "already_rejected", review: { revision: 3 } });
+  });
+
   it("keeps astrologer replies moderated and preserves the old approved reply on edit rejection", () => {
     const planned = planSubmitReviewReplyVersion({
       actorUserId: ids.astrologerUserId,

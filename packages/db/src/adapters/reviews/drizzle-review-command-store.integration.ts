@@ -135,6 +135,40 @@ describe.sequential("Drizzle review command store", () => {
       star5Count: 1
     });
 
+    const replayedFirstApproval = await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:05:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: randomUUID()
+    });
+
+    expect(replayedFirstApproval).toMatchObject({
+      kind: "already_approved",
+      review: { revision: 2, activePublicVersion: { id: fixture.firstVersionId } },
+      flowEvent: null
+    });
+
+    const [replayedApprovalReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(replayedApprovalReviewRow?.revision).toBe(2);
+
+    const [firstApprovalPublicationCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewPublicationEvents)
+      .where(eq(reviewPublicationEvents.reviewId, fixture.reviewId));
+    expect(firstApprovalPublicationCount?.value).toBe(1);
+
+    const [firstApprovalAuditCount] = await runtime.database
+      .select({ value: count() })
+      .from(auditLogEntries)
+      .where(
+        sql`${auditLogEntries.targetId} = ${fixture.reviewId} and ${auditLogEntries.action} = 'review.version.approved'`
+      );
+    expect(firstApprovalAuditCount?.value).toBe(1);
+
     const submittedReply = await store.submitReviewReplyVersion({
       actorUserId: fixture.astrologerUserId,
       now: "2026-08-20T12:00:00.000Z",
@@ -449,6 +483,34 @@ describe.sequential("Drizzle review command store", () => {
       moderationNote: "Не про оказанную услугу.",
       decidedByUserId: fixture.moderatorUserId
     });
+
+    const replayedRejection = await store.rejectReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:05:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      reasonCode: "off_topic",
+      note: "Replay."
+    });
+    expect(replayedRejection).toMatchObject({
+      kind: "already_rejected",
+      review: { revision: 2 },
+      version: { id: fixture.firstVersionId, moderationStatus: "rejected" }
+    });
+
+    const [replayedRejectionReviewRow] = await runtime.database
+      .select()
+      .from(reviews)
+      .where(eq(reviews.id, fixture.reviewId));
+    expect(replayedRejectionReviewRow?.revision).toBe(2);
+
+    const [rejectionAuditCount] = await runtime.database
+      .select({ value: count() })
+      .from(auditLogEntries)
+      .where(
+        sql`${auditLogEntries.targetId} = ${fixture.reviewId} and ${auditLogEntries.action} = 'review.version.rejected'`
+      );
+    expect(rejectionAuditCount?.value).toBe(1);
 
     const [publicationCount] = await runtime.database
       .select({ value: count() })

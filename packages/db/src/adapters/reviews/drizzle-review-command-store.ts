@@ -250,6 +250,7 @@ export function createDrizzleReviewCommandStore(
           version: mapVersion(versionRow)
         });
         if (result.kind === "rejected") return result;
+        if (result.kind === "already_approved") return result;
 
         const reviewableInstance = await readReviewableInstance(
           transaction,
@@ -345,6 +346,7 @@ export function createDrizzleReviewCommandStore(
           version: mapVersion(versionRow)
         });
         if (result.kind === "not_rejected") return result;
+        if (result.kind === "already_rejected") return result;
 
         await transaction
           .update(reviewVersions)
@@ -438,6 +440,7 @@ export function createDrizzleReviewCommandStore(
           replyVersion: mapReplyVersion(replyVersionRow)
         });
         if (result.kind === "rejected") return result;
+        if (result.kind === "already_approved") return result;
 
         await transaction
           .update(reviewReplyVersions)
@@ -494,6 +497,7 @@ export function createDrizzleReviewCommandStore(
           replyVersion: mapReplyVersion(replyVersionRow)
         });
         if (result.kind === "not_rejected") return result;
+        if (result.kind === "already_rejected") return result;
 
         await transaction
           .update(reviewReplyVersions)
