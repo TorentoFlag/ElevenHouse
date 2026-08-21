@@ -160,7 +160,7 @@ export function ClientReviewsPage() {
 
   async function handleCaseMessageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!caseDetail || caseMessage.trim().length === 0) return;
+    if (!caseDetail || caseDetail.status === "closed" || caseMessage.trim().length === 0) return;
     setCaseMessageStatus("saving");
     try {
       const message = await createClientReviewCaseMessage(
@@ -483,32 +483,34 @@ function CaseThread({
           </li>
         ))}
       </ul>
-      <form className={styles.form} onSubmit={onSubmit}>
-        <label>
-          <span className={styles.eyebrow}>{copy.caseReplyLabel}</span>
-          <textarea
-            className={styles.textareaSmall}
-            value={message}
-            aria-label={copy.caseMessageAriaLabel}
-            onChange={(event) => onMessageChange(event.target.value)}
-          />
-        </label>
-        <div className={styles.formActions}>
-          <button
-            className={styles.secondaryButton}
-            type="submit"
-            disabled={message.trim().length === 0 || messageStatus === "saving"}
-          >
-            <Icon iconName="chat" size={16} /> {copy.caseSendLabel}
-          </button>
-          {messageStatus === "saved" ? (
-            <p className={styles.notice}>{copy.caseMessageSuccessLabel}</p>
-          ) : null}
-          {messageStatus === "error" ? (
-            <p className={styles.notice}>{copy.caseMessageErrorLabel}</p>
-          ) : null}
-        </div>
-      </form>
+      {caseDetail.status === "closed" ? null : (
+        <form className={styles.form} onSubmit={onSubmit}>
+          <label>
+            <span className={styles.eyebrow}>{copy.caseReplyLabel}</span>
+            <textarea
+              className={styles.textareaSmall}
+              value={message}
+              aria-label={copy.caseMessageAriaLabel}
+              onChange={(event) => onMessageChange(event.target.value)}
+            />
+          </label>
+          <div className={styles.formActions}>
+            <button
+              className={styles.secondaryButton}
+              type="submit"
+              disabled={message.trim().length === 0 || messageStatus === "saving"}
+            >
+              <Icon iconName="chat" size={16} /> {copy.caseSendLabel}
+            </button>
+            {messageStatus === "saved" ? (
+              <p className={styles.notice}>{copy.caseMessageSuccessLabel}</p>
+            ) : null}
+            {messageStatus === "error" ? (
+              <p className={styles.notice}>{copy.caseMessageErrorLabel}</p>
+            ) : null}
+          </div>
+        </form>
+      )}
     </div>
   );
 }

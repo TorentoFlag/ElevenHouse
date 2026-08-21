@@ -121,6 +121,29 @@ describe("ClientReviewsPage", () => {
     expect(screen.getByText("Речь про прогноз на вторую неделю.")).toBeVisible();
   });
 
+  it("keeps closed moderation case history visible without a reply form", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/me/reviews/reviewable-instances?limit=30") {
+        return { items: [closedCaseReviewDetail.reviewableInstance], nextCursor: null };
+      }
+      if (path === `/me/reviews/reviewable-instances/${reviewableInstanceId}`) {
+        return closedCaseReviewDetail;
+      }
+      if (path === `/me/reviews/moderation-cases/${caseId}`) {
+        return closedCaseDetail;
+      }
+      throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Спор закрыт после проверки.")).toBeVisible();
+    expect(screen.getByText("Статус: Закрыт")).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Сообщение по спору" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отправить" })).not.toBeInTheDocument();
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
   it("renders the client review form in English", async () => {
     http.get.mockImplementation(async (path: string) => {
       if (path === "/me/reviews/reviewable-instances?limit=30") {
@@ -217,6 +240,17 @@ const caseReviewDetail = {
   }
 } satisfies ClientReviewDetail;
 
+const closedCaseReviewDetail = {
+  ...editedReviewDetail,
+  moderationCase: {
+    caseId,
+    status: "closed",
+    openedAt: "2026-08-21T09:00:00.000Z",
+    closedAt: "2026-08-21T12:00:00.000Z",
+    reasonCode: "other"
+  }
+} satisfies ClientReviewDetail;
+
 const clientCaseMessage = {
   messageId: "10000000-0000-4000-8000-000000000110",
   authorRole: "client",
@@ -242,6 +276,21 @@ const caseDetail = {
       visibility: "all_case_participants",
       body: "Уточните контекст консультации.",
       createdAt: "2026-08-21T09:05:00.000Z"
+    }
+  ]
+} satisfies ReviewModerationCaseDetail;
+
+const closedCaseDetail = {
+  ...caseDetail,
+  status: "closed",
+  closedAt: "2026-08-21T12:00:00.000Z",
+  messages: [
+    {
+      messageId: "10000000-0000-4000-8000-000000000111",
+      authorRole: "moderator",
+      visibility: "all_case_participants",
+      body: "Спор закрыт после проверки.",
+      createdAt: "2026-08-21T12:00:00.000Z"
     }
   ]
 } satisfies ReviewModerationCaseDetail;
