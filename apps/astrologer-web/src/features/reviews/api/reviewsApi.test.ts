@@ -51,12 +51,7 @@ describe("reviewsApi", () => {
     post.mockResolvedValueOnce({
       draftId,
       attemptId,
-      draftText: "Спасибо за такой теплый отзыв.",
-      provider: "openai",
-      model: "gpt-5.4-mini",
-      promptId: "reviews.replyDraft",
-      promptVersion: 1,
-      finishReason: "completed"
+      draftText: "Спасибо за такой теплый отзыв."
     });
 
     await expect(
@@ -71,6 +66,27 @@ describe("reviewsApi", () => {
       { locale: "ru" },
       { csrf: true, headers: { "idempotency-key": "reviews:ai:test" } }
     );
+  });
+
+  it("rejects AI reply draft responses that expose provider internals", async () => {
+    post.mockResolvedValueOnce({
+      draftId,
+      attemptId,
+      draftText: "Спасибо за такой теплый отзыв.",
+      provider: "openai",
+      model: "gpt-5.4-mini",
+      promptId: "reviews.replyDraft",
+      promptVersion: 1,
+      finishReason: "completed"
+    });
+
+    await expect(
+      createReviewReplyAiDraft({
+        reviewId,
+        idempotencyKey: "reviews:ai:test",
+        body: { locale: "ru" }
+      })
+    ).rejects.toThrow();
   });
 
   it("opens disputes through the moderation case contract", async () => {

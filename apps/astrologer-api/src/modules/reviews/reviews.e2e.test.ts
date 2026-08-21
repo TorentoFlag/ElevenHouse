@@ -331,18 +331,10 @@ describe("astrologer reviews HTTP API", () => {
     });
 
     expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toMatchObject({
-      draftText: "Спасибо за отзыв. Рад, что консультация помогла.",
-      provider: "openai",
-      model: "gpt-5.5",
-      promptId: "reviews.replyDraft",
-      promptVersion: 1,
-      finishReason: "completed",
-      usage: {
-        promptTokens: 100,
-        completionTokens: 20,
-        totalTokens: 120
-      }
+    await expect(response.json()).resolves.toEqual({
+      draftId: expect.any(String),
+      attemptId: expect.any(String),
+      draftText: "Спасибо за отзыв. Рад, что консультация помогла."
     });
     expect(receivedAiDraftCommand).toMatchObject({
       actorUserId: astrologerUserId,

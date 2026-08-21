@@ -65,13 +65,7 @@ export const createReviewReplyAiDraftResponseSchema = z
   .object({
     draftId: uuidSchema,
     attemptId: uuidSchema,
-    draftText: nonEmptyStringSchema.max(4_000),
-    provider: aiDraftProviderSchema,
-    model: aiDraftModelSchema,
-    promptId: z.literal("reviews.replyDraft"),
-    promptVersion: z.literal(1),
-    finishReason: aiDraftFinishReasonSchema,
-    usage: aiDraftUsageSchema.optional()
+    draftText: nonEmptyStringSchema.max(4_000)
   })
   .strict();
 export type CreateReviewReplyAiDraftResponse = z.infer<

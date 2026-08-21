@@ -179,13 +179,7 @@ export class AstrologerReviewsService {
     return createReviewReplyAiDraftResponseSchema.parse({
       draftId,
       attemptId,
-      draftText: output.data.draftText,
-      provider: generated.provider,
-      model: generated.model,
-      promptId: reviewReplyDraftPromptV1.id,
-      promptVersion: reviewReplyDraftPromptV1.version,
-      finishReason: generated.finishReason,
-      usage: generated.usage
+      draftText: output.data.draftText
     });
   }
 

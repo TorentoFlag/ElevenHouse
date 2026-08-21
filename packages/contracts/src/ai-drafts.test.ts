@@ -12,6 +12,16 @@ describe("AI draft contracts", () => {
       createReviewReplyAiDraftResponseSchema.parse({
         draftId: "10000000-0000-4000-8000-000000000001",
         attemptId: "10000000-0000-4000-8000-000000000002",
+        draftText: "Спасибо за отзыв."
+      }).draftText
+    ).toBe("Спасибо за отзыв.");
+  });
+
+  it("does not expose review reply draft provider internals to frontend", () => {
+    expect(() =>
+      createReviewReplyAiDraftResponseSchema.parse({
+        draftId: "10000000-0000-4000-8000-000000000001",
+        attemptId: "10000000-0000-4000-8000-000000000002",
         draftText: "Спасибо за отзыв.",
         provider: "openai",
         model: "gpt-5.5",
@@ -23,7 +33,7 @@ describe("AI draft contracts", () => {
           completionTokens: 5,
           totalTokens: 15
         }
-      }).draftText
-    ).toBe("Спасибо за отзыв.");
+      })
+    ).toThrow();
   });
 });
