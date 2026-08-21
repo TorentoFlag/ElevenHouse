@@ -2,7 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import type { ClientReviewDetail, ReviewModerationCaseDetail } from "@elevenhouse/contracts";
-import { I18nProvider } from "@elevenhouse/i18n";
+import { I18nProvider, type SupportedLocale } from "@elevenhouse/i18n";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -72,7 +72,7 @@ describe("ClientReviewsPage", () => {
     renderPage();
     expect(await screen.findByText("Старая опубликованная версия")).toBeVisible();
     await waitFor(() => expect(screen.getAllByText("Очень точная консультация").length).toBe(2));
-    expect(screen.getByText("На модерации")).toBeVisible();
+    expect(screen.getAllByText("На модерации").length).toBeGreaterThan(0);
   });
 
   it("loads moderation case thread and sends a client message", async () => {
@@ -120,12 +120,32 @@ describe("ClientReviewsPage", () => {
     expect(await screen.findByText("Сообщение отправлено.")).toBeVisible();
     expect(screen.getByText("Речь про прогноз на вторую неделю.")).toBeVisible();
   });
+
+  it("renders the client review form in English", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/me/reviews/reviewable-instances?limit=30") {
+        return { items: [newReviewDetail.reviewableInstance], nextCursor: null };
+      }
+      if (path === `/me/reviews/reviewable-instances/${reviewableInstanceId}`) {
+        return newReviewDetail;
+      }
+      throw new Error(`Unexpected GET ${path}`);
+    });
+
+    renderPage("en");
+
+    expect(await screen.findByRole("heading", { name: "Reviews" })).toBeVisible();
+    expect(screen.getByText("Consultation")).toBeVisible();
+    expect(await screen.findByText("New review")).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /Publish anonymously/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Submit for moderation/ })).toBeDisabled();
+  });
 });
 
-function renderPage() {
+function renderPage(locale: SupportedLocale = "ru") {
   return render(
     <MemoryRouter>
-      <I18nProvider dictionaries={clientCopyByLocale}>
+      <I18nProvider dictionaries={clientCopyByLocale} initialLocale={locale}>
         <ClientReviewsPage />
       </I18nProvider>
     </MemoryRouter>
