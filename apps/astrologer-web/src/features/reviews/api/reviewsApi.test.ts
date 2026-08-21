@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createAstrologerReviewCaseMessage,
   createReviewReplyAiDraft,
+  getAstrologerReviewModerationCaseDetail,
   listAstrologerReviews,
   openReviewDispute,
   submitReviewReplyVersion
@@ -87,6 +89,36 @@ describe("reviewsApi", () => {
       { csrf: true, headers: { "idempotency-key": "reviews:dispute:test" } }
     );
   });
+
+  it("reads moderation case detail for the current astrologer", async () => {
+    get.mockResolvedValueOnce(moderationCase);
+
+    await expect(getAstrologerReviewModerationCaseDetail(caseId)).resolves.toEqual(moderationCase);
+    expect(get).toHaveBeenCalledWith(`/reviews/moderation-cases/${caseId}`);
+  });
+
+  it("creates astrologer moderation case messages", async () => {
+    post.mockResolvedValueOnce(caseMessage);
+
+    await expect(
+      createAstrologerReviewCaseMessage({
+        caseId,
+        idempotencyKey: "reviews:case-message:test",
+        body: {
+          visibility: "all_case_participants",
+          body: "Готов обсудить детали консультации."
+        }
+      })
+    ).resolves.toEqual(caseMessage);
+    expect(post).toHaveBeenCalledWith(
+      `/reviews/moderation-cases/${caseId}/messages`,
+      {
+        visibility: "all_case_participants",
+        body: "Готов обсудить детали консультации."
+      },
+      { csrf: true, headers: { "idempotency-key": "reviews:case-message:test" } }
+    );
+  });
 });
 
 const reviewId = "11111111-1111-4111-8111-111111111111";
@@ -156,4 +188,12 @@ const moderationCase = {
     contextLabel: "Сессия завершена"
   },
   messages: []
+} as const;
+
+const caseMessage = {
+  messageId: "81111111-1111-4111-8111-111111111111",
+  authorRole: "astrologer",
+  visibility: "all_case_participants",
+  body: "Готов обсудить детали консультации.",
+  createdAt: "2026-08-21T09:05:00.000Z"
 } as const;

@@ -1,6 +1,7 @@
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import type { ReviewCaseState } from "./ReviewsPage";
 import type { ReviewsPageCopy } from "./ReviewsPage";
 import styles from "./ReviewsPage.module.css";
 
@@ -9,27 +10,35 @@ export function ReviewCard({
   locale,
   review,
   replyDraft,
+  caseState,
+  caseMessageDraft,
   replyActive,
   commandPending,
   onStartReply,
   onCancelReply,
   onEditReply,
+  onEditCaseMessage,
   onSubmitReply,
   onCreateAiDraft,
-  onOpenDispute
+  onOpenDispute,
+  onSubmitCaseMessage
 }: {
   readonly copy: ReviewsPageCopy;
   readonly locale: SupportedLocale;
   readonly review: ReviewAstrologerItem;
   readonly replyDraft: string;
+  readonly caseState: ReviewCaseState | undefined;
+  readonly caseMessageDraft: string;
   readonly replyActive: boolean;
   readonly commandPending: boolean;
   readonly onStartReply: () => void;
   readonly onCancelReply: () => void;
   readonly onEditReply: (value: string) => void;
+  readonly onEditCaseMessage: (value: string) => void;
   readonly onSubmitReply: () => void;
   readonly onCreateAiDraft: () => void;
   readonly onOpenDispute: () => void;
+  readonly onSubmitCaseMessage: () => void;
 }) {
   const status = getReviewStatus(review);
   const reply = review.activePublicReplyVersion ?? review.pendingReplyVersion;
@@ -145,7 +154,88 @@ export function ReviewCard({
       {status === "pending" && !replyActive ? (
         <p className={styles.pendingNote}>{copy.reply.pendingReplyLabel}</p>
       ) : null}
+      {review.moderationCase ? (
+        <ReviewCaseThread
+          copy={copy}
+          caseState={caseState}
+          draft={caseMessageDraft}
+          commandPending={commandPending}
+          onEdit={onEditCaseMessage}
+          onSubmit={onSubmitCaseMessage}
+        />
+      ) : null}
     </article>
+  );
+}
+
+function ReviewCaseThread({
+  copy,
+  caseState,
+  draft,
+  commandPending,
+  onEdit,
+  onSubmit
+}: {
+  readonly copy: ReviewsPageCopy;
+  readonly caseState: ReviewCaseState | undefined;
+  readonly draft: string;
+  readonly commandPending: boolean;
+  readonly onEdit: (value: string) => void;
+  readonly onSubmit: () => void;
+}) {
+  const caseThread = copy.caseThread;
+
+  return (
+    <section className={styles.caseThread}>
+      <div className={styles.caseHeader}>
+        <h3>{caseThread.title}</h3>
+        {caseState?.detail ? <span>{caseThread.status[caseState.detail.status]}</span> : null}
+      </div>
+      {!caseState || caseState.status === "loading" ? (
+        <p className={styles.pendingNote}>{caseThread.loadingLabel}</p>
+      ) : null}
+      {caseState?.status === "error" ? (
+        <p className={styles.pendingNote}>{caseThread.errorLabel}</p>
+      ) : null}
+      {caseState?.detail ? (
+        <>
+          <ul className={styles.caseMessages}>
+            {caseState.detail.messages.map((message) => (
+              <li key={message.messageId}>
+                <strong>{caseThread.author[message.authorRole]}</strong>
+                <p>{message.body}</p>
+              </li>
+            ))}
+          </ul>
+          <form
+            className={styles.replyForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit();
+            }}
+          >
+            <textarea
+              className={styles.replyInput}
+              value={draft}
+              rows={3}
+              maxLength={4000}
+              aria-label={caseThread.messageLabel}
+              placeholder={caseThread.placeholder}
+              onChange={(event) => onEdit(event.target.value)}
+            />
+            <div className={styles.replyActions}>
+              <button
+                type="submit"
+                className={styles.primaryButton}
+                disabled={commandPending || !draft.trim()}
+              >
+                {caseThread.submitLabel}
+              </button>
+            </div>
+          </form>
+        </>
+      ) : null}
+    </section>
   );
 }
 

@@ -1,9 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
+import type { ReviewAstrologerItem, ReviewModerationCaseDetail } from "@elevenhouse/contracts";
 import { useI18n, type SupportedLocale } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
-import { astrologerReviewsListQueryOptions } from "../../features/reviews/model/reviewsQueryOptions";
+import {
+  astrologerReviewModerationCaseQueryOptions,
+  astrologerReviewsListQueryOptions
+} from "../../features/reviews/model/reviewsQueryOptions";
 import {
   type AstrologerReviewFilter,
   buildAstrologerReviewsSummary,
@@ -11,6 +14,7 @@ import {
   filterAstrologerReviews
 } from "../../features/reviews/model/reviewsPresentation";
 import {
+  useCreateAstrologerReviewCaseMessageMutation,
   useCreateReviewReplyAiDraftMutation,
   useOpenReviewDisputeMutation,
   useSubmitReviewReplyVersionMutation
@@ -25,15 +29,28 @@ export function ReviewsPage() {
   const [filter, setFilter] = useState<AstrologerReviewFilter>("all");
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [caseMessageDrafts, setCaseMessageDrafts] = useState<Record<string, string>>({});
   const reviewsQuery = useQuery(
     astrologerReviewsListQueryOptions({ limit: pageSize, cursor: null })
   );
   const submitReplyMutation = useSubmitReviewReplyVersionMutation();
   const aiDraftMutation = useCreateReviewReplyAiDraftMutation();
   const disputeMutation = useOpenReviewDisputeMutation();
+  const caseMessageMutation = useCreateAstrologerReviewCaseMessageMutation();
   const reviews = reviewsQuery.data?.items ?? [];
   const visibleReviews = filterAstrologerReviews(reviews, filter);
-  const commandError = submitReplyMutation.error ?? aiDraftMutation.error ?? disputeMutation.error;
+  const reviewsWithCases = visibleReviews.filter((review) => review.moderationCase);
+  const caseQueries = useQueries({
+    queries: reviewsWithCases.map((review) =>
+      astrologerReviewModerationCaseQueryOptions(review.moderationCase!.caseId)
+    )
+  });
+  const caseStates = buildCaseStates(reviewsWithCases, caseQueries);
+  const commandError =
+    submitReplyMutation.error ??
+    aiDraftMutation.error ??
+    disputeMutation.error ??
+    caseMessageMutation.error;
 
   useDocumentTitle(copy.documentTitle);
 
@@ -72,6 +89,23 @@ export function ReviewsPage() {
     });
   }
 
+  async function handleSubmitCaseMessage(review: ReviewAstrologerItem) {
+    const caseId = review.moderationCase?.caseId;
+    if (!caseId) return;
+    const body = (caseMessageDrafts[caseId] ?? "").trim();
+    if (!body) return;
+
+    await caseMessageMutation.mutateAsync({
+      caseId,
+      idempotencyKey: createCommandKey("reviews:case-message"),
+      body: {
+        visibility: "all_case_participants",
+        body
+      }
+    });
+    setCaseMessageDrafts((current) => ({ ...current, [caseId]: "" }));
+  }
+
   return (
     <ReviewsPageView
       copy={copy}
@@ -82,16 +116,24 @@ export function ReviewsPage() {
       selectedFilter={filter}
       replyTargetId={replyTargetId}
       replyDrafts={replyDrafts}
+      caseStates={caseStates}
+      caseMessageDrafts={caseMessageDrafts}
       isLoading={reviewsQuery.isLoading}
       isError={reviewsQuery.isError}
       isCommandPending={
-        submitReplyMutation.isPending || aiDraftMutation.isPending || disputeMutation.isPending
+        submitReplyMutation.isPending ||
+        aiDraftMutation.isPending ||
+        disputeMutation.isPending ||
+        caseMessageMutation.isPending
       }
       commandError={commandError ? copy.commandError : null}
       onFilterChange={setFilter}
       onRefresh={() => void reviewsQuery.refetch()}
       onEditReply={(reviewId, value) =>
         setReplyDrafts((current) => ({ ...current, [reviewId]: value }))
+      }
+      onEditCaseMessage={(caseId, value) =>
+        setCaseMessageDrafts((current) => ({ ...current, [caseId]: value }))
       }
       onStartReply={(review) => {
         setReplyTargetId(review.reviewId);
@@ -110,9 +152,43 @@ export function ReviewsPage() {
       onOpenDispute={(review) => {
         void handleOpenDispute(review);
       }}
+      onSubmitCaseMessage={(review) => {
+        void handleSubmitCaseMessage(review);
+      }}
     />
   );
 }
+
+function buildCaseStates(
+  reviews: readonly ReviewAstrologerItem[],
+  queries: readonly {
+    readonly data?: ReviewModerationCaseDetail;
+    readonly isLoading: boolean;
+    readonly isError: boolean;
+  }[]
+): Record<string, ReviewCaseState> {
+  const entries: Array<[string, ReviewCaseState]> = [];
+  reviews.forEach((review, index) => {
+    const caseId = review.moderationCase?.caseId;
+    const query = queries[index];
+    if (!caseId || !query) return;
+    if (query.data) {
+      entries.push([caseId, { status: "ready", detail: query.data }]);
+      return;
+    }
+    if (query.isError) {
+      entries.push([caseId, { status: "error", detail: null }]);
+      return;
+    }
+    entries.push([caseId, { status: "loading", detail: null }]);
+  });
+  return Object.fromEntries(entries);
+}
+
+export type ReviewCaseState = {
+  readonly status: "loading" | "ready" | "error";
+  readonly detail: ReviewModerationCaseDetail | null;
+};
 
 function createCommandKey(scope: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -142,6 +218,16 @@ export type ReviewsPageCopy = {
     readonly cancelLabel: string;
     readonly startLabel: string;
     readonly aiLabel: string;
+  };
+  readonly caseThread: {
+    readonly title: string;
+    readonly loadingLabel: string;
+    readonly errorLabel: string;
+    readonly messageLabel: string;
+    readonly placeholder: string;
+    readonly submitLabel: string;
+    readonly status: Record<ReviewModerationCaseDetail["status"], string>;
+    readonly author: Record<ReviewModerationCaseDetail["messages"][number]["authorRole"], string>;
   };
   readonly disputeLabel: string;
   readonly disputeDefaultNote: string;
@@ -180,6 +266,27 @@ const reviewsCopyByLocale = {
       startLabel: "Ответить",
       aiLabel: "AI-ответ"
     },
+    caseThread: {
+      title: "Спор и уточнения",
+      loadingLabel: "Загружаем переписку",
+      errorLabel: "Не удалось загрузить переписку",
+      messageLabel: "Сообщение по спору",
+      placeholder: "Ответьте модератору и клиенту...",
+      submitLabel: "Отправить",
+      status: {
+        open: "Открыт",
+        closed: "Закрыт",
+        waiting_client: "Ждём клиента",
+        waiting_astrologer: "Ждём астролога",
+        consensus_reached: "Консенсус найден"
+      },
+      author: {
+        client: "Клиент",
+        astrologer: "Вы",
+        moderator: "Модератор",
+        system: "Система"
+      }
+    },
     disputeLabel: "Оспорить",
     disputeDefaultNote: "Астролог открыл спор из раздела отзывов.",
     commandError: "Команду не удалось выполнить. Обновите список и попробуйте снова."
@@ -215,6 +322,27 @@ const reviewsCopyByLocale = {
       cancelLabel: "Cancel",
       startLabel: "Reply",
       aiLabel: "AI reply"
+    },
+    caseThread: {
+      title: "Dispute and clarifications",
+      loadingLabel: "Loading thread",
+      errorLabel: "Could not load thread",
+      messageLabel: "Dispute message",
+      placeholder: "Reply to the moderator and client...",
+      submitLabel: "Send",
+      status: {
+        open: "Open",
+        closed: "Closed",
+        waiting_client: "Waiting for client",
+        waiting_astrologer: "Waiting for astrologer",
+        consensus_reached: "Consensus reached"
+      },
+      author: {
+        client: "Client",
+        astrologer: "You",
+        moderator: "Moderator",
+        system: "System"
+      }
     },
     disputeLabel: "Dispute",
     disputeDefaultNote: "Astrologer opened a dispute from the reviews workspace.",

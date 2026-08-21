@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  createAstrologerReviewCaseMessageMutationOptions,
   createReviewReplyAiDraftMutationOptions,
   openReviewDisputeMutationOptions,
   submitReviewReplyVersionMutationOptions
@@ -15,4 +16,8 @@ export function useCreateReviewReplyAiDraftMutation() {
 
 export function useOpenReviewDisputeMutation() {
   return useMutation(openReviewDisputeMutationOptions(useQueryClient()));
+}
+
+export function useCreateAstrologerReviewCaseMessageMutation() {
+  return useMutation(createAstrologerReviewCaseMessageMutationOptions(useQueryClient()));
 }

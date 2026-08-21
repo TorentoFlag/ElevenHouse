@@ -5,6 +5,8 @@ import {
   reviewAstrologerListResponseSchema,
   reviewModerationCaseDetailSchema,
   reviewModerationDecisionSchema,
+  reviewModerationCaseMessageCreateSchema,
+  reviewModerationCaseMessageSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type CreateReviewReplyAiDraftRequest,
@@ -12,6 +14,8 @@ import {
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationDecision,
+  type ReviewModerationCaseMessage,
+  type ReviewModerationCaseMessageCreate,
   type ReviewReplySubmission,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
@@ -92,6 +96,34 @@ export async function openReviewDispute(
   return reviewModerationCaseDetailSchema.parse(
     await application.http.post(
       `/reviews/${encodeURIComponent(input.reviewId)}/disputes`,
+      body,
+      commandRequestOptions(input.idempotencyKey)
+    )
+  );
+}
+
+export async function getAstrologerReviewModerationCaseDetail(
+  caseId: string
+): Promise<ReviewModerationCaseDetail> {
+  return reviewModerationCaseDetailSchema.parse(
+    await application.http.get(`/reviews/moderation-cases/${encodeURIComponent(caseId)}`)
+  );
+}
+
+export type CreateAstrologerReviewCaseMessageInput = Readonly<{
+  caseId: string;
+  idempotencyKey: string;
+  body: ReviewModerationCaseMessageCreate;
+}>;
+
+export async function createAstrologerReviewCaseMessage(
+  input: CreateAstrologerReviewCaseMessageInput
+): Promise<ReviewModerationCaseMessage> {
+  const body = reviewModerationCaseMessageCreateSchema.parse(input.body);
+
+  return reviewModerationCaseMessageSchema.parse(
+    await application.http.post(
+      `/reviews/moderation-cases/${encodeURIComponent(input.caseId)}/messages`,
       body,
       commandRequestOptions(input.idempotencyKey)
     )

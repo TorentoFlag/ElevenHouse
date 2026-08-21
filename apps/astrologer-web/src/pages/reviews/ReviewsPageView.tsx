@@ -1,6 +1,7 @@
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
+import type { ReviewCaseState } from "./ReviewsPage";
 import type {
   AstrologerReviewFilter,
   AstrologerReviewsSummary
@@ -19,6 +20,8 @@ export type ReviewsPageViewProps = {
   readonly selectedFilter: AstrologerReviewFilter;
   readonly replyTargetId: string | null;
   readonly replyDrafts: Record<string, string>;
+  readonly caseStates: Record<string, ReviewCaseState>;
+  readonly caseMessageDrafts: Record<string, string>;
   readonly isLoading: boolean;
   readonly isError: boolean;
   readonly isCommandPending: boolean;
@@ -28,9 +31,11 @@ export type ReviewsPageViewProps = {
   readonly onStartReply: (review: ReviewAstrologerItem) => void;
   readonly onCancelReply: () => void;
   readonly onEditReply: (reviewId: string, value: string) => void;
+  readonly onEditCaseMessage: (caseId: string, value: string) => void;
   readonly onSubmitReply: (review: ReviewAstrologerItem) => void;
   readonly onCreateAiDraft: (review: ReviewAstrologerItem) => void;
   readonly onOpenDispute: (review: ReviewAstrologerItem) => void;
+  readonly onSubmitCaseMessage: (review: ReviewAstrologerItem) => void;
 };
 
 const filterOrder: readonly AstrologerReviewFilter[] = ["all", "published", "pending", "hidden"];
@@ -44,6 +49,8 @@ export function ReviewsPageView({
   selectedFilter,
   replyTargetId,
   replyDrafts,
+  caseStates,
+  caseMessageDrafts,
   isLoading,
   isError,
   isCommandPending,
@@ -53,9 +60,11 @@ export function ReviewsPageView({
   onStartReply,
   onCancelReply,
   onEditReply,
+  onEditCaseMessage,
   onSubmitReply,
   onCreateAiDraft,
-  onOpenDispute
+  onOpenDispute,
+  onSubmitCaseMessage
 }: ReviewsPageViewProps) {
   return (
     <section className={styles.page} aria-labelledby="reviews-title">
@@ -119,14 +128,28 @@ export function ReviewsPageView({
                   locale={locale}
                   review={review}
                   replyDraft={replyDrafts[review.reviewId] ?? ""}
+                  caseState={
+                    review.moderationCase ? caseStates[review.moderationCase.caseId] : undefined
+                  }
+                  caseMessageDraft={
+                    review.moderationCase
+                      ? (caseMessageDrafts[review.moderationCase.caseId] ?? "")
+                      : ""
+                  }
                   replyActive={replyTargetId === review.reviewId}
                   commandPending={isCommandPending}
                   onStartReply={() => onStartReply(review)}
                   onCancelReply={onCancelReply}
                   onEditReply={(value) => onEditReply(review.reviewId, value)}
+                  onEditCaseMessage={(value) => {
+                    if (review.moderationCase) {
+                      onEditCaseMessage(review.moderationCase.caseId, value);
+                    }
+                  }}
                   onSubmitReply={() => onSubmitReply(review)}
                   onCreateAiDraft={() => onCreateAiDraft(review)}
                   onOpenDispute={() => onOpenDispute(review)}
+                  onSubmitCaseMessage={() => onSubmitCaseMessage(review)}
                 />
               ))}
             </div>
