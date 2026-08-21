@@ -443,12 +443,25 @@ describe("Reviews contracts", () => {
         closedAt: null,
         reasonCode: "other"
       },
+      auditTrail: [
+        {
+          id: "10000000-0000-4000-8000-000000000045",
+          actorUserId: "10000000-0000-4000-8000-000000000046",
+          action: "review.dispute.opened",
+          occurredAt: "2026-08-20T10:00:00.000Z",
+          metadata: {
+            caseId: "10000000-0000-4000-8000-000000000043",
+            reasonCode: "other"
+          }
+        }
+      ],
       auditCursor: "audit:1"
     });
 
     expect(parsed.client.displayName).toBe("Анна Петрова");
     expect(parsed.visibilityStatus).toBe("temporarily_hidden_by_dispute");
     expect(parsed.replyVersions[0]?.moderationStatus).toBe("pending");
+    expect(parsed.auditTrail[0]?.action).toBe("review.dispute.opened");
   });
 
   it("models the admin moderation queue with explicit review or reply targets", () => {

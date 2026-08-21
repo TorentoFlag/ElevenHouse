@@ -12,6 +12,7 @@ import {
   type AdminReviewsApi
 } from "../api/adminReviewsApi";
 import {
+  auditActionLabel,
   caseMessageVisibilityOptions,
   caseMessageAuthorLabel,
   caseMessageVisibilityLabel,
@@ -348,6 +349,24 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
                   </section>
                 </div>
 
+                <section className="adminReviewsPanel adminReviewsAudit">
+                  <h3>Аудит</h3>
+                  {selected.auditTrail.length === 0 ? <p>Действий пока нет.</p> : null}
+                  {selected.auditTrail.map((entry) => (
+                    <article key={entry.id} className="adminReviewsVersion">
+                      <header>
+                        <strong>{auditActionLabel(entry.action)}</strong>
+                        <span>{formatDateTime(entry.occurredAt)}</span>
+                      </header>
+                      <p>
+                        {entry.actorUserId
+                          ? `Автор действия: ${entry.actorUserId}`
+                          : "Системное действие"}
+                      </p>
+                    </article>
+                  ))}
+                </section>
+
                 {caseDetail ? (
                   <section className="adminReviewsCase">
                     <header>
@@ -526,6 +545,14 @@ function DecisionActions(props: {
 function normalizedDecision(reasonCode: ReviewModerationReasonCode, note: string) {
   const normalizedNote = note.trim();
   return { reasonCode, note: normalizedNote ? normalizedNote : null };
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "UTC"
+  }).format(new Date(value));
 }
 
 function toEditableCaseStatus(status: ReviewModerationCaseDetail["status"] | undefined) {

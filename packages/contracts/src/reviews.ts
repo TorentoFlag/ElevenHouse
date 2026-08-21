@@ -427,6 +427,17 @@ export const reviewAstrologerListResponseSchema = z
   .strict();
 export type ReviewAstrologerListResponse = z.infer<typeof reviewAstrologerListResponseSchema>;
 
+export const reviewAdminAuditEntrySchema = z
+  .object({
+    id: uuidSchema,
+    actorUserId: uuidSchema.nullable(),
+    action: z.string().trim().min(1).max(160),
+    occurredAt: instantSchema,
+    metadata: z.record(z.string(), z.unknown())
+  })
+  .strict();
+export type ReviewAdminAuditEntry = z.infer<typeof reviewAdminAuditEntrySchema>;
+
 export const reviewAdminDetailSchema = z
   .object({
     reviewId: uuidSchema,
@@ -438,6 +449,7 @@ export const reviewAdminDetailSchema = z
     versions: z.array(reviewVersionSchema).max(100),
     replyVersions: z.array(reviewReplyVersionSchema).max(100),
     moderationCase: reviewModerationCaseSummarySchema.nullable(),
+    auditTrail: z.array(reviewAdminAuditEntrySchema).max(100),
     auditCursor: cursorSchema.nullable()
   })
   .strict();

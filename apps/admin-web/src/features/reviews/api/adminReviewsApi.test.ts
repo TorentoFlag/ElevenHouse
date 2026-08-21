@@ -92,6 +92,7 @@ function reviewDetail() {
     ],
     replyVersions: [],
     moderationCase: null,
+    auditTrail: [],
     auditCursor: null
   };
 }

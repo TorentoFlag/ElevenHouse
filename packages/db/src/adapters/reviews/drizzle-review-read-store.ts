@@ -11,6 +11,7 @@ import {
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
+  type ReviewAdminAuditEntry,
   type ReviewAstrologerItem,
   type ReviewAstrologerListQuery,
   type ClientReviewableInstanceListQuery,
@@ -29,6 +30,7 @@ import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from "d
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
+  auditLogEntries,
   reviewModerationCases,
   reviewModerationCaseMessages,
   reviewReplyVersions,
@@ -44,6 +46,7 @@ type ReviewReplyVersionRow = typeof reviewReplyVersions.$inferSelect;
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
 type ReviewModerationCaseRow = typeof reviewModerationCases.$inferSelect;
 type ReviewModerationCaseMessageRow = typeof reviewModerationCaseMessages.$inferSelect;
+type AuditLogEntryRow = typeof auditLogEntries.$inferSelect;
 type UserProfileRow = typeof userProfiles.$inferSelect;
 
 type PublicReviewRow = {
@@ -447,6 +450,7 @@ async function getAdminReviewDetail(
   const versions = await readReviewVersions(database, row.review.id);
   const replyVersions = await readReviewReplyVersions(database, row.review.id);
   const moderationCase = await readLatestModerationCase(database, row.review.id);
+  const auditTrail = await readReviewAuditTrail(database, row.review.id);
 
   return reviewAdminDetailSchema.parse({
     reviewId: row.review.id,
@@ -458,6 +462,7 @@ async function getAdminReviewDetail(
     versions: versions.map(toReviewVersion),
     replyVersions: replyVersions.map(toReviewReplyVersion),
     moderationCase: moderationCase ? toModerationCaseSummary(moderationCase) : null,
+    auditTrail: auditTrail.map(toReviewAdminAuditEntry),
     auditCursor: null
   });
 }
@@ -538,6 +543,28 @@ async function readLatestModerationCase(
     .orderBy(desc(reviewModerationCases.openedAt), desc(reviewModerationCases.id))
     .limit(1);
   return row ?? null;
+}
+
+async function readReviewAuditTrail(
+  database: ElevenHouseDatabase,
+  reviewId: string
+): Promise<readonly AuditLogEntryRow[]> {
+  return database
+    .select()
+    .from(auditLogEntries)
+    .where(and(eq(auditLogEntries.targetType, "review"), eq(auditLogEntries.targetId, reviewId)))
+    .orderBy(desc(auditLogEntries.occurredAt), desc(auditLogEntries.id))
+    .limit(100);
+}
+
+function toReviewAdminAuditEntry(row: AuditLogEntryRow): ReviewAdminAuditEntry {
+  return {
+    id: row.id,
+    actorUserId: row.actorUserId,
+    action: row.action,
+    occurredAt: row.occurredAt.toISOString(),
+    metadata: row.metadata as Record<string, unknown>
+  };
 }
 
 function toPublicReviewItem(row: PublicReviewRow): ReviewPublicItem {

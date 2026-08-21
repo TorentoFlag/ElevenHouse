@@ -248,6 +248,15 @@ describe.sequential("Drizzle review read store", () => {
         expect.objectContaining({ id: fixture.pendingEditVersionId, moderationStatus: "pending" })
       ],
       moderationCase: null,
+      auditTrail: expect.arrayContaining([
+        expect.objectContaining({
+          actorUserId: fixture.moderatorUserId,
+          action: "review.version.approved",
+          metadata: expect.objectContaining({
+            versionId: fixture.firstVersionId
+          })
+        })
+      ]),
       auditCursor: null
     });
   });

@@ -22,8 +22,10 @@ describe("AdminReviewsPage", () => {
     expect(screen.getAllByText("60 минут · заказ #EH-100").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Модератор")).toBeInTheDocument();
     expect(screen.getAllByText("Клиент и астролог").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Спор открыт")).toBeInTheDocument();
     expect(screen.queryByText("moderator")).not.toBeInTheDocument();
     expect(screen.queryByText("all_case_participants")).not.toBeInTheDocument();
+    expect(screen.queryByText("review.dispute.opened")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Кому видно сообщение"), {
       target: { value: "client_and_moderators" }
@@ -136,6 +138,17 @@ function reviewDetail(): ReviewAdminDetail {
       closedAt: null,
       reasonCode: "fraud_or_conflict"
     },
+    auditTrail: [
+      {
+        id: "10000000-0000-4000-8000-000000000401",
+        actorUserId: "10000000-0000-4000-8000-000000000402",
+        action: "review.dispute.opened",
+        occurredAt: "2026-08-20T12:00:00.000Z",
+        metadata: {
+          caseId: "10000000-0000-4000-8000-000000000301"
+        }
+      }
+    ],
     auditCursor: null
   };
 }

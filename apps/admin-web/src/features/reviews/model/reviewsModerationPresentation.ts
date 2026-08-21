@@ -121,6 +121,31 @@ export function caseMessageVisibilityLabel(
   }
 }
 
+export function auditActionLabel(action: string): string {
+  switch (action) {
+    case "review.version.approved":
+      return "Отзыв одобрен";
+    case "review.version.rejected":
+      return "Отзыв отклонён";
+    case "review.reply_version.approved":
+      return "Ответ одобрен";
+    case "review.reply_version.rejected":
+      return "Ответ отклонён";
+    case "review.dispute.opened":
+      return "Спор открыт";
+    case "review.dispute.restored":
+      return "Публикация восстановлена";
+    case "review.moderation_hidden":
+      return "Отзыв скрыт модерацией";
+    case "review.moderation_case.status_updated":
+      return "Статус спора обновлён";
+    case "review.moderation_case.message_created":
+      return "Сообщение по спору добавлено";
+    default:
+      return action;
+  }
+}
+
 export function visibilityLabel(status: ReviewVisibilityStatus): string {
   switch (status) {
     case "visible":

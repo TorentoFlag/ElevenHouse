@@ -656,6 +656,7 @@ function adminReviewDetail(
       }
     ],
     moderationCase: null,
+    auditTrail: [],
     auditCursor: null
   };
 }
