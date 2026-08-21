@@ -392,7 +392,13 @@ function ReviewDetail({
                   })
                 }
               />
-              Опубликовать анонимно
+              <span>
+                Опубликовать анонимно
+                <small>
+                  Астролог и публичная страница увидят “Секретный пользователь”. Модераторы
+                  ElevenHouse всё равно видят автора для проверки и споров.
+                </small>
+              </span>
             </label>
             <div className={styles.formActions}>
               <button

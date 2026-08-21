@@ -236,10 +236,22 @@
 
 .checkboxRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--eh-space-9);
   color: var(--eh-color-moon-120);
   font-size: var(--eh-font-size-14);
+}
+
+.checkboxRow span {
+  display: grid;
+  gap: var(--eh-space-4);
+}
+
+.checkboxRow small {
+  color: var(--eh-color-muted);
+  font-size: var(--eh-font-size-12);
+  font-weight: var(--eh-font-weight-regular);
+  line-height: var(--eh-line-height-140);
 }
 
 .primaryButton,

@@ -34,10 +34,14 @@ describe("ClientReviewsPage", () => {
 
     renderPage();
     expect(await screen.findByText("Прогностика на месяц")).toBeVisible();
-    fireEvent.change(await screen.findByRole("textbox", { name: "Текст отзыва" }), {
+    const reviewTextInput = await screen.findByRole("textbox", { name: "Текст отзыва" });
+    expect(
+      screen.getByText(/Астролог и публичная страница увидят “Секретный пользователь”/)
+    ).toBeVisible();
+    fireEvent.change(reviewTextInput, {
       target: { value: "Очень точная консультация" }
     });
-    fireEvent.click(screen.getByLabelText("Опубликовать анонимно"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Опубликовать анонимно/ }));
     fireEvent.click(screen.getByRole("button", { name: /Отправить на модерацию/ }));
 
     await waitFor(() =>
