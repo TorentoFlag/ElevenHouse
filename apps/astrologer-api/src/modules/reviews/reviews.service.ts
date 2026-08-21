@@ -20,12 +20,15 @@ import {
   reviewModerationDecisionSchema,
   reviewRequestCreateSchema,
   reviewRequestDeliveryResponseSchema,
+  reviewRequestTargetListQuerySchema,
+  reviewRequestTargetListResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewRequestDeliveryResponse,
+  type ReviewRequestTargetListResponse,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
 import type {
@@ -106,7 +109,10 @@ export class AstrologerReviewsService {
     @Inject(ASTROLOGER_REVIEWS_READ_STORE)
     private readonly readStore: Pick<
       ReviewReadStore,
-      "listAstrologerReviews" | "getModerationCaseDetail" | "getClientReviewDetail"
+      | "listAstrologerReviews"
+      | "listReviewRequestTargets"
+      | "getModerationCaseDetail"
+      | "getClientReviewDetail"
     >,
     @Inject(ASTROLOGER_REVIEWS_COMMAND_STORE)
     private readonly commandStore: AstrologerReviewCommandStore,
@@ -125,6 +131,16 @@ export class AstrologerReviewsService {
     const normalized = normalizeAstrologerReviewsQuery(astrologerUserId, query);
     return reviewAstrologerListResponseSchema.parse(
       await this.readStore.listAstrologerReviews(normalized)
+    );
+  }
+
+  async listReviewRequestTargets(
+    astrologerUserId: string,
+    query: unknown
+  ): Promise<ReviewRequestTargetListResponse> {
+    const normalized = normalizeReviewRequestTargetsQuery(astrologerUserId, query);
+    return reviewRequestTargetListResponseSchema.parse(
+      await this.readStore.listReviewRequestTargets(normalized)
     );
   }
 
@@ -403,5 +419,18 @@ function normalizeAstrologerReviewsQuery(astrologerUserId: string, query: unknow
     cursor: typeof cursor === "string" && cursor.trim() !== "" ? cursor : null
   });
   if (!parsed.success) throw new BadRequestException("Invalid reviews query");
+  return parsed.data;
+}
+
+function normalizeReviewRequestTargetsQuery(astrologerUserId: string, query: unknown) {
+  const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
+  const limit = Array.isArray(input.limit) ? input.limit[0] : input.limit;
+  const cursor = Array.isArray(input.cursor) ? input.cursor[0] : input.cursor;
+  const parsed = reviewRequestTargetListQuerySchema.safeParse({
+    astrologerUserId: requireUuid(astrologerUserId),
+    limit: typeof limit === "string" && limit.trim() !== "" ? Number(limit) : undefined,
+    cursor: typeof cursor === "string" && cursor.trim() !== "" ? cursor : null
+  });
+  if (!parsed.success) throw new BadRequestException("Invalid review request targets query");
   return parsed.data;
 }

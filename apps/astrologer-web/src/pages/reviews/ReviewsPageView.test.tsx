@@ -9,15 +9,14 @@ import { ReviewsPageView } from "./ReviewsPageView";
 afterEach(cleanup);
 
 describe("ReviewsPageView", () => {
-  it("opens a manual request-review dialog without claiming an in-app send", () => {
+  it("opens a request-review dialog with real target and channel controls", () => {
     const onOpenRequestReview = vi.fn();
-    const onCopyRequestReview = vi.fn();
+    const onSendReviewRequest = vi.fn();
 
     const { rerender } = renderView({
       requestReviewOpen: false,
-      requestReviewCopied: false,
       onOpenRequestReview,
-      onCopyRequestReview
+      onSendReviewRequest
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Запросить отзыв" }));
@@ -26,19 +25,16 @@ describe("ReviewsPageView", () => {
     rerender(
       renderViewElement({
         requestReviewOpen: true,
-        requestReviewCopied: true,
         onOpenRequestReview,
-        onCopyRequestReview
+        onSendReviewRequest
       })
     );
 
     expect(screen.getByRole("dialog")).toBeVisible();
-    expect(
-      screen.getByText(/ElevenHouse не помечает такой запрос как отправленный/)
-    ).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Скопировать текст" }));
-    expect(onCopyRequestReview).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Текст скопирован.")).toBeVisible();
+    expect(screen.getByLabelText("Клиент и услуга")).toHaveValue(reviewableInstanceId);
+    expect(screen.getByLabelText("Канал доставки")).toHaveValue(threadId);
+    fireEvent.click(screen.getByRole("button", { name: "Отправить запрос" }));
+    expect(onSendReviewRequest).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -49,9 +45,8 @@ function renderView(overrides: Partial<ReviewsPageViewPropsForTest> = {}) {
 function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {}) {
   const props: ReviewsPageViewPropsForTest = {
     requestReviewOpen: false,
-    requestReviewCopied: false,
     onOpenRequestReview: vi.fn(),
-    onCopyRequestReview: vi.fn(),
+    onSendReviewRequest: vi.fn(),
     ...overrides
   };
 
@@ -75,7 +70,15 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
       counts={{ all: 0, published: 0, pending: 0, hidden: 0 }}
       selectedFilter="all"
       requestReviewOpen={props.requestReviewOpen}
-      requestReviewCopied={props.requestReviewCopied}
+      requestReviewTargets={[reviewRequestTarget]}
+      requestReviewThreads={[messagingThread]}
+      selectedRequestTargetId={reviewableInstanceId}
+      selectedRequestThreadId={threadId}
+      requestReviewMessage="Пожалуйста, оставьте отзыв в ElevenHouse."
+      requestReviewLoading={false}
+      requestReviewError={false}
+      requestReviewPending={false}
+      requestReviewSent={false}
       replyTargetId={null}
       replyDrafts={{}}
       aiDraftStates={{}}
@@ -91,7 +94,10 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
       onRefresh={vi.fn()}
       onOpenRequestReview={props.onOpenRequestReview}
       onCloseRequestReview={vi.fn()}
-      onCopyRequestReview={props.onCopyRequestReview}
+      onRequestTargetChange={vi.fn()}
+      onRequestThreadChange={vi.fn()}
+      onRequestMessageChange={vi.fn()}
+      onSendReviewRequest={props.onSendReviewRequest}
       onStartReply={vi.fn()}
       onCancelReply={vi.fn()}
       onStartDispute={vi.fn()}
@@ -109,10 +115,13 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
 
 type ReviewsPageViewPropsForTest = {
   readonly requestReviewOpen: boolean;
-  readonly requestReviewCopied: boolean;
   readonly onOpenRequestReview: () => void;
-  readonly onCopyRequestReview: () => void;
+  readonly onSendReviewRequest: () => void;
 };
+
+const reviewableInstanceId = "21111111-1111-4111-8111-111111111111";
+const clientUserId = "b1111111-1111-4111-8111-111111111111";
+const threadId = "91111111-1111-4111-8111-111111111111";
 
 const copy = {
   documentTitle: "ElevenHouse | Отзывы",
@@ -122,11 +131,18 @@ const copy = {
   requestReview: {
     title: "Запросить отзыв",
     description:
-      "Подготовьте текст запроса и отправьте клиенту в вашем рабочем канале. ElevenHouse не помечает такой запрос как отправленный, пока production messaging flow не подключен.",
+      "Выберите услугу и рабочий канал клиента. Запрос уйдёт обычным сообщением и попадёт в очередь доставки.",
+    targetLabel: "Клиент и услуга",
+    threadLabel: "Канал доставки",
     messageLabel: "Текст запроса",
     defaultMessage: "Пожалуйста, оставьте отзыв в ElevenHouse.",
-    copyLabel: "Скопировать текст",
-    copiedLabel: "Текст скопирован.",
+    sendLabel: "Отправить запрос",
+    sendingLabel: "Отправляем...",
+    sentLabel: "Запрос поставлен в очередь доставки.",
+    loadingLabel: "Загружаем клиентов и каналы",
+    errorLabel: "Не удалось загрузить услуги или каналы.",
+    emptyTargetsLabel: "Нет услуг, по которым сейчас можно запросить отзыв.",
+    emptyThreadsLabel: "Нет связанного открытого канала для этого клиента.",
     closeLabel: "Закрыть"
   },
   loadingLabel: "Загружаем отзывы",
@@ -199,3 +215,48 @@ const copy = {
   },
   commandError: "Команду не удалось выполнить."
 } satisfies ReviewsPageCopy;
+
+const reviewRequestTarget = {
+  reviewableInstance: {
+    id: reviewableInstanceId,
+    kind: "booking",
+    status: "reviewable",
+    title: "Натальный разбор",
+    contextLabel: "Сессия завершена",
+    receivedAt: "2026-08-20T09:00:00.000Z",
+    reviewWindowClosesAt: "2026-09-03T09:00:00.000Z",
+    windowPolicy: "standard_14_days_after_receipt"
+  },
+  client: {
+    clientUserId,
+    displayName: "Марина К.",
+    initials: "МК",
+    avatarUrl: null
+  }
+} as const;
+
+const messagingThread = {
+  id: threadId,
+  clientUserId,
+  linkedClient: { userId: clientUserId, displayName: "Марина К.", birthDate: null },
+  status: "open",
+  primaryIdentity: {
+    id: "a1111111-1111-4111-8111-111111111111",
+    channelConnectionId: "c1111111-1111-4111-8111-111111111111",
+    provider: "telegram",
+    providerUserId: null,
+    providerChatId: "123",
+    username: "marina",
+    displayName: "Марина",
+    avatarMediaId: null,
+    linkedClientUserId: clientUserId,
+    linkStatus: "linked",
+    firstSeenAt: "2026-08-20T09:00:00.000Z",
+    lastSeenAt: "2026-08-20T09:00:00.000Z"
+  },
+  lastMessage: null,
+  lastMessageAt: null,
+  unreadCount: 0,
+  createdAt: "2026-08-20T09:00:00.000Z",
+  updatedAt: "2026-08-20T09:00:00.000Z"
+} as const;

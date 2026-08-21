@@ -3,6 +3,8 @@ import type {
   ReviewAstrologerListResponse,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
+  ReviewRequestDeliveryResponse,
+  ReviewRequestTargetListResponse,
   ReviewReplyVersion
 } from "@elevenhouse/contracts";
 import { keepPreviousData, type QueryClient } from "@tanstack/react-query";
@@ -11,12 +13,16 @@ import {
   createReviewReplyAiDraft,
   getAstrologerReviewModerationCaseDetail,
   listAstrologerReviews,
+  listReviewRequestTargets,
   openReviewDispute,
+  requestReview,
   submitReviewReplyVersion,
   type CreateAstrologerReviewCaseMessageInput,
   type CreateReviewReplyAiDraftInput,
   type ListAstrologerReviewsInput,
+  type ListReviewRequestTargetsInput,
   type OpenReviewDisputeInput,
+  type RequestReviewInput,
   type SubmitReviewReplyVersionInput
 } from "../api/reviewsApi";
 
@@ -24,6 +30,8 @@ export const reviewsQueryKeys = {
   all: () => ["reviews"] as const,
   astrologerList: (input: ListAstrologerReviewsInput) =>
     ["reviews", "astrologer-list", input] as const,
+  requestTargets: (input: ListReviewRequestTargetsInput) =>
+    ["reviews", "request-targets", input] as const,
   moderationCase: (caseId: string) => ["reviews", "moderation-case", caseId] as const
 };
 
@@ -31,6 +39,14 @@ export function astrologerReviewsListQueryOptions(input: ListAstrologerReviewsIn
   return {
     queryKey: reviewsQueryKeys.astrologerList(input),
     queryFn: (): Promise<ReviewAstrologerListResponse> => listAstrologerReviews(input),
+    placeholderData: keepPreviousData
+  };
+}
+
+export function reviewRequestTargetsQueryOptions(input: ListReviewRequestTargetsInput) {
+  return {
+    queryKey: reviewsQueryKeys.requestTargets(input),
+    queryFn: (): Promise<ReviewRequestTargetListResponse> => listReviewRequestTargets(input),
     placeholderData: keepPreviousData
   };
 }
@@ -49,6 +65,17 @@ export function createReviewReplyAiDraftMutationOptions() {
   return {
     mutationFn: (input: CreateReviewReplyAiDraftInput): Promise<CreateReviewReplyAiDraftResponse> =>
       createReviewReplyAiDraft(input)
+  };
+}
+
+export function requestReviewMutationOptions(queryClient: Pick<QueryClient, "invalidateQueries">) {
+  return {
+    mutationFn: (input: RequestReviewInput): Promise<ReviewRequestDeliveryResponse> =>
+      requestReview(input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: reviewsQueryKeys.requestTargets({ limit: 50, cursor: null })
+      })
   };
 }
 

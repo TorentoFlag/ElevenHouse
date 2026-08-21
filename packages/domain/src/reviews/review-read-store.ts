@@ -8,6 +8,8 @@ import type {
   ReviewModerationCaseDetail,
   ReviewModerationQueueQuery,
   ReviewModerationQueueResponse,
+  ReviewRequestTargetListQuery,
+  ReviewRequestTargetListResponse,
   ReviewPublicListQuery,
   ReviewPublicListResponse
 } from "@elevenhouse/contracts";
@@ -22,6 +24,9 @@ export type ReviewReadStore = {
   readonly listAstrologerReviews: (
     query: ReviewAstrologerListQuery
   ) => Promise<ReviewAstrologerListResponse>;
+  readonly listReviewRequestTargets: (
+    query: ReviewRequestTargetListQuery
+  ) => Promise<ReviewRequestTargetListResponse>;
   readonly listModerationQueue: (
     query: ReviewModerationQueueQuery
   ) => Promise<ReviewModerationQueueResponse>;

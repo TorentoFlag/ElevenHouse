@@ -4,6 +4,7 @@ import {
   createReviewReplyAiDraft,
   getAstrologerReviewModerationCaseDetail,
   listAstrologerReviews,
+  listReviewRequestTargets,
   openReviewDispute,
   requestReview,
   submitReviewReplyVersion
@@ -29,6 +30,15 @@ describe("reviewsApi", () => {
       reviewListResponse
     );
     expect(get).toHaveBeenCalledWith("/reviews?limit=20");
+  });
+
+  it("loads review request targets through the shared target contract", async () => {
+    get.mockResolvedValueOnce(reviewRequestTargetList);
+
+    await expect(listReviewRequestTargets({ limit: 20, cursor: null })).resolves.toEqual(
+      reviewRequestTargetList
+    );
+    expect(get).toHaveBeenCalledWith("/reviews/request-targets?limit=20");
   });
 
   it("submits astrologer replies for moderation with CSRF and idempotency", async () => {
@@ -247,4 +257,28 @@ const reviewRequestDelivery = {
   status: "queued",
   createdAt: "2026-08-21T09:06:00.000Z",
   replayed: false
+} as const;
+
+const reviewRequestTargetList = {
+  items: [
+    {
+      reviewableInstance: {
+        id: reviewableInstanceId,
+        kind: "booking",
+        status: "reviewable",
+        title: "Натальный разбор",
+        contextLabel: "Сессия завершена",
+        receivedAt: "2026-08-20T09:00:00.000Z",
+        reviewWindowClosesAt: "2026-09-03T09:00:00.000Z",
+        windowPolicy: "standard_14_days_after_receipt"
+      },
+      client: {
+        clientUserId: "b1111111-1111-4111-8111-111111111111",
+        displayName: "Марина К.",
+        initials: "МК",
+        avatarUrl: null
+      }
+    }
+  ],
+  nextCursor: null
 } as const;

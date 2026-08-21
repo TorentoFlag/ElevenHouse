@@ -8,6 +8,8 @@ import {
   reviewModerationCaseDetailSchema,
   reviewModerationQueueQuerySchema,
   reviewModerationQueueResponseSchema,
+  reviewRequestTargetListQuerySchema,
+  reviewRequestTargetListResponseSchema,
   reviewPublicListQuerySchema,
   reviewPublicListResponseSchema,
   type ReviewAdminAuthor,
@@ -18,6 +20,7 @@ import {
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseSummary,
   type ReviewModerationQueueItem,
+  type ReviewRequestTarget,
   type ReviewPublicItem,
   type ReviewPublicIdentityMode,
   type ReviewPublicListQuery,
@@ -26,7 +29,20 @@ import {
   type ReviewableInstanceSummary
 } from "@elevenhouse/contracts";
 import { buildReviewPublicAuthor, type ReviewReadStore } from "@elevenhouse/domain";
-import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL
+} from "drizzle-orm";
 
 import type { ElevenHouseDatabase } from "../../runtime";
 import {
@@ -69,6 +85,10 @@ type ClientReviewableInstanceCursor = {
   readonly receivedAt: string;
   readonly reviewableInstanceId: string;
 };
+type ReviewRequestTargetCursor = {
+  readonly receivedAt: string;
+  readonly reviewableInstanceId: string;
+};
 type AstrologerReviewCursor = {
   readonly updatedAt: string;
   readonly reviewId: string;
@@ -77,6 +97,7 @@ type AstrologerReviewCursor = {
 const publicCursorVersion = "reviews_public_v1";
 const moderationQueueCursorVersion = "reviews_moderation_queue_v1";
 const clientReviewableInstanceCursorVersion = "reviews_client_instances_v1";
+const reviewRequestTargetCursorVersion = "reviews_request_targets_v1";
 const astrologerReviewCursorVersion = "reviews_astrologer_v1";
 
 export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): ReviewReadStore {
@@ -84,6 +105,7 @@ export function createDrizzleReviewReadStore(database: ElevenHouseDatabase): Rev
     listPublicReviews: (query) => listPublicReviews(database, query),
     listClientReviewableInstances: (query) => listClientReviewableInstances(database, query),
     listAstrologerReviews: (query) => listAstrologerReviews(database, query),
+    listReviewRequestTargets: (query) => listReviewRequestTargets(database, query),
     listModerationQueue: (query) => listModerationQueue(database, query),
     getClientReviewDetail: (input) => getClientReviewDetail(database, input),
     getAdminReviewDetail: (input) => getAdminReviewDetail(database, input),
@@ -326,6 +348,58 @@ async function listClientReviewableInstances(
         ? encodeClientReviewableInstanceCursor({
             receivedAt: last.receivedAt.toISOString(),
             reviewableInstanceId: last.id
+          })
+        : null
+  });
+}
+
+async function listReviewRequestTargets(
+  database: ElevenHouseDatabase,
+  input: Parameters<ReviewReadStore["listReviewRequestTargets"]>[0]
+): Promise<Awaited<ReturnType<ReviewReadStore["listReviewRequestTargets"]>>> {
+  const query = reviewRequestTargetListQuerySchema.parse(input);
+  const cursor = query.cursor ? parseReviewRequestTargetCursor(query.cursor) : null;
+  if (query.cursor && !cursor) return { items: [], nextCursor: null };
+
+  const conditions: SQL[] = [
+    eq(reviewableInstances.astrologerUserId, query.astrologerUserId),
+    eq(reviewableInstances.status, "reviewable"),
+    gt(reviewableInstances.reviewWindowClosesAt, new Date()),
+    isNull(reviews.id)
+  ];
+  if (cursor) {
+    const receivedAt = new Date(cursor.receivedAt);
+    const cursorCondition = or(
+      lt(reviewableInstances.receivedAt, receivedAt),
+      and(
+        eq(reviewableInstances.receivedAt, receivedAt),
+        lt(reviewableInstances.id, cursor.reviewableInstanceId)
+      )
+    );
+    if (cursorCondition) conditions.push(cursorCondition);
+  }
+
+  const rows = await database
+    .select({
+      reviewableInstance: reviewableInstances,
+      clientProfile: userProfiles
+    })
+    .from(reviewableInstances)
+    .leftJoin(reviews, eq(reviews.reviewableInstanceId, reviewableInstances.id))
+    .leftJoin(userProfiles, eq(userProfiles.userId, reviewableInstances.clientUserId))
+    .where(and(...conditions))
+    .orderBy(desc(reviewableInstances.receivedAt), desc(reviewableInstances.id))
+    .limit(query.limit + 1);
+
+  const pageRows = rows.slice(0, query.limit);
+  const last = pageRows.at(-1) ?? null;
+  return reviewRequestTargetListResponseSchema.parse({
+    items: pageRows.map(toReviewRequestTarget),
+    nextCursor:
+      rows.length > query.limit && last
+        ? encodeReviewRequestTargetCursor({
+            receivedAt: last.reviewableInstance.receivedAt.toISOString(),
+            reviewableInstanceId: last.reviewableInstance.id
           })
         : null
   });
@@ -664,6 +738,16 @@ function toReviewableInstanceSummary(row: ReviewableInstanceRow): ReviewableInst
   };
 }
 
+function toReviewRequestTarget(row: {
+  readonly reviewableInstance: ReviewableInstanceRow;
+  readonly clientProfile: UserProfileRow | null;
+}): ReviewRequestTarget {
+  return {
+    reviewableInstance: toReviewableInstanceSummary(row.reviewableInstance),
+    client: toAdminAuthor(row.reviewableInstance.clientUserId, row.clientProfile)
+  };
+}
+
 function resolveReviewableInstanceSummaryStatus(
   row: ReviewableInstanceRow
 ): ReviewableInstanceSummary["status"] {
@@ -897,6 +981,25 @@ function parseClientReviewableInstanceCursor(value: string): ClientReviewableIns
       return null;
     }
     if (Number.isNaN(Date.parse(parsed.receivedAt))) return null;
+    return {
+      receivedAt: parsed.receivedAt,
+      reviewableInstanceId: parsed.reviewableInstanceId
+    };
+  } catch {
+    return null;
+  }
+}
+
+function encodeReviewRequestTargetCursor(cursor: ReviewRequestTargetCursor): string {
+  return `${reviewRequestTargetCursorVersion}.${Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")}`;
+}
+
+function parseReviewRequestTargetCursor(value: string): ReviewRequestTargetCursor | null {
+  const [version, payload] = value.split(".", 2);
+  if (version !== reviewRequestTargetCursorVersion || !payload) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<ReviewRequestTargetCursor>;
+    if (typeof parsed.receivedAt !== "string" || typeof parsed.reviewableInstanceId !== "string") return null;
     return {
       receivedAt: parsed.receivedAt,
       reviewableInstanceId: parsed.reviewableInstanceId

@@ -1,4 +1,4 @@
-import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
+import type { MessagingThread, ReviewAstrologerItem, ReviewRequestTarget } from "@elevenhouse/contracts";
 import type { SupportedLocale } from "@elevenhouse/i18n";
 import { Icon } from "@elevenhouse/design-system/icons/Icon";
 import type { AiDraftState, DisputeDraft, ReviewCaseState } from "./ReviewsPage";
@@ -8,6 +8,7 @@ import type {
 } from "../../features/reviews/model/reviewsPresentation";
 import type { ReviewsPageCopy } from "./ReviewsPage";
 import { ReviewCard } from "./ReviewCard";
+import { ReviewRequestDialog } from "./ReviewRequestDialog";
 import { ReviewsSummaryPanel } from "./ReviewsSummaryPanel";
 import styles from "./ReviewsPage.module.css";
 
@@ -19,7 +20,15 @@ export type ReviewsPageViewProps = {
   readonly counts: Record<AstrologerReviewFilter, number>;
   readonly selectedFilter: AstrologerReviewFilter;
   readonly requestReviewOpen: boolean;
-  readonly requestReviewCopied: boolean;
+  readonly requestReviewTargets: readonly ReviewRequestTarget[];
+  readonly requestReviewThreads: readonly MessagingThread[];
+  readonly selectedRequestTargetId: string;
+  readonly selectedRequestThreadId: string;
+  readonly requestReviewMessage: string;
+  readonly requestReviewLoading: boolean;
+  readonly requestReviewError: boolean;
+  readonly requestReviewPending: boolean;
+  readonly requestReviewSent: boolean;
   readonly replyTargetId: string | null;
   readonly replyDrafts: Record<string, string>;
   readonly aiDraftStates: Record<string, AiDraftState>;
@@ -35,7 +44,10 @@ export type ReviewsPageViewProps = {
   readonly onRefresh: () => void;
   readonly onOpenRequestReview: () => void;
   readonly onCloseRequestReview: () => void;
-  readonly onCopyRequestReview: () => void;
+  readonly onRequestTargetChange: (reviewableInstanceId: string) => void;
+  readonly onRequestThreadChange: (threadId: string) => void;
+  readonly onRequestMessageChange: (message: string) => void;
+  readonly onSendReviewRequest: () => void;
   readonly onStartReply: (review: ReviewAstrologerItem) => void;
   readonly onCancelReply: () => void;
   readonly onStartDispute: (review: ReviewAstrologerItem) => void;
@@ -59,7 +71,15 @@ export function ReviewsPageView({
   counts,
   selectedFilter,
   requestReviewOpen,
-  requestReviewCopied,
+  requestReviewTargets,
+  requestReviewThreads,
+  selectedRequestTargetId,
+  selectedRequestThreadId,
+  requestReviewMessage,
+  requestReviewLoading,
+  requestReviewError,
+  requestReviewPending,
+  requestReviewSent,
   replyTargetId,
   replyDrafts,
   aiDraftStates,
@@ -75,7 +95,10 @@ export function ReviewsPageView({
   onRefresh,
   onOpenRequestReview,
   onCloseRequestReview,
-  onCopyRequestReview,
+  onRequestTargetChange,
+  onRequestThreadChange,
+  onRequestMessageChange,
+  onSendReviewRequest,
   onStartReply,
   onCancelReply,
   onStartDispute,
@@ -126,9 +149,20 @@ export function ReviewsPageView({
       {requestReviewOpen ? (
         <ReviewRequestDialog
           copy={copy}
-          copied={requestReviewCopied}
+          targets={requestReviewTargets}
+          threads={requestReviewThreads}
+          selectedTargetId={selectedRequestTargetId}
+          selectedThreadId={selectedRequestThreadId}
+          message={requestReviewMessage}
+          loading={requestReviewLoading}
+          error={requestReviewError}
+          pending={requestReviewPending}
+          sent={requestReviewSent}
           onClose={onCloseRequestReview}
-          onCopy={onCopyRequestReview}
+          onTargetChange={onRequestTargetChange}
+          onThreadChange={onRequestThreadChange}
+          onMessageChange={onRequestMessageChange}
+          onSend={onSendReviewRequest}
         />
       ) : null}
 
@@ -193,49 +227,5 @@ export function ReviewsPageView({
         ) : null}
       </div>
     </section>
-  );
-}
-
-function ReviewRequestDialog({
-  copy,
-  copied,
-  onClose,
-  onCopy
-}: {
-  readonly copy: ReviewsPageCopy;
-  readonly copied: boolean;
-  readonly onClose: () => void;
-  readonly onCopy: () => void;
-}) {
-  return (
-    <div className={styles.modalBackdrop} role="presentation">
-      <section className={styles.requestDialog} role="dialog" aria-modal="true">
-        <header className={styles.requestDialogHeader}>
-          <div>
-            <h2>{copy.requestReview.title}</h2>
-            <p>{copy.requestReview.description}</p>
-          </div>
-          <button type="button" className={styles.quietButton} onClick={onClose}>
-            {copy.requestReview.closeLabel}
-          </button>
-        </header>
-        <label className={styles.formField}>
-          <span>{copy.requestReview.messageLabel}</span>
-          <textarea
-            className={styles.replyInput}
-            readOnly
-            rows={5}
-            value={copy.requestReview.defaultMessage}
-          />
-        </label>
-        <div className={styles.replyActions}>
-          <button type="button" className={styles.primaryButton} onClick={onCopy}>
-            <Icon iconName="doc" size={15} aria-hidden="true" />
-            {copy.requestReview.copyLabel}
-          </button>
-          {copied ? <p className={styles.pendingNote}>{copy.requestReview.copiedLabel}</p> : null}
-        </div>
-      </section>
-    </div>
   );
 }

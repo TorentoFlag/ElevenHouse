@@ -1,6 +1,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
+  MessagingThread,
   ReviewAstrologerItem,
   ReviewModerationCaseDetail,
   ReviewModerationReasonCode
@@ -9,8 +10,10 @@ import { useI18n, type SupportedLocale } from "@elevenhouse/i18n";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import {
   astrologerReviewModerationCaseQueryOptions,
-  astrologerReviewsListQueryOptions
+  astrologerReviewsListQueryOptions,
+  reviewRequestTargetsQueryOptions
 } from "../../features/reviews/model/reviewsQueryOptions";
+import { listMessagingThreadsQueryOptions } from "../../features/messaging/model/messagingQueries";
 import {
   type AstrologerReviewFilter,
   buildAstrologerReviewsSummary,
@@ -21,6 +24,7 @@ import {
   useCreateAstrologerReviewCaseMessageMutation,
   useCreateReviewReplyAiDraftMutation,
   useOpenReviewDisputeMutation,
+  useRequestReviewMutation,
   useSubmitReviewReplyVersionMutation
 } from "../../features/reviews/model/useReviewsMutations";
 import { ReviewsPageView } from "./ReviewsPageView";
@@ -32,7 +36,10 @@ export function ReviewsPage() {
   const copy = reviewsCopyByLocale[locale];
   const [filter, setFilter] = useState<AstrologerReviewFilter>("all");
   const [requestReviewOpen, setRequestReviewOpen] = useState(false);
-  const [requestReviewCopied, setRequestReviewCopied] = useState(false);
+  const [selectedRequestTargetId, setSelectedRequestTargetId] = useState("");
+  const [selectedRequestThreadId, setSelectedRequestThreadId] = useState("");
+  const [requestReviewMessage, setRequestReviewMessage] = useState(copy.requestReview.defaultMessage);
+  const [requestReviewSent, setRequestReviewSent] = useState(false);
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [aiDraftStates, setAiDraftStates] = useState<Record<string, AiDraftState>>({});
@@ -42,11 +49,37 @@ export function ReviewsPage() {
   const reviewsQuery = useQuery(
     astrologerReviewsListQueryOptions({ limit: pageSize, cursor: null })
   );
+  const requestTargetsQuery = useQuery({
+    ...reviewRequestTargetsQueryOptions({ limit: 50, cursor: null }),
+    enabled: requestReviewOpen
+  });
+  const messagingThreadsQuery = useQuery({
+    ...listMessagingThreadsQueryOptions({ limit: 100, offset: 0 }),
+    enabled: requestReviewOpen
+  });
   const submitReplyMutation = useSubmitReviewReplyVersionMutation();
   const aiDraftMutation = useCreateReviewReplyAiDraftMutation();
   const disputeMutation = useOpenReviewDisputeMutation();
   const caseMessageMutation = useCreateAstrologerReviewCaseMessageMutation();
+  const requestReviewMutation = useRequestReviewMutation();
   const reviews = reviewsQuery.data?.items ?? [];
+  const requestTargets = requestTargetsQuery.data?.items ?? [];
+  const requestThreads = useMemo(
+    () => filterRequestReviewThreads(messagingThreadsQuery.data?.threads ?? []),
+    [messagingThreadsQuery.data?.threads]
+  );
+  const selectedRequestTarget =
+    requestTargets.find((target) => target.reviewableInstance.id === selectedRequestTargetId) ??
+    null;
+  const selectedTargetThreads = useMemo(
+    () =>
+      selectedRequestTarget
+        ? requestThreads.filter(
+            (thread) => thread.clientUserId === selectedRequestTarget.client.clientUserId
+          )
+        : [],
+    [requestThreads, selectedRequestTarget]
+  );
   const visibleReviews = filterAstrologerReviews(reviews, filter);
   const reviewsWithCases = visibleReviews.filter((review) => review.moderationCase);
   const caseQueries = useQueries({
@@ -59,9 +92,21 @@ export function ReviewsPage() {
     submitReplyMutation.error ??
     aiDraftMutation.error ??
     disputeMutation.error ??
-    caseMessageMutation.error;
+    caseMessageMutation.error ??
+    requestReviewMutation.error;
 
   useDocumentTitle(copy.documentTitle);
+
+  useEffect(() => {
+    if (!requestReviewOpen || selectedRequestTargetId || requestTargets.length === 0) return;
+    setSelectedRequestTargetId(requestTargets[0]!.reviewableInstance.id);
+  }, [requestReviewOpen, requestTargets, selectedRequestTargetId]);
+
+  useEffect(() => {
+    if (!requestReviewOpen) return;
+    if (selectedTargetThreads.some((thread) => thread.id === selectedRequestThreadId)) return;
+    setSelectedRequestThreadId(selectedTargetThreads[0]?.id ?? "");
+  }, [requestReviewOpen, selectedRequestThreadId, selectedTargetThreads]);
 
   async function handleCreateAiDraft(review: ReviewAstrologerItem) {
     setAiDraftStates((current) => ({ ...current, [review.reviewId]: { status: "loading" } }));
@@ -134,10 +179,20 @@ export function ReviewsPage() {
     setCaseMessageDrafts((current) => ({ ...current, [caseId]: "" }));
   }
 
-  async function handleCopyReviewRequest() {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    await navigator.clipboard.writeText(copy.requestReview.defaultMessage);
-    setRequestReviewCopied(true);
+  async function handleSendReviewRequest() {
+    const selectedTarget = selectedRequestTarget;
+    const text = requestReviewMessage.trim();
+    if (!selectedTarget || !selectedRequestThreadId || !text) return;
+
+    await requestReviewMutation.mutateAsync({
+      idempotencyKey: createCommandKey("reviews:request"),
+      body: {
+        reviewableInstanceId: selectedTarget.reviewableInstance.id,
+        threadId: selectedRequestThreadId,
+        text
+      }
+    });
+    setRequestReviewSent(true);
   }
 
   return (
@@ -149,7 +204,15 @@ export function ReviewsPage() {
       counts={countAstrologerReviewFilters(reviews)}
       selectedFilter={filter}
       requestReviewOpen={requestReviewOpen}
-      requestReviewCopied={requestReviewCopied}
+      requestReviewTargets={requestTargets}
+      requestReviewThreads={requestThreads}
+      selectedRequestTargetId={selectedRequestTargetId}
+      selectedRequestThreadId={selectedRequestThreadId}
+      requestReviewMessage={requestReviewMessage}
+      requestReviewLoading={requestTargetsQuery.isLoading || messagingThreadsQuery.isLoading}
+      requestReviewError={requestTargetsQuery.isError || messagingThreadsQuery.isError}
+      requestReviewPending={requestReviewMutation.isPending}
+      requestReviewSent={requestReviewSent}
       replyTargetId={replyTargetId}
       replyDrafts={replyDrafts}
       aiDraftStates={aiDraftStates}
@@ -163,18 +226,26 @@ export function ReviewsPage() {
         submitReplyMutation.isPending ||
         aiDraftMutation.isPending ||
         disputeMutation.isPending ||
-        caseMessageMutation.isPending
+        caseMessageMutation.isPending ||
+        requestReviewMutation.isPending
       }
       commandError={commandError ? copy.commandError : null}
       onFilterChange={setFilter}
       onRefresh={() => void reviewsQuery.refetch()}
       onOpenRequestReview={() => {
-        setRequestReviewCopied(false);
+        setRequestReviewMessage(copy.requestReview.defaultMessage);
+        setRequestReviewSent(false);
         setRequestReviewOpen(true);
       }}
       onCloseRequestReview={() => setRequestReviewOpen(false)}
-      onCopyRequestReview={() => {
-        void handleCopyReviewRequest();
+      onRequestTargetChange={(reviewableInstanceId) => {
+        setSelectedRequestTargetId(reviewableInstanceId);
+        setRequestReviewSent(false);
+      }}
+      onRequestThreadChange={setSelectedRequestThreadId}
+      onRequestMessageChange={(message) => {
+        setRequestReviewMessage(message);
+        setRequestReviewSent(false);
       }}
       onEditReply={(reviewId, value) =>
         setReplyDrafts((current) => ({ ...current, [reviewId]: value }))
@@ -213,7 +284,19 @@ export function ReviewsPage() {
       onSubmitCaseMessage={(review) => {
         void handleSubmitCaseMessage(review);
       }}
+      onSendReviewRequest={() => {
+        void handleSendReviewRequest();
+      }}
     />
+  );
+}
+
+function filterRequestReviewThreads(threads: readonly MessagingThread[]): readonly MessagingThread[] {
+  return threads.filter(
+    (thread) =>
+      thread.clientUserId !== null &&
+      thread.status === "open" &&
+      thread.primaryIdentity !== null
   );
 }
 
@@ -278,10 +361,17 @@ export type ReviewsPageCopy = {
   readonly requestReview: {
     readonly title: string;
     readonly description: string;
+    readonly targetLabel: string;
+    readonly threadLabel: string;
     readonly messageLabel: string;
     readonly defaultMessage: string;
-    readonly copyLabel: string;
-    readonly copiedLabel: string;
+    readonly sendLabel: string;
+    readonly sendingLabel: string;
+    readonly sentLabel: string;
+    readonly loadingLabel: string;
+    readonly errorLabel: string;
+    readonly emptyTargetsLabel: string;
+    readonly emptyThreadsLabel: string;
     readonly closeLabel: string;
   };
   readonly loadingLabel: string;
@@ -334,12 +424,19 @@ const reviewsCopyByLocale = {
     requestReview: {
       title: "Запросить отзыв",
       description:
-        "Подготовьте текст запроса и отправьте клиенту в вашем рабочем канале. ElevenHouse не помечает такой запрос как отправленный, пока production messaging flow не подключен.",
+        "Выберите услугу и рабочий канал клиента. Запрос уйдёт обычным сообщением и попадёт в очередь доставки.",
+      targetLabel: "Клиент и услуга",
+      threadLabel: "Канал доставки",
       messageLabel: "Текст запроса",
       defaultMessage:
         "Здравствуйте! Буду благодарна за отзыв в ElevenHouse. Если услуга уже получена, откройте кабинет и оставьте отзыв в разделе “Отзывы”.",
-      copyLabel: "Скопировать текст",
-      copiedLabel: "Текст скопирован.",
+      sendLabel: "Отправить запрос",
+      sendingLabel: "Отправляем...",
+      sentLabel: "Запрос поставлен в очередь доставки.",
+      loadingLabel: "Загружаем клиентов и каналы",
+      errorLabel: "Не удалось загрузить услуги или каналы.",
+      emptyTargetsLabel: "Нет услуг, по которым сейчас можно запросить отзыв.",
+      emptyThreadsLabel: "Нет связанного открытого канала для этого клиента.",
       closeLabel: "Закрыть"
     },
     loadingLabel: "Загружаем отзывы",
@@ -420,12 +517,19 @@ const reviewsCopyByLocale = {
     requestReview: {
       title: "Request review",
       description:
-        "Prepare the request text and send it to the client in your working channel. ElevenHouse does not mark this request as sent until the production messaging flow is connected.",
+        "Choose the service and the client's working channel. The request is sent as a regular message and queued for delivery.",
+      targetLabel: "Client and service",
+      threadLabel: "Delivery channel",
       messageLabel: "Request text",
       defaultMessage:
         "Hello! I would appreciate your review in ElevenHouse. If the service has already been received, open your cabinet and leave a review in the Reviews section.",
-      copyLabel: "Copy text",
-      copiedLabel: "Text copied.",
+      sendLabel: "Send request",
+      sendingLabel: "Sending...",
+      sentLabel: "Review request queued for delivery.",
+      loadingLabel: "Loading clients and channels",
+      errorLabel: "Could not load services or channels.",
+      emptyTargetsLabel: "There are no services that can be requested for review now.",
+      emptyThreadsLabel: "No linked open channel for this client.",
       closeLabel: "Close"
     },
     loadingLabel: "Loading reviews",

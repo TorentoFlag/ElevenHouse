@@ -533,6 +533,22 @@
   font-size: 12px;
 }
 
+.successText,
+.errorText {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.successText {
+  color: var(--reviews-green);
+}
+
+.errorText {
+  color: #ffb4a8;
+}
+
 .caseThread {
   display: grid;
   gap: 10px;

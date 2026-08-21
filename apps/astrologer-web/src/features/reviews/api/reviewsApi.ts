@@ -9,6 +9,8 @@ import {
   reviewModerationCaseMessageSchema,
   reviewRequestCreateSchema,
   reviewRequestDeliveryResponseSchema,
+  reviewRequestTargetListQuerySchema,
+  reviewRequestTargetListResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
   type CreateReviewReplyAiDraftRequest,
@@ -20,6 +22,7 @@ import {
   type ReviewModerationCaseMessageCreate,
   type ReviewRequestCreate,
   type ReviewRequestDeliveryResponse,
+  type ReviewRequestTargetListResponse,
   type ReviewReplySubmission,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
@@ -43,6 +46,27 @@ export async function listAstrologerReviews(
 
   return reviewAstrologerListResponseSchema.parse(
     await application.http.get(`/reviews?${searchParams.toString()}`)
+  );
+}
+
+const reviewRequestTargetsClientQuerySchema = reviewRequestTargetListQuerySchema.omit({
+  astrologerUserId: true
+});
+
+export type ListReviewRequestTargetsInput = Readonly<{
+  limit?: number;
+  cursor?: string | null;
+}>;
+
+export async function listReviewRequestTargets(
+  input: ListReviewRequestTargetsInput
+): Promise<ReviewRequestTargetListResponse> {
+  const query = reviewRequestTargetsClientQuerySchema.parse(input);
+  const searchParams = new URLSearchParams({ limit: String(query.limit) });
+  if (query.cursor) searchParams.set("cursor", query.cursor);
+
+  return reviewRequestTargetListResponseSchema.parse(
+    await application.http.get(`/reviews/request-targets?${searchParams.toString()}`)
   );
 }
 

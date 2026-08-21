@@ -332,6 +332,36 @@ export type ReviewRequestDeliveryResponse = z.infer<
   typeof reviewRequestDeliveryResponseSchema
 >;
 
+export const reviewRequestTargetSchema = z
+  .object({
+    reviewableInstance: reviewableInstanceSummarySchema,
+    client: reviewAdminAuthorSchema
+  })
+  .strict();
+export type ReviewRequestTarget = z.infer<typeof reviewRequestTargetSchema>;
+
+export const reviewRequestTargetListQuerySchema = z
+  .object({
+    astrologerUserId: uuidSchema,
+    limit: z.number().int().min(1).max(50).optional().default(20),
+    cursor: cursorSchema.nullish().default(null)
+  })
+  .strict();
+export type ReviewRequestTargetListQueryInput = z.input<
+  typeof reviewRequestTargetListQuerySchema
+>;
+export type ReviewRequestTargetListQuery = z.infer<typeof reviewRequestTargetListQuerySchema>;
+
+export const reviewRequestTargetListResponseSchema = z
+  .object({
+    items: z.array(reviewRequestTargetSchema).max(50),
+    nextCursor: cursorSchema.nullable()
+  })
+  .strict();
+export type ReviewRequestTargetListResponse = z.infer<
+  typeof reviewRequestTargetListResponseSchema
+>;
+
 export const reviewReplyVersionSchema = z
   .object({
     id: uuidSchema,

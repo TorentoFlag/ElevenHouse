@@ -3,6 +3,7 @@ import {
   createAstrologerReviewCaseMessageMutationOptions,
   createReviewReplyAiDraftMutationOptions,
   openReviewDisputeMutationOptions,
+  requestReviewMutationOptions,
   submitReviewReplyVersionMutationOptions
 } from "./reviewsQueryOptions";
 
@@ -12,6 +13,10 @@ export function useSubmitReviewReplyVersionMutation() {
 
 export function useCreateReviewReplyAiDraftMutation() {
   return useMutation(createReviewReplyAiDraftMutationOptions());
+}
+
+export function useRequestReviewMutation() {
+  return useMutation(requestReviewMutationOptions(useQueryClient()));
 }
 
 export function useOpenReviewDisputeMutation() {

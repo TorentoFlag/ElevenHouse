@@ -32,6 +32,7 @@ describe("astrologer reviews HTTP API", () => {
   let app: INestApplication;
   let baseUrl: string;
   let receivedReviewsRead: unknown;
+  let receivedReviewTargetsRead: unknown;
   let receivedCaseRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedReplyCommand: unknown;
@@ -50,6 +51,7 @@ describe("astrologer reviews HTTP API", () => {
 
   beforeEach(async () => {
     receivedReviewsRead = null;
+    receivedReviewTargetsRead = null;
     receivedCaseRead = null;
     receivedMessageCommand = null;
     receivedReplyCommand = null;
@@ -136,6 +138,32 @@ describe("astrologer reviews HTTP API", () => {
                 nextCursor: null
               };
             },
+            async listReviewRequestTargets(input) {
+              receivedReviewTargetsRead = input;
+              return {
+                items: [
+                  {
+                    reviewableInstance: {
+                      id: reviewableInstanceId,
+                      kind: "booking",
+                      status: "reviewable",
+                      title: "Солярная консультация",
+                      contextLabel: "60 минут",
+                      receivedAt: "2026-08-19T10:00:00.000Z",
+                      reviewWindowClosesAt: "2026-09-02T10:00:00.000Z",
+                      windowPolicy: "standard_14_days_after_receipt"
+                    },
+                    client: {
+                      clientUserId,
+                      displayName: "Марина Ковалёва",
+                      initials: "МК",
+                      avatarUrl: null
+                    }
+                  }
+                ],
+                nextCursor: null
+              };
+            },
             async getClientReviewDetail(input) {
               receivedReviewDetailRead = input;
               if (
@@ -190,7 +218,10 @@ describe("astrologer reviews HTTP API", () => {
             }
           } satisfies Pick<
             ReviewReadStore,
-            "listAstrologerReviews" | "getModerationCaseDetail" | "getClientReviewDetail"
+            | "listAstrologerReviews"
+            | "listReviewRequestTargets"
+            | "getModerationCaseDetail"
+            | "getClientReviewDetail"
           >
         },
         {
@@ -408,6 +439,33 @@ describe("astrologer reviews HTTP API", () => {
       nextCursor: null
     });
     expect(receivedReviewsRead).toEqual({
+      astrologerUserId,
+      limit: 10,
+      cursor: null
+    });
+  });
+
+  it("lists review request targets for the current astrologer", async () => {
+    const response = await fetch(`${baseUrl}/reviews/request-targets?limit=10`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      items: [
+        {
+          reviewableInstance: {
+            id: reviewableInstanceId,
+            title: "Солярная консультация"
+          },
+          client: {
+            clientUserId,
+            displayName: "Марина Ковалёва",
+            initials: "МК"
+          }
+        }
+      ],
+      nextCursor: null
+    });
+    expect(receivedReviewTargetsRead).toEqual({
       astrologerUserId,
       limit: 10,
       cursor: null

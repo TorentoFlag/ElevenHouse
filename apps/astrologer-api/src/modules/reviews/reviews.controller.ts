@@ -16,6 +16,7 @@ import type {
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
   ReviewRequestDeliveryResponse,
+  ReviewRequestTargetListResponse,
   ReviewReplyVersion
 } from "@elevenhouse/contracts";
 
@@ -37,6 +38,14 @@ export class AstrologerReviewsController {
     @Query() query: unknown
   ): Promise<ReviewAstrologerListResponse> {
     return this.service.listAstrologerReviews(requireAstrologerUserId(request), query);
+  }
+
+  @Get("request-targets")
+  listReviewRequestTargets(
+    @Req() request: AstrologerSessionRequest,
+    @Query() query: unknown
+  ): Promise<ReviewRequestTargetListResponse> {
+    return this.service.listReviewRequestTargets(requireAstrologerUserId(request), query);
   }
 
   @Post(":reviewId/reply-drafts/ai")
