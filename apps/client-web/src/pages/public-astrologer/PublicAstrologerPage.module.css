@@ -46,6 +46,170 @@
   gap: var(--eh-space-14);
 }
 
+.reviewsListCompact {
+  display: grid;
+  gap: var(--eh-space-12);
+}
+
+.reviewsSummary {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: var(--eh-space-14);
+  padding: var(--eh-space-16);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-16);
+  background: rgb(20 18 39 / 0.92);
+}
+
+.ratingScore {
+  display: grid;
+  align-content: center;
+  gap: var(--eh-space-4);
+}
+
+.ratingScore strong {
+  color: var(--eh-color-white);
+  font-size: var(--eh-font-size-32);
+  line-height: var(--eh-line-height-100);
+}
+
+.ratingScore span {
+  color: var(--eh-color-muted);
+  font-size: var(--eh-font-size-13);
+}
+
+.starBreakdown {
+  display: grid;
+  gap: var(--eh-space-8);
+}
+
+.starFilter,
+.starFilterActive {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 78px minmax(86px, 1fr) 28px;
+  align-items: center;
+  gap: var(--eh-space-10);
+  padding: 0 var(--eh-space-10);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  background: rgb(255 255 255 / 0.03);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: var(--eh-font-size-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.starFilterActive {
+  border-color: rgb(244 196 48 / 0.62);
+  background: rgb(244 196 48 / 0.1);
+}
+
+.starBar {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.starBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--eh-color-gold);
+}
+
+.starFilter strong,
+.starFilterActive strong {
+  color: var(--eh-color-white);
+  text-align: right;
+}
+
+.reviewsToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eh-space-10);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filterButton,
+.filterButtonActive,
+.secondaryButton,
+.iconButton {
+  min-height: 38px;
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-10);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--eh-color-moon-120);
+  font: inherit;
+  font-size: var(--eh-font-size-13);
+  font-weight: var(--eh-font-weight-semibold);
+  cursor: pointer;
+}
+
+.filterButton,
+.filterButtonActive,
+.secondaryButton {
+  padding: 0 var(--eh-space-14);
+}
+
+.filterButtonActive {
+  border-color: rgb(244 196 48 / 0.62);
+  color: var(--eh-color-white);
+}
+
+.secondaryButton {
+  color: var(--eh-color-gold);
+}
+
+.iconButton {
+  width: 38px;
+  padding: 0;
+  font-size: var(--eh-font-size-24);
+  line-height: var(--eh-line-height-100);
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--eh-space-20);
+  background: rgb(4 3 10 / 0.72);
+}
+
+.reviewsDialog {
+  width: min(100%, 720px);
+  max-height: min(720px, calc(100vh - 40px));
+  display: grid;
+  gap: var(--eh-space-16);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: var(--eh-space-20);
+  border: 1px solid var(--eh-color-moon-300-alpha-14);
+  border-radius: var(--eh-radius-16);
+  background: var(--eh-color-night-900);
+  box-shadow: 0 32px 90px -48px rgb(0 0 0 / 0.95);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--eh-space-12);
+}
+
+.dialogHeader h3 {
+  margin: 0;
+  color: var(--eh-color-white);
+  font-size: var(--eh-font-size-21);
+  line-height: var(--eh-line-height-120);
+}
+
 .reviewCard,
 .reviewsState {
   border: 1px solid var(--eh-color-moon-300-alpha-14);
@@ -200,8 +364,8 @@
 
 .sidePanel span {
   display: grid;
-  width: var(--eh-length-52);
-  height: var(--eh-length-52);
+  width: var(--eh-length-52, 52px);
+  height: var(--eh-length-52, 52px);
   place-items: center;
   border: 1px solid rgb(183 156 251 / 0.42);
   border-radius: var(--eh-radius-16);
@@ -252,6 +416,19 @@
 
   .reviewsList {
     grid-template-columns: 1fr;
+  }
+
+  .reviewsSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .starFilter,
+  .starFilterActive {
+    grid-template-columns: 74px minmax(64px, 1fr) 24px;
+  }
+
+  .dialogBackdrop {
+    padding: var(--eh-space-12);
   }
 
   .hero {

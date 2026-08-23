@@ -32,7 +32,7 @@ export function PublicAstrologerPage() {
         try {
           const reviews = await listPublicReviews({
             astrologerUserId: intent.astrologer.userId,
-            limit: 6,
+            limit: 50,
             cursor: null
           });
           if (!cancelled) {
