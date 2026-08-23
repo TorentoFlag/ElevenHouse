@@ -25,10 +25,37 @@ type ReviewAiReplyDraftTransaction = Parameters<
 type ReviewRow = typeof reviews.$inferSelect;
 type ReviewVersionRow = typeof reviewVersions.$inferSelect;
 type ReviewableInstanceRow = typeof reviewableInstances.$inferSelect;
+type ReviewAiReplyDraftRow = typeof reviewAiReplyDrafts.$inferSelect;
 
 export type ReviewAiReplyDraftCompletionResult =
   | { readonly kind: "updated" }
   | { readonly kind: "not_updated"; readonly reason: "draft_not_pending" };
+
+export type ReviewAiReplyDraftReplayResult =
+  | {
+      readonly kind: "replayed";
+      readonly draftId: string;
+      readonly attemptId: string;
+      readonly status: "pending";
+    }
+  | {
+      readonly kind: "replayed";
+      readonly draftId: string;
+      readonly attemptId: string;
+      readonly status: "succeeded";
+      readonly draftText: string;
+    }
+  | {
+      readonly kind: "replayed";
+      readonly draftId: string;
+      readonly attemptId: string;
+      readonly status: "failed";
+      readonly safeErrorCode: string;
+    };
+
+export type ReviewAiReplyDraftCommandStoreResult =
+  | CreateReviewReplyDraftCommandResult
+  | ReviewAiReplyDraftReplayResult;
 
 export type DrizzleReviewAiReplyDraftStore = {
   readonly createReplyDraftCommand: (input: {
@@ -37,7 +64,7 @@ export type DrizzleReviewAiReplyDraftStore = {
     readonly reviewId: string;
     readonly nextDraftId: string;
     readonly attemptId: string;
-  }) => Promise<CreateReviewReplyDraftCommandResult>;
+  }) => Promise<ReviewAiReplyDraftCommandStoreResult>;
   readonly markReplyDraftSucceeded: (input: {
     readonly attemptId: string;
     readonly now: string;
@@ -56,34 +83,31 @@ export function createDrizzleReviewAiReplyDraftStore(
   return {
     createReplyDraftCommand: (input) =>
       database.transaction(async (transaction) => {
-        const reviewRow = await readReview(transaction, input.reviewId);
-        if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+        const existingDraft = await readDraftByAttempt(transaction, input.attemptId);
+        if (existingDraft) {
+          if (
+            existingDraft.reviewId !== input.reviewId ||
+            existingDraft.astrologerUserId !== input.actorUserId
+          ) {
+            return { kind: "rejected", reason: "not_review_astrologer" };
+          }
+          return mapReplayResult(existingDraft);
+        }
 
-        const review = await hydrateReviewForAiDraft(transaction, reviewRow);
-        const reviewableInstance = await readReviewableInstance(
+        const result = await buildReplyDraftCommandFromReview(
           transaction,
-          review.reviewableInstanceId
+          input.actorUserId,
+          input.attemptId,
+          input.reviewId,
+          input.now,
+          true
         );
-        if (!reviewableInstance) return { kind: "rejected", reason: "review_not_public" };
-
-        const draftAlreadyPending = await hasPendingDraft(transaction, review.id);
-        const result = createReviewReplyDraftCommand({
-          actorUserId: input.actorUserId,
-          attemptId: input.attemptId,
-          now: input.now,
-          review,
-          serviceContext: {
-            title: reviewableInstance.titleSnapshot,
-            contextLabel: reviewableInstance.contextLabelSnapshot
-          },
-          draftAlreadyPending
-        });
         if (result.kind === "rejected") return result;
 
         await transaction.insert(reviewAiReplyDrafts).values({
           id: input.nextDraftId,
-          reviewId: review.id,
-          astrologerUserId: review.astrologerUserId,
+          reviewId: result.command.resourceEvidence.resourceId,
+          astrologerUserId: input.actorUserId,
           aiUsageAttemptId: result.command.attemptId,
           status: "pending",
           promptId: result.command.promptId,
@@ -139,6 +163,78 @@ export function createDrizzleReviewAiReplyDraftStore(
         : { kind: "not_updated", reason: "draft_not_pending" };
     }
   };
+}
+
+async function buildReplyDraftCommandFromReview(
+  transaction: ReviewAiReplyDraftTransaction,
+  actorUserId: string,
+  attemptId: string,
+  reviewId: string,
+  now: string,
+  checkPendingDraft: boolean
+): Promise<CreateReviewReplyDraftCommandResult> {
+  const reviewRow = await readReview(transaction, reviewId);
+  if (!reviewRow) return { kind: "rejected", reason: "review_not_public" };
+
+  const review = await hydrateReviewForAiDraft(transaction, reviewRow);
+  const reviewableInstance = await readReviewableInstance(
+    transaction,
+    review.reviewableInstanceId
+  );
+  if (!reviewableInstance) return { kind: "rejected", reason: "review_not_public" };
+
+  const draftAlreadyPending = checkPendingDraft
+    ? await hasPendingDraft(transaction, review.id)
+    : false;
+  return createReviewReplyDraftCommand({
+    actorUserId,
+    attemptId,
+    now,
+    review,
+    serviceContext: {
+      title: reviewableInstance.titleSnapshot,
+      contextLabel: reviewableInstance.contextLabelSnapshot
+    },
+    draftAlreadyPending
+  });
+}
+
+function mapReplayResult(row: ReviewAiReplyDraftRow): ReviewAiReplyDraftReplayResult {
+  if (row.status === "succeeded" && row.draftText) {
+    return {
+      kind: "replayed",
+      draftId: row.id,
+      attemptId: row.aiUsageAttemptId,
+      status: "succeeded",
+      draftText: row.draftText
+    };
+  }
+  if (row.status === "failed" && row.safeErrorCode) {
+    return {
+      kind: "replayed",
+      draftId: row.id,
+      attemptId: row.aiUsageAttemptId,
+      status: "failed",
+      safeErrorCode: row.safeErrorCode
+    };
+  }
+  return {
+    kind: "replayed",
+    draftId: row.id,
+    attemptId: row.aiUsageAttemptId,
+    status: "pending"
+  };
+}
+
+async function readDraftByAttempt(
+  transaction: ReviewAiReplyDraftTransaction,
+  attemptId: string
+): Promise<ReviewAiReplyDraftRow | null> {
+  const [row] = await transaction
+    .select()
+    .from(reviewAiReplyDrafts)
+    .where(eq(reviewAiReplyDrafts.aiUsageAttemptId, attemptId));
+  return row ?? null;
 }
 
 async function readReview(

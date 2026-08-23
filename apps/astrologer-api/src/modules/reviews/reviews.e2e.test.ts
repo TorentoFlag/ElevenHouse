@@ -46,6 +46,7 @@ describe("astrologer reviews HTTP API", () => {
   let receivedThreadLookup: unknown;
   let receivedOutboundMessage: unknown;
   let aiGenerationOutput: unknown;
+  let aiDraftCommandResult: unknown;
   let disputeOpened: boolean;
   let threadClientUserId: string | null;
   let canSubmitNewVersion: boolean;
@@ -66,6 +67,7 @@ describe("astrologer reviews HTTP API", () => {
     receivedThreadLookup = null;
     receivedOutboundMessage = null;
     aiGenerationOutput = { draftText: "Спасибо за отзыв. Рад, что консультация помогла." };
+    aiDraftCommandResult = null;
     disputeOpened = true;
     threadClientUserId = clientUserId;
     canSubmitNewVersion = true;
@@ -320,6 +322,7 @@ describe("astrologer reviews HTTP API", () => {
               readonly attemptId: string;
             }) {
               receivedAiDraftCommand = command;
+              if (aiDraftCommandResult) return aiDraftCommandResult;
               return {
                 kind: "created",
                 command: {
@@ -519,6 +522,35 @@ describe("astrologer reviews HTTP API", () => {
     expect(receivedAiDraftSucceeded).toMatchObject({
       draftText: "Спасибо за отзыв. Рад, что консультация помогла."
     });
+    expect(receivedAiDraftFailed).toBeNull();
+  });
+
+  it("replays completed astrologer AI reply drafts without calling the provider again", async () => {
+    aiDraftCommandResult = {
+      kind: "replayed",
+      draftId: "10000000-0000-4000-8000-000000000331",
+      attemptId: "10000000-0000-4000-8000-000000000332",
+      status: "succeeded",
+      draftText: "Повторно возвращенный черновик ответа."
+    };
+
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/reply-drafts/ai`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-ai-reply-draft-replay"
+      },
+      body: JSON.stringify({ locale: "ru" })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      draftId: "10000000-0000-4000-8000-000000000331",
+      attemptId: "10000000-0000-4000-8000-000000000332",
+      draftText: "Повторно возвращенный черновик ответа."
+    });
+    expect(receivedAiGeneration).toBeNull();
+    expect(receivedAiDraftSucceeded).toBeNull();
     expect(receivedAiDraftFailed).toBeNull();
   });
 

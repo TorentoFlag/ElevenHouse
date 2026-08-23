@@ -116,6 +116,45 @@ describe.sequential("Drizzle review AI reply draft store", () => {
       pendingReplyVersionId: null
     });
   });
+
+  it("replays an existing AI reply draft command for the same attempt without duplicate inserts", async () => {
+    const fixture = await seedPublishedReview(runtime);
+    const store = createDrizzleReviewAiReplyDraftStore(runtime.database);
+    const draftId = randomUUID();
+    const attemptId = randomUUID();
+
+    const first = await store.createReplyDraftCommand({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextDraftId: draftId,
+      attemptId
+    });
+    const replayed = await store.createReplyDraftCommand({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:02:00.000Z",
+      reviewId: fixture.reviewId,
+      nextDraftId: randomUUID(),
+      attemptId
+    });
+
+    expect(first).toMatchObject({
+      kind: "created",
+      command: { attemptId, ownerSafetyId: fixture.astrologerUserId }
+    });
+    expect(replayed).toEqual({
+      kind: "replayed",
+      draftId,
+      attemptId,
+      status: "pending"
+    });
+
+    const [draftCount] = await runtime.database
+      .select({ value: count() })
+      .from(reviewAiReplyDrafts)
+      .where(eq(reviewAiReplyDrafts.aiUsageAttemptId, attemptId));
+    expect(draftCount?.value).toBe(1);
+  });
 });
 
 async function seedPublishedReview(runtime: PostgresRuntime) {

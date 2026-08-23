@@ -24,6 +24,7 @@ import {
   reviewRequestTargetListResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
+  type CreateReviewReplyAiDraftResponse,
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
@@ -91,7 +92,29 @@ type AstrologerReviewAiReplyDraftStore = {
     readonly reviewId: string;
     readonly nextDraftId: string;
     readonly attemptId: string;
-  }) => Promise<CreateReviewReplyDraftCommandResult>;
+  }) => Promise<
+    | CreateReviewReplyDraftCommandResult
+    | {
+        readonly kind: "replayed";
+        readonly draftId: string;
+        readonly attemptId: string;
+        readonly status: "pending";
+      }
+    | {
+        readonly kind: "replayed";
+        readonly draftId: string;
+        readonly attemptId: string;
+        readonly status: "succeeded";
+        readonly draftText: string;
+      }
+    | {
+        readonly kind: "replayed";
+        readonly draftId: string;
+        readonly attemptId: string;
+        readonly status: "failed";
+        readonly safeErrorCode: string;
+      }
+  >;
   readonly markReplyDraftSucceeded: (input: {
     readonly attemptId: string;
     readonly now: string;
@@ -209,7 +232,7 @@ export class AstrologerReviewsService {
     reviewId: string,
     body: unknown,
     idempotencyKey: string
-  ) {
+  ): Promise<CreateReviewReplyAiDraftResponse> {
     const parsed = createReviewReplyAiDraftRequestSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid review reply AI draft request");
 
@@ -230,6 +253,19 @@ export class AstrologerReviewsService {
     });
     if (created.kind === "rejected") {
       throw new BadRequestException("Review reply AI draft cannot be created");
+    }
+    if (created.kind === "replayed") {
+      if (created.status === "succeeded") {
+        return createReviewReplyAiDraftResponseSchema.parse({
+          draftId: created.draftId,
+          attemptId: created.attemptId,
+          draftText: created.draftText
+        });
+      }
+      if (created.status === "failed") {
+        throw new BadGatewayException("Review reply AI draft provider response is unavailable");
+      }
+      throw new ConflictException("Review reply AI draft generation is still in progress");
     }
 
     let generated: Awaited<ReturnType<AiGenerationService["generate"]>>;
