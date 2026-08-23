@@ -95,6 +95,7 @@ describe("Clients CRM HTTP API", () => {
               amountMinor: 12000,
               currency: "RUB",
               bookingId: "10000000-0000-4000-8000-000000000020",
+              reviewReceiptAvailable: false,
               createdAt: "2026-08-20T09:00:00.000Z",
               updatedAt: "2026-08-20T09:05:00.000Z"
             }
@@ -645,6 +646,7 @@ function serviceWorkSummary() {
           amountMinor: 12000,
           currency: "RUB",
           bookingId: "10000000-0000-4000-8000-000000000020",
+          reviewReceiptAvailable: false,
           createdAt: "2026-08-20T09:00:00.000Z",
           updatedAt: "2026-08-20T09:05:00.000Z"
         }
