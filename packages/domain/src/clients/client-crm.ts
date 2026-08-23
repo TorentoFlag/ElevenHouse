@@ -70,6 +70,7 @@ export type ClientServiceWorkOrderItem = {
   readonly amountMinor: number;
   readonly currency: string;
   readonly bookingId: string | null;
+  readonly reviewReceiptAvailable: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly href?: string;

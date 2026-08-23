@@ -535,7 +535,11 @@ function ServiceWorkGroup({
               {content}
             </div>
           ) : (
-            <a className={styles.workItem} href={"href" in item ? item.href : undefined} key={item.id}>
+            <a
+              className={styles.workItem}
+              href={"href" in item ? item.href : undefined}
+              key={item.id}
+            >
               {content}
             </a>
           );
@@ -557,12 +561,14 @@ function getServiceWorkTitle(item: ServiceWorkItem, locale: SupportedLocale): st
   return `${locale === "ru" ? "Платеж" : "Payment"} ${shortOrderId}`;
 }
 
-function isReviewReceiptEligibleOrder(item: ServiceWorkItem): item is ClientCrmServiceWorkOrderItem {
+function isReviewReceiptEligibleOrder(
+  item: ServiceWorkItem
+): item is ClientCrmServiceWorkOrderItem {
   return (
     "productTitle" in item &&
     "amountMinor" in item &&
-    "status" in item &&
-    (item.status === "paid" || item.status === "fulfilled")
+    "reviewReceiptAvailable" in item &&
+    item.reviewReceiptAvailable
   );
 }
 

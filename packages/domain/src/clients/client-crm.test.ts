@@ -226,6 +226,7 @@ describe("Clients CRM domain read model", () => {
                     amountMinor: 12_000,
                     currency: "RUB",
                     bookingId: "booking-1",
+                    reviewReceiptAvailable: false,
                     createdAt: "2026-08-20T09:00:00.000Z",
                     updatedAt: "2026-08-20T09:05:00.000Z"
                   }

@@ -365,6 +365,7 @@ describe("Clients CRM contracts", () => {
                 amountMinor: 12000,
                 currency: "RUB",
                 bookingId,
+                reviewReceiptAvailable: false,
                 createdAt: occurredAt,
                 updatedAt: laterAt
               }

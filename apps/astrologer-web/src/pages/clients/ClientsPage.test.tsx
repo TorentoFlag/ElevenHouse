@@ -824,6 +824,7 @@ const adaDetail = {
           amountMinor: 12000,
           currency: "RUB",
           bookingId: null,
+          reviewReceiptAvailable: true,
           createdAt: "2026-08-20T09:00:00.000Z",
           updatedAt: "2026-08-20T09:05:00.000Z"
         }

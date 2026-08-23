@@ -54,6 +54,7 @@ describe.sequential("Drizzle finance client service-work summary reader", () => 
             amountMinor: 12000,
             currency: "RUB",
             bookingId: null,
+            reviewReceiptAvailable: true,
             createdAt: "2026-08-19T11:00:00.000Z",
             updatedAt: "2026-08-19T11:00:00.000Z"
           },
@@ -64,6 +65,7 @@ describe.sequential("Drizzle finance client service-work summary reader", () => 
             amountMinor: 12000,
             currency: "RUB",
             bookingId: null,
+            reviewReceiptAvailable: true,
             createdAt: "2026-08-19T11:00:00.000Z",
             updatedAt: "2026-08-19T11:00:00.000Z"
           },
@@ -74,6 +76,7 @@ describe.sequential("Drizzle finance client service-work summary reader", () => 
             amountMinor: 12000,
             currency: "RUB",
             bookingId: null,
+            reviewReceiptAvailable: true,
             createdAt: "2026-08-18T10:00:00.000Z",
             updatedAt: "2026-08-18T10:00:00.000Z"
           }
@@ -474,7 +477,7 @@ function product(input: { readonly id: string; readonly ownerUserId: string; rea
     currency: "RUB",
     coverMediaId: null,
     introVideoUrl: null,
-    executionMode: "live",
+    executionMode: "async",
     paymentModel: "once",
     durationMinutes: 60,
     durationLabel: null,

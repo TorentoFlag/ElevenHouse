@@ -565,6 +565,7 @@ export const clientCrmServiceWorkOrderItemSchema = z
     amountMinor: moneyAmountMinorSchema,
     currency: rubCurrencySchema,
     bookingId: uuidSchema.nullable(),
+    reviewReceiptAvailable: z.boolean(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     href: clientCrmRelativeHrefSchema.optional()

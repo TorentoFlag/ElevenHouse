@@ -6,7 +6,7 @@ import type {
   FinanceClientServiceWorkSummaryReader
 } from "@elevenhouse/domain";
 import type { ElevenHouseDatabase } from "../../runtime";
-import { clientAstrologerRelationships, orders, paymentAttempts } from "../../schema";
+import { clientAstrologerRelationships, orders, paymentAttempts, products } from "../../schema";
 
 type ClientServiceWorkOrderRow = {
   readonly id: string;
@@ -15,6 +15,7 @@ type ClientServiceWorkOrderRow = {
   readonly amountMinor: number;
   readonly currency: string;
   readonly bookingId: string | null;
+  readonly productExecutionMode: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -53,10 +54,12 @@ export function createDrizzleFinanceClientServiceWorkSummaryReader(
               amountMinor: orders.grossAmountMinor,
               currency: orders.grossCurrency,
               bookingId: orders.bookingId,
+              productExecutionMode: products.executionMode,
               createdAt: orders.createdAt,
               updatedAt: orders.updatedAt
             })
             .from(orders)
+            .leftJoin(products, eq(products.id, orders.productId))
             .innerJoin(
               clientAstrologerRelationships,
               activeOrdersJoin(input.ownerUserId, input.clientUserId)
@@ -177,6 +180,9 @@ function toOrderItem(order: ClientServiceWorkOrderRow): ClientServiceWorkOrderIt
     amountMinor: order.amountMinor,
     currency: order.currency,
     bookingId: order.bookingId,
+    reviewReceiptAvailable:
+      (order.status === "paid" || order.status === "fulfilled") &&
+      order.productExecutionMode !== "live",
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString()
   };
