@@ -19,6 +19,23 @@ describe("Drizzle migration journal", () => {
     expect(trackedSqlFiles.filter((tag) => !journalTags.has(tag))).toEqual([]);
   });
 
+  it("keeps the approved journal in tracked SQL migration order", () => {
+    const trackedSqlFiles = execFileSync("git", ["ls-files", "packages/db/drizzle/*.sql"])
+      .toString("utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((filePath) => basename(filePath, ".sql"))
+      .sort();
+    const journal = JSON.parse(readFileSync("packages/db/drizzle/meta/_journal.json", "utf8")) as {
+      readonly entries: readonly { readonly idx: number; readonly tag: string; readonly when: number }[];
+    };
+
+    expect(journal.entries.map((entry) => entry.tag)).toEqual(trackedSqlFiles);
+    expect(journal.entries.map((entry) => entry.idx)).toEqual(trackedSqlFiles.map((_, index) => index));
+    expect(journal.entries.every((entry) => Number.isSafeInteger(entry.when))).toBe(true);
+  });
+
   it("keeps WhatsApp provider schema in every snapshot after the provider migration", () => {
     for (const snapshotPath of [
       "packages/db/drizzle/meta/0060_snapshot.json",
