@@ -2,6 +2,7 @@ import "reflect-metadata";
 
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { ReviewRatingAggregateProjectionDriftError } from "@elevenhouse/db/reviews";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -48,6 +49,7 @@ describe("astrologer reviews HTTP API", () => {
   let disputeOpened: boolean;
   let threadClientUserId: string | null;
   let canSubmitNewVersion: boolean;
+  let disputeProjectionDrift: boolean;
 
   beforeEach(async () => {
     receivedReviewsRead = null;
@@ -67,6 +69,7 @@ describe("astrologer reviews HTTP API", () => {
     disputeOpened = true;
     threadClientUserId = clientUserId;
     canSubmitNewVersion = true;
+    disputeProjectionDrift = false;
     const builder = Test.createTestingModule({
       controllers: [AstrologerReviewsController],
       providers: [
@@ -237,6 +240,9 @@ describe("astrologer reviews HTTP API", () => {
               readonly note: string | null;
             }) {
               receivedDisputeCommand = command;
+              if (disputeProjectionDrift) {
+                throw new ReviewRatingAggregateProjectionDriftError("astrologer");
+              }
               disputeOpened = true;
               return {
                 kind: "opened",
@@ -670,6 +676,29 @@ describe("astrologer reviews HTTP API", () => {
       caseId,
       actorUserId: astrologerUserId,
       actorRole: "astrologer"
+    });
+  });
+
+  it("returns conflict when opening a dispute requires review aggregate reconciliation", async () => {
+    disputeOpened = false;
+    disputeProjectionDrift = true;
+
+    const response = await fetch(`${baseUrl}/reviews/${reviewId}/disputes`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-dispute-astrologer-drift"
+      },
+      body: JSON.stringify({
+        reasonCode: "fraud_or_conflict",
+        note: "Нужна проверка контекста услуги."
+      })
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "review_rating_aggregate_projection_drift",
+      scope: "astrologer"
     });
   });
 

@@ -10,6 +10,7 @@ import {
   reviewModerationCases,
   reviewModerationCaseMessages,
   reviewPublicationEvents,
+  reviewRatingAggregates,
   reviewVersions,
   reviewableInstances,
   reviews,
@@ -895,6 +896,67 @@ describe.sequential("Drizzle review command store", () => {
       ratingSum: 5,
       star4Count: 0,
       star5Count: 1
+    });
+  });
+
+  it("reports aggregate projection drift when restore would violate rating aggregate checks", async () => {
+    const fixture = await seedReviewableFixture(runtime);
+    const store = createDrizzleReviewCommandStore(runtime.database);
+    const caseId = randomUUID();
+
+    await store.submitReviewVersion({
+      actorUserId: fixture.clientUserId,
+      now: "2026-08-20T10:00:00.000Z",
+      reviewableInstanceId: fixture.reviewableInstanceId,
+      nextReviewId: fixture.reviewId,
+      nextVersionId: fixture.firstVersionId,
+      submission: {
+        rating: 5,
+        text: "Полезная консультация.",
+        publicIdentityMode: "named"
+      }
+    });
+    await store.approveReviewVersion({
+      moderatorUserId: fixture.moderatorUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId: fixture.reviewId,
+      versionId: fixture.firstVersionId,
+      nextPublicationEventId: fixture.publicationEventId
+    });
+    await store.openReviewDispute({
+      actorUserId: fixture.astrologerUserId,
+      now: "2026-08-20T12:00:00.000Z",
+      reviewId: fixture.reviewId,
+      nextCaseId: caseId,
+      nextMessageId: randomUUID(),
+      reasonCode: "fraud_or_conflict",
+      note: "Нужна проверка контекста услуги."
+    });
+
+    await runtime.database
+      .update(reviewRatingAggregates)
+      .set({
+        visibleReviewCount: 1,
+        approvedReviewCount: 1,
+        ratingSum: 3,
+        star1Count: 0,
+        star2Count: 0,
+        star3Count: 1,
+        star4Count: 0,
+        star5Count: 0
+      })
+      .where(eq(reviewRatingAggregates.astrologerUserId, fixture.astrologerUserId));
+
+    await expect(
+      store.restoreReviewAfterDispute({
+        moderatorUserId: fixture.moderatorUserId,
+        now: "2026-08-20T13:00:00.000Z",
+        reviewId: fixture.reviewId,
+        caseId
+      })
+    ).rejects.toMatchObject({
+      code: "review_rating_aggregate_projection_drift",
+      scope: "astrologer"
     });
   });
 

@@ -4,6 +4,7 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import type { ReviewAdminDetail } from "@elevenhouse/contracts";
 import type { ReviewDisputeStatus, ReviewVisibilityStatus } from "@elevenhouse/contracts";
+import { ReviewRatingAggregateProjectionDriftError } from "@elevenhouse/db/reviews";
 import type { ReviewReadStore } from "@elevenhouse/domain";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -35,6 +36,7 @@ describe("admin reviews HTTP API", () => {
   let reviewVisibilityStatus: ReviewVisibilityStatus;
   let reviewDisputeStatus: ReviewDisputeStatus;
   let moderationCaseStatus: "open" | "waiting_client" | "waiting_astrologer" | "consensus_reached";
+  let restoreProjectionDrift: boolean;
 
   beforeEach(async () => {
     receivedCaseRead = null;
@@ -46,6 +48,7 @@ describe("admin reviews HTTP API", () => {
     reviewVisibilityStatus = "visible";
     reviewDisputeStatus = "none";
     moderationCaseStatus = "open";
+    restoreProjectionDrift = false;
     const builder = Test.createTestingModule({
       controllers: [AdminReviewsController],
       providers: [
@@ -236,6 +239,9 @@ describe("admin reviews HTTP API", () => {
               readonly caseId: string;
             }) {
               receivedDecisionCommand = command;
+              if (restoreProjectionDrift) {
+                throw new ReviewRatingAggregateProjectionDriftError("product");
+              }
               reviewVisibilityStatus = "visible";
               reviewDisputeStatus = "resolved_closed";
               return {
@@ -563,6 +569,28 @@ describe("admin reviews HTTP API", () => {
       now: "2026-08-20T11:00:00.000Z",
       reviewId,
       caseId
+    });
+  });
+
+  it("returns conflict when review rating aggregates require reconciliation", async () => {
+    reviewVisibilityStatus = "temporarily_hidden_by_dispute";
+    reviewDisputeStatus = "open";
+    restoreProjectionDrift = true;
+
+    const response = await fetch(
+      `${baseUrl}/admin/reviews/${reviewId}/moderation-cases/${caseId}/restore`,
+      {
+        method: "POST",
+        headers: {
+          "idempotency-key": "reviews-dispute-restore-drift"
+        }
+      }
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "review_rating_aggregate_projection_drift",
+      scope: "product"
     });
   });
 

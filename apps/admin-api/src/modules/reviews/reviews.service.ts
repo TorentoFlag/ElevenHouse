@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from "@nestjs/common";
+import { ReviewRatingAggregateProjectionDriftError } from "@elevenhouse/db/reviews";
 import {
   reviewAdminDetailSchema,
   reviewModerationCaseDetailSchema,
@@ -222,12 +229,14 @@ export class AdminReviewsService {
     const safeAdminUserId = requireUuid(adminUserId);
     const safeReviewId = requireUuid(reviewId);
     const safeCaseId = requireUuid(caseId);
-    const result = await this.commandStore.restoreReviewAfterDispute({
-      moderatorUserId: safeAdminUserId,
-      now: this.clock.now().toISOString(),
-      reviewId: safeReviewId,
-      caseId: safeCaseId
-    });
+    const result = await mapReviewAggregateProjectionDrift(() =>
+      this.commandStore.restoreReviewAfterDispute({
+        moderatorUserId: safeAdminUserId,
+        now: this.clock.now().toISOString(),
+        reviewId: safeReviewId,
+        caseId: safeCaseId
+      })
+    );
     if (result.kind === "rejected") {
       throw new BadRequestException("Review dispute cannot be restored");
     }
@@ -249,18 +258,20 @@ export class AdminReviewsService {
     const nextCaseId = deterministicUuid(
       `${safeReviewId}:${safeAdminUserId}:${idempotencyKey}:hide-case`
     );
-    const result = await this.commandStore.hideReviewByModeration({
-      moderatorUserId: safeAdminUserId,
-      now: this.clock.now().toISOString(),
-      reviewId: safeReviewId,
-      caseId: safeCaseId,
-      nextCaseId,
-      nextCaseMessageId: parsed.data.note
-        ? deterministicUuid(`${nextCaseId}:${safeAdminUserId}:${idempotencyKey}:hide-note`)
-        : null,
-      reasonCode: parsed.data.reasonCode,
-      note: parsed.data.note
-    });
+    const result = await mapReviewAggregateProjectionDrift(() =>
+      this.commandStore.hideReviewByModeration({
+        moderatorUserId: safeAdminUserId,
+        now: this.clock.now().toISOString(),
+        reviewId: safeReviewId,
+        caseId: safeCaseId,
+        nextCaseId,
+        nextCaseMessageId: parsed.data.note
+          ? deterministicUuid(`${nextCaseId}:${safeAdminUserId}:${idempotencyKey}:hide-note`)
+          : null,
+        reasonCode: parsed.data.reasonCode,
+        note: parsed.data.note
+      })
+    );
     if (result.kind === "rejected") {
       throw new BadRequestException("Review cannot be hidden by moderation");
     }
@@ -336,6 +347,20 @@ export class AdminReviewsService {
     const detail = await this.readStore.getAdminReviewDetail({ reviewId });
     if (!detail) throw new NotFoundException("Review was not found");
     return reviewAdminDetailSchema.parse(detail);
+  }
+}
+
+async function mapReviewAggregateProjectionDrift<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof ReviewRatingAggregateProjectionDriftError) {
+      throw new ConflictException({
+        code: error.code,
+        scope: error.scope
+      });
+    }
+    throw error;
   }
 }
 

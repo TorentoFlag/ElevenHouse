@@ -31,6 +31,7 @@ import {
   type ReviewRequestTargetListResponse,
   type ReviewReplyVersion
 } from "@elevenhouse/contracts";
+import { ReviewRatingAggregateProjectionDriftError } from "@elevenhouse/db/reviews";
 import type {
   CreateReviewReplyDraftCommandResult,
   CreateReviewCaseMessageResult,
@@ -319,19 +320,21 @@ export class AstrologerReviewsService {
 
     const safeAstrologerUserId = requireUuid(astrologerUserId);
     const safeReviewId = requireUuid(reviewId);
-    const result = await this.commandStore.openReviewDispute({
-      actorUserId: safeAstrologerUserId,
-      now: this.clock.now().toISOString(),
-      reviewId: safeReviewId,
-      nextCaseId: deterministicUuid(
-        `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case`
-      ),
-      nextMessageId: parsed.data.note
-        ? deterministicUuid(`${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case-note`)
-        : null,
-      reasonCode: parsed.data.reasonCode,
-      note: parsed.data.note
-    });
+    const result = await mapReviewAggregateProjectionDrift(() =>
+      this.commandStore.openReviewDispute({
+        actorUserId: safeAstrologerUserId,
+        now: this.clock.now().toISOString(),
+        reviewId: safeReviewId,
+        nextCaseId: deterministicUuid(
+          `${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case`
+        ),
+        nextMessageId: parsed.data.note
+          ? deterministicUuid(`${safeReviewId}:${safeAstrologerUserId}:${idempotencyKey}:case-note`)
+          : null,
+        reasonCode: parsed.data.reasonCode,
+        note: parsed.data.note
+      })
+    );
     if (result.kind === "rejected") {
       throw new BadRequestException("Review dispute cannot be opened");
     }
@@ -391,6 +394,20 @@ export class AstrologerReviewsService {
       body: result.message.body,
       createdAt: result.message.createdAt
     });
+  }
+}
+
+async function mapReviewAggregateProjectionDrift<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (error instanceof ReviewRatingAggregateProjectionDriftError) {
+      throw new ConflictException({
+        code: error.code,
+        scope: error.scope
+      });
+    }
+    throw error;
   }
 }
 

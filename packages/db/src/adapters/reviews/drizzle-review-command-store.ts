@@ -891,6 +891,14 @@ export function createDrizzleReviewCommandStore(
   };
 }
 
+export class ReviewRatingAggregateProjectionDriftError extends Error {
+  readonly code = "review_rating_aggregate_projection_drift" as const;
+
+  constructor(readonly scope: "astrologer" | "product") {
+    super(`Review rating aggregate projection drift: ${scope}`);
+  }
+}
+
 async function appendReviewAudit(
   transaction: ReviewCommandTransaction,
   input: {
@@ -1205,26 +1213,28 @@ async function updateAstrologerAggregateDelta(
   input: ReviewAggregateDeltaInput,
   delta: ReviewAggregateComputedDelta
 ): Promise<void> {
-  const result = await transaction.execute<{ id: string }>(sql`
-    update review_rating_aggregates
-    set
-      visible_review_count = visible_review_count + ${delta.visibleDelta},
-      approved_review_count = approved_review_count + ${input.approvedDelta},
-      rating_sum = rating_sum + ${delta.ratingSumDelta},
-      star_1_count = star_1_count + ${delta.starDeltas[0]},
-      star_2_count = star_2_count + ${delta.starDeltas[1]},
-      star_3_count = star_3_count + ${delta.starDeltas[2]},
-      star_4_count = star_4_count + ${delta.starDeltas[3]},
-      star_5_count = star_5_count + ${delta.starDeltas[4]},
-      last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
-      updated_at = ${input.updatedAt}
-    where scope = 'astrologer'
-      and astrologer_user_id = ${input.astrologerUserId}::uuid
-      and product_id is null
-    returning id
-  `);
+  const result = await executeAggregateDeltaUpdate("astrologer", () =>
+    transaction.execute<{ id: string }>(sql`
+      update review_rating_aggregates
+      set
+        visible_review_count = visible_review_count + ${delta.visibleDelta},
+        approved_review_count = approved_review_count + ${input.approvedDelta},
+        rating_sum = rating_sum + ${delta.ratingSumDelta},
+        star_1_count = star_1_count + ${delta.starDeltas[0]},
+        star_2_count = star_2_count + ${delta.starDeltas[1]},
+        star_3_count = star_3_count + ${delta.starDeltas[2]},
+        star_4_count = star_4_count + ${delta.starDeltas[3]},
+        star_5_count = star_5_count + ${delta.starDeltas[4]},
+        last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
+        updated_at = ${input.updatedAt}
+      where scope = 'astrologer'
+        and astrologer_user_id = ${input.astrologerUserId}::uuid
+        and product_id is null
+      returning id
+    `)
+  );
   if (result.rows.length !== 1) {
-    throw new Error("review_rating_aggregate_missing");
+    throw new ReviewRatingAggregateProjectionDriftError("astrologer");
   }
 }
 
@@ -1292,27 +1302,67 @@ async function updateProductAggregateDelta(
   input: ReviewAggregateDeltaInput & { readonly productId: string },
   delta: ReviewAggregateComputedDelta
 ): Promise<void> {
-  const result = await transaction.execute<{ id: string }>(sql`
-    update review_rating_aggregates
-    set
-      visible_review_count = visible_review_count + ${delta.visibleDelta},
-      approved_review_count = approved_review_count + ${input.approvedDelta},
-      rating_sum = rating_sum + ${delta.ratingSumDelta},
-      star_1_count = star_1_count + ${delta.starDeltas[0]},
-      star_2_count = star_2_count + ${delta.starDeltas[1]},
-      star_3_count = star_3_count + ${delta.starDeltas[2]},
-      star_4_count = star_4_count + ${delta.starDeltas[3]},
-      star_5_count = star_5_count + ${delta.starDeltas[4]},
-      last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
-      updated_at = ${input.updatedAt}
-    where scope = 'product'
-      and astrologer_user_id = ${input.astrologerUserId}::uuid
-      and product_id = ${input.productId}::uuid
-    returning id
-  `);
+  const result = await executeAggregateDeltaUpdate("product", () =>
+    transaction.execute<{ id: string }>(sql`
+      update review_rating_aggregates
+      set
+        visible_review_count = visible_review_count + ${delta.visibleDelta},
+        approved_review_count = approved_review_count + ${input.approvedDelta},
+        rating_sum = rating_sum + ${delta.ratingSumDelta},
+        star_1_count = star_1_count + ${delta.starDeltas[0]},
+        star_2_count = star_2_count + ${delta.starDeltas[1]},
+        star_3_count = star_3_count + ${delta.starDeltas[2]},
+        star_4_count = star_4_count + ${delta.starDeltas[3]},
+        star_5_count = star_5_count + ${delta.starDeltas[4]},
+        last_published_at = greatest(coalesce(last_published_at, ${input.publishedAt}), ${input.publishedAt}),
+        updated_at = ${input.updatedAt}
+      where scope = 'product'
+        and astrologer_user_id = ${input.astrologerUserId}::uuid
+        and product_id = ${input.productId}::uuid
+      returning id
+    `)
+  );
   if (result.rows.length !== 1) {
-    throw new Error("review_rating_aggregate_missing");
+    throw new ReviewRatingAggregateProjectionDriftError("product");
   }
+}
+
+async function executeAggregateDeltaUpdate<T>(
+  scope: "astrologer" | "product",
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (
+      hasPostgresConstraintViolation(
+        error,
+        "23514",
+        "review_rating_aggregates_counts_check"
+      )
+    ) {
+      throw new ReviewRatingAggregateProjectionDriftError(scope);
+    }
+    throw error;
+  }
+}
+
+function hasPostgresConstraintViolation(error: unknown, code: string, constraint: string): boolean {
+  let current: unknown = error;
+  const visited = new Set<object>();
+  while (typeof current === "object" && current !== null && !visited.has(current)) {
+    visited.add(current);
+    if (
+      "code" in current &&
+      current.code === code &&
+      "constraint" in current &&
+      current.constraint === constraint
+    ) {
+      return true;
+    }
+    current = "cause" in current ? current.cause : null;
+  }
+  return false;
 }
 
 function isInsertableAggregateDelta(
