@@ -1,6 +1,6 @@
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 
-export type AstrologerReviewFilter = "all" | "published" | "pending" | "hidden";
+export type AstrologerReviewFilter = "all" | "published" | "pending" | "hidden" | "disputed";
 
 export type AstrologerReviewsSummary = {
   readonly averageRating: string;
@@ -43,6 +43,8 @@ export function filterAstrologerReviews(
       return reviews.filter(hasPendingModeration);
     case "hidden":
       return reviews.filter(isHiddenReview);
+    case "disputed":
+      return reviews.filter(hasActiveDispute);
     case "all":
       return [...reviews];
   }
@@ -55,7 +57,8 @@ export function countAstrologerReviewFilters(
     all: reviews.length,
     published: reviews.filter(isVisiblePublishedReview).length,
     pending: reviews.filter(hasPendingModeration).length,
-    hidden: reviews.filter(isHiddenReview).length
+    hidden: reviews.filter(isHiddenReview).length,
+    disputed: reviews.filter(hasActiveDispute).length
   };
 }
 

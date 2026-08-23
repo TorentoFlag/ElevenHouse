@@ -110,7 +110,7 @@ function renderViewElement(overrides: Partial<ReviewsPageViewPropsForTest> = {})
           { rating: 1, count: 0 }
         ]
       }}
-      counts={{ all: 0, published: 0, pending: 0, hidden: 0 }}
+      counts={{ all: 0, published: 0, pending: 0, disputed: 0, hidden: 0 }}
       selectedFilter="all"
       requestReviewOpen={props.requestReviewOpen}
       requestReviewTargets={[reviewRequestTarget]}
@@ -201,6 +201,7 @@ const copy = {
     all: "Все",
     published: "Опубликованы",
     pending: "На модерации",
+    disputed: "Спорные",
     hidden: "Скрытые"
   },
   status: {

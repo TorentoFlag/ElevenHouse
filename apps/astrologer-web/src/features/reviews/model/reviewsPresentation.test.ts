@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildAstrologerReviewsSummary, filterAstrologerReviews } from "./reviewsPresentation";
+import {
+  buildAstrologerReviewsSummary,
+  countAstrologerReviewFilters,
+  filterAstrologerReviews
+} from "./reviewsPresentation";
 import type { ReviewAstrologerItem } from "@elevenhouse/contracts";
 
 describe("reviewsPresentation", () => {
@@ -31,6 +35,12 @@ describe("reviewsPresentation", () => {
     expect(filterAstrologerReviews(reviews, "hidden").map((review) => review.reviewId)).toEqual([
       "31111111-1111-4111-8111-111111111111"
     ]);
+    expect(filterAstrologerReviews(reviews, "disputed").map((review) => review.reviewId)).toEqual([
+      "31111111-1111-4111-8111-111111111111"
+    ]);
+    expect(countAstrologerReviewFilters(reviews)).toMatchObject({
+      disputed: 1
+    });
   });
 });
 

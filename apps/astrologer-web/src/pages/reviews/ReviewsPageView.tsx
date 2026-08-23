@@ -61,7 +61,13 @@ export type ReviewsPageViewProps = {
   readonly onSubmitCaseMessage: (review: ReviewAstrologerItem) => void;
 };
 
-const filterOrder: readonly AstrologerReviewFilter[] = ["all", "published", "pending", "hidden"];
+const filterOrder: readonly AstrologerReviewFilter[] = [
+  "all",
+  "published",
+  "pending",
+  "disputed",
+  "hidden"
+];
 
 export function ReviewsPageView({
   copy,

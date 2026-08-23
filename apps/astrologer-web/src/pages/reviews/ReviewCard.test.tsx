@@ -417,6 +417,7 @@ const copy = {
     all: "Все",
     published: "Опубликованы",
     pending: "На модерации",
+    disputed: "Спорные",
     hidden: "Скрытые"
   },
   status: {

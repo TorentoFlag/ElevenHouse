@@ -448,6 +448,7 @@ const reviewsCopyByLocale = {
       all: "Все",
       published: "Опубликованы",
       pending: "На модерации",
+      disputed: "Спорные",
       hidden: "Скрытые"
     },
     status: {
@@ -541,6 +542,7 @@ const reviewsCopyByLocale = {
       all: "All",
       published: "Published",
       pending: "In moderation",
+      disputed: "Disputed",
       hidden: "Hidden"
     },
     status: {
