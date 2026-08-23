@@ -126,7 +126,7 @@ export function ReviewRequestDialog({
                 disabled={!canSend}
                 onClick={onSend}
               >
-                <Icon iconName="chat" size={15} aria-hidden="true" />
+                <Icon iconName="send" size={15} aria-hidden="true" />
                 {pending ? copy.requestReview.sendingLabel : copy.requestReview.sendLabel}
               </button>
               {sent ? <p className={styles.successText}>{copy.requestReview.sentLabel}</p> : null}

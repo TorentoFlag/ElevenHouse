@@ -147,7 +147,7 @@ export function ReviewsPageView({
           className={styles.secondaryButton}
           onClick={onOpenRequestReview}
         >
-          <Icon iconName="chat" size={15} aria-hidden="true" />
+          <Icon iconName="send" size={15} aria-hidden="true" />
           {copy.requestReviewLabel}
         </button>
       </header>
@@ -192,7 +192,7 @@ export function ReviewsPageView({
               className={styles.mobileRequestButton}
               onClick={onOpenRequestReview}
             >
-              <Icon iconName="chat" size={15} aria-hidden="true" />
+              <Icon iconName="send" size={15} aria-hidden="true" />
               {copy.requestReviewLabel}
             </button>
             <div className={styles.list}>

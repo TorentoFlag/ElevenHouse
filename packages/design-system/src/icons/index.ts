@@ -33,6 +33,7 @@ export * from "./Pin/index.js";
 export * from "./Refresh/index.js";
 export * from "./Reference/index.js";
 export * from "./Search/index.js";
+export * from "./Send/index.js";
 export * from "./Settings/index.js";
 export * from "./Sparkle/index.js";
 export * from "./Star/index.js";

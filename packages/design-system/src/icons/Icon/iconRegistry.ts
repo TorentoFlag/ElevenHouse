@@ -33,6 +33,7 @@ import { Pin } from "../Pin/index.js";
 import { Reference } from "../Reference/index.js";
 import { Refresh } from "../Refresh/index.js";
 import { Search } from "../Search/index.js";
+import { Send } from "../Send/index.js";
 import { Settings } from "../Settings/index.js";
 import { Sparkle } from "../Sparkle/index.js";
 import { Star } from "../Star/index.js";
@@ -79,6 +80,7 @@ export const iconRegistry = {
   reference: Reference,
   refresh: Refresh,
   search: Search,
+  send: Send,
   settings: Settings,
   sparkle: Sparkle,
   star: Star,
