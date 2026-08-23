@@ -12,7 +12,7 @@ export const productionImages = [
     app_dir: "landing",
     build_args: "VITE_ASTROLOGER_WEB_ORIGIN=https://app.elevenhouse.ai",
     servicePaths: ["apps/landing/"],
-    group: "frontend",
+    group: "frontend"
   },
   {
     image: "elevenhouse-client-web",
@@ -23,7 +23,7 @@ export const productionImages = [
     app_dir: "client-web",
     build_args: "",
     servicePaths: ["apps/client-web/"],
-    group: "frontend",
+    group: "frontend"
   },
   {
     image: "elevenhouse-astrologer-web",
@@ -34,7 +34,7 @@ export const productionImages = [
     app_dir: "astrologer-web",
     build_args: "",
     servicePaths: ["apps/astrologer-web/"],
-    group: "frontend",
+    group: "frontend"
   },
   {
     image: "elevenhouse-admin-web",
@@ -45,7 +45,7 @@ export const productionImages = [
     app_dir: "admin-web",
     build_args: "",
     servicePaths: ["apps/admin-web/"],
-    group: "frontend",
+    group: "frontend"
   },
   {
     image: "elevenhouse-public-api",
@@ -56,7 +56,7 @@ export const productionImages = [
     app_dir: "public-api",
     build_args: "",
     servicePaths: ["apps/public-api/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-astrologer-api",
@@ -67,7 +67,7 @@ export const productionImages = [
     app_dir: "astrologer-api",
     build_args: "",
     servicePaths: ["apps/astrologer-api/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-admin-api",
@@ -78,7 +78,7 @@ export const productionImages = [
     app_dir: "admin-api",
     build_args: "",
     servicePaths: ["apps/admin-api/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-workers",
@@ -89,7 +89,7 @@ export const productionImages = [
     app_dir: "workers",
     build_args: "",
     servicePaths: ["apps/workers/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-payment-worker",
@@ -100,7 +100,7 @@ export const productionImages = [
     app_dir: "payment-worker",
     build_args: "",
     servicePaths: ["apps/payment-worker/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-chart-worker",
@@ -111,7 +111,7 @@ export const productionImages = [
     app_dir: "chart-worker",
     build_args: "",
     servicePaths: ["apps/chart-worker/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-chart-engine",
@@ -122,7 +122,7 @@ export const productionImages = [
     app_dir: "chart-engine",
     build_args: "",
     servicePaths: ["apps/chart-engine/"],
-    group: "chart-engine",
+    group: "chart-engine"
   },
   {
     image: "elevenhouse-notification-worker",
@@ -133,7 +133,7 @@ export const productionImages = [
     app_dir: "notification-worker",
     build_args: "",
     servicePaths: ["apps/notification-worker/"],
-    group: "backend",
+    group: "backend"
   },
   {
     image: "elevenhouse-db-migrator",
@@ -144,8 +144,8 @@ export const productionImages = [
     app_dir: "",
     build_args: "",
     servicePaths: ["packages/db/", "deployment/docker/db-migrator.Dockerfile"],
-    group: "db-migrator",
-  },
+    group: "db-migrator"
+  }
 ];
 
 const databaseWriterServices = [
@@ -155,7 +155,7 @@ const databaseWriterServices = [
   "workers",
   "payment-worker",
   "chart-worker",
-  "notification-worker",
+  "notification-worker"
 ];
 
 const serviceSmokeTargets = new Map([
@@ -165,7 +165,7 @@ const serviceSmokeTargets = new Map([
   ["astrologer-web", ["https://app.elevenhouse.ai"]],
   ["astrologer-api", ["https://app.elevenhouse.ai/api/health"]],
   ["admin-web", ["https://admin.elevenhouse.ai"]],
-  ["admin-api", ["https://admin.elevenhouse.ai/api/health"]],
+  ["admin-api", ["https://admin.elevenhouse.ai/api/health"]]
 ]);
 
 const fullSmokeTargets = [
@@ -175,7 +175,7 @@ const fullSmokeTargets = [
   "https://app.elevenhouse.ai",
   "https://app.elevenhouse.ai/api/health",
   "https://admin.elevenhouse.ai",
-  "https://admin.elevenhouse.ai/api/health",
+  "https://admin.elevenhouse.ai/api/health"
 ];
 
 const sharedNodePaths = [
@@ -184,23 +184,21 @@ const sharedNodePaths = [
   "pnpm-workspace.yaml",
   "turbo.json",
   "tsconfig.base.json",
-  "packages/",
+  "packages/"
 ];
 
 const deployRuntimePaths = [
+  ".github/workflows/deploy.yml",
   "deployment/compose/",
   "deployment/caddy/",
-  "deployment/server/",
+  "deployment/server/"
 ];
 
-const databaseReleasePaths = [
-  "packages/db/",
-  "deployment/docker/db-migrator.Dockerfile",
-];
+const databaseReleasePaths = ["packages/db/", "deployment/docker/db-migrator.Dockerfile"];
 
 const frontendImagePaths = [
   "deployment/docker/frontend.Dockerfile",
-  "deployment/docker/frontend.Caddyfile",
+  "deployment/docker/frontend.Caddyfile"
 ];
 
 const backendImagePaths = ["deployment/docker/backend.Dockerfile"];
@@ -208,7 +206,7 @@ const chartEngineImagePaths = ["deployment/docker/chart-engine.Dockerfile"];
 
 function matchesAnyPath(file, prefixes) {
   return prefixes.some((prefix) =>
-    prefix.endsWith("/") ? file.startsWith(prefix) : file === prefix,
+    prefix.endsWith("/") ? file.startsWith(prefix) : file === prefix
   );
 }
 
@@ -224,7 +222,7 @@ function normalizeCurrentImageTags(input) {
   return Object.fromEntries(
     Object.entries(input)
       .map(([key, value]) => [key, String(value ?? "").trim()])
-      .filter(([, value]) => value.length > 0),
+      .filter(([, value]) => value.length > 0)
   );
 }
 
@@ -248,7 +246,7 @@ function deployEnvContent(serviceTags) {
       .filter(([key]) => key !== "RELEASE_IMAGE_TAG")
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, value]) => `${key}=${value}`),
-    "COMPOSE_PROJECT_NAME=elevenhouse",
+    "COMPOSE_PROJECT_NAME=elevenhouse"
   ].join("\n");
 }
 
@@ -258,7 +256,7 @@ function encodeBase64(value) {
 
 export function createProductionImagePlan(changedFiles, options = {}) {
   const currentImageTags = normalizeCurrentImageTags(
-    options.currentImageTags ?? options.currentImageTag,
+    options.currentImageTags ?? options.currentImageTag
   );
   const headRef = String(options.headRef ?? options.imageTag ?? "HEAD").trim();
   const forceDeploy = options.forceDeploy === true;
@@ -314,7 +312,7 @@ export function createProductionImagePlan(changedFiles, options = {}) {
   }
 
   const buildAllBecauseNoCurrentTag = productionImages.some(
-    (image) => !isCommitTag(imageTagFor(image, currentImageTags)),
+    (image) => !isCommitTag(imageTagFor(image, currentImageTags))
   );
   const effectiveChangedImages = buildAllBecauseNoCurrentTag
     ? new Set(productionImages.map((image) => image.image))
@@ -324,16 +322,13 @@ export function createProductionImagePlan(changedFiles, options = {}) {
   const changedRuntimeServices = uniqueSorted(
     productionImages
       .filter((image) => effectiveChangedImages.has(image.image) && image.service !== "db-migrator")
-      .map((image) => image.service),
+      .map((image) => image.service)
   );
   const deployServices = databaseReleaseRequired
     ? uniqueSorted(databaseWriterServices)
     : changedRuntimeServices;
   const deployRequired =
-    forceDeploy ||
-    buildAllBecauseNoCurrentTag ||
-    deployRuntimeChanged ||
-    changedImages.size > 0;
+    forceDeploy || buildAllBecauseNoCurrentTag || deployRuntimeChanged || changedImages.size > 0;
   const deployMode = !deployRequired
     ? "none"
     : forceDeploy || buildAllBecauseNoCurrentTag
@@ -346,8 +341,8 @@ export function createProductionImagePlan(changedFiles, options = {}) {
   const serviceTags = Object.fromEntries(
     productionImages.map((image) => [
       image.tagVariable,
-      effectiveChangedImages.has(image.image) ? headRef : imageTagFor(image, currentImageTags),
-    ]),
+      effectiveChangedImages.has(image.image) ? headRef : imageTagFor(image, currentImageTags)
+    ])
   );
   serviceTags.RELEASE_IMAGE_TAG = headRef;
   const smokeTargets =
@@ -379,17 +374,18 @@ export function createProductionImagePlan(changedFiles, options = {}) {
     databaseReleaseRequired,
     forceDeploy,
     deployRuntimeChanged,
-    buildAllBecauseNoCurrentTag,
+    buildAllBecauseNoCurrentTag
   };
 }
 
 function readChangedFiles(baseRef, headRef) {
-  const output = execFileSync(
-    "git",
-    ["diff", "--name-only", `${baseRef}...${headRef}`],
-    { encoding: "utf8" },
-  );
-  return output.split("\n").map((line) => line.trim()).filter(Boolean);
+  const output = execFileSync("git", ["diff", "--name-only", `${baseRef}...${headRef}`], {
+    encoding: "utf8"
+  });
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 async function writeGitHubOutput(plan) {
@@ -406,7 +402,7 @@ async function writeGitHubOutput(plan) {
     `has_build=${plan.build.length > 0 ? "true" : "false"}`,
     `build_matrix=${JSON.stringify({ include: plan.build })}`,
     `current_image_tag=${plan.currentImageTag}`,
-    `changed_files_json=${JSON.stringify(plan.changedFiles)}`,
+    `changed_files_json=${JSON.stringify(plan.changedFiles)}`
   ];
 
   if (!outputPath) {
@@ -429,7 +425,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const plan = createProductionImagePlan(changedFiles, {
     currentImageTags: JSON.parse(env.CURRENT_IMAGE_TAGS_JSON ?? "{}"),
     headRef,
-    forceDeploy: env.FORCE_DEPLOY === "true",
+    forceDeploy: env.FORCE_DEPLOY === "true"
   });
 
   await writeGitHubOutput(plan);

@@ -1,10 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  createProductionImagePlan,
-  productionImages,
-} from "./plan-production-images.mjs";
+import { createProductionImagePlan, productionImages } from "./plan-production-images.mjs";
 
 const currentImageTag = "6cec802e07bae80141b2279c8f959b640e4855b4";
 
@@ -13,10 +10,10 @@ function imageNames(items) {
 }
 
 test("plans one changed frontend app without promoting unchanged images", () => {
-  const plan = createProductionImagePlan(
-    ["apps/client-web/src/pages/home/HomePage.tsx"],
-    { currentImageTags: { default: currentImageTag }, headRef: currentImageTag },
-  );
+  const plan = createProductionImagePlan(["apps/client-web/src/pages/home/HomePage.tsx"], {
+    currentImageTags: { default: currentImageTag },
+    headRef: currentImageTag
+  });
 
   assert.deepEqual(imageNames(plan.build), ["elevenhouse-client-web"]);
   assert.equal(plan.deployMode, "service");
@@ -28,10 +25,13 @@ test("plans one changed frontend app without promoting unchanged images", () => 
 test("shared packages conservatively rebuild all node images but not chart-engine", () => {
   const plan = createProductionImagePlan(["packages/contracts/src/clients.ts"], {
     currentImageTags: { default: currentImageTag },
-    headRef: "1111111111111111111111111111111111111111",
+    headRef: "1111111111111111111111111111111111111111"
   });
 
-  assert.equal(plan.build.some((item) => item.image === "elevenhouse-chart-engine"), false);
+  assert.equal(
+    plan.build.some((item) => item.image === "elevenhouse-chart-engine"),
+    false
+  );
   assert.equal(plan.build.length, productionImages.length - 1);
   assert.equal(plan.promote.length, 0);
   assert.equal(plan.serviceTags.CHART_ENGINE_IMAGE_TAG, currentImageTag);
@@ -41,7 +41,7 @@ test("shared packages conservatively rebuild all node images but not chart-engin
 test("chart-engine changes rebuild only chart-engine", () => {
   const plan = createProductionImagePlan(["apps/chart-engine/src/chart_engine/main.py"], {
     currentImageTags: { default: currentImageTag },
-    headRef: "2222222222222222222222222222222222222222",
+    headRef: "2222222222222222222222222222222222222222"
   });
 
   assert.deepEqual(imageNames(plan.build), ["elevenhouse-chart-engine"]);
@@ -51,8 +51,8 @@ test("chart-engine changes rebuild only chart-engine", () => {
 });
 
 test("deployment runtime changes deploy without rebuilding images", () => {
-  const plan = createProductionImagePlan(["deployment/caddy/Caddyfile"], {
-    currentImageTags: { default: currentImageTag },
+  const plan = createProductionImagePlan([".github/workflows/deploy.yml"], {
+    currentImageTags: { default: currentImageTag }
   });
 
   assert.equal(plan.deployRequired, true);
@@ -63,7 +63,7 @@ test("deployment runtime changes deploy without rebuilding images", () => {
 
 test("docs-only changes do not require production deployment", () => {
   const plan = createProductionImagePlan(["docs/product/roadmap.md"], {
-    currentImageTags: { default: currentImageTag },
+    currentImageTags: { default: currentImageTag }
   });
 
   assert.equal(plan.deployRequired, false);
@@ -75,7 +75,7 @@ test("docs-only changes do not require production deployment", () => {
 test("force deploy runs full rollout without rebuilding unchanged images", () => {
   const plan = createProductionImagePlan(["docs/product/roadmap.md"], {
     currentImageTags: { default: currentImageTag },
-    forceDeploy: true,
+    forceDeploy: true
   });
 
   assert.equal(plan.deployRequired, true);
@@ -87,7 +87,7 @@ test("force deploy runs full rollout without rebuilding unchanged images", () =>
 test("missing current tag rebuilds all images", () => {
   const plan = createProductionImagePlan(["docs/product/roadmap.md"], {
     currentImageTags: {},
-    headRef: "3333333333333333333333333333333333333333",
+    headRef: "3333333333333333333333333333333333333333"
   });
 
   assert.equal(plan.buildAllBecauseNoCurrentTag, true);
@@ -101,7 +101,7 @@ test("missing current tag rebuilds all images", () => {
 test("db package changes require database release and all writers", () => {
   const plan = createProductionImagePlan(["packages/db/src/schema.ts"], {
     currentImageTags: { default: currentImageTag },
-    headRef: "4444444444444444444444444444444444444444",
+    headRef: "4444444444444444444444444444444444444444"
   });
 
   assert.equal(plan.deployMode, "db");
@@ -113,14 +113,14 @@ test("db package changes require database release and all writers", () => {
     "notification-worker",
     "payment-worker",
     "public-api",
-    "workers",
+    "workers"
   ]);
 });
 
 test("encodes deploy services for ssh-safe transport", () => {
   const plan = createProductionImagePlan(["packages/db/src/schema.ts"], {
     currentImageTags: { default: currentImageTag },
-    headRef: "5555555555555555555555555555555555555555",
+    headRef: "5555555555555555555555555555555555555555"
   });
 
   assert.equal(
