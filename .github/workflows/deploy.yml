@@ -489,6 +489,26 @@ jobs:
           trap - ERR
           REMOTE
 
+      - name: Diagnose failed production deploy
+        if: failure()
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
+          ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'bash -s' <<'REMOTE'
+          set +e
+          cd /opt/elevenhouse || exit 0
+          echo "PRODUCTION_DEPLOY_DIAGNOSTIC ps"
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
+          echo "PRODUCTION_DEPLOY_DIAGNOSTIC astrologer-api-health"
+          docker inspect elevenhouse-astrologer-api-1 --format '{{json .State.Health}}'
+          echo "PRODUCTION_DEPLOY_DIAGNOSTIC astrologer-api-logs"
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml logs --no-color --tail=200 astrologer-api
+          echo "PRODUCTION_DEPLOY_DIAGNOSTIC dependency-logs"
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml logs --no-color --tail=80 postgres redis minio
+          REMOTE
+
       - name: Smoke check
         env:
           SMOKE_TARGETS: ${{ needs.plan-images.outputs.smoke_targets }}
