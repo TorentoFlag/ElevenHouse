@@ -13,7 +13,7 @@ import {
   createFlowRuntimeRequirementKeys,
   createNewLeadFlowEnrollmentRequestedPayload,
   createProductPurchasedFlowEnrollmentRequestedPayload,
-  createReviewReceivedFlowEnrollmentRequestedPayload,
+  createReviewFirstPublishedFlowEnrollmentRequestedPayload,
   createScheduleTimeFlowEnrollmentRequestedPayload,
   createSubscriptionEventFlowEnrollmentRequestedPayload,
   decideDurableFlowApproval,
@@ -46,6 +46,7 @@ import {
 import { createPostgresRuntime } from "@elevenhouse/db/runtime";
 import { createDrizzleChartCalculationCommandStore } from "../src/adapters/charts/drizzle-chart-calculation-job-store";
 import { createDrizzlePlatformTariffAuthorityStore } from "../src/adapters/platform-billing/drizzle-platform-tariff-authority-store";
+import { createDrizzleReviewCommandStore } from "../src/adapters/reviews/drizzle-review-command-store";
 
 const qaPrefix = `flow-local-qa-${Date.now()}`;
 const runtime = createPostgresRuntime();
@@ -79,7 +80,7 @@ async function main() {
     await runFreeProductReceivedStartScenario(ownerUserId, ownerSubjectId),
     await runAstroEventStartScenario(ownerUserId, ownerSubjectId),
     await runScheduleTimeStartScenario(ownerUserId, ownerSubjectId),
-    await runReviewReceivedStartScenario(ownerUserId, ownerSubjectId),
+    await runReviewFirstPublishedStartScenario(ownerUserId, ownerSubjectId),
     await runSubscriptionEventStartScenario(ownerUserId, ownerSubjectId),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, true),
     await runBirthDataScenario(ownerUserId, ownerSubjectId, productId, false),
@@ -545,8 +546,8 @@ async function runScheduleTimeStartScenario(ownerUserId: string, ownerSubjectId:
   };
 }
 
-async function runReviewReceivedStartScenario(ownerUserId: string, ownerSubjectId: string) {
-  const graph = reviewReceivedGraph();
+async function runReviewFirstPublishedStartScenario(ownerUserId: string, ownerSubjectId: string) {
+  const graph = reviewFirstPublishedGraph();
   const { flowId, workerIdentity } = await publishActivateAndAdmit(
     ownerUserId,
     ownerSubjectId,
@@ -554,25 +555,31 @@ async function runReviewReceivedStartScenario(ownerUserId: string, ownerSubjectI
   );
   const scenarioClientUserId = await createUser();
   const relationshipId = await createRelationship(ownerUserId, scenarioClientUserId);
+  const review = await createPublishedReviewForFlowQa(
+    ownerUserId,
+    scenarioClientUserId,
+    relationshipId
+  );
   const enrollment = await createDrizzleFlowClientEventEnrollmentStore(
     runtime.database
   ).enrollClientEvent({
-    request: createReviewReceivedFlowEnrollmentRequestedPayload({
-      reviewId: randomUUID(),
+    request: createReviewFirstPublishedFlowEnrollmentRequestedPayload({
+      reviewId: review.reviewId,
       ownerUserId,
       clientUserId: scenarioClientUserId,
       relationshipId,
-      receivedAt: await databaseNow()
+      firstApprovedVersionId: review.firstApprovedVersionId,
+      publishedAt: review.publishedAt
     })
   });
   const execution = await processAll(workerIdentity);
   const run = enrollment.runs.find((candidate) => candidate.flowId === flowId);
   return {
-    scenario: "review_received_completed",
+    scenario: "review_first_published_completed",
     clientUserId: scenarioClientUserId,
     enrollment,
     execution,
-    persisted: await runPersistence(run?.runId ?? raise("Expected review-received run"))
+    persisted: await runPersistence(run?.runId ?? raise("Expected review-first-published run"))
   };
 }
 
@@ -1173,6 +1180,70 @@ async function createRelationship(ownerUserId: string, clientUserId: string) {
     [clientUserId, ownerUserId]
   );
   return row.rows[0]?.id ?? raise("Expected relationship");
+}
+
+async function createPublishedReviewForFlowQa(
+  ownerUserId: string,
+  clientUserId: string,
+  relationshipId: string
+) {
+  const productId = await createProduct(ownerUserId);
+  const moderatorUserId = await createUser();
+  const reviewableInstanceId = randomUUID();
+  const reviewId = randomUUID();
+  const firstApprovedVersionId = randomUUID();
+  const receivedAt = await databaseNow();
+  const submittedAt = await databaseNow();
+  const publishedAt = await databaseNow();
+
+  await runtime.pool.query(
+    `insert into reviewable_instances
+      (id, astrologer_user_id, client_user_id, relationship_id, kind, status, window_policy,
+       source_resource_key, product_id, order_id, booking_id, title_snapshot, context_label_snapshot,
+       received_at, review_window_closes_at, blocked_reason_code, created_at, updated_at)
+     values ($1, $2, $3, $4, 'booking', 'reviewable', 'standard_14_days_after_receipt',
+       $5, $6, null, null, 'QA consultation', '60 minutes', $7,
+       $7::timestamptz + interval '14 days', null, $7, $7)`,
+    [
+      reviewableInstanceId,
+      ownerUserId,
+      clientUserId,
+      relationshipId,
+      `booking:${randomUUID()}`,
+      productId,
+      receivedAt
+    ]
+  );
+
+  const reviewCommands = createDrizzleReviewCommandStore(runtime.database);
+  const submission = await reviewCommands.submitReviewVersion({
+    actorUserId: clientUserId,
+    now: submittedAt,
+    reviewableInstanceId,
+    nextReviewId: reviewId,
+    nextVersionId: firstApprovedVersionId,
+    submission: {
+      rating: 5,
+      text: "Flow QA review publication.",
+      publicIdentityMode: "named"
+    }
+  });
+  if (submission.kind === "rejected") {
+    throw new Error(`Expected QA review submission, got ${submission.reason}`);
+  }
+
+  const approval = await reviewCommands.approveReviewVersion({
+    moderatorUserId,
+    now: publishedAt,
+    reviewId,
+    versionId: firstApprovedVersionId,
+    nextPublicationEventId: randomUUID()
+  });
+  if (approval.kind === "rejected") {
+    throw new Error(`Expected QA review approval, got ${approval.reason}`);
+  }
+
+  return { reviewId, firstApprovedVersionId, publishedAt };
 }
 
 async function createBirthData(clientUserId: string) {
@@ -1901,14 +1972,14 @@ function scheduleTimeGraph(): FlowGraphV2 {
   });
 }
 
-function reviewReceivedGraph(): FlowGraphV2 {
+function reviewFirstPublishedGraph(): FlowGraphV2 {
   return flowGraphV2Schema.parse({
     schemaVersion: "flow-graph.v2",
     nodes: [
       {
         id: "review",
-        kind: "review_received",
-        displayTitle: "Review received",
+        kind: "review_first_published",
+        displayTitle: "Review published",
         configSchemaVersion: 1,
         executorContractVersion: 1,
         config: { enrollmentPolicy: "each_occurrence" }
@@ -1919,7 +1990,7 @@ function reviewReceivedGraph(): FlowGraphV2 {
         displayTitle: "Done",
         configSchemaVersion: 1,
         executorContractVersion: 1,
-        config: { goalKey: "qa_review_received" }
+        config: { goalKey: "qa_review_first_published" }
       }
     ],
     edges: [

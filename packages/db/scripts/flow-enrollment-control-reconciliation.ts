@@ -559,7 +559,7 @@ ALTER TABLE flow_runtime_events
         'astro_event',
         'client_lifecycle_changed',
         'schedule_time',
-        'review_received',
+        'review_first_published',
         'subscription_event'
       )
       AND length(trim(occurrence_key)) BETWEEN 1 AND 180
