@@ -90,15 +90,6 @@ const generatedBaselineCatalog = {
 } as const satisfies CatalogFingerprint;
 
 const currentRuntimeExtensionCatalog = {
-  hash: "491ceadae67019e2060ecd9820a22d2bc7e9a512d50389687ebf203d2230bbdf",
-  columns: 16,
-  constraints: 4,
-  indexes: 2,
-  unvalidatedConstraints: 0,
-  invalidIndexes: 0
-} as const satisfies RuntimeExtensionCatalogFingerprint;
-
-const reviewReceivedRuntimeExtensionCatalog = {
   hash: "c261b45862c4d4bb941914fcd4ed3a6d1036a33c75f91966acf4e86abdb3ba35",
   columns: 16,
   constraints: 4,
@@ -169,12 +160,7 @@ export async function reconcileFlowEnrollmentControl(
     state = await readReconciliationCatalogState(client);
   }
 
-  const {
-    catalog: before,
-    runtimeExtensionIsAbsent,
-    runtimeExtensionIsReviewReceived,
-    runtimeIntegrityIsAbsent
-  } = state;
+  const { catalog: before, runtimeExtensionIsAbsent, runtimeIntegrityIsAbsent } = state;
 
   let reconciled = false;
   if (matchesCatalog(before, currentCatalog)) {
@@ -198,9 +184,6 @@ export async function reconcileFlowEnrollmentControl(
 
   if (runtimeExtensionIsAbsent) {
     await client.query(flowEnrollmentRuntimeExtensionBaselineDdl);
-    reconciled = true;
-  } else if (runtimeExtensionIsReviewReceived) {
-    await client.query(flowEnrollmentRuntimeExtensionReviewReceivedUpgradeDdl);
     reconciled = true;
   }
   if (runtimeIntegrityIsAbsent) {
@@ -242,7 +225,6 @@ type ReconciliationCatalogState = {
   readonly catalog: CatalogFingerprint;
   readonly runtimeExtensionIsCurrent: boolean;
   readonly runtimeExtensionIsAbsent: boolean;
-  readonly runtimeExtensionIsReviewReceived: boolean;
   readonly runtimeIntegrityIsCurrent: boolean;
   readonly runtimeIntegrityIsAbsent: boolean;
 };
@@ -254,12 +236,8 @@ async function readReconciliationCatalogState(client: Client): Promise<Reconcili
     runtimeExtension,
     currentRuntimeExtensionCatalog
   );
-  const runtimeExtensionIsReviewReceived = matchesRuntimeExtensionCatalog(
-    runtimeExtension,
-    reviewReceivedRuntimeExtensionCatalog
-  );
   const runtimeExtensionIsAbsent = isAbsentRuntimeExtensionCatalog(runtimeExtension);
-  if (!runtimeExtensionIsCurrent && !runtimeExtensionIsReviewReceived && !runtimeExtensionIsAbsent) {
+  if (!runtimeExtensionIsCurrent && !runtimeExtensionIsAbsent) {
     throw runtimeExtensionDriftError(runtimeExtension);
   }
 
@@ -277,7 +255,6 @@ async function readReconciliationCatalogState(client: Client): Promise<Reconcili
     catalog,
     runtimeExtensionIsCurrent,
     runtimeExtensionIsAbsent,
-    runtimeExtensionIsReviewReceived,
     runtimeIntegrityIsCurrent,
     runtimeIntegrityIsAbsent
   };
@@ -648,51 +625,6 @@ CREATE UNIQUE INDEX flow_runs_owner_stable_enrollment_unique
 
 ALTER TABLE flow_runs VALIDATE CONSTRAINT flow_runs_activation_epoch_fk;
 ALTER TABLE flow_runs VALIDATE CONSTRAINT flow_runs_enrollment_shape_check;
-`;
-
-export const flowEnrollmentRuntimeExtensionReviewReceivedUpgradeDdl = `
-ALTER TABLE flow_runtime_events
-  DROP CONSTRAINT flow_runtime_events_normalized_shape_check,
-  ADD CONSTRAINT flow_runtime_events_normalized_shape_check CHECK (
-    (
-      event_kind IS NULL
-      AND occurrence_key IS NULL
-      AND payload_schema_version IS NULL
-      AND payload_digest IS NULL
-      AND classification IS NULL
-      AND redaction_version IS NULL
-      AND retention_policy_id IS NULL
-      AND ingestion_outcome IS NULL
-      AND processed_at IS NULL
-    ) OR (
-      event_kind IN (
-        'booking_confirmed',
-        'manual_client',
-        'new_lead',
-        'free_product_received',
-        'product_purchased',
-        'first_inbound_message',
-        'astro_event',
-        'client_lifecycle_changed',
-        'schedule_time',
-        'review_first_published',
-        'subscription_event'
-      )
-      AND length(trim(occurrence_key)) BETWEEN 1 AND 180
-      AND payload_schema_version = 1
-      AND payload_digest ~ '^sha256:[a-f0-9]{64}$'
-      AND classification IN ('personal')
-      AND redaction_version = 1
-      AND length(trim(retention_policy_id)) BETWEEN 1 AND 180
-      AND ingestion_outcome IN (
-        'enrolled', 'no_match', 'late_unmatched', 'subject_ineligible', 'suppressed'
-      )
-      AND processed_at IS NOT NULL
-    )
-  ) NOT VALID;
-
-ALTER TABLE flow_runtime_events
-  VALIDATE CONSTRAINT flow_runtime_events_normalized_shape_check;
 `;
 
 export const flowEnrollmentRuntimeIntegrityBaselineDdl = `
