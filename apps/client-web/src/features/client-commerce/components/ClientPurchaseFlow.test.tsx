@@ -24,7 +24,9 @@ afterEach(cleanup);
 describe("ClientPurchaseFlow checkout errors", () => {
   beforeEach(() => {
     Object.values(api).forEach((mock) => mock.mockReset());
+    window.sessionStorage.clear();
     window.history.replaceState(null, "", "/me");
+    vi.restoreAllMocks();
   });
 
   it("shows provider-unavailable copy instead of a verified-contact error", async () => {
@@ -64,6 +66,43 @@ describe("ClientPurchaseFlow checkout errors", () => {
     fireEvent.click(screen.getByRole("button", { name: "Оплатить 10,00 ₽" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Проверьте подтверждённый email");
+  });
+
+  it("does not reuse checkout idempotency keys across product revision changes", async () => {
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(
+      "11111111-1111-4111-8111-111111111111"
+    );
+    window.sessionStorage.setItem(
+      `elevenhouse.client-checkout.keys.${encodeURIComponent(
+        [astrologerId, productId, "chat", ""].join("|")
+      )}`,
+      JSON.stringify({
+        booking: "client-checkout:booking:stale",
+        order: "client-checkout:order:stale",
+        checkout: "client-checkout:checkout:stale"
+      })
+    );
+    api.getClientPurchaseOptions.mockResolvedValueOnce({
+      products: [{ ...astroDiaryProduct, revision: astroDiaryProduct.revision + 1 }]
+    });
+    api.createClientOrder.mockResolvedValueOnce(order);
+    api.prepareClientCheckout.mockRejectedValueOnce(
+      new HttpError(503, { code: "payment_checkout_unavailable" })
+    );
+
+    renderFlow();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Астродневник/ }));
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "client@example.com" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Оплатить 10,00 ₽" }));
+
+    await screen.findByRole("alert");
+    expect(api.createClientOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedProductRevision: astroDiaryProduct.revision + 1 }),
+      "client-checkout:order:11111111-1111-4111-8111-111111111111"
+    );
   });
 });
 

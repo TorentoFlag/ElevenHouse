@@ -8,6 +8,13 @@ This is the current route inventory. API ownership, authorization and contract r
 
 | Method | Route | Controller |
 | --- | --- | --- |
+| GET | `/astro-diary/journals` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId/client-entry/draft` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| POST | `/astro-diary/journals/:journalId/client-entry/drafts` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| PUT | `/astro-diary/journals/:journalId/client-entry/drafts/:draftId` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| POST | `/astro-diary/journals/:journalId/client-entry/drafts/:draftId/publish` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId/timeline` | `apps/public-api/src/modules/astro-diary/astro-diary.controller.ts` |
 | POST | `/booking/intent` | `apps/public-api/src/modules/booking/booking.controller.ts` |
 | POST | `/client-join-intents` | `apps/public-api/src/modules/client-join/client-join.controller.ts` |
 | GET | `/client/orders/:orderId/disputes` | `apps/public-api/src/modules/refund-candidates/refund-candidates.controller.ts` |
@@ -25,6 +32,9 @@ This is the current route inventory. API ownership, authorization and contract r
 | PUT | `/me/birth-data` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
 | GET | `/me/birth-places` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
 | GET | `/me/overview` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
+| GET | `/me/related-birth-profiles` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
+| POST | `/me/related-birth-profiles` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
+| PUT | `/me/related-birth-profiles/:relatedProfileId` | `apps/public-api/src/modules/client-profile/client-profile.controller.ts` |
 | POST | `/orders` | `apps/public-api/src/modules/orders/orders.controller.ts` |
 | GET | `/orders/:orderId` | `apps/public-api/src/modules/orders/orders.controller.ts` |
 | POST | `/payments/checkout` | `apps/public-api/src/modules/payments/payments.controller.ts` |
@@ -44,6 +54,13 @@ This is the current route inventory. API ownership, authorization and contract r
 | POST | `/astro-calendar/generations` | `apps/astrologer-api/src/modules/astro-calendar/astro-calendar.controller.ts` |
 | POST | `/astro-calendar/generations/:generationId/retry` | `apps/astrologer-api/src/modules/astro-calendar/astro-calendar.controller.ts` |
 | GET | `/astro-calendar/range` | `apps/astrologer-api/src/modules/astro-calendar/astro-calendar.controller.ts` |
+| GET | `/astro-diary/journals` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId/astrologer-reply/draft` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| POST | `/astro-diary/journals/:journalId/astrologer-reply/drafts` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| PUT | `/astro-diary/journals/:journalId/astrologer-reply/drafts/:draftId` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| POST | `/astro-diary/journals/:journalId/astrologer-reply/drafts/:draftId/publish` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
+| GET | `/astro-diary/journals/:journalId/timeline` | `apps/astrologer-api/src/modules/astro-diary/astro-diary.controller.ts` |
 | GET | `/astrologer-profile/me` | `apps/astrologer-api/src/modules/astrologer-profile/astrologer-profile.controller.ts` |
 | PUT | `/astrologer-profile/me` | `apps/astrologer-api/src/modules/astrologer-profile/astrologer-profile.controller.ts` |
 | GET | `/availability/schedules/default` | `apps/astrologer-api/src/modules/availability/availability.controller.ts` |
@@ -82,6 +99,8 @@ This is the current route inventory. API ownership, authorization and contract r
 | GET | `/clients` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/:clientUserId` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | PUT | `/clients/:clientUserId/birth-data` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| POST | `/clients/:clientUserId/related-birth-profiles` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
+| PUT | `/clients/:clientUserId/related-birth-profiles/:relatedProfileId` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/birth-places` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/birth-places/geoapify/:providerPlaceId` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
 | GET | `/clients/crm` | `apps/astrologer-api/src/modules/clients/clients.controller.ts` |
@@ -170,6 +189,9 @@ This is the current route inventory. API ownership, authorization and contract r
 | POST | `/media/upload-intents` | `apps/astrologer-api/src/modules/media/media.controller.ts` |
 | GET | `/messaging/channel-connections` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | GET | `/messaging/channel-connections/instagram/graph/callback` | `apps/astrologer-api/src/modules/messaging/instagram-graph-oauth.controller.ts` |
+| POST | `/messaging/channel-connections/instagram/graph/data-deletion` | `apps/astrologer-api/src/modules/messaging/instagram-graph-compliance.controller.ts` |
+| GET | `/messaging/channel-connections/instagram/graph/data-deletion/status/:confirmationCode` | `apps/astrologer-api/src/modules/messaging/instagram-graph-compliance.controller.ts` |
+| POST | `/messaging/channel-connections/instagram/graph/deauthorize` | `apps/astrologer-api/src/modules/messaging/instagram-graph-compliance.controller.ts` |
 | POST | `/messaging/channel-connections/instagram/graph/start` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | POST | `/messaging/channel-connections/telegram/business/start` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |
 | POST | `/messaging/channel-connections/telegram/mtproto/code` | `apps/astrologer-api/src/modules/messaging/messaging.controller.ts` |

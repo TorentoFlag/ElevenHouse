@@ -184,6 +184,7 @@ export function ClientPurchaseFlow({
           checkoutScope({
             astrologerUserId: selectedAstrologer.astrologerUserId,
             productId: selectedProduct.id,
+            productRevision: selectedProduct.revision,
             deliveryFormat,
             selectedStartAt
           })
@@ -478,6 +479,7 @@ function readCheckoutKeys(storageKey: string): CheckoutKeys | null {
 function checkoutScope(input: {
   readonly astrologerUserId: string;
   readonly productId: string;
+  readonly productRevision: number;
   readonly deliveryFormat: string;
   readonly selectedStartAt: string | null;
 }): string {
@@ -485,6 +487,7 @@ function checkoutScope(input: {
     [
       input.astrologerUserId,
       input.productId,
+      String(input.productRevision),
       input.deliveryFormat,
       input.selectedStartAt ?? ""
     ].join("|")

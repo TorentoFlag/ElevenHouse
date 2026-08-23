@@ -1,0 +1,11 @@
+Admin finance browser fixture seeded
+Admin user: 10000000-0000-4000-8000-000000000001
+Astrologer user: 10000000-0000-4000-8000-000000000002
+Session cookie: elevenhouse_admin_session=elevenhouse-dev-admin-finance-session-token
+Astrologer session cookie: elevenhouse_astrologer_session=elevenhouse-dev-astrologer-finance-session-token
+Astrologer CSRF cookie: elevenhouse_astrologer_csrf=v1.1788104340880.elevenhouse-dev-admin-finance-csrf.yiqsEaXCBDxGC6f_9w8cd5bW47ieZ5CmOcjE3Uh_lAM
+Astrologer CSRF header: x-csrf-token: v1.1788104340880.elevenhouse-dev-admin-finance-csrf.yiqsEaXCBDxGC6f_9w8cd5bW47ieZ5CmOcjE3Uh_lAM
+CSRF cookie: elevenhouse_admin_csrf=v1.1788104340881.elevenhouse-dev-admin-finance-csrf.kljQqejFzCm6a4DSI-jNddkPVj1HJGWJ1hEdh9nyrzQ
+CSRF header: x-csrf-token: v1.1788104340881.elevenhouse-dev-admin-finance-csrf.kljQqejFzCm6a4DSI-jNddkPVj1HJGWJ1hEdh9nyrzQ
+Browser console helper: document.cookie = "elevenhouse_admin_session=elevenhouse-dev-admin-finance-session-token; Path=/; SameSite=Lax"; document.cookie = "elevenhouse_admin_csrf=v1.1788104340881.elevenhouse-dev-admin-finance-csrf.kljQqejFzCm6a4DSI-jNddkPVj1HJGWJ1hEdh9nyrzQ; Path=/; SameSite=Lax"; location.reload()
+Astrologer browser console helper: document.cookie = "elevenhouse_astrologer_session=elevenhouse-dev-astrologer-finance-session-token; Path=/; SameSite=Lax"; document.cookie = "elevenhouse_astrologer_csrf=v1.1788104340880.elevenhouse-dev-admin-finance-csrf.yiqsEaXCBDxGC6f_9w8cd5bW47ieZ5CmOcjE3Uh_lAM; Path=/; SameSite=Lax"; location.reload()
