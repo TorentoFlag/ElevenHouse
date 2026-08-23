@@ -116,3 +116,15 @@ test("db package changes require database release and all writers", () => {
     "workers",
   ]);
 });
+
+test("encodes deploy services for ssh-safe transport", () => {
+  const plan = createProductionImagePlan(["packages/db/src/schema.ts"], {
+    currentImageTags: { default: currentImageTag },
+    headRef: "5555555555555555555555555555555555555555",
+  });
+
+  assert.equal(
+    Buffer.from(plan.deployServicesBase64, "base64").toString("utf8"),
+    "admin-api astrologer-api chart-worker notification-worker payment-worker public-api workers"
+  );
+});

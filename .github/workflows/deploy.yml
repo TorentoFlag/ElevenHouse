@@ -53,6 +53,7 @@ jobs:
       deploy_required: ${{ steps.plan.outputs.deploy_required }}
       deploy_mode: ${{ steps.plan.outputs.deploy_mode }}
       deploy_services: ${{ steps.plan.outputs.deploy_services }}
+      deploy_services_base64: ${{ steps.plan.outputs.deploy_services_base64 }}
       deploy_env_base64: ${{ steps.plan.outputs.deploy_env_base64 }}
       smoke_targets: ${{ steps.plan.outputs.smoke_targets }}
       chart_smoke_required: ${{ steps.plan.outputs.chart_smoke_required }}
@@ -312,7 +313,7 @@ jobs:
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
           DEPLOY_ENV_BASE64: ${{ needs.plan-images.outputs.deploy_env_base64 }}
           DEPLOY_MODE: ${{ needs.plan-images.outputs.deploy_mode }}
-          DEPLOY_SERVICES: ${{ needs.plan-images.outputs.deploy_services }}
+          DEPLOY_SERVICES_BASE64: ${{ needs.plan-images.outputs.deploy_services_base64 }}
           CHART_SMOKE_REQUIRED: ${{ needs.plan-images.outputs.chart_smoke_required }}
         run: |
           SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
@@ -321,7 +322,7 @@ jobs:
             IMAGE_TAG="${IMAGE_TAG}" \
             DEPLOY_ENV_BASE64="${DEPLOY_ENV_BASE64}" \
             DEPLOY_MODE="${DEPLOY_MODE}" \
-            DEPLOY_SERVICES="${DEPLOY_SERVICES}" \
+            DEPLOY_SERVICES_BASE64="${DEPLOY_SERVICES_BASE64}" \
             CHART_SMOKE_REQUIRED="${CHART_SMOKE_REQUIRED}" \
             GHCR_USERNAME="${PRODUCTION_GHCR_USERNAME}" \
             GHCR_TOKEN="${PRODUCTION_GHCR_READ_TOKEN}" \
@@ -358,6 +359,7 @@ jobs:
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next config --quiet
           ./cleanup-docker-retention.sh bootstrap-successful-release
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          DEPLOY_SERVICES="$(printf '%s' "${DEPLOY_SERVICES_BASE64}" | base64 -d)"
           read -r -a DEPLOY_SERVICE_ARGS <<< "${DEPLOY_SERVICES}"
           if [[ "${DEPLOY_MODE}" == "service" ]]; then
             if (( ${#DEPLOY_SERVICE_ARGS[@]} == 0 )); then
