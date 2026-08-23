@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
+import { StrictMode } from "react";
 import { PublicAstrologerPage } from "./PublicAstrologerPage";
 
 const createClientJoinIntent = vi.hoisted(() => vi.fn());
@@ -97,16 +98,35 @@ describe("PublicAstrologerPage", () => {
     expect(await screen.findByText("Анна Соколова")).toBeVisible();
     await waitFor(() => expect(screen.getByText("Отзывы временно недоступны.")).toBeVisible());
   });
+
+  it("deduplicates the direct-link join intent request during StrictMode remount", async () => {
+    let resolveJoinIntent: (value: typeof joinIntent) => void = () => undefined;
+    createClientJoinIntent.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveJoinIntent = resolve;
+      })
+    );
+    listPublicReviews.mockResolvedValueOnce({ items: [], nextCursor: null });
+
+    renderPage({ strict: true });
+
+    expect(createClientJoinIntent).toHaveBeenCalledTimes(1);
+    resolveJoinIntent(joinIntent);
+
+    expect(await screen.findByText("Анна Соколова")).toBeVisible();
+    await waitFor(() => expect(listPublicReviews).toHaveBeenCalledTimes(1));
+  });
 });
 
-function renderPage() {
-  render(
+function renderPage(options: { readonly strict?: boolean } = {}) {
+  const page = (
     <MemoryRouter initialEntries={["/a/anna"]}>
       <Routes>
         <Route path="/a/:handle" element={<PublicAstrologerPage />} />
       </Routes>
     </MemoryRouter>
   );
+  render(options.strict ? <StrictMode>{page}</StrictMode> : page);
 }
 
 const astrologerUserId = "10000000-0000-4000-8000-000000000032";

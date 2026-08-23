@@ -9,6 +9,11 @@ import {
   type PublicAstrologerJoinState
 } from "./PublicAstrologerPageView";
 
+const joinIntentRequests = new Map<
+  string,
+  ReturnType<typeof createClientJoinIntent>
+>();
+
 export function PublicAstrologerPage() {
   const { handle } = useParams<{ handle: string }>();
   const [state, setState] = useState<PublicAstrologerJoinState>({ status: "loading" });
@@ -23,7 +28,7 @@ export function PublicAstrologerPage() {
     }
 
     setState({ status: "loading" });
-    createClientJoinIntent({ publicHandle: handle })
+    getClientJoinIntent(handle)
       .then(async (intent) => {
         if (cancelled) return;
         writePendingClientJoinIntent(intent);
@@ -60,4 +65,15 @@ export function PublicAstrologerPage() {
   }, [handle]);
 
   return <PublicAstrologerPageView state={state} />;
+}
+
+function getClientJoinIntent(handle: string): ReturnType<typeof createClientJoinIntent> {
+  const existing = joinIntentRequests.get(handle);
+  if (existing) return existing;
+
+  const request = createClientJoinIntent({ publicHandle: handle }).finally(() => {
+    joinIntentRequests.delete(handle);
+  });
+  joinIntentRequests.set(handle, request);
+  return request;
 }
