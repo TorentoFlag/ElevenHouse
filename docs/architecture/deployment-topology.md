@@ -109,12 +109,38 @@ The deployment sequence is fail-closed:
 A failed rollout retains the verified PostgreSQL archive and does not change the
 last-successful release history. Each successful release atomically publishes a
 mode-`0600` snapshot containing the exact Compose file, the validated
-`IMAGE_NAMESPACE`/`IMAGE_TAG`/project deploy env and all project image IDs;
-cleanup retains only images referenced by currently running containers.
+`IMAGE_NAMESPACE`/`RELEASE_IMAGE_TAG`/per-service image tags/project deploy env
+and all project image IDs; cleanup retains only images referenced by currently
+running containers.
 Rollback by local Docker image set is intentionally unavailable after successful
 cleanup; a rollback requires pulling the required release images from GHCR.
 Database restoration remains an explicit operator action: automatic restore could
 destroy valid writes made after the backup.
+
+## Affected production rollout
+
+Push-triggered production deploy plans the diff from the last successful
+`RELEASE_IMAGE_TAG` to the new commit and writes a per-service deploy env. Compose
+images use service-specific tags such as `CLIENT_WEB_IMAGE_TAG`,
+`PUBLIC_API_IMAGE_TAG` and `CHART_ENGINE_IMAGE_TAG`; unchanged services keep their
+previous tag and are not re-tagged to the new commit.
+
+The deploy workflow has four production modes:
+
+- `none`: documentation, tests, screenshots and other non-runtime changes do not
+  mutate production.
+- `service`: changed app images are pulled and applied with `docker compose up
+  -d --no-deps --wait <service...>`; only related public smoke targets run.
+- `db`: database schema or migrator changes quiesce database writers, verify no
+  active client sessions, take a PostgreSQL backup, run migration/preflight/seed,
+  then restart the writer contour.
+- `full`: manual force deploy or first deploy without a complete per-service tag
+  baseline uses the full protected rollout path.
+
+Runtime deployment file changes (`deployment/compose/`, `deployment/caddy/`,
+`deployment/server/`) use the runtime path: validate and publish the new Compose
+or server files, then apply Compose without database writer quiesce unless a DB
+or full rollout is also required.
 
 External infrastructure images are pinned by immutable multi-platform manifest
 digest. The current manifests were verified on 2026-08-03 with

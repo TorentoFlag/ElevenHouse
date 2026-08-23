@@ -51,10 +51,14 @@ jobs:
       contents: read
     outputs:
       deploy_required: ${{ steps.plan.outputs.deploy_required }}
+      deploy_mode: ${{ steps.plan.outputs.deploy_mode }}
+      deploy_services: ${{ steps.plan.outputs.deploy_services }}
+      deploy_env_base64: ${{ steps.plan.outputs.deploy_env_base64 }}
+      smoke_targets: ${{ steps.plan.outputs.smoke_targets }}
+      chart_smoke_required: ${{ steps.plan.outputs.chart_smoke_required }}
+      database_release_required: ${{ steps.plan.outputs.database_release_required }}
       has_build: ${{ steps.plan.outputs.has_build }}
-      has_promote: ${{ steps.plan.outputs.has_promote }}
       build_matrix: ${{ steps.plan.outputs.build_matrix }}
-      promote_matrix: ${{ steps.plan.outputs.promote_matrix }}
       current_image_tag: ${{ steps.plan.outputs.current_image_tag }}
     steps:
       - name: Validate runner identity
@@ -96,28 +100,48 @@ jobs:
           printf '%s\n' "${PRODUCTION_KNOWN_HOSTS}" > ~/.ssh/known_hosts
           chmod 0600 ~/.ssh/known_hosts
 
-      - name: Read current production image tag
+      - name: Read current production image tags
         id: current
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
         run: |
           SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
-          current_image_tag="$(
+          current_deploy_env="$(
             ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
-              "awk -F= '\$1 == \"IMAGE_TAG\" { print \$2 }' /opt/elevenhouse/env/.env.deploy 2>/dev/null || true"
+              "cat /opt/elevenhouse/env/.env.deploy 2>/dev/null || true"
           )"
-          if [ -n "${current_image_tag}" ] && ! [[ "${current_image_tag}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "CURRENT_IMAGE_TAG_INVALID value=${current_image_tag}" >&2
-            exit 1
-          fi
+          current_image_tags_json="$(
+            CURRENT_DEPLOY_ENV="${current_deploy_env}" node <<'NODE'
+          const tags = {};
+          for (const line of (process.env.CURRENT_DEPLOY_ENV ?? "").split("\n")) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#")) continue;
+            const index = trimmed.indexOf("=");
+            if (index === -1) continue;
+            const key = trimmed.slice(0, index);
+            const value = trimmed.slice(index + 1);
+            if (key === "IMAGE_TAG") tags.default = value;
+            if (key === "RELEASE_IMAGE_TAG") tags.default = value;
+            if (/^[A-Z_]+_IMAGE_TAG$/.test(key)) tags[key] = value;
+          }
+          for (const [key, value] of Object.entries(tags)) {
+            if (!/^[0-9a-f]{40}$/.test(value)) {
+              throw new Error(`CURRENT_IMAGE_TAG_INVALID key=${key} value=${value}`);
+            }
+          }
+          process.stdout.write(JSON.stringify(tags));
+          NODE
+          )"
+          current_image_tag="$(node -e 'const tags = JSON.parse(process.argv[1]); process.stdout.write(tags.default ?? "")' "${current_image_tags_json}")"
+          printf 'current_image_tags_json=%s\n' "${current_image_tags_json}" >> "${GITHUB_OUTPUT}"
           printf 'current_image_tag=%s\n' "${current_image_tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Plan production images
         id: plan
         env:
           BASE_REF: ${{ steps.current.outputs.current_image_tag }}
-          CURRENT_IMAGE_TAG: ${{ steps.current.outputs.current_image_tag }}
+          CURRENT_IMAGE_TAGS_JSON: ${{ steps.current.outputs.current_image_tags_json }}
           FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: |
           bash deployment/scripts/validate-self-hosted-runner.sh
@@ -194,75 +218,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-  promote-unchanged:
-    runs-on:
-      - self-hosted
-      - Linux
-      - X64
-      - elevenhouse-stage
-    if: ${{ needs.plan-images.outputs.deploy_required == 'true' && needs.plan-images.outputs.has_promote == 'true' }}
-    permissions:
-      contents: read
-      packages: write
-    needs:
-      - plan-images
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix: ${{ fromJson(needs.plan-images.outputs.promote_matrix) }}
-    steps:
-      - name: Validate runner identity
-        run: |
-          if [ "$(id -u)" = "0" ]; then
-            echo "SELF_HOSTED_RUNNER_MUST_NOT_RUN_AS_ROOT" >&2
-            exit 1
-          fi
-          if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
-            echo "SELF_HOSTED_RUNNER_MUST_NOT_HAVE_PASSWORDLESS_SUDO" >&2
-            exit 1
-          fi
-          case "${GITHUB_WORKSPACE:-}" in
-            /opt/* | /root/* | /)
-              echo "SELF_HOSTED_RUNNER_WORKSPACE_FORBIDDEN path=${GITHUB_WORKSPACE:-}" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.IMAGE_TAG }}
-
-      - name: Validate rootless Docker
-        run: bash deployment/scripts/validate-self-hosted-runner.sh --require-rootless-docker
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Promote unchanged image tag
-        env:
-          CURRENT_IMAGE_TAG: ${{ needs.plan-images.outputs.current_image_tag }}
-        run: |
-          if [ -z "${CURRENT_IMAGE_TAG}" ]; then
-            echo "CURRENT_IMAGE_TAG_REQUIRED_FOR_IMAGE_PROMOTION" >&2
-            exit 1
-          fi
-          if [ "${CURRENT_IMAGE_TAG}" = "${IMAGE_TAG}" ]; then
-            echo "Image ${{ matrix.image }} already has target tag ${IMAGE_TAG}."
-            exit 0
-          fi
-          docker buildx imagetools create \
-            -t "${IMAGE_NAMESPACE}/${{ matrix.image }}:${IMAGE_TAG}" \
-            -t "${IMAGE_NAMESPACE}/${{ matrix.image }}:latest" \
-            "${IMAGE_NAMESPACE}/${{ matrix.image }}:${CURRENT_IMAGE_TAG}"
-
   deploy:
     runs-on:
       - self-hosted
@@ -276,14 +231,12 @@ jobs:
     needs:
       - plan-images
       - build-and-push
-      - promote-unchanged
     if: >-
       ${{
         always() &&
         needs.plan-images.result == 'success' &&
         needs.plan-images.outputs.deploy_required == 'true' &&
-        (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') &&
-        (needs.promote-unchanged.result == 'success' || needs.promote-unchanged.result == 'skipped')
+        (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
       }}
     steps:
       - name: Validate runner identity
@@ -320,6 +273,7 @@ jobs:
           chmod 0600 ~/.ssh/known_hosts
 
       - name: Preflight production providers
+        if: ${{ needs.plan-images.outputs.deploy_mode == 'full' || needs.plan-images.outputs.deploy_mode == 'db' }}
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
@@ -328,6 +282,7 @@ jobs:
           ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" 'bash -s' < deployment/server/preflight-production-providers.sh
 
       - name: Preflight licensed chart ephemeris
+        if: ${{ needs.plan-images.outputs.chart_smoke_required == 'true' }}
         env:
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
@@ -355,11 +310,19 @@ jobs:
           PRODUCTION_GHCR_USERNAME: ${{ secrets.PRODUCTION_GHCR_USERNAME }}
           PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
           PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+          DEPLOY_ENV_BASE64: ${{ needs.plan-images.outputs.deploy_env_base64 }}
+          DEPLOY_MODE: ${{ needs.plan-images.outputs.deploy_mode }}
+          DEPLOY_SERVICES: ${{ needs.plan-images.outputs.deploy_services }}
+          CHART_SMOKE_REQUIRED: ${{ needs.plan-images.outputs.chart_smoke_required }}
         run: |
           SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ConnectionAttempts=3 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/elevenhouse)
           ssh "${SSH_OPTS[@]}" "${PRODUCTION_USER}@${PRODUCTION_HOST}" \
             IMAGE_NAMESPACE="${IMAGE_NAMESPACE}" \
             IMAGE_TAG="${IMAGE_TAG}" \
+            DEPLOY_ENV_BASE64="${DEPLOY_ENV_BASE64}" \
+            DEPLOY_MODE="${DEPLOY_MODE}" \
+            DEPLOY_SERVICES="${DEPLOY_SERVICES}" \
+            CHART_SMOKE_REQUIRED="${CHART_SMOKE_REQUIRED}" \
             GHCR_USERNAME="${PRODUCTION_GHCR_USERNAME}" \
             GHCR_TOKEN="${PRODUCTION_GHCR_READ_TOKEN}" \
             PRELAUNCH_RESET="${{ github.event_name == 'workflow_dispatch' && inputs.prelaunch_reset || 'false' }}" \
@@ -379,11 +342,7 @@ jobs:
           test "$(stat -c '%a' env/.env.chart-engine.production)" = "600"
           test "$(stat -c '%a' env/.env.chart-worker.production)" = "600"
           umask 077
-          cat > env/.env.deploy.next <<EOF
-          IMAGE_NAMESPACE=${IMAGE_NAMESPACE}
-          IMAGE_TAG=${IMAGE_TAG}
-          COMPOSE_PROJECT_NAME=elevenhouse
-          EOF
+          printf '%s' "${DEPLOY_ENV_BASE64}" | base64 -d > env/.env.deploy.next
           compose_version="$(docker compose version --short)"
           compose_version="${compose_version#v}"
           if [[ ! "${compose_version}" =~ ^([0-9]+)\.([0-9]+)(\.|$) ]]; then
@@ -399,13 +358,57 @@ jobs:
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next config --quiet
           ./cleanup-docker-retention.sh bootstrap-successful-release
           echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
-          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull
-          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps workers \
-            node apps/workers/dist/validate-startup-config.js </dev/null
-          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
-            node apps/chart-worker/dist/validate-startup-config.js </dev/null
-          docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps admin-api \
-            node -e "require('./apps/admin-api/dist/config/runtime-config.js').createAdminApiRuntimeConfig(process.env)" </dev/null
+          read -r -a DEPLOY_SERVICE_ARGS <<< "${DEPLOY_SERVICES}"
+          if [[ "${DEPLOY_MODE}" == "service" ]]; then
+            if (( ${#DEPLOY_SERVICE_ARGS[@]} == 0 )); then
+              printf '%s\n' 'PRODUCTION_DEPLOY_SERVICES_REQUIRED' >&2
+              exit 1
+            fi
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull "${DEPLOY_SERVICE_ARGS[@]}"
+            if printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx workers; then
+              docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps workers \
+                node apps/workers/dist/validate-startup-config.js </dev/null
+            fi
+            if printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx chart-worker; then
+              docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
+                node apps/chart-worker/dist/validate-startup-config.js </dev/null
+            fi
+            if printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx admin-api; then
+              docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps admin-api \
+                node -e "require('./apps/admin-api/dist/config/runtime-config.js').createAdminApiRuntimeConfig(process.env)" </dev/null
+            fi
+            mv -- compose/compose.production.yml.next compose/compose.production.yml
+            mv -- env/.env.deploy.next env/.env.deploy
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --no-deps --wait --wait-timeout 180 "${DEPLOY_SERVICE_ARGS[@]}"
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps "${DEPLOY_SERVICE_ARGS[@]}"
+            trap - ERR
+            exit 0
+          fi
+          if [[ "${DEPLOY_MODE}" == "runtime" ]]; then
+            mv -- compose/compose.production.yml.next compose/compose.production.yml
+            mv -- env/.env.deploy.next env/.env.deploy
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
+            trap - ERR
+            exit 0
+          fi
+          if [[ "${DEPLOY_MODE}" == "db" ]]; then
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull db-migrator db-baseline-preflight db-seeder "${DEPLOY_SERVICE_ARGS[@]}"
+          else
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next pull
+          fi
+          if [[ "${DEPLOY_MODE}" == "full" ]] || printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx workers; then
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps workers \
+              node apps/workers/dist/validate-startup-config.js </dev/null
+          fi
+          if [[ "${DEPLOY_MODE}" == "full" ]] || printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx chart-worker; then
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps chart-worker \
+              node apps/chart-worker/dist/validate-startup-config.js </dev/null
+          fi
+          if [[ "${DEPLOY_MODE}" == "full" ]] || printf '%s\n' "${DEPLOY_SERVICE_ARGS[@]}" | grep -qx admin-api; then
+            docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T --no-deps admin-api \
+              node -e "require('./apps/admin-api/dist/config/runtime-config.js').createAdminApiRuntimeConfig(process.env)" </dev/null
+          fi
           docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next up -d --no-recreate --wait --wait-timeout 120 postgres
           if [[ "${PRELAUNCH_RESET}" != "true" ]]; then
             docker compose --env-file env/.env.deploy.next -f compose/compose.production.yml.next run --rm -T db-baseline-preflight </dev/null
@@ -461,32 +464,41 @@ jobs:
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-baseline-preflight </dev/null
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml run --rm -T db-seeder </dev/null
           deploy_phase=service_start
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+          if [[ "${DEPLOY_MODE}" == "db" ]]; then
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --no-deps --wait --wait-timeout 180 "${DEPLOY_SERVICE_ARGS[@]}"
+          else
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+          fi
           database_writers_quiesced=false
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml exec -T \
-            -e CHART_SMOKE_ALLOW_PRODUCTION=true \
-            -e CHART_SMOKE_EXPECTED_DATABASE_HOST=postgres \
-            -e CHART_SMOKE_EXPECTED_DATABASE_NAME=elevenhouse \
-            -e CHART_SMOKE_API_BASE_URL=http://127.0.0.1:3002 \
-            -e CHART_WORKER_BASE_URL=http://chart-worker:3012 \
-            -e CHART_ENGINE_BASE_URL=http://chart-engine:8012 \
-            -e CHART_SMOKE_ORIGIN=https://app.elevenhouse.ai \
-            -e CHART_SMOKE_POLL_TIMEOUT_MS=150000 \
-            -e CHART_SMOKE_CLEANUP_SETTLE_TIMEOUT_MS=150000 \
-            astrologer-api node apps/astrologer-api/scripts/chart-engine-smoke.mjs
+          if [[ "${CHART_SMOKE_REQUIRED}" == "true" ]]; then
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml exec -T \
+              -e CHART_SMOKE_ALLOW_PRODUCTION=true \
+              -e CHART_SMOKE_EXPECTED_DATABASE_HOST=postgres \
+              -e CHART_SMOKE_EXPECTED_DATABASE_NAME=elevenhouse \
+              -e CHART_SMOKE_API_BASE_URL=http://127.0.0.1:3002 \
+              -e CHART_WORKER_BASE_URL=http://chart-worker:3012 \
+              -e CHART_ENGINE_BASE_URL=http://chart-engine:8012 \
+              -e CHART_SMOKE_ORIGIN=https://app.elevenhouse.ai \
+              -e CHART_SMOKE_POLL_TIMEOUT_MS=150000 \
+              -e CHART_SMOKE_CLEANUP_SETTLE_TIMEOUT_MS=150000 \
+              astrologer-api node apps/astrologer-api/scripts/chart-engine-smoke.mjs
+          fi
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
           trap - ERR
           REMOTE
 
       - name: Smoke check
+        env:
+          SMOKE_TARGETS: ${{ needs.plan-images.outputs.smoke_targets }}
         run: |
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://client.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://client.elevenhouse.ai/api/health
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://app.elevenhouse.ai/api/health
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai >/dev/null
-          curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS https://admin.elevenhouse.ai/api/health
+          read -r -a targets <<< "${SMOKE_TARGETS}"
+          if (( ${#targets[@]} == 0 )); then
+            echo "No public smoke targets required for this deploy."
+            exit 0
+          fi
+          for target in "${targets[@]}"; do
+            curl --retry 12 --retry-all-errors --retry-delay 10 --retry-max-time 120 --connect-timeout 10 --max-time 20 -fsS "${target}" >/dev/null
+          done
 
       - name: Cleanup production Docker artifacts
         if: success()

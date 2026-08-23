@@ -26,23 +26,23 @@ services:
         condition: service_healthy
 
   landing:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-landing:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-landing:${LANDING_IMAGE_TAG}
     restart: unless-stopped
 
   client-web:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-client-web:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-client-web:${CLIENT_WEB_IMAGE_TAG}
     restart: unless-stopped
 
   astrologer-web:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-web:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-web:${ASTROLOGER_WEB_IMAGE_TAG}
     restart: unless-stopped
 
   admin-web:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-web:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-web:${ADMIN_WEB_IMAGE_TAG}
     restart: unless-stopped
 
   public-api:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-public-api:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-public-api:${PUBLIC_API_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - ../env/.env.production
@@ -63,7 +63,7 @@ services:
       start_period: 30s
 
   astrologer-api:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-api:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-astrologer-api:${ASTROLOGER_API_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - ../env/.env.production
@@ -91,7 +91,7 @@ services:
       - chart-provider
 
   admin-api:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-api:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-admin-api:${ADMIN_API_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - ../env/.env.production
@@ -107,7 +107,7 @@ services:
       start_period: 30s
 
   workers:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-workers:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-workers:${WORKERS_IMAGE_TAG}
     restart: unless-stopped
     stop_grace_period: 60s
     env_file:
@@ -124,7 +124,7 @@ services:
       start_period: 30s
 
   payment-worker:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-payment-worker:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-payment-worker:${PAYMENT_WORKER_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - ../env/.env.production
@@ -140,7 +140,7 @@ services:
       start_period: 30s
 
   chart-worker:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-chart-worker:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-chart-worker:${CHART_WORKER_IMAGE_TAG}
     restart: unless-stopped
     stop_grace_period: 135s
     env_file:
@@ -171,7 +171,7 @@ services:
       start_period: 30s
 
   chart-engine:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-chart-engine:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-chart-engine:${CHART_ENGINE_IMAGE_TAG}
     restart: unless-stopped
     stop_grace_period: 120s
     read_only: true
@@ -213,7 +213,7 @@ services:
       start_period: 20s
 
   notification-worker:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-notification-worker:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-notification-worker:${NOTIFICATION_WORKER_IMAGE_TAG}
     restart: unless-stopped
     env_file:
       - ../env/.env.production
@@ -234,7 +234,7 @@ services:
       start_period: 30s
 
   db-migrator:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${DB_MIGRATOR_IMAGE_TAG}
     profiles:
       - maintenance
     env_file:
@@ -244,7 +244,7 @@ services:
         condition: service_healthy
 
   db-baseline-preflight:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${DB_MIGRATOR_IMAGE_TAG}
     command: ["pnpm", "--filter", "@elevenhouse/db", "db:preflight-production-baseline"]
     profiles:
       - maintenance
@@ -255,7 +255,7 @@ services:
         condition: service_healthy
 
   db-seeder:
-    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${IMAGE_TAG}
+    image: ${IMAGE_NAMESPACE}/elevenhouse-db-migrator:${DB_MIGRATOR_IMAGE_TAG}
     command: ["pnpm", "db:seed"]
     profiles:
       - maintenance

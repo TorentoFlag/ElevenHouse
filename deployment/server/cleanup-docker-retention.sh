@@ -96,32 +96,69 @@ validate_deploy_env_file() {
   fi
   if ! awk '
     BEGIN {
-      namespace_count = 0
-      tag_count = 0
-      project_count = 0
-      valid = 1
-    }
-    index($0, "IMAGE_NAMESPACE=") == 1 {
-      namespace_count += 1
-      if ($0 != "IMAGE_NAMESPACE=ghcr.io/torentoflag") valid = 0
-      next
-    }
-    index($0, "IMAGE_TAG=") == 1 {
-      tag_count += 1
-      value = substr($0, length("IMAGE_TAG=") + 1)
-      if (length(value) != 40 || value ~ /[^0-9a-f]/) valid = 0
-      next
-    }
+	      namespace_count = 0
+	      legacy_tag_count = 0
+	      tag_count = 0
+	      release_count = 0
+	      project_count = 0
+	      valid = 1
+	      expected_tags["ADMIN_API_IMAGE_TAG"] = 1
+	      expected_tags["ADMIN_WEB_IMAGE_TAG"] = 1
+	      expected_tags["ASTROLOGER_API_IMAGE_TAG"] = 1
+	      expected_tags["ASTROLOGER_WEB_IMAGE_TAG"] = 1
+	      expected_tags["CHART_ENGINE_IMAGE_TAG"] = 1
+	      expected_tags["CHART_WORKER_IMAGE_TAG"] = 1
+	      expected_tags["CLIENT_WEB_IMAGE_TAG"] = 1
+	      expected_tags["DB_MIGRATOR_IMAGE_TAG"] = 1
+	      expected_tags["LANDING_IMAGE_TAG"] = 1
+	      expected_tags["NOTIFICATION_WORKER_IMAGE_TAG"] = 1
+	      expected_tags["PAYMENT_WORKER_IMAGE_TAG"] = 1
+	      expected_tags["PUBLIC_API_IMAGE_TAG"] = 1
+	      expected_tags["WORKERS_IMAGE_TAG"] = 1
+	    }
+	    index($0, "IMAGE_NAMESPACE=") == 1 {
+	      namespace_count += 1
+	      if ($0 != "IMAGE_NAMESPACE=ghcr.io/torentoflag") valid = 0
+	      next
+	    }
+	    index($0, "RELEASE_IMAGE_TAG=") == 1 {
+	      release_count += 1
+	      value = substr($0, length("RELEASE_IMAGE_TAG=") + 1)
+	      if (length(value) != 40 || value ~ /[^0-9a-f]/) valid = 0
+	      next
+	    }
+	    index($0, "IMAGE_TAG=") == 1 {
+	      legacy_tag_count += 1
+	      value = substr($0, length("IMAGE_TAG=") + 1)
+	      if (length(value) != 40 || value ~ /[^0-9a-f]/) valid = 0
+	      next
+	    }
+	    /^[A-Z_]+_IMAGE_TAG=/ {
+	      key = substr($0, 1, index($0, "=") - 1)
+	      if (!(key in expected_tags)) valid = 0
+	      if (seen_tags[key] == 1) valid = 0
+	      seen_tags[key] = 1
+	      tag_count += 1
+	      value = substr($0, index($0, "=") + 1)
+	      if (length(value) != 40 || value ~ /[^0-9a-f]/) valid = 0
+	      next
+	    }
     index($0, "COMPOSE_PROJECT_NAME=") == 1 {
       project_count += 1
       if ($0 != "COMPOSE_PROJECT_NAME=elevenhouse") valid = 0
       next
     }
-    { valid = 0 }
-    END {
-      if (namespace_count != 1 || tag_count != 1 || project_count != 1) valid = 0
-      exit valid ? 0 : 1
-    }
+	    { valid = 0 }
+	    END {
+	      for (key in expected_tags) {
+	        if (tag_count > 0 && seen_tags[key] != 1) valid = 0
+	      }
+	      legacy_format = legacy_tag_count == 1 && release_count == 0 && tag_count == 0
+	      service_tag_format = legacy_tag_count == 0 && release_count == 1 && tag_count == 13
+	      if (namespace_count != 1 || project_count != 1) valid = 0
+	      if (!legacy_format && !service_tag_format) valid = 0
+	      exit valid ? 0 : 1
+	    }
   ' "${deploy_env_file}"; then
     fail "SUCCESSFUL_RELEASE_DEPLOY_ENV_INVALID"
   fi
