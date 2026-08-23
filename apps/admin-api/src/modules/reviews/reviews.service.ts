@@ -17,10 +17,12 @@ import {
   reviewModerationCaseStatusUpdateSchema,
   reviewModerationQueueQuerySchema,
   reviewModerationQueueResponseSchema,
+  reviewRatingAggregateReconciliationResponseSchema,
   type ReviewAdminDetail,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
-  type ReviewModerationQueueResponse
+  type ReviewModerationQueueResponse,
+  type ReviewRatingAggregateReconciliationResponse
 } from "@elevenhouse/contracts";
 import type {
   ApproveReviewReplyVersionResult,
@@ -102,6 +104,24 @@ type AdminReviewCommandStore = {
     readonly body: string;
     readonly now: string;
   }) => Promise<CreateReviewCaseMessageResult>;
+  readonly reconcileRatingAggregatesForReview: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+  }) => Promise<
+    | {
+        readonly kind: "reconciled";
+        readonly reviewId: string;
+        readonly astrologerUserId: string;
+        readonly productIds: readonly string[];
+        readonly aggregateRowsWritten: number;
+        readonly reconciledAt: string;
+      }
+    | {
+        readonly kind: "rejected";
+        readonly reason: "not_review";
+      }
+  >;
 };
 
 @Injectable()
@@ -340,6 +360,29 @@ export class AdminReviewsService {
       visibility: result.message.visibility,
       body: result.message.body,
       createdAt: result.message.createdAt
+    });
+  }
+
+  async reconcileRatingAggregatesForReview(
+    adminUserId: string,
+    reviewId: string
+  ): Promise<ReviewRatingAggregateReconciliationResponse> {
+    const safeAdminUserId = requireUuid(adminUserId);
+    const safeReviewId = requireUuid(reviewId);
+    const result = await this.commandStore.reconcileRatingAggregatesForReview({
+      moderatorUserId: safeAdminUserId,
+      now: this.clock.now().toISOString(),
+      reviewId: safeReviewId
+    });
+    if (result.kind === "rejected") {
+      throw new NotFoundException("Review was not found");
+    }
+    return reviewRatingAggregateReconciliationResponseSchema.parse({
+      reviewId: result.reviewId,
+      astrologerUserId: result.astrologerUserId,
+      productIds: result.productIds,
+      aggregateRowsWritten: result.aggregateRowsWritten,
+      reconciledAt: result.reconciledAt
     });
   }
 

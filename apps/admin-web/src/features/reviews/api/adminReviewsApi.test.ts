@@ -45,6 +45,40 @@ describe("createAdminReviewsApi", () => {
       })
     );
   });
+
+  it("reconciles rating aggregates with csrf and idempotency headers", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
+        reviewId: reviewDetail().reviewId,
+        astrologerUserId: "10000000-0000-4000-8000-000000000104",
+        productIds: ["10000000-0000-4000-8000-000000000105"],
+        aggregateRowsWritten: 2,
+        reconciledAt: "2026-08-20T11:00:00.000Z"
+      })
+    );
+    const api = createAdminReviewsApi({
+      baseUrl: "https://admin.local",
+      fetcher,
+      csrfTokenReader: () => "csrf-token"
+    });
+
+    await expect(
+      api.reconcileRatingAggregatesForReview(reviewDetail().reviewId, "reconcile-key")
+    ).resolves.toMatchObject({
+      aggregateRowsWritten: 2
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://admin.local/admin/reviews/10000000-0000-4000-8000-000000000100/rating-aggregates/reconcile",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "idempotency-key": "reconcile-key",
+          "x-csrf-token": "csrf-token"
+        })
+      })
+    );
+  });
 });
 
 function jsonResponse(body: unknown) {

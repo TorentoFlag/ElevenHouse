@@ -53,6 +53,7 @@ import {
   reviewModerationCases,
   reviewModerationCaseMessages,
   reviewPublicationEvents,
+  reviewRatingAggregates,
   reviewReplyVersions,
   reviewVersions,
   reviewableInstances,
@@ -152,7 +153,26 @@ export type DrizzleReviewCommandStore = {
     readonly body: string;
     readonly now: string;
   }) => Promise<CreateReviewCaseMessageResult>;
+  readonly reconcileRatingAggregatesForReview: (input: {
+    readonly moderatorUserId: string;
+    readonly now: string;
+    readonly reviewId: string;
+  }) => Promise<ReviewRatingAggregateReconciliationResult>;
 };
+
+export type ReviewRatingAggregateReconciliationResult =
+  | {
+      readonly kind: "reconciled";
+      readonly reviewId: string;
+      readonly astrologerUserId: string;
+      readonly productIds: readonly string[];
+      readonly aggregateRowsWritten: number;
+      readonly reconciledAt: string;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "not_review";
+    };
 
 export function createDrizzleReviewCommandStore(
   database: ElevenHouseDatabase
@@ -887,6 +907,37 @@ export function createDrizzleReviewCommandStore(
         }
 
         return result;
+      }),
+    reconcileRatingAggregatesForReview: (input) =>
+      database.transaction(async (transaction) => {
+        const reviewRow = await readReview(transaction, input.reviewId);
+        if (!reviewRow) return { kind: "rejected", reason: "not_review" };
+
+        await lockReviewsForAstrologer(transaction, reviewRow.astrologerUserId);
+        const result = await rewriteRatingAggregatesForAstrologer(transaction, {
+          astrologerUserId: reviewRow.astrologerUserId,
+          updatedAt: new Date(input.now)
+        });
+        await appendReviewAudit(transaction, {
+          actorUserId: input.moderatorUserId,
+          action: "review.rating_aggregates.reconciled",
+          reviewId: reviewRow.id,
+          occurredAt: input.now,
+          metadata: {
+            astrologerUserId: reviewRow.astrologerUserId,
+            productIds: result.productIds,
+            aggregateRowsWritten: result.aggregateRowsWritten
+          }
+        });
+
+        return {
+          kind: "reconciled",
+          reviewId: reviewRow.id,
+          astrologerUserId: reviewRow.astrologerUserId,
+          productIds: result.productIds,
+          aggregateRowsWritten: result.aggregateRowsWritten,
+          reconciledAt: input.now
+        };
       })
   };
 }
@@ -921,6 +972,118 @@ async function appendReviewAudit(
 
 async function lockReview(transaction: ReviewCommandTransaction, reviewId: string): Promise<void> {
   await transaction.execute(sql`select id from reviews where id = ${reviewId} for update`);
+}
+
+async function lockReviewsForAstrologer(
+  transaction: ReviewCommandTransaction,
+  astrologerUserId: string
+): Promise<void> {
+  await transaction.execute(sql`
+    select id
+    from reviews
+    where astrologer_user_id = ${astrologerUserId}::uuid
+    for update
+  `);
+}
+
+async function rewriteRatingAggregatesForAstrologer(
+  transaction: ReviewCommandTransaction,
+  input: {
+    readonly astrologerUserId: string;
+    readonly updatedAt: Date;
+  }
+): Promise<{ readonly productIds: readonly string[]; readonly aggregateRowsWritten: number }> {
+  await transaction
+    .delete(reviewRatingAggregates)
+    .where(eq(reviewRatingAggregates.astrologerUserId, input.astrologerUserId));
+
+  const astrologerRows = await transaction.execute<{ id: string }>(sql`
+    insert into review_rating_aggregates (
+      scope,
+      astrologer_user_id,
+      product_id,
+      visible_review_count,
+      approved_review_count,
+      rating_sum,
+      star_1_count,
+      star_2_count,
+      star_3_count,
+      star_4_count,
+      star_5_count,
+      last_published_at,
+      updated_at
+    )
+    select
+      'astrologer',
+      r.astrologer_user_id,
+      null,
+      count(*) filter (where r.visibility_status = 'visible')::integer,
+      count(*)::integer,
+      coalesce(sum(case when r.visibility_status = 'visible' then rv.rating else 0 end), 0)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 1)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 2)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 3)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 4)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 5)::integer,
+      max(case when r.visibility_status = 'visible' then coalesce(r.first_published_at, rv.decided_at) end),
+      ${input.updatedAt}
+    from reviews r
+    join review_versions rv
+      on rv.id = r.active_public_version_id
+      and rv.review_id = r.id
+      and rv.moderation_status = 'approved'
+    where r.astrologer_user_id = ${input.astrologerUserId}::uuid
+    group by r.astrologer_user_id
+    returning id
+  `);
+
+  const productRows = await transaction.execute<{ id: string; productId: string }>(sql`
+    insert into review_rating_aggregates (
+      scope,
+      astrologer_user_id,
+      product_id,
+      visible_review_count,
+      approved_review_count,
+      rating_sum,
+      star_1_count,
+      star_2_count,
+      star_3_count,
+      star_4_count,
+      star_5_count,
+      last_published_at,
+      updated_at
+    )
+    select
+      'product',
+      r.astrologer_user_id,
+      ri.product_id,
+      count(*) filter (where r.visibility_status = 'visible')::integer,
+      count(*)::integer,
+      coalesce(sum(case when r.visibility_status = 'visible' then rv.rating else 0 end), 0)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 1)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 2)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 3)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 4)::integer,
+      count(*) filter (where r.visibility_status = 'visible' and rv.rating = 5)::integer,
+      max(case when r.visibility_status = 'visible' then coalesce(r.first_published_at, rv.decided_at) end),
+      ${input.updatedAt}
+    from reviews r
+    join review_versions rv
+      on rv.id = r.active_public_version_id
+      and rv.review_id = r.id
+      and rv.moderation_status = 'approved'
+    join reviewable_instances ri
+      on ri.id = r.reviewable_instance_id
+    where r.astrologer_user_id = ${input.astrologerUserId}::uuid
+      and ri.product_id is not null
+    group by r.astrologer_user_id, ri.product_id
+    returning id, product_id as "productId"
+  `);
+
+  return {
+    productIds: productRows.rows.map((row) => row.productId),
+    aggregateRowsWritten: astrologerRows.rows.length + productRows.rows.length
+  };
 }
 
 async function readReviewableInstance(

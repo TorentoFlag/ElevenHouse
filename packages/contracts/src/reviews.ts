@@ -623,6 +623,19 @@ export const reviewModerationQueueResponseSchema = z
   .strict();
 export type ReviewModerationQueueResponse = z.infer<typeof reviewModerationQueueResponseSchema>;
 
+export const reviewRatingAggregateReconciliationResponseSchema = z
+  .object({
+    reviewId: uuidSchema,
+    astrologerUserId: uuidSchema,
+    productIds: z.array(uuidSchema).max(500),
+    aggregateRowsWritten: z.number().int().min(0).max(501),
+    reconciledAt: instantSchema
+  })
+  .strict();
+export type ReviewRatingAggregateReconciliationResponse = z.infer<
+  typeof reviewRatingAggregateReconciliationResponseSchema
+>;
+
 export const reviewModerationDecisionSchema = z
   .object({
     reasonCode: reviewModerationReasonCodeSchema,

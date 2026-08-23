@@ -8,6 +8,7 @@ import {
   reviewModerationCaseStatusUpdateSchema,
   reviewModerationQueueResponseSchema,
   reviewModerationReasonCodeSchema,
+  reviewRatingAggregateReconciliationResponseSchema,
   reviewAstrologerListResponseSchema,
   reviewPublicListResponseSchema,
   clientReviewableInstanceListResponseSchema,
@@ -627,5 +628,20 @@ describe("Reviews contracts", () => {
     expect(reviewModerationCaseStatusUpdateSchema.safeParse({ status: "closed" }).success).toBe(
       false
     );
+  });
+
+  it("models admin review rating aggregate reconciliation results", () => {
+    expect(
+      reviewRatingAggregateReconciliationResponseSchema.parse({
+        reviewId: "10000000-0000-4000-8000-000000000070",
+        astrologerUserId: "10000000-0000-4000-8000-000000000071",
+        productIds: ["10000000-0000-4000-8000-000000000072"],
+        aggregateRowsWritten: 2,
+        reconciledAt: "2026-08-20T10:00:00.000Z"
+      })
+    ).toMatchObject({
+      aggregateRowsWritten: 2,
+      productIds: ["10000000-0000-4000-8000-000000000072"]
+    });
   });
 });

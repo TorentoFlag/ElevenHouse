@@ -958,6 +958,57 @@ describe.sequential("Drizzle review command store", () => {
       code: "review_rating_aggregate_projection_drift",
       scope: "astrologer"
     });
+
+    await expect(
+      store.reconcileRatingAggregatesForReview({
+        moderatorUserId: fixture.moderatorUserId,
+        now: "2026-08-20T13:05:00.000Z",
+        reviewId: fixture.reviewId
+      })
+    ).resolves.toMatchObject({
+      kind: "reconciled",
+      reviewId: fixture.reviewId,
+      astrologerUserId: fixture.astrologerUserId,
+      productIds: [fixture.productId],
+      aggregateRowsWritten: 2,
+      reconciledAt: "2026-08-20T13:05:00.000Z"
+    });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 0,
+      approvedReviewCount: 1,
+      ratingSum: 0,
+      star4Count: 0,
+      star5Count: 0
+    });
+    await expectProductAggregate(runtime, fixture.astrologerUserId, fixture.productId, {
+      visibleReviewCount: 0,
+      approvedReviewCount: 1,
+      ratingSum: 0,
+      star4Count: 0,
+      star5Count: 0
+    });
+
+    await expect(
+      store.restoreReviewAfterDispute({
+        moderatorUserId: fixture.moderatorUserId,
+        now: "2026-08-20T13:10:00.000Z",
+        reviewId: fixture.reviewId,
+        caseId
+      })
+    ).resolves.toMatchObject({
+      kind: "restored",
+      review: {
+        visibilityStatus: "visible",
+        disputeStatus: "resolved_closed"
+      }
+    });
+    await expectAstrologerAggregate(runtime, fixture.astrologerUserId, {
+      visibleReviewCount: 1,
+      approvedReviewCount: 1,
+      ratingSum: 5,
+      star4Count: 0,
+      star5Count: 1
+    });
   });
 
   it("hides visible reviews by moderation decision with aggregate deltas and audit case", async () => {

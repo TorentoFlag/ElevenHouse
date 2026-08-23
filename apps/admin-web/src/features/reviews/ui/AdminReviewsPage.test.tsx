@@ -10,7 +10,7 @@ import type {
   ReviewModerationQueueResponse
 } from "@elevenhouse/contracts";
 import { AdminReviewsPage } from "./AdminReviewsPage";
-import type { AdminReviewsApi } from "../api/adminReviewsApi";
+import { AdminReviewsApiError, type AdminReviewsApi } from "../api/adminReviewsApi";
 
 afterEach(() => {
   cleanup();
@@ -80,6 +80,32 @@ describe("AdminReviewsPage", () => {
     expect(screen.queryByRole("button", { name: "Вернуть публикацию" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Скрыть модерацией" })).not.toBeInTheDocument();
   });
+
+  it("offers rating aggregate reconciliation when dispute restore detects projection drift", async () => {
+    const api = createApi();
+    vi.mocked(api.restoreReviewAfterDispute).mockRejectedValueOnce(
+      new AdminReviewsApiError(409, {
+        code: "review_rating_aggregate_projection_drift",
+        scope: "astrologer"
+      })
+    );
+
+    render(<AdminReviewsPage api={api} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Вернуть публикацию" }));
+
+    expect(
+      await screen.findByText("Рейтинговые проекции отзыва требуют пересборки.")
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Пересобрать рейтинги" }));
+
+    await waitFor(() => {
+      expect(api.reconcileRatingAggregatesForReview).toHaveBeenCalledWith(
+        "10000000-0000-4000-8000-000000000200",
+        expect.stringMatching(/^admin-reviews:/)
+      );
+    });
+  });
 });
 
 function createApi(options?: {
@@ -122,6 +148,13 @@ function createApi(options?: {
     rejectReviewReplyVersion: vi.fn(async () => detail),
     restoreReviewAfterDispute: vi.fn(async () => detail),
     hideReviewByModeration: vi.fn(async () => detail),
+    reconcileRatingAggregatesForReview: vi.fn(async () => ({
+      reviewId: detail.reviewId,
+      astrologerUserId: "10000000-0000-4000-8000-000000000500",
+      productIds: ["10000000-0000-4000-8000-000000000501"],
+      aggregateRowsWritten: 2,
+      reconciledAt: "2026-08-21T09:45:00.000Z"
+    })),
     createModerationCaseMessage: vi.fn(
       async (): Promise<ReviewModerationCaseMessage> => ({
         messageId: "10000000-0000-4000-8000-000000000305",

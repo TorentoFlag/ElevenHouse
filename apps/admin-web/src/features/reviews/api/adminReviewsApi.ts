@@ -6,13 +6,15 @@ import {
   reviewModerationCaseStatusUpdateSchema,
   reviewModerationDecisionSchema,
   reviewModerationQueueResponseSchema,
+  reviewRatingAggregateReconciliationResponseSchema,
   type ReviewAdminDetail,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewModerationCaseMessageCreate,
   type ReviewModerationCaseStatusUpdate,
   type ReviewModerationDecision,
-  type ReviewModerationQueueResponse
+  type ReviewModerationQueueResponse,
+  type ReviewRatingAggregateReconciliationResponse
 } from "@elevenhouse/contracts";
 
 export type AdminReviewsApi = {
@@ -55,6 +57,10 @@ export type AdminReviewsApi = {
     request: ReviewModerationDecision,
     idempotencyKey: string
   ) => Promise<ReviewAdminDetail>;
+  readonly reconcileRatingAggregatesForReview: (
+    reviewId: string,
+    idempotencyKey: string
+  ) => Promise<ReviewRatingAggregateReconciliationResponse>;
   readonly createModerationCaseMessage: (
     caseId: string,
     request: ReviewModerationCaseMessageCreate,
@@ -164,6 +170,13 @@ export function createAdminReviewsApi(input: CreateAdminReviewsApiInput = {}): A
         })
       );
     },
+    reconcileRatingAggregatesForReview: async (reviewId, idempotencyKey) =>
+      reviewRatingAggregateReconciliationResponseSchema.parse(
+        await request(
+          `/admin/reviews/${encodeURIComponent(reviewId)}/rating-aggregates/reconcile`,
+          { method: "POST", headers: idempotencyHeaders(idempotencyKey) }
+        )
+      ),
     createModerationCaseMessage: async (caseId, rawRequest, idempotencyKey) => {
       const parsed = reviewModerationCaseMessageCreateSchema.parse(rawRequest);
       return reviewModerationCaseMessageSchema.parse(

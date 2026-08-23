@@ -117,8 +117,24 @@
 }
 
 .adminReviewsError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   background: rgb(244 122 122 / 0.16);
   color: #ffd3d3;
+}
+
+.adminReviewsError button {
+  flex: 0 0 auto;
+  border: 1px solid rgb(255 211 211 / 0.45);
+  border-radius: 8px;
+  background: rgb(255 211 211 / 0.12);
+  color: #fff4f4;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .adminReviewsState {
@@ -372,6 +388,7 @@
   }
 
   .adminReviewsHeader,
+  .adminReviewsError,
   .adminReviewsDetailHead,
   .adminReviewsCase header,
   .adminReviewsCase--empty {

@@ -16,7 +16,8 @@ import type {
   ReviewAdminDetail,
   ReviewModerationCaseDetail,
   ReviewModerationCaseMessage,
-  ReviewModerationQueueResponse
+  ReviewModerationQueueResponse,
+  ReviewRatingAggregateReconciliationResponse
 } from "@elevenhouse/contracts";
 
 import { AdminSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -177,6 +178,16 @@ export class AdminReviewsController {
       body,
       requireIdempotencyKey(idempotencyKey)
     );
+  }
+
+  @Post(":reviewId/rating-aggregates/reconcile")
+  @RequireCsrf()
+  @RequireIdempotency()
+  reconcileRatingAggregatesForReview(
+    @Req() request: AdminSessionRequest,
+    @Param("reviewId") reviewId: string
+  ): Promise<ReviewRatingAggregateReconciliationResponse> {
+    return this.service.reconcileRatingAggregatesForReview(requireAdminUserId(request), reviewId);
   }
 
   @Get(":reviewId")

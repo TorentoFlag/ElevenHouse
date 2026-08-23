@@ -51,6 +51,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
   const [selectedQueueItemId, setSelectedQueueItemId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [aggregateDriftReviewId, setAggregateDriftReviewId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [reasonCode, setReasonCode] = useState<ReviewModerationReasonCode>("off_topic");
   const [decisionNote, setDecisionNote] = useState("");
@@ -106,6 +107,7 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
 
   const selectQueueItem = async (item: ReviewModerationQueueItem) => {
     setSubmitError(null);
+    setAggregateDriftReviewId(null);
     setNotice(null);
     setSelectedQueueItemId(item.queueItemId);
     setSaving(true);
@@ -137,7 +139,30 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
     try {
       const detail = await action(newAdminReviewCommandKey());
       setNotice(label);
+      setAggregateDriftReviewId(null);
       await refresh(detail.reviewId);
+    } catch (error) {
+      setSubmitError(errorMessage(error));
+      setAggregateDriftReviewId(
+        selected && isReviewAggregateProjectionDriftError(error) ? selected.reviewId : null
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reconcileRatingAggregates = async () => {
+    if (!selected) return;
+    setSaving(true);
+    setSubmitError(null);
+    try {
+      const result = await api.reconcileRatingAggregatesForReview(
+        selected.reviewId,
+        newAdminReviewCommandKey()
+      );
+      setAggregateDriftReviewId(null);
+      setNotice(`Рейтинги пересобраны: ${result.aggregateRowsWritten} строк.`);
+      await refresh(result.reviewId);
     } catch (error) {
       setSubmitError(errorMessage(error));
     } finally {
@@ -211,6 +236,11 @@ export function AdminReviewsPage({ api: providedApi }: AdminReviewsPageProps) {
       {submitError ? (
         <div className="adminReviewsError" role="alert">
           {submitError}
+          {selected && aggregateDriftReviewId === selected.reviewId ? (
+            <button type="button" disabled={saving} onClick={() => void reconcileRatingAggregates()}>
+              Пересобрать рейтинги
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -578,8 +608,22 @@ function newAdminReviewCommandKey(): string {
 
 function errorMessage(error: unknown): string {
   if (error instanceof AdminReviewsApiError) {
+    if (isReviewAggregateProjectionDriftError(error)) {
+      return "Рейтинговые проекции отзыва требуют пересборки.";
+    }
     return `Admin reviews API error ${error.status}`;
   }
   if (error instanceof Error) return error.message;
   return "Не удалось выполнить действие с отзывами";
+}
+
+function isReviewAggregateProjectionDriftError(error: unknown): boolean {
+  if (!(error instanceof AdminReviewsApiError) || error.status !== 409) return false;
+  const body = error.responseBody;
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    "code" in body &&
+    body.code === "review_rating_aggregate_projection_drift"
+  );
 }

@@ -31,6 +31,7 @@ describe("admin reviews HTTP API", () => {
   let receivedQueueRead: unknown;
   let receivedMessageCommand: unknown;
   let receivedDecisionCommand: unknown;
+  let receivedReconciliationCommand: unknown;
   let decisionStatus: "pending" | "approved" | "rejected";
   let replyDecisionStatus: "pending" | "approved" | "rejected";
   let reviewVisibilityStatus: ReviewVisibilityStatus;
@@ -43,6 +44,7 @@ describe("admin reviews HTTP API", () => {
     receivedQueueRead = null;
     receivedMessageCommand = null;
     receivedDecisionCommand = null;
+    receivedReconciliationCommand = null;
     decisionStatus = "pending";
     replyDecisionStatus = "pending";
     reviewVisibilityStatus = "visible";
@@ -289,6 +291,21 @@ describe("admin reviews HTTP API", () => {
                   caseId: command.caseId,
                   status: command.status
                 }
+              };
+            },
+            async reconcileRatingAggregatesForReview(command: {
+              readonly moderatorUserId: string;
+              readonly now: string;
+              readonly reviewId: string;
+            }) {
+              receivedReconciliationCommand = command;
+              return {
+                kind: "reconciled",
+                reviewId: command.reviewId,
+                astrologerUserId: "10000000-0000-4000-8000-000000000209",
+                productIds: ["10000000-0000-4000-8000-000000000210"],
+                aggregateRowsWritten: 2,
+                reconciledAt: command.now
               };
             }
           }
@@ -591,6 +608,29 @@ describe("admin reviews HTTP API", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "review_rating_aggregate_projection_drift",
       scope: "product"
+    });
+  });
+
+  it("reconciles review rating aggregates for a review", async () => {
+    const response = await fetch(`${baseUrl}/admin/reviews/${reviewId}/rating-aggregates/reconcile`, {
+      method: "POST",
+      headers: {
+        "idempotency-key": "reviews-rating-aggregates-reconcile"
+      }
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      reviewId,
+      astrologerUserId: "10000000-0000-4000-8000-000000000209",
+      productIds: ["10000000-0000-4000-8000-000000000210"],
+      aggregateRowsWritten: 2,
+      reconciledAt: "2026-08-20T11:00:00.000Z"
+    });
+    expect(receivedReconciliationCommand).toEqual({
+      moderatorUserId: adminUserId,
+      now: "2026-08-20T11:00:00.000Z",
+      reviewId
     });
   });
 
