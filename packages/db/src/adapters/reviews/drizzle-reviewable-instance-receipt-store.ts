@@ -673,7 +673,8 @@ async function upsertAstroDiaryPeriodInTransaction(
     titleSnapshot: row.productTitle,
     contextLabelSnapshot: `AstroDiary ${row.startsAt.toISOString()} - ${row.endsAt.toISOString()}`,
     receivedAt: row.grantCreatedAt.toISOString(),
-    windowPolicy: "standard_14_days_after_receipt",
+    windowPolicy: "active_period_plus_14_days",
+    activePeriodEndsAt: row.endsAt.toISOString(),
     now: input.now
   });
 }

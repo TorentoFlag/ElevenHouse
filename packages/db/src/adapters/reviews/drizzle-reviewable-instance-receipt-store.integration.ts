@@ -190,7 +190,8 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
         orderId: null,
         titleSnapshot: "AstroDiary integration",
         receivedAt: "2026-08-01T10:00:00.000Z",
-        reviewWindowClosesAt: "2026-08-15T10:00:00.000Z"
+        windowPolicy: "active_period_plus_14_days",
+        reviewWindowClosesAt: "2026-09-15T10:00:00.000Z"
       }
     });
 
