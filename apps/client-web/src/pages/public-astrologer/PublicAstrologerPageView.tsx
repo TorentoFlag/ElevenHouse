@@ -1,5 +1,9 @@
-import { useMemo, useState } from "react";
-import type { CreateClientJoinIntentResponse, ReviewPublicItem } from "@elevenhouse/contracts";
+import { useState } from "react";
+import type {
+  CreateClientJoinIntentResponse,
+  ReviewPublicItem,
+  ReviewPublicSummary
+} from "@elevenhouse/contracts";
 import styles from "./PublicAstrologerPage.module.css";
 
 type StarRating = 1 | 2 | 3 | 4 | 5;
@@ -7,7 +11,11 @@ const starRatings: readonly StarRating[] = [5, 4, 3, 2, 1];
 
 export type PublicAstrologerReviewsState =
   | { readonly status: "loading" }
-  | { readonly status: "ready"; readonly items: readonly ReviewPublicItem[] }
+  | {
+      readonly status: "ready";
+      readonly items: readonly ReviewPublicItem[];
+      readonly summary: ReviewPublicSummary;
+    }
   | { readonly status: "error" };
 
 export type PublicAstrologerJoinState =
@@ -93,10 +101,7 @@ export function PublicAstrologerPageView({
 function PublicReviewsList({ state }: { readonly state: PublicAstrologerReviewsState }) {
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [isDialogOpen, setDialogOpen] = useState(false);
-  const summary = useMemo(
-    () => (state.status === "ready" ? buildReviewsSummary(state.items) : null),
-    [state]
-  );
+  const summary = state.status === "ready" ? state.summary : null;
 
   if (state.status === "loading") {
     return <p className={styles.reviewsState}>Загружаем отзывы.</p>;
@@ -119,7 +124,7 @@ function PublicReviewsList({ state }: { readonly state: PublicAstrologerReviewsS
       {summary ? (
         <section className={styles.reviewsSummary} aria-label="Сводка отзывов">
           <div className={styles.ratingScore}>
-            <strong>{formatAverageRating(summary.averageRating)}</strong>
+            <strong>{formatAverageRating(summary.averageRating ?? 0)}</strong>
             <span>{formatReviewsCount(summary.total)}</span>
           </div>
           <div className={styles.starBreakdown} aria-label="Распределение оценок">
@@ -299,24 +304,6 @@ function StarRow({ rating }: { readonly rating: number }) {
       ))}
     </span>
   );
-}
-
-function buildReviewsSummary(items: readonly ReviewPublicItem[]): {
-  readonly total: number;
-  readonly averageRating: number;
-  readonly counts: Record<StarRating, number>;
-} {
-  const counts: Record<StarRating, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  let ratingSum = 0;
-  for (const item of items) {
-    counts[item.rating as StarRating] += 1;
-    ratingSum += item.rating;
-  }
-  return {
-    total: items.length,
-    averageRating: items.length > 0 ? ratingSum / items.length : 0,
-    counts
-  };
 }
 
 function getInitials(value: string): string {

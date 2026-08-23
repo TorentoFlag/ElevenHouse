@@ -69,6 +69,11 @@ describe("public reviews HTTP API", () => {
                     astrologerReply: null
                   }
                 ],
+                summary: {
+                  total: 1,
+                  averageRating: 5,
+                  counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
+                },
                 nextCursor: null
               };
             },
@@ -212,6 +217,11 @@ describe("public reviews HTTP API", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       items: [{ reviewId, author: { displayName: "Секретный пользователь" } }],
+      summary: {
+        total: 1,
+        averageRating: 5,
+        counts: { 5: 1 }
+      },
       nextCursor: null
     });
     expect(receivedQuery).toEqual({

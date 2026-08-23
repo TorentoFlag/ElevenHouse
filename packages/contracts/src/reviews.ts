@@ -467,9 +467,56 @@ export const reviewPublicListQuerySchema = z
 export type ReviewPublicListQueryInput = z.input<typeof reviewPublicListQuerySchema>;
 export type ReviewPublicListQuery = z.infer<typeof reviewPublicListQuerySchema>;
 
+export const reviewPublicSummarySchema = z
+  .object({
+    total: z.number().int().min(0),
+    averageRating: z.number().min(1).max(5).nullable(),
+    counts: z
+      .object({
+        1: z.number().int().min(0),
+        2: z.number().int().min(0),
+        3: z.number().int().min(0),
+        4: z.number().int().min(0),
+        5: z.number().int().min(0)
+      })
+      .strict()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const counted =
+      value.counts[1] +
+      value.counts[2] +
+      value.counts[3] +
+      value.counts[4] +
+      value.counts[5];
+    if (counted !== value.total) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["counts"],
+        message: "Public review summary star counts must match total"
+      });
+    }
+    if (value.total === 0 && value.averageRating !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["averageRating"],
+        message: "Empty public review summary cannot have an average rating"
+      });
+    }
+    if (value.total > 0 && value.averageRating === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["averageRating"],
+        message: "Non-empty public review summary requires an average rating"
+      });
+    }
+  });
+export type ReviewPublicSummary = z.infer<typeof reviewPublicSummarySchema>;
+
 export const reviewPublicListResponseSchema = z
   .object({
     items: z.array(reviewPublicItemSchema).max(50),
+    summary: reviewPublicSummarySchema,
     nextCursor: cursorSchema.nullable()
   })
   .strict();

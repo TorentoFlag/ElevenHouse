@@ -24,6 +24,7 @@ import {
   type ReviewPublicItem,
   type ReviewPublicIdentityMode,
   type ReviewPublicListQuery,
+  type ReviewPublicSummary,
   type ReviewReplyVersion,
   type ReviewVersion,
   type ReviewableInstanceSummary
@@ -255,19 +256,10 @@ async function listPublicReviews(
 ): Promise<Awaited<ReturnType<ReviewReadStore["listPublicReviews"]>>> {
   const query = reviewPublicListQuerySchema.parse(input);
   const cursor = query.cursor ? parsePublicCursor(query.cursor) : null;
-  if (query.cursor && !cursor) return { items: [], nextCursor: null };
+  if (query.cursor && !cursor) return { items: [], summary: emptyPublicSummary(), nextCursor: null };
 
-  const conditions: SQL[] = [
-    eq(reviews.visibilityStatus, "visible"),
-    isNotNull(reviews.activePublicVersionId),
-    isNotNull(reviews.firstPublishedAt)
-  ];
-  if (query.astrologerUserId) {
-    conditions.push(eq(reviews.astrologerUserId, query.astrologerUserId));
-  }
-  if (query.productId) {
-    conditions.push(eq(reviewableInstances.productId, query.productId));
-  }
+  const summaryConditions = publicReviewConditions(query);
+  const conditions: SQL[] = [...summaryConditions];
   if (cursor) {
     const cursorCondition = or(
       lt(reviews.firstPublishedAt, new Date(cursor.publishedAt)),
@@ -278,6 +270,21 @@ async function listPublicReviews(
     );
     if (cursorCondition) conditions.push(cursorCondition);
   }
+
+  const [summaryRow] = await database
+    .select({
+      total: sql<number>`count(*)::integer`,
+      ratingSum: sql<number>`coalesce(sum(${reviewVersions.rating}), 0)::integer`,
+      star1: sql<number>`count(*) filter (where ${reviewVersions.rating} = 1)::integer`,
+      star2: sql<number>`count(*) filter (where ${reviewVersions.rating} = 2)::integer`,
+      star3: sql<number>`count(*) filter (where ${reviewVersions.rating} = 3)::integer`,
+      star4: sql<number>`count(*) filter (where ${reviewVersions.rating} = 4)::integer`,
+      star5: sql<number>`count(*) filter (where ${reviewVersions.rating} = 5)::integer`
+    })
+    .from(reviews)
+    .innerJoin(reviewableInstances, eq(reviewableInstances.id, reviews.reviewableInstanceId))
+    .innerJoin(reviewVersions, eq(reviewVersions.id, reviews.activePublicVersionId))
+    .where(and(...summaryConditions));
 
   const rows = await database
     .select({
@@ -301,6 +308,7 @@ async function listPublicReviews(
   const last = pageRows.at(-1)?.review ?? null;
   return reviewPublicListResponseSchema.parse({
     items,
+    summary: toPublicSummary(summaryRow ?? null),
     nextCursor:
       rows.length > query.limit && last?.firstPublishedAt
         ? encodePublicCursor({
@@ -309,6 +317,54 @@ async function listPublicReviews(
           })
         : null
   });
+}
+
+function publicReviewConditions(query: ReviewPublicListQuery): SQL[] {
+  const conditions: SQL[] = [
+    eq(reviews.visibilityStatus, "visible"),
+    isNotNull(reviews.activePublicVersionId),
+    isNotNull(reviews.firstPublishedAt)
+  ];
+  if (query.astrologerUserId) {
+    conditions.push(eq(reviews.astrologerUserId, query.astrologerUserId));
+  }
+  if (query.productId) {
+    conditions.push(eq(reviewableInstances.productId, query.productId));
+  }
+  return conditions;
+}
+
+function toPublicSummary(
+  row: {
+    readonly total: number;
+    readonly ratingSum: number;
+    readonly star1: number;
+    readonly star2: number;
+    readonly star3: number;
+    readonly star4: number;
+    readonly star5: number;
+  } | null
+): ReviewPublicSummary {
+  const total = Number(row?.total ?? 0);
+  return {
+    total,
+    averageRating: total > 0 ? Number(row?.ratingSum ?? 0) / total : null,
+    counts: {
+      1: Number(row?.star1 ?? 0),
+      2: Number(row?.star2 ?? 0),
+      3: Number(row?.star3 ?? 0),
+      4: Number(row?.star4 ?? 0),
+      5: Number(row?.star5 ?? 0)
+    }
+  };
+}
+
+function emptyPublicSummary(): ReviewPublicSummary {
+  return {
+    total: 0,
+    averageRating: null,
+    counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  };
 }
 
 async function listClientReviewableInstances(

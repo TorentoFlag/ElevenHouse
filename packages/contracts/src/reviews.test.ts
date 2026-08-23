@@ -339,6 +339,11 @@ describe("Reviews contracts", () => {
           astrologerReply: null
         }
       ],
+      summary: {
+        total: 1,
+        averageRating: 5,
+        counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
+      },
       nextCursor: null
     });
 

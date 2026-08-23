@@ -184,6 +184,11 @@ describe.sequential("Drizzle review read store", () => {
           }
         }
       ],
+      summary: {
+        total: 1,
+        averageRating: 5,
+        counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
+      },
       nextCursor: null
     });
     expect(JSON.stringify(publicPage)).not.toContain(fixture.clientUserId);

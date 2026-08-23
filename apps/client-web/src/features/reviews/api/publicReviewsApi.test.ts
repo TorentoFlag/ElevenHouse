@@ -10,12 +10,17 @@ describe("publicReviewsApi", () => {
   });
 
   it("lists public reviews for one astrologer only", async () => {
-    http.get.mockResolvedValueOnce({ items: [publicReview], nextCursor: null });
+    http.get.mockResolvedValueOnce({
+      items: [publicReview],
+      summary: publicReviewsSummary,
+      nextCursor: null
+    });
 
     await expect(
       listPublicReviews({ astrologerUserId, limit: 6, cursor: null })
     ).resolves.toEqual({
       items: [publicReview],
+      summary: publicReviewsSummary,
       nextCursor: null
     });
 
@@ -42,4 +47,10 @@ const publicReview = {
   },
   publishedAt: "2026-08-20T10:00:00.000Z",
   astrologerReply: null
+};
+
+const publicReviewsSummary = {
+  total: 1,
+  averageRating: 5,
+  counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 }
 };

@@ -32,6 +32,7 @@ describe("PublicAstrologerPage", () => {
     createClientJoinIntent.mockResolvedValueOnce(joinIntent);
     listPublicReviews.mockResolvedValueOnce({
       items: [publicReview, secondPublicReview],
+      summary: publicReviewsSummary,
       nextCursor: null
     });
 
@@ -41,8 +42,8 @@ describe("PublicAstrologerPage", () => {
     expect(await screen.findByText("Точно и полезно.")).toBeVisible();
     expect(screen.getByText("Секретный пользователь")).toBeVisible();
     expect(screen.getByText("Спасибо за доверие.")).toBeVisible();
-    expect(screen.getByText("4,5")).toBeVisible();
-    expect(screen.getByText("2 отзыва")).toBeVisible();
+    expect(screen.getByText("4,8")).toBeVisible();
+    expect(screen.getByText("51 отзыв")).toBeVisible();
     expect(screen.getByText("5 звезд")).toBeVisible();
     expect(screen.getByText("4 звезды")).toBeVisible();
     expect(screen.getByLabelText("Оценка 5 из 5")).toBeVisible();
@@ -62,6 +63,7 @@ describe("PublicAstrologerPage", () => {
     createClientJoinIntent.mockResolvedValueOnce(joinIntent);
     listPublicReviews.mockResolvedValueOnce({
       items: [publicReview, secondPublicReview],
+      summary: publicReviewsSummary,
       nextCursor: null
     });
 
@@ -106,7 +108,11 @@ describe("PublicAstrologerPage", () => {
         resolveJoinIntent = resolve;
       })
     );
-    listPublicReviews.mockResolvedValueOnce({ items: [], nextCursor: null });
+    listPublicReviews.mockResolvedValueOnce({
+      items: [],
+      summary: emptyPublicReviewsSummary,
+      nextCursor: null
+    });
 
     renderPage({ strict: true });
 
@@ -162,6 +168,18 @@ const publicReview = {
     text: "Спасибо за доверие.",
     publishedAt: "2026-08-20T11:00:00.000Z"
   }
+};
+
+const publicReviewsSummary = {
+  total: 51,
+  averageRating: 4.8,
+  counts: { 1: 1, 2: 2, 3: 3, 4: 12, 5: 33 }
+};
+
+const emptyPublicReviewsSummary = {
+  total: 0,
+  averageRating: null,
+  counts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
 };
 
 const secondPublicReview = {

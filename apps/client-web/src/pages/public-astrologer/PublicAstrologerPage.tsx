@@ -44,7 +44,7 @@ export function PublicAstrologerPage() {
             setState({
               status: "ready",
               intent,
-              reviews: { status: "ready", items: reviews.items }
+              reviews: { status: "ready", items: reviews.items, summary: reviews.summary }
             });
           }
         } catch {
