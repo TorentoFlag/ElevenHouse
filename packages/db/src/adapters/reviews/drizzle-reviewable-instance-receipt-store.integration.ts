@@ -603,6 +603,63 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("maps paid mini, custom and group fulfillments to product-specific review receipts", async () => {
+    const cases = [
+      {
+        productUpdate: { type: "mini", executionMode: "async", participantMode: "solo" },
+        expectedKind: "mini_delivery",
+        expectedContext: "Мини-продукт выдан клиенту"
+      },
+      {
+        productUpdate: { type: "custom", executionMode: "async", participantMode: "solo" },
+        expectedKind: "custom_fulfillment",
+        expectedContext: "Услуга выдана клиенту"
+      },
+      {
+        productUpdate: {
+          type: "single",
+          executionMode: "async",
+          participantMode: "group",
+          groupSize: 8
+        },
+        expectedKind: "group_participation",
+        expectedContext: "Участие подтверждено"
+      }
+    ] as const;
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    for (const entry of cases) {
+      const fixture = await seedPaidOrderFixture(runtime);
+      await runtime.database
+        .update(products)
+        .set({
+          ...entry.productUpdate,
+          paymentModel: "once",
+          revision: sql`${products.revision} + 1`,
+          updatedAt: new Date("2026-08-22T09:59:00.000Z")
+        })
+        .where(eq(products.id, fixture.productId));
+
+      await expect(
+        store.recordPaidOrderFulfillmentReceipt({
+          id: randomUUID(),
+          astrologerUserId: fixture.astrologerUserId,
+          orderId: fixture.orderId,
+          receivedAt: "2026-08-22T10:00:00.000Z",
+          now: "2026-08-22T10:01:00.000Z"
+        })
+      ).resolves.toMatchObject({
+        kind: "created",
+        receipt: {
+          kind: entry.expectedKind,
+          sourceResourceKey: `${entry.expectedKind}:${fixture.orderId}`,
+          contextLabelSnapshot: entry.expectedContext,
+          windowPolicy: "standard_14_days_after_receipt"
+        }
+      });
+    }
+  });
+
   it("rejects AstroDiary paid order fulfillment in favor of entitlement period receipts", async () => {
     const fixture = await seedPaidOrderFixture(runtime, "astro_diary");
     const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
