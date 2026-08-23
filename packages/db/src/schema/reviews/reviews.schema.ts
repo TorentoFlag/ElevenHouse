@@ -432,7 +432,7 @@ export const reviewModerationCaseMessages = pgTable(
     ),
     check(
       "review_moderation_case_messages_visibility_author_check",
-      sql`(${table.authorRole} = 'moderator') or (${table.authorRole} = 'client' and ${table.visibility} in ('all_case_participants', 'client_and_moderators')) or (${table.authorRole} = 'astrologer' and ${table.visibility} in ('all_case_participants', 'astrologer_and_moderators')) or (${table.authorRole} = 'system' and ${table.visibility} in ('all_case_participants', 'moderators_only'))`
+      sql`(${table.authorRole} = 'moderator') or (${table.authorRole} = 'client' and ${table.visibility} = 'client_and_moderators') or (${table.authorRole} = 'astrologer' and ${table.visibility} = 'astrologer_and_moderators') or (${table.authorRole} = 'system' and ${table.visibility} in ('all_case_participants', 'moderators_only'))`
     ),
     check("review_moderation_case_messages_body_check", reviewTextCheck(table.body)),
     index("review_moderation_case_messages_case_created_idx").on(table.caseId, table.createdAt)

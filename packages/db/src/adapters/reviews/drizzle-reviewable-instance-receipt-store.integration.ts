@@ -568,6 +568,40 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("maps paid pack fulfillment to a pack session receipt", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    await runtime.database
+      .update(products)
+      .set({
+        type: "pack",
+        executionMode: "async",
+        paymentModel: "once",
+        participantMode: "solo",
+        revision: sql`${products.revision} + 1`,
+        updatedAt: new Date("2026-08-22T09:59:00.000Z")
+      })
+      .where(eq(products.id, fixture.productId));
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: fixture.astrologerUserId,
+        orderId: fixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      receipt: {
+        kind: "pack_session",
+        sourceResourceKey: `pack_session:${fixture.orderId}`,
+        contextLabelSnapshot: "Сессия из пакета оказана",
+        windowPolicy: "standard_14_days_after_receipt"
+      }
+    });
+  });
+
   it("does not record paid live order fulfillment without terminal booking evidence", async () => {
     const fixture = await seedPaidOrderFixture(runtime);
     await runtime.database

@@ -808,6 +808,17 @@ describe.sequential("Drizzle review command store", () => {
       reason: "visibility_not_allowed_for_author"
     });
     await expect(
+      runtime.database.insert(reviewModerationCaseMessages).values({
+        id: randomUUID(),
+        caseId,
+        authorUserId: fixture.clientUserId,
+        authorRole: "client",
+        visibility: "all_case_participants",
+        body: "Обходной broadcast клиентом.",
+        createdAt: new Date("2026-08-20T12:13:00.000Z")
+      })
+    ).rejects.toThrow();
+    await expect(
       store.createReviewCaseMessage({
         messageId: clientMessageId,
         caseId,

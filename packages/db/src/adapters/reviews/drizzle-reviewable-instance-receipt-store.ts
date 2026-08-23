@@ -504,7 +504,7 @@ function classifyPaidOrderFulfillmentSource(input: {
     return standardFulfillment("mini_delivery", "Мини-продукт выдан клиенту");
   }
   if (input.type === "pack") {
-    return standardFulfillment("pack", "Пакет услуг выдан клиенту");
+    return standardFulfillment("pack_session", "Сессия из пакета оказана");
   }
   if (input.type === "custom") {
     return standardFulfillment("custom_fulfillment", "Услуга выдана клиенту");

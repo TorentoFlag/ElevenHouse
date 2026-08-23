@@ -194,7 +194,40 @@ function PublicReviewsList({ state }: { readonly state: PublicAstrologerReviewsS
                 ×
               </button>
             </header>
-            <ReviewCards items={state.items} compact />
+            <div
+              className={styles.dialogFilters}
+              role="group"
+              aria-label="Фильтр отзывов в модальном окне"
+            >
+              <button
+                className={
+                  selectedRating === null ? styles.filterButtonActive : styles.filterButton
+                }
+                type="button"
+                aria-pressed={selectedRating === null}
+                onClick={() => setSelectedRating(null)}
+              >
+                Все отзывы
+              </button>
+              {starRatings.map((rating) => (
+                <button
+                  className={
+                    selectedRating === rating ? styles.filterButtonActive : styles.filterButton
+                  }
+                  key={rating}
+                  type="button"
+                  aria-pressed={selectedRating === rating}
+                  onClick={() => setSelectedRating(rating === selectedRating ? null : rating)}
+                >
+                  {formatStarLabel(rating)}
+                </button>
+              ))}
+            </div>
+            {visibleItems.length === 0 ? (
+              <p className={styles.reviewsState}>Нет опубликованных отзывов с такой оценкой.</p>
+            ) : (
+              <ReviewCards items={visibleItems} compact />
+            )}
           </section>
         </div>
       ) : null}
@@ -214,11 +247,14 @@ function ReviewCards({
       {items.map((item) => (
         <article className={styles.reviewCard} key={item.reviewId}>
           <header className={styles.reviewCardHeader}>
-            <div>
-              <strong>{item.author.displayName}</strong>
-              <p>{item.contextLabel}</p>
+            <div className={styles.reviewAuthor}>
+              <ReviewAuthorAvatar item={item} />
+              <div>
+                <strong>{item.author.displayName}</strong>
+                <p>{item.contextLabel}</p>
+              </div>
             </div>
-            <span aria-label={`Оценка ${item.rating} из 5`}>{item.rating} / 5</span>
+            <StarRow rating={item.rating} />
           </header>
           <h3>{item.title}</h3>
           <p className={styles.reviewText}>{item.text}</p>
@@ -232,6 +268,36 @@ function ReviewCards({
         </article>
       ))}
     </div>
+  );
+}
+
+function ReviewAuthorAvatar({ item }: { readonly item: ReviewPublicItem }) {
+  if (item.author.avatarUrl) {
+    return (
+      <img
+        className={styles.reviewAvatar}
+        src={item.author.avatarUrl}
+        alt=""
+        aria-hidden="true"
+      />
+    );
+  }
+  return (
+    <span className={styles.reviewAvatar} aria-hidden="true">
+      {item.author.initials ?? "СП"}
+    </span>
+  );
+}
+
+function StarRow({ rating }: { readonly rating: number }) {
+  return (
+    <span className={styles.reviewStars} aria-label={`Оценка ${rating} из 5`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span key={star} aria-hidden="true">
+          {star <= rating ? "★" : "☆"}
+        </span>
+      ))}
+    </span>
   );
 }
 

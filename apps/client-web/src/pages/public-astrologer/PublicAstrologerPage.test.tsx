@@ -44,6 +44,10 @@ describe("PublicAstrologerPage", () => {
     expect(screen.getByText("2 отзыва")).toBeVisible();
     expect(screen.getByText("5 звезд")).toBeVisible();
     expect(screen.getByText("4 звезды")).toBeVisible();
+    expect(screen.getByLabelText("Оценка 5 из 5")).toBeVisible();
+    expect(screen.getByLabelText("Оценка 4 из 5")).toBeVisible();
+    expect(screen.getByText("СП")).toBeVisible();
+    expect(screen.getByText("МИ")).toBeVisible();
     expect(createClientJoinIntent).toHaveBeenCalledWith({ publicHandle: "anna" });
     expect(writePendingClientJoinIntent).toHaveBeenCalledWith(joinIntent);
     expect(listPublicReviews).toHaveBeenCalledWith({
@@ -74,7 +78,11 @@ describe("PublicAstrologerPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть модальное окно всех отзывов" }));
     expect(screen.getByRole("dialog", { name: "Все отзывы клиентов" })).toBeVisible();
+    expect(screen.getAllByText("Хороший разбор.").length).toBeGreaterThan(1);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "5 звезд" }).at(-1)!);
     expect(screen.getAllByText("Точно и полезно.").length).toBeGreaterThan(1);
+    expect(screen.queryByText("Хороший разбор.")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Закрыть все отзывы" }));
     expect(screen.queryByRole("dialog", { name: "Все отзывы клиентов" })).not.toBeInTheDocument();
