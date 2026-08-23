@@ -113,6 +113,7 @@ export type UpsertReviewableInstanceFromReceiptResult =
         | "order_not_reviewable"
         | "source_identity_conflict"
         | "astro_diary_requires_entitlement_period"
+        | "gift_requires_redemption_receipt"
         | "invalid_received_at"
         | "active_period_end_required"
         | "active_period_end_before_receipt";
@@ -463,7 +464,8 @@ function classifyPaidOrderFulfillmentSource(input: {
       readonly reason:
         | "live_order_requires_terminal_booking"
         | "active_period_end_required"
-        | "astro_diary_requires_entitlement_period";
+        | "astro_diary_requires_entitlement_period"
+        | "gift_requires_redemption_receipt";
     } {
   if (input.executionMode === "live") {
     return { kind: "rejected", reason: "live_order_requires_terminal_booking" };
@@ -487,7 +489,7 @@ function classifyPaidOrderFulfillmentSource(input: {
   }
 
   if (input.participantMode === "gift") {
-    return standardFulfillment("gift_redemption", "Подарок получен клиентом");
+    return { kind: "rejected", reason: "gift_requires_redemption_receipt" };
   }
   if (input.participantMode === "group") {
     return standardFulfillment("group_participation", "Участие подтверждено");

@@ -270,7 +270,8 @@ export class AstrologerReviewsService {
         result.reason === "order_not_reviewable" ||
         result.reason === "live_order_requires_terminal_booking" ||
         result.reason === "active_period_end_required" ||
-        result.reason === "astro_diary_requires_entitlement_period"
+        result.reason === "astro_diary_requires_entitlement_period" ||
+        result.reason === "gift_requires_redemption_receipt"
       ) {
         throw new ConflictException(result.reason);
       }

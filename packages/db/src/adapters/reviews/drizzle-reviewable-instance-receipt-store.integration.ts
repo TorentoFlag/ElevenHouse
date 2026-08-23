@@ -621,6 +621,32 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("rejects gift paid order fulfillment without a redemption recipient receipt", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    await runtime.database
+      .update(products)
+      .set({
+        participantMode: "gift",
+        revision: sql`${products.revision} + 1`,
+        updatedAt: new Date("2026-08-22T09:59:00.000Z")
+      })
+      .where(eq(products.id, fixture.productId));
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: fixture.astrologerUserId,
+        orderId: fixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toEqual({
+      kind: "rejected",
+      reason: "gift_requires_redemption_receipt"
+    });
+  });
+
   it("does not record paid live order fulfillment without terminal booking evidence", async () => {
     const fixture = await seedPaidOrderFixture(runtime);
     await runtime.database
