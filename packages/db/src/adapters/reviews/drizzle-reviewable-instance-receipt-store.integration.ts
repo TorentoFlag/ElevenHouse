@@ -602,6 +602,25 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
     });
   });
 
+  it("rejects AstroDiary paid order fulfillment in favor of entitlement period receipts", async () => {
+    const fixture = await seedPaidOrderFixture(runtime, "astro_diary");
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: fixture.astrologerUserId,
+        orderId: fixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        activePeriodEndsAt: "2026-09-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toEqual({
+      kind: "rejected",
+      reason: "astro_diary_requires_entitlement_period"
+    });
+  });
+
   it("does not record paid live order fulfillment without terminal booking evidence", async () => {
     const fixture = await seedPaidOrderFixture(runtime);
     await runtime.database
@@ -639,12 +658,15 @@ type OrderFixture = {
   readonly orderInput: CreateFinanceOrderRecordInput;
 };
 
-async function seedPaidOrderFixture(runtime: PostgresRuntime): Promise<OrderFixture> {
-  return seedOrderFixture(runtime, "paid");
+async function seedPaidOrderFixture(
+  runtime: PostgresRuntime,
+  purpose: "astro_diary" | "standard" = "standard"
+): Promise<OrderFixture> {
+  return seedOrderFixture(runtime, "paid", purpose);
 }
 
 async function seedPendingOrderFixture(runtime: PostgresRuntime): Promise<OrderFixture> {
-  return seedOrderFixture(runtime, "pending_payment");
+  return seedOrderFixture(runtime, "pending_payment", "standard");
 }
 
 type CompletedBookingFixture = {
@@ -803,9 +825,10 @@ async function seedCompletedBookingFixture(
 
 async function seedOrderFixture(
   runtime: PostgresRuntime,
-  status: "paid" | "pending_payment"
+  status: "paid" | "pending_payment",
+  purpose: "astro_diary" | "standard"
 ): Promise<OrderFixture> {
-  const prerequisite = await seedClientSubscriptionOrderPrerequisites(runtime, "standard");
+  const prerequisite = await seedClientSubscriptionOrderPrerequisites(runtime, purpose);
   const orderInput = {
     ...prerequisite.orderInput,
     status

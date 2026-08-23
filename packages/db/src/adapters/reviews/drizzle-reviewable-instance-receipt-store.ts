@@ -112,6 +112,7 @@ export type UpsertReviewableInstanceFromReceiptResult =
         | "order_identity_mismatch"
         | "order_not_reviewable"
         | "source_identity_conflict"
+        | "astro_diary_requires_entitlement_period"
         | "invalid_received_at"
         | "active_period_end_required"
         | "active_period_end_before_receipt";
@@ -459,23 +460,17 @@ function classifyPaidOrderFulfillmentSource(input: {
     }
   | {
       readonly kind: "rejected";
-      readonly reason: "live_order_requires_terminal_booking" | "active_period_end_required";
+      readonly reason:
+        | "live_order_requires_terminal_booking"
+        | "active_period_end_required"
+        | "astro_diary_requires_entitlement_period";
     } {
   if (input.executionMode === "live") {
     return { kind: "rejected", reason: "live_order_requires_terminal_booking" };
   }
 
   if (input.hasAstroDiaryConfig) {
-    if (!input.activePeriodEndsAt) {
-      return { kind: "rejected", reason: "active_period_end_required" };
-    }
-    return {
-      kind: "ok",
-      reviewableKind: "astro_diary_period",
-      windowPolicy: "active_period_plus_14_days",
-      activePeriodEndsAt: input.activePeriodEndsAt,
-      contextLabelSnapshot: "Период AstroDiary активирован"
-    };
+    return { kind: "rejected", reason: "astro_diary_requires_entitlement_period" };
   }
 
   if (input.paymentModel === "sub" || input.type === "sub" || input.subscriptionPeriod) {
