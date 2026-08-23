@@ -41,17 +41,29 @@ function readApprovedLineage(): readonly MigrationIdentity[] {
     readFileSync(join(migrationDirectory, "meta/_journal.json"), "utf8")
   ) as { readonly entries?: readonly { readonly idx?: number; readonly tag?: string; readonly when?: number }[] };
   const entries = journal.entries;
-  const migrationFiles = readdirSync(migrationDirectory).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort();
-  if (!entries || entries.length === 0 || entries.length !== migrationFiles.length) {
+  const migrationFiles = new Set(
+    readdirSync(migrationDirectory)
+      .filter((file) => /^\d{4}_.+\.sql$/.test(file))
+      .map((file) => file.slice(0, -".sql".length))
+  );
+  if (!entries || entries.length === 0 || entries.length !== migrationFiles.size) {
     throw new Error("Approved Drizzle lineage is missing or incomplete");
   }
 
-  return migrationFiles.map((file, index) => {
-    const entry = entries[index];
-    const tag = file.slice(0, -".sql".length);
-    if (!entry || entry.idx !== index || entry.tag !== tag || !Number.isSafeInteger(entry.when)) {
+  const seenTags = new Set<string>();
+  return entries.map((entry, index) => {
+    if (
+      !entry ||
+      entry.idx !== index ||
+      !entry.tag ||
+      !migrationFiles.has(entry.tag) ||
+      seenTags.has(entry.tag) ||
+      !Number.isSafeInteger(entry.when)
+    ) {
       throw new Error("Approved Drizzle lineage journal is invalid");
     }
+    seenTags.add(entry.tag);
+    const file = `${entry.tag}.sql`;
     return {
       hash: createHash("sha256").update(readFileSync(join(migrationDirectory, file))).digest("hex"),
       createdAt: String(entry.when)
