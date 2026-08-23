@@ -49,6 +49,9 @@ export type ClientsPageViewProps = {
   readonly isRelatedProfileError: boolean;
   readonly isManualClientCreating: boolean;
   readonly isManualClientCreateError: boolean;
+  readonly reviewReceiptOrderId: string | null;
+  readonly isReviewReceiptSaving: boolean;
+  readonly isReviewReceiptError: boolean;
   readonly isFiltered: boolean;
   readonly hasNextPage: boolean;
   readonly onSearchChange: (value: string) => void;
@@ -76,6 +79,7 @@ export type ClientsPageViewProps = {
     relatedProfileId: string,
     input: ClientRelatedBirthProfileUpsertRequest
   ) => Promise<unknown>;
+  readonly onRecordReviewReceipt: (orderId: string) => Promise<unknown>;
 };
 
 export function ClientsPageView({
@@ -107,6 +111,9 @@ export function ClientsPageView({
   isRelatedProfileError,
   isManualClientCreating,
   isManualClientCreateError,
+  reviewReceiptOrderId,
+  isReviewReceiptSaving,
+  isReviewReceiptError,
   isFiltered,
   hasNextPage,
   onSearchChange,
@@ -124,7 +131,8 @@ export function ClientsPageView({
   onSavePrivateCrm,
   onSaveBirthData,
   onCreateRelatedProfile,
-  onSaveRelatedProfile
+  onSaveRelatedProfile,
+  onRecordReviewReceipt
 }: ClientsPageViewProps) {
   return (
     <section
@@ -182,6 +190,9 @@ export function ClientsPageView({
           isBirthDataError={isBirthDataError}
           isRelatedProfileSaving={isRelatedProfileSaving}
           isRelatedProfileError={isRelatedProfileError}
+          reviewReceiptOrderId={reviewReceiptOrderId}
+          isReviewReceiptSaving={isReviewReceiptSaving}
+          isReviewReceiptError={isReviewReceiptError}
           onTabChange={onTabChange}
           onBackToList={onBackToList}
           onRetryDetail={onRetryDetail}
@@ -190,6 +201,7 @@ export function ClientsPageView({
           onSaveBirthData={onSaveBirthData}
           onCreateRelatedProfile={onCreateRelatedProfile}
           onSaveRelatedProfile={onSaveRelatedProfile}
+          onRecordReviewReceipt={onRecordReviewReceipt}
         />
       </div>
     </section>

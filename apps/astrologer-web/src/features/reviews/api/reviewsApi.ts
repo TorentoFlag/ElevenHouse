@@ -1,6 +1,7 @@
 import {
   createReviewReplyAiDraftRequestSchema,
   createReviewReplyAiDraftResponseSchema,
+  paidOrderFulfillmentReviewReceiptRequestSchema,
   reviewAstrologerListQuerySchema,
   reviewAstrologerListResponseSchema,
   reviewModerationCaseDetailSchema,
@@ -13,8 +14,10 @@ import {
   reviewRequestTargetListResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
+  reviewSourceReceiptResponseSchema,
   type CreateReviewReplyAiDraftRequest,
   type CreateReviewReplyAiDraftResponse,
+  type PaidOrderFulfillmentReviewReceiptRequest,
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationDecision,
@@ -24,7 +27,8 @@ import {
   type ReviewRequestDeliveryResponse,
   type ReviewRequestTargetListResponse,
   type ReviewReplySubmission,
-  type ReviewReplyVersion
+  type ReviewReplyVersion,
+  type ReviewSourceReceiptResponse
 } from "@elevenhouse/contracts";
 import { application } from "../../../Application";
 
@@ -103,6 +107,25 @@ export async function requestReview(
   return reviewRequestDeliveryResponseSchema.parse(
     await application.http.post(
       "/reviews/request-review",
+      body,
+      commandRequestOptions(input.idempotencyKey)
+    )
+  );
+}
+
+export type RecordPaidOrderFulfillmentReviewReceiptInput = Readonly<{
+  idempotencyKey: string;
+  body: PaidOrderFulfillmentReviewReceiptRequest;
+}>;
+
+export async function recordPaidOrderFulfillmentReviewReceipt(
+  input: RecordPaidOrderFulfillmentReviewReceiptInput
+): Promise<ReviewSourceReceiptResponse> {
+  const body = paidOrderFulfillmentReviewReceiptRequestSchema.parse(input.body);
+
+  return reviewSourceReceiptResponseSchema.parse(
+    await application.http.post(
+      "/reviews/source-receipts/paid-order-fulfillment",
       body,
       commandRequestOptions(input.idempotencyKey)
     )

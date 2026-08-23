@@ -6,6 +6,7 @@ import {
   listAstrologerReviews,
   listReviewRequestTargets,
   openReviewDispute,
+  recordPaidOrderFulfillmentReviewReceipt,
   requestReview,
   submitReviewReplyVersion
 } from "./reviewsApi";
@@ -103,6 +104,22 @@ describe("reviewsApi", () => {
     );
   });
 
+  it("records paid order fulfillment receipts through the shared review receipt contract", async () => {
+    post.mockResolvedValueOnce(reviewSourceReceipt);
+
+    await expect(
+      recordPaidOrderFulfillmentReviewReceipt({
+        idempotencyKey: "reviews:receipt:test",
+        body: { orderId, activePeriodEndsAt: null }
+      })
+    ).resolves.toEqual(reviewSourceReceipt);
+    expect(post).toHaveBeenCalledWith(
+      "/reviews/source-receipts/paid-order-fulfillment",
+      { orderId, activePeriodEndsAt: null },
+      { csrf: true, headers: { "idempotency-key": "reviews:receipt:test" } }
+    );
+  });
+
   it("rejects AI reply draft responses that expose provider internals", async () => {
     post.mockResolvedValueOnce({
       draftId,
@@ -178,6 +195,7 @@ const draftId = "31111111-1111-4111-8111-111111111111";
 const attemptId = "41111111-1111-4111-8111-111111111111";
 const caseId = "51111111-1111-4111-8111-111111111111";
 const threadId = "91111111-1111-4111-8111-111111111111";
+const orderId = "c1111111-1111-4111-8111-111111111111";
 const replyVersion = {
   id: "61111111-1111-4111-8111-111111111111",
   versionNumber: 1,
@@ -257,6 +275,23 @@ const reviewRequestDelivery = {
   status: "queued",
   createdAt: "2026-08-21T09:06:00.000Z",
   replayed: false
+} as const;
+
+const reviewSourceReceipt = {
+  id: "d1111111-1111-4111-8111-111111111111",
+  clientUserId: "b1111111-1111-4111-8111-111111111111",
+  astrologerUserId: "e1111111-1111-4111-8111-111111111111",
+  relationshipId: "f1111111-1111-4111-8111-111111111111",
+  kind: "async_delivery",
+  sourceResourceKey: `async_delivery:${orderId}`,
+  productId: "01111111-1111-4111-8111-111111111111",
+  orderId,
+  titleSnapshot: "Письменный разбор",
+  contextLabelSnapshot: "Материал выдан клиенту",
+  receivedAt: "2026-08-21T09:00:00.000Z",
+  windowPolicy: "standard_14_days_after_receipt",
+  activePeriodEndsAt: null,
+  status: "received"
 } as const;
 
 const reviewRequestTargetList = {

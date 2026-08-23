@@ -504,6 +504,63 @@ describe("ClientsPage", () => {
     expect(document.querySelector("[data-chat-bubble]")).not.toBeInTheDocument();
   });
 
+  it("records paid order fulfillment from client service work for review collection", async () => {
+    http.get.mockImplementation(async (path: string) => {
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {
+        return { client: adaDetail };
+      }
+      if (path === "/clients/crm/11111111-1111-4111-8111-111111111111/activity") {
+        return { items: [activityItem], nextCursor: null };
+      }
+      if (path.startsWith("/clients/crm?")) return { items: [adaListItem], nextCursor: null };
+      throw new Error(`Unexpected GET ${path}`);
+    });
+    http.post.mockResolvedValue({
+      id: "91111111-1111-4111-8111-111111111111",
+      clientUserId,
+      astrologerUserId: "81111111-1111-4111-8111-111111111111",
+      relationshipId: "21111111-1111-4111-8111-111111111111",
+      kind: "async_delivery",
+      sourceResourceKey: "async_delivery:61111111-1111-4111-8111-111111111111",
+      productId: "91111111-1111-4111-8111-111111111112",
+      orderId: "61111111-1111-4111-8111-111111111111",
+      titleSnapshot: "Paid report",
+      contextLabelSnapshot: "Материал выдан клиенту",
+      receivedAt: "2026-08-20T12:00:00.000Z",
+      windowPolicy: "standard_14_days_after_receipt",
+      activePeriodEndsAt: null,
+      status: "received"
+    });
+
+    renderClientsPage({ route: "/clients/11111111-1111-4111-8111-111111111111" });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть отзыв" }));
+
+    await waitFor(() =>
+      expect(http.post).toHaveBeenCalledWith(
+        "/reviews/source-receipts/paid-order-fulfillment",
+        {
+          orderId: "61111111-1111-4111-8111-111111111111",
+          activePeriodEndsAt: null
+        },
+        {
+          csrf: true,
+          headers: {
+            "idempotency-key":
+              "client-crm-review-receipt:61111111-1111-4111-8111-111111111111"
+          }
+        }
+      )
+    );
+    await waitFor(() =>
+      expect(
+        http.get.mock.calls.filter(([path]) =>
+          String(path).startsWith("/clients/crm/11111111-1111-4111-8111-111111111111")
+        ).length
+      ).toBeGreaterThanOrEqual(4)
+    );
+  });
+
   it("renders service-work unavailable and empty states without fake module data", async () => {
     http.get.mockImplementation(async (path: string) => {
       if (path === "/clients/crm/11111111-1111-4111-8111-111111111111") {

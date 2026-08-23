@@ -681,6 +681,20 @@
   font-size: 12px;
 }
 
+.workActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.workActionError {
+  color: #9f2f24;
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .emptyStateCompact {
   padding: 14px 0 2px;
   color: var(--clients-text-3);

@@ -486,6 +486,11 @@ export type ClientsCrmCopy = {
     readonly recentPayments: string;
     readonly empty: string;
     readonly unavailable: string;
+    readonly reviewReceipt: {
+      readonly action: string;
+      readonly saving: string;
+      readonly error: string;
+    };
   };
   readonly privateCrm: {
     readonly title: string;
@@ -850,7 +855,12 @@ export const astrologerCopyByLocale = {
           recentOrders: "Заказы",
           recentPayments: "Платежи",
           empty: "Работы, заказов и платежей пока нет",
-          unavailable: "Не удалось загрузить работу с клиентом"
+          unavailable: "Не удалось загрузить работу с клиентом",
+          reviewReceipt: {
+            action: "Открыть отзыв",
+            saving: "Открываем",
+            error: "Не удалось открыть отзыв"
+          }
         },
         privateCrm: {
           title: "CRM",
@@ -1525,7 +1535,12 @@ export const astrologerCopyByLocale = {
           recentOrders: "Orders",
           recentPayments: "Payments",
           empty: "There is no client work, orders, or payments yet",
-          unavailable: "Could not load client work"
+          unavailable: "Could not load client work",
+          reviewReceipt: {
+            action: "Open review",
+            saving: "Opening",
+            error: "Could not open review"
+          }
         },
         privateCrm: {
           title: "CRM",

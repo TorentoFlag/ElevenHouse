@@ -47,6 +47,9 @@ type ClientCrmDetailPanelProps = {
   readonly isBirthDataError: boolean;
   readonly isRelatedProfileSaving: boolean;
   readonly isRelatedProfileError: boolean;
+  readonly reviewReceiptOrderId: string | null;
+  readonly isReviewReceiptSaving: boolean;
+  readonly isReviewReceiptError: boolean;
   readonly onTabChange: (tab: ClientCrmTabId) => void;
   readonly onBackToList: () => void;
   readonly onRetryDetail: () => void;
@@ -62,6 +65,7 @@ type ClientCrmDetailPanelProps = {
     relatedProfileId: string,
     input: ClientRelatedBirthProfileUpsertRequest
   ) => Promise<unknown>;
+  readonly onRecordReviewReceipt: (orderId: string) => Promise<unknown>;
 };
 
 export function ClientCrmDetailPanel({
@@ -81,6 +85,9 @@ export function ClientCrmDetailPanel({
   isBirthDataError,
   isRelatedProfileSaving,
   isRelatedProfileError,
+  reviewReceiptOrderId,
+  isReviewReceiptSaving,
+  isReviewReceiptError,
   onTabChange,
   onBackToList,
   onRetryDetail,
@@ -88,7 +95,8 @@ export function ClientCrmDetailPanel({
   onSavePrivateCrm,
   onSaveBirthData,
   onCreateRelatedProfile,
-  onSaveRelatedProfile
+  onSaveRelatedProfile,
+  onRecordReviewReceipt
 }: ClientCrmDetailPanelProps) {
   const displayName = client
     ? formatClientCrmDisplayName(client.clientUserId, client.displayName, locale)
@@ -191,6 +199,10 @@ export function ClientCrmDetailPanel({
                 isPrivateCrmSaving={isPrivateCrmSaving}
                 isPrivateCrmError={isPrivateCrmError}
                 onSavePrivateCrm={onSavePrivateCrm}
+                reviewReceiptOrderId={reviewReceiptOrderId}
+                isReviewReceiptSaving={isReviewReceiptSaving}
+                isReviewReceiptError={isReviewReceiptError}
+                onRecordReviewReceipt={onRecordReviewReceipt}
               />
             ) : activeTab === "birthData" ? (
               <ClientCrmBirthDataPanel
@@ -248,16 +260,24 @@ function OverviewPanel({
   locale,
   isPrivateCrmSaving,
   isPrivateCrmError,
-  onSavePrivateCrm
+  onSavePrivateCrm,
+  reviewReceiptOrderId,
+  isReviewReceiptSaving,
+  isReviewReceiptError,
+  onRecordReviewReceipt
 }: {
   readonly client: AstrologerClientCrmDetail;
   readonly copy: ClientsCrmCopy;
   readonly locale: SupportedLocale;
   readonly isPrivateCrmSaving: boolean;
   readonly isPrivateCrmError: boolean;
+  readonly reviewReceiptOrderId: string | null;
+  readonly isReviewReceiptSaving: boolean;
+  readonly isReviewReceiptError: boolean;
   readonly onSavePrivateCrm: (
     input: AstrologerClientCrmPrivateProfileUpdateRequest
   ) => Promise<AstrologerClientCrmPrivateProfileUpdateResponse>;
+  readonly onRecordReviewReceipt: (orderId: string) => Promise<unknown>;
 }) {
   const lifecycle = formatClientCrmLifecycle(client.lifecycle.status, locale);
   const readiness = {
@@ -330,7 +350,15 @@ function OverviewPanel({
       />
 
       {client.serviceWork ? (
-        <ServiceWorkPanel copy={copy} locale={locale} serviceWork={client.serviceWork} />
+        <ServiceWorkPanel
+          copy={copy}
+          locale={locale}
+          serviceWork={client.serviceWork}
+          reviewReceiptOrderId={reviewReceiptOrderId}
+          isReviewReceiptSaving={isReviewReceiptSaving}
+          isReviewReceiptError={isReviewReceiptError}
+          onRecordReviewReceipt={onRecordReviewReceipt}
+        />
       ) : null}
 
       <section className={`${styles.card} ${styles.wideCard}`}>
@@ -351,11 +379,19 @@ function OverviewPanel({
 function ServiceWorkPanel({
   copy,
   locale,
-  serviceWork
+  serviceWork,
+  reviewReceiptOrderId,
+  isReviewReceiptSaving,
+  isReviewReceiptError,
+  onRecordReviewReceipt
 }: {
   readonly copy: ClientsCrmCopy;
   readonly locale: SupportedLocale;
   readonly serviceWork: AstrologerClientCrmDetail["serviceWork"];
+  readonly reviewReceiptOrderId: string | null;
+  readonly isReviewReceiptSaving: boolean;
+  readonly isReviewReceiptError: boolean;
+  readonly onRecordReviewReceipt: (orderId: string) => Promise<unknown>;
 }) {
   if (!serviceWork) return null;
   if (serviceWork.status === "unavailable") {
@@ -409,6 +445,11 @@ function ServiceWorkPanel({
             total={serviceWork.orders.recentTotal}
             items={serviceWork.orders.recent}
             locale={locale}
+            reviewReceiptOrderId={reviewReceiptOrderId}
+            isReviewReceiptSaving={isReviewReceiptSaving}
+            isReviewReceiptError={isReviewReceiptError}
+            onRecordReviewReceipt={onRecordReviewReceipt}
+            receiptLabels={copy.serviceWork.reviewReceipt}
           />
           <ServiceWorkGroup
             title={copy.serviceWork.recentPayments}
@@ -428,12 +469,22 @@ function ServiceWorkGroup({
   title,
   total,
   items,
-  locale
+  locale,
+  reviewReceiptOrderId = null,
+  isReviewReceiptSaving = false,
+  isReviewReceiptError = false,
+  onRecordReviewReceipt,
+  receiptLabels
 }: {
   readonly title: string;
   readonly total: number;
   readonly items: readonly ServiceWorkItem[];
   readonly locale: SupportedLocale;
+  readonly reviewReceiptOrderId?: string | null;
+  readonly isReviewReceiptSaving?: boolean;
+  readonly isReviewReceiptError?: boolean;
+  readonly onRecordReviewReceipt?: (orderId: string) => Promise<unknown>;
+  readonly receiptLabels?: ClientsCrmCopy["serviceWork"]["reviewReceipt"];
 }) {
   if (items.length === 0) return null;
 
@@ -444,12 +495,51 @@ function ServiceWorkGroup({
         <span className={styles.workCount}>{total}</span>
       </div>
       <div className={styles.workList}>
-        {items.map((item) => (
-          <a className={styles.workItem} href={item.href} key={item.id}>
-            <span className={styles.workTitle}>{getServiceWorkTitle(item, locale)}</span>
-            <span className={styles.workMeta}>{getServiceWorkMeta(item, locale)}</span>
-          </a>
-        ))}
+        {items.map((item) => {
+          const canRecordReviewReceipt =
+            receiptLabels !== undefined &&
+            onRecordReviewReceipt !== undefined &&
+            isReviewReceiptEligibleOrder(item);
+          const action = canRecordReviewReceipt
+            ? {
+                labels: receiptLabels,
+                onRecord: onRecordReviewReceipt,
+                isSaving: isReviewReceiptSaving && reviewReceiptOrderId === item.id,
+                isError: isReviewReceiptError && reviewReceiptOrderId === item.id
+              }
+            : null;
+          const content = (
+            <>
+              <span className={styles.workTitle}>{getServiceWorkTitle(item, locale)}</span>
+              <span className={styles.workMeta}>{getServiceWorkMeta(item, locale)}</span>
+              {action ? (
+                <span className={styles.workActions}>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={action.isSaving}
+                    onClick={() => void action.onRecord(item.id)}
+                    type="button"
+                  >
+                    {action.isSaving ? action.labels.saving : action.labels.action}
+                  </button>
+                  {action.isError ? (
+                    <span className={styles.workActionError}>{action.labels.error}</span>
+                  ) : null}
+                </span>
+              ) : null}
+            </>
+          );
+
+          return action ? (
+            <div className={styles.workItem} key={item.id}>
+              {content}
+            </div>
+          ) : (
+            <a className={styles.workItem} href={"href" in item ? item.href : undefined} key={item.id}>
+              {content}
+            </a>
+          );
+        })}
       </div>
     </div>
   );
@@ -465,6 +555,15 @@ function getServiceWorkTitle(item: ServiceWorkItem, locale: SupportedLocale): st
   if ("productTitle" in item) return item.productTitle;
   const shortOrderId = item.orderId.slice(0, 8);
   return `${locale === "ru" ? "Платеж" : "Payment"} ${shortOrderId}`;
+}
+
+function isReviewReceiptEligibleOrder(item: ServiceWorkItem): item is ClientCrmServiceWorkOrderItem {
+  return (
+    "productTitle" in item &&
+    "amountMinor" in item &&
+    "status" in item &&
+    (item.status === "paid" || item.status === "fulfilled")
+  );
 }
 
 function getServiceWorkMeta(item: ServiceWorkItem, locale: SupportedLocale): string {

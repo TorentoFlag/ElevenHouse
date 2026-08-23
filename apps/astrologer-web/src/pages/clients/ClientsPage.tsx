@@ -6,6 +6,7 @@ import type {
   ClientRelationshipSource
 } from "@elevenhouse/contracts";
 import { useI18n } from "@elevenhouse/i18n";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import { useDocumentTitle } from "../../common/hooks/useDocumentTitle";
 import type { AstrologerCopy } from "../../common/i18n/astrologerCopy";
@@ -21,6 +22,7 @@ import {
 } from "../../features/clients/model/clientsCrmQueries";
 import type { ClientCrmTabId } from "../../features/clients/ui/ClientCrmTabs";
 import type { ClientCrmListViewMode } from "../../features/clients/ui/ClientCrmListPanel";
+import { recordPaidOrderFulfillmentReviewReceipt } from "../../features/reviews/api/reviewsApi";
 import { ClientsPageView } from "./ClientsPageView";
 
 const clientsCrmPageSize = 20;
@@ -58,6 +60,16 @@ export function ClientsPage() {
     useCreateClientRelatedBirthProfileMutation(selectedClientUserId);
   const updateRelatedProfileMutation =
     useUpdateClientRelatedBirthProfileMutation(selectedClientUserId);
+  const reviewReceiptMutation = useMutation({
+    mutationFn: (orderId: string) =>
+      recordPaidOrderFulfillmentReviewReceipt({
+        idempotencyKey: `client-crm-review-receipt:${orderId}`,
+        body: { orderId, activePeriodEndsAt: null }
+      }),
+    onSuccess: async () => {
+      await Promise.all([detailQuery.refetch(), activityQuery.refetch()]);
+    }
+  });
   const isFiltered = search.trim().length > 0 || lifecycle !== undefined || source !== undefined;
 
   useDocumentTitle(dictionary.clients.documentTitle);
@@ -130,6 +142,13 @@ export function ClientsPage() {
       }
       isManualClientCreating={createManualClientMutation.isPending}
       isManualClientCreateError={createManualClientMutation.isError}
+      reviewReceiptOrderId={
+        typeof reviewReceiptMutation.variables === "string"
+          ? reviewReceiptMutation.variables
+          : null
+      }
+      isReviewReceiptSaving={reviewReceiptMutation.isPending}
+      isReviewReceiptError={reviewReceiptMutation.isError}
       isFiltered={isFiltered}
       hasNextPage={Boolean(listQuery.data?.nextCursor)}
       onSearchChange={handleSearchChange}
@@ -158,6 +177,7 @@ export function ClientsPage() {
       onSaveRelatedProfile={(relatedProfileId, input) =>
         updateRelatedProfileMutation.mutateAsync({ relatedProfileId, input })
       }
+      onRecordReviewReceipt={(orderId) => reviewReceiptMutation.mutateAsync(orderId)}
     />
   );
 }
