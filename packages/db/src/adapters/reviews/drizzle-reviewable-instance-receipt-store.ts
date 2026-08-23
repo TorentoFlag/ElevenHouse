@@ -124,6 +124,19 @@ export type RecordReviewSourceReceiptResult =
     }
   | Extract<UpsertReviewableInstanceFromReceiptResult, { readonly kind: "rejected" }>;
 
+export type RecordPaidOrderFulfillmentReceiptResult =
+  | RecordReviewSourceReceiptResult
+  | {
+      readonly kind: "rejected";
+      readonly reason:
+        | "order_not_found"
+        | "order_identity_mismatch"
+        | "order_not_reviewable"
+        | "product_not_found"
+        | "live_order_requires_terminal_booking"
+        | "active_period_end_required";
+    };
+
 export type DrizzleReviewableInstanceReceiptStore = {
   readonly upsertFromReceipt: (
     input: ReviewableInstanceReceiptCommandInput
@@ -131,6 +144,14 @@ export type DrizzleReviewableInstanceReceiptStore = {
   readonly recordSourceReceipt: (
     input: ReviewSourceReceiptCommandInput
   ) => Promise<RecordReviewSourceReceiptResult>;
+  readonly recordPaidOrderFulfillmentReceipt: (input: {
+    readonly id: string;
+    readonly astrologerUserId: string;
+    readonly orderId: string;
+    readonly receivedAt: string;
+    readonly activePeriodEndsAt?: string | null;
+    readonly now: string;
+  }) => Promise<RecordPaidOrderFulfillmentReceiptResult>;
   readonly upsertFromCompletedBookingEvent: (input: {
     readonly bookingLifecycleEventId: string;
     readonly nextReviewableInstanceId: string;
@@ -181,6 +202,10 @@ export function createDrizzleReviewableInstanceReceiptStore(
       database.transaction((transaction) => upsertReceiptInTransaction(transaction, input)),
     recordSourceReceipt: (input) =>
       database.transaction((transaction) => recordSourceReceiptInTransaction(transaction, input)),
+    recordPaidOrderFulfillmentReceipt: (input) =>
+      database.transaction((transaction) =>
+        recordPaidOrderFulfillmentReceiptInTransaction(transaction, input)
+      ),
     upsertFromCompletedBookingEvent: (input) =>
       database.transaction((transaction) =>
         upsertCompletedBookingEventInTransaction(transaction, input)
@@ -332,6 +357,174 @@ export function createDrizzleReviewableInstanceReceiptStore(
 
       return { scanned: rows.length, created, existing, rejected };
     }
+  };
+}
+
+async function recordPaidOrderFulfillmentReceiptInTransaction(
+  transaction: ReviewReceiptTransaction,
+  input: {
+    readonly id: string;
+    readonly astrologerUserId: string;
+    readonly orderId: string;
+    readonly receivedAt: string;
+    readonly activePeriodEndsAt?: string | null;
+    readonly now: string;
+  }
+): Promise<RecordPaidOrderFulfillmentReceiptResult> {
+  const [row] = await transaction
+    .select({
+      orderId: orders.id,
+      clientUserId: orders.clientUserId,
+      astrologerUserId: orders.astrologerUserId,
+      productId: orders.productId,
+      productTitleSnapshot: orders.productTitleSnapshot,
+      orderStatus: orders.status,
+      productOwnerUserId: products.ownerUserId,
+      productType: products.type,
+      productExecutionMode: products.executionMode,
+      productPaymentModel: products.paymentModel,
+      productParticipantMode: products.participantMode,
+      productDurationLabel: products.durationLabel,
+      productSubscriptionPeriod: products.subscriptionPeriod,
+      productAstroDiaryReflectionCyclesPerPeriod: products.astroDiaryReflectionCyclesPerPeriod
+    })
+    .from(orders)
+    .leftJoin(products, eq(products.id, orders.productId))
+    .where(eq(orders.id, input.orderId))
+    .limit(1);
+
+  if (!row) return { kind: "rejected", reason: "order_not_found" };
+  if (row.astrologerUserId !== input.astrologerUserId) {
+    return { kind: "rejected", reason: "order_identity_mismatch" };
+  }
+  if (row.orderStatus !== "paid" && row.orderStatus !== "fulfilled") {
+    return { kind: "rejected", reason: "order_not_reviewable" };
+  }
+  if (!row.productOwnerUserId || row.productOwnerUserId !== input.astrologerUserId) {
+    return { kind: "rejected", reason: "product_not_found" };
+  }
+  if (
+    !row.productType ||
+    !row.productExecutionMode ||
+    !row.productPaymentModel ||
+    !row.productParticipantMode
+  ) {
+    return { kind: "rejected", reason: "product_not_found" };
+  }
+
+  const source = classifyPaidOrderFulfillmentSource({
+    type: row.productType,
+    executionMode: row.productExecutionMode,
+    paymentModel: row.productPaymentModel,
+    participantMode: row.productParticipantMode,
+    subscriptionPeriod: row.productSubscriptionPeriod,
+    hasAstroDiaryConfig: row.productAstroDiaryReflectionCyclesPerPeriod !== null,
+    activePeriodEndsAt: input.activePeriodEndsAt ?? null
+  });
+  if (source.kind === "rejected") return source;
+
+  return recordSourceReceiptInTransaction(transaction, {
+    id: input.id,
+    clientUserId: row.clientUserId,
+    astrologerUserId: row.astrologerUserId,
+    kind: source.reviewableKind,
+    sourceResourceKey: `${source.reviewableKind}:${row.orderId}`,
+    productId: row.productId,
+    orderId: row.orderId,
+    titleSnapshot: row.productTitleSnapshot,
+    contextLabelSnapshot:
+      source.contextLabelSnapshot ?? row.productDurationLabel ?? "Услуга выдана клиенту",
+    receivedAt: input.receivedAt,
+    windowPolicy: source.windowPolicy,
+    activePeriodEndsAt: source.activePeriodEndsAt,
+    now: input.now
+  });
+}
+
+function classifyPaidOrderFulfillmentSource(input: {
+  readonly type: string;
+  readonly executionMode: string;
+  readonly paymentModel: string;
+  readonly participantMode: string;
+  readonly subscriptionPeriod: string | null;
+  readonly hasAstroDiaryConfig: boolean;
+  readonly activePeriodEndsAt: string | null;
+}):
+  | {
+      readonly kind: "ok";
+      readonly reviewableKind: ReviewableInstanceKind;
+      readonly windowPolicy: ReviewWindowPolicy;
+      readonly activePeriodEndsAt: string | null;
+      readonly contextLabelSnapshot: string | null;
+    }
+  | {
+      readonly kind: "rejected";
+      readonly reason: "live_order_requires_terminal_booking" | "active_period_end_required";
+    } {
+  if (input.executionMode === "live") {
+    return { kind: "rejected", reason: "live_order_requires_terminal_booking" };
+  }
+
+  if (input.hasAstroDiaryConfig) {
+    if (!input.activePeriodEndsAt) {
+      return { kind: "rejected", reason: "active_period_end_required" };
+    }
+    return {
+      kind: "ok",
+      reviewableKind: "astro_diary_period",
+      windowPolicy: "active_period_plus_14_days",
+      activePeriodEndsAt: input.activePeriodEndsAt,
+      contextLabelSnapshot: "Период AstroDiary активирован"
+    };
+  }
+
+  if (input.paymentModel === "sub" || input.type === "sub" || input.subscriptionPeriod) {
+    if (!input.activePeriodEndsAt) {
+      return { kind: "rejected", reason: "active_period_end_required" };
+    }
+    return {
+      kind: "ok",
+      reviewableKind: "subscription_period",
+      windowPolicy: "active_period_plus_14_days",
+      activePeriodEndsAt: input.activePeriodEndsAt,
+      contextLabelSnapshot: "Период подписки активирован"
+    };
+  }
+
+  if (input.participantMode === "gift") {
+    return standardFulfillment("gift_redemption", "Подарок получен клиентом");
+  }
+  if (input.participantMode === "group") {
+    return standardFulfillment("group_participation", "Участие подтверждено");
+  }
+  if (input.type === "course") {
+    return standardFulfillment("course_access", "Доступ к курсу открыт");
+  }
+  if (input.type === "mini") {
+    return standardFulfillment("mini_delivery", "Мини-продукт выдан клиенту");
+  }
+  if (input.type === "pack") {
+    return standardFulfillment("pack", "Пакет услуг выдан клиенту");
+  }
+  if (input.type === "custom") {
+    return standardFulfillment("custom_fulfillment", "Услуга выдана клиенту");
+  }
+  if (input.executionMode === "instant") {
+    return standardFulfillment("instant_delivery", "Материал выдан клиенту");
+  }
+  return standardFulfillment("async_delivery", "Материал выдан клиенту");
+}
+
+function standardFulfillment(
+  reviewableKind: ReviewableInstanceKind,
+  contextLabelSnapshot: string
+): Extract<ReturnType<typeof classifyPaidOrderFulfillmentSource>, { readonly kind: "ok" }> {
+  return {
+    kind: "ok",
+    reviewableKind,
+    windowPolicy: "standard_14_days_after_receipt",
+    activePeriodEndsAt: null,
+    contextLabelSnapshot
   };
 }
 

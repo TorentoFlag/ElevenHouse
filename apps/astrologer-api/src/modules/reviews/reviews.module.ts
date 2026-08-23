@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import {
   createDrizzleReviewAiReplyDraftStore,
   createDrizzleReviewCommandStore,
+  createDrizzleReviewableInstanceReceiptStore,
   createDrizzleReviewReadStore
 } from "@elevenhouse/db/reviews";
 import { createDrizzleMessagingStore } from "@elevenhouse/db/messaging";
@@ -19,7 +20,8 @@ import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
   ASTROLOGER_REVIEWS_MESSAGING_STORE,
-  ASTROLOGER_REVIEWS_READ_STORE
+  ASTROLOGER_REVIEWS_READ_STORE,
+  ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE
 } from "./reviews.tokens";
 
 @Module({
@@ -55,6 +57,12 @@ import {
     {
       provide: ASTROLOGER_REVIEWS_MESSAGING_STORE,
       useFactory: (runtime: PostgresRuntimeService) => createDrizzleMessagingStore(runtime.database),
+      inject: [PostgresRuntimeService]
+    },
+    {
+      provide: ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE,
+      useFactory: (runtime: PostgresRuntimeService) =>
+        createDrizzleReviewableInstanceReceiptStore(runtime.database),
       inject: [PostgresRuntimeService]
     }
   ]

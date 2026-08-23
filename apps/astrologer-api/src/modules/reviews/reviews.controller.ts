@@ -17,7 +17,8 @@ import type {
   ReviewModerationCaseMessage,
   ReviewRequestDeliveryResponse,
   ReviewRequestTargetListResponse,
-  ReviewReplyVersion
+  ReviewReplyVersion,
+  ReviewSourceReceiptResponse
 } from "@elevenhouse/contracts";
 
 import { AstrologerSessionAuthGuard } from "../identity/auth/identity-auth.guard";
@@ -79,6 +80,21 @@ export class AstrologerReviewsController {
     @Req() request: AstrologerSessionRequest
   ): Promise<ReviewRequestDeliveryResponse> {
     return this.service.requestReview(
+      requireAstrologerUserId(request),
+      body,
+      requireIdempotencyKey(idempotencyKey)
+    );
+  }
+
+  @Post("source-receipts/paid-order-fulfillment")
+  @RequireIdempotency({ scope: "reviews.source-receipt.paid-order-fulfillment" })
+  @RequireCsrf()
+  recordPaidOrderFulfillmentReceipt(
+    @Body() body: unknown,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Req() request: AstrologerSessionRequest
+  ): Promise<ReviewSourceReceiptResponse> {
+    return this.service.recordPaidOrderFulfillmentReceipt(
       requireAstrologerUserId(request),
       body,
       requireIdempotencyKey(idempotencyKey)

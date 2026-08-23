@@ -57,6 +57,10 @@ export const reviewableInstanceStatusValues = [
 export const reviewableInstanceStatusSchema = z.enum(reviewableInstanceStatusValues);
 export type ReviewableInstanceStatus = z.infer<typeof reviewableInstanceStatusSchema>;
 
+export const reviewSourceReceiptStatusValues = ["received", "revoked"] as const;
+export const reviewSourceReceiptStatusSchema = z.enum(reviewSourceReceiptStatusValues);
+export type ReviewSourceReceiptStatus = z.infer<typeof reviewSourceReceiptStatusSchema>;
+
 export const reviewPublicIdentityModeValues = ["named", "secret_user"] as const;
 export const reviewPublicIdentityModeSchema = z.enum(reviewPublicIdentityModeValues);
 export type ReviewPublicIdentityMode = z.infer<typeof reviewPublicIdentityModeSchema>;
@@ -117,6 +121,41 @@ export const reviewModerationCaseStatusValues = [
 ] as const;
 export const reviewModerationCaseStatusSchema = z.enum(reviewModerationCaseStatusValues);
 export type ReviewModerationCaseStatus = z.infer<typeof reviewModerationCaseStatusSchema>;
+
+export const paidOrderFulfillmentReviewReceiptRequestSchema = z
+  .object({
+    orderId: uuidSchema,
+    receivedAt: instantSchema.optional(),
+    activePeriodEndsAt: instantSchema.nullable().optional()
+  })
+  .strict()
+  .transform((value) => ({
+    ...value,
+    activePeriodEndsAt: value.activePeriodEndsAt ?? null
+  }));
+export type PaidOrderFulfillmentReviewReceiptRequest = z.infer<
+  typeof paidOrderFulfillmentReviewReceiptRequestSchema
+>;
+
+export const reviewSourceReceiptResponseSchema = z
+  .object({
+    id: uuidSchema,
+    clientUserId: uuidSchema,
+    astrologerUserId: uuidSchema,
+    relationshipId: uuidSchema,
+    kind: reviewableInstanceKindSchema,
+    sourceResourceKey: z.string().trim().min(3).max(180),
+    productId: uuidSchema.nullable(),
+    orderId: uuidSchema.nullable(),
+    titleSnapshot: z.string().trim().min(1).max(180),
+    contextLabelSnapshot: z.string().trim().min(1).max(240),
+    receivedAt: instantSchema,
+    windowPolicy: reviewWindowPolicySchema,
+    activePeriodEndsAt: instantSchema.nullable(),
+    status: reviewSourceReceiptStatusSchema
+  })
+  .strict();
+export type ReviewSourceReceiptResponse = z.infer<typeof reviewSourceReceiptResponseSchema>;
 
 export const reviewModerationCaseMessageAuthorRoleValues = [
   "moderator",

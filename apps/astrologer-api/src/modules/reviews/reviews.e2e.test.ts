@@ -18,7 +18,8 @@ import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
   ASTROLOGER_REVIEWS_MESSAGING_STORE,
-  ASTROLOGER_REVIEWS_READ_STORE
+  ASTROLOGER_REVIEWS_READ_STORE,
+  ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE
 } from "./reviews.tokens";
 
 const astrologerUserId = "10000000-0000-4000-8000-000000000301";
@@ -28,6 +29,9 @@ const reviewableInstanceId = "10000000-0000-4000-8000-000000000305";
 const clientUserId = "10000000-0000-4000-8000-000000000307";
 const threadId = "10000000-0000-4000-8000-000000000308";
 const channelConnectionId = "10000000-0000-4000-8000-000000000309";
+const orderId = "10000000-0000-4000-8000-000000000311";
+const productId = "10000000-0000-4000-8000-000000000312";
+const relationshipId = "10000000-0000-4000-8000-000000000313";
 
 describe("astrologer reviews HTTP API", () => {
   let app: INestApplication;
@@ -45,6 +49,8 @@ describe("astrologer reviews HTTP API", () => {
   let receivedReviewDetailRead: unknown;
   let receivedThreadLookup: unknown;
   let receivedOutboundMessage: unknown;
+  let receivedSourceReceiptCommand: unknown;
+  let sourceReceiptResult: unknown;
   let aiGenerationOutput: unknown;
   let aiDraftCommandResult: unknown;
   let disputeOpened: boolean;
@@ -66,6 +72,8 @@ describe("astrologer reviews HTTP API", () => {
     receivedReviewDetailRead = null;
     receivedThreadLookup = null;
     receivedOutboundMessage = null;
+    receivedSourceReceiptCommand = null;
+    sourceReceiptResult = null;
     aiGenerationOutput = { draftText: "Спасибо за отзыв. Рад, что консультация помогла." };
     aiDraftCommandResult = null;
     disputeOpened = true;
@@ -405,6 +413,34 @@ describe("astrologer reviews HTTP API", () => {
               };
             }
           }
+        },
+        {
+          provide: ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE,
+          useValue: {
+            async recordPaidOrderFulfillmentReceipt(input: unknown) {
+              receivedSourceReceiptCommand = input;
+              if (sourceReceiptResult) return sourceReceiptResult;
+              return {
+                kind: "created",
+                receipt: {
+                  id: "10000000-0000-4000-8000-000000000314",
+                  clientUserId,
+                  astrologerUserId,
+                  relationshipId,
+                  kind: "async_delivery",
+                  sourceResourceKey: `async_delivery:${orderId}`,
+                  productId,
+                  orderId,
+                  titleSnapshot: "Письменный разбор",
+                  contextLabelSnapshot: "Материал выдан клиенту",
+                  receivedAt: "2026-08-20T13:00:00.000Z",
+                  windowPolicy: "standard_14_days_after_receipt",
+                  activePeriodEndsAt: null,
+                  status: "received"
+                }
+              };
+            }
+          }
         }
       ]
     });
@@ -583,6 +619,74 @@ describe("astrologer reviews HTTP API", () => {
       idempotencyKey: "reviews-request-review-1",
       now: "2026-08-20T13:00:00.000Z"
     });
+  });
+
+  it("records paid order fulfillment receipts for later reviewable projection", async () => {
+    const response = await fetch(`${baseUrl}/reviews/source-receipts/paid-order-fulfillment`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-source-receipt-1"
+      },
+      body: JSON.stringify({ orderId })
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "10000000-0000-4000-8000-000000000314",
+      kind: "async_delivery",
+      sourceResourceKey: `async_delivery:${orderId}`,
+      status: "received"
+    });
+    expect(receivedSourceReceiptCommand).toMatchObject({
+      astrologerUserId,
+      orderId,
+      receivedAt: "2026-08-20T13:00:00.000Z",
+      activePeriodEndsAt: null,
+      now: "2026-08-20T13:00:00.000Z"
+    });
+    expect(receivedSourceReceiptCommand).toHaveProperty("id", expect.any(String));
+  });
+
+  it("passes active-period evidence when recording paid order fulfillment receipts", async () => {
+    const response = await fetch(`${baseUrl}/reviews/source-receipts/paid-order-fulfillment`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-source-receipt-active-period"
+      },
+      body: JSON.stringify({
+        orderId,
+        receivedAt: "2026-08-01T10:00:00.000Z",
+        activePeriodEndsAt: "2026-08-31T10:00:00.000Z"
+      })
+    });
+
+    expect(response.status).toBe(201);
+    expect(receivedSourceReceiptCommand).toMatchObject({
+      orderId,
+      receivedAt: "2026-08-01T10:00:00.000Z",
+      activePeriodEndsAt: "2026-08-31T10:00:00.000Z"
+    });
+  });
+
+  it("returns conflict when paid order fulfillment is not reviewable yet", async () => {
+    sourceReceiptResult = {
+      kind: "rejected",
+      reason: "live_order_requires_terminal_booking"
+    };
+
+    const response = await fetch(`${baseUrl}/reviews/source-receipts/paid-order-fulfillment`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "idempotency-key": "reviews-source-receipt-live"
+      },
+      body: JSON.stringify({ orderId })
+    });
+
+    expect(response.status).toBe(409);
+    expect(receivedSourceReceiptCommand).toMatchObject({ astrologerUserId, orderId });
   });
 
   it("rejects review requests for unlinked messaging threads", async () => {

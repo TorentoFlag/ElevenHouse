@@ -12,6 +12,7 @@ import { reviewReplyDraftPromptV1 } from "@elevenhouse/ai";
 import {
   createReviewReplyAiDraftRequestSchema,
   createReviewReplyAiDraftResponseSchema,
+  paidOrderFulfillmentReviewReceiptRequestSchema,
   reviewAstrologerListQuerySchema,
   reviewAstrologerListResponseSchema,
   reviewModerationCaseDetailSchema,
@@ -24,15 +25,20 @@ import {
   reviewRequestTargetListResponseSchema,
   reviewReplySubmissionSchema,
   reviewReplyVersionSchema,
+  reviewSourceReceiptResponseSchema,
   type CreateReviewReplyAiDraftResponse,
   type ReviewAstrologerListResponse,
   type ReviewModerationCaseDetail,
   type ReviewModerationCaseMessage,
   type ReviewRequestDeliveryResponse,
   type ReviewRequestTargetListResponse,
-  type ReviewReplyVersion
+  type ReviewReplyVersion,
+  type ReviewSourceReceiptResponse
 } from "@elevenhouse/contracts";
-import { ReviewRatingAggregateProjectionDriftError } from "@elevenhouse/db/reviews";
+import {
+  ReviewRatingAggregateProjectionDriftError,
+  type DrizzleReviewableInstanceReceiptStore
+} from "@elevenhouse/db/reviews";
 import type {
   CreateReviewReplyDraftCommandResult,
   CreateReviewCaseMessageResult,
@@ -54,7 +60,8 @@ import {
   ASTROLOGER_REVIEWS_AI_REPLY_DRAFT_STORE,
   ASTROLOGER_REVIEWS_COMMAND_STORE,
   ASTROLOGER_REVIEWS_MESSAGING_STORE,
-  ASTROLOGER_REVIEWS_READ_STORE
+  ASTROLOGER_REVIEWS_READ_STORE,
+  ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE
 } from "./reviews.tokens";
 
 type AstrologerReviewCommandStore = {
@@ -144,6 +151,11 @@ export class AstrologerReviewsService {
     private readonly aiReplyDraftStore: AstrologerReviewAiReplyDraftStore,
     @Inject(ASTROLOGER_REVIEWS_MESSAGING_STORE)
     private readonly messagingStore: MessagingStore,
+    @Inject(ASTROLOGER_REVIEWS_SOURCE_RECEIPT_STORE)
+    private readonly sourceReceiptStore: Pick<
+      DrizzleReviewableInstanceReceiptStore,
+      "recordPaidOrderFulfillmentReceipt"
+    >,
     private readonly aiGeneration: AiGenerationService,
     private readonly clock: SystemClock
   ) {}
@@ -225,6 +237,46 @@ export class AstrologerReviewsService {
       }
       throw error;
     }
+  }
+
+  async recordPaidOrderFulfillmentReceipt(
+    astrologerUserId: string,
+    body: unknown,
+    idempotencyKey: string
+  ): Promise<ReviewSourceReceiptResponse> {
+    const parsed = paidOrderFulfillmentReviewReceiptRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid paid order fulfillment review receipt request");
+    }
+
+    const safeAstrologerUserId = requireUuid(astrologerUserId);
+    const now = this.clock.now().toISOString();
+    const result = await this.sourceReceiptStore.recordPaidOrderFulfillmentReceipt({
+      id: deterministicUuid(
+        `${safeAstrologerUserId}:${parsed.data.orderId}:${idempotencyKey}:receipt`
+      ),
+      astrologerUserId: safeAstrologerUserId,
+      orderId: parsed.data.orderId,
+      receivedAt: parsed.data.receivedAt ?? now,
+      activePeriodEndsAt: parsed.data.activePeriodEndsAt,
+      now
+    });
+
+    if (result.kind === "rejected") {
+      if (result.reason === "order_not_found" || result.reason === "product_not_found") {
+        throw new NotFoundException(result.reason);
+      }
+      if (
+        result.reason === "order_not_reviewable" ||
+        result.reason === "live_order_requires_terminal_booking" ||
+        result.reason === "active_period_end_required"
+      ) {
+        throw new ConflictException(result.reason);
+      }
+      throw new BadRequestException(result.reason);
+    }
+
+    return reviewSourceReceiptResponseSchema.parse(result.receipt);
   }
 
   async createReplyAiDraft(

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { CreateFinanceOrderRecordInput } from "@elevenhouse/domain";
@@ -454,6 +454,145 @@ describe.sequential("Drizzle reviewable instance receipt store", () => {
         now: "2026-08-20T10:01:00.000Z"
       })
     ).resolves.toEqual({ kind: "rejected", reason: "order_not_reviewable" });
+  });
+
+  it("records review source receipts from paid async product fulfillment", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: fixture.astrologerUserId,
+        orderId: fixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      receipt: {
+        clientUserId: fixture.clientUserId,
+        astrologerUserId: fixture.astrologerUserId,
+        relationshipId: fixture.relationshipId,
+        kind: "async_delivery",
+        sourceResourceKey: `async_delivery:${fixture.orderId}`,
+        productId: fixture.productId,
+        orderId: fixture.orderId,
+        contextLabelSnapshot: "Материал выдан клиенту",
+        windowPolicy: "standard_14_days_after_receipt"
+      }
+    });
+
+    await expect(
+      store.upsertPendingSourceReceipts({
+        limit: 1,
+        now: "2026-08-22T10:02:00.000Z"
+      })
+    ).resolves.toEqual({ scanned: 1, created: 1, existing: 0, rejected: 0 });
+  });
+
+  it("maps course and subscription fulfillment receipts to their review windows", async () => {
+    const courseFixture = await seedPaidOrderFixture(runtime);
+    const subscriptionFixture = await seedPaidOrderFixture(runtime);
+    await runtime.database
+      .update(products)
+      .set({
+        type: "course",
+        executionMode: "async",
+        paymentModel: "once",
+        participantMode: "solo",
+        revision: sql`${products.revision} + 1`,
+        updatedAt: new Date("2026-08-22T09:59:00.000Z")
+      })
+      .where(eq(products.id, courseFixture.productId));
+    await runtime.database
+      .update(products)
+      .set({
+        type: "sub",
+        executionMode: "async",
+        paymentModel: "sub",
+        participantMode: "solo",
+        subscriptionPeriod: "month",
+        revision: sql`${products.revision} + 1`,
+        updatedAt: new Date("2026-08-22T09:59:00.000Z")
+      })
+      .where(eq(products.id, subscriptionFixture.productId));
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: courseFixture.astrologerUserId,
+        orderId: courseFixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      receipt: {
+        kind: "course_access",
+        sourceResourceKey: `course_access:${courseFixture.orderId}`,
+        contextLabelSnapshot: "Доступ к курсу открыт",
+        windowPolicy: "standard_14_days_after_receipt"
+      }
+    });
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: subscriptionFixture.astrologerUserId,
+        orderId: subscriptionFixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "rejected", reason: "active_period_end_required" });
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: subscriptionFixture.astrologerUserId,
+        orderId: subscriptionFixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        activePeriodEndsAt: "2026-09-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toMatchObject({
+      kind: "created",
+      receipt: {
+        kind: "subscription_period",
+        sourceResourceKey: `subscription_period:${subscriptionFixture.orderId}`,
+        contextLabelSnapshot: "Период подписки активирован",
+        windowPolicy: "active_period_plus_14_days",
+        activePeriodEndsAt: "2026-09-22T10:00:00.000Z"
+      }
+    });
+  });
+
+  it("does not record paid live order fulfillment without terminal booking evidence", async () => {
+    const fixture = await seedPaidOrderFixture(runtime);
+    await runtime.database
+      .update(products)
+      .set({
+        type: "single",
+        executionMode: "live",
+        paymentModel: "once",
+        participantMode: "solo",
+        durationMinutes: 60,
+        revision: sql`${products.revision} + 1`,
+        updatedAt: new Date("2026-08-22T09:59:00.000Z")
+      })
+      .where(eq(products.id, fixture.productId));
+    const store = createDrizzleReviewableInstanceReceiptStore(runtime.database);
+
+    await expect(
+      store.recordPaidOrderFulfillmentReceipt({
+        id: randomUUID(),
+        astrologerUserId: fixture.astrologerUserId,
+        orderId: fixture.orderId,
+        receivedAt: "2026-08-22T10:00:00.000Z",
+        now: "2026-08-22T10:01:00.000Z"
+      })
+    ).resolves.toEqual({ kind: "rejected", reason: "live_order_requires_terminal_booking" });
   });
 });
 
