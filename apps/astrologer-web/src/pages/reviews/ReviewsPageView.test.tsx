@@ -20,7 +20,9 @@ describe("ReviewsPageView", () => {
       onSendReviewRequest
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Запросить отзыв" }));
+    const requestReviewButtons = screen.getAllByRole("button", { name: "Запросить отзыв" });
+    expect(requestReviewButtons.length).toBeGreaterThan(0);
+    fireEvent.click(requestReviewButtons[0]!);
     expect(onOpenRequestReview).toHaveBeenCalledTimes(1);
 
     rerender(

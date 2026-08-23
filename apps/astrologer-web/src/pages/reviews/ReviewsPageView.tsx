@@ -181,6 +181,14 @@ export function ReviewsPageView({
         {!isLoading && !isError ? (
           <div className={styles.grid}>
             <ReviewsSummaryPanel copy={copy} summary={summary} />
+            <button
+              type="button"
+              className={styles.mobileRequestButton}
+              onClick={onOpenRequestReview}
+            >
+              <Icon iconName="chat" size={15} aria-hidden="true" />
+              {copy.requestReviewLabel}
+            </button>
             <div className={styles.list}>
               {reviews.length === 0 ? (
                 <div className={styles.stateCard}>{copy.emptyLabel}</div>
