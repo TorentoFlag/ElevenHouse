@@ -345,30 +345,28 @@ jobs:
             exit 1
           fi
           install -d -m 0700 env backups/postgres
-          node <<'NODE'
-          const fs = require("node:fs");
-          const path = "env/.env.production";
-          const key = "ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET";
-          const value = process.env[key];
-          if (!value || value.trim().length < 32) {
-            throw new Error(`${key}_INVALID`);
-          }
-          const lines = fs.readFileSync(path, "utf8").split(/\r?\n/);
-          let replaced = false;
-          const next = lines.map((line) => {
-            if (line.startsWith(`${key}=`)) {
-              replaced = true;
-              return `${key}=${value}`;
+          if (( ${#ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET} < 32 )); then
+            printf '%s\n' 'ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET_INVALID' >&2
+            exit 1
+          fi
+          secret_tmp="$(mktemp env/.env.production.XXXXXX)"
+          awk -v key='ASTROLOGER_API_CLIENT_CRM_CURSOR_SECRET' '
+            BEGIN {
+              found = 0
+              value = ENVIRON[key]
             }
-            return line;
-          });
-          if (!replaced) {
-            while (next.length > 0 && next[next.length - 1] === "") next.pop();
-            next.push(`${key}=${value}`);
-          }
-          fs.writeFileSync(path, `${next.join("\n")}\n`, { mode: 0o600 });
-          fs.chmodSync(path, 0o600);
-          NODE
+            $0 ~ "^" key "=" {
+              print key "=" value
+              found = 1
+              next
+            }
+            { print }
+            END {
+              if (!found) print key "=" value
+            }
+          ' env/.env.production > "${secret_tmp}"
+          install -m 600 "${secret_tmp}" env/.env.production
+          rm -f "${secret_tmp}"
           ./materialize-chart-service-envs.sh
           test "$(stat -c '%a' env/.env.chart-engine.production)" = "600"
           test "$(stat -c '%a' env/.env.chart-worker.production)" = "600"
