@@ -146,6 +146,11 @@ export function AuthPage() {
     setServerError(null);
   }, []);
 
+  const handleCodeChange = useCallback((nextCode: string) => {
+    setCode(nextCode);
+    setServerError(null);
+  }, []);
+
   return (
     <main className={styles.page}>
       <AuthVisualPane copy={copy.visual} motionKey={locale} />
@@ -208,7 +213,7 @@ export function AuthPage() {
               resendCooldownLabel={resendCooldownLabel}
               submitDisabled={code.length !== 6}
               onBack={handleBackToCredentials}
-              onCodeChange={setCode}
+              onCodeChange={handleCodeChange}
               onResend={() => {
                 void handleResend();
               }}

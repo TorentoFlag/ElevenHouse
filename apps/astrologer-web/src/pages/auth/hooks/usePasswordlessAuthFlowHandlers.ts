@@ -4,7 +4,14 @@ import type {
 } from "@elevenhouse/design-system/components/OtpAuthForm";
 import type { RequestAstrologerPasswordlessCodeResponse } from "@elevenhouse/contracts";
 import { validateSupportedPhoneNumber } from "@elevenhouse/validation/phone";
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction
+} from "react";
 import { useNavigate } from "react-router";
 import { application } from "../../../Application";
 import { requestPasswordlessCode } from "../../../features/auth/api/requestPasswordlessCode";
@@ -61,6 +68,18 @@ export function usePasswordlessAuthFlowHandlers(input: {
 }) {
   const routerNavigate = useNavigate();
   const navigate = input.navigate ?? routerNavigate;
+  const latestCodeVerificationTargetRef = useRef({
+    challengeId: input.challenge?.challengeId ?? null,
+    code: input.code
+  });
+  const codeVerificationSequenceRef = useRef(0);
+
+  useEffect(() => {
+    latestCodeVerificationTargetRef.current = {
+      challengeId: input.challenge?.challengeId ?? null,
+      code: input.code
+    };
+  }, [input.challenge?.challengeId, input.code]);
 
   const handleCredentialSubmit = useCallback(async () => {
     input.setEmailTouched(true);
@@ -118,13 +137,16 @@ export function usePasswordlessAuthFlowHandlers(input: {
         return;
       }
 
+      const attemptSequence = codeVerificationSequenceRef.current + 1;
+      codeVerificationSequenceRef.current = attemptSequence;
+      const attemptedChallengeId = input.challenge.challengeId;
       input.setIsSubmitting(true);
       input.setServerError(null);
 
       try {
         const request = createPasswordlessVerificationRequest({
           mode: input.pendingCredential.mode,
-          challengeId: input.challenge.challengeId,
+          challengeId: attemptedChallengeId,
           code: submittedCode,
           displayName: input.pendingCredential.displayName
         });
@@ -132,6 +154,15 @@ export function usePasswordlessAuthFlowHandlers(input: {
           input.pendingCredential.mode === "register" && "displayName" in request
             ? await verifyRegistrationPasswordlessCode(request)
             : await verifyPasswordlessCode(request);
+        const latestTarget = latestCodeVerificationTargetRef.current;
+
+        if (
+          codeVerificationSequenceRef.current !== attemptSequence ||
+          latestTarget.challengeId !== attemptedChallengeId ||
+          latestTarget.code !== submittedCode
+        ) {
+          return;
+        }
 
         application.queryClient.setQueryData(authQueryKeys.currentAccount(), {
           account: {
@@ -142,9 +173,19 @@ export function usePasswordlessAuthFlowHandlers(input: {
         });
         navigate("/dashboard", { replace: true });
       } catch (error) {
-        input.setServerError(resolveAuthErrorMessage(error, input.copy));
+        const latestTarget = latestCodeVerificationTargetRef.current;
+
+        if (
+          codeVerificationSequenceRef.current === attemptSequence &&
+          latestTarget.challengeId === attemptedChallengeId &&
+          latestTarget.code === submittedCode
+        ) {
+          input.setServerError(resolveAuthErrorMessage(error, input.copy));
+        }
       } finally {
-        input.setIsSubmitting(false);
+        if (codeVerificationSequenceRef.current === attemptSequence) {
+          input.setIsSubmitting(false);
+        }
       }
     },
     [input, navigate]
