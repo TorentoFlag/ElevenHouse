@@ -419,7 +419,7 @@ jobs:
           if [[ "${DEPLOY_MODE}" == "runtime" ]]; then
             mv -- compose/compose.production.yml.next compose/compose.production.yml
             mv -- env/.env.deploy.next env/.env.deploy
-            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --wait --wait-timeout 180
+            docker compose --env-file env/.env.deploy -f compose/compose.production.yml up -d --force-recreate --wait --wait-timeout 180
             docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
             trap - ERR
             exit 0
