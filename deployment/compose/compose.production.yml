@@ -18,12 +18,10 @@ services:
         condition: service_started
       admin-web:
         condition: service_started
-      public-api:
+      minio:
         condition: service_healthy
-      astrologer-api:
-        condition: service_healthy
-      admin-api:
-        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   landing:
     image: ${IMAGE_NAMESPACE}/elevenhouse-landing:${LANDING_IMAGE_TAG}
@@ -51,6 +49,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      caddy:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -76,6 +76,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      caddy:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -112,6 +114,9 @@ services:
     stop_grace_period: 60s
     env_file:
       - ../env/.env.production
+    depends_on:
+      caddy:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -128,6 +133,9 @@ services:
     restart: unless-stopped
     env_file:
       - ../env/.env.production
+    depends_on:
+      caddy:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -222,6 +230,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      caddy:
+        condition: service_started
     healthcheck:
       test:
         [
