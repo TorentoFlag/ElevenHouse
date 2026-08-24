@@ -528,11 +528,14 @@ jobs:
           set +e
           cd /opt/elevenhouse || exit 0
           echo "PRODUCTION_DEPLOY_DIAGNOSTIC ps"
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps
-          echo "PRODUCTION_DEPLOY_DIAGNOSTIC astrologer-api-health"
-          docker inspect elevenhouse-astrologer-api-1 --format '{{json .State.Health}}'
-          echo "PRODUCTION_DEPLOY_DIAGNOSTIC astrologer-api-logs"
-          docker compose --env-file env/.env.deploy -f compose/compose.production.yml logs --no-color --tail=200 astrologer-api
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml ps -a
+          for service in public-api astrologer-api admin-api caddy chart-engine chart-worker; do
+            echo "PRODUCTION_DEPLOY_DIAGNOSTIC ${service}-health"
+            docker inspect "elevenhouse-${service}-1" --format '{{json .State.Health}}'
+          done
+          echo "PRODUCTION_DEPLOY_DIAGNOSTIC app-logs"
+          docker compose --env-file env/.env.deploy -f compose/compose.production.yml logs --no-color --tail=200 \
+            public-api astrologer-api admin-api caddy workers payment-worker notification-worker chart-worker chart-engine
           echo "PRODUCTION_DEPLOY_DIAGNOSTIC dependency-logs"
           docker compose --env-file env/.env.deploy -f compose/compose.production.yml logs --no-color --tail=80 postgres redis minio
           REMOTE
